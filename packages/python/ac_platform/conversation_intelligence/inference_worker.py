@@ -8,7 +8,7 @@ No HTTP 200 is treated as a settled invoice or as human quality approval.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, cast
@@ -173,6 +173,7 @@ def _provider_returned_receipt(
         "human_approved": False,
     }
 
+
 # Persist operationally useful categories, never arbitrary exception messages:
 # provider errors can contain a response body, transcript or credential URL.
 _VALIDATION_FAILURES = frozenset(
@@ -246,8 +247,9 @@ class ConversationInferenceWorker:
         broker: InferenceBroker,
         *,
         authority: ConversationAuthority | None = None,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        self.sessions, self.storage, self.broker = sessions, storage, broker
+        self.sessions, self.storage, self.broker, self.clock = sessions, storage, broker, clock
         self.authority = authority
 
     async def claim(self) -> Work | None:
@@ -296,7 +298,13 @@ class ConversationInferenceWorker:
         await JobRepository(db).renew(job, work.lease_token, lease_for=_LEASE)
         return job
 
-    async def _scope(self, db: AsyncSession, job: Job) -> Scope:
+    async def _scope(
+        self,
+        db: AsyncSession,
+        job: Job,
+        *,
+        allow_started_effect: bool = False,
+    ) -> Scope:
         if (
             set(job.payload) != {"schema", "run_id"}
             or type(job.payload["schema"]) is not int
@@ -315,7 +323,7 @@ class ConversationInferenceWorker:
         )
         if task is None or task.erased_at is not None or task.state not in {"queued", "running"}:
             raise ConversationDenied("The provider task is no longer active.")
-        application = ConversationApplication(db)
+        application = ConversationApplication(db, clock=self.clock)
         actor = actor_from_row(task)
         now = await application.admit(actor)
         await application.get(actor, task.recording_id)
@@ -363,6 +371,17 @@ class ConversationInferenceWorker:
             or task.stage != plan.checkpoint.stage
         ):
             raise ConversationConflict("The immutable provider input changed.")
+        dispatch_started_at: datetime | None = None
+        if allow_started_effect:
+            candidate = job.dispatch_started_at
+            if (
+                candidate is None
+                or job.provider_idempotency_key != job.dedupe_key
+                or candidate > now
+                or now - candidate > timedelta(seconds=_EFFECT_SECONDS)
+            ):
+                raise ConversationConflict("The provider dispatch proof is no longer current.")
+            dispatch_started_at = candidate
         quoted, _, _ = await service._quote(
             actor,
             recording,
@@ -370,6 +389,7 @@ class ConversationInferenceWorker:
             plan,
             now,
             require_acceptance=True,
+            dispatch_started_at=dispatch_started_at,
         )
         return Scope(task, recording, run, quoted, plan)
 
@@ -487,7 +507,7 @@ class ConversationInferenceWorker:
                     raise ConversationConflict("A previous provider dispatch needs reconciliation.")
                 scope = await self._scope(db, job)
                 payload = await fenced.run(self._payload, scope)
-                service = ConversationInference(ConversationApplication(db))
+                service = ConversationInference(ConversationApplication(db, clock=self.clock))
                 minutes, budget = await service.accounts(scope.recording, scope.quoted)
                 before = MinuteAccount.from_dict(minutes.snapshot)
                 reservation = next(
@@ -512,12 +532,13 @@ class ConversationInferenceWorker:
                         environment=self.authority.environment,
                         operations_tenant_id=self.authority.operations_tenant_id,
                     )
+                dispatch_now = self.clock()
                 transition = mark_dispatched(
                     before,
                     BudgetAccount.from_dict(budget.snapshot),
                     str(scope.task.run_id),
                     key,
-                    int(datetime.now(UTC).timestamp()),
+                    int(dispatch_now.timestamp()),
                 )
                 save_accounts(minutes, budget, transition)
                 await JobRepository(db).record_dispatch_started(
@@ -525,6 +546,7 @@ class ConversationInferenceWorker:
                     work.lease_token,
                     provider_idempotency_key=key,
                     recovery_generation=work.recovery_generation,
+                    now=dispatch_now,
                 )
                 scope.task.state = scope.run.state = "running"
                 reservation = transition.reservation
@@ -541,7 +563,7 @@ class ConversationInferenceWorker:
                     provider_idempotency_key=key,
                 )
                 if self.authority is None:
-                    scope = await self._scope(db, job)
+                    scope = await self._scope(db, job, allow_started_effect=True)
                 else:
                     # lock_for_dispatch above proves our committed marker and
                     # current lease. Only the pause check is waived for that
@@ -550,7 +572,7 @@ class ConversationInferenceWorker:
                         environment=self.authority.environment,
                         operations_tenant_id=self.authority.operations_tenant_id,
                     ):
-                        scope = await self._scope(db, job)
+                        scope = await self._scope(db, job, allow_started_effect=True)
                 # Restore, revocation and deletion wait on these canonical locks
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
@@ -573,13 +595,13 @@ class ConversationInferenceWorker:
                     provider_idempotency_key=key,
                 )
                 if self.authority is None:
-                    scope = await self._scope(db, job)
+                    scope = await self._scope(db, job, allow_started_effect=True)
                 else:
                     with already_started_effect(
                         environment=self.authority.environment,
                         operations_tenant_id=self.authority.operations_tenant_id,
                     ):
-                        scope = await self._scope(db, job)
+                        scope = await self._scope(db, job, allow_started_effect=True)
                 output = self._validate(scope, result)
                 normalized = output.data()
                 checkpoint = replace(scope.plan.checkpoint, payload_sha256=content_hash(normalized))
@@ -595,14 +617,14 @@ class ConversationInferenceWorker:
                     feature_blob_id=None,
                     manifest=checkpoint.as_dict(),
                     payload=normalized,
-                    created_at=datetime.now(UTC),
+                    created_at=self.clock(),
                 )
                 db.add(row)
                 await db.flush()
                 scope.task.checkpoint_id = row.id
                 scope.task.state = scope.run.state = "completed"
-                scope.run.completed_at = datetime.now(UTC)
-                service = ConversationInference(ConversationApplication(db))
+                scope.run.completed_at = self.clock()
+                service = ConversationInference(ConversationApplication(db, clock=self.clock))
                 await service.finish_stage(
                     scope.recording,
                     scope.task,
@@ -680,7 +702,7 @@ class ConversationInferenceWorker:
                     run.state = "failed"
                 if recording is not None and quoted is not None:
                     minutes, budget = await ConversationInference(
-                        ConversationApplication(db)
+                        ConversationApplication(db, clock=self.clock)
                     ).accounts(recording, quoted)
                     snapshot = MinuteAccount.from_dict(minutes.snapshot)
                     existing = next(

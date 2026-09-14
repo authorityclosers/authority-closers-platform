@@ -69,6 +69,7 @@ async def _provider_quote(
     provider_id: str = "elevenlabs",
     provider_model: str = "scribe_v2",
     permission_fingerprint: str | None = None,
+    expires_in_seconds: int = 3600,
 ) -> tuple[UUID, Quote]:
     now = datetime.now(UTC)
     quoted_source_sha256 = quote_source_sha256 or source_sha256
@@ -91,13 +92,13 @@ async def _provider_quote(
         entitlement_seconds=1,
         max_cost_paise=0,
         created_at_epoch=int(now.timestamp()) - 1,
-        expires_at_epoch=int(now.timestamp()) + 3600,
+        expires_at_epoch=int(now.timestamp()) + expires_in_seconds,
     )
     permission = ExecutionPermission(
         "synthetic-provider-execution-approval",
         permission_fingerprint or quote.fingerprint,
         str(state.person_id),
-        int(now.timestamp()) + 3600,
+        int(now.timestamp()) + expires_in_seconds,
     )
     quote_id = UUID(quote.quote_id)
     async with sessions() as database, database.begin():
@@ -451,6 +452,152 @@ def test_success_commits_native_c2_receipt_before_ack_and_never_redispatches(
                 )
             assert await worker.run_once() is False
             assert broker.calls == 1
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_dispatch_before_quote_expiry_accepts_late_provider_return_once(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A committed dispatch may finish after quote expiry within its effect window."""
+
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+                expires_in_seconds=60,
+            )
+            async with sessions() as database, database.begin():
+                service = ConversationInference(ConversationApplication(database))
+                await service.accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                view = await service.request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-dispatch-before-expiry",
+                )
+            dispatch_clock = [datetime.now(UTC) + timedelta(seconds=5)]
+
+            class LateReturningBroker(FakeBroker):
+                async def execute(self, reservation: Any, payload: bytes) -> ProviderResult:
+                    dispatch_clock[0] = datetime.fromtimestamp(quote.expires_at_epoch + 1, UTC)
+                    return await super().execute(reservation, payload)
+
+            broker = LateReturningBroker(prepared.data)
+            worker = ConversationInferenceWorker(
+                sessions, prepared.storage, broker, clock=lambda: dispatch_clock[0]
+            )
+            assert await worker.run_once()
+            assert broker.calls == 1
+            assert int(dispatch_clock[0].timestamp()) > quote.expires_at_epoch
+            async with sessions() as database:
+                run_row = await database.get(ConversationRun, UUID(view["id"]))
+                assert run_row is not None and run_row.state == "completed"
+                task = await database.get(ConversationInferenceTask, run_row.id)
+                assert task is not None and task.state == "completed"
+                checkpoint = await database.scalar(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.recording_id == prepared.recording_id,
+                        ConversationCheckpoint.stage == "C2",
+                    )
+                )
+                assert checkpoint is not None and checkpoint.payload is not None
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                provider_reservations = [
+                    item
+                    for item in MinuteAccount.from_dict(minutes.snapshot).reservations
+                    if item.quote.quote_id == str(quote_id)
+                ]
+                assert len(provider_reservations) == 1
+                assert provider_reservations[0].state == "uncertain"
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_quote_expired_before_dispatch_stays_blocked(postgres_harness: Any, tmp_path: Path) -> None:
+    """The persisted dispatch exception cannot admit an already-expired quote."""
+
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+                expires_in_seconds=60,
+            )
+            async with sessions() as database, database.begin():
+                service = ConversationInference(ConversationApplication(database))
+                await service.accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                view = await service.request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-expired-before-dispatch",
+                )
+            dispatch_clock = [datetime.fromtimestamp(quote.expires_at_epoch + 1, UTC)]
+            broker = FakeBroker(prepared.data)
+            worker = ConversationInferenceWorker(
+                sessions, prepared.storage, broker, clock=lambda: dispatch_clock[0]
+            )
+            assert await worker.run_once()
+            assert broker.calls == 0
+            async with sessions() as database:
+                run_row = await database.get(ConversationRun, UUID(view["id"]))
+                assert run_row is not None and run_row.state == "failed"
+                job = await database.get(Job, run_row.job_id)
+                assert job is not None and job.dispatch_started_at is None
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                provider_reservations = [
+                    item
+                    for item in MinuteAccount.from_dict(minutes.snapshot).reservations
+                    if item.quote.quote_id == str(quote_id)
+                ]
+                assert len(provider_reservations) == 1
+                assert provider_reservations[0].state == "released"
         finally:
             await engine.dispose()
 

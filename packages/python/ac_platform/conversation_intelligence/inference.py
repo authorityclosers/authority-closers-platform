@@ -275,6 +275,7 @@ class ConversationInference:
         now: datetime,
         *,
         require_acceptance: bool,
+        dispatch_started_at: datetime | None = None,
     ) -> tuple[ConversationQuote, Quote, ExecutionPermission]:
         row = await self.database.scalar(
             select(ConversationQuote)
@@ -292,6 +293,14 @@ class ConversationInference:
         quote, permission = (
             Quote.from_dict(row.quote),
             ExecutionPermission.from_dict(row.execution_permission),
+        )
+        # A quote's expiry is the deadline to admit an external effect. Once
+        # the durable dispatch marker is committed, a bounded provider call
+        # may return after that deadline. All other checks still use ``now``
+        # below so revocation, retention and current release authority remain
+        # live at provider-return time.
+        quote_admission_epoch = int(
+            (dispatch_started_at if dispatch_started_at is not None else now).timestamp()
         )
         if (
             quote.quote_id != str(row.id)
@@ -315,7 +324,7 @@ class ConversationInference:
             or permission.quote_fingerprint != quote.fingerprint
             or permission.approved_by != str(actor.person_id)
             or not quote.created_at_epoch
-            <= int(now.timestamp())
+            <= quote_admission_epoch
             < min(quote.expires_at_epoch, permission.expires_at_epoch)
         ):
             raise ConversationDenied("This quote does not authorize this exact provider request.")
