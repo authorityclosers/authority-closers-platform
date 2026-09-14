@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.inference import (
     ServicePlan,
 )
 from ac_platform.conversation_intelligence.inference_tasks import (
+    InferenceTaskError,
     validate_coaching_result,
     validate_fact_result,
     validate_scribe_result,
@@ -73,6 +74,41 @@ _VALIDATION_LABELS = {
     "C4": "facts_schema_and_source_binding",
     "C5": "coaching_schema_and_source_binding",
 }
+
+# Persist operationally useful categories, never arbitrary exception messages:
+# provider errors can contain a response body, transcript or credential URL.
+_VALIDATION_FAILURES = frozenset(
+    {
+        "report_evidence_quote_mismatch",
+        "report_evidence_segment_invalid",
+        "fact_evidence_outside_chunk",
+        "report_json_invalid",
+        "report_overview_missing",
+        "fact_packet_invalid",
+        "provider_result_route_mismatch",
+        "provider_result_input_digest_mismatch",
+        "provider_raw_json_digest_mismatch",
+        "provider_parsed_data_mismatch",
+        "gemini_response_blocked",
+        "gemini_response_incomplete",
+        "gemini_response_json_invalid",
+    }
+)
+
+
+def provider_failure_code(error: BaseException) -> str:
+    """Map failures to content-free codes without changing recovery policy."""
+    if isinstance(error, InferenceTaskError):
+        if len(error.args) == 1 and type(error.args[0]) is str:
+            code = error.args[0]
+            if code in _VALIDATION_FAILURES:
+                return f"conversation_{code}"
+        return "conversation_provider_result_validation_failed"
+    if isinstance(error, TimeoutError):
+        return "conversation_provider_execution_timeout"
+    if isinstance(error, StorageError):
+        return "conversation_provider_storage_failed"
+    return "conversation_provider_execution_unresolved"
 
 
 class InferenceBroker(Protocol):
@@ -414,7 +450,9 @@ class ConversationInferenceWorker:
             async with self.sessions() as db, db.begin():
                 await JobRepository(db).complete(work.job_id, work.lease_token)
 
-    async def _fail(self, work: Work) -> None:
+    async def _fail(
+        self, work: Work, *, failure_code: str = "conversation_provider_execution_unresolved"
+    ) -> None:
         async with self.sessions() as db, db.begin():
             job = await self._locked_job(db, work)
             if job.provider_receipt is not None:
@@ -466,7 +504,7 @@ class ConversationInferenceWorker:
             await JobRepository(db).fail(
                 job,
                 work.lease_token,
-                "conversation_provider_execution_unresolved",
+                failure_code,
                 permanent=True,
                 ambiguous=ambiguous,
             )
@@ -480,7 +518,9 @@ class ConversationInferenceWorker:
         except BaseException as error:
             # A failed cleanup may itself be fenced by restore/lease loss. The
             # dispatch marker still quarantines the job on the next claim.
-            cleanup = asyncio.create_task(self._fail(work))
+            cleanup = asyncio.create_task(
+                self._fail(work, failure_code=provider_failure_code(error))
+            )
             await _drain(cleanup)
             if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
                 raise
