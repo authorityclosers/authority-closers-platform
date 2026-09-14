@@ -18,3 +18,11 @@ Original Dipak continuation 649ca180 completed at the provider with STOP (8,972 
 44 overview and compatibility tests passed. An initial test fixture incorrectly assumed a non-null diagnosis; the corrected fixture explicitly supplies it and exercises source rejection. Ruff lint/format pass. Whole retained production-response replay remains to be recorded independently before a live recovery claim.
 
 Deepgram integration also passed 139 targeted tests; 17 POSIX ownership tests are skipped on Windows and remain required in Linux CI. Python types pass for all 75 conversation source files. Admin provider/settings integration: 18 tests and TypeScript pass.
+
+## Integrated report and Admin follow-up
+
+The explicit overview-array prompt and audited Admin Open report route are integrated. Local focused validation passed: 26 backend tests, 5 Admin UI tests, Admin TypeScript, all 659 Python files formatted, Ruff lint, and mypy on all 294 source files. An independent combined C5 check passed 95 tests and rejected forged citations at all 11 overview evidence paths.
+
+Read-only replay of the original retained 649ca180 response against the integrated candidate passed the full coaching validator. The exact original task input SHA was reconstructed and matched; no database write or external provider call was performed. This proves structural/source validation, not publication or perfect coaching quality. Separate semantic review identified improvement opportunities in attribution, chronology, evidence coverage and plain language; the new full-context prompt still needs a real output review.
+
+The first combined Linux run, 34900064404 at 89df607, passed frontend, capacity and Python deployment gates but failed Python shards using an outdated simulated C5 response plus a formatting check. The authority method formatting is corrected here; the synthetic provider/input expectations are being repaired independently without relaxing production validation. Sales Xray web-image run 34900069538 passed, but the failed core candidate was not deployed. The currently deployed 724f baseline is healthy on staging and production. A new complete green candidate and authenticated/public browser checks remain required.

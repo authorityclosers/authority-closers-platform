@@ -452,9 +452,7 @@ class ConversationAuthority:
         )
         return cast(ConversationProviderConfiguration | None, value)
 
-    async def selected_asr_route(
-        self, app: ConversationApplication
-    ) -> tuple[str, str] | None:
+    async def selected_asr_route(self, app: ConversationApplication) -> tuple[str, str] | None:
         """Return the active approved ASR binding for a new transcription plan.
 
         A saved configuration is not enough to change routing.  Only the
