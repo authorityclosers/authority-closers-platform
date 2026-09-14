@@ -47,10 +47,23 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 
 _MAX_LIMIT = 50
 _MAX_SEARCH = 120
 _CURSOR_SEPARATOR = "|"
+_PROVIDER_USAGE_KEYS = frozenset(
+    {
+        "promptTokenCount",
+        "candidatesTokenCount",
+        "thoughtsTokenCount",
+        "cachedContentTokenCount",
+        "totalTokenCount",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+    }
+)
 
 
 def _cursor(created_at: datetime, recording_id: UUID) -> str:
@@ -103,6 +116,60 @@ def _safe_duration(payload: Any) -> int | None:
     if type(value) is int and 0 < value <= 14_400_000:
         return value
     return None
+
+
+def _safe_provider_usage(value: Any) -> dict[str, int] | None:
+    """Return only the bounded numeric usage counters from a provider receipt."""
+
+    if not isinstance(value, Mapping):
+        return None
+    usage = {
+        key: amount
+        for key, amount in value.items()
+        if key in _PROVIDER_USAGE_KEYS and type(amount) is int and 0 <= amount <= 1_000_000_000
+    }
+    return usage or None
+
+
+def _provider_stage_view(
+    task: ConversationInferenceTask,
+    job: Job | None,
+) -> dict[str, Any]:
+    """Expose receipt metadata without treating usage as a provider invoice."""
+
+    receipt = None if job is None else job.provider_receipt
+    if not isinstance(receipt, Mapping):
+        return {
+            "stage": task.stage,
+            "run_id": str(task.run_id),
+            "state": task.state,
+            "provider": None,
+            "model": None,
+            "request_id": None,
+            "usage": None,
+            "receipt_state": "not_recorded",
+            "cost_state": "not_settled",
+        }
+
+    provider = receipt.get("provider")
+    model = receipt.get("model")
+    request_id = receipt.get("provider_request_id")
+    cost_state = receipt.get("cost_state")
+    return {
+        "stage": task.stage,
+        "run_id": str(task.run_id),
+        "state": task.state,
+        "provider": provider if isinstance(provider, str) and provider else None,
+        "model": model if isinstance(model, str) and model else None,
+        "request_id": request_id if isinstance(request_id, str) and request_id else None,
+        "usage": _safe_provider_usage(receipt.get("usage")),
+        "receipt_state": "recorded",
+        "cost_state": (
+            cost_state
+            if isinstance(cost_state, str) and cost_state in {"reconciliation_required", "settled"}
+            else "not_settled"
+        ),
+    }
 
 
 def _owner_view(
@@ -189,6 +256,7 @@ def _cost_view(
     plan_quote_ids: Iterable[UUID] | None = None,
     quote_rows: Mapping[UUID, ConversationQuote] | None = None,
     budget_rows: Mapping[UUID, ConversationBudgetAccount] | None = None,
+    provider_stages: Iterable[Mapping[str, Any]] | None = None,
     scope: str = "recording_total",
 ) -> dict[str, Any]:
     tasks = list(plan_tasks) if plan_tasks is not None else ([] if task is None else [task])
@@ -256,6 +324,8 @@ def _cost_view(
         state = "released"
     else:
         state = next(iter(states))
+    provider_stage_values = list(provider_stages or ())
+    has_provider_usage = any(stage.get("usage") is not None for stage in provider_stage_values)
     return {
         "currency": "INR",
         "scope": scope,
@@ -269,6 +339,17 @@ def _cost_view(
             else "reconciliation_required"
             if state == "reconciliation_required"
             else "not_settled"
+        ),
+        # The canonical receipt stores usage counters but does not store a
+        # source-backed per-unit rate.  Keep this separate from the quote
+        # ceiling and settlement so the admin surface cannot imply an invoice.
+        "usage_estimate_paise": None,
+        "usage_estimate_state": (
+            "rate_unavailable"
+            if has_provider_usage
+            else "usage_unavailable"
+            if provider_stage_values
+            else "not_applicable"
         ),
     }
 
@@ -470,6 +551,20 @@ class AdminConversationRecordings:
                 )
             )
         ).all()
+        task_job_ids = {task.job_id for task in tasks if getattr(task, "job_id", None) is not None}
+        jobs = (
+            (
+                await self.database.scalars(
+                    select(Job).where(
+                        Job.id.in_(task_job_ids),
+                        Job.tenant_id.in_(self.recording_tenant_ids),
+                    )
+                )
+            ).all()
+            if task_job_ids
+            else []
+        )
+        jobs_by_id = {job.id: job for job in jobs}
         plan_ids = {row.id for row in latest_plans.values()}
         plan_stage_rows = (
             (
@@ -605,6 +700,16 @@ class AdminConversationRecordings:
                 if plan_is_complete
                 else {candidate.quote_id for candidate in recording_tasks}
             )
+            provider_stages = [
+                _provider_stage_view(
+                    candidate,
+                    jobs_by_id.get(getattr(candidate, "job_id", None)),
+                )
+                for candidate in sorted(
+                    cost_tasks,
+                    key=lambda candidate: (utc(candidate.created_at), candidate.run_id),
+                )
+            ]
             review_eligible = bool(
                 has_report
                 and report_run is not None
@@ -660,6 +765,7 @@ class AdminConversationRecordings:
                             "completed_at": None
                             if run.completed_at is None
                             else utc(run.completed_at).isoformat(),
+                            "provider_stages": provider_stages,
                         }
                     ),
                     "processing_plan": None
@@ -680,6 +786,7 @@ class AdminConversationRecordings:
                         plan_quote_ids=cost_quote_ids,
                         quote_rows=quotes,
                         budget_rows=budgets,
+                        provider_stages=provider_stages,
                         scope="current_plan" if plan_is_complete else "recording_total",
                     ),
                 }

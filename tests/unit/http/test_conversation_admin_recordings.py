@@ -66,6 +66,7 @@ def _public_page_responses(
     created_at = recording.created_at + timedelta(seconds=1)
     second_run_id, third_run_id = uuid4(), uuid4()
     second_quote_id, third_quote_id = uuid4(), uuid4()
+    first_job_id, second_job_id, third_job_id = uuid4(), uuid4(), uuid4()
     plan_created_at = recording.created_at + timedelta(seconds=10)
     guest = SimpleNamespace(
         recording_id=recording.id,
@@ -103,8 +104,10 @@ def _public_page_responses(
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
+        job_id=first_job_id,
         quote_id=quote_id,
         stage="C2",
+        state="completed",
         generation=1,
         created_at=created_at,
         erased_at=None,
@@ -114,8 +117,10 @@ def _public_page_responses(
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
+        job_id=second_job_id,
         quote_id=second_quote_id,
         stage="C4",
+        state="completed",
         generation=1,
         created_at=recording.created_at + timedelta(seconds=11),
         erased_at=None,
@@ -125,8 +130,10 @@ def _public_page_responses(
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
+        job_id=third_job_id,
         quote_id=third_quote_id,
         stage="C5",
+        state="completed",
         generation=1,
         created_at=recording.created_at + timedelta(seconds=12),
         erased_at=None,
@@ -154,6 +161,20 @@ def _public_page_responses(
         SimpleNamespace(plan_id=plan.id, quote_id=second_quote_id, tenant_id=PUBLIC_TENANT),
         SimpleNamespace(plan_id=plan.id, quote_id=third_quote_id, tenant_id=PUBLIC_TENANT),
     ]
+    jobs = [
+        SimpleNamespace(
+            id=job_id,
+            tenant_id=PUBLIC_TENANT,
+            provider_receipt={
+                "provider": "gemini",
+                "model": "gemini-3.8-flash",
+                "provider_request_id": f"request-{index}",
+                "usage": {"promptTokenCount": 100 + index},
+                "cost_state": "reconciliation_required",
+            },
+        )
+        for index, job_id in enumerate((first_job_id, second_job_id, third_job_id), start=1)
+    ]
     minute = SimpleNamespace(
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
@@ -175,6 +196,7 @@ def _public_page_responses(
         [run],
         [plan],
         [first_task, second_task, third_task],
+        jobs,
         stage_authorizations,
         [quote, second_quote, third_quote],
         [SimpleNamespace(scope_id=scope_id, snapshot={})],
@@ -302,6 +324,8 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     }
     assert item["status"] == "held"
     assert item["latest_run"]["state"] == "running"
+    assert item["latest_run"]["provider_stages"][0]["provider"] == "gemini"
+    assert item["latest_run"]["provider_stages"][0]["usage"] == {"promptTokenCount": 101}
     assert item["processing_plan"]["state"] == "held"
     assert item["cost"] == {
         "currency": "INR",
@@ -311,6 +335,8 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
         "actual_paise": 1230,
         "reservation_state": "settled",
         "actual_state": "settled",
+        "usage_estimate_paise": None,
+        "usage_estimate_state": "rate_unavailable",
     }
     assert body["next_cursor"]
 

@@ -44,6 +44,28 @@ function formatCost(value: number | null): string {
   return value === null ? "—" : `₹${(value / 100).toFixed(2)}`;
 }
 
+function formatUsage(usage: Record<string, number> | null): string {
+  if (!usage) return "No usage receipt";
+  const total = usage.total_tokens ?? usage.totalTokenCount;
+  if (total !== undefined) return `${total.toLocaleString()} tokens`;
+  const input = usage.prompt_tokens ?? usage.promptTokenCount;
+  const output = usage.completion_tokens ?? usage.candidatesTokenCount;
+  if (input !== undefined || output !== undefined) {
+    return `${(input ?? 0).toLocaleString()} in · ${(output ?? 0).toLocaleString()} out`;
+  }
+  return "Counters recorded";
+}
+
+function formatUsageEstimate(
+  state: AdminRecording["cost"]["usage_estimate_state"],
+  value: number | null,
+): string {
+  if (value !== null) return formatCost(value);
+  if (state === "rate_unavailable") return "Unavailable · no approved rate";
+  if (state === "usage_unavailable") return "Unavailable · no usage receipt";
+  return "—";
+}
+
 function statusLabel(value: AdminRecording["status"]): string {
   return value.replaceAll("_", " ");
 }
@@ -108,6 +130,15 @@ function InventoryRow({
           <dd>{formatCost(recording.cost.estimate_paise)}</dd>
         </div>
         <div>
+          <dt>Usage estimate</dt>
+          <dd>
+            {formatUsageEstimate(
+              recording.cost.usage_estimate_state,
+              recording.cost.usage_estimate_paise,
+            )}
+          </dd>
+        </div>
+        <div>
           <dt>Actual</dt>
           <dd>
             {recording.cost.actual_paise === null
@@ -124,6 +155,21 @@ function InventoryRow({
           </dd>
         </div>
       </dl>
+      {recording.latest_run?.provider_stages.length ? (
+        <div className={styles.panelIntro}>
+          <strong>Provider usage observed</strong>
+          {recording.latest_run.provider_stages.map((stage) => (
+            <span key={stage.run_id}>
+              {stage.stage} · {stage.provider ?? "Provider unavailable"}
+              {stage.model ? ` / ${stage.model}` : ""} ·{" "}
+              {formatUsage(stage.usage)}
+              {stage.cost_state === "reconciliation_required"
+                ? " · charge pending reconciliation"
+                : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.assignmentActions}>
         {canUseForReview ? (
           <button
@@ -233,7 +279,7 @@ export function RecordingsInventory({
         eyebrow="All authorized recordings"
         id="recordings-title"
         title="Call inventory"
-        body="Search every retained learner and guest recording. Costs stay split between reservation, estimate, and settled actuals."
+        body="Search every retained learner and guest recording. Provider receipts show observed usage; reservation ceilings, usage estimates, and settled actuals stay separate."
       />
       <form className={styles.searchRow} onSubmit={submitSearch}>
         <label className={styles.searchField} htmlFor="recording-search">

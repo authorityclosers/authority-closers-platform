@@ -38,7 +38,27 @@ const recording = {
     source: "native_measurement" as const,
   },
   status: "held" as const,
-  latest_run: null,
+  latest_run: {
+    id: "33333333-3333-4333-8333-333333333333",
+    state: "completed" as const,
+    generation: 1,
+    recipe_revision: "audioatlas-16000-v1",
+    created_at: "2026-09-14T12:31:00+00:00",
+    completed_at: "2026-09-14T12:32:00+00:00",
+    provider_stages: [
+      {
+        stage: "C4" as const,
+        run_id: "33333333-3333-4333-8333-333333333333",
+        state: "completed" as const,
+        provider: "gemini",
+        model: "gemini-3.8-flash",
+        request_id: "request-1",
+        usage: { total_tokens: 120 },
+        receipt_state: "recorded" as const,
+        cost_state: "reconciliation_required" as const,
+      },
+    ],
+  },
   processing_plan: {
     id: "33333333-3333-4333-8333-333333333333",
     state: "held" as const,
@@ -58,6 +78,8 @@ const recording = {
     actual_paise: null,
     reservation_state: "reserved" as const,
     actual_state: "not_settled" as const,
+    usage_estimate_paise: null,
+    usage_estimate_state: "rate_unavailable" as const,
   },
 };
 
@@ -82,6 +104,10 @@ it("does not label an available report ready while review eligibility is blocked
       expect(container.textContent).toContain("Not ready"),
     );
     expect(container.textContent).toContain("Not ready");
+    expect(container.textContent).toContain("gemini / gemini-3.8-flash");
+    expect(container.textContent).toContain("120 tokens");
+    expect(container.textContent).toContain("charge pending reconciliation");
+    expect(container.textContent).toContain("Unavailable · no approved rate");
     expect(container.textContent).not.toContain("Ready for review");
   } finally {
     await act(async () => root.unmount());

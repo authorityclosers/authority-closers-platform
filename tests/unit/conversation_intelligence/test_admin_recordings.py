@@ -12,7 +12,9 @@ from ac_platform.conversation_intelligence.admin_recordings import (
     _cursor,
     _decode_cursor,
     _owner_view,
+    _provider_stage_view,
     _safe_duration,
+    _safe_provider_usage,
     _status,
 )
 from ac_platform.conversation_intelligence.application import ConversationError
@@ -86,6 +88,61 @@ def test_cost_view_never_invents_actual_cost_without_settlement() -> None:
     assert view["estimate_paise"] is None
     assert view["actual_paise"] is None
     assert view["actual_state"] == "not_settled"
+    assert view["usage_estimate_paise"] is None
+    assert view["usage_estimate_state"] == "not_applicable"
+
+
+def test_provider_receipt_exposes_allowlisted_usage_without_invoice_claim() -> None:
+    task = SimpleNamespace(
+        stage="C4",
+        state="completed",
+        run_id=UUID("33333333-3333-4333-8333-333333333333"),
+    )
+    job = SimpleNamespace(
+        provider_receipt={
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "provider_request_id": "request-1",
+            "usage": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 20,
+                "untrusted_text": "do-not-expose",
+            },
+            "cost_state": "reconciliation_required",
+            "actual_cost_paise": None,
+        }
+    )
+
+    view = _provider_stage_view(task, job)
+
+    assert view == {
+        "stage": "C4",
+        "run_id": "33333333-3333-4333-8333-333333333333",
+        "state": "completed",
+        "provider": "gemini",
+        "model": "gemini-3.8-flash",
+        "request_id": "request-1",
+        "usage": {"promptTokenCount": 100, "candidatesTokenCount": 20},
+        "receipt_state": "recorded",
+        "cost_state": "reconciliation_required",
+    }
+
+
+def test_usage_estimate_requires_a_source_backed_rate() -> None:
+    task = SimpleNamespace(
+        run_id=uuid4(),
+        quote_id=uuid4(),
+    )
+    view = _cost_view(
+        task,
+        None,
+        None,
+        provider_stages=({"usage": {"total_tokens": 120}, "receipt_state": "recorded"},),
+    )
+
+    assert view["usage_estimate_paise"] is None
+    assert view["usage_estimate_state"] == "rate_unavailable"
+    assert _safe_provider_usage({"total_tokens": 120, "input": "unsafe"}) == {"total_tokens": 120}
 
 
 def test_cost_view_aggregates_latest_plan_stages_from_shared_budget(

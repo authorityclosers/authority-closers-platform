@@ -16,6 +16,32 @@ const ownerSchema = z
   })
   .strict();
 
+const providerUsageSchema = z.record(
+  z.string().min(1),
+  z.number().int().nonnegative(),
+);
+
+const providerStageSchema = z
+  .object({
+    stage: z.enum(["C2", "C4", "C5"]),
+    run_id: uuidSchema,
+    state: z.enum([
+      "queued",
+      "running",
+      "completed",
+      "failed",
+      "uncertain",
+      "cancelled",
+    ]),
+    provider: z.string().min(1).nullable(),
+    model: z.string().min(1).nullable(),
+    request_id: z.string().min(1).nullable(),
+    usage: providerUsageSchema.nullable(),
+    receipt_state: z.enum(["recorded", "not_recorded"]),
+    cost_state: z.enum(["reconciliation_required", "settled", "not_settled"]),
+  })
+  .strict();
+
 const recordingSchema = z
   .object({
     id: uuidSchema,
@@ -67,6 +93,7 @@ const recordingSchema = z
         recipe_revision: z.string().min(1),
         created_at: z.string().datetime({ offset: true }),
         completed_at: z.string().datetime({ offset: true }).nullable(),
+        provider_stages: z.array(providerStageSchema),
       })
       .strict()
       .nullable(),
@@ -107,6 +134,13 @@ const recordingSchema = z
           "settled",
           "reconciliation_required",
           "not_settled",
+        ]),
+        usage_estimate_paise: z.number().int().nonnegative().nullable(),
+        usage_estimate_state: z.enum([
+          "available",
+          "rate_unavailable",
+          "usage_unavailable",
+          "not_applicable",
         ]),
       })
       .strict(),

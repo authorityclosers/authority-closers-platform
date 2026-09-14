@@ -41,6 +41,19 @@ const payload = {
         recipe_revision: "audioatlas-16000-v1",
         created_at: "2026-09-14T12:31:00+00:00",
         completed_at: "2026-09-14T12:32:00+00:00",
+        provider_stages: [
+          {
+            stage: "C4",
+            run_id: ids.run,
+            state: "completed",
+            provider: "gemini",
+            model: "gemini-3.8-flash",
+            request_id: "req-1",
+            usage: { promptTokenCount: 100, candidatesTokenCount: 20 },
+            receipt_state: "recorded",
+            cost_state: "reconciliation_required",
+          },
+        ],
       },
       processing_plan: null,
       report: {
@@ -58,6 +71,8 @@ const payload = {
         actual_paise: null,
         reservation_state: null,
         actual_state: "not_settled",
+        usage_estimate_paise: null,
+        usage_estimate_state: "rate_unavailable",
       },
     },
   ],
