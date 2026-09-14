@@ -130,6 +130,17 @@ DEFAULT_RATE_LIMIT_RULES = (
         capacity=10,
         refill_seconds=900,
     ),
+    # Coarse per-process issuance shield only.  This limits repeated public
+    # guest session minting by the source IP supplied by the trusted edge; it
+    # is not a one-human/one-account proof and does not enforce the durable
+    # 100-minute visitor ledger.
+    RateLimitRule(
+        name="conversation-acquisition-session",
+        method="POST",
+        path=re.compile(r"^/v1/conversation/acquisition/session$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
     # Coarse per-process abuse shield only.  Telemetry writes still require
     # an explicit tenant-aware distributed/edge admission seam in the route.
     RateLimitRule(
