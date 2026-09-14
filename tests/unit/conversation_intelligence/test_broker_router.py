@@ -212,6 +212,7 @@ def _router(bundle_box: dict[str, HostedApprovalBundle], child: Any) -> FixedPro
     return FixedProviderRouter(
         {
             "elevenlabs": ProviderRoute("elevenlabs", "ref:credential/elevenlabs/v1", child),
+            "deepgram": ProviderRoute("deepgram", "ref:credential/deepgram/v1", child),
             "groq": ProviderRoute("groq", "ref:credential/groq/v1", child),
             "gemini": ProviderRoute("gemini", "ref:credential/gemini/v1", child),
         },
@@ -229,6 +230,29 @@ async def test_exact_current_approval_selects_only_fixed_provider_child() -> Non
     result = await _router(bundle_box, child).execute(reservation, SOURCE)
 
     assert result.provider == "elevenlabs"
+    assert child.calls == [(reservation, SOURCE)]
+
+
+@pytest.mark.asyncio
+async def test_exact_current_approval_selects_deepgram_c2_child() -> None:
+    child = FakeChild()
+    stage = _stage(
+        provider_id="deepgram",
+        model_id="nova-3",
+        recipe_revision="deepgram-nova-3-multilingual-v1",
+    )
+    bundle = _bundle(stage)
+    reservation = _reservation(
+        bundle,
+        provider_id="deepgram",
+        provider_model="nova-3",
+        recipe_revision="deepgram-nova-3-multilingual-v1",
+        operation="transcribe_deepgram_nova3",
+    )
+
+    result = await _router({"bundle": bundle}, child).execute(reservation, SOURCE)
+
+    assert result.provider == "deepgram"
     assert child.calls == [(reservation, SOURCE)]
 
 

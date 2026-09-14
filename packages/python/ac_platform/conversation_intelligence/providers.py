@@ -157,8 +157,18 @@ class BoundedProviders:
                 payload = json.loads(raw)
                 if not isinstance(payload, dict):
                     raise ProviderError("provider_response_invalid")
-                request_id = response.headers.get(
-                    "request-id", response.headers.get("x-request-id")
+                request_id = next(
+                    (
+                        response.headers.get(name)
+                        for name in (
+                            "request-id",
+                            "x-request-id",
+                            "dg-request-id",
+                            "x-dg-request-id",
+                        )
+                        if response.headers.get(name) is not None
+                    ),
+                    None,
                 )
                 if request_id is not None and (
                     len(request_id) > 128 or not all(c.isalnum() or c in "-_:" for c in request_id)
@@ -196,10 +206,7 @@ class BoundedProviders:
             raise ProviderError("provider_transport_or_response_failed") from None
 
     def transcribe(self, reservation: Reservation, audio: bytes) -> ProviderResult:
-        if (
-            type(audio) is not bytes
-            or not 0 < len(audio) <= MAX_AUDIO_BYTES
-        ):
+        if type(audio) is not bytes or not 0 < len(audio) <= MAX_AUDIO_BYTES:
             raise ProviderError("provider_audio_or_model_invalid")
         if reservation.quote.input_sha256 != reservation.quote.source.source_sha256:
             raise ProviderError("provider_source_binding_mismatch")

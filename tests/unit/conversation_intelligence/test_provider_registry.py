@@ -32,6 +32,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
 
 _ENDPOINTS = {
     "elevenlabs": "https://api.elevenlabs.io/v1/speech-to-text",
+    "deepgram": "https://api.deepgram.com/v1/listen",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
     "groq": "https://api.groq.com/openai/v1/chat/completions",
 }
@@ -124,9 +125,9 @@ def _dispatch_request(config: RegistryConfig, *, task: TaskName = "asr") -> Disp
 def test_catalog_distinguishes_current_transport_from_planned_provider_options() -> None:
     view = {entry["provider_id"]: entry for entry in catalog_public_view()}
     assert DEFAULT_PROVIDER_CATALOG.digest
-    assert {
-        view[name]["status"] for name in ("gemini", "groq", "elevenlabs", "deepgram")
-    } == {"implemented"}
+    assert {view[name]["status"] for name in ("gemini", "groq", "elevenlabs", "deepgram")} == {
+        "implemented"
+    }
     planned = (
         "openai",
         "deepseek",
@@ -150,9 +151,7 @@ def test_catalog_distinguishes_current_transport_from_planned_provider_options()
     }
     nova = next(model for model in view["deepgram"]["models"] if model["model_id"] == "nova-3")
     assert nova["endpoint"] == "https://api.deepgram.com/v1/listen"
-    assert {item["task"]: item["status"] for item in nova["task_support"]} == {
-        "asr": "implemented"
-    }
+    assert {item["task"]: item["status"] for item in nova["task_support"]} == {"asr": "implemented"}
     gemini = next(
         model for model in view["gemini"]["models"] if model["model_id"] == "gemini-2.5-flash"
     )
@@ -250,6 +249,20 @@ def test_zero_cost_asr_resolves_exact_permission_and_endpoint_without_transport(
     assert plan.max_cost_paise == 0
     assert plan.required_input_stage == "C0"
     assert plan.reuses_checkpoint_stage is None
+
+
+def test_deepgram_nova3_resolves_as_an_explicit_c2_route() -> None:
+    provider = _provider(provider_id="deepgram", model_id="nova-3")
+    config = _config(
+        provider=provider,
+        route=_route("asr", provider_id="deepgram", model_id="nova-3"),
+    )
+
+    plan = resolve_dispatch(config, _dispatch_request(config))
+
+    assert plan.provider_id == "deepgram"
+    assert plan.model_id == "nova-3"
+    assert plan.endpoint == _ENDPOINTS["deepgram"]
 
 
 def test_dispatch_requires_current_config_digest_permission_and_input_stage() -> None:

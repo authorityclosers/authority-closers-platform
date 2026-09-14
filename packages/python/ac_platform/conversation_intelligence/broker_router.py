@@ -34,7 +34,7 @@ from ac_platform.conversation_intelligence.gemini_tasks import gemini_prompt_vie
 from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.providers import ProviderResult
 
-_SUPPORTED_PROVIDERS = frozenset({"elevenlabs", "groq", "gemini"})
+_SUPPORTED_PROVIDERS = frozenset({"deepgram", "elevenlabs", "groq", "gemini"})
 _REFERENCE = re.compile(r"^ref:[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$")
 _SENSITIVE = re.compile(
     r"(?:api[_-]?key|bearer|basic|password|secret|token|sk[-_]|gsk_|aq\.)",

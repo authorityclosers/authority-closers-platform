@@ -64,6 +64,28 @@ def test_elevenlabs_estimate_uses_native_duration_and_hourly_snapshot() -> None:
     assert estimate["pricing_snapshot"]["is_billing_rate"] is False
 
 
+def test_deepgram_estimate_uses_native_duration_and_multilingual_snapshot() -> None:
+    estimate = estimate_provider_usage(
+        "deepgram",
+        "nova-3",
+        None,
+        duration_ms=25_933,
+    )
+
+    assert estimate["paise"] == 23
+    assert estimate["state"] == "available"
+    assert estimate["basis"] == "native_duration_ms_x_approved_per_minute_rate"
+    snapshot = estimate["pricing_snapshot"]
+    assert snapshot["source_date"] == "2026-09-15"
+    assert snapshot["evidence_release_sha"] == "724f3ab549e1837bc0f5ed49aa298d4fd0f308a1"
+    assert snapshot["pricing_ref"] == "ref:pricing/deepgram-nova-3-multilingual-20260915"
+    assert snapshot["rate_basis"] == "per_minute"
+    assert snapshot["usd_per_minute"] == 0.0052
+    assert snapshot["evidence_sha256"] == (
+        "e4ac299a8e030cd9b6e22d517293fb979bf9bd8797f4d67faee86a28e3ffd1a7"
+    )
+
+
 def test_estimate_stays_unavailable_for_unknown_model_or_missing_units() -> None:
     unknown = estimate_provider_usage("gemini", "unknown-model", {"total_tokens": 10})
     missing_units = estimate_provider_usage("gemini", "gemini-3.8-flash", {"total_tokens": 10})

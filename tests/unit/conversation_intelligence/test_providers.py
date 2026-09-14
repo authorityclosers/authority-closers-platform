@@ -344,6 +344,7 @@ def test_deepgram_nova3_uses_bounded_binary_request_and_normalizes_labels():
         assert request.read() == audio
         return httpx.Response(
             200,
+            headers={"dg-request-id": "deepgram-synthetic-request-1"},
             json={
                 "results": {
                     "channels": [
@@ -376,6 +377,7 @@ def test_deepgram_nova3_uses_bounded_binary_request_and_normalizes_labels():
         )
 
     result = client(handler).transcribe(g, audio)
+    assert result.request_id == "deepgram-synthetic-request-1"
     transcript = deepgram_transcript(
         result,
         duration_ms=1000,
@@ -395,6 +397,61 @@ def test_deepgram_nova3_uses_bounded_binary_request_and_normalizes_labels():
     assert transcript["timebase_id"] == "deepgram-native-seconds"
     assert transcript["alignment_to_audioatlas"] == "unverified"
     assert transcript["speaker_identity"] == "unverified_provider_labels"
+
+
+def test_deepgram_preserves_hinglish_text_switching_and_unverified_speakers():
+    audio = b"synthetic-hinglish-audio"
+    g = grant(audio, provider="deepgram", model="nova-3", operation="transcribe_deepgram_nova3")
+
+    def handler(_):
+        return httpx.Response(
+            200,
+            headers={"dg-request-id": "deepgram-hinglish-request-1"},
+            json={
+                "results": {
+                    "channels": [
+                        {
+                            "alternatives": [
+                                {
+                                    "transcript": "Aap kal pricing discuss karenge? Haan, bilkul.",
+                                    "words": [
+                                        {"word": "Aap", "start": 0.0, "end": 0.4, "speaker": 0},
+                                        {"word": "kal", "start": 0.4, "end": 0.7, "speaker": 0},
+                                        {"word": "pricing", "start": 0.7, "end": 1.1, "speaker": 0},
+                                        {"word": "discuss", "start": 1.1, "end": 1.5, "speaker": 0},
+                                        {
+                                            "word": "karenge?",
+                                            "start": 1.5,
+                                            "end": 1.9,
+                                            "speaker": 0,
+                                        },
+                                        {"word": "Haan,", "start": 2.1, "end": 2.5, "speaker": 1},
+                                        {"word": "bilkul.", "start": 2.5, "end": 2.9, "speaker": 1},
+                                    ],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+        )
+
+    result = client(handler).transcribe(g, audio)
+    normalized = deepgram_transcript(
+        result,
+        duration_ms=3_000,
+        source_sha256=g.quote.source.source_sha256,
+    )
+    assert result.request_id == "deepgram-hinglish-request-1"
+    assert normalized["raw_text"] == "Aap kal pricing discuss karenge? Haan, bilkul."
+    assert [segment["speaker_id"] for segment in normalized["segments"]] == [
+        "speaker_0",
+        "speaker_1",
+    ]
+    assert normalized["segments"][0]["text"] == "Aap kal pricing discuss karenge?"
+    assert normalized["segments"][1]["text"] == "Haan, bilkul."
+    assert normalized["speaker_identity"] == "unverified_provider_labels"
+    assert all("channel" not in segment for segment in normalized["segments"])
 
 
 def _scribe_from_response(payload, *, duration_ms=1000):

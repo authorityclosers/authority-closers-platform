@@ -175,6 +175,29 @@ def test_deepgram_result_is_normalized_through_the_same_c2_contract() -> None:
     assert normalized.data()["segments"][0]["speaker_id"] == "speaker_0"
 
 
+@pytest.mark.parametrize(
+    "content_type",
+    ["audio/flac", "audio/mp4", "audio/mpeg", "audio/ogg", "audio/wav"],
+)
+def test_deepgram_c2_envelope_preserves_supported_mixed_audio_formats(
+    content_type: str,
+) -> None:
+    source_sha256 = hashlib.sha256(f"synthetic-{content_type}".encode()).hexdigest()
+    prepared = prepare_scribe_input(
+        source_sha256,
+        2_000,
+        content_type=content_type,
+        provider="deepgram",
+        model="nova-3",
+    )
+
+    payload = json.loads(prepared.payload)
+    assert prepared.operation == "transcribe_deepgram_nova3"
+    assert payload["content_type"] == content_type
+    assert payload["source_sha256"] == source_sha256
+    assert "audio_bytes" not in payload
+
+
 def test_fact_envelopes_cover_complete_chunks_without_profile() -> None:
     transcript = _transcript(count=6)
     prepared = prepare_fact_inputs(transcript, max_input_chars=220)
