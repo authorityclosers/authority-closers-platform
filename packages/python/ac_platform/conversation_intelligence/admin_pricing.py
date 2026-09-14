@@ -16,7 +16,7 @@ from typing import Any
 _PAISE_PER_INR = Decimal("100")
 _MILLION = Decimal("1000000")
 _SNAPSHOT_SCHEMA = "ac.sales-xray.pricing-snapshot/1"
-_RELEASE_SHA = "0847db5d3ca1ed825b68c226713d0f52d11683b1"
+_EVIDENCE_RELEASE_SHA = "0847db5d3ca1ed825b68c226713d0f52d11683b1"
 _SOURCE_DATE = "2026-09-14"
 _FX_USD_TO_INR = Decimal("100")
 
@@ -36,7 +36,9 @@ class PricingSnapshot:
     def as_dict(self) -> dict[str, Any]:
         return {
             "schema": _SNAPSHOT_SCHEMA,
-            "release_sha": _RELEASE_SHA,
+            # This is the release that supplied the immutable pricing evidence;
+            # it is not a claim about the release currently serving the API.
+            "evidence_release_sha": _EVIDENCE_RELEASE_SHA,
             "provider": self.provider_id,
             "model": self.model_id,
             "currency": "INR",
@@ -148,8 +150,8 @@ def estimate_provider_usage(
     input_tokens = _counter(usage, "promptTokenCount", "prompt_tokens", "input_tokens")
     output_tokens = _counter(usage, "candidatesTokenCount", "completion_tokens", "output_tokens")
     thoughts = _counter(usage, "thoughtsTokenCount", "thoughts_tokens")
-    if thoughts is not None:
-        output_tokens = (output_tokens or 0) + thoughts
+    if output_tokens is not None and thoughts is not None:
+        output_tokens += thoughts
     if input_tokens is None or output_tokens is None:
         return {
             "paise": None,

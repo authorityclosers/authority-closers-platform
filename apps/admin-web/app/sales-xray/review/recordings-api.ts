@@ -25,7 +25,7 @@ const providerUsageSchema = z.record(
 const pricingSnapshotSchema = z
   .object({
     schema: z.literal("ac.sales-xray.pricing-snapshot/1"),
-    release_sha: releaseShaSchema,
+    evidence_release_sha: releaseShaSchema,
     provider: z.string().min(1),
     model: z.string().min(1),
     currency: z.literal("INR"),

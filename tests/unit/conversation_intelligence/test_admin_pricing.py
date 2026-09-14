@@ -14,7 +14,7 @@ def test_gemini_estimate_uses_receipt_tokens_and_release_snapshot() -> None:
     assert estimate["state"] == "available"
     assert estimate["pricing_snapshot"] == {
         "schema": "ac.sales-xray.pricing-snapshot/1",
-        "release_sha": "0847db5d3ca1ed825b68c226713d0f52d11683b1",
+        "evidence_release_sha": "0847db5d3ca1ed825b68c226713d0f52d11683b1",
         "provider": "gemini",
         "model": "gemini-3.8-flash",
         "currency": "INR",
@@ -55,3 +55,14 @@ def test_estimate_stays_unavailable_for_unknown_model_or_missing_units() -> None
     assert missing_units["paise"] is None
     assert missing_units["state"] == "usage_unavailable"
     assert missing_units["pricing_snapshot"]["currency"] == "INR"
+
+
+def test_gemini_estimate_stays_unavailable_when_only_thought_tokens_exist() -> None:
+    estimate = estimate_provider_usage(
+        "gemini",
+        "gemini-3.8-flash",
+        {"thoughtsTokenCount": 20},
+    )
+
+    assert estimate["paise"] is None
+    assert estimate["state"] == "usage_unavailable"

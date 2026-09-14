@@ -34,10 +34,11 @@ conservative display estimate.  Each snapshot is marked
 stage with missing units or an unknown model remains unavailable, and a
 recording with only some stage estimates is labelled `partial`.
 
-The snapshots are operator-bound to release
-`0847db5d3ca1ed825b68c226713d0f52d11683b1`; the API carries that release SHA
-alongside each evidence hash so a later release cannot silently present a
-different rate as the current estimate.
+The snapshots carry `evidence_release_sha`
+`0847db5d3ca1ed825b68c226713d0f52d11683b1`, the release that supplied the
+immutable pricing evidence. This provenance field is not the serving release
+and does not claim that the current deployment is that SHA; the API carries it
+alongside each evidence hash so operators can audit the rate source.
 
 The implementation reads existing `jobs.provider_receipt` rows through the
 tenant-scoped inference task IDs.  It does not call providers, alter budgets,

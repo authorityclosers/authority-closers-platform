@@ -130,7 +130,7 @@ def test_provider_receipt_exposes_allowlisted_usage_without_invoice_claim() -> N
         "usage_estimate_basis": "provider_input_and_output_tokens_x_approved_token_rates",
         "pricing_snapshot": {
             "schema": "ac.sales-xray.pricing-snapshot/1",
-            "release_sha": "0847db5d3ca1ed825b68c226713d0f52d11683b1",
+            "evidence_release_sha": "0847db5d3ca1ed825b68c226713d0f52d11683b1",
             "provider": "gemini",
             "model": "gemini-3.8-flash",
             "currency": "INR",
