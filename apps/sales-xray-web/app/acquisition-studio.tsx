@@ -473,6 +473,15 @@ export function AcquisitionStudio() {
     if (input.current) input.current.value = "";
   }
 
+  function forgetSavedCall() {
+    if (inFlight.current) return;
+    rememberSubmission(null);
+    setDeletionOnlyId(null);
+    setDeleteConfirm(false);
+    setError("");
+    chosenId.current = "";
+  }
+
   async function claim() {
     await operation("Saving with your account…", async (signal) => {
       const claimed = record(
@@ -648,6 +657,18 @@ export function AcquisitionStudio() {
                   This saved call cannot be opened here. If you own it, you can
                   permanently delete it.
                 </p>
+                <p className="small-text">
+                  If deletion is denied, you can forget this selector on this
+                  device. That does not delete the stored recording or report.
+                </p>
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={!!busy}
+                  onClick={forgetSavedCall}
+                >
+                  Forget this saved call on this device
+                </button>
               </>
             ) : !file && !submission ? (
               <>

@@ -30,7 +30,8 @@ let existing: boolean,
   accepted: boolean,
   claimed: boolean,
   failedUpload: boolean,
-  lookupUnavailable: boolean;
+  lookupUnavailable: boolean,
+  deletionDenied: boolean;
 let reportBody: unknown;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -87,6 +88,7 @@ beforeEach(() => {
   claimed = false;
   failedUpload = false;
   lookupUnavailable = false;
+  deletionDenied = false;
   reportBody = envelope;
   localStorage.clear();
   container = document.createElement("div");
@@ -148,7 +150,9 @@ beforeEach(() => {
       }
       if (path.endsWith(`/submissions/${submissionId}`))
         return init.method === "DELETE"
-          ? response({ id: recordingId, state: "deleting" }, 202)
+          ? deletionDenied
+            ? response({}, 404)
+            : response({ id: recordingId, state: "deleting" }, 202)
           : lookupUnavailable
             ? response({}, 404)
             : response({
@@ -276,4 +280,22 @@ it("keeps an explicit deletion-only recovery when a saved call is unavailable", 
   ).toBe(true);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(container.textContent).toContain("Deletion requested");
+});
+
+it("can forget a saved selector when owner-authorized deletion is denied", async () => {
+  existing = true;
+  lookupUnavailable = true;
+  deletionDenied = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await click("Delete this call");
+  await click("Delete recording and report");
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(button("Forget this saved call on this device")).toBeDefined();
+  await click("Forget this saved call on this device");
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
+  expect(container.textContent).toContain("Start with your sales call");
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
 });
