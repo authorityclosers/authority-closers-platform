@@ -451,6 +451,78 @@ describe("provider control contract", () => {
     ).toBe(false);
   });
 
+  it("edits an existing stage route from its provider/model selectors and saves from the main path", async () => {
+    const localProvider = {
+      ...importedConfiguration.providers[0]!,
+      provider_id: "local",
+      model_id: "audioatlas",
+      endpoint: null,
+      endpoint_sha256: null,
+      max_cost_paise: 0,
+    };
+    const stageConfiguration = {
+      ...importedConfiguration,
+      providers: [...importedConfiguration.providers, localProvider],
+    };
+    const current = {
+      id: "registry-proof",
+      revision: 4,
+      configuration_sha256: "a".repeat(64),
+      configuration: stageConfiguration,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+      activation: null,
+      activation_options: [],
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockResolvedValueOnce(jsonResponse({ ...current, revision: 5 }));
+
+    await renderPanel();
+    const provider = host.querySelector(
+      'select[aria-label="Analysis provider"]',
+    ) as HTMLSelectElement;
+    expect(provider).not.toBeNull();
+    expect(
+      host.querySelector('select[aria-label="Analysis model"]'),
+    ).not.toBeNull();
+
+    await act(async () => {
+      provider.value = "local";
+      provider.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+    const saveButton = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Save settings"),
+    ) as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(false);
+
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Save settings"))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const saveCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        url === "/v1/admin/conversation/providers" && init?.method === "POST",
+    );
+    expect(saveCall).toBeDefined();
+    expect(
+      JSON.parse(saveCall?.[1]?.body as string).configuration.routes,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          task: "facts",
+          provider_id: "local",
+          model_id: "audioatlas",
+        }),
+      ]),
+    );
+  });
+
   it("activates only a server-listed approved revision for future plans", async () => {
     const current = {
       id: "registry-proof",

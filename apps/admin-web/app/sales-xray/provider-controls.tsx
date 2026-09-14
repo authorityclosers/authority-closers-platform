@@ -800,6 +800,9 @@ type StageSummaryProps = {
   catalog: CatalogEntry[];
   dataPath: string;
   note?: string;
+  saved: boolean;
+  active: boolean;
+  onRouteChange?: (patch: Partial<RouteConfig>) => void;
 };
 
 function StageSummary({
@@ -811,6 +814,9 @@ function StageSummary({
   catalog,
   dataPath,
   note,
+  saved,
+  active,
+  onRouteChange,
 }: StageSummaryProps) {
   const provider = route
     ? providers.find((entry) => bindingKey(entry) === bindingKey(route))
@@ -821,17 +827,48 @@ function StageSummary({
   const model = provider
     ? modelFor(catalogProvider, provider.model_id)
     : undefined;
+  const taskSupport = model?.task_support.find(
+    (support) => support.task === task,
+  );
   const implemented =
     catalogProvider?.status === "implemented" &&
-    model?.transport_status === "implemented";
+    model?.transport_status === "implemented" &&
+    taskSupport?.status === "implemented";
   const status = !route
     ? "Not configured"
-    : implemented
-      ? "Implemented"
-      : catalogProvider?.status === "planned" ||
-          model?.transport_status === "planned"
+    : !catalogProvider || !model
+      ? "Needs catalog review"
+      : catalogProvider.status === "planned" ||
+          model.transport_status === "planned"
         ? "Planned · dormant"
-        : "Needs catalog review";
+        : !taskSupport || taskSupport.status === "unavailable"
+          ? "Unavailable for task"
+          : taskSupport.status === "contract_only"
+            ? "Contract only"
+            : taskSupport.status === "planned"
+              ? "Planned · dormant"
+              : implemented
+                ? "Implemented"
+                : "Needs catalog review";
+  const providerOptions = providers.filter(
+    (entry, index, all) =>
+      entry.provider_id &&
+      all.findIndex(
+        (candidate) => candidate.provider_id === entry.provider_id,
+      ) === index,
+  );
+  const modelOptions = route
+    ? providers.filter(
+        (entry, index, all) =>
+          entry.provider_id === route.provider_id &&
+          entry.model_id &&
+          all.findIndex(
+            (candidate) =>
+              candidate.provider_id === entry.provider_id &&
+              candidate.model_id === entry.model_id,
+          ) === index,
+      )
+    : [];
 
   return (
     <article
@@ -843,24 +880,95 @@ function StageSummary({
           <span className={styles.eyebrow}>{eyebrow}</span>
           <h2 id={`${task}-stage-title`}>{title}</h2>
         </div>
-        <span
-          className={implemented ? styles.stageStatus : styles.stageStatusMuted}
-        >
-          {status}
-        </span>
+        <div className={styles.stageBadges}>
+          <span
+            className={
+              implemented ? styles.stageStatus : styles.stageStatusMuted
+            }
+          >
+            {status}
+          </span>
+          {route ? (
+            <>
+              <span
+                className={saved ? styles.stageStatus : styles.stageStatusMuted}
+              >
+                {saved ? "Saved" : "Unsaved changes"}
+              </span>
+              <span
+                className={
+                  active ? styles.stageStatus : styles.stageStatusMuted
+                }
+              >
+                {active ? "Active for new plans" : "Not active"}
+              </span>
+            </>
+          ) : null}
+        </div>
       </div>
       {route ? (
         <div className={styles.stageRoute}>
-          <div>
-            <span className={styles.stageLabel}>Provider</span>
-            <strong>
-              {catalogProvider?.display_name ?? route.provider_id}
-            </strong>
-          </div>
-          <div>
-            <span className={styles.stageLabel}>Model</span>
-            <strong>{route.model_id || "Model not selected"}</strong>
-          </div>
+          {onRouteChange ? (
+            <label className={styles.stageField}>
+              <span className={styles.stageLabel}>Provider</span>
+              <select
+                aria-label={`${title} provider`}
+                value={route.provider_id}
+                onChange={(event) => {
+                  const next = providers.find(
+                    (entry) => entry.provider_id === event.target.value,
+                  );
+                  if (next)
+                    onRouteChange({
+                      provider_id: next.provider_id,
+                      model_id: next.model_id,
+                    });
+                }}
+              >
+                {providerOptions.map((entry) => (
+                  <option value={entry.provider_id} key={entry.provider_id}>
+                    {providerFor(catalog, entry.provider_id)?.display_name ??
+                      entry.provider_id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div>
+              <span className={styles.stageLabel}>Provider</span>
+              <strong>
+                {catalogProvider?.display_name ?? route.provider_id}
+              </strong>
+            </div>
+          )}
+          {onRouteChange ? (
+            <label className={styles.stageField}>
+              <span className={styles.stageLabel}>Model</span>
+              <select
+                aria-label={`${title} model`}
+                value={route.model_id}
+                onChange={(event) =>
+                  onRouteChange({ model_id: event.target.value })
+                }
+              >
+                {modelOptions.map((entry) => (
+                  <option value={entry.model_id} key={entry.model_id}>
+                    {entry.model_id}
+                  </option>
+                ))}
+                {!modelOptions.some(
+                  (entry) => entry.model_id === route.model_id,
+                ) && route.model_id ? (
+                  <option value={route.model_id}>{route.model_id}</option>
+                ) : null}
+              </select>
+            </label>
+          ) : (
+            <div>
+              <span className={styles.stageLabel}>Model</span>
+              <strong>{route.model_id || "Model not selected"}</strong>
+            </div>
+          )}
           <div>
             <span className={styles.stageLabel}>Task</span>
             <strong>{task}</strong>
@@ -1037,6 +1145,26 @@ export function ProviderControlsPanel() {
   const catalog = state.status === "ready" ? state.payload.catalog : [];
   const tasks = state.status === "ready" ? state.payload.tasks : [];
   const activationOptions = current?.activation_options ?? [];
+  const draftMatchesSaved =
+    current !== null &&
+    canonicalJson(draft.providers) ===
+      canonicalJson(current.configuration.providers) &&
+    canonicalJson(draft.routes) === canonicalJson(current.configuration.routes);
+  const currentRevisionIsActive = Boolean(
+    current?.activation && current.activation.revision === current.revision,
+  );
+
+  function updateRoute(task: RouteConfig["task"], patch: Partial<RouteConfig>) {
+    setDraft((previous) => ({
+      ...previous,
+      routes: previous.routes.map((entry) =>
+        entry.task === task ? { ...entry, ...patch } : entry,
+      ),
+    }));
+    setSaveState("idle");
+    setMessage("");
+  }
+
   function addProvider() {
     if (state.status !== "ready") return;
     setDraft((previous) => ({
@@ -1379,8 +1507,30 @@ export function ProviderControlsPanel() {
               Review the real provider and model used by each stage. These cards
               describe the data path; they do not start a provider call.
             </p>
+            <p className={styles.revisionState}>
+              <strong>Saved:</strong>{" "}
+              {current ? `revision #${current.revision}` : "none"}
+              {" · "}
+              <strong>Active for new plans:</strong>{" "}
+              {current?.activation
+                ? `revision #${current.activation.revision}`
+                : "none"}
+            </p>
           </div>
-          <ShieldCheck size={20} aria-hidden="true" />
+          <button
+            className="button button-primary"
+            type="button"
+            onClick={() => void save()}
+            disabled={saveState === "saving" || draftMatchesSaved}
+          >
+            {saveState === "saving" ? (
+              "Saving…"
+            ) : (
+              <>
+                <Save size={15} aria-hidden="true" /> Save settings
+              </>
+            )}
+          </button>
         </div>
         <div className={styles.stageGrid}>
           <StageSummary
@@ -1391,6 +1541,9 @@ export function ProviderControlsPanel() {
             providers={draft.providers}
             catalog={catalog}
             dataPath="The uploaded recording is sent for speech-to-text transcription."
+            saved={draftMatchesSaved}
+            active={currentRevisionIsActive}
+            onRouteChange={(patch) => updateRoute("asr", patch)}
           />
           <StageSummary
             eyebrow="02 · Analysis"
@@ -1400,6 +1553,9 @@ export function ProviderControlsPanel() {
             providers={draft.providers}
             catalog={catalog}
             dataPath="The saved transcript is sent for structured facts and checkpoints."
+            saved={draftMatchesSaved}
+            active={currentRevisionIsActive}
+            onRouteChange={(patch) => updateRoute("facts", patch)}
           />
           <StageSummary
             eyebrow="03 · Report style"
@@ -1410,6 +1566,9 @@ export function ProviderControlsPanel() {
             catalog={catalog}
             dataPath="Source-bound transcript facts and checkpoints are sent for coaching/report drafting."
             note="Report profile and detail length are controlled in Analysis settings above."
+            saved={draftMatchesSaved}
+            active={currentRevisionIsActive}
+            onRouteChange={(patch) => updateRoute("coaching", patch)}
           />
         </div>
       </section>
