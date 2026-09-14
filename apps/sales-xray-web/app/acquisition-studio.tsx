@@ -3,6 +3,7 @@ import { AnalysisAvailability } from "./analysis-availability";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AudioLines,
   ArrowRight,
@@ -142,6 +143,7 @@ export function AcquisitionStudio({
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
   const [entry, setEntry] = useState<Entry | null>(null);
+  const router = useRouter();
   const [analysisPaused, setAnalysisPaused] = useState(false);
   const [policy, setPolicy] = useState<UploadPolicy | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
@@ -1440,7 +1442,11 @@ export function AcquisitionStudio({
                   id: "overview",
                   label: "Overview",
                   content: (
-                    <DipakOverview report={report} onSelectEvidence={seek} />
+                    <DipakOverview
+                      report={report}
+                      onSelectEvidence={seek}
+                      onUnlock={() => router.push("/login")}
+                    />
                   ),
                 },
                 {

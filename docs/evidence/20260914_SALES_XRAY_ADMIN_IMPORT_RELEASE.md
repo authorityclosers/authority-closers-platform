@@ -67,3 +67,12 @@ Dipak artwork despite the asset being present in source. The Docker runtime now
 copies public assets. The image workflow requests the real WebP over HTTP and
 compares its bytes with the bundled file after starting the built container;
 this check must pass on the next exact-SHA image before deployment.
+
+Integrated the guest projection with the mounted acquisition journey: each
+remaining-insight action opens the existing account route without re-uploading
+or discarding the saved submission. The same one-consent path is exercised under
+the real learner route, with one source PUT and one plan acceptance. Combined
+standalone suite: 174 passed; focused mounted acquisition: 30 passed; learner
+Sales Xray routes: 33 passed; upload-policy/projection: 29 passed. Both app
+typechecks, standalone lint, affected-app formatting and diff checks passed.
+These are local results; live recovery and report readback are still required.

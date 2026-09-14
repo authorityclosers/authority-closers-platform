@@ -1,6 +1,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+const { navigateToAccount } = vi.hoisted(() => ({
+  navigateToAccount: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: navigateToAccount }),
+}));
 import Page from "./page";
 import { remainingAllowanceLabel } from "./acquisition-studio";
 import {
@@ -88,6 +94,7 @@ async function consent() {
 }
 
 beforeEach(() => {
+  navigateToAccount.mockReset();
   vi.useFakeTimers();
   calls = [];
   existing = false;
@@ -761,6 +768,50 @@ it("reload fetches the retained call and refuses a mismatched report", async () 
   ).toBeNull();
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
+});
+
+it("opens account access from a withheld report insight without another upload", async () => {
+  existing = true;
+  accepted = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  const previewSections = Object.fromEntries(
+    [
+      "strengths",
+      "improvements",
+      "missed_opportunities",
+      "objection_analysis",
+      "closing_analysis",
+      "golden_moments",
+      "prospect_interpretations",
+      "rewatch",
+      "ethics_notes",
+    ].map((key) => {
+      const content = envelope.report.content as Record<string, unknown>;
+      const overview = content.overview as Record<string, unknown>;
+      const visible = ((content[key] ?? overview[key]) as unknown[]).length;
+      const hidden = key === "strengths" || visible > 1 ? 1 : 0;
+      return [
+        key,
+        {
+          visible_count: visible,
+          total_count: visible + hidden,
+          hidden_count: hidden,
+        },
+      ];
+    }),
+  );
+  reportBody = {
+    ...envelope,
+    report: {
+      ...envelope.report,
+      preview: { version: "guest-findings-v1", sections: previewSections },
+    },
+  };
+  await mount();
+  await click("Continue free");
+  expect(navigateToAccount).toHaveBeenCalledWith("/login");
+  expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
 });
 
 it("login return offers an explicit claim before reading the saved report", async () => {

@@ -2,6 +2,9 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 import Page from "./page";
 import CallsPage from "./calls/page";
 import {
@@ -212,12 +215,9 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(button("Upload my call").disabled).toBe(false);
   expect(host.querySelector('script[src*="turnstile"]')).toBeNull();
   await click("Upload my call");
-  expect(button("Analyse my call").disabled).toBe(true);
-  expect(requests.some(({ path }) => path.endsWith("/plan"))).toBe(false);
-  await act(async () =>
-    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
-  );
-  await click("Analyse my call");
+  expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(host.textContent).not.toContain("Maximum processing cost");
+  expect(host.textContent).not.toContain("synthetic-provider");
   expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
   expect(host.textContent).toContain(envelope.report.content.summary);
   expect(host.textContent).not.toContain("Sign in to save this call");
