@@ -172,7 +172,6 @@ export function AdminReportPage({ runId }: { runId: string }) {
 
   const load = useCallback(() => {
     const controller = new AbortController();
-    setState({ status: "loading", report: null });
     void loadAdminReport({ runId, signal: controller.signal }).then(
       (report) => setState({ status: "ready", report }),
       (error: unknown) => {
@@ -190,9 +189,9 @@ export function AdminReportPage({ runId }: { runId: string }) {
       },
     );
     return () => controller.abort();
-  }, [runId, requestNumber]);
+  }, [runId]);
 
-  useEffect(() => load(), [load]);
+  useEffect(() => load(), [load, requestNumber]);
 
   return (
     <AdminShell
@@ -229,7 +228,10 @@ export function AdminReportPage({ runId }: { runId: string }) {
               <button
                 className="button button-secondary"
                 type="button"
-                onClick={() => setRequestNumber((current) => current + 1)}
+                onClick={() => {
+                  setState({ status: "loading", report: null });
+                  setRequestNumber((current) => current + 1);
+                }}
               >
                 Try again
               </button>
