@@ -41,6 +41,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import StageReques
 from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_acquisition_runtime import install_acquisition_runtime
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
@@ -173,10 +174,11 @@ def _make_live_backend(
     settings = Settings(
         _env_file=None,
         environment="test",
-        public_app_url=origin,
+        public_app_url="http://learner.test",
         admin_app_url="http://admin.test",
         coach_app_url="http://coach.test",
-        api_url=origin,
+        api_url="http://api.test",
+        sales_xray_app_url=origin,
         session_token_pepper=pepper,
         oauth_transaction_secret=secrets.token_urlsafe(32),
         email_challenge_secret=secrets.token_urlsafe(32),
@@ -221,6 +223,13 @@ def _make_live_backend(
                     prepared.storage,
                     prepared.scratch,
                 ),
+            )
+            install_acquisition_runtime(
+                app,
+                settings=settings,
+                sessions=sessions,
+                require_actor=require_actor,
+                runtime=None,
             )
             app.add_middleware(
                 RequestBodyLimitMiddleware,

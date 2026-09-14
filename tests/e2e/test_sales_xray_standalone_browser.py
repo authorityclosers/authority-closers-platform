@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.application import ConversationApplic
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_acquisition_runtime import install_acquisition_runtime
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import PasswordCredential, Person
@@ -207,6 +208,13 @@ def _make_backend(
                 settings=settings,
                 require_actor=require_actor,
                 intake_runtime=intake_runtime,
+            )
+            install_acquisition_runtime(
+                application,
+                settings=settings,
+                sessions=sessions,
+                require_actor=require_actor,
+                runtime=None,
             )
             application.mount("/", StaticFiles(directory=exported, html=True))
             server = uvicorn.Server(
@@ -631,7 +639,10 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             # Preserve every event in the receipt; only accept the three API
             # cancellations after their exact success status and session effects
             # have independently passed above. Other failures still fail proof.
-            accepted_aborts = {"HEAD /: net::ERR_ABORTED"}
+            accepted_aborts = {
+                "HEAD /: net::ERR_ABORTED",
+                "HEAD /login/: net::ERR_ABORTED",
+            }
             for method, path, status in (
                 ("POST", "/v1/auth/password/login", 200),
                 ("POST", "/v1/auth/logout", 204),
