@@ -228,14 +228,13 @@ def normalize_overview(
 
 
 OVERVIEW_INSTRUCTION = (
-    " Use fourteen parts; no invented/duplicate findings. Separate event, impact, next action. "
-    "Golden moments need evidenced "
-    "strengths. Interpretations/causal effects are hypotheses. "
-    "Unsupported diagnosis/outcome/change "
-    "is null; before/change/after must be chronological. A follow-up window is not a booking/sale. "
-    "ONE focus/drill links improvement 0 with an observable target. Business impact is "
-    "insufficient_data with named missing inputs; progress is null. No invented closer name, "
-    "level or ethics verdict; ethics notes need evidence and human review. Omit server-derived "
+    " EVIDENCE_ARRAYS: v1. span={segment_id,quote,start_ms,end_ms}. Every evidence value is a "
+    "nonempty JSON array of span objects, even for one; never a bare object or string. "
+    "No invented/duplicate findings. Golden moments: evidenced strengths. "
+    "Interpretations/causes:hypotheses. Unknown diagnosis/outcome/change:null. "
+    "Follow-up windows are not bookings/sales. ONE focus/drill: improvement 0, observable target. "
+    "Business impact:insufficient_data; name missing inputs. No invented name/level/"
+    "ethics verdict; ethics need evidence/human review. Omit server-derived "
     "source_label, source_sha256, transcript_revision, report_sections, "
     "dimension labels/citations. "
 )
@@ -244,32 +243,34 @@ OVERVIEW_INSTRUCTION = (
 # validating boundary. Repeating the entire JSON Schema would waste bounded TPM.
 OVERVIEW_FORMAT = {
     "version": OVERVIEW_VERSION,
-    "diagnosis": "{text: one sentence <=320 characters, evidence}|null",
+    "diagnosis": "{text: sentence <=320 chars,evidence:[span]}|null",
     "outcome": (
-        "{kind: closed|follow_up|no_sale|future_date|disqualified|unclear, text, evidence}|null"
+        "{kind: closed|follow_up|no_sale|future_date|disqualified|unclear,"
+        "text,evidence:[span]}|null"
     ),
-    "strength_details": "[{finding_index, why_it_matters}] for each strength",
+    "strength_details": "[{finding_index, why_it_matters}] per strength",
     "improvement_details": (
-        "[{finding_index, what_happened: {text,evidence}, why_it_matters, "
+        "[{finding_index, what_happened: {text,evidence:[span]}, why_it_matters, "
         "replacement_behavior, business_impact: {status: insufficient_data, "
-        "missing_inputs: [text]}}] for each improvement"
+        "missing_inputs: [text]}}] per improvement"
     ),
     "golden_moments": "[{strength_index,evidence_index,why_effective}], at most 3",
     "missed_details": (
-        "[{finding_index,prospect_signal:{text,evidence},closer_response:{text,evidence},"
+        "[{finding_index,prospect_signal:{text,evidence:[span]},closer_response:{text,evidence:[span]},"
         "follow_up,potential_impact}]"
     ),
     "prospect_interpretations": (
-        "[{source:{text,evidence},possible_concern,interpretation_kind:inference}], at most 3"
+        "[{source:{text,evidence:[span]},possible_concern,"
+        "interpretation_kind:inference}], at most 3"
     ),
     "rewatch": (
-        "[{text,purpose:must_watch|watch|repeat,evidence:[one exact source span]}], at most 3"
+        "[{text,purpose:must_watch|watch|repeat,evidence:[span]}], at most 3; one span each"
     ),
     "conversation_change": (
-        "{before:{text,evidence},change:{text,evidence},after:{text,evidence},"
+        "{before:{text,evidence:[span]},change:{text,evidence:[span]},after:{text,evidence:[span]},"
         "possible_effect,interpretation_kind:inference}|null; strictly chronological source spans"
     ),
-    "ethics_notes": "[{text,evidence}], at most 3; observations only",
+    "ethics_notes": "[{text,evidence:[span]}], at most 3; observations only",
     "next_call_focus": "{improvement_index:0,behavior,target}|null if no improvement",
     "practice": "{improvement_index:0,instructions,success_condition}|null if no improvement",
     "progress": None,
