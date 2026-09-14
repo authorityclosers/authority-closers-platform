@@ -60,7 +60,10 @@ describe("acquisition source-bound presentation", () => {
   });
   it("rejects forged quota, paid upload policy and mismatched progress", () => {
     expect(parseAllowance(allowance).available_seconds).toBe(6000);
-    expect(parsePolicy(policy).maximum_file_bytes).toBe(128 * 1024 ** 2);
+    expect(parsePolicy(policy).maximum_file_bytes).toBe(32 * 1024 ** 2);
+    expect(() =>
+      parsePolicy({ ...policy, maximum_file_bytes: 32 * 1024 ** 2 + 1 }),
+    ).toThrow();
     expect(parseEntry(entry).site_key).toBe(entry.site_key);
     expect(() =>
       parseAllowance({ ...allowance, available_seconds: 5999 }),

@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.acquisition_source import (
 )
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import _canonical_json
 from tests.unit.conversation_intelligence.test_native_runtime import _checkpoint_fixture
 
@@ -122,6 +123,17 @@ def test_wrong_original_hash_is_rejected_before_native_call(tmp_path: Path) -> N
     source.write_bytes(b"RIFF0000WAVEsynthetic")
     runtime = FixtureRuntime()
     with pytest.raises(ConversationError, match="differs"):
+        NativeUploadPreflight(runtime).measure(source, uuid4(), "0" * 64)
+    assert runtime.calls == 0
+
+
+def test_source_over_provider_limit_is_rejected_before_native_call(tmp_path: Path) -> None:
+    source = tmp_path / "oversized.media"
+    with source.open("wb") as stream:
+        stream.truncate(MAX_AUDIO_BYTES + 1)
+    runtime = FixtureRuntime()
+
+    with pytest.raises(ConversationError, match="up to 32 MiB"):
         NativeUploadPreflight(runtime).measure(source, uuid4(), "0" * 64)
     assert runtime.calls == 0
 

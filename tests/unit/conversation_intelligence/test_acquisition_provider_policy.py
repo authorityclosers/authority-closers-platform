@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Quote,
     Reservation,
 )
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationMinuteAccount,
@@ -60,7 +61,7 @@ def _template(stage: str) -> AcquisitionStagePolicy:
         zero_cost_basis="synthetic",
         price_evidence_sha256="c" * 64,
         max_source_duration_ms=14_400_000,
-        max_input_bytes=134_217_728,
+        max_input_bytes=MAX_AUDIO_BYTES,
         max_completion_tokens=0 if is_c2 else 800,
         profile_sha256="d" * 64 if stage == "C5" else None,
     )
@@ -75,7 +76,7 @@ def _policy(**updates: object) -> AcquisitionProviderPolicy:
         "authorization_ref": "ref:acquisition/approval-v1",
         "expires_at_epoch": 1_900,
         "max_recordings": 4,
-        "max_source_bytes": 134_217_728,
+        "max_source_bytes": MAX_AUDIO_BYTES,
         "max_stored_source_bytes": 536_870_912,
         "stages": (_template("C2"), _template("C4"), _template("C5")),
     }

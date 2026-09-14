@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from ac_platform.conversation_intelligence.contracts import RecordingIntent
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.http.conversation import install_conversation_http
 
 
@@ -20,7 +21,7 @@ def test_caller_cannot_select_tenant_or_enable_providers():
         ("tenant_id", "forged"),
         ("provider_processing", True),
         ("source_bytes", True),
-        ("source_bytes", 134217729),
+        ("source_bytes", MAX_AUDIO_BYTES + 1),
         ("source_sha256", "../secret"),
     ]:
         with pytest.raises(ValidationError):

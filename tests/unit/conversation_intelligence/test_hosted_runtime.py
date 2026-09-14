@@ -43,7 +43,7 @@ def approval_data(environment: str = "test") -> dict[str, Any]:
                 "person_id": person,
                 "seconds": 300,
                 "max_recordings": 4,
-                "max_source_bytes": 134_217_728,
+                "max_source_bytes": 32 * 1024 * 1024,
                 "max_stored_source_bytes": 536_870_912,
                 "authorization_ref": "ref:synthetic/allowance",
                 "granted_by": person,

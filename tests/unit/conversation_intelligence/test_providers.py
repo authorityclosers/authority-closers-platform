@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Quote,
     Reservation,
 )
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
@@ -400,3 +401,16 @@ def test_cross_source_scribe_and_oversized_output_budget_rejected():
     invalid = {**body(), "generationConfig": {"maxOutputTokens": 9000}}
     with pytest.raises(ProviderError, match="budget"):
         client(lambda _: pytest.fail("network called")).generate(grant(canonical(invalid)), invalid)
+
+
+def test_scribe_rejects_audio_over_shared_provider_limit_before_network():
+    audio = b"a" * (MAX_AUDIO_BYTES + 1)
+    reservation = grant(
+        audio,
+        provider="elevenlabs",
+        model="scribe_v2",
+        operation="transcribe_scribe_v2",
+    )
+
+    with pytest.raises(ProviderError, match="audio_or_model_invalid"):
+        client(lambda _: pytest.fail("oversized audio dispatched")).transcribe(reservation, audio)

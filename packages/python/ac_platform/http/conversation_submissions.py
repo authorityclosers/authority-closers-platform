@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import (
     ConversationProcessingPlans,
@@ -215,7 +216,7 @@ def install_submission_http(
         if (
             len(lengths) != 1
             or re.fullmatch(r"[1-9][0-9]{0,8}", lengths[0]) is None
-            or int(lengths[0]) > runtime.storage.max_bytes
+            or int(lengths[0]) > min(runtime.storage.max_bytes, MAX_AUDIO_BYTES)
             or request.headers.getlist("content-type") != ["application/octet-stream"]
             or request.headers.getlist("content-encoding") not in ([], ["identity"])
             or request.headers.getlist("transfer-encoding")
@@ -225,7 +226,10 @@ def install_submission_http(
             or policies[0] != upload_policy(runtime.policy)["policy_sha256"]
             or request.headers.getlist("x-upload-consent") != ["accepted"]
         ):
-            raise fail(422, "Choose one bounded audio file and accept the current upload terms.")
+            raise fail(
+                422,
+                "Choose one bounded audio file up to 32 MiB and accept the current upload terms.",
+            )
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
         async with asynccontextmanager(current_owner)(request) as owner:

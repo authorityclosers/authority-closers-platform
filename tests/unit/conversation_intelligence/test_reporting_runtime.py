@@ -68,7 +68,7 @@ def _stage(
         zero_cost_basis="synthetic",
         price_evidence_sha256="c" * 64,
         max_source_duration_ms=14_400_000,
-        max_input_bytes=134_217_728,
+        max_input_bytes=32 * 1024 * 1024,
         max_completion_tokens=0 if is_c2 else 800,
         profile_sha256=PROFILE_SHA if stage == "C5" else None,
     )

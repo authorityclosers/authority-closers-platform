@@ -272,6 +272,34 @@ it("shows the advertised trial allowance for a clean visitor", async () => {
   expect(container.textContent).not.toContain("unavailable until your session");
 });
 
+it("rejects an audio file above the provider limit before creating a session", async () => {
+  await mount();
+  const input =
+    container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const oversized = new File(["synthetic"], "Oversized call.wav", {
+    type: "audio/wav",
+  });
+  Object.defineProperty(oversized, "size", {
+    configurable: true,
+    value: 32 * 1024 ** 2 + 1,
+  });
+  Object.defineProperty(input, "files", {
+    configurable: true,
+    value: [oversized],
+  });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+
+  expect(container.textContent).toContain("within the displayed size limit");
+  expect(
+    calls.some(
+      (call) => call.path.endsWith("/session") && call.init.method === "POST",
+    ),
+  ).toBe(false);
+});
+
 it("does not treat the advertised trial allowance as confirmed for a saved selector after 401", async () => {
   sessionUnauthorized = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);

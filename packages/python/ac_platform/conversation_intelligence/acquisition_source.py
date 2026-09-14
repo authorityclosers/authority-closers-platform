@@ -17,9 +17,9 @@ from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredS
 from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import (
     HOSTED_C1_RATE,
-    MAX_SOURCE_BYTES,
     DockerNativeRuntime,
     NativeRuntime,
     NativeRuntimeError,
@@ -64,14 +64,14 @@ class NativeUploadPreflight:
     runtime: NativeRuntime
 
     def measure(self, path: Path, submission_id: UUID, expected_sha256: str) -> MeasuredUpload:
-        if (
-            type(submission_id) is not UUID
-            or not path.is_file()
-            or path.is_symlink()
-            or not 0 < path.stat().st_size <= MAX_SOURCE_BYTES
-        ):
+        if type(submission_id) is not UUID or not path.is_file() or path.is_symlink():
             raise ConversationError("The original upload is unavailable.")
-        source_bytes, digest = path.stat().st_size, file_sha256(path)
+        source_bytes = path.stat().st_size
+        if source_bytes <= 0:
+            raise ConversationError("The original upload is unavailable.")
+        if source_bytes > MAX_AUDIO_BYTES:
+            raise ConversationError("Choose an audio file up to 32 MiB.")
+        digest = file_sha256(path)
         if digest != expected_sha256:
             raise ConversationError("The uploaded file differs from the file you selected.")
         with path.open("rb") as stream:

@@ -24,6 +24,7 @@ export type UploadPolicy = {
   maximum_call_seconds: number;
   retention_days: number;
 };
+export const MAX_ACQUISITION_FILE_BYTES = 32 * 1024 ** 2;
 export type Submission = { id: string; recordingId: string; sha: string };
 export type LibrarySubmission = {
   id: string;
@@ -135,10 +136,18 @@ export function parsePolicy(value: unknown): UploadPolicy {
     item.description.length > 3000
   )
     throw new ReportContractError("acquisition_policy");
-  const maximum_file_bytes = integer(item.maximum_file_bytes, 128 * 1024 ** 2),
+  const maximum_file_bytes = integer(
+      item.maximum_file_bytes,
+      MAX_ACQUISITION_FILE_BYTES,
+    ),
     maximum_call_seconds = integer(item.maximum_call_seconds, 1800),
     retention_days = integer(item.retention_days, 7);
-  if (!maximum_file_bytes || !maximum_call_seconds || !retention_days)
+  if (
+    !maximum_file_bytes ||
+    maximum_file_bytes > MAX_ACQUISITION_FILE_BYTES ||
+    !maximum_call_seconds ||
+    !retention_days
+  )
     throw new ReportContractError("acquisition_policy_limit");
   return {
     policy_sha256: item.policy_sha256,

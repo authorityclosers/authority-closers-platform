@@ -47,7 +47,7 @@ export const policy = {
   title: "Upload privately",
   description:
     "Synthetic test. Original audio stays private for seven days. No external processing during upload.",
-  maximum_file_bytes: 128 * 1024 ** 2,
+  maximum_file_bytes: 32 * 1024 ** 2,
   maximum_call_seconds: 1800,
   retention_days: 7,
   max_cost_paise: 0,

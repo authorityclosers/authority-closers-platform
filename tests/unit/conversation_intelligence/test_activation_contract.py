@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
     load_hosted_approval_bundle,
 )
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
 TENANT_ID = UUID("10000000-0000-4000-8000-000000000001")
 PERSON_ID = UUID("20000000-0000-4000-8000-000000000002")
@@ -37,7 +38,7 @@ def _allowance(
         granted_by=APPROVER_ID,
         reason="Approved internal testing allowance",
         max_recordings=4,
-        max_source_bytes=134_217_728,
+        max_source_bytes=MAX_AUDIO_BYTES,
         max_stored_source_bytes=536_870_912,
     )
 
@@ -84,7 +85,7 @@ def _stage(
         price_evidence_sha256="c" * 64,
         max_cost_paise=max_cost_paise,
         max_source_duration_ms=14_400_000,
-        max_input_bytes=134_217_728,
+        max_input_bytes=MAX_AUDIO_BYTES,
         max_completion_tokens=max_completion_tokens,
         profile_sha256=profile_sha256,
     )
@@ -266,8 +267,8 @@ def test_free_v1_bundle_canonical_bytes_omit_paid_extension_defaults() -> None:
 def test_loader_enforces_explicit_source_and_stored_capacity_bounds() -> None:
     allowance = _allowance()
     payload = json.loads(_bundle(allowances=(allowance,)).to_json())
-    payload["allowances"][0]["max_source_bytes"] = 100_000_000
-    payload["allowances"][0]["max_stored_source_bytes"] = 50_000_000
+    payload["allowances"][0]["max_source_bytes"] = 20_000_000
+    payload["allowances"][0]["max_stored_source_bytes"] = 10_000_000
     with pytest.raises(ActivationContractError, match="allowance_source_bytes_exceed_stored_cap"):
         load_hosted_approval_bundle(payload)
 
@@ -347,7 +348,7 @@ def test_strict_bounds_reject_boolean_and_oversized_values_without_leaking_input
     assert "True" not in str(error.value)
 
     oversized = json.loads(_bundle().to_json())
-    oversized["stages"][0]["max_input_bytes"] = 134_217_729
+    oversized["stages"][0]["max_input_bytes"] = MAX_AUDIO_BYTES + 1
     with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
         load_hosted_approval_bundle(oversized)
 

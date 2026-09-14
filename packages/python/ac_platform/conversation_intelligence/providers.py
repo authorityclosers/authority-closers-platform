@@ -18,8 +18,8 @@ import httpx
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
-MAX_AUDIO_BYTES = 32 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_STREAM_SECONDS = 180
 

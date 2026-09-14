@@ -27,6 +27,7 @@ from pydantic import (
 )
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
 HOSTED_APPROVAL_SCHEMA: Literal["ac.sales-xray.hosted-approval/1"] = (
     "ac.sales-xray.hosted-approval/1"
@@ -104,7 +105,7 @@ class AllowanceApproval(_StrictFrozenModel):
     granted_by: UUID
     reason: Literal["Approved internal testing allowance"]
     max_recordings: StrictInt = Field(ge=1, le=64)
-    max_source_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_source_bytes: StrictInt = Field(ge=1, le=MAX_AUDIO_BYTES)
     max_stored_source_bytes: StrictInt = Field(ge=1, le=8_589_934_592)
 
     _authorization_ref = field_validator("authorization_ref")(_validate_reference)
@@ -144,7 +145,7 @@ class StageApproval(_StrictFrozenModel):
     price_evidence_sha256: str = Field(pattern=_DIGEST)
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
-    max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_input_bytes: StrictInt = Field(ge=1, le=MAX_AUDIO_BYTES)
     max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
@@ -229,7 +230,7 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
     price_evidence_sha256: str = Field(pattern=_DIGEST)
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
-    max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_input_bytes: StrictInt = Field(ge=1, le=MAX_AUDIO_BYTES)
     max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
@@ -288,7 +289,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
     authorization_ref: str = Field(min_length=6, max_length=256)
     expires_at_epoch: StrictInt = Field(gt=0)
     max_recordings: StrictInt = Field(ge=1, le=64)
-    max_source_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_source_bytes: StrictInt = Field(ge=1, le=MAX_AUDIO_BYTES)
     max_stored_source_bytes: StrictInt = Field(ge=1, le=8_589_934_592)
     stages: tuple[AcquisitionStagePolicy, ...] = Field(
         min_length=MAX_ACQUISITION_POLICY_STAGES, max_length=MAX_ACQUISITION_POLICY_STAGES
