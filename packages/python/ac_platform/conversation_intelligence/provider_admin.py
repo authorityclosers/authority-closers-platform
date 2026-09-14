@@ -60,8 +60,8 @@ class ConversationProviderAdmin:
         self.application = application
         self.database = application.database
 
-    async def admit(self, actor: ActorContext) -> None:
-        await self.application.admit(actor)
+    async def admit(self, actor: ActorContext, *, shared_identity_locks: bool = False) -> None:
+        await self.application.admit(actor, shared_identity_locks=shared_identity_locks)
         person = await self.database.get(Person, actor.person_id)
         membership = await self.database.get(Membership, (actor.tenant_id, actor.person_id))
         if (

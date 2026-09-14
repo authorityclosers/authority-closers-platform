@@ -738,6 +738,14 @@ def test_processing_continuation_parity_contract_tracks_0040_table() -> None:
     ) in restore_drill.MIGRATION_REHEARSAL_PAIRS
 
 
+def test_execution_control_parity_contract_tracks_0041_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260914_0041") == "ac-postgres-parity-v21"
+    assert restore_drill.parity_tables_for_head("20260914_0041") == (
+        restore_drill.PROCESSING_CONTINUATION_PARITY_TABLES + ("conversation_execution_controls",)
+    )
+    assert ("20260914_0040", "20260914_0041") in restore_drill.MIGRATION_REHEARSAL_PAIRS
+
+
 def test_processing_ownership_migration_command_targets_only_0037() -> None:
     target = restore_drill._target_for("0123456789ab")
     command = restore_drill._migration_command(
@@ -966,6 +974,7 @@ def test_review_assignment_transition_preserves_0033_and_requires_empty_tables()
             "20260914_0040",
             ("conversation_processing_continuations",),
         ),
+        ("20260914_0040", "20260914_0041", ("conversation_execution_controls",)),
     ),
 )
 def test_invitation_and_guest_migrations_preserve_existing_history(

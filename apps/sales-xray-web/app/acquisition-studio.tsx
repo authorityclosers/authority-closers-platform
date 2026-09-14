@@ -1,4 +1,5 @@
 "use client";
+import { AnalysisAvailability } from "./analysis-availability";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -141,6 +142,7 @@ export function AcquisitionStudio({
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
   const [entry, setEntry] = useState<Entry | null>(null);
+  const [analysisPaused, setAnalysisPaused] = useState(false);
   const [policy, setPolicy] = useState<UploadPolicy | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   const [allowanceUnknown, setAllowanceUnknown] = useState(false);
@@ -709,6 +711,7 @@ export function AcquisitionStudio({
       data-stage={report ? "report" : submission ? "processing" : "upload"}
     >
       <div className="studio-main">
+        <AnalysisAvailability onChange={setAnalysisPaused} />
         <nav className="studio-steps" aria-label="Analysis steps">
           {[
             "Your call",
@@ -1027,7 +1030,9 @@ export function AcquisitionStudio({
                 <button
                   type="button"
                   className="primary-button studio-wide"
-                  disabled={!planConsent || !!busy || planExpired}
+                  disabled={
+                    !planConsent || !!busy || planExpired || analysisPaused
+                  }
                   onClick={() => void approvePlan()}
                 >
                   {busy ? (

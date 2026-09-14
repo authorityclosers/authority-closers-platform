@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     grant_minutes,
     reserve,
 )
+from ac_platform.conversation_intelligence.execution_control import require_execution_enabled
 from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
@@ -127,6 +128,13 @@ class ConversationAuthority:
         bundle = self.current(await app.admit(actor))
         self.recipient(bundle, actor)
         return bundle
+
+    async def require_execution_enabled(self, app: ConversationApplication) -> None:
+        await require_execution_enabled(
+            app.database,
+            environment=self.environment,
+            operations_tenant_id=self.operations_tenant_id,
+        )
 
     async def claim_allowance(self, app: ConversationApplication, actor: ConversationActor) -> None:
         """POST-only application command; finite grants are never inferred from login."""
@@ -311,6 +319,11 @@ class ConversationAuthority:
         now: datetime,
         configuration_sha256: str | None = None,
     ) -> tuple[HostedApprovalBundle, StageApproval]:
+        await require_execution_enabled(
+            app.database,
+            environment=self.environment,
+            operations_tenant_id=self.operations_tenant_id,
+        )
         bundle = self.current(now)
         self.recipient(bundle, actor)
         approved_default_configuration_sha256 = self._approved_default_configuration_sha256(

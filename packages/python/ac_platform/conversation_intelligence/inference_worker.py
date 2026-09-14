@@ -31,6 +31,13 @@ from ac_platform.conversation_intelligence.entitlements import (
     mark_uncertain,
     release,
 )
+from ac_platform.conversation_intelligence.execution_control import (
+    ConversationExecutionPaused,
+    already_started_effect,
+    execution_state,
+    lock_execution_control,
+    require_execution_enabled,
+)
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
     ConversationInference,
@@ -152,6 +159,17 @@ class ConversationInferenceWorker:
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
+            if (
+                self.authority is not None
+                and (
+                    await execution_state(
+                        db,
+                        environment=self.authority.environment,
+                        operations_tenant_id=self.authority.operations_tenant_id,
+                    )
+                )["paused"]
+            ):
+                return None
             recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
             jobs = await JobRepository(db).claim(kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE)
             if not jobs:
@@ -357,6 +375,21 @@ class ConversationInferenceWorker:
                 if reservation is None or reservation.state != "reserved":
                     raise ConversationConflict("The provider budget is already dispatched or held.")
                 key = job.dedupe_key
+                if self.authority is not None:
+                    # This short fence serializes the last pause check with the
+                    # durable dispatch marker. A marker committed before pause
+                    # is already-started work and may finish after pause returns.
+                    await lock_execution_control(
+                        db,
+                        environment=self.authority.environment,
+                        operations_tenant_id=self.authority.operations_tenant_id,
+                        shared=True,
+                    )
+                    await require_execution_enabled(
+                        db,
+                        environment=self.authority.environment,
+                        operations_tenant_id=self.authority.operations_tenant_id,
+                    )
                 transition = mark_dispatched(
                     before,
                     BudgetAccount.from_dict(budget.snapshot),
@@ -381,7 +414,17 @@ class ConversationInferenceWorker:
                     recovery_generation=work.recovery_generation,
                     provider_idempotency_key=key,
                 )
-                scope = await self._scope(db, job)
+                if self.authority is None:
+                    scope = await self._scope(db, job)
+                else:
+                    # lock_for_dispatch above proves our committed marker and
+                    # current lease. Only the pause check is waived for that
+                    # already-started effect; all other authority is rechecked.
+                    with already_started_effect(
+                        environment=self.authority.environment,
+                        operations_tenant_id=self.authority.operations_tenant_id,
+                    ):
+                        scope = await self._scope(db, job)
                 # Restore, revocation and deletion wait on these canonical locks
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
@@ -515,6 +558,11 @@ class ConversationInferenceWorker:
             return False
         try:
             await self._dispatch(work)
+        except ConversationExecutionPaused:
+            # A pause racing claim rolls back before a dispatch marker. Keep
+            # every source/checkpoint/reservation intact; normal lease recovery
+            # can reclaim this job after resume. Do not call failure/refund code.
+            return True
         except BaseException as error:
             # A failed cleanup may itself be fenced by restore/lease loss. The
             # dispatch marker still quarantines the job on the next claim.

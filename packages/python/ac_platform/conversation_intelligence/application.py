@@ -97,7 +97,9 @@ class ConversationApplication:
         self.database = database
         self.clock = clock
 
-    async def admit(self, actor: ConversationActor) -> datetime:
+    async def admit(
+        self, actor: ConversationActor, *, shared_identity_locks: bool = False
+    ) -> datetime:
         tx = self.database.get_transaction()
         sync_tx = tx.sync_transaction if tx is not None else None
         if sync_tx is None or sync_tx.origin is not SessionTransactionOrigin.BEGIN:
@@ -115,7 +117,7 @@ class ConversationApplication:
         person = await self.database.scalar(
             select(Person)
             .where(Person.id == actor.person_id)
-            .with_for_update()
+            .with_for_update(read=shared_identity_locks)
             .execution_options(populate_existing=True)
         )
         session = await self.database.scalar(
@@ -124,7 +126,7 @@ class ConversationApplication:
                 IdentitySession.id == actor.session_id,
                 IdentitySession.person_id == actor.person_id,
             )
-            .with_for_update()
+            .with_for_update(read=shared_identity_locks)
             .execution_options(populate_existing=True)
         )
         tenant = await self.database.scalar(

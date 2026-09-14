@@ -281,6 +281,12 @@ PROCESSING_CONTINUATION_PARITY_NEW_TABLES = ("conversation_processing_continuati
 PROCESSING_CONTINUATION_PARITY_TABLES = (
     PROVIDER_ACTIVATION_PARITY_TABLES + PROCESSING_CONTINUATION_PARITY_NEW_TABLES
 )
+EXECUTION_CONTROL_PARITY_MIGRATION_HEAD = "20260914_0041"
+EXECUTION_CONTROL_PARITY_CONTRACT = "ac-postgres-parity-v21"
+EXECUTION_CONTROL_PARITY_NEW_TABLES = ("conversation_execution_controls",)
+EXECUTION_CONTROL_PARITY_TABLES = (
+    PROCESSING_CONTINUATION_PARITY_TABLES + EXECUTION_CONTROL_PARITY_NEW_TABLES
+)
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -307,6 +313,8 @@ PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD = REVIEWER_IDENTITY_PARITY_MIGRATION_H
 PROVIDER_ACTIVATION_REHEARSAL_TARGET_HEAD = PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD
 PROCESSING_CONTINUATION_REHEARSAL_SOURCE_HEAD = PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD
 PROCESSING_CONTINUATION_REHEARSAL_TARGET_HEAD = PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD
+EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD = PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD
+EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD = EXECUTION_CONTROL_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
@@ -344,6 +352,10 @@ MIGRATION_REHEARSAL_PAIRS = frozenset(
         (
             PROCESSING_CONTINUATION_REHEARSAL_SOURCE_HEAD,
             PROCESSING_CONTINUATION_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD,
+            EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD,
         ),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
@@ -418,6 +430,10 @@ VERSIONED_PARITY_CONTRACTS = {
     PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD: (
         PROCESSING_CONTINUATION_PARITY_CONTRACT,
         PROCESSING_CONTINUATION_PARITY_TABLES,
+    ),
+    EXECUTION_CONTROL_PARITY_MIGRATION_HEAD: (
+        EXECUTION_CONTROL_PARITY_CONTRACT,
+        EXECUTION_CONTROL_PARITY_TABLES,
     ),
 }
 
@@ -2166,6 +2182,15 @@ def _assert_migration_rehearsal_transition(
             raise DrillError(
                 "migration rehearsal does not match the reviewed processing continuation table"
             )
+    elif (source_head, target_head) == (
+        EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD,
+        EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("execution control rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in EXECUTION_CONTROL_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError("execution control rehearsal table mismatch")
     elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
         DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,

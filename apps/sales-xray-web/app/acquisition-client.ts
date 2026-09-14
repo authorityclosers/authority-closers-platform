@@ -1,6 +1,8 @@
 import { ReportContractError } from "./report-contract";
 
 export const ACQUISITION = "/v1/conversation/acquisition";
+export const ACQUISITION_PAUSED_MESSAGE =
+  "New analysis is temporarily paused. Your saved calls and reports are still available. Contact the AC team at admin@authorityclosers.com.";
 export const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA = /^[a-f0-9]{64}$/;
@@ -48,24 +50,26 @@ export type Progress = {
 export class AcquisitionError extends Error {
   constructor(
     readonly status: number,
-    reason?: "provider_allowance_used" | "plan_permission",
+    reason?: "provider_allowance_used" | "plan_permission" | "execution_paused",
   ) {
     super(
-      status === 401
-        ? "Your session needs attention. Sign in again or return to the browser where you uploaded this call."
-        : status === 403
-          ? reason === "provider_allowance_used"
-            ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-            : reason === "plan_permission"
-              ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-              : "This action is not available with your current access. Ask the AC team to check your permission."
-          : status === 404
-            ? "This call is unavailable in your current session. It may have expired or been deleted."
-            : status === 429
-              ? "Another call is uploading. Please try again shortly."
-              : status === 409
-                ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                : "This request did not finish. Check your connection and try again.",
+      reason === "execution_paused"
+        ? ACQUISITION_PAUSED_MESSAGE
+        : status === 401
+          ? "Your session needs attention. Sign in again or return to the browser where you uploaded this call."
+          : status === 403
+            ? reason === "provider_allowance_used"
+              ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+              : reason === "plan_permission"
+                ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                : "This action is not available with your current access. Ask the AC team to check your permission."
+            : status === 404
+              ? "This call is unavailable in your current session. It may have expired or been deleted."
+              : status === 429
+                ? "Another call is uploading. Please try again shortly."
+                : status === 409
+                  ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                  : "This request did not finish. Check your connection and try again.",
     );
   }
 }
@@ -81,6 +85,16 @@ export async function acquisition(
     headers: { accept: "application/json", ...init.headers },
   });
   if (!response.ok) {
+    if (response.status === 503) {
+      const body: unknown = await response.json().catch(() => null);
+      if (
+        body &&
+        typeof body === "object" &&
+        "detail" in body &&
+        body.detail === ACQUISITION_PAUSED_MESSAGE
+      )
+        throw new AcquisitionError(503, "execution_paused");
+    }
     if (
       response.status === 403 &&
       /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)

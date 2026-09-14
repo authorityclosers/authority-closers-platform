@@ -376,6 +376,8 @@ class ConversationInference:
         request: StageRequest | None = None,
     ) -> dict[str, str]:
         now = await self.application.admit(actor)
+        if self.authority is not None:
+            await self.authority.require_execution_enabled(self.application)
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
         plan: ServicePlan = (
@@ -463,6 +465,8 @@ class ConversationInference:
         request: StageRequest | None = None,
     ) -> dict[str, Any]:
         now = await self.application.admit(actor)
+        if self.authority is not None:
+            await self.authority.require_execution_enabled(self.application)
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
         if recording.state != "ready":

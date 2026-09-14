@@ -46,6 +46,7 @@ PROCESSING_OWNERSHIP = "20260914_0037"
 REVIEWER_IDENTITY = "20260914_0038"
 PROVIDER_ACTIVATION = "20260914_0039"
 PROCESSING_CONTINUATION = "20260914_0040"
+EXECUTION_CONTROL = "20260914_0041"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -70,6 +71,7 @@ HEADS = (
     REVIEWER_IDENTITY,
     PROVIDER_ACTIVATION,
     PROCESSING_CONTINUATION,
+    EXECUTION_CONTROL,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
@@ -145,6 +147,7 @@ NEW_TABLES = {
     REVIEWER_IDENTITY: ("reviewer_auth_challenges",),
     PROVIDER_ACTIVATION: ("conversation_provider_activations",),
     PROCESSING_CONTINUATION: ("conversation_processing_continuations",),
+    EXECUTION_CONTROL: ("conversation_execution_controls",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -568,6 +571,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         93,
         94,
         95,
+        96,
     )
     expected_contracts = (
         None,
@@ -593,6 +597,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v18",
         "ac-postgres-parity-v19",
         "ac-postgres-parity-v20",
+        "ac-postgres-parity-v21",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

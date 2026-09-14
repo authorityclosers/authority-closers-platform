@@ -27,6 +27,7 @@ from ac_platform.http.conversation_acquisition_runtime import (
     install_acquisition_runtime,
 )
 from ac_platform.http.conversation_admin import install_conversation_admin_http
+from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.course import install_course_http
@@ -179,6 +180,9 @@ def create_app(
         settings=settings,
         require_actor=require_actor,
         import_storage=conversation_intake_runtime.storage if conversation_intake_runtime else None,
+    )
+    install_execution_control_http(
+        application, settings=settings, sessions=session_factory, require_actor=require_actor
     )
     install_conversation_review_http(
         application,
