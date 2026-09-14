@@ -245,7 +245,7 @@ sudo /usr/bin/python3 /srv/authority-closers/application/operator-inputs/native-
   --environment staging \
   --native-units /srv/authority-closers/application/operator-inputs/staging/native-units.json \
   --native-units-sha256 <reviewed-native-units-sha256> \
-  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60bd1753816f7f57ef9 \
+  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2f66a223b72b481866 \
   --receipt /srv/authority-closers/application/deployments/staging/native-unit-install-reviewed.json \
   --dry-run
 
@@ -253,7 +253,7 @@ sudo /usr/bin/python3 /srv/authority-closers/application/operator-inputs/native-
   --environment staging \
   --native-units /srv/authority-closers/application/operator-inputs/staging/native-units.json \
   --native-units-sha256 <reviewed-native-units-sha256> \
-  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60bd1753816f7f57ef9 \
+  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2f66a223b72b481866 \
   --receipt /srv/authority-closers/application/deployments/staging/native-unit-install-reviewed.json \
   --start
 ```
