@@ -594,6 +594,7 @@ class ConversationProcessingPlans:
         self, actor: ConversationActor, recording_id: UUID, payload: PlanAcceptance, *, key: str
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
+        await self.authority.require_execution_enabled(self.app)
         row = await self._row(actor, recording_id, payload.plan_id)
         value = manifest_for(row)
         recording = await self.app._recording(actor, recording_id)

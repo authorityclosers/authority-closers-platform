@@ -97,6 +97,38 @@ async def _view(setup: Any, plan_id: UUID | None = None) -> dict[str, Any]:
         return service.view(await database.get(ConversationProcessingPlan, plan_id))
 
 
+def test_paused_plan_acceptance_preserves_quote_and_can_resume(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    from ac_platform.conversation_intelligence.execution_control import ConversationExecutionPaused
+    from tests.database.test_conversation_execution_control_postgresql import pause
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, funded=True)
+        try:
+            quote = await _quote(setup, "pause-plan-quote")
+            async with setup.sessions() as database:
+                before = (
+                    await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
+                ).snapshot
+            await pause(setup)
+            with pytest.raises(ConversationExecutionPaused):
+                await _accept(setup, quote, "pause-plan-accept")
+            async with setup.sessions() as database:
+                plan = await database.get(ConversationProcessingPlan, UUID(quote["id"]))
+                assert plan.state == "quoted" and plan.acceptance_command_id is None
+                budget = await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
+                assert budget.snapshot == before
+            assert setup.broker.calls == 0
+            await pause(setup, value=False, revision=1, key="resume-plan")
+            accepted = await _accept(setup, quote, "pause-plan-accept")
+            assert accepted["state"] == "active"
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 async def _make_due(setup: Any, plan_id: UUID) -> None:
     """Make the bounded scheduler eligible without waiting in a DB proof."""
 
