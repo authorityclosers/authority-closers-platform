@@ -127,8 +127,27 @@ export function parseEntry(value: unknown): Entry {
       policy_revision: null,
       allowance_seconds: null,
     };
+  // The authenticated learner entry uses the existing Academy session; the
+  // server deliberately omits guest challenge credentials on that host.
+  if (entry.auth_mode === "account") {
+    if (
+      entry.enabled !== true ||
+      entry.site_key !== null ||
+      entry.challenge_action !== null ||
+      typeof entry.policy_revision !== "string"
+    )
+      throw new ReportContractError("acquisition_entry");
+    return {
+      enabled: true,
+      site_key: null,
+      challenge_action: null,
+      policy_revision: entry.policy_revision,
+      allowance_seconds: integer(entry.allowance_seconds, 6000),
+    };
+  }
   if (
     entry.enabled !== true ||
+    entry.auth_mode !== undefined ||
     typeof entry.site_key !== "string" ||
     !/^[A-Za-z0-9_-]{10,128}$/.test(entry.site_key) ||
     typeof entry.challenge_action !== "string" ||

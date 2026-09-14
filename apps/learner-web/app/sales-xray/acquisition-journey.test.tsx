@@ -101,7 +101,16 @@ beforeEach(() => {
           },
           workspaceStatus,
         );
-      if (path.endsWith("/entry")) return json(entry, entryStatus);
+      if (path.endsWith("/entry"))
+        return json(
+          {
+            ...entry,
+            auth_mode: "account",
+            site_key: null,
+            challenge_action: null,
+          },
+          entryStatus,
+        );
       if (path.endsWith("/upload-policy")) return json(policy);
       if (path.endsWith("/session")) {
         expect(init.method).not.toBe("POST");

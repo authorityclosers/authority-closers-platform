@@ -45,13 +45,11 @@ describe("acquisition permission recovery", () => {
   it.each(["", "/quote"])(
     "translates the exact plan%s allowance denial",
     async (suffix) => {
-      const fetch = vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ detail: allowanceDetail }), {
-            status: 403,
-          }),
-        );
+      const fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: allowanceDetail }), {
+          status: 403,
+        }),
+      );
       vi.stubGlobal("fetch", fetch);
       await expect(
         acquisition(path + suffix, { method: "POST" }),
@@ -97,13 +95,11 @@ describe("acquisition permission recovery", () => {
   it("does not infer an allowance denial outside the plan endpoints", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ detail: allowanceDetail }), {
-            status: 403,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: allowanceDetail }), {
+          status: 403,
+        }),
+      ),
     );
     await expect(
       acquisition(`/submissions/${submissionId}`),
@@ -177,5 +173,26 @@ describe("acquisition source-bound presentation", () => {
       "https://other.example/private",
     );
     expect(savedSubmissionId()).toBeNull();
+  });
+  it("accepts the authenticated learner entry without enabling a guest challenge", () => {
+    const accountEntry = {
+      ...entry,
+      auth_mode: "account",
+      site_key: null,
+      challenge_action: null,
+    };
+    expect(parseEntry(accountEntry)).toMatchObject({
+      enabled: true,
+      site_key: null,
+      challenge_action: null,
+    });
+    expect(() => parseEntry({ ...entry, site_key: null })).toThrow();
+    expect(() => parseEntry({ ...accountEntry, auth_mode: "guest" })).toThrow();
+    expect(() =>
+      parseEntry({ ...accountEntry, site_key: entry.site_key }),
+    ).toThrow();
+    expect(() =>
+      parseEntry({ ...accountEntry, allowance_seconds: 6001 }),
+    ).toThrow();
   });
 });
