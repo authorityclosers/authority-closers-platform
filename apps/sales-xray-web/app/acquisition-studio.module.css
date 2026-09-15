@@ -1734,10 +1734,16 @@
   grid-area: guidance;
   grid-column: auto;
   width: 100%;
+  align-items: flex-start;
+  gap: 12px;
   justify-content: center;
   margin: 14px 0 0;
   padding: 0;
   border: 0;
+}
+.app[data-stage="processing"] .withProcessing .progressGuidance > * {
+  min-width: 0;
+  align-self: flex-start;
 }
 .app[data-stage="processing"]
   .withProcessing
@@ -1809,6 +1815,14 @@
     .withProcessing
     .progressGuidance
     :global(.secondary-button) {
+    width: 100%;
+  }
+  .app[data-stage="processing"] .withProcessing .progressGuidance {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .app[data-stage="processing"] .withProcessing .progressGuidance > * {
     width: 100%;
   }
 }
