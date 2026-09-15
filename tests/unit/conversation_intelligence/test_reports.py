@@ -202,9 +202,7 @@ def test_c4_evidence_keeps_the_strict_copied_quote_contract() -> None:
         parse_fact_packet(
             {
                 "overview": "A source-bound fact.",
-                "observations": [
-                    {"fact": "A fact.", "evidence": [{"segment_id": "s1"}]}
-                ],
+                "observations": [{"fact": "A fact.", "evidence": [{"segment_id": "s1"}]}],
                 "uncertainties": [],
             },
             transcript,

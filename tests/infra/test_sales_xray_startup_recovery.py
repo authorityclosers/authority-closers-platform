@@ -176,9 +176,7 @@ def test_edge_recovery_waits_for_docker_restart_restoration(monkeypatch):
         return dict(collision)
 
     monkeypatch.setattr(MODULE.time, "sleep", lambda seconds: sleeps.append(seconds))
-    observed_edge, observed_collision = MODULE._wait_for_edge_recovery_state(
-        "production", inspect
-    )
+    observed_edge, observed_collision = MODULE._wait_for_edge_recovery_state("production", inspect)
 
     assert observed_edge["id"] == edge["id"]
     assert observed_collision["id"] == collision["id"]

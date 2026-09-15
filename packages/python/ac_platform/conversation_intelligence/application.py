@@ -582,9 +582,7 @@ class ConversationApplication:
             raise ConversationDenied("An explicit processing entitlement is required.")
         if authority is not None:
             assert authority_bundle is not None
-            await authority.reconcile_existing_minute_account(
-                self, actor, bundle=authority_bundle
-            )
+            await authority.reconcile_existing_minute_account(self, actor, bundle=authority_bundle)
         # Canonical admission above already holds this person's lock, shared by
         # guest claims and account acquisition reservations. The older upload
         # path must also count those minutes instead of issuing a second pool.

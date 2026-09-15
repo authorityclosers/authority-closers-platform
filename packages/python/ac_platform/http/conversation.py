@@ -178,11 +178,7 @@ def install_conversation_http(
                     auth.resolved.actor,
                     payload,
                     key=key,
-                    authority=(
-                        intake_runtime.authority
-                        if intake_runtime is not None
-                        else None
-                    ),
+                    authority=(intake_runtime.authority if intake_runtime is not None else None),
                 )
             )
 

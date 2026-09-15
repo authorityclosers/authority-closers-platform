@@ -48,6 +48,15 @@ passed; the latter also prove that new-upload guest-claim admission is unchanged
   integrated report contract. Seven positive and negative checks passed,
   including exact source quotations and rejection of false human attribution.
   No private recording text is included in this repository.
+- The integrated conversation unit suite passed 965 tests with one
+  POSIX-ownership test skipped on Windows. The initial local decoding failure
+  was resolved by installing the already built, source-and-binary-hash-verified
+  AudioAtlas executable in the ignored native build directory. No decoder or
+  measurement contract was changed to obtain this result.
+- Startup recovery and release-archive checks passed 108 tests. The source-owned
+  systemd installer still requires a separate verified activation after release.
+- The Sales Xray production build passed, including route generation and
+  TypeScript. Python type checking passed across 298 source files.
 
 Private local receipts retain exact commands, source hashes and outcomes. None
 of these checks made an inference-provider request or settled a provider bill.

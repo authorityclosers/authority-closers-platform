@@ -112,7 +112,7 @@ def test_optional_root_business_impact_round_trips_and_absence_stays_omitted() -
     [
         {"status": "known", "missing_inputs": ["Lead volume"]},
         {"status": "insufficient_data", "missing_inputs": []},
-        {"status": "insufficient_data", "missing_inputs": ["" ]},
+        {"status": "insufficient_data", "missing_inputs": [""]},
         {
             "status": "insufficient_data",
             "missing_inputs": ["Lead volume"],
