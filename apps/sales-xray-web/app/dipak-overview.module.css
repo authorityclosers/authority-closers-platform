@@ -1215,6 +1215,28 @@
   cursor: pointer;
 }
 
+.evidenceControls {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 220px);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.evidenceQuote {
+  grid-column: 1 / -1;
+  order: 2;
+}
+
+.evidenceControls .timestamp,
+.evidenceControls .evidenceWaveform {
+  order: 1;
+}
+
+.evidenceWaveform {
+  height: 28px;
+}
+
 .overview :global(.studio-finding-evidence) {
   margin-top: 15px;
   padding-top: 12px;
@@ -1241,6 +1263,17 @@
   color: var(--ink-soft);
   font-size: 14px;
   line-height: 1.65;
+}
+
+@media (max-width: 560px) {
+  .evidenceControls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .evidenceWaveform {
+    width: min(100%, 220px);
+  }
 }
 
 .overview :global(.studio-finding-evidence) blockquote + blockquote {

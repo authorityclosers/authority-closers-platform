@@ -16,6 +16,7 @@ import type {
   SalesReport,
 } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
+import { SourceWaveform } from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
 import styles from "./dipak-overview.module.css";
 
@@ -361,16 +362,23 @@ export function DipakOverview({
       <FindingEvidence count={finding.evidence.length}>
         {finding.evidence.map((item, index) => (
           <blockquote key={`${item.segment_id}-${index}`}>
-            <button
-              className={styles.timestamp}
-              type="button"
-              onClick={() => onSelectEvidence(item, finding.title)}
-              aria-label={`Play source moment, ${time(item.start_ms)} to ${time(item.end_ms)}: ${item.quote}`}
-            >
-              <Play size={12} aria-hidden="true" />
-              {time(item.start_ms)}–{time(item.end_ms)}
-            </button>{" "}
-            <span>{item.quote}</span>
+            <div className={styles.evidenceControls}>
+              <span className={styles.evidenceQuote}>{item.quote}</span>
+              <button
+                className={styles.timestamp}
+                type="button"
+                onClick={() => onSelectEvidence(item, finding.title)}
+                aria-label={`Play source moment, ${time(item.start_ms)} to ${time(item.end_ms)}: ${item.quote}`}
+              >
+                <Play size={12} aria-hidden="true" />
+                {time(item.start_ms)}–{time(item.end_ms)}
+              </button>
+              <SourceWaveform
+                className={styles.evidenceWaveform}
+                startMs={item.start_ms}
+                endMs={item.end_ms}
+              />
+            </div>
           </blockquote>
         ))}
       </FindingEvidence>

@@ -61,6 +61,8 @@ import {
 import { ProcessingVisual } from "./processing-visual";
 import { UploadCheck } from "./upload-check";
 import { useWorkspaceAccess } from "./workspace-access";
+import { CallAudioDock } from "./call-audio-dock";
+import { SourceWaveformProvider } from "./source-waveform";
 import styles from "./acquisition-studio.module.css";
 
 type Result = { report: SalesReport; transcript: Transcript; claimed: boolean };
@@ -856,7 +858,7 @@ export function AcquisitionStudio({
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
-  const audioPlayer = (
+  const audioPlayer = !reportReady ? (
     <audio
       ref={audio}
       src={source || undefined}
@@ -876,7 +878,7 @@ export function AcquisitionStudio({
           audio.current.pause();
       }}
     />
-  );
+  ) : null;
 
   const savedCallRecovery =
     savedCallNeedsSession && error && !submission && !deletionOnlyId ? (
@@ -1641,163 +1643,191 @@ export function AcquisitionStudio({
           </div>
         )}
         {result && report && (
-          <section
-            className={`studio-report panel ${styles.report}`}
-            aria-label="Sales call report"
+          <SourceWaveformProvider
+            submissionId={submission?.id}
+            audioRef={audio}
           >
-            <div className={styles.reportHeader}>
-              <div>
-                <h1 className={styles.reportTitle}>Your call, clearly.</h1>
-              </div>
-              <div className="studio-report-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!!busy || !submission}
-                  onClick={() => void downloadReport()}
-                >
-                  <Download size={16} aria-hidden="true" />
-                  Download report
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!!busy}
-                  onClick={() => reset()}
-                >
-                  Analyse another call <ArrowRight size={16} />
-                </button>
-              </div>
-            </div>
-            {submission && (
-              <details className={styles.reportPrivacyActions}>
-                <summary>Privacy &amp; support</summary>
+            <section
+              className={`studio-report panel ${styles.report}`}
+              aria-label="Sales call report"
+            >
+              <div className={styles.reportHeader}>
                 <div>
-                  <p>
-                    Need this call removed?{" "}
-                    <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
-                      Email the AC team
-                    </a>{" "}
-                    or request deletion here.
-                  </p>
-                  {!deleteConfirm ? (
-                    <button
-                      className="text-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() => setDeleteConfirm(true)}
-                    >
-                      Request deletion
-                    </button>
-                  ) : (
-                    <>
-                      <p>
-                        Remove this recording and its report? This cannot be
-                        undone.
-                      </p>
+                  <h1 className={styles.reportTitle}>Your call, clearly.</h1>
+                </div>
+                <div className="studio-report-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy || !submission}
+                    onClick={() => void downloadReport()}
+                  >
+                    <Download size={16} aria-hidden="true" />
+                    Download report
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={() => reset()}
+                  >
+                    Analyse another call <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+              {submission && (
+                <details className={styles.reportPrivacyActions}>
+                  <summary>Privacy &amp; support</summary>
+                  <div>
+                    <p>
+                      Need this call removed?{" "}
+                      <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
+                        Email the AC team
+                      </a>{" "}
+                      or request deletion here.
+                    </p>
+                    {!deleteConfirm ? (
                       <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={!!busy}
-                        onClick={() => void erase()}
-                      >
-                        Request recording deletion
-                      </button>
-                      <button
-                        type="button"
                         className="text-button"
+                        type="button"
                         disabled={!!busy}
-                        onClick={() => setDeleteConfirm(false)}
+                        onClick={() => setDeleteConfirm(true)}
                       >
-                        Keep call
+                        Request deletion
                       </button>
-                    </>
-                  )}
-                </div>
+                    ) : (
+                      <>
+                        <p>
+                          Remove this recording and its report? This cannot be
+                          undone.
+                        </p>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={!!busy}
+                          onClick={() => void erase()}
+                        >
+                          Request recording deletion
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={!!busy}
+                          onClick={() => setDeleteConfirm(false)}
+                        >
+                          Keep call
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </details>
+              )}
+              <ReportExplorer
+                label="Explore your sales report"
+                panels={[
+                  {
+                    id: "overview",
+                    label: "Overview",
+                    content: (
+                      <DipakOverview
+                        report={report}
+                        onSelectEvidence={seek}
+                        onUnlock={() => router.push("/login")}
+                        durationMs={result.transcript.duration_ms}
+                      />
+                    ),
+                  },
+                  {
+                    id: "moments",
+                    label: "Moments",
+                    content: (
+                      <ReportTranscript
+                        transcript={result.transcript}
+                        language="en"
+                        onSelect={(segment) =>
+                          seek({
+                            segment_id: segment.id,
+                            quote: segment.text,
+                            start_ms: segment.start_ms,
+                            end_ms: segment.end_ms,
+                          })
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    id: "skills",
+                    label: "Sales skills",
+                    content: (
+                      <ReportFactors
+                        dimensions={report.dimensions}
+                        language="en"
+                      />
+                    ),
+                  },
+                  {
+                    id: "next-call-plan",
+                    label: "Next-call plan",
+                    content: (
+                      <NextCallPlan
+                        report={report}
+                        onSelectEvidence={seek}
+                        onUnlock={() => router.push("/login")}
+                      />
+                    ),
+                  },
+                ]}
+              />
+              {!result.claimed && (
+                <aside className={styles.claim}>
+                  <ShieldCheck size={22} />
+                  <div>
+                    <h2>Keep your report with your AC account</h2>
+                    <p>
+                      Sign in to keep this call and any future reviews together.
+                    </p>
+                  </div>
+                  <Link href="/login" className="primary-button">
+                    Sign in to save this call <ArrowRight size={16} />
+                  </Link>
+                </aside>
+              )}
+              <details className="studio-report-details">
+                <summary lang="en">Report details</summary>
+                <p lang="en">
+                  This draft uses evidence from the authorized recording.
+                  Speaker labels remain unverified.
+                  {` Source: ${report.source_label}.`}
+                  {report.review_status === "draft_not_dipak_adjudicated"
+                    ? " Review status: draft; Dipak has not adjudicated this report."
+                    : " Review status is recorded in the report."}
+                  {` Duration: ${time(result.transcript.duration_ms)}.`}
+                </p>
               </details>
-            )}
-            <ReportExplorer
-              label="Explore your sales report"
-              panels={[
-                {
-                  id: "overview",
-                  label: "Overview",
-                  content: (
-                    <DipakOverview
-                      report={report}
-                      onSelectEvidence={seek}
-                      onUnlock={() => router.push("/login")}
-                      durationMs={result.transcript.duration_ms}
-                    />
-                  ),
-                },
-                {
-                  id: "moments",
-                  label: "Moments",
-                  content: (
-                    <ReportTranscript
-                      transcript={result.transcript}
-                      language="en"
-                      onSelect={(segment) =>
-                        seek({
-                          segment_id: segment.id,
-                          quote: segment.text,
-                          start_ms: segment.start_ms,
-                          end_ms: segment.end_ms,
-                        })
-                      }
-                    />
-                  ),
-                },
-                {
-                  id: "skills",
-                  label: "Sales skills",
-                  content: (
-                    <ReportFactors
-                      dimensions={report.dimensions}
-                      language="en"
-                    />
-                  ),
-                },
-                {
-                  id: "next-call-plan",
-                  label: "Next-call plan",
-                  content: (
-                    <NextCallPlan
-                      report={report}
-                      onSelectEvidence={seek}
-                      onUnlock={() => router.push("/login")}
-                    />
-                  ),
-                },
-              ]}
+            </section>
+            <CallAudioDock
+              audioRef={audio}
+              src={source}
+              durationMs={result.transcript.duration_ms}
+              title={file?.name ?? "Your saved sales call"}
+              embedded={embedded}
+              onTimeUpdate={() => {
+                if (
+                  moment &&
+                  audio.current &&
+                  audio.current.currentTime >= moment.end_ms / 1000
+                ) {
+                  audio.current.pause();
+                }
+              }}
+              onSeek={() => setMoment(null)}
+              onError={() =>
+                setPlaybackMessage(
+                  "Audio playback is unavailable. Your report remains below.",
+                )
+              }
             />
-            {!result.claimed && (
-              <aside className={styles.claim}>
-                <ShieldCheck size={22} />
-                <div>
-                  <h2>Keep your report with your AC account</h2>
-                  <p>
-                    Sign in to keep this call and any future reviews together.
-                  </p>
-                </div>
-                <Link href="/login" className="primary-button">
-                  Sign in to save this call <ArrowRight size={16} />
-                </Link>
-              </aside>
-            )}
-            <details className="studio-report-details">
-              <summary lang="en">Report details</summary>
-              <p lang="en">
-                This draft uses evidence from the authorized recording. Speaker
-                labels remain unverified.{` Source: ${report.source_label}.`}
-                {report.review_status === "draft_not_dipak_adjudicated"
-                  ? " Review status: draft; Dipak has not adjudicated this report."
-                  : " Review status is recorded in the report."}
-                {` Duration: ${time(result.transcript.duration_ms)}.`}
-              </p>
-            </details>
-          </section>
+          </SourceWaveformProvider>
         )}
       </div>
     </div>
