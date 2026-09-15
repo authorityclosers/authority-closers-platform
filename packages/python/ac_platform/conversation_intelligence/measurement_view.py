@@ -26,12 +26,14 @@ from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, 
 from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
+    ConversationRecording,
 )
 from ac_platform.kernel.authz import ActorContext
 
 MEASUREMENT_VIEW_SCHEMA: Literal["ac.sales-xray.measurement-view/1"] = (
     "ac.sales-xray.measurement-view/1"
 )
+WAVEFORM_SCHEMA: Literal["ac.sales-xray.waveform/1"] = "ac.sales-xray.waveform/1"
 SIGNALLAB_SOURCE_REVISION: Literal["signallab-studio-0.2"] = "signallab-studio-0.2"
 SIGNALLAB_UNAVAILABLE_REASON: Literal["source_inspected_adapter_not_implemented"] = (
     "source_inspected_adapter_not_implemented"
@@ -45,6 +47,28 @@ class MeasurementPoint(BaseModel):
 
     start_ms: float = Field(ge=0)
     value: float | None = None
+
+
+class WaveformPoint(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True, allow_inf_nan=False)
+
+    start_ms: float = Field(ge=0)
+    level: float | None = Field(default=None, ge=0, le=1)
+
+
+class WaveformEnvelope(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        frozen=True,
+        allow_inf_nan=False,
+        populate_by_name=True,
+    )
+
+    schema_: Literal["ac.sales-xray.waveform/1"] = Field(alias="schema")
+    kind: Literal["rms_envelope"]
+    duration_ms: int = Field(gt=0)
+    points: tuple[WaveformPoint, ...] = Field(max_length=MAX_PLOT_POINTS)
 
 
 class MeasurementSeries(BaseModel):
@@ -360,6 +384,48 @@ class ConversationMeasurements:
     async def get(self, actor: ActorContext, recording_id: UUID) -> dict[str, object]:
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
+        return (await self._from_recording(recording)).model_dump(mode="json", by_alias=True)
+
+    async def waveform_from_recording(self, recording: ConversationRecording) -> dict[str, object]:
+        """Project persisted C1 RMS levels for an already-authorized recording."""
+
+        view = await self._from_recording(recording)
+        channels = view.audioatlas.channels
+        if not channels:
+            raise _conflict()
+        reference = channels[0].series[0].points
+        for channel in channels[1:]:
+            points = channel.series[0].points
+            if len(points) != len(reference) or any(
+                point.start_ms != expected.start_ms
+                for point, expected in zip(points, reference, strict=True)
+            ):
+                raise _conflict()
+        projected: list[WaveformPoint] = []
+        for index, expected in enumerate(reference):
+            amplitudes = []
+            for channel in channels:
+                measured = channel.series[0].points[index].value
+                if measured is not None:
+                    amplitudes.append(1.0 if measured >= 0 else max(0.0, 10 ** (measured / 20)))
+            projected.append(
+                WaveformPoint(
+                    start_ms=expected.start_ms,
+                    level=max(amplitudes) if amplitudes else None,
+                )
+            )
+        try:
+            envelope = WaveformEnvelope(
+                schema=WAVEFORM_SCHEMA,
+                kind="rms_envelope",
+                duration_ms=view.audioatlas.duration_ms,
+                points=tuple(projected),
+            )
+        except ValueError:
+            raise _conflict() from None
+        return envelope.model_dump(mode="json", by_alias=True)
+
+    async def _from_recording(self, recording: ConversationRecording) -> MeasurementView:
         binding = binding_for(recording)
         c0_payload = {
             "source_sha256": recording.source_sha256,
@@ -379,8 +445,8 @@ class ConversationMeasurements:
             select(ConversationCheckpoint)
             .where(
                 ConversationCheckpoint.recording_id == recording.id,
-                ConversationCheckpoint.tenant_id == actor.tenant_id,
-                ConversationCheckpoint.person_id == actor.person_id,
+                ConversationCheckpoint.tenant_id == recording.tenant_id,
+                ConversationCheckpoint.person_id == recording.person_id,
                 ConversationCheckpoint.stage == "C0",
                 ConversationCheckpoint.cache_key == canonical_c0.cache_key,
                 ConversationCheckpoint.erased_at.is_(None),
@@ -402,8 +468,8 @@ class ConversationMeasurements:
             select(ConversationCheckpoint)
             .where(
                 ConversationCheckpoint.recording_id == recording.id,
-                ConversationCheckpoint.tenant_id == actor.tenant_id,
-                ConversationCheckpoint.person_id == actor.person_id,
+                ConversationCheckpoint.tenant_id == recording.tenant_id,
+                ConversationCheckpoint.person_id == recording.person_id,
                 ConversationCheckpoint.stage == "C1",
                 ConversationCheckpoint.erased_at.is_(None),
             )
@@ -572,7 +638,7 @@ class ConversationMeasurements:
                     runtime_output=False,
                 ),
             )
-            return view.model_dump(mode="json", by_alias=True)
+            return view
         except (TypeError, ValueError, KeyError):
             raise _conflict() from None
 
@@ -581,5 +647,7 @@ __all__ = [
     "ConversationMeasurements",
     "MeasurementView",
     "MEASUREMENT_VIEW_SCHEMA",
+    "WaveformEnvelope",
+    "WAVEFORM_SCHEMA",
     "MAX_PLOT_POINTS",
 ]

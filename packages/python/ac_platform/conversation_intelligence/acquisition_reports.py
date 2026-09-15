@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
 from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
+from ac_platform.conversation_intelligence.measurement_view import ConversationMeasurements
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationInferenceTask,
@@ -192,6 +193,12 @@ class AcquisitionReports:
             name: transcript[name]
             for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
         }
+
+    async def waveform(
+        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+    ) -> dict[str, Any]:
+        _, recording = await self.recording(submission_id, token=token, actor=actor)
+        return await ConversationMeasurements(self.application).waveform_from_recording(recording)
 
     async def progress(
         self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None

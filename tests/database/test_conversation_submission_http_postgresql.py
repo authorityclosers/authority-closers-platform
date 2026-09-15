@@ -354,6 +354,8 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                 assert result["source_sha256"] == hashlib.sha256(data).hexdigest()
                 assert result["allowance"]["available_seconds"] == 3599
                 assert setup.native.calls == 1
+                missing_measurements = await client.get(path + "/waveform")
+                assert missing_measurements.status_code == 409
                 repeat = await client.put(path + "/source", content=data, headers=headers)
                 assert repeat.status_code == 202, repeat.text
                 assert repeat.json()["recording_id"] == result["recording_id"]
@@ -387,13 +389,20 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                 assert status.status_code == 200
                 assert status.json()["has_report"] is False
                 assert status.json()["automatic_progression"] is False
+                waveform = await client.get(path + "/waveform")
+                assert waveform.status_code == 200, waveform.text
+                assert waveform.json()["schema"] == "ac.sales-xray.waveform/1"
+                assert waveform.json()["kind"] == "rms_envelope"
+                assert waveform.json()["duration_ms"] == 1000
+                assert 0 < len(waveform.json()["points"]) <= 1200
+                assert waveform.headers["cache-control"] == "private, no-store"
                 assert (await client.get(path + "/report")).status_code == 404
                 unavailable = await client.post(
                     path + "/plan/quote",
                     headers={"Origin": ORIGIN, "Idempotency-Key": "no-provider-approved"},
                 )
                 assert unavailable.status_code == 409
-                for suffix in ("", "/source", "/report", "/transcript"):
+                for suffix in ("", "/source", "/report", "/transcript", "/waveform"):
                     client.cookies.set("ac_xray_guest", setup.stranger.token)
                     denied = await client.get(path + suffix)
                     assert denied.status_code == 404

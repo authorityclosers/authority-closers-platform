@@ -456,6 +456,13 @@ def install_submission_http(
             submission_id, **owner.arguments
         )
 
+    @router.get("/submissions/{submission_id}/waveform")
+    async def waveform(
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+    ) -> dict[str, Any]:
+        guard(request, response)
+        return await AcquisitionReports(owner.ownership).waveform(submission_id, **owner.arguments)
+
     @router.delete("/submissions/{submission_id}", status_code=202)
     async def delete_submission(
         submission_id: UUID,

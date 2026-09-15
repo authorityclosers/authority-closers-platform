@@ -75,6 +75,8 @@ def test_measurement_view_returns_saved_c1_and_enforces_current_source_authority
                     )
                 )
                 assert row is not None and row.payload is not None
+                recording = await database.get(ConversationRecording, prepared.recording_id)
+                assert recording is not None
                 payload = row.payload
                 display = payload["display"]
                 assert view["schema"] == "ac.sales-xray.measurement-view/1"
@@ -107,6 +109,32 @@ def test_measurement_view_returns_saved_c1_and_enforces_current_source_authority
                 assert [
                     point["value"] for point in first_view["series"][0]["points"]
                 ] == first_saved["dbfs"]
+                waveform = await ConversationMeasurements(application).waveform_from_recording(
+                    recording
+                )
+                assert waveform["schema"] == "ac.sales-xray.waveform/1"
+                assert waveform["kind"] == "rms_envelope"
+                assert waveform["duration_ms"] == view["audioatlas"]["duration_ms"]
+                expected_levels = []
+                for frame in range(len(first_saved["time_s"])):
+                    levels = [
+                        channel["dbfs"][frame]
+                        for channel in display["channels"]
+                        if channel["dbfs"][frame] is not None
+                    ]
+                    expected_levels.append(
+                        None if not levels else min(1.0, max(0.0, 10 ** (max(levels) / 20)))
+                    )
+                actual_levels = [point["level"] for point in waveform["points"]]
+                assert len(actual_levels) == len(expected_levels)
+                for actual, expected in zip(actual_levels, expected_levels, strict=True):
+                    if expected is None:
+                        assert actual is None
+                    else:
+                        assert actual == pytest.approx(expected)
+                assert [point["start_ms"] for point in waveform["points"]] == [
+                    time * 1000 for time in first_saved["time_s"]
+                ]
                 assert view["signallab"] == {
                     "status": "unavailable",
                     "reason": "source_inspected_adapter_not_implemented",
@@ -212,10 +240,16 @@ def test_measurement_view_returns_saved_c1_and_enforces_current_source_authority
 
             async def expect_tampered_payload() -> None:
                 async with AsyncSession(engine) as database, database.begin():
+                    recording = await database.get(ConversationRecording, prepared.recording_id)
+                    assert recording is not None
                     with pytest.raises(ConversationConflict):
                         await ConversationMeasurements(
                             ConversationApplication(database, clock=lambda: prepared.state.now)
                         ).get(prepared.state.actor, prepared.recording_id)
+                    with pytest.raises(ConversationConflict):
+                        await ConversationMeasurements(
+                            ConversationApplication(database, clock=lambda: prepared.state.now)
+                        ).waveform_from_recording(recording)
 
             await add_c1_and_check(tampered_payload_row, expect_tampered_payload)
 
