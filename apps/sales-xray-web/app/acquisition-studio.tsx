@@ -1269,7 +1269,7 @@ export function AcquisitionStudio({
                   <p>
                     {processingNeedsAttention
                       ? "This stage needs checking before analysis can continue. Your call stays private while it is retained."
-                      : "Your call is saved privately. You can leave this page and return in this browser while it is retained."}
+                      : "Your call is saved. We’ll update each step as your analysis completes."}
                   </p>
                 </div>
                 <div

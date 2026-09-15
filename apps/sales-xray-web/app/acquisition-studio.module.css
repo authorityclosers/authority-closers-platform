@@ -1055,6 +1055,10 @@
 .app[data-stage="processing"] :global(.studio-main) {
   max-width: 1360px;
   padding: 18px 24px 12px;
+  background: #fffdf9;
+}
+.app[data-stage="processing"] {
+  background: #fffdf9;
 }
 .app[data-stage="processing"] .withProcessing {
   display: block;
@@ -1135,7 +1139,7 @@
 .app[data-stage="processing"] .withProcessing .progressCopy h3 {
   margin: 0 0 10px;
   color: var(--ink);
-  font-size: clamp(30px, 3.4vw, 44px);
+  font-size: clamp(32px, 2.3vw, 36px);
   font-weight: 650;
   letter-spacing: -1.2px;
   line-height: 1.12;
@@ -1314,7 +1318,7 @@
     margin-top: 14px;
   }
   .app[data-stage="processing"] .withProcessing .progressCopy h3 {
-    font-size: clamp(28px, 8vw, 34px);
+    font-size: 28px;
     letter-spacing: -0.7px;
   }
   .app[data-stage="processing"] .withProcessing .progressCopy > p:last-child {

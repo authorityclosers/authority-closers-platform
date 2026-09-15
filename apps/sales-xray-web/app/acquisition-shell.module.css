@@ -542,6 +542,9 @@
     );
     box-shadow: 0 -0.5rem 1.5rem #10233a10;
   }
+  .shell[data-compact-busy="true"] .bottomNav {
+    display: grid;
+  }
   .bottomLink {
     justify-content: center;
     flex-direction: column;
