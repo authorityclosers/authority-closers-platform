@@ -66,3 +66,8 @@ uses that complete envelope and continues to reject false human approval.
 
 Private local receipts retain exact commands, source hashes and outcomes. None
 of these checks made an inference-provider request or settled a provider bill.
+# Final retained HTTP integration
+
+At candidate `b77e1fb`, the two disposable PostgreSQL cases pass, including actual Admin revalidate/correct/report requests and owner report, transcript, progress and source requests. Unauthorized guest and anonymous Admin reads are rejected. Recovery responses include the metadata accepted by the Admin frontend. Receipt: `D:/AC-authority-closers-release-audit/integrated-retained-http-final-pg-20260915-v2.xml`. The first root invocation used a temp directory under a parent Git checkout and failed the storage-root fixture guard; the corrected invocation uses an isolated `D:/Temp` directory. No provider call or production write occurred.
+
+This is candidate verification, not production deployment evidence. Report and processing visual work continues on isolated branches with normal Pro design handoffs.
