@@ -687,6 +687,193 @@ def inspect_media(
             outdir.rmdir()
 
 
+def validate_media(
+    source: Path,
+    outdir: Path,
+    rate: int = 16000,
+    max_seconds: int = MAX_SECONDS,
+) -> dict[str, Any]:
+    """Validate and fully decode a source without computing AudioAtlas features.
+
+    Admission needs an exact decoded duration and source binding before it can
+    reserve minutes.  C1 feature extraction is repeated by the durable worker,
+    so doing that work in the request path needlessly extends the upload window.
+    This mode keeps the same bounded ffprobe/ffmpeg decode and private output
+    contract while publishing only a canonical source-validation receipt.
+    """
+    if type(rate) is not int or rate not in (16000, 48000):
+        raise SignalError("signal_unsupported_profile_rate")
+    if type(max_seconds) is not int or not 1 <= max_seconds <= MAX_SECONDS:
+        raise SignalError("signal_invalid_duration_limit")
+    if (
+        not source.is_file()
+        or source.is_symlink()
+        or not 0 < source.stat().st_size <= MAX_SOURCE_BYTES
+    ):
+        raise SignalError("signal_source_missing_or_oversized")
+    ffprobe, ffmpeg = _tool("ffprobe"), _tool("ffmpeg")
+    outdir.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        outdir.mkdir(mode=0o700)
+    except FileExistsError:
+        raise SignalError("signal_output_exists") from None
+    succeeded = False
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix=".ac-source-validation-", dir=outdir.parent
+        ) as temporary:
+            workspace = Path(temporary)
+            snapshot = workspace / "source.media"
+            source_hash = hashlib.sha256()
+            source_bytes = 0
+            with source.open("rb") as original, snapshot.open("xb") as copied:
+                while block := original.read(1024 * 1024):
+                    source_bytes += len(block)
+                    if source_bytes > MAX_SOURCE_BYTES:
+                        raise SignalError("signal_source_missing_or_oversized")
+                    source_hash.update(block)
+                    copied.write(block)
+            try:
+                info = json.loads(
+                    _run_bounded(
+                        [
+                            ffprobe,
+                            "-v",
+                            "error",
+                            "-protocol_whitelist",
+                            "file,pipe",
+                            "-format_whitelist",
+                            _FORMATS,
+                            "-select_streams",
+                            "a:0",
+                            "-show_entries",
+                            "stream=index,codec_name,codec_type,sample_rate,channels,duration,start_time,"
+                            "time_base:format=duration,format_name",
+                            "-of",
+                            "json",
+                            str(snapshot),
+                        ],
+                        timeout=20,
+                        max_stdout_bytes=65536,
+                    )
+                )
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                raise SignalError("signal_invalid_probe") from None
+            streams = info.get("streams", [])
+            if not streams or streams[0].get("codec_type") != "audio":
+                raise SignalError("signal_no_audio_stream")
+            stream = streams[0]
+            try:
+                channels, source_rate = int(stream["channels"]), int(stream["sample_rate"])
+            except (ValueError, TypeError, KeyError):
+                raise SignalError("signal_invalid_probe") from None
+            if channels not in (1, 2) or not 1000 <= source_rate <= 384000:
+                raise SignalError("signal_unsupported_source_layout")
+            duration = _finite_number(
+                stream.get("duration") or info.get("format", {}).get("duration"),
+                "signal_invalid_source_duration",
+            )
+            if not 0 < duration <= max_seconds:
+                raise SignalError("signal_invalid_source_duration")
+            start_time = (
+                None
+                if stream.get("start_time") in (None, "N/A")
+                else _finite_number(stream["start_time"], "signal_invalid_track_origin")
+            )
+            pcm = workspace / "decoded.f32"
+            byte_cap = (max_seconds + 1) * rate * channels * 4
+            _run_bounded(
+                [
+                    ffmpeg,
+                    "-nostdin",
+                    "-hide_banner",
+                    "-v",
+                    "error",
+                    "-threads",
+                    "1",
+                    "-protocol_whitelist",
+                    "file,pipe",
+                    "-format_whitelist",
+                    _FORMATS,
+                    "-i",
+                    str(snapshot),
+                    "-map",
+                    "0:a:0",
+                    "-vn",
+                    "-sn",
+                    "-dn",
+                    "-ac",
+                    str(channels),
+                    "-ar",
+                    str(rate),
+                    "-threads",
+                    "1",
+                    "-filter_threads",
+                    "1",
+                    "-t",
+                    str(max_seconds + 1),
+                    "-fs",
+                    str(byte_cap),
+                    "-f",
+                    "f32le",
+                    "-n",
+                    str(pcm),
+                ],
+                timeout=90,
+                watched_outputs={pcm: byte_cap + 65536},
+            )
+            size = pcm.stat().st_size
+            if not size or size % (channels * 4):
+                raise SignalError("signal_incomplete_pcm_frame")
+            sample_count = size // (channels * 4)
+            if sample_count > rate * max_seconds:
+                raise SignalError("signal_decoded_duration_limit")
+            digest = source_hash.hexdigest()
+            result = {
+                "schema": "ac.sales-xray.source-validation/1",
+                "source_sha256": digest,
+                "source_bytes": source_bytes,
+                "source_rate": source_rate,
+                "source_channels": channels,
+                "source_codec": stream.get("codec_name"),
+                "media_duration_ms": round(sample_count / rate * 1000),
+                "decoded": {"rate": rate, "channels": channels, "sample_count": sample_count},
+                "timebase": {
+                    "clock": "decoded_audio_track",
+                    "rate": rate,
+                    "sample_zero": 0,
+                    "sample_to_seconds": {"numerator": 1, "denominator": rate},
+                    "source_sample_rate": source_rate,
+                    "source_track_start_seconds": start_time,
+                    "source_track_time_base": stream.get("time_base"),
+                    "resampled": source_rate != rate,
+                    "silence_removed": False,
+                    "gain_normalized": False,
+                    "denoised": False,
+                    "source_mapping_status": "uncertified_codec_delay_origin_and_discontinuities",
+                    "container_video_sync_certified": False,
+                },
+                "coverage": (
+                    "All decoded-track samples; no AudioAtlas, ASR/VAD/diarization, "
+                    "or video analysis"
+                ),
+                "isolation": "local_bounded_subprocess_not_an_os_sandbox",
+            }
+            checkpoint = workspace / "checkpoint.json"
+            checkpoint.write_text(
+                json.dumps(result, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            checkpoint.replace(outdir / "checkpoint.json")
+        succeeded = True
+        return result
+    finally:
+        if not succeeded:
+            (outdir / "checkpoint.json").unlink(missing_ok=True)
+            outdir.rmdir()
+
+
 def fuse_segments(
     transcript: Mapping[str, Any],
     features: Path,

@@ -127,7 +127,7 @@ def _handle(
         if set(request) != expected or request.get("schema") != NATIVE_RUNTIME_SCHEMA:
             raise NativeRuntimeError("native_runtime_failed")
         if (
-            request.get("operation") != "inspect"
+            request.get("operation") not in {"inspect", "validate"}
             or request.get("image_ref") != image_ref
             or request.get("rate") != HOSTED_C1_RATE
             or not isinstance(request.get("source"), str)
@@ -144,7 +144,10 @@ def _handle(
         source_sha256, source_bytes = _validate_request_paths(source, outdir, workspace_root)
         if source_sha256 != request["source_sha256"] or source_bytes != request["source_bytes"]:
             raise NativeRuntimeError("native_runtime_source_binding_mismatch")
-        result = runtime.inspect(source, outdir, job_id=job_id, rate=HOSTED_C1_RATE)
+        if request["operation"] == "inspect":
+            result = runtime.inspect(source, outdir, job_id=job_id, rate=HOSTED_C1_RATE)
+        else:
+            result = runtime.validate_source(source, outdir, job_id=job_id, rate=HOSTED_C1_RATE)
         if (
             result.get("source_sha256") != request["source_sha256"]
             or result.get("source_bytes") != request["source_bytes"]

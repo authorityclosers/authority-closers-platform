@@ -55,6 +55,57 @@ class FixtureRuntime:
         return payload
 
 
+class ValidationFixtureRuntime:
+    def __init__(self, *, change: str | None = None) -> None:
+        self.calls = 0
+        self.change = change
+
+    def validate_source(
+        self, source: Path, outdir: Path, *, job_id: UUID, rate: Any
+    ) -> dict[str, Any]:
+        self.calls += 1
+        assert rate == 16000 and type(job_id) is UUID
+        source_sha256 = signals.file_sha256(source)
+        payload: dict[str, Any] = {
+            "schema": "ac.sales-xray.source-validation/1",
+            "source_sha256": source_sha256,
+            "source_bytes": source.stat().st_size,
+            "source_rate": 48000,
+            "source_channels": 1,
+            "source_codec": "pcm_s16le",
+            "media_duration_ms": 1000,
+            "decoded": {"rate": 16000, "channels": 1, "sample_count": 16000},
+            "timebase": {
+                "clock": "decoded_audio_track",
+                "rate": 16000,
+                "sample_zero": 0,
+                "sample_to_seconds": {"numerator": 1, "denominator": 16000},
+                "source_sample_rate": 48000,
+                "source_track_start_seconds": 0.0,
+                "source_track_time_base": "1/48000",
+                "resampled": True,
+                "silence_removed": False,
+                "gain_normalized": False,
+                "denoised": False,
+                "source_mapping_status": "uncertified_codec_delay_origin_and_discontinuities",
+                "container_video_sync_certified": False,
+            },
+            "coverage": (
+                "All decoded-track samples; no AudioAtlas, ASR/VAD/diarization, or video analysis"
+            ),
+            "isolation": "local_bounded_subprocess_not_an_os_sandbox",
+        }
+        if self.change == "duration":
+            payload["media_duration_ms"] = 999
+        elif self.change == "samples":
+            payload["decoded"]["sample_count"] = 32000
+        elif self.change == "source":
+            payload["source_sha256"] = "a" * 64
+        outdir.mkdir(mode=0o700)
+        (outdir / "checkpoint.json").write_bytes(_canonical_json(payload) + b"\n")
+        return payload
+
+
 @pytest.mark.parametrize(
     "header,expected",
     [
@@ -127,6 +178,31 @@ def test_wrong_original_hash_is_rejected_before_native_call(tmp_path: Path) -> N
     assert runtime.calls == 0
 
 
+def test_source_validation_path_measures_without_audioatlas_features(tmp_path: Path) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"RIFF0000WAVEsynthetic")
+    runtime = ValidationFixtureRuntime()
+    measured = NativeUploadPreflight(runtime).measure(source, uuid4(), signals.file_sha256(source))
+    assert measured.source.duration_ms == 1000
+    assert measured.source.duration_evidence_sha256
+    assert measured.intent.duration_ms == 1000
+    assert runtime.calls == 1
+    assert (tmp_path / "preflight" / "checkpoint.json").is_file()
+    assert not (tmp_path / "preflight" / "features.aaf").exists()
+
+
+@pytest.mark.parametrize("change", ["duration", "samples", "source"])
+def test_source_validation_receipt_cannot_forge_duration_or_binding(
+    tmp_path: Path, change: str
+) -> None:
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"RIFF0000WAVEsynthetic")
+    with pytest.raises(ConversationError, match="could not be verified"):
+        NativeUploadPreflight(ValidationFixtureRuntime(change=change)).measure(
+            source, uuid4(), signals.file_sha256(source)
+        )
+
+
 def test_source_over_provider_limit_is_rejected_before_native_call(tmp_path: Path) -> None:
     source = tmp_path / "oversized.media"
     with source.open("wb") as stream:
@@ -144,8 +220,10 @@ def test_source_over_provider_limit_is_rejected_before_native_call(tmp_path: Pat
 )
 def test_actual_offline_native_preflight_measures_original_samples(tmp_path: Path) -> None:
     class OfflineRuntime:
-        def inspect(self, source: Path, outdir: Path, *, job_id: UUID, rate: Any) -> dict[str, Any]:
-            return signals.inspect_media(source, outdir, rate=rate)
+        def validate_source(
+            self, source: Path, outdir: Path, *, job_id: UUID, rate: Any
+        ) -> dict[str, Any]:
+            return signals.validate_media(source, outdir, rate=rate)
 
     source = tmp_path / "source.media"
     with wave.open(str(source), "wb") as stream:
@@ -162,5 +240,6 @@ def test_actual_offline_native_preflight_measures_original_samples(tmp_path: Pat
     receipt = json.loads((tmp_path / "preflight/checkpoint.json").read_bytes())
     assert receipt["timebase"]["rate"] == 16000
     assert receipt["source_rate"] == 48000
-    assert receipt["acoustics"]["sample_count"] == 16000
+    assert receipt["decoded"]["sample_count"] == 16000
     assert receipt["timebase"]["resampled"] is True
+    assert not (tmp_path / "preflight" / "features.aaf").exists()

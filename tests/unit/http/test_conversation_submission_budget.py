@@ -69,6 +69,9 @@ def test_native_timeout_is_actionable_before_any_reservation(tmp_path: Path) -> 
         def inspect(self, *_: object, **__: object) -> dict[str, object]:
             raise NativeRuntimeError("native_runtime_timeout")
 
+        def validate_source(self, *_: object, **__: object) -> dict[str, object]:
+            raise NativeRuntimeError("native_runtime_timeout")
+
     with pytest.raises(NativePreflightTimeout, match="too long to verify") as error:
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
         NativeUploadPreflight(TimedOutRuntime()).measure(source, uuid4(), digest)

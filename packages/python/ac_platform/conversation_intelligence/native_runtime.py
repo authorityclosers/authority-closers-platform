@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
-from ac_platform.conversation_intelligence.signals import iter_features
+from ac_platform.conversation_intelligence.signals import MAX_SECONDS, iter_features
 
 HOSTED_C1_RATE: Literal[16000] = 16000
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
@@ -43,6 +43,8 @@ _IMAGE_REF = re.compile(r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}$")
 _CONTAINER_PREFIX = re.compile(r"^[a-z][a-z0-9-]{0,40}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _CHECKPOINT_FILES = frozenset({"checkpoint.json", "features.aaf"})
+_SOURCE_VALIDATION_FILES = frozenset({"checkpoint.json"})
+_SOURCE_VALIDATION_SCHEMA = "ac.sales-xray.source-validation/1"
 
 
 class NativeRuntimeError(ValueError):
@@ -85,6 +87,16 @@ class NativeRuntime(Protocol):
     ) -> dict[str, Any]:
         """Create one immutable C1 output directory and return its payload."""
 
+    def validate_source(
+        self,
+        source: Path,
+        outdir: Path,
+        *,
+        job_id: UUID,
+        rate: Literal[16000],
+    ) -> dict[str, Any]:
+        """Fully decode one source and publish only its admission receipt."""
+
 
 # This is intentionally the same bounded preflight as the reviewed candidate
 # README. It is kept as a fixed program rather than accepting a caller command or
@@ -122,12 +134,16 @@ for mount, size in (("/work", 536870912), ("/tmp", 16777216)):
 filesystem = os.statvfs("/output")
 assert filesystem.f_frsize * filesystem.f_blocks <= 67108864
 assert stat.S_IMODE(os.stat("/output").st_mode) == 0o700
-subprocess.run([sys.executable, "-m", "ac_platform.conversation_intelligence", "inspect",
+operation = "__NATIVE_OPERATION__"
+if operation not in {"inspect", "validate"}:
+    raise RuntimeError("unsupported native operation")
+subprocess.run([sys.executable, "-m", "ac_platform.conversation_intelligence", operation,
                 "/input/source.media", "--out", "/work/checkpoint", "--rate", "16000"],
                check=True, timeout=720)
 published = Path("/output/checkpoint")
 published.mkdir(mode=0o700)
-for name in ("features.aaf", "checkpoint.json"):
+names = ("features.aaf", "checkpoint.json") if operation == "inspect" else ("checkpoint.json",)
+for name in names:
     shutil.copyfile(Path("/work/checkpoint") / name, published / name)
 """
 
@@ -295,14 +311,37 @@ class SocketNativeRuntime:
         job_id: UUID,
         rate: Literal[16000],
     ) -> dict[str, Any]:
+        return self._run_operation(source, outdir, job_id=job_id, rate=rate, operation="inspect")
+
+    def validate_source(
+        self,
+        source: Path,
+        outdir: Path,
+        *,
+        job_id: UUID,
+        rate: Literal[16000],
+    ) -> dict[str, Any]:
+        return self._run_operation(source, outdir, job_id=job_id, rate=rate, operation="validate")
+
+    def _run_operation(
+        self,
+        source: Path,
+        outdir: Path,
+        *,
+        job_id: UUID,
+        rate: Literal[16000],
+        operation: Literal["inspect", "validate"],
+    ) -> dict[str, Any]:
         source_sha256, source_bytes = _validate_request_paths(source, outdir, self.workspace_root)
         if type(rate) is not int or rate != HOSTED_C1_RATE:
             raise NativeRuntimeError("native_runtime_rate_mismatch")
         if type(job_id) is not UUID:
             raise NativeRuntimeError("native_runtime_configuration_invalid")
+        if operation not in {"inspect", "validate"}:
+            raise NativeRuntimeError("native_runtime_configuration_invalid")
         request = {
             "schema": NATIVE_RUNTIME_SCHEMA,
-            "operation": "inspect",
+            "operation": operation,
             "source": str(source),
             "outdir": str(outdir),
             "job_id": str(job_id),
@@ -325,8 +364,14 @@ class SocketNativeRuntime:
                 error = "native_runtime_failed"
             raise NativeRuntimeError(error)
         try:
-            payload = DockerNativeRuntime._validate_output(
-                outdir, source_sha256=source_sha256, source_bytes=source_bytes
+            payload = (
+                DockerNativeRuntime._validate_output(
+                    outdir, source_sha256=source_sha256, source_bytes=source_bytes
+                )
+                if operation == "inspect"
+                else DockerNativeRuntime._validate_source_output(
+                    outdir, source_sha256=source_sha256, source_bytes=source_bytes
+                )
             )
         except NativeRuntimeError:
             raise
@@ -445,9 +490,32 @@ class DockerNativeRuntime:
         job_id: UUID,
         rate: Literal[16000],
     ) -> dict[str, Any]:
+        return self._run_operation(source, outdir, job_id=job_id, rate=rate, operation="inspect")
+
+    def validate_source(
+        self,
+        source: Path,
+        outdir: Path,
+        *,
+        job_id: UUID,
+        rate: Literal[16000],
+    ) -> dict[str, Any]:
+        return self._run_operation(source, outdir, job_id=job_id, rate=rate, operation="validate")
+
+    def _run_operation(
+        self,
+        source: Path,
+        outdir: Path,
+        *,
+        job_id: UUID,
+        rate: Literal[16000],
+        operation: Literal["inspect", "validate"],
+    ) -> dict[str, Any]:
         if type(rate) is not int or rate != HOSTED_C1_RATE:
             raise NativeRuntimeError("native_runtime_rate_mismatch")
         if type(job_id) is not UUID:
+            raise NativeRuntimeError("native_runtime_configuration_invalid")
+        if operation not in {"inspect", "validate"}:
             raise NativeRuntimeError("native_runtime_configuration_invalid")
         if not isinstance(source, Path) or not isinstance(outdir, Path):
             raise NativeRuntimeError("native_runtime_configuration_invalid")
@@ -486,7 +554,7 @@ class DockerNativeRuntime:
             staging_parent = self.output_root or outdir.parent
             staging = Path(tempfile.mkdtemp(prefix=".native-output-", dir=str(staging_parent)))
             self._restrict_directory(staging)
-            command = self._command(source, staging, container_name)
+            command = self._command(source, staging, container_name, operation=operation)
             self._invoke(command, container_name)
             try:
                 current_source = source.lstat()
@@ -500,12 +568,21 @@ class DockerNativeRuntime:
                 unchanged = False
             if not unchanged:
                 raise NativeRuntimeError("native_runtime_source_binding_mismatch")
-            payload = self._validate_output(
-                staging / "checkpoint",
-                source_sha256=source_sha256,
-                source_bytes=source_info.st_size,
+            checkpoint = staging / "checkpoint"
+            payload = (
+                self._validate_output(
+                    checkpoint,
+                    source_sha256=source_sha256,
+                    source_bytes=source_info.st_size,
+                )
+                if operation == "inspect"
+                else self._validate_source_output(
+                    checkpoint,
+                    source_sha256=source_sha256,
+                    source_bytes=source_info.st_size,
+                )
             )
-            self._publish_output(staging / "checkpoint", outdir)
+            self._publish_output(checkpoint, outdir, operation=operation)
             return payload
         except NativeRuntimeError:
             raise
@@ -555,14 +632,25 @@ class DockerNativeRuntime:
         except OSError:
             raise NativeRuntimeError("native_runtime_output_invalid") from None
 
-    def _publish_output(self, checkpoint: Path, outdir: Path) -> None:
+    def _publish_output(
+        self,
+        checkpoint: Path,
+        outdir: Path,
+        *,
+        operation: Literal["inspect", "validate"] = "inspect",
+    ) -> None:
         if outdir.exists() or outdir.is_symlink():
             raise NativeRuntimeError("native_runtime_output_exists")
         publish: Path | None = None
         try:
             publish = Path(tempfile.mkdtemp(prefix=".native-publish-", dir=str(outdir.parent)))
             self._restrict_directory(publish)
-            for name in ("features.aaf", "checkpoint.json"):
+            names = (
+                ("features.aaf", "checkpoint.json")
+                if operation == "inspect"
+                else ("checkpoint.json",)
+            )
+            for name in names:
                 shutil.copyfile(checkpoint / name, publish / name)
                 self._restrict_file(publish / name)
             try:
@@ -578,7 +666,14 @@ class DockerNativeRuntime:
             if publish is not None:
                 shutil.rmtree(publish, ignore_errors=True)
 
-    def _command(self, source: Path, staging: Path, container_name: str) -> tuple[str, ...]:
+    def _command(
+        self,
+        source: Path,
+        staging: Path,
+        container_name: str,
+        *,
+        operation: Literal["inspect", "validate"],
+    ) -> tuple[str, ...]:
         # Every argument is fixed except the three trusted coordinator paths, the
         # canonical job-derived name and the immutable image digest.
         return (
@@ -614,7 +709,7 @@ class DockerNativeRuntime:
             "--entrypoint=python",
             self.image_ref,
             "-c",
-            _CONTAINER_PROGRAM,
+            _CONTAINER_PROGRAM.replace("__NATIVE_OPERATION__", operation),
         )
 
     def _invoke(self, command: Sequence[str], container_name: str) -> None:
@@ -748,6 +843,68 @@ class DockerNativeRuntime:
                 pass
         except (OSError, ValueError, RuntimeError):
             raise NativeRuntimeError("native_runtime_feature_invalid") from None
+        return payload
+
+    @staticmethod
+    def _validate_source_output(
+        checkpoint: Path, *, source_sha256: str, source_bytes: int
+    ) -> dict[str, Any]:
+        """Validate the smaller full-decode receipt used during upload admission."""
+        try:
+            _directory(checkpoint)
+            names = {entry.name for entry in checkpoint.iterdir()}
+        except OSError:
+            raise NativeRuntimeError("native_runtime_checkpoint_invalid") from None
+        if names != _SOURCE_VALIDATION_FILES:
+            raise NativeRuntimeError("native_runtime_checkpoint_invalid")
+        checkpoint_json = checkpoint / "checkpoint.json"
+        _regular(checkpoint_json, max_bytes=MAX_CHECKPOINT_BYTES)
+        try:
+            raw = checkpoint_json.read_bytes()
+            if not raw.endswith(b"\n"):
+                raise NativeRuntimeError("native_runtime_checkpoint_not_canonical")
+            payload = json.loads(
+                raw[:-1].decode("utf-8"),
+                object_pairs_hook=_object_pairs,
+                parse_constant=_reject_json_constant,
+            )
+        except NativeRuntimeError:
+            raise
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            raise NativeRuntimeError("native_runtime_checkpoint_invalid") from None
+        if not isinstance(payload, dict) or _canonical_json(payload) != raw[:-1]:
+            raise NativeRuntimeError("native_runtime_checkpoint_not_canonical")
+        decoded = payload.get("decoded")
+        timebase = payload.get("timebase")
+        sample_count = decoded.get("sample_count") if isinstance(decoded, dict) else None
+        channels = decoded.get("channels") if isinstance(decoded, dict) else None
+        rate = decoded.get("rate") if isinstance(decoded, dict) else None
+        source_rate = payload.get("source_rate")
+        source_channels = payload.get("source_channels")
+        duration = payload.get("media_duration_ms")
+        if (
+            payload.get("schema") != _SOURCE_VALIDATION_SCHEMA
+            or payload.get("source_sha256") != source_sha256
+            or payload.get("source_bytes") != source_bytes
+            or type(sample_count) is not int
+            or not 0 < sample_count <= HOSTED_C1_RATE * MAX_SECONDS
+            or type(channels) is not int
+            or channels not in (1, 2)
+            or rate != HOSTED_C1_RATE
+            or type(source_rate) is not int
+            or not 1000 <= source_rate <= 384000
+            or type(source_channels) is not int
+            or source_channels != channels
+            or type(duration) is not int
+            or duration != round(sample_count * 1000 / HOSTED_C1_RATE)
+            or not 0 < duration <= MAX_SECONDS * 1000
+            or not isinstance(timebase, dict)
+            or timebase.get("clock") != "decoded_audio_track"
+            or timebase.get("rate") != HOSTED_C1_RATE
+            or timebase.get("sample_zero") != 0
+            or timebase.get("source_sample_rate") != source_rate
+        ):
+            raise NativeRuntimeError("native_runtime_source_binding_mismatch")
         return payload
 
 

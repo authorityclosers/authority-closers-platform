@@ -119,12 +119,12 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
             monkeypatch.setattr(app_module, "session_factory", setup.sessions)
 
             def native(self: Any, source: Path, outdir: Path, *, job_id: UUID, rate: Any):
-                return signals.inspect_media(source, outdir, rate=rate)
+                return signals.validate_media(source, outdir, rate=rate)
 
             async def challenge(self: Any, token: str):
                 assert token == "synthetic-browser-challenge"  # noqa: S105 -- test-only response
 
-            monkeypatch.setattr(SocketNativeRuntime, "inspect", native)
+            monkeypatch.setattr(SocketNativeRuntime, "validate_source", native)
             monkeypatch.setattr(UploadChallenge, "verify", challenge)
             application = app_module.create_app(conversation_intake_runtime=setup.runtime)
             assert application.state.sales_xray_acquisition_configured

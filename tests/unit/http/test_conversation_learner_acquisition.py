@@ -70,6 +70,11 @@ class _Native(NativeRuntime):
     def inspect(self, source: Path, outdir: Path, *, job_id: UUID, rate: int) -> dict[str, object]:
         raise AssertionError("learner host guard should run before native inspection")
 
+    def validate_source(
+        self, source: Path, outdir: Path, *, job_id: UUID, rate: int
+    ) -> dict[str, object]:
+        raise AssertionError("learner host guard should run before native validation")
+
 
 def _settings() -> Settings:
     return Settings(

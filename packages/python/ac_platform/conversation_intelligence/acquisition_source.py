@@ -78,30 +78,54 @@ class NativeUploadPreflight:
             media_type = original_content_type(stream.read(64))
         destination = path.parent / "preflight"
         try:
-            returned = self.runtime.inspect(
-                path, destination, job_id=submission_id, rate=HOSTED_C1_RATE
-            )
-            payload = DockerNativeRuntime._validate_output(
-                destination, source_sha256=digest, source_bytes=source_bytes
-            )
+            validate_source = getattr(self.runtime, "validate_source", None)
+            if callable(validate_source):
+                returned = validate_source(
+                    path, destination, job_id=submission_id, rate=HOSTED_C1_RATE
+                )
+                payload = DockerNativeRuntime._validate_source_output(
+                    destination, source_sha256=digest, source_bytes=source_bytes
+                )
+                decoded = payload["decoded"]
+                sample_count, channels = (
+                    decoded["sample_count"],
+                    decoded["channels"],
+                )
+            else:
+                returned = self.runtime.inspect(
+                    path, destination, job_id=submission_id, rate=HOSTED_C1_RATE
+                )
+                payload = DockerNativeRuntime._validate_output(
+                    destination, source_sha256=digest, source_bytes=source_bytes
+                )
+                acoustics = payload["acoustics"]
+                sample_count, channels = acoustics["sample_count"], acoustics["channels"]
             if content_hash(returned) != content_hash(payload):
                 raise ValueError("measurement_envelope_differs")
-            acoustics = payload["acoustics"]
-            sample_count, channels = acoustics["sample_count"], acoustics["channels"]
             duration = payload["media_duration_ms"]
-            with (destination / "features.aaf").open("rb") as features:
-                header = _HEADER.unpack(features.read(_HEADER.size))
-            if (
-                type(sample_count) is not int
-                or not 0 < sample_count <= HOSTED_C1_RATE * MAX_SECONDS
-                or type(channels) is not int
-                or channels not in (1, 2)
-                or header[1:4] != (HOSTED_C1_RATE, channels, sample_count)
-                or type(duration) is not int
-                or duration != round(sample_count * 1000 / HOSTED_C1_RATE)
-                or not 0 < duration <= MAX_SECONDS * 1000
-            ):
+            if type(sample_count) is not int or type(channels) is not int:
                 raise ValueError("measurement_duration_differs")
+            if callable(validate_source):
+                if not (
+                    0 < sample_count <= HOSTED_C1_RATE * MAX_SECONDS
+                    and channels in (1, 2)
+                    and type(duration) is int
+                    and duration == round(sample_count * 1000 / HOSTED_C1_RATE)
+                    and 0 < duration <= MAX_SECONDS * 1000
+                ):
+                    raise ValueError("measurement_duration_differs")
+            else:
+                with (destination / "features.aaf").open("rb") as features:
+                    header = _HEADER.unpack(features.read(_HEADER.size))
+                if (
+                    not 0 < sample_count <= HOSTED_C1_RATE * MAX_SECONDS
+                    or channels not in (1, 2)
+                    or header[1:4] != (HOSTED_C1_RATE, channels, sample_count)
+                    or type(duration) is not int
+                    or duration != round(sample_count * 1000 / HOSTED_C1_RATE)
+                    or not 0 < duration <= MAX_SECONDS * 1000
+                ):
+                    raise ValueError("measurement_duration_differs")
         except NativeRuntimeError as error:
             if error.code == "native_runtime_timeout":
                 raise NativePreflightTimeout(

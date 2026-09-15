@@ -120,6 +120,44 @@ def _checkpoint_fixture(source: Path, destination: Path) -> None:
     (destination / "checkpoint.json").write_bytes(native_runtime._canonical_json(payload) + b"\n")
 
 
+def _source_validation_fixture(source: Path, destination: Path) -> None:
+    destination.mkdir(mode=0o700)
+    payload = {
+        "coverage": (
+            "All decoded-track samples; no AudioAtlas, ASR/VAD/diarization, or video analysis"
+        ),
+        "decoded": {"channels": 1, "rate": 16000, "sample_count": 16000},
+        "isolation": "local_bounded_subprocess_not_an_os_sandbox",
+        "media_duration_ms": 1000,
+        "schema": "ac.sales-xray.source-validation/1",
+        "source_bytes": source.stat().st_size,
+        "source_channels": 1,
+        "source_codec": "pcm_s16le",
+        "source_rate": 48000,
+        "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "timebase": {
+            "clock": "decoded_audio_track",
+            "container_video_sync_certified": False,
+            "denoised": False,
+            "gain_normalized": False,
+            "nominal_source_samples_per_decoded_sample": {
+                "denominator": 16000,
+                "numerator": 48000,
+            },
+            "rate": 16000,
+            "resampled": True,
+            "sample_to_seconds": {"denominator": 16000, "numerator": 1},
+            "sample_zero": 0,
+            "silence_removed": False,
+            "source_mapping_status": "uncertified_codec_delay_origin_and_discontinuities",
+            "source_sample_rate": 48000,
+            "source_track_start_seconds": 0.0,
+            "source_track_time_base": "1/48000",
+        },
+    }
+    (destination / "checkpoint.json").write_bytes(native_runtime._canonical_json(payload) + b"\n")
+
+
 def _output_mount(command: tuple[str, ...]) -> Path:
     mounts = [command[index + 1] for index, value in enumerate(command) if value == "--mount"]
     mount = next(value for value in mounts if "target=/output" in value)
@@ -213,6 +251,25 @@ def test_docker_adapter_stages_on_helper_quota_root_and_publishes_to_worker_root
     assert result["timebase"]["rate"] == 16000
     assert (tmp_path / "published" / "checkpoint.json").is_file()
     assert not list(quota_root.glob(".native-output-*"))
+
+
+def test_docker_adapter_validates_source_without_audioatlas_features(tmp_path: Path) -> None:
+    source = tmp_path / "source.media"
+    source.write_bytes(b"synthetic source validation")
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: tuple[str, ...], _name: str, _timeout: float) -> None:
+        calls.append(command)
+        _source_validation_fixture(source, _output_mount(command) / "checkpoint")
+
+    runtime = native_runtime.DockerNativeRuntime(IMAGE, workspace_root=tmp_path, runner=runner)
+    result = runtime.validate_source(source, tmp_path / "validated", job_id=uuid4(), rate=16000)
+
+    assert result["schema"] == "ac.sales-xray.source-validation/1"
+    assert result["media_duration_ms"] == 1000
+    assert (tmp_path / "validated" / "checkpoint.json").is_file()
+    assert not (tmp_path / "validated" / "features.aaf").exists()
+    assert calls and 'operation = "validate"' in calls[0][-1]
 
 
 def test_helper_peer_credentials_use_uid_slot(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -363,6 +420,41 @@ def test_socket_client_sends_only_bounded_paths_and_validates_output(tmp_path: P
     assert seen["rate"] == 16000
     assert "audio" not in seen
     assert (tmp_path / "socket-result" / "features.aaf").is_file()
+
+
+def test_socket_client_validates_source_with_the_allowlisted_operation(tmp_path: Path) -> None:
+    source = tmp_path / "source.media"
+    source.write_bytes(b"synthetic socket validation source")
+    seen: dict[str, object] = {}
+
+    def exchange(frame: bytes) -> bytes:
+        length = struct.unpack(">I", frame[:4])[0]
+        request = json.loads(frame[4 : 4 + length])
+        seen.update(request)
+        _source_validation_fixture(source, Path(str(request["outdir"])))
+        return native_runtime._canonical_json(
+            {"schema": native_runtime.NATIVE_RUNTIME_SCHEMA, "ok": True}
+        )
+
+    runtime = native_runtime.SocketNativeRuntime(
+        Path(tmp_path.anchor) / "ac-native-validation.sock",
+        workspace_root=tmp_path,
+        expected_image_ref=IMAGE,
+        exchange=exchange,
+    )
+    result = runtime.validate_source(
+        source,
+        tmp_path / "socket-validation-result",
+        job_id=uuid4(),
+        rate=16000,
+    )
+
+    assert result["schema"] == "ac.sales-xray.source-validation/1"
+    assert seen["operation"] == "validate"
+    assert seen["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert seen["source_bytes"] == source.stat().st_size
+    assert (tmp_path / "socket-validation-result" / "checkpoint.json").is_file()
+    assert not (tmp_path / "socket-validation-result" / "features.aaf").exists()
 
 
 @pytest.mark.parametrize(

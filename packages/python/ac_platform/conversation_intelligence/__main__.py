@@ -17,6 +17,10 @@ def main() -> int:
     inspect.add_argument("source", type=Path)
     inspect.add_argument("--out", type=Path, required=True)
     inspect.add_argument("--rate", choices=(16000, 48000), type=int, default=16000)
+    validate = commands.add_parser("validate", help="Validate and fully decode authorized audio")
+    validate.add_argument("source", type=Path)
+    validate.add_argument("--out", type=Path, required=True)
+    validate.add_argument("--rate", choices=(16000, 48000), type=int, default=16000)
     args = parser.parse_args()
     if args.command == "doctor":
         print(
@@ -29,10 +33,14 @@ def main() -> int:
             )
         )
         return 0
-    from ac_platform.conversation_intelligence.signals import inspect_media
+    from ac_platform.conversation_intelligence.signals import inspect_media, validate_media
 
     try:
-        receipt = inspect_media(args.source, args.out, rate=args.rate)
+        receipt = (
+            inspect_media(args.source, args.out, rate=args.rate)
+            if args.command == "inspect"
+            else validate_media(args.source, args.out, rate=args.rate)
+        )
     except (ValueError, RuntimeError, OSError):
         # Third-party decoder errors may contain source paths or private metadata.
         print("Local inspection failed; verify the media and offline toolchain.", file=sys.stderr)
@@ -40,7 +48,11 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "state": "acoustic_checkpoint_created",
+                "state": (
+                    "acoustic_checkpoint_created"
+                    if args.command == "inspect"
+                    else "source_validation_created"
+                ),
                 "provider_calls": False,
                 "source_sha256": receipt.get("source_sha256"),
                 "feature_sha256": receipt.get("feature_sha256"),

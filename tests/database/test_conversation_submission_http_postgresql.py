@@ -454,7 +454,7 @@ def test_native_preflight_timeout_does_not_reserve_usage(
                 assert type(job_id) is UUID and rate == 16000
                 raise NativeRuntimeError("native_runtime_timeout")
 
-            setup.native.inspect = timed_out  # type: ignore[method-assign]
+            setup.native.validate_source = timed_out  # type: ignore[method-assign]
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
@@ -572,9 +572,9 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
             def local_test_inspect(
                 self: Any, source: Path, outdir: Path, *, job_id: UUID, rate: Any
             ) -> dict[str, Any]:
-                return signals.inspect_media(source, outdir, rate=rate)
+                return signals.validate_media(source, outdir, rate=rate)
 
-            monkeypatch.setattr(SocketNativeRuntime, "inspect", local_test_inspect)
+            monkeypatch.setattr(SocketNativeRuntime, "validate_source", local_test_inspect)
             application = app_module.create_app(conversation_intake_runtime=setup.runtime)
             assert application.state.sales_xray_acquisition_configured is True
             paths = application.openapi()["paths"]
