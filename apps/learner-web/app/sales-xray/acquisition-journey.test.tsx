@@ -207,14 +207,14 @@ it("runs the actual learner upload and report journey under one Academy main and
     input.dispatchEvent(new Event("change", { bubbles: true })),
   );
   await flush();
-  expect(button("Upload my call").disabled).toBe(true);
+  expect(button("Analyse my call").disabled).toBe(true);
   await act(async () =>
     host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
   );
   await flush();
-  expect(button("Upload my call").disabled).toBe(false);
+  expect(button("Analyse my call").disabled).toBe(false);
   expect(host.querySelector('script[src*="turnstile"]')).toBeNull();
-  await click("Upload my call");
+  await click("Analyse my call");
   expect(host.querySelector('input[type="checkbox"]')).toBeNull();
   expect(host.textContent).not.toContain("Maximum processing cost");
   expect(host.textContent).not.toContain("synthetic-provider");

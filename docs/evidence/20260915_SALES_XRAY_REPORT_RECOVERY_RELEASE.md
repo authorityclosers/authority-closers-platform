@@ -167,3 +167,12 @@ local database/browser reruns were not completed. A fresh normal CI run with
 disposable PostgreSQL remains required. The static Sales Xray build, complete
 frontend formatting check, and changed-file Python lint/format checks passed.
 These repairs and local results do not establish production deployment.
+
+At `3607fd1`, the independent web-image workflow passed and all 187 Sales Xray
+frontend tests plus the saved-report browser proof passed in normal CI. Three
+Python shards and the static/gate jobs passed. The remaining failures were the
+Learner journey's previous upload-button label and the expired-permission
+fixture using an injected clock while the Admin reader intentionally uses the
+database clock. The fixture now places expiry before both clocks while keeping
+a valid historical interval. The Learner journey uses the visible "Analyse my
+call" label; all six focused Learner journey cases passed locally.
