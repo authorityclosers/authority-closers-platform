@@ -452,6 +452,16 @@ describe("provider control contract", () => {
   });
 
   it("edits an existing stage route from its provider/model selectors and saves from the main path", async () => {
+    // Native WebCrypto completion is not bounded by React's microtask flush.
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    let releaseDigest!: () => void;
+    const digestGate = new Promise<void>((resolve) => {
+      releaseDigest = resolve;
+    });
+    vi.spyOn(crypto.subtle, "digest").mockImplementation(async (...args) => {
+      await digestGate;
+      return digest(...args);
+    });
     const localProvider = {
       ...importedConfiguration.providers[0]!,
       provider_id: "local",
@@ -505,10 +515,17 @@ describe("provider control contract", () => {
       await Promise.resolve();
     });
 
-    const saveCall = fetchMock.mock.calls.find(
-      ([url, init]) =>
-        url === "/v1/admin/conversation/providers" && init?.method === "POST",
-    );
+    const providerSaves = () =>
+      fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          url === "/v1/admin/conversation/providers" && init?.method === "POST",
+      );
+    expect(providerSaves()).toHaveLength(0);
+    await act(async () => {
+      releaseDigest();
+      await vi.waitFor(() => expect(providerSaves()).toHaveLength(1));
+    });
+    const saveCall = providerSaves()[0];
     expect(saveCall).toBeDefined();
     expect(
       JSON.parse(saveCall?.[1]?.body as string).configuration.routes,
