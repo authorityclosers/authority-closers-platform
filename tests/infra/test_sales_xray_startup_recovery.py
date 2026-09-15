@@ -15,6 +15,13 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+INSTALLER_SPEC = importlib.util.spec_from_file_location(
+    "xray_startup_recovery_installer",
+    ROOT / "infra/application/scripts/install-sales-xray-startup-recovery.py",
+)
+assert INSTALLER_SPEC and INSTALLER_SPEC.loader
+INSTALLER = importlib.util.module_from_spec(INSTALLER_SPEC)
+INSTALLER_SPEC.loader.exec_module(INSTALLER)
 
 
 def failed_container(service="api", environment="production"):
@@ -33,6 +40,37 @@ def failed_container(service="api", environment="production"):
             "error during container init: failed to fulfil mount request: "
             f"open /run/ac-sales-xray/{environment}: no such file or directory"
         ),
+    }
+
+
+def edge_container(status="exited", environment="production", ip=MODULE.EDGE_IP):
+    return {
+        "id": "e" * 64,
+        "name": MODULE.EDGE_NAME,
+        "project": MODULE.EDGE_PROJECT,
+        "service": MODULE.EDGE_SERVICE,
+        "status": status,
+        "exit_code": 1 if status == "exited" else 0,
+        "error": "",
+        "oom": False,
+        "restart_policy": "unless-stopped",
+        "networks": {MODULE.EDGE_NETWORK: {"IPAddress": ip}} if ip is not None else {},
+    }
+
+
+def collision_container(environment="production", status="running", ip=MODULE.EDGE_IP):
+    project = f"ac-application-{environment}"
+    return {
+        "id": "c" * 64,
+        "name": f"/{project}-{MODULE.REVIEWED_COLLISION_SERVICE}-1",
+        "project": project,
+        "service": MODULE.REVIEWED_COLLISION_SERVICE,
+        "status": status,
+        "exit_code": 0,
+        "error": "",
+        "oom": False,
+        "restart_policy": "unless-stopped",
+        "networks": {MODULE.EDGE_NETWORK: {"IPAddress": ip}} if ip is not None else {},
     }
 
 
@@ -178,3 +216,200 @@ def test_companion_unit_orders_after_native_without_docker_dependency_cycle(envi
 def test_renderer_rejects_unpinned_release(release):
     with pytest.raises(MODULE.RecoveryError, match="release_not_pinned"):
         MODULE.render_unit("production", release)
+
+
+@pytest.mark.parametrize("environment", MODULE.ENVIRONMENTS)
+def test_edge_unit_is_pinned_and_runs_before_consumer(environment):
+    units = MODULE.render_edge_unit(environment, "d" * 40)
+    unit = units[f"ac-sales-xray-edge-reconcile-{environment}.service"]
+    assert "Requires=docker.service" in unit
+    assert "After=docker.service network-online.target" in unit
+    assert f"Before=ac-sales-xray-startup-{environment}.service" in unit
+    assert f"/releases/{'d' * 40}/scripts/recover-sales-xray-startup.py" in unit
+    assert "--reconcile-edge" in unit
+    assert "EnvironmentFile=" not in unit
+    assert "InaccessiblePaths=-/etc/authority-closers/secrets" in unit
+
+
+def test_edge_unit_rejects_unpinned_release():
+    with pytest.raises(MODULE.RecoveryError, match="release_not_pinned"):
+        MODULE.render_edge_unit("production", "main")
+
+
+@pytest.mark.parametrize("environment", MODULE.ENVIRONMENTS)
+def test_edge_collision_recovery_binds_mutations_to_exact_ids(environment):
+    rows = {
+        MODULE.EDGE_NAME: edge_container(environment=environment),
+        f"ac-application-{environment}-{MODULE.REVIEWED_COLLISION_SERVICE}-1": collision_container(
+            environment
+        ),
+    }
+    calls = []
+
+    def inspect(identifier):
+        row = next(
+            r
+            for r in rows.values()
+            if identifier in (r["id"], r["name"].lstrip("/"))
+            or (identifier == MODULE.EDGE_NAME and r["name"] == MODULE.EDGE_NAME)
+        )
+        return dict(row)
+
+    def stop(identifier):
+        calls.append(("stop", identifier))
+        row = next(r for r in rows.values() if r["id"] == identifier)
+        row.update(status="exited")
+        row["networks"] = {}
+
+    def start(identifier):
+        calls.append(("start", identifier))
+        row = next(r for r in rows.values() if r["id"] == identifier)
+        row.update(status="running")
+        if identifier == "e" * 64:
+            row["networks"] = {MODULE.EDGE_NETWORK: {"IPAddress": MODULE.EDGE_IP}}
+        else:
+            row["networks"] = {MODULE.EDGE_NETWORK: {"IPAddress": "172.18.0.3"}}
+
+    result = MODULE.reconcile_edge_collision(environment, inspect=inspect, stop=stop, start=start)
+    assert result["result"] == "edge_started_after_reviewed_collision"
+    assert calls == [("stop", "c" * 64), ("start", "e" * 64), ("start", "c" * 64)]
+
+
+def test_edge_collision_unknown_occupant_refuses_without_mutation():
+    edge = edge_container()
+    unknown = collision_container()
+    unknown["service"] = "api"
+    stop = Mock()
+    start = Mock()
+    with pytest.raises(MODULE.RecoveryError, match="edge_collision_unknown_occupant"):
+        MODULE.reconcile_edge_collision(
+            "production",
+            inspect=lambda identifier: dict(edge if identifier == MODULE.EDGE_NAME else unknown),
+            stop=stop,
+            start=start,
+        )
+    stop.assert_not_called()
+    start.assert_not_called()
+
+
+def test_edge_start_failure_restores_exact_reviewed_collision():
+    rows = {
+        MODULE.EDGE_NAME: edge_container(),
+        "collision": collision_container(),
+    }
+    calls = []
+
+    def inspect(identifier):
+        if identifier in (MODULE.EDGE_NAME, "e" * 64):
+            return dict(rows[MODULE.EDGE_NAME])
+        return dict(rows["collision"])
+
+    def stop(identifier):
+        calls.append(("stop", identifier))
+        if identifier == "c" * 64:
+            rows["collision"].update(status="exited")
+        else:
+            rows[MODULE.EDGE_NAME].update(status="exited")
+
+    def start(identifier):
+        calls.append(("start", identifier))
+        if identifier == "c" * 64:
+            rows["collision"].update(status="running")
+        else:
+            raise MODULE.RecoveryError("container_start_failed")
+
+    with pytest.raises(MODULE.RecoveryError, match="container_start_failed"):
+        MODULE.reconcile_edge_collision("production", inspect=inspect, stop=stop, start=start)
+    assert calls == [("stop", "c" * 64), ("start", "e" * 64), ("start", "c" * 64)]
+    assert rows["collision"]["status"] == "running"
+
+
+def test_running_edge_with_wrong_ip_refuses_without_touching_collision():
+    edge = edge_container(status="running", ip="172.18.0.9")
+    collision = collision_container()
+    stop = Mock()
+    start = Mock()
+    with pytest.raises(MODULE.RecoveryError, match="edge_container_network_mismatch"):
+        MODULE.reconcile_edge_collision(
+            "production",
+            inspect=lambda identifier: dict(edge if identifier == MODULE.EDGE_NAME else collision),
+            stop=stop,
+            start=start,
+        )
+    stop.assert_not_called()
+    start.assert_not_called()
+
+
+def test_descriptor_plan_validates_hash_and_keeps_install_side_effect_free(tmp_path):
+    release = "f" * 40
+    descriptor = MODULE.render_descriptor("staging", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    result = INSTALLER.install(
+        path,
+        environment="staging",
+        release=release,
+        descriptor_sha=INSTALLER.sha256(raw),
+        unit_root=tmp_path / "units",
+    )
+    assert result["action"] == "plan"
+    assert result["provider_calls"] == 0
+    assert not (tmp_path / "units").exists()
+
+
+def test_descriptor_install_is_atomic_and_activation_path_is_exact(tmp_path, monkeypatch):
+    release = "a" * 40
+    descriptor = MODULE.render_descriptor("production", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    unit_root = tmp_path / "units"
+    unit_root.mkdir()
+    calls = []
+
+    def systemctl(argv):
+        calls.append(argv)
+
+    monkeypatch.setattr(INSTALLER.os, "geteuid", lambda: 0, raising=False)
+    result = INSTALLER.install(
+        path,
+        environment="production",
+        release=release,
+        descriptor_sha=INSTALLER.sha256(raw),
+        execute=True,
+        activate=True,
+        unit_root=unit_root,
+        systemctl=systemctl,
+    )
+    assert result["action"] == "activate"
+    assert calls == [
+        ["daemon-reload"],
+        ["enable", "--now", "ac-sales-xray-edge-reconcile-production.service"],
+        ["enable", "--now", "ac-sales-xray-startup-production.service"],
+    ]
+    assert sorted(p.name for p in unit_root.iterdir()) == sorted(result["units"])
+
+
+def test_installer_refuses_existing_unit_drift_without_overwrite(tmp_path, monkeypatch):
+    release = "b" * 40
+    descriptor = MODULE.render_descriptor("staging", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    unit_root = tmp_path / "units"
+    unit_root.mkdir()
+    target = unit_root / "ac-sales-xray-edge-reconcile-staging.service"
+    target.write_text("operator-owned", encoding="utf-8")
+    monkeypatch.setattr(INSTALLER.os, "geteuid", lambda: 0, raising=False)
+    with pytest.raises(INSTALLER.InstallerError, match="unit_drift_requires_review"):
+        INSTALLER.install(
+            path,
+            environment="staging",
+            release=release,
+            descriptor_sha=INSTALLER.sha256(raw),
+            execute=True,
+            unit_root=unit_root,
+            systemctl=Mock(),
+        )
+    assert target.read_text(encoding="utf-8") == "operator-owned"
