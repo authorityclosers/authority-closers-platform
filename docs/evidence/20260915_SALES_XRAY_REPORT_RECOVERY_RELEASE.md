@@ -142,3 +142,26 @@ passed, including TypeScript and all six static pages. The playback regression
 proves expanding/collapsing its controls preserves the same saved source and
 does not resubmit or restart analysis. All 32 app-update application/HTTP tests
 passed after the matching notification was enabled in the candidate catalogue.
+
+## Release CI repair
+
+The first frozen candidate `f0a29b2` failed CI: a legacy report browser assertion
+matched two summary paragraphs, the retention-denial fixture assigned expiry
+before its consent timestamp, and an existing frontend test needed formatting.
+The report proof now scopes the saved summary and explicitly opens the on-demand
+strength review point before checking its detailed feedback.
+
+The companion web image built and passed its baked-release and HTTP health
+checks, but artifact admission rejected the old-plus-new bundle size. The
+repository artifact pool is now configurable through
+`AC_RELEASE_ARTIFACT_POOL_BYTES`, defaulting to 1 GB with numeric bounds of
+450 MB to 4 GB. Each artifact retains its 450 MB ceiling; old release cleanup
+still follows verification of the newly uploaded artifact. The focused infra
+checks passed 102 cases with five platform/opt-in skips. All four workflow YAML
+files passed formatting and duplicate-key validation.
+
+The resumed Windows environment had no running Docker PostgreSQL service;
+local database/browser reruns were not completed. A fresh normal CI run with
+disposable PostgreSQL remains required. The static Sales Xray build, complete
+frontend formatting check, and changed-file Python lint/format checks passed.
+These repairs and local results do not establish production deployment.

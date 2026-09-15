@@ -698,9 +698,7 @@ describe("CallStudio", () => {
         ...container.querySelectorAll(
           '[role="tablist"][aria-label="Explore your report"] [role="tab"]',
         ),
-      ].map(
-        (tab) => tab.textContent,
-      ),
+      ].map((tab) => tab.textContent),
     ).toEqual([
       "Overview",
       "Sales factors",

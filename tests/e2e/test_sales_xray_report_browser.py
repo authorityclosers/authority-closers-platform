@@ -410,13 +410,20 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             page.locator(".recording-history-item").filter(has_text="Open report").click()
             expect(page.get_by_role("region", name="Sales call report")).to_be_visible()
-            expect(page.get_by_text(backend.report_summary)).to_be_visible()
+            expect(
+                page.get_by_role("region", name="Sales call report").locator(
+                    ".studio-report-summary"
+                )
+            ).to_have_text(backend.report_summary)
+            expect(page.locator(".studio-report-summary")).to_be_visible()
             overview = page.get_by_label("Dipak’s call review", exact=True)
             expect(overview).to_be_visible()
             if backend.mode == "durable":
+                overview.locator('button[data-insight-number="01"]').click()
                 expect(
                     overview.get_by_text("A synthetic reason to repeat this.", exact=False)
                 ).to_be_visible()
+                overview.get_by_role("button", name="Back to review points").click()
                 checks.append(
                     "Durable C5/C6 overview fields reach the mounted UI through the real API."
                 )

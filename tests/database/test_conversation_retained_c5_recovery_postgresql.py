@@ -807,15 +807,18 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                 assert owner is not None and owner["report"] is not None
                 assert admin is not None and admin["report"] is not None
             async with sessions() as database, database.begin():
+                person = await database.get(Person, prepared.state.person_id)
                 permission = await database.get(
                     ConversationPermission, prepared.state.permission_id
                 )
+                assert person is not None and person.consented_at is not None
                 assert permission is not None
-                permission.expires_at = prepared.state.now + timedelta(seconds=1)
+                expired_at = utc(person.consented_at) + timedelta(seconds=1)
+                permission.expires_at = expired_at
             async with sessions() as database, database.begin():
                 service = RetainedC5RecoveryService(
                     ConversationApplication(
-                        database, clock=lambda: prepared.state.now + timedelta(seconds=2)
+                        database, clock=lambda: expired_at + timedelta(seconds=1)
                     ),
                     operations_tenant_id=prepared.state.tenant_id,
                     recording_tenant_ids=(prepared.state.tenant_id,),
