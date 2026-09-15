@@ -1826,3 +1826,104 @@
     width: 100%;
   }
 }
+
+/* A paused call needs its recovery actions in view. The waveform is useful
+   while work is running, but it adds height without helping a paused recovery. */
+.app[data-stage="processing"]
+  .withProcessing
+  .processingPanel[data-paused="true"] {
+  grid-template-areas:
+    "copy"
+    "rail"
+    "guidance";
+  padding-top: 12px;
+}
+.app[data-stage="processing"]
+  .withProcessing
+  .processingPanel[data-paused="true"]
+  > :first-child {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"] {
+    padding-top: 8px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressCopy
+    h3 {
+    margin-bottom: 6px;
+    font-size: 24px;
+    letter-spacing: -0.4px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressCopy
+    > p:last-child {
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressRail {
+    margin-top: 12px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressRail
+    > div {
+    min-height: 68px;
+    gap: 4px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressGuidance {
+    margin-top: 8px;
+    gap: 6px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressGuidance
+    > div
+    > p {
+    margin: 0 0 6px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressGuidance
+    > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressGuidance
+    > div
+    > button {
+    order: -1;
+  }
+}
+
+@media (max-width: 380px) {
+  .app[data-stage="processing"]
+    .withProcessing
+    .processingPanel[data-paused="true"]
+    .progressGuidance
+    > div {
+    margin-top: -12px;
+  }
+}
