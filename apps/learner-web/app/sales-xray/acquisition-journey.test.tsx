@@ -3,7 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: navigate }),
 }));
 import Page from "./page";
 import CallsPage from "./calls/page";
@@ -288,7 +288,7 @@ it("opens an account library result in the learner report route without processi
   expect(host.querySelector(".studio-header")).toBeNull();
   expect(host.textContent).toContain("Report ready");
   await click("Open call");
-  expect(navigate).toHaveBeenCalledWith("/sales-xray");
+  expect(navigate).toHaveBeenCalledWith(`/sales-xray?call=${submissionId}`);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(mutationRequests()).toHaveLength(0);
 });
