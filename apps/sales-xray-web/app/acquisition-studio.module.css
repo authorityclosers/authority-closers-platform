@@ -1163,6 +1163,18 @@
   align-items: center;
   gap: 16px;
 }
+.recoveryError {
+  align-items: center;
+  margin: 0 0 16px;
+}
+.recoveryError p {
+  flex: 1 1 280px;
+  margin: 0;
+}
+.recoveryError .errorActions {
+  flex: 0 0 auto;
+  gap: 8px;
+}
 @media (max-width: 760px) {
   .app[data-stage="report"] .withReport .upload {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1226,6 +1238,19 @@
   }
   .app[data-variant="standalone"] :global(.studio-steps span) {
     font-size: 11px;
+  }
+  .recoveryError {
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .recoveryError p {
+    flex-basis: 100%;
+    line-height: 1.45;
+  }
+  .recoveryError .errorActions {
+    width: 100%;
+    justify-content: flex-start;
   }
   .withProcessing .upload {
     padding: 18px;

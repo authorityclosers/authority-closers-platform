@@ -38,6 +38,7 @@ let existing: boolean,
   claimed: boolean,
   failedUpload: boolean,
   sessionUnauthorized: boolean,
+  savedSubmissionUnauthorized: boolean,
   processingMode: "running" | "held" | null,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
@@ -103,6 +104,7 @@ beforeEach(() => {
   claimed = false;
   failedUpload = false;
   sessionUnauthorized = false;
+  savedSubmissionUnauthorized = false;
   processingMode = null;
   lookupUnavailable = false;
   deletionDenied = false;
@@ -198,6 +200,12 @@ beforeEach(() => {
         progressOverride
       )
         return response(progressOverride);
+      if (
+        path.endsWith(`/submissions/${submissionId}`) &&
+        init.method !== "DELETE" &&
+        savedSubmissionUnauthorized
+      )
+        return response({}, 401);
       if (path.endsWith(`/submissions/${submissionId}`))
         return init.method === "DELETE"
           ? deletionDenied
@@ -486,6 +494,66 @@ it("does not treat the advertised trial allowance as confirmed for a saved selec
     "Remaining analysis time · unavailable until your session is confirmed",
   );
   expect(container.textContent).not.toContain("Up to 100m trial allowance");
+});
+
+it("keeps a saved selector opaque when its creating session is unavailable", async () => {
+  savedSubmissionUnauthorized = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+
+  expect(container.textContent).toContain(
+    "Your saved call needs the session that created it",
+  );
+  expect(container.textContent).toContain("It hasn’t been deleted");
+  expect(button("Start a new call")).toBeDefined();
+  expect(container.textContent).not.toContain("Saved call unavailable");
+  expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/transcript"))).toBe(false);
+  expect(
+    calls.some(
+      (call) => call.path.endsWith("/source") && call.init.method === "GET",
+    ),
+  ).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
+});
+
+it("opens a normally saved call when its session remains valid", async () => {
+  existing = true;
+  accepted = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(calls.some((call) => call.path.endsWith("/report"))).toBe(true);
+  expect(container.textContent).not.toContain("Start a new call");
+});
+
+it("lets a guest start a new upload without clearing a stale opaque selector", async () => {
+  savedSubmissionUnauthorized = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await click("Start a new call");
+
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
 });
 
 it.each([

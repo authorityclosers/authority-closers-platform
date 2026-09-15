@@ -138,6 +138,7 @@ export function AcquisitionStudio({
   const [allowanceUnknown, setAllowanceUnknown] = useState(false);
   const [session, setSession] = useState(false);
   const [claimAvailable, setClaimAvailable] = useState(false);
+  const [savedCallNeedsSession, setSavedCallNeedsSession] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState("");
   const [consent, setConsent] = useState(false);
@@ -256,6 +257,22 @@ export function AcquisitionStudio({
             // permission expires. Keep only the opaque selector so the owner
             // still has an explicit, server-authorized deletion path; do not
             // render or infer any private content from the failed lookup.
+            if (
+              error instanceof AcquisitionError &&
+              error.status === 401 &&
+              current === null &&
+              !requested
+            ) {
+              // A stale opaque selector does not prove that the saved call was
+              // deleted. Keep it in local storage, but give a standalone guest
+              // a clean path to upload a new call without weakening ownership
+              // checks for the saved call itself.
+              setSavedCallNeedsSession(true);
+              setError(
+                "Your saved call needs the session that created it. It hasn’t been deleted. Sign in to recover it or start a new call.",
+              );
+              return;
+            }
             if (
               error instanceof AcquisitionError &&
               (error.status === 403 || error.status === 404)
@@ -673,6 +690,7 @@ export function AcquisitionStudio({
     setConsent(false);
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
+    setSavedCallNeedsSession(false);
     stalePlanRefresh.current = null;
     setMoment(null);
     setPlaybackMessage("");
@@ -830,6 +848,30 @@ export function AcquisitionStudio({
     />
   );
 
+  const savedCallRecovery =
+    savedCallNeedsSession && error && !submission && !deletionOnlyId ? (
+      <div
+        className={`notice error ${styles.error} ${styles.recoveryError}`}
+        role="alert"
+      >
+        <p>{error instanceof AcquisitionError ? error.message : error}</p>
+        <div className={styles.errorActions}>
+          <Link className="text-button" href="/login">
+            Sign in to recover it
+          </Link>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!!busy}
+            onClick={startAnotherCall}
+          >
+            <ArrowRight size={16} aria-hidden="true" />
+            Start a new call
+          </button>
+        </div>
+      </div>
+    ) : null;
+
   const content = (
     <div
       className={`xray-app simple-app ${styles.app}`}
@@ -905,6 +947,7 @@ export function AcquisitionStudio({
             </button>
           </aside>
         )}
+        {savedCallRecovery}
         <div
           className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
         >
@@ -1522,7 +1565,7 @@ export function AcquisitionStudio({
             </aside>
           )}
         </div>
-        {error && (
+        {error && !savedCallNeedsSession && (
           <div className={`notice error ${styles.error}`} role="alert">
             <p>{error instanceof AcquisitionError ? error.message : error}</p>
             <div className={styles.errorActions}>
