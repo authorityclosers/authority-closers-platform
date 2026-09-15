@@ -1149,6 +1149,44 @@
 .reportHeader :global(.studio-report-actions) {
   flex: 0 0 auto;
 }
+
+/* Report-ready state uses the fixed CallAudioDock; keep the upload entry
+   controls out of the report flow while retaining privacy support below. */
+.app[data-stage="report"] .withReport .upload {
+  display: none;
+}
+
+.reportPrivacyActions {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reportPrivacyActions summary {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.reportPrivacyActions > div {
+  max-width: 560px;
+  margin-top: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.reportPrivacyActions p {
+  margin: 0 0 9px;
+  line-height: 1.5;
+}
+
+.reportPrivacyActions button {
+  min-height: 40px;
+}
 .loading {
   display: flex;
   gap: 10px;

@@ -337,13 +337,13 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(3);
+  ).toHaveLength(4);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await click("Transcript & moments");
+  await click("Moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 

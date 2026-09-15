@@ -1,0 +1,161 @@
+.plan {
+  display: grid;
+  max-width: 760px;
+  gap: 14px;
+  color: #172b3a;
+}
+
+.header {
+  padding: 4px 0 12px;
+  border-bottom: 1px solid #d5e1e2;
+}
+
+.eyebrow,
+.label {
+  margin: 0 0 6px;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.header h2,
+.focusCard h3,
+.practiceCard h3 {
+  margin: 0;
+  color: #172b3a;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.header h2 {
+  font-size: clamp(24px, 3vw, 34px);
+}
+
+.header > p:last-child,
+.focusCard p,
+.practiceCard p {
+  margin: 8px 0 0;
+  color: #536978;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.focusCard,
+.practiceCard {
+  padding: 20px;
+  border: 1px solid #f0c8aa;
+  border-radius: 15px;
+  background: #fff7ef;
+}
+
+.focusCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+}
+
+.focusCard > svg {
+  color: #a34d19;
+}
+
+.focusCard .label {
+  color: #a34d19;
+}
+
+.focusCard h3,
+.practiceCard h3 {
+  font-size: 20px;
+}
+
+.target {
+  padding-left: 12px;
+  border-left: 3px solid #e5ae83;
+}
+
+.practiceCard {
+  border-color: #d8d0f4;
+  background: #faf8ff;
+}
+
+.practiceCard .label {
+  color: #5541a9;
+}
+
+.evidence {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #c9dfda;
+  border-radius: 12px;
+  background: #f4fbf9;
+  color: #172b3a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.evidence:hover,
+.evidence:focus-visible {
+  border-color: #80bcb2;
+  background: #eaf7f4;
+}
+
+.play {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: #0f766e;
+  color: #fff;
+}
+
+.evidence strong,
+.evidence small {
+  display: block;
+}
+
+.evidence small {
+  margin-top: 2px;
+  color: #627988;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.evidence:focus-visible,
+.unlock:focus-visible {
+  outline: 3px solid #6d7ce0;
+  outline-offset: 3px;
+}
+
+.empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #d5e1e2;
+  border-radius: 12px;
+  color: #536978;
+}
+
+.unlock {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 9px 13px;
+  border: 1px solid #d5a06f;
+  border-radius: 9px;
+  background: #fff9f3;
+  color: #a34d19;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}

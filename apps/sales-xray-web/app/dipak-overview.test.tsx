@@ -303,6 +303,34 @@ it("keeps every chapter mounted while the review map opens one section", async (
   );
 });
 
+it("opens a bounded review dialog with point navigation and Escape recovery", async () => {
+  await render();
+  const point = container.querySelector<HTMLButtonElement>(
+    '[data-insight-number="05"]',
+  )!;
+  await act(async () => point.click());
+  expect(
+    container.querySelector('[role="dialog"][aria-modal="true"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Close review point"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[data-review-point="05"]')).not.toBeNull();
+  expect(container.textContent).toContain("Previous point");
+  expect(container.textContent).toContain("Next point");
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>("[data-review-next]")!.click(),
+  );
+  expect(
+    container.querySelector('[aria-current="true"]')?.textContent,
+  ).toContain("06");
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(point);
+});
+
 it("shows the impact limitations for the third detailed priority too", async () => {
   const source = structuredClone(fixture.report);
   source.improvements = Array.from({ length: 3 }, (_, index) => ({

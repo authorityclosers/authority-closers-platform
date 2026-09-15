@@ -9,10 +9,10 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  Download,
   FileText,
   FolderOpen,
   LoaderCircle,
-  Printer,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -25,6 +25,7 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { ReportFactors } from "./report-factors";
+import { NextCallPlan } from "./next-call-plan";
 import {
   ReportTranscript,
   formatTranscriptTime as time,
@@ -758,6 +759,35 @@ export function AcquisitionStudio({
         reset();
         setDeleted(true);
       }
+    });
+  }
+
+  async function downloadReport() {
+    if (!submission) return;
+    const bound = submission;
+    await operation("Preparing your report download…", async (signal) => {
+      const response = await fetch(
+        `${ACQUISITION}${submissionPath(bound.id)}/report.docx`,
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          signal,
+          headers: {
+            accept:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        },
+      );
+      if (!response.ok) throw new AcquisitionError(response.status);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `sales-xray-${bound.id}.docx`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
     });
   }
 
@@ -1617,16 +1647,17 @@ export function AcquisitionStudio({
           >
             <div className={styles.reportHeader}>
               <div>
-                <h1 className={styles.reportTitle}>Your coaching report</h1>
+                <h1 className={styles.reportTitle}>Your call, clearly.</h1>
               </div>
               <div className="studio-report-actions">
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => window.print()}
+                  disabled={!!busy || !submission}
+                  onClick={() => void downloadReport()}
                 >
-                  <Printer size={16} aria-hidden="true" />
-                  <span className={styles.printLabel}>Print / save PDF</span>
+                  <Download size={16} aria-hidden="true" />
+                  Download report
                 </button>
                 <button
                   type="button"
@@ -1638,6 +1669,53 @@ export function AcquisitionStudio({
                 </button>
               </div>
             </div>
+            {submission && (
+              <details className={styles.reportPrivacyActions}>
+                <summary>Privacy &amp; support</summary>
+                <div>
+                  <p>
+                    Need this call removed?{" "}
+                    <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
+                      Email the AC team
+                    </a>{" "}
+                    or request deletion here.
+                  </p>
+                  {!deleteConfirm ? (
+                    <button
+                      className="text-button"
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => setDeleteConfirm(true)}
+                    >
+                      Request deletion
+                    </button>
+                  ) : (
+                    <>
+                      <p>
+                        Remove this recording and its report? This cannot be
+                        undone.
+                      </p>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        disabled={!!busy}
+                        onClick={() => void erase()}
+                      >
+                        Request recording deletion
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={!!busy}
+                        onClick={() => setDeleteConfirm(false)}
+                      >
+                        Keep call
+                      </button>
+                    </>
+                  )}
+                </div>
+              </details>
+            )}
             <ReportExplorer
               label="Explore your sales report"
               panels={[
@@ -1649,22 +1727,13 @@ export function AcquisitionStudio({
                       report={report}
                       onSelectEvidence={seek}
                       onUnlock={() => router.push("/login")}
+                      durationMs={result.transcript.duration_ms}
                     />
                   ),
                 },
                 {
-                  id: "factors",
-                  label: "Sales factors",
-                  content: (
-                    <ReportFactors
-                      dimensions={report.dimensions}
-                      language="en"
-                    />
-                  ),
-                },
-                {
-                  id: "transcript",
-                  label: "Transcript & moments",
+                  id: "moments",
+                  label: "Moments",
                   content: (
                     <ReportTranscript
                       transcript={result.transcript}
@@ -1677,6 +1746,27 @@ export function AcquisitionStudio({
                           end_ms: segment.end_ms,
                         })
                       }
+                    />
+                  ),
+                },
+                {
+                  id: "skills",
+                  label: "Sales skills",
+                  content: (
+                    <ReportFactors
+                      dimensions={report.dimensions}
+                      language="en"
+                    />
+                  ),
+                },
+                {
+                  id: "next-call-plan",
+                  label: "Next-call plan",
+                  content: (
+                    <NextCallPlan
+                      report={report}
+                      onSelectEvidence={seek}
+                      onUnlock={() => router.push("/login")}
                     />
                   ),
                 },
