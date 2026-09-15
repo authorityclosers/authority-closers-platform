@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="8" skipped="0" tests="8" time="0.982" timestamp="2026-09-14T06:12:37.773285+05:30" hostname="RSuyash"><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[256-groq-openai/gpt-oss-120b]" time="0.014"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[256-gemini-gemini-3.8-flash]" time="0.010"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[1400-groq-openai/gpt-oss-120b]" time="0.010"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[1400-gemini-gemini-3.8-flash]" time="0.010"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[3200-groq-openai/gpt-oss-120b]" time="0.009"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[3200-gemini-gemini-3.8-flash]" time="0.009"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[4000-groq-openai/gpt-oss-120b]" time="0.008"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase><testcase classname="tests.unit.conversation_intelligence.test_mixed_script_prompt_budget" name="test_long_mixed_script_call_prepares_complete_bounded_fact_requests[4000-gemini-gemini-3.8-flash]" time="0.009"><failure message="ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded">tests\unit\conversation_intelligence\test_mixed_script_prompt_budget.py:34: in test_long_mixed_script_call_prepares_complete_bounded_fact_requests
+    prepared = prepare_fact_inputs(
+packages\python\ac_platform\conversation_intelligence\inference_tasks.py:795: in prepare_fact_inputs
+    raise InferenceTaskError(str(exc)) from None
+E   ac_platform.conversation_intelligence.inference_tasks.InferenceTaskError: report_prompt_budget_exceeded</failure></testcase></testsuite></testsuites>

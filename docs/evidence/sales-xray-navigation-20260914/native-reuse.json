@@ -1,0 +1,8 @@
+{
+  "reuse_from": "D:\\Projects\\authority-closers-xray-ux-live-acceptance-20260913\\native\\audioatlas",
+  "source_sha256": "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3",
+  "binary_sha256": "b4ac897627daf8f41f807370ad7cfcda11639faf891c4d47d57b377feea6bca8",
+  "compiler": "cl.EXE",
+  "copied_files": 2,
+  "result": "verified"
+}

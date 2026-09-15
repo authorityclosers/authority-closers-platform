@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-09-13T18:21:56.4676768Z",
+  "source_base_commit": "63d5a5edd644bd250acdc8c51694712a3754c7f7",
+  "test_overlay_commits": [
+    "d55669168cd241375db9566152e52a68c3dddd06",
+    "57a4743e252f04b2a8829597f011c88f5019723b"
+  ],
+  "worktree_clean": true,
+  "static_preview": true,
+  "static_export": "D:\\Projects\\authority-closers-xray-ux-live-acceptance-20260913\\apps\\sales-xray-web\\out\\index.html",
+  "static_export_manifest_sha256": "956d1148aba978bffa9fc6dfcafb6a2cc5edacc394b067ede523e75263b6e582",
+  "runtime": {
+    "node": "v24.19.0",
+    "pnpm": "11.19.0",
+    "python": "Python 3.12.0",
+    "uv": "uv 0.6.2 (6d3614eec 2025-02-19)",
+    "git": "git version 2.43.0.windows.1"
+  },
+  "run": {
+    "result": "passed",
+    "tests": 2,
+    "checks_per_test": 8,
+    "junit": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\sales-xray-report-browser.junit.xml",
+    "imported_proof": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\authenticated-browser.json",
+    "durable_proof": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\durable-authenticated-browser.json"
+  }
+}

@@ -807,6 +807,8 @@ describe("development learner API proxy", () => {
       ["POST", "/v1/auth/logout"],
       ["GET", "/v1/me"],
       ["GET", "/v1/me/app-updates"],
+      ["GET", "/v1/me/consent"],
+      ["POST", "/v1/me/consent/renew"],
       ["POST", "/v1/me/app-updates/app-updates-v0-2-alpha/read"],
       ["GET", "/v1/context"],
       ["POST", "/v1/context"],

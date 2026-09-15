@@ -31,6 +31,20 @@ class RateLimitRule:
 
 DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
+        name="reviewer-sign-in-request",
+        method="POST",
+        path=re.compile(r"^/v1/reviewer/auth/request$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="reviewer-sign-in-verify",
+        method="POST",
+        path=re.compile(r"^/v1/reviewer/auth/verify$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="password-register",
         method="POST",
         path=re.compile(r"^/v1/auth/password/register$"),
@@ -92,6 +106,54 @@ DEFAULT_RATE_LIMIT_RULES = (
         path=re.compile(r"^/v1/programs(?:/[^/]+)?$"),
         capacity=300,
         refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-profile-search",
+        method="GET",
+        path=re.compile(r"^/v1/community/(?:search|connections|public/[^/]+)$"),
+        capacity=60,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-connection-actions",
+        method="POST",
+        path=re.compile(
+            r"^/v1/community/(?:discovery|connections/[^/]+(?:/(?:accept|decline))?|blocks/[^/]+)$"
+        ),
+        capacity=30,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-discovery-update",
+        method="PUT",
+        path=re.compile(r"^/v1/community/discovery$"),
+        capacity=20,
+        refill_seconds=300,
+    ),
+    RateLimitRule(
+        name="community-connection-remove",
+        method="DELETE",
+        path=re.compile(r"^/v1/community/connections/[^/]+$"),
+        capacity=30,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-report",
+        method="POST",
+        path=re.compile(r"^/v1/community/reports/[^/]+$"),
+        capacity=10,
+        refill_seconds=900,
+    ),
+    # Coarse per-process issuance shield only.  This limits repeated public
+    # guest session minting by the source IP supplied by the trusted edge; it
+    # is not a one-human/one-account proof and does not enforce the durable
+    # 100-minute visitor ledger.
+    RateLimitRule(
+        name="conversation-acquisition-session",
+        method="POST",
+        path=re.compile(r"^/v1/conversation/acquisition/session$"),
+        capacity=5,
+        refill_seconds=900,
     ),
     # Coarse per-process abuse shield only.  Telemetry writes still require
     # an explicit tenant-aware distributed/edge admission seam in the route.
@@ -331,11 +393,23 @@ class RateLimitMiddleware:
         trusted_proxy_addresses: frozenset[
             ipaddress.IPv4Address | ipaddress.IPv6Address
         ] = frozenset(),
+        exemption: Callable[[Scope, str], Awaitable[bool]] | None = None,
     ) -> None:
         self.app = app
         self.rules = rules
         self.limiter = limiter or InMemoryTokenBucketLimiter()
         self.trusted_proxy_addresses = trusted_proxy_addresses
+        self.exemption = exemption
+
+    async def _is_exempt(self, scope: Scope, rule_name: str) -> bool:
+        if self.exemption is None:
+            return False
+        try:
+            return await self.exemption(scope, rule_name)
+        except Exception:
+            # An unavailable identity/policy lookup never weakens the coarse
+            # abuse shield; the ordinary IP bucket remains active.
+            return False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -343,6 +417,9 @@ class RateLimitMiddleware:
             return
         rule = _rule_for(scope, self.rules)
         if rule is None:
+            await self.app(scope, receive, send)
+            return
+        if await self._is_exempt(scope, rule.name):
             await self.app(scope, receive, send)
             return
         identity = client_identity(

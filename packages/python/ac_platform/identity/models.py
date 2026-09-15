@@ -49,6 +49,13 @@ class PersonStatus(StrEnum):
     DELETED = "deleted"
 
 
+class SessionAudience(StrEnum):
+    """The server-owned surface a session is allowed to authenticate."""
+
+    ACCOUNT = "account"
+    REVIEWER = "reviewer"
+
+
 class OnboardingStatus(StrEnum):
     """Progressive self-profile states without implying course entitlement."""
 
@@ -355,6 +362,64 @@ class EmailChallenge(Base):
     person: Mapped[Person] = relationship(back_populates="email_challenges")
 
 
+class ReviewerAuthChallenge(Base):
+    """One-time mailbox proof for a dedicated reviewer session.
+
+    Reviewer sign-in is intentionally separate from learner email challenges:
+    an invited address may not have a canonical person yet, and proving the
+    invitation must never imply learner consent or membership provisioning.
+    ``invitation_id`` is an opaque cross-domain binding resolved by the review
+    boundary in the same caller-owned transaction. The browser binding is
+    retained only as a domain-separated digest; its raw value is never stored.
+    """
+
+    __tablename__ = "reviewer_auth_challenges"
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(email)) > 3",
+            name="email_nonblank",
+        ),
+        CheckConstraint("length(token_hash) = 32", name="token_hash_length"),
+        CheckConstraint(
+            "length(browser_nonce_hash) = 32",
+            name="browser_nonce_hash_length",
+        ),
+        CheckConstraint(
+            "length(trim(encrypted_token)) > 0",
+            name="encrypted_token_nonblank",
+        ),
+        CheckConstraint("expires_at > issued_at", name="expiry_after_issue"),
+        CheckConstraint(
+            "consumed_at IS NULL OR consumed_at >= issued_at",
+            name="consumed_after_issue",
+        ),
+        Index("ix_reviewer_auth_challenges_email_issued", "email", "issued_at"),
+        Index("ix_reviewer_auth_challenges_invitation", "invitation_id"),
+        Index("ix_reviewer_auth_challenges_expiry", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    # The person is optional because a first-time invited reviewer is not a
+    # canonical identity until mailbox proof succeeds.
+    person_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("persons.id", name="fk_reviewer_auth_challenges_person_id_persons"),
+        nullable=True,
+    )
+    # Deliberately no ORM/database FK: identity must not import the review
+    # domain, and the review boundary validates this binding before commit.
+    invitation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32), nullable=False, unique=True)
+    browser_nonce_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32), nullable=False)
+    encrypted_token: Mapped[str] = mapped_column(String(768), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Session(Base):
     """Opaque browser/session metadata; the bearer token is never persisted."""
 
@@ -375,6 +440,14 @@ class Session(Base):
             name="expiry_after_creation",
         ),
         CheckConstraint(
+            "audience IN ('account', 'reviewer')",
+            name="audience_supported",
+        ),
+        CheckConstraint(
+            "audience = 'account' OR selected_tenant_id IS NULL",
+            name="reviewer_session_unscoped",
+        ),
+        CheckConstraint(
             "revoked_at IS NULL OR "
             "revocation_reason IS NULL OR "
             "length(trim(revocation_reason)) > 0",
@@ -386,6 +459,7 @@ class Session(Base):
         ),
         Index("ix_sessions_person_id", "person_id"),
         Index("ix_sessions_selected_tenant_id", "selected_tenant_id"),
+        Index("ix_sessions_audience", "audience"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
@@ -404,6 +478,12 @@ class Session(Base):
     revocation_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    audience: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default=SessionAudience.ACCOUNT.value,
+        server_default=SessionAudience.ACCOUNT.value,
+    )
     selected_tenant_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
@@ -636,6 +716,7 @@ __all__ = [
     "DeletionRequestStatus",
     "EmailChallenge",
     "EmailChallengeKind",
+    "ReviewerAuthChallenge",
     "IdentityCommandIdempotency",
     "OnboardingStatus",
     "Person",
@@ -645,5 +726,6 @@ __all__ = [
     "ProviderIdentity",
     "PasswordCredential",
     "Session",
+    "SessionAudience",
     "utc_now",
 ]

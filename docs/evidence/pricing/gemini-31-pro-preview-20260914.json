@@ -1,0 +1,23 @@
+{
+  "schema": "ac.sales_xray.pricing_evidence/1",
+  "provider_id": "gemini",
+  "model_id": "gemini-3.1-pro-preview",
+  "pricing_ref": "ref:pricing/gemini-31-pro-preview-20260914",
+  "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+  "source_section": "Gemini 3.1 Pro Preview / Standard / Paid Tier",
+  "source_observed_at_utc": "2026-09-14",
+  "input_usd_per_million": 2,
+  "output_usd_per_million": 12,
+  "prompt_tier": "prompts <= 200k tokens",
+  "planning_usd_to_inr": 100,
+  "planning_rate_is_not_billing_rate": true,
+  "max_input_bytes": 19416,
+  "safe_billing_input_tokens": 19416,
+  "max_output_tokens": 1400,
+  "system_prefix_overhead_tokens": 128,
+  "computed_max_cost_paise": 559,
+  "quoted_max_cost_paise": 700,
+  "provider_calls_performed": false,
+  "account_funding_or_quota_verified": false,
+  "purpose": "Source-backed planning bound for the finite Pro C4 profile. Billing reserves conservatively treat each admitted UTF-8 input byte as one token and add the adapter's fixed 128-token system overhead; this is not a provider tokenizer claim. It does not prove account funding, quota, or provider availability."
+}

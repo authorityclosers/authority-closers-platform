@@ -2,8 +2,24 @@ import { AuthFlowPage } from "../components/auth-flow-page";
 import { PasswordResetForm } from "../components/password-auth-forms";
 import { StagingAuthHandoff } from "../components/staging-auth-handoff";
 import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
+import { parseCourseIntent } from "../lib/course-intent";
+import { parseActivityIntent } from "../lib/activity-intent";
+import type { QueryValue } from "../lib/surface-state";
+import { parseSalesAuthNext } from "../lib/sales-auth-return";
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage({
+  searchParams = Promise.resolve({}),
+}: {
+  searchParams?: Promise<{
+    course?: QueryValue;
+    activity?: QueryValue;
+    next?: QueryValue;
+  }>;
+} = {}) {
+  const query = await searchParams;
+  const courseIntent = parseCourseIntent(query.course);
+  const activityIntent = parseActivityIntent(query.activity);
+  const salesNext = parseSalesAuthNext(query.next);
   const stagingBridge = isStagingAuthenticatedBridge(
     process.env,
     process.env.NODE_ENV,
@@ -19,9 +35,19 @@ export default function ResetPasswordPage() {
       ]}
     >
       {stagingBridge ? (
-        <StagingAuthHandoff path="/reset-password" action="Password reset" />
+        <StagingAuthHandoff
+          path="/reset-password"
+          action="Password reset"
+          courseIntent={courseIntent}
+          activityIntent={activityIntent}
+          salesNext={salesNext}
+        />
       ) : (
-        <PasswordResetForm />
+        <PasswordResetForm
+          courseIntent={courseIntent}
+          activityIntent={activityIntent}
+          salesNext={salesNext}
+        />
       )}
     </AuthFlowPage>
   );

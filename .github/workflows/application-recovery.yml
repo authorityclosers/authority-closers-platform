@@ -38,6 +38,7 @@ jobs:
       LEARNER_IMAGE: ghcr.io/authorityclosers/authority-closers-learner-web:${{ inputs.release_sha }}
       ADMIN_IMAGE: ghcr.io/authorityclosers/authority-closers-admin-web:${{ inputs.release_sha }}
       COACH_IMAGE: ghcr.io/authorityclosers/authority-closers-coach-web:${{ inputs.release_sha }}
+      AC_RELEASE_ARTIFACT_POOL_BYTES: ${{ vars.AC_RELEASE_ARTIFACT_POOL_BYTES || '1000000000' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -287,7 +288,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/ac-application-${RELEASE_SHA}"
           candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
           max_artifact_bytes=450000000
-          max_artifact_pool_bytes=450000000
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
             printf 'Release artifact is %s bytes; refusing upload above %s bytes.\n' \
               "$candidate_bytes" "$max_artifact_bytes" >&2
@@ -333,7 +334,7 @@ jobs:
           UPLOADED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
         run: |
           set -euo pipefail
-          max_artifact_pool_bytes=450000000
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           current_name="ac-application-${RELEASE_SHA}"
           current_artifact_id="$UPLOADED_ARTIFACT_ID"
           [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {

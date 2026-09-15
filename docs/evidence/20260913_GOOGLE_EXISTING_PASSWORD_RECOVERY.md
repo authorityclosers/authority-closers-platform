@@ -8,8 +8,7 @@ or enrollment behavior.
 
 This fixes the release owner's reproduced production path where an existing
 password user saw only Create free account after selecting unlinked Google.
-The independent navigation review identified no conflict with this bounded
-recovery path. Main reviewed the two-file diff and ran the actual callback
+Main reviewed the two-file diff and ran the actual callback
 component suite under Node 24: **15 passed**. The added mounted regression checks
 the password link, exact preserved context, and settings guidance.
 

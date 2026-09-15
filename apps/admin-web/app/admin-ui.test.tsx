@@ -245,8 +245,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
     const markup = renderToStaticMarkup(createElement(AdminHome));
 
     expect(markup).toContain("clarity-shell surface-organization");
-    expect(markup).toContain("Organization overview");
-    expect(markup).toContain("Tenant pending");
+    expect(markup).toContain('<h1 id="page-title">Overview</h1>');
+    expect(markup).toContain("Workspace pending");
     expect(markup).toContain("Waiting for session verification");
     expect(markup).toContain("Checking workspace access");
     expect(markup).not.toContain("Active learners");
@@ -261,6 +261,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toContain("Checking workspace access");
     expect(markup).not.toContain("No learner records available");
     expect(markup).not.toContain("Create assignment");
+    expect(markup).toContain("ACADEMY LEARNER RECORDS · AUDITED ACCESS");
+    expect(markup).not.toContain("PREVIEW DATA · NO RECORDS ASSERTED");
   });
 
   it("renders the Academy Studio shell without requesting before session verification", () => {
@@ -303,7 +305,7 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toMatch(/<button[^>]*disabled/);
   });
 
-  it("keeps all scoped route action buttons disabled", () => {
+  it("keeps scoped mutation forms unavailable while navigation controls remain usable", () => {
     const routes = [
       { Page: CorrectionPage, permission: "learning_correct" },
       { Page: GrantsPage, permission: "enrollment_grant" },
@@ -315,9 +317,17 @@ describe("G1 admin permissions and semantic boundaries", () => {
       const buttons = [...markup.matchAll(/<button\b[^>]*>/g)].map(
         (match) => match[0],
       );
-
-      expect(buttons.length).toBeGreaterThan(0);
-      expect(buttons.every((button) => button.includes("disabled"))).toBe(true);
+      const enabled = buttons.filter((button) => !/\bdisabled\b/.test(button));
+      expect(
+        enabled.map((button) => /aria-label="([^"]+)"/.exec(button)?.[1]),
+      ).toEqual([
+        "Collapse Admin navigation",
+        "Close Admin navigation",
+        "Open Admin navigation",
+      ]);
+      expect(
+        buttons.filter((button) => /type="submit"/.test(button)),
+      ).toHaveLength(0);
       expect(markup).not.toContain(permission);
       expect(markup).toContain("Checking workspace access");
       expect(markup).not.toContain("<form");
@@ -357,7 +367,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
       "utf8",
     );
 
-    expect(people).toMatch(/<div class="admin-shell(?: [^"]+)?">/);
+    expect(people).toMatch(/<div class="admin-shell(?: [^"]+)?"[^>]*>/);
+    expect([...people.matchAll(/<main\b/g)]).toHaveLength(1);
     expect(people).toMatch(
       /<main[^>]*class="admin-content"[^>]*id="admin-content"/,
     );

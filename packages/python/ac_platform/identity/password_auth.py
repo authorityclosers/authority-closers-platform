@@ -41,6 +41,14 @@ PASSWORD_EMAIL_VERIFICATION_EVENT = "identity.email_verification.requested.v1"  
 PASSWORD_EMAIL_VERIFICATION_JOB = "email.identity_verification.v1"  # noqa: S105
 PASSWORD_EMAIL_RESET_EVENT = "identity.password_reset.requested.v1"  # noqa: S105
 PASSWORD_EMAIL_RESET_JOB = "email.identity_password_reset.v1"  # noqa: S105
+PASSWORD_EMAIL_VERIFICATION_EVENT_V2 = "identity.email_verification.requested.v2"  # noqa: S105
+PASSWORD_EMAIL_VERIFICATION_JOB_V2 = "email.identity_verification.v2"  # noqa: S105
+PASSWORD_EMAIL_RESET_EVENT_V2 = "identity.password_reset.requested.v2"  # noqa: S105
+PASSWORD_EMAIL_RESET_JOB_V2 = "email.identity_password_reset.v2"  # noqa: S105
+PASSWORD_EMAIL_VERIFICATION_EVENT_V3 = "identity.email_verification.requested.v3"  # noqa: S105
+PASSWORD_EMAIL_VERIFICATION_JOB_V3 = "email.identity_verification.v3"  # noqa: S105
+PASSWORD_EMAIL_RESET_EVENT_V3 = "identity.password_reset.requested.v3"  # noqa: S105
+PASSWORD_EMAIL_RESET_JOB_V3 = "email.identity_password_reset.v3"  # noqa: S105
 # A fixed, non-account verifier keeps unknown-email authentication on the same
 # expensive scrypt path as a known account. It is not a credential and grants
 # no access; changing it would only alter the timing equalization input.
@@ -532,8 +540,16 @@ __all__ = [
     "PasswordRegistration",
     "PASSWORD_EMAIL_RESET_EVENT",
     "PASSWORD_EMAIL_RESET_JOB",
+    "PASSWORD_EMAIL_RESET_EVENT_V2",
+    "PASSWORD_EMAIL_RESET_JOB_V2",
+    "PASSWORD_EMAIL_RESET_EVENT_V3",
+    "PASSWORD_EMAIL_RESET_JOB_V3",
     "PASSWORD_EMAIL_VERIFICATION_EVENT",
     "PASSWORD_EMAIL_VERIFICATION_JOB",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V2",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V2",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V3",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V3",
     "RESET_TTL",
     "VERIFICATION_TTL",
     "decrypt_challenge_token",

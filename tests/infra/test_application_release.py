@@ -16,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
 COMPOSE = (APPLICATION / "compose.yaml").read_text(encoding="utf-8")
+FILESYSTEM_COMPOSE = (APPLICATION / "compose.filesystem-media.yaml").read_text(encoding="utf-8")
 APPLICATION_README = (APPLICATION / "README.md").read_text(encoding="utf-8")
 APPLICATION_SECRETS = (APPLICATION / "SECRETS.md").read_text(encoding="utf-8")
 WEB_DOCKERFILE = (APPLICATION / "Dockerfile.web").read_text(encoding="utf-8")
@@ -149,14 +150,26 @@ def _run_compose_for_probe(
     *,
     practice_enabled: bool = True,
     rollback_practice_enabled: bool | None = None,
+    filesystem_enabled: bool = False,
+    rollback_filesystem_enabled: bool | None = None,
+    rollback_legacy_media_profile: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
     profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+    profile = profile.replace(
+        b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+        b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+    )
     if not practice_enabled:
         profile = profile.replace(
             b"AC_PRACTICE_PILOT_ENABLED=true\n",
             b"AC_PRACTICE_PILOT_ENABLED=false\n",
+        )
+    if filesystem_enabled:
+        profile = profile.replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
         )
     (release / "environments" / "staging.env").write_bytes(profile)
     (release / "release-images.env").write_text("", encoding="utf-8")
@@ -175,22 +188,62 @@ services:
 """,
         encoding="utf-8",
     )
+    if filesystem_enabled or rollback_filesystem_enabled:
+        (release / "compose.filesystem-media.yaml").write_text(
+            """services:
+  probe:
+    environment:
+      filesystem: \"true\"
+    volumes:
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?required}
+        target: /var/lib/ac-media
+        bind:
+          create_host_path: false
+""",
+            encoding="utf-8",
+        )
     rollback_compose = ""
-    if rollback_practice_enabled is not None:
+    if rollback_practice_enabled is not None or rollback_filesystem_enabled is not None:
         rollback = tmp_path / "rollback"
         (rollback / "environments").mkdir(parents=True)
         rollback_profile = (APPLICATION / "environments" / "staging.env").read_bytes()
-        if not rollback_practice_enabled:
+        rollback_profile = rollback_profile.replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+        )
+        if rollback_practice_enabled is False:
             rollback_profile = rollback_profile.replace(
                 b"AC_PRACTICE_PILOT_ENABLED=true\n",
                 b"AC_PRACTICE_PILOT_ENABLED=false\n",
             )
+        if rollback_filesystem_enabled:
+            rollback_profile = rollback_profile.replace(
+                b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+                b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+            )
+        if rollback_legacy_media_profile:
+            rollback_profile = b"\n".join(
+                line
+                for line in rollback_profile.split(b"\n")
+                if not line.startswith((b"AC_MEDIA_FILESYSTEM_", b"AC_MEDIA_SCANNER_HOST_ROOT="))
+            )
         (rollback / "environments" / "staging.env").write_bytes(rollback_profile)
         (rollback / "release-images.env").write_text("", encoding="utf-8")
         (rollback / "compose.yaml").write_bytes((release / "compose.yaml").read_bytes())
+        if rollback_filesystem_enabled:
+            (rollback / "compose.filesystem-media.yaml").write_bytes(
+                (release / "compose.filesystem-media.yaml").read_bytes()
+            )
         rollback_compose = f"compose_for {shlex.quote(rollback.as_posix())} config\n"
     compose_for = _installer_function(
         "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    filesystem_selector = _installer_function(
+        "filesystem_media_compose_file_for", "\n\nvalidate_filesystem_media_activation() {"
+    )
+    hosted_selector = _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
     )
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
@@ -207,6 +260,9 @@ with_release_secrets() {{
   "$@"
 }}
 {practice_scope}
+{filesystem_selector}
+sales_xray_hosted_inputs=()
+{hosted_selector}
 export AC_EXTERNAL_SIDE_EFFECTS_HOLD=true
 export AC_EMAIL_PROVIDER=fake
 export AC_PRACTICE_PILOT_ENABLED=false
@@ -329,6 +385,41 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert "container_name:" not in COMPOSE
     assert "build:" not in COMPOSE
     assert COMPOSE.count("pull_policy: never") == 6
+
+
+def test_filesystem_media_companion_uses_reviewed_environment_roots() -> None:
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT:?" in FILESYSTEM_COMPOSE
+    assert "AC_MEDIA_SCANNER_HOST_ROOT:?" in FILESYSTEM_COMPOSE
+    assert "AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects" in FILESYSTEM_COMPOSE
+    assert "/srv/authority-closers/volumes/media-video:" not in FILESYSTEM_COMPOSE
+    assert "/srv/authority-closers/volumes/media-safety-socket:" not in FILESYSTEM_COMPOSE
+    assert "create_host_path: false" in FILESYSTEM_COMPOSE
+
+
+def test_filesystem_media_companion_bounds_transcoding_worker_memory() -> None:
+    worker = re.search(r"(?ms)^  worker:\n(.*)$", FILESYSTEM_COMPOSE)
+    assert worker is not None
+    assert re.search(r"(?m)^    mem_limit: 2g$", worker.group(1))
+
+
+def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
+    assert "stat -c '%u:%g:%a' -- \"$media_filesystem_host_root\"" in INSTALLER
+    assert "10001:10001:700" in INSTALLER
+    assert '"$media_filesystem_host_root/avatar-objects"' in INSTALLER
+    assert 'install -d -o 10001 -g 10001 -m 700 -- "$avatar_objects_root"' in INSTALLER
+    assert '[[ ! -L "$avatar_objects_root" ]]' in INSTALLER
+    assert "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\"" in INSTALLER
+    assert "100:100:755" in INSTALLER
+    assert "stat -c '%u:%g' -- \"$media_scanner_host_root\"" in INSTALLER
+    assert 'scanner_root_mode="$(stat -c \'%a\' -- "$media_scanner_host_root")"' in INSTALLER
+    assert 'chmod g-s -- "$media_scanner_host_root"' in INSTALLER
+    assert INSTALLER.index("stat -c '%u:%g' -- \"$media_scanner_host_root\"") < INSTALLER.index(
+        'chmod g-s -- "$media_scanner_host_root"'
+    )
+    assert INSTALLER.index('chmod g-s -- "$media_scanner_host_root"') < INSTALLER.index(
+        "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\""
+    )
+    assert '"$media_scanner_host_root/clamd.sock"' in INSTALLER
 
 
 def test_edge_and_application_logs_redact_oauth_and_media_credentials() -> None:
@@ -685,15 +776,17 @@ def test_caddy_routes_only_named_application_hosts() -> None:
     assert "Strict-Transport-Security" in CADDYFILE
     assert "X-Content-Type-Options" in CADDYFILE
     assert application_routes.count("path /v1/*") == 6
-    assert application_routes.count("reverse_proxy ac-production-api:8000") == 4
-    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 4
+    # Each environment's Sales Xray host has its own same-origin /v1 proxy in
+    # addition to the four learner/admin/coach/API application routes.
+    assert application_routes.count("reverse_proxy ac-production-api:8000") == 5
+    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 5
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @learner_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @learner {"
     )
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @admin_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @admin {"
     )
-    assert application_routes.count("connect-src 'self';") == 6
+    assert application_routes.count("connect-src 'self';") == 8
     assert "connect-src 'self' https://api.authorityclosers.com" not in application_routes
     for route in (
         "learner-production",
@@ -979,7 +1072,24 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false" in production
     assert "AC_EMAIL_PROVIDER=resend" in production
     assert "AC_PRACTICE_PILOT_ENABLED=true" in staging
-    assert "AC_PRACTICE_PILOT_ENABLED=false" in production
+    assert "AC_PRACTICE_PILOT_ENABLED=true" in production
+    assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in staging
+    assert (
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging"
+        in staging
+    )
+    assert (
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket" in staging
+    )
+    assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in production
+    assert (
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production"
+        in production
+    )
+    assert (
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
+        in production
+    )
     assert "-u AC_PRACTICE_PILOT_ENABLED" in INSTALLER
     assert "-u AC_PRACTICE_PILOT_TENANT_ID" in INSTALLER
     secret_wrapper = INSTALLER.split("with_release_secrets() {", maxsplit=1)[1].split(
@@ -1065,6 +1175,40 @@ def test_installer_profile_parser_reports_effective_profile_policy(
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == expected_status
+
+
+@pytest.mark.parametrize("target_environment", ("staging", "production"))
+def test_installer_profile_parser_accepts_explicit_filesystem_activation(
+    tmp_path: Path, target_environment: str
+) -> None:
+    profile = (
+        (APPLICATION / "environments" / f"{target_environment}.env")
+        .read_bytes()
+        .replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+        )
+    )
+
+    result = _run_profile_parser(tmp_path, profile, target_environment=target_environment)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_installer_profile_parser_rejects_noncanonical_filesystem_root(tmp_path: Path) -> None:
+    profile = (
+        (APPLICATION / "environments" / "staging.env")
+        .read_bytes()
+        .replace(
+            b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging\n",
+            b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production\n",
+        )
+    )
+
+    result = _run_profile_parser(tmp_path, profile)
+
+    assert result.returncode != 0
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" in result.stderr
 
 
 @pytest.mark.parametrize("target_environment", ("staging", "production"))
@@ -1197,22 +1341,20 @@ def test_installer_rejects_stale_production_activation_policy(
     assert "unexpected value for AC_" in result.stderr
 
 
-def test_installer_rejects_production_practice_pilot_enablement(tmp_path: Path) -> None:
-    profile = (
-        (APPLICATION / "environments" / "production.env")
-        .read_bytes()
-        .replace(b"AC_PRACTICE_PILOT_ENABLED=false\n", b"AC_PRACTICE_PILOT_ENABLED=true\n")
-    )
+def test_installer_accepts_production_practice_pilot_enablement(tmp_path: Path) -> None:
+    profile = (APPLICATION / "environments" / "production.env").read_bytes()
 
     result = _run_profile_parser(tmp_path, profile, target_environment="production")
 
-    assert result.returncode != 0
-    assert "unexpected value for AC_PRACTICE_PILOT_ENABLED" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "released,resend\n"
 
 
 PUBLIC_TENANT = "10000000-0000-4000-8000-000000000001"
 OPERATIONS_TENANT = "20000000-0000-4000-8000-000000000002"
 FOREIGN_TENANT = "30000000-0000-4000-8000-000000000003"
+PRODUCTION_PUBLIC_TENANT = "c1d51741-6e0f-4ddc-8cc4-58856d0e778f"
+PRODUCTION_OPERATIONS_TENANT = "fb594dea-fdb6-444c-a36f-1d94fbc65bbf"
 
 
 @pytest.mark.parametrize(
@@ -1270,6 +1412,18 @@ def test_practice_pilot_preflight_does_not_accept_ambient_tenant_scope() -> None
     assert result.stdout == ""
 
 
+def test_production_pilot_preflight_accepts_the_reviewed_public_learner_tenant() -> None:
+    result = _run_practice_pilot_preflight(
+        enabled=True,
+        pilot_tenant=PRODUCTION_PUBLIC_TENANT,
+        public_tenant=PRODUCTION_PUBLIC_TENANT,
+        operations_tenant=PRODUCTION_OPERATIONS_TENANT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+
+
 def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path) -> None:
     result = _run_compose_for_probe(tmp_path)
 
@@ -1282,6 +1436,39 @@ def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path
     assert f"public_tenant: {PUBLIC_TENANT}" in result.stdout
     assert f"operations_tenant: {OPERATIONS_TENANT}" in result.stdout
     assert FOREIGN_TENANT not in result.stdout
+
+
+@pytest.mark.parametrize("filesystem_enabled,rollback_enabled", [(True, False), (False, True)])
+def test_compose_for_selects_filesystem_companion_from_each_target_release_policy(
+    tmp_path: Path,
+    filesystem_enabled: bool,
+    rollback_enabled: bool,
+) -> None:
+    result = _run_compose_for_probe(
+        tmp_path,
+        filesystem_enabled=filesystem_enabled,
+        rollback_filesystem_enabled=rollback_enabled,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count('filesystem: "true"') == 1
+    assert result.stdout.splitlines().count("name: ac-application-staging") == 2
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" not in result.stderr
+    assert "media-video/staging" in result.stdout
+
+
+def test_compose_for_old_rollback_profile_does_not_inherit_filesystem_activation(
+    tmp_path: Path,
+) -> None:
+    result = _run_compose_for_probe(
+        tmp_path,
+        filesystem_enabled=True,
+        rollback_filesystem_enabled=False,
+        rollback_legacy_media_profile=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines().count("name: ac-application-staging") == 2
+    assert result.stdout.count('filesystem: "true"') == 1
 
 
 def test_policy_off_rollback_target_preserves_practice_history(tmp_path: Path) -> None:
@@ -1338,7 +1525,7 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
         "mutation_started=1"
     )
     assert "max_artifact_bytes=450000000" in WORKFLOW
-    assert "max_artifact_pool_bytes=450000000" in WORKFLOW
+    assert 'max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"' in WORKFLOW
     assert "refusing upload above" in WORKFLOW
     assert "group: application-release-packaging" in WORKFLOW
     assert "actions: write" in WORKFLOW
@@ -1407,7 +1594,7 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
         'activate_edge_route "$edge_route_source"'
     )
     assert deployment.index('activate_edge_route "$edge_route_source"') < deployment.index(
-        "up --detach --no-deps --wait --wait-timeout 180 worker"
+        'up --detach --no-deps --wait --wait-timeout 180 "${runtime_workers[@]}"'
     )
     rollback = _installer_function("rollback_release", "\n\ncontain_forward_recovery() {")
     assert '[[ "$write_exposure_started" == 0 ]]' in rollback
@@ -1430,6 +1617,7 @@ def test_late_failure_after_an_accepted_write_is_forward_only(tmp_path: Path) ->
     containment = _installer_function(
         "contain_forward_recovery", "\n\nrecord_forward_recovery_required() {"
     )
+    hosted_stop = _installer_function("load_sales_xray_hosted_inputs", "\n\ncompose_for() {")
     finish = _installer_function("finish", "\ntrap finish EXIT")
     harness = f"""set -euo pipefail
 mutation_started=1
@@ -1451,8 +1639,13 @@ check_route() {{
   printf 'edge:verified\n' >> {shlex.quote(events.as_posix())}
 }}
 compose_for() {{
-  test "$*" = "/immutable/release stop --timeout 30 api worker learner-web admin-web coach-web"
-  printf 'services:stopped\n' >> {shlex.quote(events.as_posix())}
+  case "$*" in
+    "/immutable/release stop --timeout 30 api worker")
+      printf 'core:stopped\n' >> {shlex.quote(events.as_posix())} ;;
+    "/immutable/release stop --timeout 30 learner-web admin-web coach-web")
+      printf 'web:stopped\n' >> {shlex.quote(events.as_posix())} ;;
+    *) return 1 ;;
+  esac
 }}
 set_database_writer_access() {{
   test "$1" = fence
@@ -1468,6 +1661,8 @@ record_forward_recovery_required() {{
   printf recorded > {shlex.quote(recovery_recorded.as_posix())}
 }}
 cleanup_stages() {{ return 0; }}
+sales_xray_hosted_inputs=()
+{hosted_stop}
 {containment}
 {finish}
 trap finish EXIT
@@ -1485,7 +1680,8 @@ false
     assert events.read_text(encoding="utf-8").splitlines() == [
         "edge:hold",
         "edge:verified",
-        "services:stopped",
+        "core:stopped",
+        "web:stopped",
         "writers:fenced",
         "recovery:recorded",
     ]

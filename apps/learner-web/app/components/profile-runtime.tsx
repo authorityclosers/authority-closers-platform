@@ -42,6 +42,7 @@ import {
 } from "../lib/avatar-upload";
 import { AvatarCropDialog } from "./avatar-crop-dialog";
 import { CommunityIdentityCard } from "./community-identity-card";
+import { CommunityDiscovery } from "./community-discovery";
 import {
   hasMembershipRole,
   MembershipUnavailable,
@@ -480,6 +481,8 @@ export function ProfileRuntime({
           showLeaderboard={false}
         />
       ) : null}
+
+      {!offlineRead ? <CommunityDiscovery api={api} /> : null}
 
       <div className={styles.contentGrid}>
         <section

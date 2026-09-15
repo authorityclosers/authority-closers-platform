@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
 from ac_platform.application.release_identity import require_baked_release_id
+from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
 
 _DEPLOYMENT_ORIGINS = {
     "staging": {
@@ -31,6 +32,10 @@ _DEPLOYMENT_ORIGINS = {
 _DEPLOYMENT_LEARNER_ORIGINS = {
     "staging": "https://learner-staging.authorityclosers.com",
     "production": "https://learner.authorityclosers.com",
+}
+_SALES_XRAY_ORIGINS = {
+    "staging": "https://salesxray-staging.authorityclosers.com",
+    "production": "https://salesxray.authorityclosers.com",
 }
 _DEPLOYMENT_URL_ENV_FIELDS = {
     "public_app_url": "AC_PUBLIC_APP_URL",
@@ -69,6 +74,8 @@ class Settings(BaseSettings):
     public_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3000")
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
     coach_app_url: AnyHttpUrl = AnyHttpUrl("http://coach.localhost:3102")
+    # Optional standalone client. Enabling its host does not enable processing.
+    sales_xray_app_url: AnyHttpUrl | None = None
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
     internal_api_host: str = "localhost"
     session_token_pepper: SecretStr = SecretStr(
@@ -109,7 +116,7 @@ class Settings(BaseSettings):
     media_gap_reference: str | None = None
     media_upload_ttl_seconds: int = 900
     media_playback_ttl_seconds: int = 900
-    media_max_upload_bytes: int = 512 * 1024 * 1024
+    media_max_upload_bytes: int = STUDIO_VIDEO_MAX_SOURCE_BYTES
     media_quota_window_seconds: int = 3600
     media_quota_bytes_per_actor: int = 2 * 1024 * 1024 * 1024
     media_quota_uploads_per_actor: int = 100
@@ -117,6 +124,16 @@ class Settings(BaseSettings):
     media_max_processing_output_bytes: int = 4 * 1024 * 1024 * 1024
     media_max_processing_caption_bytes: int = 25 * 1024 * 1024
     media_allow_range_requests: bool = True
+    # Source-owned filesystem media is an explicit deployment profile. It is
+    # separate from provider activation and remains inert unless every path
+    # and scanner endpoint is configured together.
+    media_filesystem_enabled: bool = False
+    media_filesystem_root: str | None = None
+    media_filesystem_avatar_root: str | None = None
+    media_scanner_unix_socket: str | None = None
+    media_scanner_host: str | None = None
+    media_scanner_port: int = 3310
+    media_scanner_total_timeout_seconds: float = 1800.0
     # Explicitly opt-in test fixtures are separate from provider composition.
     # They are accepted only by the staging/test fixture seam and never by
     # production runtime composition.
@@ -137,6 +154,22 @@ class Settings(BaseSettings):
     # Separately reviewed deployment opt-in, never inferred from a local flag.
     practice_pilot_enabled: bool = False
     practice_pilot_tenant_id: UUID | None = None
+
+    # Independent opt-in; contains only paths and an approved artifact digest.
+    # Provider credentials belong exclusively to the separate inference broker.
+    sales_xray_enabled: bool = False
+    sales_xray_approval_path: str | None = None
+    sales_xray_approval_sha256: str | None = None
+    sales_xray_storage_root: str | None = None
+    sales_xray_scratch_root: str | None = None
+    # Guest admission is a separate release-owned capability. The file contains
+    # only the challenge credential; inference credentials remain broker-only.
+    sales_xray_acquisition_enabled: bool = False
+    sales_xray_acquisition_policy_revision: str | None = None
+    sales_xray_challenge_secret_file: str | None = None
+    sales_xray_challenge_site_key: str | None = None
+    sales_xray_native_socket_path: str | None = None
+    sales_xray_native_image_ref: str | None = None
 
     @field_validator(
         "public_learner_tenant_id",
@@ -159,6 +192,16 @@ class Settings(BaseSettings):
         if not isinstance(environment, str) or environment not in _DEPLOYMENT_ORIGINS:
             return values
         expected_origins = _DEPLOYMENT_ORIGINS[environment]
+        sales_origin = values.get("sales_xray_app_url")
+        if sales_origin not in (None, "") and (
+            not isinstance(sales_origin, str)
+            or sales_origin
+            not in {
+                _SALES_XRAY_ORIGINS[environment],
+                _SALES_XRAY_ORIGINS[environment] + "/",
+            }
+        ):
+            raise ValueError("AC_SALES_XRAY_APP_URL must be the canonical HTTPS origin")
         # Older deployment profiles need not name the not-yet-installed third
         # web service. Its default is still one exact environment-owned origin.
         values.setdefault("coach_app_url", expected_origins["coach_app_url"])
@@ -175,6 +218,26 @@ class Settings(BaseSettings):
             }:
                 raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
         return values
+
+    @field_validator("sales_xray_app_url", mode="before")
+    @classmethod
+    def require_sales_xray_origin(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        raw = str(value)
+        parsed = AnyHttpUrl(raw)
+        if (
+            raw != raw.strip()
+            or parsed.host is None
+            or "*" in parsed.host
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {None, "/"}
+            or "?" in raw
+            or "#" in raw
+        ):
+            raise ValueError("AC_SALES_XRAY_APP_URL must be an exact origin")
+        return value
 
     @field_validator("coach_app_url", mode="before")
     @classmethod
@@ -196,6 +259,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
+        if self.sales_xray_app_url is not None and self.sales_xray_app_url.host in {
+            self.public_app_url.host,
+            self.admin_app_url.host,
+            self.coach_app_url.host,
+            self.api_url.host,
+            self.internal_api_host,
+        }:
+            raise ValueError("AC_SALES_XRAY_APP_URL must use a distinct application hostname")
         if self.coach_app_url.host in {
             self.public_app_url.host,
             self.admin_app_url.host,
@@ -220,6 +291,7 @@ class Settings(BaseSettings):
         self._validate_media_stress_fixtures()
         self._validate_public_films()
         self._validate_media_provider()
+        self._validate_filesystem_media()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
             self._validate_email_provider()
@@ -269,6 +341,12 @@ class Settings(BaseSettings):
             field="AC_API_URL",
             expected_origin=expected_origins["api_url"],
         )
+        if self.sales_xray_app_url is not None:
+            self._validate_deployment_url(
+                self.sales_xray_app_url,
+                field="AC_SALES_XRAY_APP_URL",
+                expected_origin=_SALES_XRAY_ORIGINS[self.environment],
+            )
         expected_internal_api_host = _DEPLOYMENT_INTERNAL_API_HOSTS[self.environment]
         if self.internal_api_host != expected_internal_api_host:
             raise ValueError(
@@ -343,6 +421,89 @@ class Settings(BaseSettings):
             MediaProviderConfig.from_settings(self)
         except (TypeError, ValueError) as error:
             raise ValueError(f"invalid media provider configuration: {error}") from error
+
+    def _validate_filesystem_media(self) -> None:
+        """Validate the explicit private filesystem media deployment profile."""
+
+        for field in (
+            "media_filesystem_root",
+            "media_filesystem_avatar_root",
+            "media_scanner_unix_socket",
+            "media_scanner_host",
+        ):
+            value = getattr(self, field)
+            if isinstance(value, str) and not value.strip():
+                object.__setattr__(self, field, None)
+        configured = (
+            self.media_filesystem_root,
+            self.media_filesystem_avatar_root,
+            self.media_scanner_unix_socket,
+            self.media_scanner_host,
+        )
+        if not self.media_filesystem_enabled:
+            if any(value is not None and str(value).strip() for value in configured):
+                raise ValueError("filesystem media paths require AC_MEDIA_FILESYSTEM_ENABLED=true")
+            return
+        if self.environment not in {"test", "staging", "production"}:
+            raise ValueError("filesystem media requires test, staging, or production")
+        if (
+            self.media_provider_enabled
+            or self.media_stress_fixtures_enabled
+            or self.media_public_films_delivery_enabled
+            or self.media_staging_public_films_delivery_enabled
+            or self.media_local_public_films_delivery_enabled
+            or self.media_local_avatar_enabled
+        ):
+            raise ValueError("filesystem media cannot share provider or fixture activation")
+        if self.media_max_upload_bytes != STUDIO_VIDEO_MAX_SOURCE_BYTES:
+            raise ValueError("filesystem media requires the exact 2,000,000,000 byte source cap")
+        root = self.media_filesystem_root
+        avatar_root = self.media_filesystem_avatar_root
+        if (
+            not root
+            or root != root.strip()
+            or not Path(root).is_absolute()
+            or Path(root).name != "video-objects"
+            or ".." in Path(root).parts
+            or "://" in root
+            or root.startswith(("//", "\\\\"))
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in root)
+        ):
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_ROOT must be the absolute video-objects directory"
+            )
+        if self.environment in {"staging", "production"} and not avatar_root:
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must be the absolute avatar-objects directory"
+            )
+        if avatar_root and (
+            avatar_root != avatar_root.strip()
+            or not Path(avatar_root).is_absolute()
+            or Path(avatar_root).name != "avatar-objects"
+            or ".." in Path(avatar_root).parts
+            or "://" in avatar_root
+            or avatar_root.startswith(("//", "\\\\"))
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in avatar_root)
+        ):
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must be the absolute avatar-objects directory"
+            )
+        if avatar_root and Path(avatar_root).parent != Path(root).parent:
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must remain beside the video-objects directory"
+            )
+        if (self.media_scanner_unix_socket is None) == (self.media_scanner_host is None):
+            raise ValueError("filesystem media requires exactly one ClamAV endpoint")
+        # A deployment uses the scanner's private mounted Unix socket. TCP is
+        # retained only for test harnesses and the existing local tunnel.
+        if self.environment in {"staging", "production"} and self.media_scanner_unix_socket is None:
+            raise ValueError(
+                "staging and production filesystem media require the ClamAV Unix socket"
+            )
+        if not 1 <= self.media_scanner_port <= 65535:
+            raise ValueError("AC_MEDIA_SCANNER_PORT must be a valid TCP port")
+        if not 0 < self.media_scanner_total_timeout_seconds <= 3600:
+            raise ValueError("AC_MEDIA_SCANNER_TOTAL_TIMEOUT_SECONDS must be bounded")
 
     def _validate_media_stress_fixtures(self) -> None:
         """Keep local fixture opt-in outside production and normal local mode."""
@@ -558,6 +719,8 @@ class Settings(BaseSettings):
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url, self.api_url)
             if value.host is not None
         }
+        if self.sales_xray_app_url is not None and self.sales_xray_app_url.host is not None:
+            hosts.add(self.sales_xray_app_url.host)
         hosts.add(self.internal_api_host)
         if self.environment in {"local", "test"}:
             hosts.update({"localhost", "127.0.0.1", "test"})
@@ -565,10 +728,13 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        return [
+        origins = [
             str(value).rstrip("/")
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url)
         ]
+        if self.sales_xray_app_url is not None:
+            origins.append(str(self.sales_xray_app_url).rstrip("/"))
+        return origins
 
     @property
     def secure_cookies(self) -> bool:

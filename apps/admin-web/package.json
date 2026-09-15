@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ac/operations-web": "workspace:*",
+    "@ac/sales-xray-review-ui": "workspace:*",
     "@ac/ui": "workspace:*",
     "lucide-react": "1.37.0",
     "next": "16.3.3",

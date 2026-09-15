@@ -36,6 +36,14 @@ const admin: api.AdminSession = {
   permissions: ["admin_surface"],
   studioCapabilities: [],
 };
+const platformAdmin: platform.PlatformIdentity = {
+  personId: person,
+  sessionId,
+  selectedTenantId: null,
+  email: admin.email,
+  displayName: admin.displayName,
+  permissions: ["platform_tenants_read"],
+};
 let container: HTMLDivElement;
 let root: Root;
 let disposed: boolean;
@@ -123,24 +131,71 @@ it("recovers OAuth-returned memberships with reads only and requires an explicit
   expect(navigate).toHaveBeenCalledWith("/");
 });
 
-it("opens Platform Admin from an explicit grant without selecting an academy", async () => {
+it("offers explicit Platform Admin navigation without inventing an academy assignment", async () => {
   vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
     ...choices,
     workspaces: [],
   });
-  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
-    personId: person,
-    sessionId,
-    selectedTenantId: null,
-    email: admin.email,
-    displayName: admin.displayName,
-    permissions: ["platform_tenants_read"],
-  });
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
   await mount();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.textContent).toContain("Your account has platform access");
+  const platformButton = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Open Platform Admin",
+  )!;
+  await act(async () => platformButton.click());
   expect(navigate).toHaveBeenCalledWith("/platform");
   expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
   expect(api.loadAdminSession).not.toHaveBeenCalled();
 });
+
+it.each([null, tenant])(
+  "lets a returning platform admin choose an academy even with selected context %s",
+  async (selectedTenantId) => {
+    const selected = { ...choices, selected_tenant_id: selectedTenantId };
+    vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue(selected);
+    vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+      ...platformAdmin,
+      selectedTenantId,
+    });
+    await mount();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(container.querySelector("select")?.value).toBe("");
+    expect(container.textContent).toContain("Open Platform Admin");
+    expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+    expect(api.loadAdminSession).not.toHaveBeenCalled();
+    await choose(other);
+    await submit();
+    expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledWith(
+      selected,
+      other,
+      "admin",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+  },
+);
+
+it.each([
+  { personId: other },
+  { sessionId: other },
+  { selectedTenantId: other },
+])(
+  "does not combine platform and workspace reads from different scopes %j",
+  async (change) => {
+    vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+      ...platformAdmin,
+      ...change,
+    });
+    await mount();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(container.querySelector("select")).toBeNull();
+    expect(container.textContent).not.toContain("Open Platform Admin");
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+  },
+);
 
 it("never consults Platform Admin admission for a Coach login", async () => {
   await mount({ surface: "coach" });
@@ -219,6 +274,55 @@ it("finishes password authentication before reading memberships and never posts 
   expect(container.textContent).toContain("Choose your workspace");
   expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
   expect(container.innerHTML).not.toContain("synthetic-password-not-real");
+});
+it("offers both destinations after password sign-in instead of redirecting a platform admin", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces)
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(choices);
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  await mount();
+  expect(platform.loadPlatformIdentity).not.toHaveBeenCalled();
+  (container.querySelector('input[name="email"]') as HTMLInputElement).value =
+    "synthetic@example.test";
+  (
+    container.querySelector('input[name="password"]') as HTMLInputElement
+  ).value = "synthetic-password-not-real";
+  await submit();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("Choose your workspace");
+  expect(container.textContent).toContain("Open Platform Admin");
+  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+  await choose();
+  await submit();
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+});
+
+it("disables platform navigation during context selection and clears it after confirmed sign-out", async () => {
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  const request = deferred<api.AdminSession>();
+  vi.mocked(workspaces.selectOperationsWorkspace).mockReturnValue(
+    request.promise,
+  );
+  await mount();
+  await choose();
+  await submit();
+  const buttons = [...container.querySelectorAll("button")];
+  const platformButton = buttons.find(
+    (button) => button.textContent === "Open Platform Admin",
+  )!;
+  expect(platformButton.disabled).toBe(true);
+  await act(async () => platformButton.click());
+  expect(navigate).not.toHaveBeenCalled();
+  await act(async () => request.resolve(admin));
+  navigate.mockClear();
+  await act(async () =>
+    buttons
+      .find((button) => button.textContent === "Use another account")!
+      .click(),
+  );
+  expect(container.textContent).not.toContain("Open Platform Admin");
+  expect(container.querySelector('input[name="email"]')).not.toBeNull();
+  expect(navigate).not.toHaveBeenCalled();
 });
 it("displays only a safe selection failure and keeps the selector available", async () => {
   vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(

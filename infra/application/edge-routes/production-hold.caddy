@@ -1,4 +1,4 @@
-	@production_release_hold host app.authorityclosers.com learner.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com api.authorityclosers.com
+	@production_release_hold host app.authorityclosers.com learner.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com api.authorityclosers.com salesxray.authorityclosers.com
 	handle @production_release_hold {
 		import base_security_headers
 		header X-Authority-Closers-Route "release-hold-production"

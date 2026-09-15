@@ -1,0 +1,231 @@
+{
+  "schema": "ac.sales-xray.account-library-evidence/1",
+  "base_commit": "30cd7a8d1aed95e8ead2ee737c9cfa6574d4d599",
+  "hash_basis": "canonical Git index bytes; log whitespace normalized, original logs external",
+  "tests": {
+    "ui": {
+      "passed": 122,
+      "files": 17
+    },
+    "postgres_http": {
+      "passed": 8,
+      "seconds": 128.09
+    },
+    "compiled_browser": {
+      "passed": 1,
+      "seconds": 47.46,
+      "build_id": "x5hb_5QbrL1TMz4a7t7ud"
+    },
+    "external_provider_calls": 0,
+    "new_spend_inr": 0
+  },
+  "review": {
+    "model": "gpt-5.6-luna",
+    "reasoning": "xhigh",
+    "backend_findings": 0,
+    "fixed_ui_findings": [
+      "empty-page pagination remains available after concurrent erasure"
+    ],
+    "remaining_actionable_findings": 0
+  },
+  "files": [
+    {
+      "path": "apps/sales-xray-web/app/account-navigation.tsx",
+      "bytes": 2843,
+      "sha256": "4aaca657ecabac61133eef81764e7a169b294ae63a0438a462dcfaadace87fc8",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/acquisition-client.ts",
+      "bytes": 9575,
+      "sha256": "e869e59f1680f7ee491f71b2410197fd2b26b93f575d9d32421a5919a917c417",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/acquisition-library.test.ts",
+      "bytes": 1821,
+      "sha256": "05641e9a086d7f8968434fad703f7c6b6b17ce5aadc5b31ff46eeda466529b43",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/acquisition-studio.test.tsx",
+      "bytes": 10598,
+      "sha256": "d26b46a0a97b90c46e191ef35a615e8e9804f967f8c343504254d8b78a921502",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/acquisition-studio.tsx",
+      "bytes": 39215,
+      "sha256": "fd4296a304980880877a4dd02ebad18cea5c9ea783d4d34ac4e844fc59fae896",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/call-studio.tsx",
+      "bytes": 71176,
+      "sha256": "4837b1305c6e669a138b6341da9faf10575080d08189c993d08a948e16fe18e9",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/calls-library.test.tsx",
+      "bytes": 7174,
+      "sha256": "b9071ca9cf9517af15c4f0d1ec16a679fa3989ceaaa1856977d94bc0b176749c",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/calls-library.tsx",
+      "bytes": 12308,
+      "sha256": "e0e7598b668dff5e7052072b0c8d3b4dc96ca4dfc23fcc68f6ca31fe9b53dfa6",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/calls/page.tsx",
+      "bytes": 233,
+      "sha256": "6531ef34529aafd95367af5c03185bc53bff1cadce0312ea8e9dfc258a583830",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/page.tsx",
+      "bytes": 241,
+      "sha256": "764d6a6a1365a1f6326fbcf896a776da9ee650d79ed0cd04ac48d67055e6e913",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/standalone-studio.test.tsx",
+      "bytes": 5623,
+      "sha256": "739078abea3763eff00a5a7d212ab6f499be32ed02be05955dd3980f24224386",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/standalone-studio.tsx",
+      "bytes": 12360,
+      "sha256": "5c88428039256817b87168f157b588c401d75527d40df694b0e06957b4e0fd48",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/styles.css",
+      "bytes": 56282,
+      "sha256": "208c48b75ee34989c973addf2a7e3164860bf51fed7dce28f615f4a977edacd3",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/app/workspace-access.tsx",
+      "bytes": 877,
+      "sha256": "5a6c06c4326f5898ecd1148e62050358b00fd1412fe30e8b2e5e7c79e25cf849",
+      "kind": "implementation"
+    },
+    {
+      "path": "apps/sales-xray-web/next.config.ts",
+      "bytes": 2653,
+      "sha256": "cfbb53e0e1a8f823f77f95272371f914f6da33d4e8884d661d463b0cdb4b98a3",
+      "kind": "implementation"
+    },
+    {
+      "path": "docs/evidence/20260914_ACCOUNT_LIBRARY_IMPLEMENTATION.md",
+      "bytes": 6729,
+      "sha256": "198340ffec1cf01920f0ffad7a0b15838f794581cff59424410693afb66c61e2",
+      "kind": "implementation"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/account-library-desktop.png",
+      "bytes": 36389,
+      "sha256": "b10f8daa2d114cf0a83d1734fbf644811abc5c9b616fb5f23d07b5ddcd649761",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/account-library-mobile.png",
+      "bytes": 24915,
+      "sha256": "48b655a1551fa50bef67150306375dc2615fc7896e0c798b6e59bfa03cb2a4c6",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/account-library-report-playback.png",
+      "bytes": 60814,
+      "sha256": "cfdfeadcabd5a6b6a11a448790dc2379e39f3ad23d930f20d960370b9d6aa25e",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/browser-network.json",
+      "bytes": 8638,
+      "sha256": "431e9eec6a6591b9f0f57756fbc3c006d0898f2f085e05473f0a2939f03dceba",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/browser.junit.xml",
+      "bytes": 395,
+      "sha256": "790070613768106da977b901aa5ab9c60eccc86addb0e56169153926d080b398",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/browser.log",
+      "bytes": 171,
+      "sha256": "cea49b4db740f75eb09b3175b151be9b2cb81fce54ff2b4536b1a8709e9cc52d",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/build.log",
+      "bytes": 691,
+      "sha256": "50fc589acaec1984d762117c4ea3646fa6b53209e742b77921784db4443345a9",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/lint.log",
+      "bytes": 28,
+      "sha256": "960f1eb37ac4d28430af9bef2c98f32333254854ffde619330f53d373ce0f632",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/postgres.junit.xml",
+      "bytes": 1632,
+      "sha256": "20eb5f3833a4874317d2bfe61f5a7e1f28ce88b15f3504c1d4566da8eecff084",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/postgres.log",
+      "bytes": 182,
+      "sha256": "f16419cbe4dad7277c6f69902666612123b767393305612689558816c4c27f11",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/static-checks.log",
+      "bytes": 701,
+      "sha256": "5e360821164a3a924c7e09b9b76a35bc455f1607fb343ceb194543489c472b48",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/ui.junit.xml",
+      "bytes": 25102,
+      "sha256": "74f6c3c5977a04025d843db40411b4b0c9f07d92b2414e36409a551b41bf18ed",
+      "kind": "receipt"
+    },
+    {
+      "path": "docs/evidence/account-library-20260914/ui.log",
+      "bytes": 2493,
+      "sha256": "6f2bcd996041721158e9392a1be7685eefe9088bc4afb7012a507fcecd4e8f1c",
+      "kind": "receipt"
+    },
+    {
+      "path": "packages/python/ac_platform/conversation_intelligence/acquisition_library.py",
+      "bytes": 4593,
+      "sha256": "4d65f63e4a06f8da1ad0981bf7d4800a3b3aeee4dffd976227af82193858e822",
+      "kind": "implementation"
+    },
+    {
+      "path": "packages/python/ac_platform/http/conversation_submissions.py",
+      "bytes": 22092,
+      "sha256": "42ee52116af9b1f83810deff0b0bbfcac883d291fa37bb4747d48077b26c02f0",
+      "kind": "implementation"
+    },
+    {
+      "path": "tests/database/test_conversation_account_library_postgresql.py",
+      "bytes": 10897,
+      "sha256": "ade4530f26e4fab155ba691cfaf5a4f16a3f4f71699465ef09132fbb87972b4b",
+      "kind": "implementation"
+    },
+    {
+      "path": "tests/e2e/test_sales_xray_acquisition_browser.py",
+      "bytes": 24771,
+      "sha256": "3c32e10ddde7d44ed84ae0e48bbb8d1f7f0edf4f02dd42ac8a77ea208e3c81ad",
+      "kind": "implementation"
+    }
+  ]
+}

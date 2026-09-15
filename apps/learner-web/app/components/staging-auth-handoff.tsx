@@ -1,8 +1,6 @@
 import { type CourseIntent } from "../lib/course-intent";
-import {
-  activityIntentHref,
-  type ActivityIntent,
-} from "../lib/activity-intent";
+import { type ActivityIntent } from "../lib/activity-intent";
+import { authIntentHref, type SalesAuthNext } from "../lib/sales-auth-return";
 
 const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
 
@@ -11,16 +9,15 @@ export function StagingAuthHandoff({
   action,
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   path: "/register" | "/forgot-password" | "/verify-email" | "/reset-password";
   action: string;
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 }) {
-  const target =
-    path === "/register"
-      ? activityIntentHref(path, activityIntent, courseIntent)
-      : path;
+  const target = authIntentHref(path, activityIntent, courseIntent, salesNext);
   const href = new URL(target, STAGING_APP_ORIGIN).toString();
   return (
     <div className="auth-card">

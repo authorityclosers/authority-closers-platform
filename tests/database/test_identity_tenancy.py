@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.schema import CreateTable
 
-from ac_platform.db.base import Base
+from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import (
     AuthenticationReplay,
     DeletionRequest,
@@ -55,13 +55,15 @@ def database() -> Engine:
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
-    Base.metadata.create_all(engine)
+    # Load the complete registry even when this module is collected in isolation.
+    metadata = model_metadata()
+    metadata.create_all(engine)
     try:
         yield engine
     finally:
         with engine.begin() as connection:
             connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
-        Base.metadata.drop_all(engine)
+        metadata.drop_all(engine)
         engine.dispose()
 
 
@@ -146,6 +148,10 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                     "onboarding_step",
                     "onboarding_revision",
                 }
+            if model is Session:
+                # The reviewer audience is introduced at0038, not in this
+                # deliberately isolated0001 migration proof.
+                expected -= {"audience"}
             assert set(actual) == expected, model.__tablename__
             for column in model.__table__.columns:
                 if column.name not in expected:
@@ -172,6 +178,11 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                     "ck_persons_onboarding_step_bounds",
                     "ck_persons_onboarding_revision_nonnegative",
                     "ck_persons_onboarding_completed_fields",
+                }
+            if model is Session:
+                expected_checks -= {
+                    "ck_sessions_audience_supported",
+                    "ck_sessions_reviewer_session_unscoped",
                 }
             actual_checks = {
                 constraint["name"]

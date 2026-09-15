@@ -16,6 +16,8 @@ describe("premium public catalog home", () => {
     expect(html).toContain("Review");
     expect(html).toContain("Improve");
     expect(html).toContain("Loading published programs");
+    expect(html).toContain('href="/sales-xray"');
+    expect(html).toContain("Explore Sales Xray");
     expect(html).toContain(
       "Explore available programs and choose where to begin.",
     );

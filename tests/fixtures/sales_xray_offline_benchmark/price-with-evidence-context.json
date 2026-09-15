@@ -1,0 +1,130 @@
+{
+  "as_of_ms": 2000,
+  "counterevidence_ids": [],
+  "critical_ids": [
+    "s1",
+    "s2"
+  ],
+  "data_class": "synthetic_fixture",
+  "expected_applicability": {
+    "AC.EVIDENCE.RELEVANCE": "applicable",
+    "AC.PRICE.DIAGNOSE": "applicable",
+    "AC.STOP.RESPECT": "insufficient_context"
+  },
+  "expected_outcome": "accepted",
+  "expected_rejection_stage": null,
+  "expected_slots": {
+    "affordability": {
+      "status": "supported",
+      "value": "available"
+    },
+    "consent_to_continue": {
+      "status": "unknown",
+      "value": null
+    },
+    "evidence_concern": {
+      "status": "supported",
+      "value": true
+    },
+    "price_objection": {
+      "status": "supported",
+      "value": true
+    }
+  },
+  "observations": [
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 44,
+        "end_ms": 1000,
+        "quote": "I have budget. I need proof before choosing.",
+        "recording_id": "fixture-cc1ca1141c00c134",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "cc1ca1141c00c134558f2039eaaff10369c232b7d30f2b80a794382735e06091",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o1",
+      "polarity": "supports",
+      "slot": "affordability",
+      "value": "available"
+    },
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 44,
+        "end_ms": 1000,
+        "quote": "I have budget. I need proof before choosing.",
+        "recording_id": "fixture-cc1ca1141c00c134",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "cc1ca1141c00c134558f2039eaaff10369c232b7d30f2b80a794382735e06091",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o2",
+      "polarity": "supports",
+      "slot": "evidence_concern",
+      "value": true
+    },
+    {
+      "available_at_ms": 2000,
+      "evidence": {
+        "end_char": 23,
+        "end_ms": 2000,
+        "quote": "That price sounds high.",
+        "recording_id": "fixture-cc1ca1141c00c134",
+        "segment_id": "s2",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "cc1ca1141c00c134558f2039eaaff10369c232b7d30f2b80a794382735e06091",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 1000,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o3",
+      "polarity": "supports",
+      "slot": "price_objection",
+      "value": true
+    }
+  ],
+  "transcript": {
+    "duration_ms": 2000,
+    "recording_id": "fixture-cc1ca1141c00c134",
+    "revision": "fixture-transcript-v1",
+    "segments": [
+      {
+        "end_ms": 1000,
+        "id": "s1",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 0,
+        "text": "I have budget. I need proof before choosing."
+      },
+      {
+        "end_ms": 2000,
+        "id": "s2",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 1000,
+        "text": "That price sounds high."
+      }
+    ],
+    "source_revision": "fixture-source-v1",
+    "source_sha256": "cc1ca1141c00c134558f2039eaaff10369c232b7d30f2b80a794382735e06091",
+    "tenant_id": "synthetic-benchmark-tenant",
+    "timebase_id": "fixture-source-ms"
+  }
+}

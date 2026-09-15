@@ -44,7 +44,20 @@ async def test_real_http_shape_origin_and_query_selectors(runtime):
         transport=httpx.ASGITransport(app=app), base_url="http://localhost:3000"
     ) as client:
         response = await client.get("/v1/practice/sets")
-        assert response.status_code == 200 and len(response.json()["items"]) == 8
+        assert response.status_code == 200
+        assert {item["id"] for item in response.json()["items"]} == {
+            "match",
+            "gaps",
+            "build",
+            "sequence",
+            "next-move",
+            "assumption",
+            "listen",
+            "dialogue",
+            "india-daily-english",
+            "india-daily-hinglish",
+            "india-daily-marlish",
+        }
         assert response.headers["cache-control"] == "private, no-store"
         assert (await client.get("/v1/practice/sets?tenant_id=other")).status_code == 422
         assert (await client.get("/v1/practice/sets/gaps")).status_code == 200

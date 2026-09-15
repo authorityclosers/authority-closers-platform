@@ -1006,7 +1006,10 @@ def test_existing_positive_fact_cannot_bypass_current_consent_or_exact_course(
         sessions = async_sessionmaker(async_engine, expire_on_commit=False)
         try:
             async with sessions() as database:
-                with pytest.raises(SelfAttestedEligibilityDenied, match="exact required 18"):
+                with pytest.raises(
+                    SelfAttestedEligibilityDenied,
+                    match="Review and accept the current learner consent document",
+                ):
                     async with database.begin():
                         await AsyncSelfAttestedEligibilityApplication(database).ensure(
                             person_id=stale_consent.learner_id,

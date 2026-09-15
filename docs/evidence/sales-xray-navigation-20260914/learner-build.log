@@ -1,0 +1,59 @@
+$ next build
+▲ Next.js 16.3.3 (Turbopack)
+✓ Running next.config.ts took 472ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 16.2s
+  Running TypeScript ...
+  Finished TypeScript in 26.7s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/28) ...
+  Generating static pages using 11 workers (7/28) 
+  Generating static pages using 11 workers (14/28) 
+  Generating static pages using 11 workers (21/28) 
+✓ Generating static pages using 11 workers (28/28) in 806ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /activity/[activityId]
+├ ƒ /auth/callback
+├ ƒ /calendar
+├ ƒ /certificates/[certificateId]
+├ ○ /dev-harness/media-player
+├ ƒ /discover
+├ ƒ /forgot-password
+├ ƒ /home
+├ ○ /icon.svg
+├ ○ /leaderboard
+├ ƒ /learn/[programSlug]
+├ ƒ /learn/[programSlug]/complete
+├ ƒ /learn/[programSlug]/module/[moduleId]
+├ ƒ /learning
+├ ƒ /login
+├ ○ /manifest.webmanifest
+├ ƒ /notifications
+├ ○ /offline
+├ ƒ /onboarding
+├ ƒ /practice
+├ ƒ /practice/availability
+├ ○ /privacy
+├ ƒ /profile
+├ ƒ /programs/[slug]
+├ ƒ /progress
+├ ƒ /register
+├ ƒ /reset-password
+├ ○ /sales-xray
+├ ƒ /sales-xray/review/[assignmentId]
+├ ○ /sales-xray/review/invite
+├ ƒ /session-expired
+├ ƒ /settings
+├ ○ /terms
+├ ƒ /v1/[...path]
+└ ƒ /verify-email
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

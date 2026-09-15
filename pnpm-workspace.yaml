@@ -2,6 +2,7 @@ packages:
   - apps/learner-web
   - apps/admin-web
   - apps/coach-web
+  - apps/sales-xray-web
   - packages/typescript/*
 
 overrides:

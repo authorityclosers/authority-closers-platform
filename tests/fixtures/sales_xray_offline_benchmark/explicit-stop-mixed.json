@@ -1,0 +1,76 @@
+{
+  "as_of_ms": 1000,
+  "counterevidence_ids": [],
+  "critical_ids": [
+    "s1"
+  ],
+  "data_class": "synthetic_fixture",
+  "expected_applicability": {
+    "AC.EVIDENCE.RELEVANCE": "insufficient_context",
+    "AC.PRICE.DIAGNOSE": "insufficient_context",
+    "AC.STOP.RESPECT": "applicable"
+  },
+  "expected_outcome": "accepted",
+  "expected_rejection_stage": null,
+  "expected_slots": {
+    "affordability": {
+      "status": "unknown",
+      "value": null
+    },
+    "consent_to_continue": {
+      "status": "supported",
+      "value": false
+    },
+    "evidence_concern": {
+      "status": "unknown",
+      "value": null
+    },
+    "price_objection": {
+      "status": "unknown",
+      "value": null
+    }
+  },
+  "observations": [
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 35,
+        "end_ms": 1000,
+        "quote": "Please stop. अभी आगे नहीं बढ़ना है।",
+        "recording_id": "fixture-f788821ba3c5c931",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "f788821ba3c5c9311e36fc644c6cea0fed5c313726072586ac3a102b0f66f230",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o1",
+      "polarity": "supports",
+      "slot": "consent_to_continue",
+      "value": false
+    }
+  ],
+  "transcript": {
+    "duration_ms": 1000,
+    "recording_id": "fixture-f788821ba3c5c931",
+    "revision": "fixture-transcript-v1",
+    "segments": [
+      {
+        "end_ms": 1000,
+        "id": "s1",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 0,
+        "text": "Please stop. अभी आगे नहीं बढ़ना है।"
+      }
+    ],
+    "source_revision": "fixture-source-v1",
+    "source_sha256": "f788821ba3c5c9311e36fc644c6cea0fed5c313726072586ac3a102b0f66f230",
+    "tenant_id": "synthetic-benchmark-tenant",
+    "timebase_id": "fixture-source-ms"
+  }
+}

@@ -1,0 +1,557 @@
+.page {
+  display: grid;
+  gap: 22px;
+  max-width: 1120px;
+}
+
+.notice,
+.error,
+.success,
+.forbidden {
+  display: grid;
+  gap: 6px;
+  padding: 17px 19px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+}
+
+.notice h2,
+.error h2,
+.success h2,
+.forbidden h2,
+.card h3,
+.section h2 {
+  margin: 0;
+}
+
+.notice p,
+.error p,
+.success p,
+.forbidden p,
+.card p,
+.section p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.notice {
+  grid-template-columns: 1fr auto;
+  border-color: color-mix(in srgb, var(--signal) 36%, var(--line));
+  background: var(--accent-soft);
+}
+
+.notice > :first-child {
+  min-width: 0;
+}
+
+.noticeCode,
+.status,
+.dormant,
+.pending,
+.saved {
+  align-self: start;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  color: var(--quiet);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dormant {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.pending {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.saved {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.error,
+.forbidden {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.error p,
+.forbidden p {
+  color: var(--text);
+}
+
+.success {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.success p {
+  color: var(--text);
+}
+
+.buttonRow,
+.sectionHeader,
+.cardHeader,
+.routeHeader,
+.catalogHeader,
+.fieldRow,
+.providerMeta,
+.routeMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.buttonRow {
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.buttonRow button,
+.sectionHeader button,
+.cardHeader button,
+.routeHeader button,
+.error button,
+.forbidden button {
+  min-height: 42px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  display: grid;
+  gap: 7px;
+  min-height: 108px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.summaryCard span,
+.eyebrow,
+.fieldLabel,
+.catalogLabel,
+.routeLabel {
+  color: var(--quiet);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryCard strong {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.section {
+  display: grid;
+  gap: 17px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.workflowSection {
+  display: grid;
+  gap: 17px;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--line));
+  background: var(--panel);
+}
+
+.stageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stageCard {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+
+.stageHeader,
+.stageRoute {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stageBadges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.revisionState {
+  color: var(--quiet) !important;
+  font-size: 0.78rem;
+}
+
+.revisionState strong {
+  color: var(--text);
+}
+
+.stageHeader h2 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
+.stageStatus,
+.stageStatusMuted {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border: 1px solid var(--info);
+  color: var(--info);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.stageStatusMuted {
+  border-color: var(--line-strong);
+  color: var(--quiet);
+}
+
+.stageRoute {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.stageRoute > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.stageField {
+  display: grid;
+  flex: 1 1 145px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.stageField select {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--text);
+}
+
+.stageField select:focus {
+  border-color: var(--focus);
+}
+
+.stageRoute > div:first-child {
+  flex: 1 1 145px;
+}
+
+.stageRoute > div:nth-child(2) {
+  flex: 1 1 145px;
+}
+
+.stageLabel {
+  color: var(--quiet);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.stageRoute strong {
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.stageData,
+.stageEmpty,
+.stageNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.stageData strong {
+  color: var(--text);
+}
+
+.advancedPanel {
+  display: grid;
+  gap: 14px;
+  order: 8;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.advancedPanel summary {
+  padding: 15px 18px;
+  color: var(--signal);
+  cursor: pointer;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.advancedPanel > .section {
+  margin: 0 18px 18px;
+}
+
+.advancedPanel[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.routeGridAdvanced {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sectionHeader,
+.cardHeader,
+.routeHeader,
+.catalogHeader {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.sectionHeader > div,
+.cardHeader > div,
+.routeHeader > div,
+.catalogHeader > div {
+  min-width: 0;
+}
+
+.sectionHeader h2 {
+  margin-top: 4px;
+  font-size: 1.22rem;
+}
+
+.providerList,
+.routeList,
+.catalogList {
+  display: grid;
+  gap: 14px;
+}
+
+.card,
+.routeCard,
+.catalogItem {
+  display: grid;
+  gap: 15px;
+  padding: 17px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+
+.cardHeader h3,
+.catalogHeader strong {
+  font-size: 1rem;
+}
+
+.providerMeta,
+.routeMeta {
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.providerMeta code,
+.routeMeta code {
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--text);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--focus);
+}
+
+.field textarea {
+  min-height: 170px;
+  resize: vertical;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.field input[readonly] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.field small,
+.helper {
+  color: var(--quiet);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.fieldRow {
+  align-items: flex-end;
+}
+
+.fieldRow .field {
+  flex: 1 1 0;
+}
+
+.advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+}
+
+.advanced summary {
+  width: fit-content;
+  color: var(--signal);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.advanced[open] summary {
+  margin-bottom: 13px;
+}
+
+.routeCard {
+  gap: 12px;
+}
+
+.routeGrid {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(210px, 1.3fr) repeat(
+      3,
+      minmax(120px, 1fr)
+    );
+  gap: 12px;
+}
+
+.routeGrid .field select,
+.routeGrid .field input {
+  min-height: 40px;
+  font-size: 0.86rem;
+}
+
+.catalogList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.catalogItem {
+  gap: 8px;
+  min-height: 114px;
+}
+
+.catalogItem p {
+  font-size: 0.82rem;
+}
+
+.catalogStatus {
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.empty {
+  padding: 17px;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+}
+
+.empty p {
+  margin: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 880px) {
+  .summaryGrid,
+  .stageGrid,
+  .catalogList {
+    grid-template-columns: 1fr;
+  }
+
+  .routeGrid,
+  .routeGridAdvanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .notice {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldGrid,
+  .routeGrid,
+  .routeGridAdvanced {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldRow {
+    display: grid;
+    align-items: stretch;
+  }
+}

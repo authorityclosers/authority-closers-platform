@@ -1,0 +1,45 @@
+{
+  "scope": "English shell and expandable findings; actual tool artifacts, synthetic report data only",
+  "files": [
+    {
+      "path": "ui.junit.xml",
+      "bytes": 15066,
+      "sha256": "5084ce9ef835c33a08becc7196f5101d753858a99759a77223f34d8a87f601d9"
+    },
+    {
+      "path": "standalone-build.log",
+      "bytes": 705,
+      "sha256": "1cd9fc12a6e1c727bab269629a8c334ca035dfbbff4cbf8d272ba6266bb0c79f"
+    },
+    {
+      "path": "navigation-browser-receipt.json",
+      "bytes": 3924,
+      "sha256": "1a3bfb7e83039df5e061edf083def6962739f1e8577e2bb20ccf39edd81500e7"
+    },
+    {
+      "path": "mixed-script-overview-1280.png",
+      "bytes": 102257,
+      "sha256": "b3c805535f66f7c411079b514da0073cd399482b7213f6942125662385b6d42f"
+    },
+    {
+      "path": "mixed-script-overview-320.png",
+      "bytes": 92840,
+      "sha256": "51fa859e357328ad82a09c0bfb931d478819600e0451f73460eedf89637992ac"
+    },
+    {
+      "path": "mixed-script-transcript-390.png",
+      "bytes": 83724,
+      "sha256": "c4d98c54447b0bec1723002768ddf904c3908365681c697d8b5edac329d955f2"
+    },
+    {
+      "path": "synthetic-report.pdf",
+      "bytes": 132457,
+      "sha256": "451cd7a1ef06850f1cc0b877bab2be3d3de3aa6f8e582f73e299d03393ab1f98"
+    },
+    {
+      "path": "learner-build.log",
+      "bytes": 1582,
+      "sha256": "b558a0fe8076b3ebbd0e359b44a431bffefc3e9038f79bddc5e5764eecc0eb9a"
+    }
+  ]
+}

@@ -151,6 +151,13 @@
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
 }
+.headerIntro {
+  max-width: 58ch;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
 .eyebrow {
   display: block;
   font-size: 0.6875rem;
@@ -165,6 +172,36 @@
   flex: 0 0 190px;
   font-size: 0.75rem;
   color: var(--muted);
+}
+.courseSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  width: fit-content;
+  margin: 0 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.courseSummary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 116px;
+  padding: 11px 15px;
+  border-right: 1px solid var(--line);
+}
+.courseSummary > div:last-child {
+  border-right: 0;
+}
+.courseSummary strong {
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.1;
+}
+.courseSummary span {
+  color: var(--muted);
+  font-size: 0.6875rem;
 }
 .versionControl select,
 .field input,
@@ -241,9 +278,18 @@
   gap: 8px;
   padding: 0 8px 20px;
 }
+.outlineHeading > div {
+  min-width: 0;
+}
 .outlineHeading h3 {
   margin: 0;
   font-size: 0.875rem;
+}
+.outlineHeading p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.5;
 }
 .outlineHeading > span {
   font-size: 0.6875rem;
@@ -274,6 +320,12 @@
 }
 .moduleButton > span:last-child {
   overflow-wrap: anywhere;
+}
+.moduleCount {
+  display: block;
+  margin: 1px 8px 7px 44px;
+  color: var(--quiet);
+  font-size: 0.6875rem;
 }
 .moduleNumber {
   width: 26px;
@@ -411,7 +463,7 @@
 }
 .field textarea {
   resize: vertical;
-  min-height: 200px;
+  min-height: 128px;
 }
 .field input::placeholder,
 .field textarea::placeholder {
@@ -506,7 +558,7 @@
   justify-content: space-between;
   align-items: center;
   position: sticky;
-  bottom: 0;
+  bottom: var(--workspace-bottom-inset, 0px);
   margin: 32px -32px -32px;
   padding: 20px 32px max(20px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
@@ -622,6 +674,9 @@
   line-height: 1.75;
   color: var(--muted);
 }
+.review > p + .notice {
+  margin-top: 22px;
+}
 .review h4 {
   margin-top: 28px;
   font-size: 0.9375rem;
@@ -667,6 +722,12 @@
 .provenance dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.provenanceNote {
+  margin: 16px 0 0;
+  color: var(--quiet);
+  font-size: 0.6875rem;
+  line-height: 1.55;
 }
 .leaveDialog {
   width: min(460px, calc(100% - 32px));
@@ -762,6 +823,12 @@
   .toolbar {
     flex-wrap: wrap;
   }
+  .courseSummary {
+    width: 100%;
+  }
+  .courseSummary > div {
+    flex: 1 1 0;
+  }
   .tabs {
     width: 100%;
   }
@@ -779,6 +846,19 @@
     display: grid;
     gap: 16px;
   }
+  .courseSummary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .courseSummary > div {
+    min-width: 0;
+    padding: 10px;
+  }
+  .courseSummary > div:last-child {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    border-right: 0;
+  }
   .versionControl {
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
@@ -795,9 +875,11 @@
   .saveBar {
     margin: 24px -16px -20px;
     padding: 16px;
+    position: static;
   }
   .saveBar > button {
     width: 100%;
+    scroll-margin-block: 100px;
   }
   .tabs button {
     gap: 6px;
@@ -811,4 +893,35 @@
   .workspace {
     --theme-transition-duration: 0ms;
   }
+}
+
+.lessonMedia {
+  min-width: 0;
+  padding: 0 clamp(16px, 3vw, 32px) 24px;
+}
+.lessonMedia > section {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tabs button,
+  .moduleButton,
+  .module ol button,
+  .add {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease;
+  }
+  .module ol button > svg:last-child {
+    transition: transform 140ms ease;
+  }
+  .module ol button:hover > svg:last-child {
+    transform: translateX(2px);
+  }
+}
+:global(html[data-reduced-motion="true"]) .module ol button > svg:last-child,
+:global(html[data-motion="reduced"]) .module ol button > svg:last-child {
+  transition: none;
+  transform: none;
 }

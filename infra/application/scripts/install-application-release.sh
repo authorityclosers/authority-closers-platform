@@ -272,11 +272,18 @@ initialize_release_profile_contract() {
     AC_EMAIL_PROVIDER
     AC_PRACTICE_PILOT_ENABLED
     AC_LEARNER_CONSENT_VERSION
+    AC_MEDIA_FILESYSTEM_ENABLED
+    AC_MEDIA_FILESYSTEM_HOST_ROOT
+    AC_MEDIA_SCANNER_HOST_ROOT
   )
   profile_allowed_keys=()
   for profile_key in "${profile_required_keys[@]}"; do
     profile_allowed_keys["$profile_key"]=1
   done
+  # Older deployment profiles may omit the optional standalone Sales Xray
+  # surface. When present, validate_release_profile binds it to the exact
+  # environment-owned origin below; it never permits a generic host.
+  profile_allowed_keys[AC_SALES_XRAY_APP_URL]=1
 }
 
 initialize_release_profile_contract
@@ -355,6 +362,8 @@ validate_release_profile() {
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
         "AC_PRACTICE_PILOT_ENABLED=true"
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging"
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
       )
       ;;
     production)
@@ -372,10 +381,26 @@ validate_release_profile() {
         "AC_EDGE_COACH_ALIAS=ac-production-coach"
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
-        "AC_PRACTICE_PILOT_ENABLED=false"
+        "AC_PRACTICE_PILOT_ENABLED=true"
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production"
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
       )
       ;;
   esac
+  if [[ -n "${profile_values[AC_SALES_XRAY_APP_URL]+present}" ]]; then
+    case "$target_environment" in
+      staging)
+        expected_profile_assignments+=(
+          "AC_SALES_XRAY_APP_URL=https://salesxray-staging.authorityclosers.com"
+        )
+        ;;
+      production)
+        expected_profile_assignments+=(
+          "AC_SALES_XRAY_APP_URL=https://salesxray.authorityclosers.com"
+        )
+        ;;
+    esac
+  fi
   for expected_profile_assignment in "${expected_profile_assignments[@]}"; do
     expected_profile_key="${expected_profile_assignment%%=*}"
     expected_profile_value="${expected_profile_assignment#*=}"
@@ -409,6 +434,25 @@ validate_release_profile() {
       ;;
   esac
 
+  media_filesystem_enabled="$(profile_value AC_MEDIA_FILESYSTEM_ENABLED)"
+  case "$media_filesystem_enabled" in
+    true|false) ;;
+    *)
+      printf 'Released environment profile has an invalid filesystem media activation policy.\n' >&2
+      return 1
+      ;;
+  esac
+  media_filesystem_host_root="$(profile_value AC_MEDIA_FILESYSTEM_HOST_ROOT)"
+  media_scanner_host_root="$(profile_value AC_MEDIA_SCANNER_HOST_ROOT)"
+  [[ "$media_filesystem_host_root" == /srv/authority-closers/volumes/media-video/* ]] || {
+    printf 'Released environment profile has an unsafe filesystem media root.\n' >&2
+    return 1
+  }
+  [[ "$media_scanner_host_root" == /srv/authority-closers/volumes/media-safety-socket ]] || {
+    printf 'Released environment profile has an unsafe scanner socket root.\n' >&2
+    return 1
+  }
+
   learner_host="$(profile_value AC_PUBLIC_APP_URL)"
   learner_host="${learner_host#https://}"
   admin_host="$(profile_value AC_ADMIN_APP_URL)"
@@ -419,6 +463,137 @@ validate_release_profile() {
 }
 
 validate_release_profile
+
+filesystem_media_compose_file_for() {
+  local target_release="$1"
+  local target_profile="$target_release/environments/$target_environment.env"
+  local line key value enabled='' target_media_root='' target_scanner_root=''
+  [[ -f "$target_profile" && ! -L "$target_profile" && -r "$target_profile" ]] || {
+    printf 'Target release environment profile is not a readable regular file.\n' >&2
+    return 1
+  }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || {
+      printf 'Target release environment profile has a malformed assignment.\n' >&2
+      return 1
+    }
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ "$key" == AC_MEDIA_FILESYSTEM_ENABLED ]]; then
+      [[ -z "$enabled" ]] || {
+        printf 'Target release environment profile has a duplicate filesystem media policy.\n' >&2
+        return 1
+      }
+      enabled="$value"
+    elif [[ "$key" == AC_MEDIA_FILESYSTEM_HOST_ROOT ]]; then
+      [[ -z "$target_media_root" ]] || {
+        printf 'Target release environment profile has a duplicate filesystem media root.\n' >&2
+        return 1
+      }
+      target_media_root="$value"
+    elif [[ "$key" == AC_MEDIA_SCANNER_HOST_ROOT ]]; then
+      [[ -z "$target_scanner_root" ]] || {
+        printf 'Target release environment profile has a duplicate scanner socket root.\n' >&2
+        return 1
+      }
+      target_scanner_root="$value"
+    fi
+  done < "$target_profile"
+  [[ -n "$enabled" && "$enabled" != true && "$enabled" != false ]] && {
+    printf 'Target release environment profile has an invalid filesystem media activation policy.\n' >&2
+    return 1
+  }
+  local expected_media_root="/srv/authority-closers/volumes/media-video/$target_environment"
+  local expected_scanner_root=/srv/authority-closers/volumes/media-safety-socket
+  [[ -z "$target_media_root" || "$target_media_root" == "$expected_media_root" ]] || {
+    printf 'Target release environment profile has an unexpected filesystem media root.\n' >&2
+    return 1
+  }
+  [[ -z "$target_scanner_root" || "$target_scanner_root" == "$expected_scanner_root" ]] || {
+    printf 'Target release environment profile has an unexpected scanner socket root.\n' >&2
+    return 1
+  }
+  [[ "$enabled" == true ]] || return 0
+  [[ "$target_media_root" == "$expected_media_root" &&
+     "$target_scanner_root" == "$expected_scanner_root" ]] || {
+    printf 'Filesystem media activation requires the exact environment roots.\n' >&2
+    return 1
+  }
+  local override="$target_release/compose.filesystem-media.yaml"
+  [[ -f "$override" && ! -L "$override" && -r "$override" ]] || {
+    printf 'Filesystem media is enabled but its reviewed Compose companion is missing.\n' >&2
+    return 1
+  }
+  printf '%s' "$override"
+}
+
+validate_filesystem_media_activation() {
+  [[ "$media_filesystem_enabled" == true ]] || return 0
+  local scanner_root_mode
+  [[ -f "$release_dir/compose.filesystem-media.yaml" &&
+     ! -L "$release_dir/compose.filesystem-media.yaml" ]] || {
+    printf 'Filesystem media is enabled but its reviewed Compose companion is missing.\n' >&2
+    return 1
+  }
+  [[ -d "$media_filesystem_host_root" && ! -L "$media_filesystem_host_root" ]] || {
+    printf 'Filesystem media host root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root")" == 10001:10001:700 ]] || {
+    printf 'Filesystem media host root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -d "$media_filesystem_host_root/tmp" && ! -L "$media_filesystem_host_root/tmp" ]] || {
+    printf 'Filesystem media temporary directory is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root/tmp")" == 10001:10001:700 ]] || {
+    printf 'Filesystem media temporary directory ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  local avatar_objects_root="$media_filesystem_host_root/avatar-objects"
+  [[ ! -L "$avatar_objects_root" ]] || {
+    printf 'Filesystem avatar host root cannot be a symlink.\n' >&2
+    return 1
+  }
+  if [[ ! -e "$avatar_objects_root" ]]; then
+    install -d -o 10001 -g 10001 -m 700 -- "$avatar_objects_root" || {
+      printf 'Filesystem avatar host root could not be created with canonical ownership.\n' >&2
+      return 1
+    }
+  fi
+  [[ -d "$avatar_objects_root" ]] || {
+    printf 'Filesystem avatar host root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$avatar_objects_root")" == 10001:10001:700 ]] || {
+    printf 'Filesystem avatar host root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -d "$media_scanner_host_root" && ! -L "$media_scanner_host_root" ]] || {
+    printf 'ClamAV scanner socket root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g' -- "$media_scanner_host_root")" == 100:100 ]] || {
+    printf 'ClamAV scanner socket root ownership is not canonical.\n' >&2
+    return 1
+  }
+  scanner_root_mode="$(stat -c '%a' -- "$media_scanner_host_root")"
+  if [[ "$scanner_root_mode" == 2755 ]]; then
+    chmod g-s -- "$media_scanner_host_root"
+  fi
+  [[ "$(stat -c '%u:%g:%a' -- "$media_scanner_host_root")" == 100:100:755 ]] || {
+    printf 'ClamAV scanner socket root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -S "$media_scanner_host_root/clamd.sock" ]] || {
+    printf 'ClamAV scanner socket is not ready at the reviewed environment boundary.\n' >&2
+    return 1
+  }
+}
+
+validate_filesystem_media_activation
 
 with_release_secrets() {
   env \
@@ -533,14 +708,117 @@ python3 "$release_dir/scripts/staging-public-films.py" \
 python3 "$release_dir/scripts/public-films.py" \
   preflight "$release_dir" "$target_environment"
 
+sales_xray_hosted_inputs=()
+
+load_sales_xray_hosted_inputs() {
+  local target_release="$1"
+  local policy="$target_release/capabilities/sales-xray-hosted-$target_environment.json"
+  sales_xray_hosted_inputs=()
+  if [[ ! -e "$policy" && ! -L "$policy" ]]; then
+    return 1
+  fi
+  local validator="$target_release/scripts/sales-xray-hosted.py"
+  [[ -f "$validator" && ! -L "$validator" && -r "$validator" ]] || {
+    printf 'Hosted Sales Xray release validator is unavailable.\n' >&2
+    return 2
+  }
+  local hosted_output=''
+  if ! hosted_output="$(
+    # Infisical supplies the managed operations scope only to this child. Pass
+    # it to the release validator as an explicit bounded argument; never copy
+    # the tenant into a committed release profile or print the secret scope.
+    # shellcheck disable=SC2016
+    with_release_secrets \
+      sh -euc '
+        exec python3 "$1" compose-inputs "$2" "$3" \
+          --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}"
+      ' sh "$validator" "$target_release" "$target_environment"
+  )"; then
+    printf 'Hosted Sales Xray activation policy is invalid or disabled.\n' >&2
+    return 2
+  fi
+  [[ -n "$hosted_output" ]] || return 1
+  mapfile -t sales_xray_hosted_inputs <<< "$hosted_output"
+  [[ "${#sales_xray_hosted_inputs[@]}" -eq 3 ]] || {
+    printf 'Hosted Sales Xray activation policy returned an invalid input contract.\n' >&2
+    return 2
+  }
+  return 0
+}
+
+sales_xray_hosted_enabled() {
+  load_sales_xray_hosted_inputs "$1"
+}
+
+stop_hosted_sales_xray_worker() {
+  local target_release="$1"
+  local hosted_status=0
+  local running_services=''
+  local container_ids=''
+  local container_id=''
+  local container_state=''
+  if sales_xray_hosted_enabled "$target_release"; then
+    # compose.sales-xray-hosted.yaml grants the worker a 16-minute graceful
+    # drain. The core 30-second stop below is only for the ordinary services.
+    compose_for "$target_release" stop --timeout 960 sales-xray-worker || return 1
+    running_services="$(compose_for "$target_release" ps --status running --services)" || return 1
+    case $'\n'"${running_services}"$'\n' in
+      *$'\n'sales-xray-worker$'\n'*)
+        printf 'Hosted Sales Xray worker remained running after its drain timeout.\n' >&2
+        return 1
+        ;;
+    esac
+    container_ids="$(compose_for "$target_release" ps --all --quiet sales-xray-worker)" || return 1
+    while IFS= read -r container_id; do
+      [[ -n "$container_id" ]] || continue
+      [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || {
+        printf 'Hosted Sales Xray worker container identity is invalid.\n' >&2
+        return 1
+      }
+      container_state="$(docker inspect --type container --format '{{.State.Status}} {{.State.ExitCode}}' "$container_id")" || return 1
+      [[ "$container_state" == "exited 0" ]] || {
+        printf 'Hosted Sales Xray worker did not exit cleanly after its drain.\n' >&2
+        return 1
+      }
+    done <<< "$container_ids"
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || return 1
+  fi
+}
+
+stop_application_services_with_hosted_drain() {
+  local target_release="$1"
+  local stop_web="${2:-false}"
+  compose_for "$target_release" stop --timeout 30 api worker || return 1
+  stop_hosted_sales_xray_worker "$target_release" || return 1
+  if [[ "$stop_web" == true ]]; then
+    compose_for "$target_release" stop --timeout 30 learner-web admin-web coach-web || return 1
+  fi
+}
+
 compose_for() {
   local target_release="$1"
   shift
   local fixture_override=''
   local public_film_override=''
-  local -a fixture_compose_files=()
+  local filesystem_override=''
+  local hosted_status=0
+  local -a fixture_compose_files=() hosted_compose_files=() hosted_env_files=() hosted_profiles=()
+  if load_sales_xray_hosted_inputs "$target_release"; then
+    hosted_compose_files=(--file "${sales_xray_hosted_inputs[0]}")
+    hosted_env_files=(--env-file "${sales_xray_hosted_inputs[1]}")
+    hosted_profiles=(--profile "${sales_xray_hosted_inputs[2]}")
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || return 1
+  fi
   # Resolve the target release's policy on every call, including rollback.
   # Old releases without a policy remain off; production never merges it.
+  filesystem_override="$(filesystem_media_compose_file_for "$target_release")" || return 1
+  if [[ -n "$filesystem_override" ]]; then
+    fixture_compose_files+=(--file "$filesystem_override")
+  fi
   if [[ "$target_environment" == staging && (
     -e "$target_release/capabilities/staging-public-films.json" ||
     -L "$target_release/capabilities/staging-public-films.json"
@@ -551,14 +829,18 @@ compose_for() {
       fixture_compose_files=(--file "$fixture_override")
     fi
   fi
+  if [[ -n "$fixture_override" && -n "$filesystem_override" ]]; then
+    printf 'Filesystem media and staging public-film delivery cannot be enabled together.\n' >&2
+    return 1
+  fi
   # Select the rollback target's own immutable policy, never the current flag.
   if [[ -e "$target_release/capabilities/public-films.json" ||
         -L "$target_release/capabilities/public-films.json" ]]; then
     public_film_override="$(python3 "$release_dir/scripts/public-films.py" \
       compose-file "$target_release" "$target_environment")" || return 1
     if [[ -n "$public_film_override" ]]; then
-      if [[ -n "$fixture_override" ]]; then
-        printf 'Legacy staging and public-film delivery cannot be enabled together.\n' >&2
+      if [[ -n "$fixture_override" || -n "$filesystem_override" ]]; then
+        printf 'Filesystem media and public-film delivery cannot be enabled together.\n' >&2
         return 1
       fi
       fixture_compose_files=(--file "$public_film_override")
@@ -576,6 +858,7 @@ compose_for() {
         -u AC_ENVIRONMENT \
         -u AC_STATE_ROOT \
         -u AC_PUBLIC_APP_URL \
+        -u AC_SALES_XRAY_APP_URL \
         -u AC_ADMIN_APP_URL \
         -u AC_COACH_APP_URL \
         -u AC_API_URL \
@@ -598,18 +881,46 @@ compose_for() {
         -u AC_LEARNER_IMAGE \
         -u AC_ADMIN_IMAGE \
         -u AC_COACH_IMAGE \
+        -u AC_XRAY_SERVICE_CONFIG \
+        -u AC_XRAY_SERVICE_SHA256 \
+        -u AC_XRAY_APPROVAL_FILE \
+        -u AC_XRAY_APPROVAL_SHA256 \
+        -u AC_XRAY_DATABASE_URL_FILE \
+        -u AC_XRAY_STORAGE_ROOT \
+        -u AC_XRAY_SCRATCH_ROOT \
+        -u AC_XRAY_NATIVE_SOCKET_DIR \
+        -u AC_XRAY_ELEVENLABS_IDENTITY_DIR \
+        -u AC_XRAY_GROQ_IDENTITY_DIR \
+        -u AC_XRAY_GEMINI_IDENTITY_DIR \
+        -u AC_XRAY_CHALLENGE_SECRET_FILE \
+        -u AC_XRAY_CHALLENGE_SITE_KEY \
+        -u AC_XRAY_ACQUISITION_ENABLED \
+        -u AC_XRAY_ACQUISITION_POLICY_REVISION \
+        -u AC_XRAY_NATIVE_IMAGE_REF \
+        -u AC_XRAY_INFISICAL_BINARY \
         -u AC_MEDIA_PROVIDER_ENABLED \
         -u AC_MEDIA_STRESS_FIXTURES_ENABLED \
         -u AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT \
         -u AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED \
         -u AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED \
         -u AC_MEDIA_PUBLIC_FILMS_ROOT \
+        -u AC_MEDIA_FILESYSTEM_ENABLED \
+        -u AC_MEDIA_FILESYSTEM_ROOT \
+        -u AC_MEDIA_FILESYSTEM_AVATAR_ROOT \
+        -u AC_MEDIA_SCANNER_UNIX_SOCKET \
+        -u AC_MEDIA_SCANNER_HOST \
+        -u AC_MEDIA_MAX_UPLOAD_BYTES \
+        -u AC_MEDIA_FILESYSTEM_HOST_ROOT \
+        -u AC_MEDIA_SCANNER_HOST_ROOT \
     docker compose \
       --project-name "$compose_project" \
       --env-file "$target_release/environments/$target_environment.env" \
       --env-file "$target_release/release-images.env" \
+      "${hosted_env_files[@]}" \
       --file "$target_release/compose.yaml" \
       "${fixture_compose_files[@]}" \
+      "${hosted_compose_files[@]}" \
+      "${hosted_profiles[@]}" \
       "$@"
 }
 
@@ -1047,18 +1358,24 @@ rollback_release() {
     # behind with a valid-looking immutable backup name.
     rm -- "$backup_file" || rollback_failed=1
   fi
-  compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web coach-web \
-    >/dev/null 2>&1 || rollback_failed=1
-  if [[ "$database_mutation_started" == 1 ]]; then
-    if set_database_writer_access fence; then
-      rollback_fenced=1
-    else
-      rollback_failed=1
-    fi
+  if [[ "$rollback_failed" == 0 ]] &&
+    stop_application_services_with_hosted_drain "$release_dir" true; then
+    :
   else
-    rollback_fenced=1
+    rollback_failed=1
   fi
-  if [[ "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
+  if [[ "$rollback_failed" == 0 ]]; then
+    if [[ "$database_mutation_started" == 1 ]]; then
+      if set_database_writer_access fence; then
+        rollback_fenced=1
+      else
+        rollback_failed=1
+      fi
+    else
+      rollback_fenced=1
+    fi
+  fi
+  if [[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
     # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
     if ! compose_for "$release_dir" exec -T postgres sh -euc '
       export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -1109,13 +1426,13 @@ contain_forward_recovery() {
   else
     containment_failed=1
   fi
-  if compose_for "$release_dir" stop --timeout 30 \
-    api worker learner-web admin-web coach-web; then
+  if [[ "$containment_failed" == 0 ]] &&
+    stop_application_services_with_hosted_drain "$release_dir" true; then
     forward_recovery_services_stopped=true
   else
     containment_failed=1
   fi
-  if set_database_writer_access fence; then
+  if [[ "$containment_failed" == 0 ]] && set_database_writer_access fence; then
     forward_recovery_writers_fenced=true
   else
     containment_failed=1
@@ -1180,7 +1497,10 @@ writer_release="$release_dir"
 if [[ -n "$previous_release" ]]; then
   writer_release="$previous_release"
 fi
-compose_for "$writer_release" stop --timeout 30 api worker
+stop_application_services_with_hosted_drain "$writer_release" false || {
+ printf 'Previous release hosted Sales Xray worker did not drain safely.\n' >&2
+ exit 1
+}
 database_mutation_started=1
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
 set_database_writer_access fence
@@ -1208,6 +1528,8 @@ attempt_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-prepared-$
   printf 'AC_STATUS=PREPARED_BEFORE_WRITE_EXPOSURE\n'
   printf 'AC_ENVIRONMENT=%s\n' "$target_environment"
   printf 'AC_RELEASE_ID=%s\n' "$release_id"
+  printf 'AC_MEDIA_FILESYSTEM_ENABLED=%s\n' "$media_filesystem_enabled"
+  printf 'AC_MEDIA_FILESYSTEM_HOST_ROOT=%s\n' "$media_filesystem_host_root"
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
   printf 'AC_PREVIOUS_EDGE_ROUTE=%s\n' "$previous_edge_route_target"
   printf 'AC_TARGET_EDGE_ROUTE=%s\n' "$edge_route_source"
@@ -1241,7 +1563,17 @@ check_route "$admin_host" /login 200 "admin-$target_environment"
 check_route "$coach_host" / 307 "coach-$target_environment" /login
 check_route "$coach_host" /login 200 "coach-$target_environment"
 check_route "$api_host" /health/ready 200 "api-$target_environment"
-compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 worker
+runtime_workers=(worker)
+if sales_xray_hosted_enabled "$release_dir"; then
+  runtime_workers+=(sales-xray-worker)
+else
+  hosted_status=$?
+  [[ "$hosted_status" -eq 1 ]] || {
+    printf 'Candidate release hosted Sales Xray activation policy is invalid.\n' >&2
+    exit 1
+  }
+fi
+compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 "${runtime_workers[@]}"
 
 evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"
 evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-${evidence_tmp##*.}.env"
@@ -1249,6 +1581,8 @@ evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-${evidenc
   printf 'AC_ENVIRONMENT=%s\n' "$target_environment"
   printf 'AC_STATUS=COMMITTED\n'
   printf 'AC_RELEASE_ID=%s\n' "$release_id"
+  printf 'AC_MEDIA_FILESYSTEM_ENABLED=%s\n' "$media_filesystem_enabled"
+  printf 'AC_MEDIA_FILESYSTEM_HOST_ROOT=%s\n' "$media_filesystem_host_root"
   printf 'AC_PREPARED_EVIDENCE=%s\n' "$attempt_file"
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
   printf 'AC_PRE_MIGRATION_BACKUP=%s\n' "$backup_file"

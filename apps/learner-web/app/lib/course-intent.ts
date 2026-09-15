@@ -13,7 +13,11 @@ type CourseIntentRoute =
   | typeof ROUTES.register
   | typeof ROUTES.learnerHome
   | typeof ROUTES.onboarding
-  | typeof ROUTES.sessionExpired;
+  | typeof ROUTES.sessionExpired
+  | typeof ROUTES.forgotPassword
+  | typeof ROUTES.verifyEmail
+  | typeof ROUTES.resetPassword
+  | typeof ROUTES.consentRenewal;
 
 export function courseIntentHref(
   route: CourseIntentRoute,

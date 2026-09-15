@@ -28,6 +28,7 @@ jobs:
       WEB_TAG: ghcr.io/authorityclosers/ac-sales-xray-web:${{ inputs.frozen_sha }}
       MAX_IMAGE_BYTES: "440000000"
       MAX_ARTIFACT_BYTES: "450000000"
+      AC_RELEASE_ARTIFACT_POOL_BYTES: ${{ vars.AC_RELEASE_ARTIFACT_POOL_BYTES || '1000000000' }}
     steps:
       - name: Validate the manually supplied source commit
         shell: bash
@@ -125,6 +126,17 @@ jobs:
             docker logs "$container_id" >&2 || true
             exit 1
           }
+          docker exec "$container_id" node -e '
+            (async () => {
+              const fs = require("node:fs/promises");
+              const asset = "/media/dipak-learning-hero-v1.webp";
+              const response = await fetch("http://127.0.0.1:3016" + asset);
+              if (response.status !== 200 || !response.headers.get("content-type")?.includes("image/webp")) process.exit(1);
+              const served = Buffer.from(await response.arrayBuffer());
+              const bundled = await fs.readFile("/app/apps/sales-xray-web/public" + asset);
+              if (served.length === 0 || !served.equals(bundled)) process.exit(1);
+            })().catch(() => process.exit(1));
+          '
 
       - name: Create and reload the minimal offline web image artifact
         shell: bash
@@ -324,7 +336,7 @@ jobs:
           set -euo pipefail
           artifact_dir="$RUNNER_TEMP/ac-sales-xray-web-${FROZEN_SHA}"
           max_artifact_bytes=450000000
-          max_artifact_pool_bytes=450000000
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
           if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
             printf 'Web image artifact is %s bytes; refusing upload above %s bytes.\n' \

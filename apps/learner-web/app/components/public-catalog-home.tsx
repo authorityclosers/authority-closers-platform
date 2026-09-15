@@ -137,6 +137,13 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
             >
               Sign in
             </Link>
+            <Link
+              className="ac-public-button ac-public-button--secondary"
+              href={ROUTES.salesXray}
+              prefetch={false}
+            >
+              Explore Sales Xray
+            </Link>
           </div>
           <div className="ac-public-proof" aria-label="Product principles">
             <span>

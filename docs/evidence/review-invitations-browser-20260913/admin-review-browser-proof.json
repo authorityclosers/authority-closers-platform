@@ -1,0 +1,41 @@
+{
+  "status": "passed",
+  "origin": "http://127.0.0.1:3101",
+  "frontend": "Next development server with local preview enabled",
+  "transport": "Browser route forwards API requests to actual loopback HTTP server",
+  "create_status": 201,
+  "invitation": {
+    "create_status": 201,
+    "revoke_after_reload_status": 200
+  },
+  "revoke_status": 200,
+  "reloaded_state": "revoked",
+  "viewports": [
+    {
+      "width": 390,
+      "horizontal_overflow": false
+    },
+    {
+      "width": 320,
+      "horizontal_overflow": false
+    }
+  ],
+  "page_errors": [],
+  "database_submission_count": 0,
+  "backend_commit": "bf221c4a09541178871a47fe670be34dd14b4102",
+  "invitation_mode": true,
+  "authentication": "synthetic canonical actor fixture; session resolver not under test",
+  "api": "real installed review HTTP router and PostgreSQL service",
+  "frontend_source_sha256": {
+    "apps/admin-web/app/components/admin-shell.tsx": "91dbef87b9c1a8e390b253166c493b7f3df4bd73f5998d1c0d7d5d4ada0a1e42",
+    "apps/admin-web/app/sales-xray/review/[assignmentId]/page.tsx": "3bb514e2f7b924ba11572c0f2018dbc57f2b0c0f0f737bf72b866dad08c3ca10",
+    "apps/admin-web/app/sales-xray/review/page.tsx": "14f5e7e725f1e2e785cecc20cc779dc29c405cf448f7d5779568c77a12937121",
+    "apps/admin-web/app/sales-xray/review/review-api.ts": "806384087a035a83250b02b2ab7a76a6d321a6822dcd53938aede162d1ed2034",
+    "apps/admin-web/app/sales-xray/review/review-invitation-api.ts": "6a3cdcec27f02ee1c6d60c8f83aae411214d007d67fee5109983cffc04501ba4",
+    "apps/admin-web/app/sales-xray/review/review-invitation-panel.module.css": "447422c856ca0c3c08f33397f9ae6f0d44a7492dcb984b8d01920418784bf316",
+    "apps/admin-web/app/sales-xray/review/review-invitation-panel.tsx": "74e67072526b182a2a26742af1dd5fe0dff33fe4b3fbf8e74430a17b8f96f227",
+    "apps/admin-web/app/sales-xray/review/review-workspace.module.css": "097f7eead6d42f6a6777bea6f28d4679f9d0224b3ae8c539e68f137303b19770",
+    "apps/admin-web/app/sales-xray/review/review-workspace.tsx": "d6f7443342417c11fda23db70d2c3b895535db16bd0a0552d2ddf7ec94091d72"
+  },
+  "frontend_source_hash_encoding": "UTF-8 with LF line endings"
+}

@@ -1,0 +1,69 @@
+.visual {
+  display: block;
+  width: min(100%, 920px);
+  color: #258a84;
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: clamp(150px, 14vw, 190px);
+}
+
+.baseline {
+  stroke: color-mix(in srgb, currentColor 16%, transparent);
+  stroke-width: 1;
+}
+
+.bar {
+  fill: currentColor;
+  opacity: 0.28;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 2.8s ease-in-out infinite;
+}
+
+.bar:nth-of-type(6n + 1) {
+  opacity: 0.42;
+}
+
+.bar:nth-of-type(5n + 2) {
+  opacity: 0.7;
+}
+
+.dot {
+  fill: currentColor;
+  opacity: 0.3;
+}
+
+.visual[data-paused="true"] {
+  color: #58726f;
+}
+
+.visual[data-paused="true"] .bar {
+  animation-play-state: paused;
+  opacity: 0.38;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scaleY(0.84);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .art {
+    height: 96px;
+  }
+}

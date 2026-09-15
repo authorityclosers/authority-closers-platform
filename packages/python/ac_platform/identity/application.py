@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
-from ac_platform.identity.models import DeletionRequestStatus, PersonStatus
+from ac_platform.identity.models import DeletionRequestStatus, PersonStatus, SessionAudience
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
 from ac_platform.identity.services import (
     AccountUnavailableError,
@@ -251,6 +251,7 @@ class AsyncIdentityApplication:
             revocation_reason=session.revocation_reason,
             user_agent=session.user_agent,
             ip_address=session.ip_address,
+            audience=session.audience,
             selected_tenant_id=session.selected_tenant_id,
             revision=session.revision,
         )
@@ -284,6 +285,7 @@ class AsyncIdentityApplication:
         token: str,
         *,
         current_time: datetime,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
     ) -> tuple[PersonSnapshot, StoredSession]:
         token_hash = self._token_hash(token)
         candidate = await self._repository.find_session_by_token_hash(token_hash)
@@ -297,6 +299,11 @@ class AsyncIdentityApplication:
             session is None
             or session.person_id != person.id
             or not hmac.compare_digest(session.token_hash, token_hash)
+            or session.audience != expected_audience.value
+            or (
+                expected_audience is SessionAudience.REVIEWER
+                and session.selected_tenant_id is not None
+            )
         ):
             raise InvalidSessionTokenError("session token is invalid")
         self._validate_session_state(session, current_time)
@@ -308,6 +315,7 @@ class AsyncIdentityApplication:
         target_session_id: UUID,
         *,
         current_time: datetime,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
     ) -> tuple[PersonSnapshot, StoredSession, StoredSession]:
         """Lock actor and target sessions in one deterministic session-id order."""
 
@@ -327,6 +335,11 @@ class AsyncIdentityApplication:
             actor_session is None
             or actor_session.person_id != person.id
             or not hmac.compare_digest(actor_session.token_hash, token_hash)
+            or actor_session.audience != expected_audience.value
+            or (
+                expected_audience is SessionAudience.REVIEWER
+                and actor_session.selected_tenant_id is not None
+            )
         ):
             raise InvalidSessionTokenError("session token is invalid")
         self._validate_session_state(actor_session, current_time)
@@ -389,6 +402,7 @@ class AsyncIdentityApplication:
         token: str,
         *,
         require_tenant: bool = False,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
         now: datetime | None = None,
     ) -> ResolvedActorContext:
         """Resolve and lock the complete server-owned actor for this transaction."""
@@ -398,6 +412,7 @@ class AsyncIdentityApplication:
         person, session = await self._lock_authenticated_session(
             token,
             current_time=current_time,
+            expected_audience=expected_audience,
         )
         tenant: Tenant | None = None
         membership: Membership | None = None
@@ -456,6 +471,7 @@ class AsyncIdentityApplication:
         token: str,
         session_id: UUID,
         *,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
         reason: str | None = None,
         now: datetime | None = None,
     ) -> SessionMetadata:
@@ -467,6 +483,7 @@ class AsyncIdentityApplication:
             token,
             session_id,
             current_time=current_time,
+            expected_audience=expected_audience,
         )
         if target.revoked_at is not None:
             return self._metadata(target)
@@ -486,9 +503,14 @@ class AsyncIdentityApplication:
         current_time: datetime,
         user_agent: str | None,
         ip_address: str | None,
+        audience: SessionAudience = SessionAudience.ACCOUNT,
     ) -> IssuedSession:
         token = secrets.token_urlsafe(self._token_length_bytes)
-        selected_tenant_id = await self._repository.get_sole_active_tenant_id(person.id)
+        selected_tenant_id = (
+            None
+            if audience is SessionAudience.REVIEWER
+            else await self._repository.get_sole_active_tenant_id(person.id)
+        )
         stored = StoredSession(
             id=uuid4(),
             person_id=person.id,
@@ -497,6 +519,7 @@ class AsyncIdentityApplication:
             expires_at=current_time + self._session_ttl,
             user_agent=_optional_text(user_agent, "user_agent", 512),
             ip_address=_optional_text(ip_address, "ip_address", 64),
+            audience=audience.value,
             selected_tenant_id=selected_tenant_id,
         )
         await self._repository.save_session(stored)
@@ -520,6 +543,27 @@ class AsyncIdentityApplication:
             current_time=current_time,
             user_agent=user_agent,
             ip_address=ip_address,
+        )
+
+    async def issue_reviewer_session(
+        self,
+        person_id: UUID,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+        now: datetime | None = None,
+    ) -> IssuedSession:
+        """Issue an unscoped session for a separately admitted reviewer surface."""
+
+        self._require_transaction()
+        current_time = _now(now)
+        person = await self._lock_person(person_id, require_active=True, require_email=True)
+        return await self._issue_session(
+            person,
+            current_time=current_time,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            audience=SessionAudience.REVIEWER,
         )
 
     async def _validate_authorization_transaction(

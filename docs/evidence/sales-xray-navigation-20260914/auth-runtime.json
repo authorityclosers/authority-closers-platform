@@ -1,0 +1,14 @@
+{
+  "source_commit": "cb886effe8f6d21c5fbe1e645d625adeca4d3107",
+  "runtime": "static export served by actual loopback AC HTTP/PG fixture",
+  "static_manifest_algorithm": "SHA256 of canonical JSON list of relative path and file SHA256, sorted by path",
+  "static_manifest_sha256": "6aa95fb1d605b674694c82ced225ae89f0e5371e466c4f5e350e9f93e35c08ef",
+  "static_files": 33,
+  "tests": 3,
+  "duration_seconds": 103.33,
+  "provider_execution": false,
+  "earlier_attempts": [
+    "default fixture storage path rejected before browser setup",
+    "fresh checkout lacked already-built native artifact; restored with verified source/binary receipt"
+  ]
+}

@@ -164,8 +164,8 @@ describe("bounded free-course navigation intent", () => {
       expect(html).not.toContain("consent=true");
     },
   );
-  it("keeps consent-update recovery with support and rejects inherited result names", async () => {
-    const support = renderToStaticMarkup(
+  it("keeps consent-update recovery on the authenticated renewal flow and rejects inherited result names", async () => {
+    const recovery = renderToStaticMarkup(
       await CallbackPage({
         searchParams: Promise.resolve({
           result: "consent_update_required",
@@ -173,8 +173,10 @@ describe("bounded free-course navigation intent", () => {
         }),
       }),
     );
-    expect(support).toContain("mailto:admin@authorityclosers.com");
-    expect(support).not.toContain('href="/register');
+    expect(recovery).toContain(
+      'href="/consent/renewal?course=authority-closers-free-course"',
+    );
+    expect(recovery).not.toContain('href="/register');
     for (const result of ["constructor", "__proto__"]) {
       const html = renderToStaticMarkup(
         await CallbackPage({

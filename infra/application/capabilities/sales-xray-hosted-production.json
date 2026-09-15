@@ -1,0 +1,8 @@
+{
+  "schema_version": "ac.sales_xray.hosted_policy/1",
+  "environment": "production",
+  "enabled": true,
+  "activation_file_template": "/etc/authority-closers/sales-xray/{environment}/activation-{release_id}.json",
+  "activation_sha256_file_template": "/etc/authority-closers/sales-xray/{environment}/activation-{release_id}.json.sha256",
+  "previous_release_policy": "exact_target_release"
+}

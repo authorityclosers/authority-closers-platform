@@ -17,6 +17,7 @@ from ac_platform.identity.models import (
     PersonStatus,
 )
 from ac_platform.identity.password_auth import encrypt_challenge_token
+from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import (
     Job,
     JobStatus,
@@ -37,9 +38,19 @@ from ac_platform.worker import (
     ENROLLMENT_WELCOME_JOB,
     OUTBOX_JOB_ROUTES,
     PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_RESET_JOB,
+    PASSWORD_EMAIL_RESET_JOB_V2,
+    PASSWORD_EMAIL_RESET_JOB_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_JOB,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+    REVIEW_INVITATION_EVENT,
+    REVIEW_INVITATION_JOB,
     AllowlistedDispatcher,
     AmbiguousProviderReceiptError,
     DurableWorker,
@@ -177,6 +188,12 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         ENROLLMENT_WELCOME_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
         PASSWORD_EMAIL_RESET_EVENT,
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+        PASSWORD_EMAIL_RESET_EVENT_V2,
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
+        REVIEW_INVITATION_EVENT,
+        REVIEWER_AUTH_EVENT,
+        PASSWORD_EMAIL_RESET_EVENT_V3,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert ENROLLMENT_WELCOME_JOB != "email.send"
@@ -188,6 +205,14 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PASSWORD_EMAIL_VERIFICATION_JOB
     )
     assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT].job_kind == PASSWORD_EMAIL_RESET_JOB
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_VERIFICATION_EVENT_V2].job_kind == (
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2
+    )
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V2].job_kind == PASSWORD_EMAIL_RESET_JOB_V2
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_VERIFICATION_EVENT_V3].job_kind == (
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3
+    )
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V3].job_kind == PASSWORD_EMAIL_RESET_JOB_V3
     assert all(route.job_kind != "email.send" for route in OUTBOX_JOB_ROUTES.values())
 
 
@@ -238,6 +263,135 @@ async def test_password_email_link_uses_fragment_and_never_exposes_token_in_requ
     assert "?token=" not in str(message.variables["action_link"])
     challenge_query = session.scalar.await_args_list[0].args[0]
     assert "email_challenges.expires_at > now()" in str(challenge_query)
+
+
+async def test_password_email_context_stays_before_fragment_and_is_worker_validated() -> None:
+    settings = _settings()
+    person = Person(
+        id=uuid4(),
+        email="learner@example.test",
+        first_name="Learner",
+        display_name="Learner",
+        status=PersonStatus.ACTIVE.value,
+    )
+    token = "r" * 43
+    challenge = EmailChallenge(
+        id=uuid4(),
+        person_id=person.id,
+        kind=EmailChallengeKind.PASSWORD_RESET.value,
+        token_hash=b"x" * 32,
+        encrypted_token=encrypt_challenge_token(
+            settings.email_challenge_secret.get_secret_value(),
+            token,
+            kind=EmailChallengeKind.PASSWORD_RESET,
+            person_id=person.id,
+        ),
+        issued_at=datetime(2026, 8, 30, 12, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+    )
+    activity = "86f7efee-f504-4d6f-b4bc-9b3cb84ba2be"
+    job = _job(PASSWORD_EMAIL_RESET_JOB_V2)
+    job.payload = {
+        "challenge_id": str(challenge.id),
+        "kind": EmailChallengeKind.PASSWORD_RESET.value,
+        "course": "authority-closers-free-course",
+        "activity": activity,
+    }
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.side_effect = [challenge, person]
+    worker = DurableWorker(_factory(session), settings=settings)
+
+    message = await worker._resolve_message(
+        session,
+        job,
+        provider_key="identity-email:test-context",
+    )
+
+    link = str(message.variables["action_link"])
+    assert link == (
+        "https://learner.example.test/reset-password?"
+        f"course=authority-closers-free-course&activity={activity}#token={token}"
+    )
+    assert "token=" not in link.split("#", 1)[0]
+    assert (
+        OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V2].normalize_payload(job.payload)["activity"]
+        == activity
+    )
+
+
+async def test_password_email_course_only_context_stays_before_fragment() -> None:
+    settings = _settings()
+    person = Person(
+        id=uuid4(),
+        email="learner@example.test",
+        first_name="Learner",
+        display_name="Learner",
+        status=PersonStatus.ACTIVE.value,
+    )
+    token = "c" * 43
+    challenge = EmailChallenge(
+        id=uuid4(),
+        person_id=person.id,
+        kind=EmailChallengeKind.VERIFICATION.value,
+        token_hash=b"x" * 32,
+        encrypted_token=encrypt_challenge_token(
+            settings.email_challenge_secret.get_secret_value(),
+            token,
+            kind=EmailChallengeKind.VERIFICATION,
+            person_id=person.id,
+        ),
+        issued_at=datetime(2026, 8, 30, 12, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+    )
+    job = _job(PASSWORD_EMAIL_VERIFICATION_JOB_V2)
+    job.payload = {
+        "challenge_id": str(challenge.id),
+        "kind": EmailChallengeKind.VERIFICATION.value,
+        "course": "authority-closers-free-course",
+    }
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.side_effect = [challenge, person]
+    worker = DurableWorker(_factory(session), settings=settings)
+
+    message = await worker._resolve_message(
+        session,
+        job,
+        provider_key="identity-email:test-course-only",
+    )
+
+    link = str(message.variables["action_link"])
+    assert link == (
+        "https://learner.example.test/verify-email?"
+        "course=authority-closers-free-course#token=" + token
+    )
+    assert "activity=" not in link
+    assert "token=" not in link.split("#", 1)[0]
+
+
+def test_password_email_context_route_rejects_schema_drift() -> None:
+    route = OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_VERIFICATION_EVENT_V2]
+    payload = {
+        "challenge_id": str(uuid4()),
+        "kind": EmailChallengeKind.VERIFICATION.value,
+        "course": "authority-closers-free-course",
+        "activity": "86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+    }
+
+    with pytest.raises(ValueError):
+        route.normalize_payload({**payload, "return_path": "/unsafe"})
+    with pytest.raises(ValueError):
+        route.normalize_payload({**payload, "course": "https://evil.example"})
+
+    course_only = {key: value for key, value in payload.items() if key != "activity"}
+    assert route.normalize_payload(course_only) == course_only
+    with pytest.raises(ValueError):
+        route.normalize_payload(
+            {
+                "challenge_id": str(uuid4()),
+                "kind": EmailChallengeKind.VERIFICATION.value,
+                "activity": payload["activity"],
+            }
+        )
 
 
 @pytest.mark.parametrize(
@@ -581,6 +735,10 @@ async def test_recovery_fence_before_provider_call_does_not_mark_delivery_ambigu
         ENROLLMENT_WELCOME_JOB,
         PASSWORD_EMAIL_VERIFICATION_JOB,
         PASSWORD_EMAIL_RESET_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+        PASSWORD_EMAIL_RESET_JOB_V2,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+        PASSWORD_EMAIL_RESET_JOB_V3,
     ],
 )
 async def test_durable_receipt_skips_provider_redispatch(job_kind: str) -> None:
@@ -624,6 +782,12 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             ENROLLMENT_WELCOME_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+            PASSWORD_EMAIL_RESET_JOB_V2,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            REVIEW_INVITATION_JOB,
+            REVIEWER_AUTH_JOB,
+            PASSWORD_EMAIL_RESET_JOB_V3,
         }
     )
     with pytest.raises(PermanentProviderError, match="injected API key"):

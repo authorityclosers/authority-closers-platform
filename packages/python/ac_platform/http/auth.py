@@ -9,19 +9,20 @@ import json
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal, cast
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
@@ -42,7 +43,7 @@ from ac_platform.identity.application import (
     AsyncIdentityApplication,
     ResolvedActorContext,
 )
-from ac_platform.identity.models import IdentityCommandIdempotency
+from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
     OnboardingConcurrencyError,
@@ -52,7 +53,11 @@ from ac_platform.identity.onboarding import (
 )
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     EmailVerificationRequired,
     InvalidEmailChallenge,
     InvalidPasswordCredentials,
@@ -159,6 +164,24 @@ class AdminSurfaceRequired(DomainError):
     status = 403
 
 
+class LearnerConsentRenewalUnavailable(DomainError):
+    code = "learner_consent_renewal_unavailable"
+    title = "Learner consent renewal is unavailable"
+    status = 503
+
+
+class LearnerConsentRenewalDenied(DomainError):
+    code = "learner_consent_renewal_denied"
+    title = "Learner consent renewal is not available"
+    status = 403
+
+
+class LearnerConsentVersionConflict(DomainError):
+    code = "learner_consent_version_conflict"
+    title = "The learner consent document changed"
+    status = 409
+
+
 @dataclass(slots=True)
 class AuthenticatedTransaction:
     database: AsyncSession
@@ -180,6 +203,49 @@ class MeResponse(BaseModel):
     selected_tenant_id: UUID | None
     membership_role: str | None
     permissions: list[str]
+
+
+class LearnerConsentDocumentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: str
+    acknowledgement: str
+    terms_path: str = "/terms"
+    privacy_path: str = "/privacy"
+
+
+class LearnerConsentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["current", "renewal_required", "consent_required"]
+    current_version: str
+    recorded_version: str | None
+    consented_at: datetime | None
+    document: LearnerConsentDocumentResponse
+    replayed: bool = False
+
+
+class LearnerConsentRenewalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: Literal[True]
+    expected_version: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_json_true(cls, value: object) -> object:
+        # Pydantic's Literal[True] accepts the integer 1.  The wire contract
+        # is an explicit JSON boolean so numeric/string coercion cannot turn
+        # an unintended payload into a consent decision.
+        if not isinstance(value, Mapping) or value.get("accepted") is not True:
+            raise ValueError("accepted must be the JSON boolean true")
+        return value
+
+
+class GoogleLinkResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    linked: bool
 
 
 class WorkspaceChoiceResponse(BaseModel):
@@ -243,6 +309,15 @@ class PasswordRegistrationRequest(BaseModel):
     password: str = Field(min_length=12, max_length=256)
     consent: Literal[True]
     consent_version: str | None = Field(default=None, min_length=1, max_length=64)
+    course: Literal["authority-closers-free-course"] | None = None
+    activity: UUID | None = None
+    next: Literal["/sales-xray"] | None = None
+
+    @model_validator(mode="after")
+    def validate_navigation_context(self) -> PasswordRegistrationRequest:
+        if self.course is None and self.activity is not None:
+            raise ValueError("activity requires an allowlisted course")
+        return self
 
 
 class PasswordLoginRequest(BaseModel):
@@ -256,6 +331,15 @@ class PasswordRecoveryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=3, max_length=320)
+    course: Literal["authority-closers-free-course"] | None = None
+    activity: UUID | None = None
+    next: Literal["/sales-xray"] | None = None
+
+    @model_validator(mode="after")
+    def validate_navigation_context(self) -> PasswordRecoveryRequest:
+        if self.course is None and self.activity is not None:
+            raise ValueError("activity requires an allowlisted course")
+        return self
 
 
 class PasswordResetRequest(BaseModel):
@@ -329,6 +413,55 @@ class PasswordRequestInvalid(DomainError):
     code = "password_request_invalid"
     title = "The password request is invalid"
     status = 422
+
+
+def _password_email_event(
+    *,
+    challenge_id: UUID,
+    person_id: UUID,
+    kind: str,
+    course: str | None = None,
+    activity: UUID | None = None,
+    next: str | None = None,
+) -> EventEnvelope:
+    event_names = {
+        "email_verification": (
+            PASSWORD_EMAIL_VERIFICATION_EVENT,
+            PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+            PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
+        ),
+        "password_reset": (
+            PASSWORD_EMAIL_RESET_EVENT,
+            PASSWORD_EMAIL_RESET_EVENT_V2,
+            PASSWORD_EMAIL_RESET_EVENT_V3,
+        ),
+    }.get(kind)
+    if event_names is None:
+        raise PasswordRequestInvalid("unsupported email challenge kind")
+    if course is None and activity is not None:
+        raise PasswordRequestInvalid("activity requires an allowlisted course")
+    if course is not None and course != "authority-closers-free-course":
+        raise PasswordRequestInvalid("course is not allowlisted")
+    if next is not None and next != "/sales-xray":
+        raise PasswordRequestInvalid("next is not allowlisted")
+    payload: dict[str, str] = {"challenge_id": str(challenge_id), "kind": kind}
+    event_name = event_names[0]
+    if course is not None:
+        event_name = event_names[1]
+        payload["course"] = course
+        if activity is not None:
+            payload["activity"] = str(activity).lower()
+    elif next is not None:
+        event_name = event_names[2]
+        payload["next"] = next
+    return EventEnvelope(
+        name=event_name,
+        category=EventCategory.OPERATIONAL,
+        aggregate_type="person",
+        aggregate_id=person_id,
+        tenant_id=None,
+        payload=payload,
+    )
 
 
 class PasswordRegistrationUnavailable(DomainError):
@@ -688,10 +821,18 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
     coach_origin = str(settings.coach_app_url).rstrip("/")
+    sales_origin = (
+        str(settings.sales_xray_app_url).rstrip("/")
+        if settings.sales_xray_app_url is not None
+        else None
+    )
+    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
     if (
         settings.environment not in {"staging", "production"}
         and request.url.hostname != settings.coach_app_url.host
         and normalized_origin != coach_origin
+        and request.url.hostname != sales_host
+        and normalized_origin != sales_origin
     ):
         return
 
@@ -702,6 +843,8 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
         expected_origin = str(settings.admin_app_url).rstrip("/")
     elif request.url.hostname == settings.coach_app_url.host:
         expected_origin = coach_origin
+    elif sales_host is not None and request.url.hostname == sales_host:
+        expected_origin = sales_origin
     if normalized_origin != expected_origin:
         raise RequestOriginDenied(
             "Cookie-authenticated state changes require a same-surface Origin."
@@ -1088,6 +1231,8 @@ def _surface_origin(settings: Settings, surface: str) -> str:
         "admin": settings.admin_app_url,
         "coach": settings.coach_app_url,
     }
+    if settings.sales_xray_app_url is not None:
+        values["sales_xray"] = settings.sales_xray_app_url
     if surface not in values:
         raise InvalidAuthTransaction("The requested application surface is not allowed.")
     value = values[surface]
@@ -1103,6 +1248,7 @@ _LEARNER_COURSE_INTENT = "authority-closers-free-course"
 _LEARNER_COURSE_RETURN_PATHS = frozenset(
     f"{path}?course={_LEARNER_COURSE_INTENT}" for path in ("/home", "/onboarding")
 )
+_LEARNER_SALES_RETURN_PATH = "/onboarding?next=/sales-xray"
 _LEARNER_ACTIVITY_RETURN_PATH = re.compile(
     r"/onboarding\?(?:course=(?P<course>authority-closers-free-course)&)?"
     r"activity=(?P<activity>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
@@ -1123,6 +1269,8 @@ def _learner_oauth_recovery_response(
     transaction_return_path: str | None = None,
 ) -> Response:
     parameters: dict[str, str] = {"result": result}
+    if transaction_return_path == _LEARNER_SALES_RETURN_PATH:
+        parameters["next"] = "/sales-xray"
     if transaction_return_path in _LEARNER_COURSE_RETURN_PATHS:
         parameters["course"] = _LEARNER_COURSE_INTENT
     activity_return = _LEARNER_ACTIVITY_RETURN_PATH.fullmatch(transaction_return_path or "")
@@ -1141,8 +1289,10 @@ def _learner_oauth_recovery_response(
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
     if (
         settings.environment not in {"staging", "production"}
-        and surface != "coach"
+        and surface not in {"coach", "sales_xray"}
         and request.url.hostname != settings.coach_app_url.host
+        and request.url.hostname
+        != (settings.sales_xray_app_url.host if settings.sales_xray_app_url else None)
     ):
         return
     expected_host = urlsplit(_surface_origin(settings, surface)).hostname
@@ -1238,21 +1388,18 @@ def install_identity_http(
         challenge_id: UUID,
         person_id: UUID,
         kind: str,
+        course: str | None = None,
+        activity: UUID | None = None,
+        next: str | None = None,
     ) -> None:
-        event_name = {
-            "email_verification": PASSWORD_EMAIL_VERIFICATION_EVENT,
-            "password_reset": PASSWORD_EMAIL_RESET_EVENT,
-        }.get(kind)
-        if event_name is None:
-            raise PasswordRequestInvalid("unsupported email challenge kind")
         await OutboxRepository(database).enqueue(
-            EventEnvelope(
-                name=event_name,
-                category=EventCategory.OPERATIONAL,
-                aggregate_type="person",
-                aggregate_id=person_id,
-                tenant_id=None,
-                payload={"challenge_id": str(challenge_id), "kind": kind},
+            _password_email_event(
+                challenge_id=challenge_id,
+                person_id=person_id,
+                kind=kind,
+                course=course,
+                activity=activity,
+                next=next,
             ),
             dedupe_key=f"identity-email:{kind}:{challenge_id}",
         )
@@ -1312,6 +1459,9 @@ def install_identity_http(
                         challenge_id=registration.challenge.challenge_id,
                         person_id=registration.challenge.person_id,
                         kind=registration.challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError) as error:
             raise PasswordRequestInvalid(str(error)) from error
@@ -1371,15 +1521,23 @@ def install_identity_http(
         require_safe_origin(request, settings)
         try:
             async with sessions() as database, database.begin():
-                challenge = await PasswordIdentityService(
-                    database, token_secret=challenge_secret
-                ).begin_reset(email=body.email)
+                passwords = PasswordIdentityService(database, token_secret=challenge_secret)
+                challenge = await passwords.begin_reset(email=body.email)
+                if challenge is None:
+                    # Recovery must also help a password account whose first
+                    # verification email was missed. This remains a mailbox
+                    # challenge, never a verification flag or a reset bypass.
+                    # Ineligible/unknown addresses keep the same public reply.
+                    challenge = await passwords.begin_verification(email=body.email)
                 if challenge is not None:
                     await enqueue_password_email(
                         database,
                         challenge_id=challenge.challenge_id,
                         person_id=challenge.person_id,
                         kind=challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError):
             pass
@@ -1407,6 +1565,9 @@ def install_identity_http(
                         challenge_id=challenge.challenge_id,
                         person_id=challenge.person_id,
                         kind=challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError):
             pass
@@ -1560,11 +1721,163 @@ def install_identity_http(
         _set_onboarding_response_headers(response, snapshot)
         return _onboarding_response(snapshot)
 
+    def _learner_consent_document(version: str) -> LearnerConsentDocumentResponse:
+        return LearnerConsentDocumentResponse(
+            version=version,
+            acknowledgement=(
+                "I confirm that I am 18 or older and accept the current Authority Closers "
+                "Terms and Privacy notice for my learner account."
+            ),
+        )
+
+    async def _learner_consent_response(
+        auth: AuthenticatedTransaction,
+        *,
+        response: Response,
+        replayed: bool = False,
+    ) -> LearnerConsentResponse:
+        version = (settings.learner_consent_version or "").strip()
+        if not version:
+            raise LearnerConsentRenewalUnavailable(
+                "The current learner consent document is not configured."
+            )
+        person = await auth.database.scalar(
+            select(Person).where(Person.id == auth.resolved.actor.person_id)
+        )
+        if person is None:
+            raise LearnerConsentRenewalDenied("The authenticated learner account is unavailable.")
+        recorded = person.consent_version
+        current = recorded == version and person.consented_at is not None
+        response.headers["cache-control"] = "no-store"
+        return LearnerConsentResponse(
+            status=(
+                "current" if current else ("renewal_required" if recorded else "consent_required")
+            ),
+            current_version=version,
+            recorded_version=recorded,
+            consented_at=person.consented_at,
+            document=_learner_consent_document(version),
+            replayed=replayed,
+        )
+
+    @router.get("/me/consent", response_model=LearnerConsentResponse)
+    async def get_learner_consent(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> LearnerConsentResponse:
+        return await _learner_consent_response(auth, response=response)
+
+    @router.post("/me/consent/renew", response_model=LearnerConsentResponse)
+    async def renew_learner_consent(
+        request: Request,
+        response: Response,
+        body: LearnerConsentRenewalRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> LearnerConsentResponse:
+        require_safe_origin(request, settings)
+        version = (settings.learner_consent_version or "").strip()
+        if not version:
+            raise LearnerConsentRenewalUnavailable(
+                "The current learner consent document is not configured."
+            )
+        if body.expected_version != version:
+            raise LearnerConsentVersionConflict(
+                "The learner consent document changed. Reload it before accepting."
+            )
+        actor = auth.resolved.actor
+        person = await auth.database.scalar(
+            select(Person).where(Person.id == actor.person_id).with_for_update()
+        )
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+        ):
+            raise LearnerConsentRenewalDenied(
+                "Only an active, email-verified learner can renew consent."
+            )
+
+        # The audit chain is the append-only consent history.  A person row is
+        # only the current projection; earlier versions remain attributable and
+        # verifiable in the chain and are never overwritten.
+        tenant_id = actor.tenant_id or settings.public_learner_tenant_id
+        if tenant_id is None:
+            raise LearnerConsentRenewalUnavailable(
+                "A learner tenant is required to record consent safely."
+            )
+        action = "identity.learner_consent_accepted.v1"
+        prior_events = list(
+            (
+                await auth.database.scalars(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.tenant_id == tenant_id,
+                        AuditEvent.actor_person_id == actor.person_id,
+                        AuditEvent.action == action,
+                        AuditEvent.resource_type == "person_consent",
+                        AuditEvent.resource_id == str(actor.person_id),
+                    )
+                    .order_by(AuditEvent.occurred_at.desc())
+                )
+            ).all()
+        )
+        existing = next(
+            (
+                event
+                for event in prior_events
+                if isinstance(event.payload, dict)
+                and event.payload.get("consent_version") == version
+            ),
+            None,
+        )
+        if (
+            existing is not None
+            and person.consent_version == version
+            and person.consented_at is not None
+            and existing.occurred_at == person.consented_at
+        ):
+            # A retried acceptance is a read of the original durable decision.
+            # Do not append a second history entry or refresh its timestamp.
+            return await _learner_consent_response(
+                auth,
+                response=response,
+                replayed=True,
+            )
+
+        now = datetime.now(UTC)
+        previous_version = person.consent_version
+        previous_consented_at = person.consented_at
+        person.consent_version = version
+        person.consented_at = now
+        person.revision += 1
+        await AuditRepository(auth.database).append(
+            tenant_id=tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action=action,
+            resource_type="person_consent",
+            resource_id=actor.person_id,
+            payload={
+                "consent_version": version,
+                "previous_consent_version": previous_version,
+                "previous_consented_at": (
+                    previous_consented_at.isoformat() if previous_consented_at else None
+                ),
+                "explicit_acceptance": True,
+                "age_attestation": "18_plus_learner_declaration",
+                "terms_path": "/terms",
+                "privacy_path": "/privacy",
+            },
+            reason="Learner accepted the current published Terms and Privacy notice.",
+            now=now,
+        )
+        return await _learner_consent_response(auth, response=response)
+
     @router.get("/auth/google/start", name="google_auth_start")
     async def google_auth_start(
         request: Request,
         authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
-        surface: Literal["learner", "admin", "coach"] = "learner",
+        surface: Literal["learner", "admin", "coach", "sales_xray"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
         client_consent_version: Annotated[
@@ -1573,6 +1886,19 @@ def install_identity_http(
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if surface == "sales_xray" and authorization_type is ProviderAuthorizationType.LINK:
+            raise InvalidAuthTransaction(
+                "Manage linked identities through your Academy account settings."
+            )
+        if (
+            surface == "sales_xray"
+            and authorization_type is ProviderAuthorizationType.AUTHENTICATE
+            and consent
+        ):
+            # One consent-aware Google button serves new and existing people.
+            # REGISTER already resolves a linked provider key to the same person;
+            # it never links another person's account by an email match.
+            authorization_type = ProviderAuthorizationType.REGISTER
         if (
             surface in {"admin", "coach"}
             and authorization_type is ProviderAuthorizationType.REGISTER
@@ -1581,10 +1907,17 @@ def install_identity_http(
                 "Studio and admin identities must be provisioned through the reviewed identity "
                 "and membership bootstrap path before they can sign in with Google."
             )
-        if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
+        if (
+            surface in {"learner", "sales_xray"}
+            and authorization_type is ProviderAuthorizationType.REGISTER
+        ):
             if not consent:
                 raise LearnerConsentRequired(
                     "Explicit learner consent is required before Google registration."
+                )
+            if surface == "sales_xray" and client_consent_version is None:
+                raise LearnerConsentRequired(
+                    "Review the current Academy Terms and Privacy Policy before continuing."
                 )
             consent_version = (settings.learner_consent_version or "").strip()
             if settings.public_learner_tenant_id is None or not consent_version:
@@ -1661,6 +1994,11 @@ def install_identity_http(
             )
             transaction = codec.decode(encoded_transaction)
             _require_surface_host(request, settings, transaction.surface)
+            if (
+                transaction.surface == "sales_xray"
+                and transaction.authorization_type is ProviderAuthorizationType.LINK
+            ):
+                raise InvalidAuthTransaction("Link identities through Academy account settings.")
             if not hmac.compare_digest(transaction.state, state_value):
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
         except InvalidAuthTransaction as error:
@@ -1707,7 +2045,7 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         if (
-            transaction.surface == "learner"
+            transaction.surface in {"learner", "sales_xray"}
             and transaction.authorization_type is ProviderAuthorizationType.REGISTER
         ):
             required_consent_version = (settings.learner_consent_version or "").strip()
@@ -1788,7 +2126,7 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                     )
                     session_token = registered.session.token
-                    if transaction.surface == "learner":
+                    if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
                             registered.person.id,
@@ -1807,7 +2145,10 @@ def install_identity_http(
                     # unscoped session; the learner surface must select its
                     # existing learner context just as password login does.
                     existing_learner_tenant_id = settings.public_learner_tenant_id
-                    if transaction.surface == "learner" and existing_learner_tenant_id is not None:
+                    if (
+                        transaction.surface in {"learner", "sales_xray"}
+                        and existing_learner_tenant_id is not None
+                    ):
                         membership = await database.scalar(
                             select(Membership).where(
                                 Membership.tenant_id == existing_learner_tenant_id,
@@ -1933,6 +2274,22 @@ def install_identity_http(
             permissions=sorted(auth.resolved.actor.permissions),
         )
 
+    @router.get("/me/google-link", response_model=GoogleLinkResponse)
+    async def google_link(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> GoogleLinkResponse:
+        if request.query_params:
+            raise DomainError("Google-link status is resolved only for the authenticated person.")
+        linked = await auth.identity.repository.has_provider_identity_for_issuers(
+            auth.resolved.actor.person_id,
+            ("accounts.google.com", "https://accounts.google.com"),
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        return GoogleLinkResponse(linked=linked)
+
     @router.get("/me/workspaces", response_model=WorkspacesResponse)
     async def workspaces(
         request: Request,
@@ -2044,7 +2401,9 @@ __all__ = [
     "AuthenticatedTransaction",
     "AuthenticationRequired",
     "ContextResponse",
+    "GoogleLinkResponse",
     "LearnerConsentRequired",
+    "LearnerConsentVersionConflict",
     "MeResponse",
     "PasswordChallengeRejected",
     "PasswordCredentialsRejected",

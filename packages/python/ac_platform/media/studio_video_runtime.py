@@ -51,7 +51,11 @@ class StudioVideoRuntime:
         """Recheck the mutable service graph at application startup."""
 
         if (
-            self.settings.environment not in {"local", "test"}
+            self.settings.environment not in {"local", "test", "staging", "production"}
+            or (
+                self.settings.environment in {"staging", "production"}
+                and not self.settings.media_filesystem_enabled
+            )
             or type(self.storage) is not VideoFileStorage
             or self.service.storage is not self.storage
             or self.service.scanner is not self.scanner
@@ -87,7 +91,7 @@ class StudioVideoRuntime:
             raise MediaConfigurationError("The Studio video runtime instance graph is invalid.")
 
 
-def compose_local_studio_video_runtime(
+def _compose_studio_video_runtime(
     settings: Settings,
     runtime: MediaRuntime,
     *,
@@ -98,6 +102,7 @@ def compose_local_studio_video_runtime(
     max_objects: int = 16_384,
     ffmpeg_binary: str = "ffmpeg",
     testing_scanner: ContentScanner | None = None,
+    filesystem_runtime: bool = False,
 ) -> MediaRuntime:
     """Add an opt-in same-host Studio pipeline without activating it by default.
 
@@ -107,7 +112,14 @@ def compose_local_studio_video_runtime(
     promotion still requires the separate proof documented by that adapter.
     """
 
-    if settings.environment not in {"local", "test"}:
+    if filesystem_runtime:
+        if not settings.media_filesystem_enabled or settings.environment not in {
+            "test",
+            "staging",
+            "production",
+        }:
+            raise MediaConfigurationError("Filesystem Studio video composition is not enabled.")
+    elif settings.environment not in {"local", "test"}:
         raise MediaConfigurationError("Studio video composition is local/test only.")
     if runtime.environment != settings.environment:
         raise MediaConfigurationError("Studio video and base media environments must match.")
@@ -147,6 +159,7 @@ def compose_local_studio_video_runtime(
         storage=storage,
         scanner=scanner,
         processor=processor,
+        filesystem_runtime=filesystem_runtime,
     ).service
     processing = StudioVideoProcessing(service)
     completion = StudioVideoCompletion(sessions, service, storage)
@@ -171,4 +184,63 @@ def compose_local_studio_video_runtime(
     return replace(runtime, studio_video_runtime=studio)
 
 
-__all__ = ["StudioVideoRuntime", "compose_local_studio_video_runtime"]
+def compose_local_studio_video_runtime(
+    settings: Settings,
+    runtime: MediaRuntime,
+    *,
+    sessions: StudioCompletionSessionFactory,
+    root: Path,
+    max_store_bytes: int,
+    scanner_config: ClamAVScannerConfig,
+    max_objects: int = 16_384,
+    ffmpeg_binary: str = "ffmpeg",
+    testing_scanner: ContentScanner | None = None,
+) -> MediaRuntime:
+    """Add the explicit local/test Studio pipeline."""
+
+    return _compose_studio_video_runtime(
+        settings,
+        runtime,
+        sessions=sessions,
+        root=root,
+        max_store_bytes=max_store_bytes,
+        scanner_config=scanner_config,
+        max_objects=max_objects,
+        ffmpeg_binary=ffmpeg_binary,
+        testing_scanner=testing_scanner,
+    )
+
+
+def compose_filesystem_studio_video_runtime(
+    settings: Settings,
+    runtime: MediaRuntime,
+    *,
+    sessions: StudioCompletionSessionFactory,
+    root: Path,
+    max_store_bytes: int,
+    scanner_config: ClamAVScannerConfig,
+    max_objects: int = 16_384,
+    ffmpeg_binary: str = "ffmpeg",
+) -> MediaRuntime:
+    """Compose the bounded source-owned filesystem profile for deployment."""
+
+    if settings.environment in {"staging", "production"} and scanner_config.unix_socket is None:
+        raise MediaConfigurationError("Deployment Studio video requires the mounted ClamAV socket.")
+    return _compose_studio_video_runtime(
+        settings,
+        runtime,
+        sessions=sessions,
+        root=root,
+        max_store_bytes=max_store_bytes,
+        scanner_config=scanner_config,
+        max_objects=max_objects,
+        ffmpeg_binary=ffmpeg_binary,
+        filesystem_runtime=True,
+    )
+
+
+__all__ = [
+    "StudioVideoRuntime",
+    "compose_filesystem_studio_video_runtime",
+    "compose_local_studio_video_runtime",
+]

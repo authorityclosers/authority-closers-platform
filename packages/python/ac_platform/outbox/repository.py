@@ -210,6 +210,7 @@ class OutboxJobRoute:
     uuid_payload_keys: frozenset[str] = frozenset()
     allowed_payload_values: Mapping[str, frozenset[str]] = field(default_factory=dict)
     max_attempts: int = 5
+    optional_payload_keys: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "job_kind", _required_text(self.job_kind, "job_kind", 128))
@@ -220,13 +221,21 @@ class OutboxJobRoute:
             for key in self.required_payload_keys
         ):
             raise ValueError("outbox route payload keys must be bounded non-blank strings")
-        if not self.uuid_payload_keys.issubset(self.required_payload_keys):
-            raise ValueError("UUID payload keys must be part of the required schema")
+        schema_keys = self.required_payload_keys | self.optional_payload_keys
+        if self.required_payload_keys & self.optional_payload_keys:
+            raise ValueError("required and optional payload keys must be disjoint")
+        if any(
+            not isinstance(key, str) or not key.strip() or len(key) > 64
+            for key in self.optional_payload_keys
+        ):
+            raise ValueError("outbox route payload keys must be bounded non-blank strings")
+        if not self.uuid_payload_keys.issubset(schema_keys):
+            raise ValueError("UUID payload keys must be part of the route schema")
         normalized_allowlists = {
             key: frozenset(values) for key, values in self.allowed_payload_values.items()
         }
-        if not set(normalized_allowlists).issubset(self.required_payload_keys):
-            raise ValueError("allowlisted value keys must be part of the required schema")
+        if not set(normalized_allowlists).issubset(schema_keys):
+            raise ValueError("allowlisted value keys must be part of the route schema")
         if any(not values for values in normalized_allowlists.values()):
             raise ValueError("allowlisted payload values must not be empty")
         if any(
@@ -248,21 +257,29 @@ class OutboxJobRoute:
 
         if not isinstance(payload, Mapping):
             raise ValueError("outbox payload must be an object")
-        if set(payload) != set(self.required_payload_keys):
+        payload_keys = set(payload)
+        schema_keys = self.required_payload_keys | self.optional_payload_keys
+        if not self.required_payload_keys.issubset(payload_keys) or not payload_keys.issubset(
+            schema_keys
+        ):
             raise ValueError("outbox payload does not match the allowlisted versioned schema")
         normalized: dict[str, Any] = {}
-        for key in sorted(self.required_payload_keys):
+        for key in sorted(payload_keys):
             value = payload[key]
             if key in self.uuid_payload_keys:
                 try:
                     normalized[key] = str(UUID(str(value)))
                 except (TypeError, ValueError, AttributeError) as error:
                     raise ValueError(f"outbox payload field {key} must be a UUID") from error
+            elif key in self.allowed_payload_values:
+                if not isinstance(value, str):
+                    raise ValueError(f"outbox payload field {key} must be a string")
+                normalized_value = _required_text(value, key, 500)
+                if normalized_value not in self.allowed_payload_values[key]:
+                    raise ValueError(f"outbox payload field {key} is not allowlisted")
+                normalized[key] = normalized_value
             elif isinstance(value, str):
                 normalized_value = _required_text(value, key, 500)
-                allowed_values = self.allowed_payload_values.get(key)
-                if allowed_values is not None and normalized_value not in allowed_values:
-                    raise ValueError(f"outbox payload field {key} is not allowlisted")
                 normalized[key] = normalized_value
             elif value is None or isinstance(value, bool | int | float):
                 normalized[key] = value
@@ -1828,8 +1845,14 @@ class JobRepository:
         receipt: Mapping[str, Any],
         *,
         now: datetime | None = None,
+        allow_provisional_upgrade: bool = False,
     ) -> Job:
-        """Persist canonical provider evidence even if acknowledgement later loses its lease."""
+        """Persist canonical provider evidence even if acknowledgement later loses its lease.
+
+        A worker may first persist a bounded ``provider_returned`` receipt before
+        strict output validation.  Only that marker may be upgraded to the final
+        validated receipt, and only when the caller opts in explicitly.
+        """
 
         row = await self._get_job(job)
         normalized_receipt = dict(receipt)
@@ -1840,9 +1863,33 @@ class JobRepository:
             )
         receipt_digest = canonical_receipt_digest(normalized_receipt)
         if row.provider_receipt_digest is not None:
-            if row.provider_receipt_digest != receipt_digest:
+            if row.provider_receipt_digest == receipt_digest:
+                return row
+            existing = row.provider_receipt
+            if (
+                not allow_provisional_upgrade
+                or not isinstance(existing, Mapping)
+                or existing.get("validation_state") != "provider_returned"
+                or existing.get("idempotency_key") != receipt_key
+            ):
                 raise DuplicateIntentError("provider returned conflicting receipt evidence")
-            return row
+            current_time = _as_utc(now or utc_now())
+            locked = await self._get_job_for_update(row.id)
+            await self._require_lease(locked, lease_token, now=current_time)
+            locked_existing = locked.provider_receipt
+            if (
+                locked.provider_receipt_digest != row.provider_receipt_digest
+                or not isinstance(locked_existing, Mapping)
+                or locked_existing.get("validation_state") != "provider_returned"
+                or locked_existing.get("idempotency_key") != receipt_key
+            ):
+                raise DuplicateIntentError("provider returned conflicting receipt evidence")
+            locked.provider_receipt = normalized_receipt
+            locked.provider_receipt_digest = receipt_digest
+            locked.receipt_recorded_at = current_time
+            locked.updated_at = current_time
+            await self._session.flush()
+            return locked
         result = await self._session.execute(
             build_job_receipt_statement(
                 job_id=row.id,

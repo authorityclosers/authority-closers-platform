@@ -2,10 +2,7 @@ import { AuthFlowPage } from "../components/auth-flow-page";
 import { OnboardingForm } from "../components/onboarding-form";
 import { SurfaceStatePanel } from "../components/surface-state";
 import { parseCourseIntent } from "../lib/course-intent";
-import {
-  activityIntentHref,
-  parseActivityIntent,
-} from "../lib/activity-intent";
+import { parseActivityIntent } from "../lib/activity-intent";
 import { ROUTES } from "../lib/routes";
 import {
   onboardingHref,
@@ -17,6 +14,7 @@ import {
   parseSurfaceState,
   type QueryValue,
 } from "../lib/surface-state";
+import { authIntentHref, parseSalesAuthNext } from "../lib/sales-auth-return";
 
 type OnboardingPageProps = {
   searchParams: Promise<{
@@ -24,6 +22,7 @@ type OnboardingPageProps = {
     return?: QueryValue;
     course?: QueryValue;
     activity?: QueryValue;
+    next?: QueryValue;
   }>;
 };
 
@@ -37,16 +36,22 @@ export default async function OnboardingPage({
     returnIntent === "settings" ? null : parseCourseIntent(query.course);
   const activityIntent =
     returnIntent === "settings" ? null : parseActivityIntent(query.activity);
+  const salesNext =
+    returnIntent === "settings" ? null : parseSalesAuthNext(query.next);
+  const salesOnly = Boolean(salesNext && !courseIntent && !activityIntent);
   const returnHref = onboardingReturnHref(
     returnIntent,
     courseIntent,
     activityIntent,
+    salesNext,
   );
 
   return (
     <AuthFlowPage
       eyebrow="Learning setup"
-      heading="Make the course fit your work."
+      heading={
+        salesOnly ? "Set up your account." : "Make the course fit your work."
+      }
       copy="Answer only what helps. You can skip every step and update these details later."
       backHref={returnHref}
       backLabel={
@@ -54,7 +59,9 @@ export default async function OnboardingPage({
           ? "Back to settings"
           : activityIntent
             ? "Back to activity"
-            : "Back to learner home"
+            : salesOnly
+              ? "Back to Sales Xray"
+              : "Back to learner home"
       }
       liveProgress
       variant="onboarding"
@@ -66,11 +73,17 @@ export default async function OnboardingPage({
     >
       <SurfaceStatePanel
         state={state}
-        retryHref={onboardingHref(returnIntent, courseIntent, activityIntent)}
-        signInHref={activityIntentHref(
+        retryHref={onboardingHref(
+          returnIntent,
+          courseIntent,
+          activityIntent,
+          salesNext,
+        )}
+        signInHref={authIntentHref(
           ROUTES.login,
           activityIntent,
           courseIntent,
+          salesNext,
         )}
         backHref={returnHref}
         pageHeadingPresent
@@ -80,6 +93,7 @@ export default async function OnboardingPage({
           returnHref={returnHref}
           courseIntent={courseIntent}
           activityIntent={activityIntent}
+          salesNext={salesNext}
         />
       ) : null}
     </AuthFlowPage>

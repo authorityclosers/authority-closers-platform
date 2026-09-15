@@ -1,0 +1,329 @@
+{
+  "status": "passed",
+  "proof_scope": "UI-only synthetic fixture; no provider, production, or database calls",
+  "coach_url": "http://127.0.0.1:3102/studio/programs/22222222-2222-4222-8222-222222222222",
+  "admin_handoff_url": "http://127.0.0.1:3161/studio/programs/22222222-2222-4222-8222-222222222222",
+  "admin_handoff_observation": "3161 intentionally returns 503 because AC_COACH_APP_URL is unset; direct Coach workspace verified on 3102",
+  "captured_at": "2026-09-13T16:15:11.423455+00:00",
+  "assertions": [
+    "course title",
+    "learner-facing draft guidance",
+    "draft visibility badge",
+    "module/lesson summary",
+    "upload feedback explains the next step",
+    "outline lesson selection opens editor",
+    "lesson title is editable",
+    "unsaved draft hint appears",
+    "preview explains learner progress behavior",
+    "technical review record starts collapsed",
+    "desktop has no horizontal overflow",
+    "mobile course outline opens with learner order guidance",
+    "mobile outline selection returns to editor",
+    "mobile has no horizontal overflow",
+    "browser proof emitted no non-GET requests"
+  ],
+  "screenshots": [
+    "D:\\AC-authority-closers-release-audit\\coach-experience-browser-03\\coach-course-desktop.png",
+    "D:\\AC-authority-closers-release-audit\\coach-experience-browser-03\\coach-course-mobile.png"
+  ],
+  "request_count": 74,
+  "mutation_requests": [],
+  "requests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Broot-of-the-server%5D__1fr5l7u._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_ui_src_14re0ya._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_operations-web_src_studio_17kjm8_._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0964-e9._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_next-devtools_index_0o808l0.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_react-dom_0p274vw._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_react-server-dom-turbopack_0m0_wzi._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_0xej69y._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_client_0t0gqis._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_0332hu_._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/0zix_%40swc_helpers_cjs_0hi-e47._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/apps_coach-web_1anvha4._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/turbopack-apps_coach-web_01riv7-._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/apps_coach-web_109wk__._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_1ha5x-0._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/_1293ta2._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_classic_1pv--5j._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_core_0570rwe._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_locales_0h8gkg1._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/node_modules__pnpm_0hkv6gb._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_1ws-lmy._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/1lic_lucide-react_dist_esm_icons_0_j8vn1._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/context"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me/studio-access"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Broot-of-the-server%5D__1fr5l7u._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_ui_src_14re0ya._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_operations-web_src_studio_17kjm8_._.css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0964-e9._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_next-devtools_index_0o808l0.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_react-dom_0p274vw._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_react-server-dom-turbopack_0m0_wzi._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_compiled_0xej69y._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_client_0t0gqis._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_0332hu_._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/0zix_%40swc_helpers_cjs_0hi-e47._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/apps_coach-web_1anvha4._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/turbopack-apps_coach-web_01riv7-._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/apps_coach-web_109wk__._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/203f_next_dist_1ha5x-0._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/_1293ta2._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_classic_1pv--5j._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_core_0570rwe._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/09ge_zod_v4_locales_0h8gkg1._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/node_modules__pnpm_0hkv6gb._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/packages_typescript_1ws-lmy._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/1lic_lucide-react_dist_esm_icons_0_j8vn1._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/context"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/me/studio-access"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:3102/v1/admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    }
+  ]
+}

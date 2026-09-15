@@ -189,10 +189,192 @@ GLOBAL_COMMUNITY_PARITY_TABLES = COMMUNITY_PARITY_TABLES + (
 APP_UPDATES_PARITY_MIGRATION_HEAD = "20260910_0029"
 APP_UPDATES_PARITY_CONTRACT = "ac-postgres-parity-v9"
 APP_UPDATES_PARITY_TABLES = GLOBAL_COMMUNITY_PARITY_TABLES + ("app_update_read_receipts",)
+SALES_XRAY_PARITY_MIGRATION_HEAD = "20260913_0030"
+SALES_XRAY_PARITY_CONTRACT = "ac-postgres-parity-v10"
+SALES_XRAY_PARITY_NEW_TABLES = (
+    "conversation_budget_accounts",
+    "conversation_review_cursors",
+    "conversation_minute_accounts",
+    "conversation_permissions",
+    "conversation_recordings",
+    "conversation_checkpoints",
+    "conversation_commands",
+    "conversation_quotes",
+    "conversation_runs",
+    "conversation_reviews",
+    "conversation_quote_acceptances",
+    "conversation_provider_configurations",
+    "conversation_report_drafts",
+)
+SALES_XRAY_PARITY_TABLES = APP_UPDATES_PARITY_TABLES + SALES_XRAY_PARITY_NEW_TABLES
+INFERENCE_PARITY_MIGRATION_HEAD = "20260913_0031"
+INFERENCE_PARITY_CONTRACT = "ac-postgres-parity-v11"
+INFERENCE_PARITY_NEW_TABLES = ("conversation_inference_tasks",)
+INFERENCE_PARITY_TABLES = SALES_XRAY_PARITY_TABLES + INFERENCE_PARITY_NEW_TABLES
+PLANS_PARITY_MIGRATION_HEAD = "20260913_0032"
+PLANS_PARITY_CONTRACT = "ac-postgres-parity-v12"
+PLANS_PARITY_NEW_TABLES = (
+    "conversation_processing_plans",
+    "conversation_plan_stage_authorizations",
+)
+PLANS_PARITY_TABLES = INFERENCE_PARITY_TABLES + PLANS_PARITY_NEW_TABLES
+COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD = "20260913_0033"
+COMMUNITY_CONNECTIONS_PARITY_CONTRACT = "ac-postgres-parity-v13"
+COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES = (
+    "community_discovery_preferences",
+    "community_connections",
+    "community_connection_events",
+    "community_blocks",
+    "community_reports",
+)
+COMMUNITY_CONNECTIONS_PARITY_TABLES = PLANS_PARITY_TABLES + COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES
+REVIEWS_PARITY_MIGRATION_HEAD = "20260913_0034"
+REVIEWS_PARITY_CONTRACT = "ac-postgres-parity-v14"
+REVIEWS_PARITY_NEW_TABLES = (
+    "conversation_review_assignments",
+    "conversation_review_revocations",
+    "conversation_review_feedback",
+)
+REVIEWS_PARITY_TABLES = COMMUNITY_CONNECTIONS_PARITY_TABLES + REVIEWS_PARITY_NEW_TABLES
+REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD = "20260913_0035"
+REVIEW_INVITATIONS_PARITY_CONTRACT = "ac-postgres-parity-v15"
+REVIEW_INVITATIONS_PARITY_NEW_TABLES = (
+    "conversation_review_invitations",
+    "conversation_review_invitation_revocations",
+    "conversation_review_invitation_acceptances",
+)
+REVIEW_INVITATIONS_PARITY_TABLES = REVIEWS_PARITY_TABLES + REVIEW_INVITATIONS_PARITY_NEW_TABLES
+ACQUISITION_PARITY_MIGRATION_HEAD = "20260914_0036"
+ACQUISITION_PARITY_CONTRACT = "ac-postgres-parity-v16"
+ACQUISITION_PARITY_NEW_TABLES = (
+    "conversation_visitors",
+    "conversation_visitor_claims",
+    "conversation_acquisition_usage",
+    "conversation_acquisition_settlements",
+)
+ACQUISITION_PARITY_TABLES = REVIEW_INVITATIONS_PARITY_TABLES + ACQUISITION_PARITY_NEW_TABLES
+PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD = "20260914_0037"
+PROCESSING_OWNERSHIP_PARITY_CONTRACT = "ac-postgres-parity-v17"
+PROCESSING_OWNERSHIP_PARITY_NEW_TABLES = (
+    "conversation_processing_principals",
+    "conversation_processing_leases",
+    "conversation_guest_submissions",
+)
+PROCESSING_OWNERSHIP_PARITY_TABLES = (
+    ACQUISITION_PARITY_TABLES + PROCESSING_OWNERSHIP_PARITY_NEW_TABLES
+)
+REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD = "20260914_0038"
+REVIEWER_IDENTITY_PARITY_CONTRACT = "ac-postgres-parity-v18"
+REVIEWER_IDENTITY_PARITY_NEW_TABLES = ("reviewer_auth_challenges",)
+REVIEWER_IDENTITY_PARITY_TABLES = (
+    PROCESSING_OWNERSHIP_PARITY_TABLES + REVIEWER_IDENTITY_PARITY_NEW_TABLES
+)
+PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD = "20260914_0039"
+PROVIDER_ACTIVATION_PARITY_CONTRACT = "ac-postgres-parity-v19"
+PROVIDER_ACTIVATION_PARITY_NEW_TABLES = ("conversation_provider_activations",)
+PROVIDER_ACTIVATION_PARITY_TABLES = (
+    REVIEWER_IDENTITY_PARITY_TABLES + PROVIDER_ACTIVATION_PARITY_NEW_TABLES
+)
+PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD = "20260914_0040"
+PROCESSING_CONTINUATION_PARITY_CONTRACT = "ac-postgres-parity-v20"
+PROCESSING_CONTINUATION_PARITY_NEW_TABLES = ("conversation_processing_continuations",)
+PROCESSING_CONTINUATION_PARITY_TABLES = (
+    PROVIDER_ACTIVATION_PARITY_TABLES + PROCESSING_CONTINUATION_PARITY_NEW_TABLES
+)
+EXECUTION_CONTROL_PARITY_MIGRATION_HEAD = "20260914_0041"
+EXECUTION_CONTROL_PARITY_CONTRACT = "ac-postgres-parity-v21"
+EXECUTION_CONTROL_PARITY_NEW_TABLES = ("conversation_execution_controls",)
+EXECUTION_CONTROL_PARITY_TABLES = (
+    PROCESSING_CONTINUATION_PARITY_TABLES + EXECUTION_CONTROL_PARITY_NEW_TABLES
+)
+ANALYSIS_SETTINGS_PARITY_MIGRATION_HEAD = "20260915_0042"
+ANALYSIS_SETTINGS_PARITY_CONTRACT = "ac-postgres-parity-v22"
+ANALYSIS_SETTINGS_PARITY_NEW_TABLES = ("conversation_analysis_settings",)
+ANALYSIS_SETTINGS_PARITY_TABLES = (
+    EXECUTION_CONTROL_PARITY_TABLES + ANALYSIS_SETTINGS_PARITY_NEW_TABLES
+)
+RETAINED_C5_RECOVERY_PARITY_MIGRATION_HEAD = "20260915_0043"
+RETAINED_C5_RECOVERY_PARITY_CONTRACT = "ac-postgres-parity-v23"
+RETAINED_C5_RECOVERY_PARITY_NEW_TABLES = ("conversation_retained_c5_versions",)
+RETAINED_C5_RECOVERY_PARITY_TABLES = (
+    ANALYSIS_SETTINGS_PARITY_TABLES + RETAINED_C5_RECOVERY_PARITY_NEW_TABLES
+)
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
 MIGRATION_REHEARSAL_TARGET_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
+SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
+SALES_XRAY_REHEARSAL_TARGET_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
+INFERENCE_REHEARSAL_SOURCE_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
+INFERENCE_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
+PLANS_REHEARSAL_SOURCE_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
+PLANS_REHEARSAL_TARGET_HEAD = PLANS_PARITY_MIGRATION_HEAD
+COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD = PLANS_PARITY_MIGRATION_HEAD
+COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD = COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD
+REVIEWS_REHEARSAL_SOURCE_HEAD = COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD
+REVIEWS_REHEARSAL_TARGET_HEAD = REVIEWS_PARITY_MIGRATION_HEAD
+REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD = REVIEWS_PARITY_MIGRATION_HEAD
+REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
+ACQUISITION_REHEARSAL_SOURCE_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
+ACQUISITION_REHEARSAL_TARGET_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
+PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
+PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD = PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD
+REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD = PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD
+REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD = REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD
+PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD = REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD
+PROVIDER_ACTIVATION_REHEARSAL_TARGET_HEAD = PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD
+PROCESSING_CONTINUATION_REHEARSAL_SOURCE_HEAD = PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD
+PROCESSING_CONTINUATION_REHEARSAL_TARGET_HEAD = PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD
+EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD = PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD
+EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD = EXECUTION_CONTROL_PARITY_MIGRATION_HEAD
+# Production is currently at 0029. Keep a direct rehearsal contract for the
+# candidate image that upgrades through both reviewed Sales Xray migrations in
+# one isolated target; do not require an intermediate application deployment.
+DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
+DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
+DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES = SALES_XRAY_PARITY_NEW_TABLES + INFERENCE_PARITY_NEW_TABLES
+MIGRATION_REHEARSAL_PAIRS = frozenset(
+    {
+        (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD),
+        (SALES_XRAY_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_TARGET_HEAD),
+        (INFERENCE_REHEARSAL_SOURCE_HEAD, INFERENCE_REHEARSAL_TARGET_HEAD),
+        (PLANS_REHEARSAL_SOURCE_HEAD, PLANS_REHEARSAL_TARGET_HEAD),
+        (
+            COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+            COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD,
+        ),
+        (REVIEWS_REHEARSAL_SOURCE_HEAD, REVIEWS_REHEARSAL_TARGET_HEAD),
+        (
+            REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD,
+            REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD,
+        ),
+        (ACQUISITION_REHEARSAL_SOURCE_HEAD, ACQUISITION_REHEARSAL_TARGET_HEAD),
+        (
+            PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+            PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
+            REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD,
+            PROVIDER_ACTIVATION_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            PROCESSING_CONTINUATION_REHEARSAL_SOURCE_HEAD,
+            PROCESSING_CONTINUATION_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD,
+            EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+            DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
+        ),
+    }
+)
 VERSIONED_PARITY_CONTRACTS = {
     CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
     PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
@@ -223,6 +405,56 @@ VERSIONED_PARITY_CONTRACTS = {
         APP_UPDATES_PARITY_CONTRACT,
         APP_UPDATES_PARITY_TABLES,
     ),
+    SALES_XRAY_PARITY_MIGRATION_HEAD: (
+        SALES_XRAY_PARITY_CONTRACT,
+        SALES_XRAY_PARITY_TABLES,
+    ),
+    INFERENCE_PARITY_MIGRATION_HEAD: (
+        INFERENCE_PARITY_CONTRACT,
+        INFERENCE_PARITY_TABLES,
+    ),
+    PLANS_PARITY_MIGRATION_HEAD: (PLANS_PARITY_CONTRACT, PLANS_PARITY_TABLES),
+    COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD: (
+        COMMUNITY_CONNECTIONS_PARITY_CONTRACT,
+        COMMUNITY_CONNECTIONS_PARITY_TABLES,
+    ),
+    REVIEWS_PARITY_MIGRATION_HEAD: (REVIEWS_PARITY_CONTRACT, REVIEWS_PARITY_TABLES),
+    REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD: (
+        REVIEW_INVITATIONS_PARITY_CONTRACT,
+        REVIEW_INVITATIONS_PARITY_TABLES,
+    ),
+    ACQUISITION_PARITY_MIGRATION_HEAD: (
+        ACQUISITION_PARITY_CONTRACT,
+        ACQUISITION_PARITY_TABLES,
+    ),
+    PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD: (
+        PROCESSING_OWNERSHIP_PARITY_CONTRACT,
+        PROCESSING_OWNERSHIP_PARITY_TABLES,
+    ),
+    REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD: (
+        REVIEWER_IDENTITY_PARITY_CONTRACT,
+        REVIEWER_IDENTITY_PARITY_TABLES,
+    ),
+    PROVIDER_ACTIVATION_PARITY_MIGRATION_HEAD: (
+        PROVIDER_ACTIVATION_PARITY_CONTRACT,
+        PROVIDER_ACTIVATION_PARITY_TABLES,
+    ),
+    PROCESSING_CONTINUATION_PARITY_MIGRATION_HEAD: (
+        PROCESSING_CONTINUATION_PARITY_CONTRACT,
+        PROCESSING_CONTINUATION_PARITY_TABLES,
+    ),
+    EXECUTION_CONTROL_PARITY_MIGRATION_HEAD: (
+        EXECUTION_CONTROL_PARITY_CONTRACT,
+        EXECUTION_CONTROL_PARITY_TABLES,
+    ),
+    ANALYSIS_SETTINGS_PARITY_MIGRATION_HEAD: (
+        ANALYSIS_SETTINGS_PARITY_CONTRACT,
+        ANALYSIS_SETTINGS_PARITY_TABLES,
+    ),
+    RETAINED_C5_RECOVERY_PARITY_MIGRATION_HEAD: (
+        RETAINED_C5_RECOVERY_PARITY_CONTRACT,
+        RETAINED_C5_RECOVERY_PARITY_TABLES,
+    ),
 }
 
 
@@ -239,6 +471,11 @@ def parity_contract_for_head(migration_head: str) -> str | None:
     if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
         return None
     return VERSIONED_PARITY_CONTRACTS[migration_head][0]
+
+
+def _validate_migration_rehearsal_pair(source_head: str, target_head: str) -> None:
+    if (source_head, target_head) not in MIGRATION_REHEARSAL_PAIRS:
+        raise DrillError("migration rehearsal transition is not an explicitly reviewed pair")
 
 
 SIDE_EFFECT_COUNTS_QUERY = """
@@ -1181,8 +1418,12 @@ def _preflight(target: DisposableTarget, config: DrillConfig) -> None:
         if _docker_inspect_optional(kind, name) is not None:
             raise DrillError(f"generated {kind} name already exists; refusing to reuse it")
     if config.source_application_image is not None:
-        if config.source_migration_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
-            raise DrillError("migration rehearsal source head is not the reviewed 0027 head")
+        if config.source_migration_head is None:
+            raise DrillError("migration rehearsal source head is missing")
+        _validate_migration_rehearsal_pair(
+            config.source_migration_head,
+            config.expected_migration_head,
+        )
         source_release_id, source_image_migration_head = _application_image_contract(
             config.source_application_image,
             target,
@@ -1797,11 +2038,15 @@ def _assert_migration_rehearsal_transition(
     source_counts_after_hold: Mapping[str, int],
     target_counts: Mapping[str, int],
     source_derivations: Mapping[str, int],
+    *,
+    source_head: str = MIGRATION_REHEARSAL_SOURCE_HEAD,
+    target_head: str = MIGRATION_REHEARSAL_TARGET_HEAD,
 ) -> dict[str, int]:
-    """Require exact preservation plus the rows defined by 0028/0029."""
+    """Require exact preservation plus the rows defined by one reviewed pair."""
 
-    source_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_SOURCE_HEAD))
-    target_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_TARGET_HEAD))
+    _validate_migration_rehearsal_pair(source_head, target_head)
+    source_tables = set(parity_tables_for_head(source_head))
+    target_tables = set(parity_tables_for_head(target_head))
     expected_new_tables = target_tables - source_tables
     if set(source_counts_after_hold) != source_tables:
         raise DrillError("migration rehearsal source row-count baseline is incomplete")
@@ -1814,33 +2059,171 @@ def _assert_migration_rehearsal_transition(
         raise DrillError("migration rehearsal row counts are invalid")
     if any(target_counts[table] != source_counts_after_hold[table] for table in source_tables):
         raise DrillError("migration rehearsal changed a preserved source table count")
-    if set(source_derivations) != {
-        "academy_public_profiles",
-        "academy_public_profile_people",
+    if (source_head, target_head) == (
+        MIGRATION_REHEARSAL_SOURCE_HEAD,
+        MIGRATION_REHEARSAL_TARGET_HEAD,
+    ):
+        if set(source_derivations) != {
+            "academy_public_profiles",
+            "academy_public_profile_people",
+        }:
+            raise DrillError("migration rehearsal source derivation contract is incomplete")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in source_derivations.values()
+        ):
+            raise DrillError("migration rehearsal source derivations are invalid")
+        if (
+            source_derivations["academy_public_profiles"]
+            != source_counts_after_hold["academy_public_profiles"]
+        ):
+            raise DrillError("migration rehearsal source derivation does not match its row count")
+        expected_new_counts = {
+            # 0028 inserts one global identity per distinct legacy person and one
+            # preference per legacy profile; 0029 creates an empty append-only
+            # receipt table.
+            "community_public_profiles": source_derivations["academy_public_profile_people"],
+            "academy_leaderboard_preferences": source_counts_after_hold["academy_public_profiles"],
+            "app_update_read_receipts": 0,
+        }
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
+            )
+    elif (source_head, target_head) == (
+        SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+        SALES_XRAY_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Sales Xray rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in SALES_XRAY_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0029/0030 pair"
+            )
+    elif (source_head, target_head) == (
+        INFERENCE_REHEARSAL_SOURCE_HEAD,
+        INFERENCE_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Inference rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in INFERENCE_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0030/0031 pair"
+            )
+    elif (source_head, target_head) == (
+        PLANS_REHEARSAL_SOURCE_HEAD,
+        PLANS_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Processing-plan rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in PLANS_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0031/0032 pair"
+            )
+    elif (source_head, target_head) == (
+        COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+        COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Community connections rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0032/0033 pair"
+            )
+    elif (source_head, target_head) == (
+        REVIEWS_REHEARSAL_SOURCE_HEAD,
+        REVIEWS_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("review assignment rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in REVIEWS_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0033/0034 pair"
+            )
+    elif (source_head, target_head) in {
+        (REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD, REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD),
+        (ACQUISITION_REHEARSAL_SOURCE_HEAD, ACQUISITION_REHEARSAL_TARGET_HEAD),
     }:
-        raise DrillError("migration rehearsal source derivation contract is incomplete")
-    if any(
-        isinstance(value, bool) or not isinstance(value, int) or value < 0
-        for value in source_derivations.values()
+        if source_derivations:
+            raise DrillError("guest and review invitation rehearsals do not accept derivations")
+        reviewed_tables = {
+            REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD: REVIEW_INVITATIONS_PARITY_NEW_TABLES,
+            ACQUISITION_REHEARSAL_TARGET_HEAD: ACQUISITION_PARITY_NEW_TABLES,
+        }[target_head]
+        expected_new_counts = {table: 0 for table in reviewed_tables}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError("migration rehearsal does not match the reviewed new tables")
+    elif (source_head, target_head) == (
+        PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+        PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
     ):
-        raise DrillError("migration rehearsal source derivations are invalid")
-    if (
-        source_derivations["academy_public_profiles"]
-        != source_counts_after_hold["academy_public_profiles"]
+        if source_derivations:
+            raise DrillError("processing ownership rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in PROCESSING_OWNERSHIP_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed processing ownership tables"
+            )
+    elif (source_head, target_head) == (
+        REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
+        REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD,
     ):
-        raise DrillError("migration rehearsal source derivation does not match its row count")
-    expected_new_counts = {
-        # 0028 inserts one global identity per distinct legacy person and one
-        # preference per legacy profile; 0029 creates an empty append-only
-        # receipt table.
-        "community_public_profiles": source_derivations["academy_public_profile_people"],
-        "academy_leaderboard_preferences": source_counts_after_hold["academy_public_profiles"],
-        "app_update_read_receipts": 0,
-    }
-    if expected_new_tables != set(expected_new_counts):
-        raise DrillError(
-            "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
-        )
+        if source_derivations:
+            raise DrillError("reviewer identity rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in REVIEWER_IDENTITY_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed reviewer identity table"
+            )
+    elif (source_head, target_head) == (
+        PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD,
+        PROVIDER_ACTIVATION_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("provider activation rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in PROVIDER_ACTIVATION_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed provider activation table"
+            )
+    elif (source_head, target_head) == (
+        PROCESSING_CONTINUATION_REHEARSAL_SOURCE_HEAD,
+        PROCESSING_CONTINUATION_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("processing continuation rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in PROCESSING_CONTINUATION_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed processing continuation table"
+            )
+    elif (source_head, target_head) == (
+        EXECUTION_CONTROL_REHEARSAL_SOURCE_HEAD,
+        EXECUTION_CONTROL_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("execution control rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in EXECUTION_CONTROL_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError("execution control rehearsal table mismatch")
+    elif (source_head, target_head) == (
+        DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+        DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("direct Sales Xray rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed direct 0029/0031 pair"
+            )
+    else:
+        raise DrillError("migration rehearsal transition has no reviewed row-count contract")
     if any(
         target_counts[table] != expected_count
         for table, expected_count in expected_new_counts.items()
@@ -1849,7 +2232,12 @@ def _assert_migration_rehearsal_transition(
     return expected_new_counts
 
 
-def _migration_command(target: DisposableTarget, image: str) -> tuple[str, ...]:
+def _migration_command(
+    target: DisposableTarget,
+    image: str,
+    *,
+    target_head: str = MIGRATION_REHEARSAL_TARGET_HEAD,
+) -> tuple[str, ...]:
     """Run only the reviewed candidate Alembic entrypoint on the internal target."""
 
     return (
@@ -1900,15 +2288,19 @@ def _migration_command(target: DisposableTarget, image: str) -> tuple[str, ...]:
         "alembic",
         image,
         "upgrade",
-        MIGRATION_REHEARSAL_TARGET_HEAD,
+        target_head,
     )
 
 
 def _run_candidate_migration(target: DisposableTarget, config: DrillConfig) -> None:
     target_url = _helper_database_url(target)
     _run_docker(
-        _migration_command(target, config.application_image),
-        "apply candidate migration 0028/0029 in isolated target",
+        _migration_command(
+            target,
+            config.application_image,
+            target_head=config.expected_migration_head,
+        ),
+        f"apply candidate migration to {config.expected_migration_head} in isolated target",
         timeout_seconds=RESTORE_TIMEOUT_SECONDS,
         env_updates={
             "AC_DATABASE_URL": target_url,
@@ -2220,10 +2612,9 @@ def _validate_migration_rehearsal_args(
         )
     if source_image is None:
         return None, None
-    if source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
-        raise DrillError("migration rehearsal supports only source migration head 20260910_0027")
-    if target_head != MIGRATION_REHEARSAL_TARGET_HEAD:
-        raise DrillError("migration rehearsal supports only candidate migration head 20260910_0029")
+    if source_head is None:
+        raise DrillError("migration rehearsal source head is missing")
+    _validate_migration_rehearsal_pair(source_head, target_head)
     if args.reconcile_job_id or args.reconcile_outbox_event_id:
         raise DrillError("migration rehearsal must leave the recovery state held")
     if (
@@ -2326,8 +2717,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-migration-head",
-        choices=(MIGRATION_REHEARSAL_SOURCE_HEAD,),
-        help="exact prior migration head for the isolated 0027-to-0029 rehearsal",
+        choices=(
+            MIGRATION_REHEARSAL_SOURCE_HEAD,
+            SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+            INFERENCE_REHEARSAL_SOURCE_HEAD,
+            PLANS_REHEARSAL_SOURCE_HEAD,
+            COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+            REVIEWS_REHEARSAL_SOURCE_HEAD,
+            REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD,
+            ACQUISITION_REHEARSAL_SOURCE_HEAD,
+            PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+            REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
+        ),
+        help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )
     parser.add_argument("--postgres-image", default=DEFAULT_POSTGRES_IMAGE)
     parser.add_argument("--execute", action="store_true", help="run the disposable drill")
@@ -2379,8 +2781,8 @@ def _dry_run_plan(config: DrillConfig) -> dict[str, Any]:
         plan["source_migration_head"] = config.source_migration_head
         plan["migration"] = {
             "entrypoint": "alembic",
-            "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
-            "target_migration_head": MIGRATION_REHEARSAL_TARGET_HEAD,
+            "command": ["upgrade", config.expected_migration_head],
+            "target_migration_head": config.expected_migration_head,
         }
     return plan
 
@@ -2495,10 +2897,9 @@ def _execute_migration_rehearsal(
 ) -> None:
     source_image = config.source_application_image
     source_head = config.source_migration_head
-    if source_image is None or source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
+    if source_image is None or source_head is None:
         raise DrillError("migration rehearsal source contract is incomplete")
-    if config.expected_migration_head != MIGRATION_REHEARSAL_TARGET_HEAD:
-        raise DrillError("migration rehearsal target contract is not the reviewed 0029 head")
+    _validate_migration_rehearsal_pair(source_head, config.expected_migration_head)
 
     _restore_dump(target)
     source_schema = _schema_and_migration(
@@ -2512,7 +2913,12 @@ def _execute_migration_rehearsal(
         source_head,
         source_counts_before_hold,
     )
-    source_derivations_before_hold = _migration_rehearsal_source_derivations(target)
+    source_derivations_before_hold = (
+        _migration_rehearsal_source_derivations(target)
+        if (source_head, config.expected_migration_head)
+        == (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD)
+        else {}
+    )
     evidence["source_schema"] = source_schema
     evidence["source_row_counts_before_hold"] = source_counts_before_hold
     evidence["source_derivations_before_hold"] = source_derivations_before_hold
@@ -2541,7 +2947,9 @@ def _execute_migration_rehearsal(
     # sanctioned hold because holding jobs/outbox work is an intentional state
     # transition.
     source_counts_after_hold = _row_counts(target, source_head)
-    source_derivations_after_hold = _migration_rehearsal_source_derivations(target)
+    source_derivations_after_hold = (
+        _migration_rehearsal_source_derivations(target) if source_derivations_before_hold else {}
+    )
     if source_derivations_after_hold != source_derivations_before_hold:
         raise DrillError("source migration derivations changed during the restore hold")
     evidence["source_row_counts_after_hold"] = source_counts_after_hold
@@ -2558,6 +2966,8 @@ def _execute_migration_rehearsal(
         source_counts_after_hold,
         target_counts,
         source_derivations_after_hold,
+        source_head=source_head,
+        target_head=config.expected_migration_head,
     )
     after_migration = _side_effect_counts(target)
     if after_migration != after_hold:
@@ -2576,7 +2986,7 @@ def _execute_migration_rehearsal(
 
     evidence["migration"] = {
         "entrypoint": "alembic",
-        "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
+        "command": ["upgrade", config.expected_migration_head],
         "source_head": source_head,
         "target_head": config.expected_migration_head,
     }

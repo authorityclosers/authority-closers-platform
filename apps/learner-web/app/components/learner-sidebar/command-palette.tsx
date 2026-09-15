@@ -9,6 +9,7 @@ import {
   Compass,
   HelpCircle,
   LayoutDashboard,
+  MessagesSquare,
   Search,
   Settings,
   User,
@@ -79,6 +80,15 @@ export function getDefaultCommandPaletteItems(
       icon: <Compass size={18} aria-hidden="true" />,
       category: "Navigation",
       keywords: ["catalog", "explore", "programs", "browse"],
+    },
+    {
+      id: "nav-sales-xray",
+      label: "Sales Xray",
+      description: "Open the conversation workspace",
+      href: ROUTES.salesXray,
+      icon: <MessagesSquare size={18} aria-hidden="true" />,
+      category: "Navigation",
+      keywords: ["conversation", "call", "review", "xray"],
     },
     {
       id: "nav-progress",

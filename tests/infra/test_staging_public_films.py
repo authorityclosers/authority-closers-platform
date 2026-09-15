@@ -341,7 +341,7 @@ def test_release_preflight_precedes_writer_stop_and_uses_both_release_identities
     installer = (APPLICATION / "scripts/install-application-release.sh").read_text(encoding="utf-8")
     for target in ("release_dir", "previous_release"):
         assert installer.index(f'preflight "${target}" "$target_environment"') < installer.index(
-            'compose_for "$writer_release" stop',
+            'stop_application_services_with_hosted_drain "$writer_release" false',
         )
 
 
@@ -373,10 +373,14 @@ def test_compose_dispatch_uses_target_release_not_latest_flag_and_scrubs_ambient
     binary_path = binary.as_posix()
     if os.name == "nt":
         binary_path = "/" + binary_path[0].lower() + binary_path[2:]
+    hosted_loader = "sales_xray_hosted_inputs=()\n" + _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+    )
     function = _installer_function("compose_for", '\n\ncompose_for "$release_dir" config --quiet')
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )
+    filesystem_selector = "filesystem_media_compose_file_for() {\n  return 0\n}\n"
     script = f"""set -euo pipefail
 export PATH={shlex.quote(binary_path)}:"$PATH"
 export AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED=true
@@ -386,6 +390,8 @@ target_environment={shlex.quote(target_environment)}
 compose_project=ac-application-{target_environment}
 with_release_secrets() {{ "$@"; }}
 {practice_scope}
+{filesystem_selector}
+{hosted_loader}
 python3() {{
   [[ "$1" == "$release_dir/scripts/staging-public-films.py" && "$2" == compose-file ]]
   [[ "$4" == staging ]]

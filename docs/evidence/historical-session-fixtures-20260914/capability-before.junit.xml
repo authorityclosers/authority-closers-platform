@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="10" time="11.630" timestamp="2026-09-14T08:43:33.251996+05:30" hostname="RSuyash"><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_sql_cannot_mutate_history[update-capability_grants]" time="6.749" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_sql_cannot_mutate_history[update-capability_revocations]" time="0.020" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_sql_cannot_mutate_history[delete-capability_grants]" time="0.020" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_sql_cannot_mutate_history[delete-capability_revocations]" time="0.018" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_program_grant_rejects_cross_tenant_relationship" time="0.011" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_real_service_replay_revocation_and_atomic_audit" time="0.096"><failure message="sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column &quot;audience&quot; of relation &quot;sessions&quot; does not exist&#10;LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...&#10;                                                             ^&#10;[SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]&#10;[parameters: {'id': UUID('669f23c4-0e5c-41ee-aeec-934d5509a45d'), 'person_id': UUID('fa251d58-9628-484e-a95c-cb7568875afb'), 'token_hash': Binary(b'@\xa6\xed\xc0\xbc{D~5\xa4\x96o\x0 ... (98 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 41, 803998, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 41, 803998, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('9a4b6210-7cdd-4b45-b2a4-7cf90e7a3374'), 'revision': 0}]&#10;(Background on this error at: https://sqlalche.me/e/20/f405)">..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.UndefinedColumn: column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+
+The above exception was the direct cause of the following exception:
+tests\database\test_capability_grants_postgresql.py:232: in test_postgresql_real_service_replay_revocation_and_atomic_audit
+    _run_async(exercise())
+tests\database\test_capability_grants_postgresql.py:257: in _run_async
+    return runner.run(coroutine)
+           ^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\base_events.py:664: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:179: in exercise
+    actor = await _manager_fixture(engine, scope)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:287: in _manager_fixture
+    await db.flush()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4353: in flush
+    self._flush(objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4488: in _flush
+    with util.safe_reraise():
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4449: in _flush
+    flush_context.execute()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:465: in execute
+    rec.execute(self)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:94: in save_obj
+    _emit_insert_statements(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+E   [SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]
+E   [parameters: {'id': UUID('669f23c4-0e5c-41ee-aeec-934d5509a45d'), 'person_id': UUID('fa251d58-9628-484e-a95c-cb7568875afb'), 'token_hash': Binary(b'@\xa6\xed\xc0\xbc{D~5\xa4\x96o\x0 ... (98 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 41, 803998, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 41, 803998, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('9a4b6210-7cdd-4b45-b2a4-7cf90e7a3374'), 'revision': 0}]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)</failure></testcase><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_capability_migration_matches_model_metadata" time="0.225" /><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_normal_identity_does_not_deadlock_with_management_fence" time="0.086"><failure message="sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column &quot;audience&quot; of relation &quot;sessions&quot; does not exist&#10;LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...&#10;                                                             ^&#10;[SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]&#10;[parameters: {'id': UUID('05ffa68f-6bae-42f3-9947-2e12a6813691'), 'person_id': UUID('d16b0e73-998d-4e69-99d3-350f19540dd4'), 'token_hash': Binary(b'\x1cH\xe3\xdb\x0b\xde\xa3\xd9U{\x ... (98 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 42, 799128, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 42, 799128, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('c804d7b7-08e8-4175-9538-c40568f11079'), 'revision': 0}]&#10;(Background on this error at: https://sqlalche.me/e/20/f405)">..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.UndefinedColumn: column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+
+The above exception was the direct cause of the following exception:
+tests\database\test_capability_grants_postgresql.py:357: in test_postgresql_normal_identity_does_not_deadlock_with_management_fence
+    _run_async(exercise())
+tests\database\test_capability_grants_postgresql.py:257: in _run_async
+    return runner.run(coroutine)
+           ^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\base_events.py:664: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:323: in exercise
+    actor = await _manager_fixture(engine, scope)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:287: in _manager_fixture
+    await db.flush()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4353: in flush
+    self._flush(objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4488: in _flush
+    with util.safe_reraise():
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4449: in _flush
+    flush_context.execute()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:465: in execute
+    rec.execute(self)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:94: in save_obj
+    _emit_insert_statements(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+E   [SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]
+E   [parameters: {'id': UUID('05ffa68f-6bae-42f3-9947-2e12a6813691'), 'person_id': UUID('d16b0e73-998d-4e69-99d3-350f19540dd4'), 'token_hash': Binary(b'\x1cH\xe3\xdb\x0b\xde\xa3\xd9U{\x ... (98 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 42, 799128, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 42, 799128, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('c804d7b7-08e8-4175-9538-c40568f11079'), 'revision': 0}]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)</failure></testcase><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_resource_lifecycle_waits_for_authorized_action[tenant]" time="0.088"><failure message="sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column &quot;audience&quot; of relation &quot;sessions&quot; does not exist&#10;LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...&#10;                                                             ^&#10;[SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]&#10;[parameters: {'id': UUID('a1b006c9-ca1b-4ad8-8ff6-4e54496ca81f'), 'person_id': UUID('0a522e80-2ff5-4f24-b76d-3527e2eac7c2'), 'token_hash': Binary(b'\xb9\x00r$[\x92\x82\xe3V\x1f\xb7\ ... (86 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 43, 397074, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 43, 397074, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('e0f39635-29a3-4556-aaa3-f0f9347c4376'), 'revision': 0}]&#10;(Background on this error at: https://sqlalche.me/e/20/f405)">..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.UndefinedColumn: column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+
+The above exception was the direct cause of the following exception:
+tests\database\test_capability_grants_postgresql.py:435: in test_postgresql_resource_lifecycle_waits_for_authorized_action
+    _run_async(exercise())
+tests\database\test_capability_grants_postgresql.py:257: in _run_async
+    return runner.run(coroutine)
+           ^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\base_events.py:664: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:372: in exercise
+    actor = await _manager_fixture(engine, scope)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:287: in _manager_fixture
+    await db.flush()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4353: in flush
+    self._flush(objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4488: in _flush
+    with util.safe_reraise():
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4449: in _flush
+    flush_context.execute()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:465: in execute
+    rec.execute(self)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:94: in save_obj
+    _emit_insert_statements(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+E   [SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]
+E   [parameters: {'id': UUID('a1b006c9-ca1b-4ad8-8ff6-4e54496ca81f'), 'person_id': UUID('0a522e80-2ff5-4f24-b76d-3527e2eac7c2'), 'token_hash': Binary(b'\xb9\x00r$[\x92\x82\xe3V\x1f\xb7\ ... (86 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 43, 397074, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 43, 397074, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('e0f39635-29a3-4556-aaa3-f0f9347c4376'), 'revision': 0}]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)</failure></testcase><testcase classname="tests.database.test_capability_grants_postgresql" name="test_postgresql_resource_lifecycle_waits_for_authorized_action[membership]" time="0.565"><failure message="sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column &quot;audience&quot; of relation &quot;sessions&quot; does not exist&#10;LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...&#10;                                                             ^&#10;[SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]&#10;[parameters: {'id': UUID('5d242347-d052-4315-a19d-33f34dd58dab'), 'person_id': UUID('baae5528-ec2f-45c3-b928-b20594fb2009'), 'token_hash': Binary(b'\xfc\x8b\x01\r\xcb\xd1\xd8&amp;!1\xc8 ... (96 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 43, 912847, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 43, 912847, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('67b4eb98-c633-4629-af7b-d9a967b245c8'), 'revision': 0}]&#10;(Background on this error at: https://sqlalche.me/e/20/f405)">..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.UndefinedColumn: column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+
+The above exception was the direct cause of the following exception:
+tests\database\test_capability_grants_postgresql.py:435: in test_postgresql_resource_lifecycle_waits_for_authorized_action
+    _run_async(exercise())
+tests\database\test_capability_grants_postgresql.py:257: in _run_async
+    return runner.run(coroutine)
+           ^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python312\Lib\asyncio\base_events.py:664: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:372: in exercise
+    actor = await _manager_fixture(engine, scope)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\database\test_capability_grants_postgresql.py:287: in _manager_fixture
+    await db.flush()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\ext\asyncio\session.py:786: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4353: in flush
+    self._flush(objects)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4488: in _flush
+    with util.safe_reraise():
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\session.py:4449: in _flush
+    flush_context.execute()
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:465: in execute
+    rec.execute(self)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\unitofwork.py:641: in execute
+    util.preloaded.orm_persistence.save_obj(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:94: in save_obj
+    _emit_insert_statements(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\orm\persistence.py:1234: in _emit_insert_statements
+    result = connection.execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1421: in execute
+    return meth(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\sql\elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1848: in _execute_context
+    return self._exec_single_context(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:2365: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\engine\default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\dialects\postgresql\psycopg.py:642: in execute
+    result = self.await_(self._cursor.execute(query, params, **kw))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\sqlalchemy\util\_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+..\authority-closers-v02-consolidation\.venv\Lib\site-packages\psycopg\cursor_async.py:117: in execute
+    raise ex.with_traceback(None)
+E   sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "audience" of relation "sessions" does not exist
+E   LINE 1: ...ed_at, revocation_reason, user_agent, ip_address, audience, ...
+E                                                                ^
+E   [SQL: INSERT INTO sessions (id, person_id, token_hash, created_at, expires_at, last_seen_at, revoked_at, revocation_reason, user_agent, ip_address, audience, selected_tenant_id, revision) VALUES (%(id)s::UUID, %(person_id)s::UUID, %(token_hash)s, %(created_at)s::TIMESTAMP WITH TIME ZONE, %(expires_at)s::TIMESTAMP WITH TIME ZONE, %(last_seen_at)s::TIMESTAMP WITH TIME ZONE, %(revoked_at)s::TIMESTAMP WITH TIME ZONE, %(revocation_reason)s::VARCHAR, %(user_agent)s::VARCHAR, %(ip_address)s::VARCHAR, %(audience)s::VARCHAR, %(selected_tenant_id)s::UUID, %(revision)s::INTEGER)]
+E   [parameters: {'id': UUID('5d242347-d052-4315-a19d-33f34dd58dab'), 'person_id': UUID('baae5528-ec2f-45c3-b928-b20594fb2009'), 'token_hash': Binary(b'\xfc\x8b\x01\r\xcb\xd1\xd8&amp;!1\xc8 ... (96 byteschars)), 'created_at': datetime.datetime(2026, 9, 14, 3, 13, 43, 912847, tzinfo=datetime.timezone.utc), 'expires_at': datetime.datetime(2026, 9, 14, 4, 13, 43, 912847, tzinfo=datetime.timezone.utc), 'last_seen_at': None, 'revoked_at': None, 'revocation_reason': None, 'user_agent': None, 'ip_address': None, 'audience': 'account', 'selected_tenant_id': UUID('67b4eb98-c633-4629-af7b-d9a967b245c8'), 'revision': 0}]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)</failure></testcase></testsuite></testsuites>

@@ -10,6 +10,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   MoreHorizontal,
+  MessagesSquare,
   Settings,
   User,
   X,
@@ -48,6 +49,7 @@ export function MobileBottomNav({
   const isProfile = current === "profile";
   const isSettings = current === "settings";
   const isMore =
+    current === "sales-xray" ||
     isCalendar ||
     isNotifications ||
     isProfile ||
@@ -272,6 +274,16 @@ export function MobileMoreSheet({
         </div>
 
         <nav className="mobile-drawer-nav" aria-label="More learner navigation">
+          <Link
+            href={ROUTES.salesXray}
+            prefetch={false}
+            className="mobile-drawer-link"
+            aria-current={current === "sales-xray" ? "page" : undefined}
+            onClick={onClose}
+          >
+            <MessagesSquare size={18} aria-hidden="true" />
+            <span>Sales Xray</span>
+          </Link>
           {practiceAvailable ? (
             <Link
               href={ROUTES.discover}

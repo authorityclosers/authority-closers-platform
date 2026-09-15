@@ -1,10 +1,14 @@
 name: ac-media-safety
+# ac-scanner-temp-filesystem-v1
 services:
   scanner:
     image: clamav/clamav@sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f
     container_name: ac-media-safety-scanner
     user: "100:100"
-    entrypoint: /init-unprivileged
+    # The pinned image's init script waits on its fixed /tmp/clamd.sock path.
+    # Keep the reviewed shared socket under /run/ac-media-safety and bridge the
+    # image-only readiness path in the immutable source-owned wrapper.
+    entrypoint: ["/bin/sh", "/usr/local/bin/ac-media-safety-entrypoint"]
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -22,7 +26,10 @@ services:
     volumes:
       - ./clamd.conf:/etc/clamav/clamd.conf:ro
       - ./freshclam.conf:/etc/clamav/freshclam.conf:ro
+      - ./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro
       - /srv/authority-closers/volumes/media-safety-signatures:/var/lib/clamav
+      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:rw
+      - /srv/authority-closers/volumes/media-safety-tmp:/var/lib/ac-media-safety-tmp:rw
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=268435456,uid=100,gid=100,mode=0700
     healthcheck:

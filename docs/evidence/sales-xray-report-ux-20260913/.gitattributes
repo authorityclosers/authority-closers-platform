@@ -1,0 +1,6 @@
+# Preserve the exact receipt bytes recorded by manifest.json across platforms.
+*.json -text
+*.xml -text
+*.log -text
+*.png binary
+*.pdf binary

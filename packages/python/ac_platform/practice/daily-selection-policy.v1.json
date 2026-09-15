@@ -1,0 +1,37 @@
+{
+  "schema_version": "daily-practice-selection-v1",
+  "status": "approved",
+  "approval": {
+    "reviewer": "Luna independent reviewer (Codex agent)",
+    "approver": "Codex release coordinator under user delegation (Authority Closers workspace owner)",
+    "approved_at": "2026-09-13",
+    "scope": "formative daily practice only"
+  },
+  "scope": "academy_tenant",
+  "period": "local_day",
+  "selection": {
+    "algorithm": "sha256",
+    "seed": "tenant_id:local_day:language",
+    "tie_break": "set_id"
+  },
+  "languages": [
+    {
+      "id": "english",
+      "label": "English",
+      "set_id": "india-daily-english"
+    },
+    {
+      "id": "hinglish",
+      "label": "Hinglish",
+      "set_id": "india-daily-hinglish"
+    },
+    {
+      "id": "marlish",
+      "label": "Marathi-English (Marlish)",
+      "set_id": "india-daily-marlish"
+    }
+  ],
+  "review": {
+    "required_status": "approved"
+  }
+}

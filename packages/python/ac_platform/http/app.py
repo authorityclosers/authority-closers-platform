@@ -13,12 +13,27 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
+from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
+from ac_platform.conversation_intelligence.internal_tester import (
+    InternalTesterPolicy,
+    tester_rate_limit_resolver,
+)
 from ac_platform.db.session import engine, session_factory
+from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.community import install_community_http
+from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_acquisition_runtime import (
+    compose_acquisition,
+    install_acquisition_runtime,
+)
+from ac_platform.http.conversation_admin import install_conversation_admin_http
+from ac_platform.http.conversation_execution_control import install_execution_control_http
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import (
@@ -37,6 +52,7 @@ from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.reviewer_auth import install_reviewer_identity_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -78,6 +94,7 @@ def create_app(
     *,
     identity_provider: OAuthIdentityProvider | None = None,
     media_runtime: MediaRuntime | None = None,
+    conversation_intake_runtime: ConversationIntakeRuntime | None = None,
 ) -> FastAPI:
     # Provider activation is closed in this slice.  There is no immutable
     # externally attested activation boundary, inbox-first/quick-ACK webhook
@@ -129,6 +146,71 @@ def create_app(
         require_actor=require_actor,
     )
     install_practice_http(application, settings=settings, require_actor=require_actor)
+    if conversation_intake_runtime is not None and settings.environment not in {"local", "test"}:
+        raise RuntimeError(
+            "Hosted conversation intake requires its reviewed deployment composition."
+        )
+    if conversation_intake_runtime is not None and settings.sales_xray_enabled:
+        raise RuntimeError("Use one explicit conversation runtime composition.")
+    try:
+        resolved_conversation = conversation_intake_runtime or compose_hosted_intake(settings)
+    except (ValueError, OSError):
+        # A stale Sales Xray approval disables this capability, not the LMS/API.
+        # No demo or less restricted provider runtime is used as a fallback.
+        resolved_conversation = None
+        logger.warning("sales_xray_composition_unavailable")
+    application.state.sales_xray_intake_configured = resolved_conversation is not None
+    tester_policy = (
+        None
+        if resolved_conversation is None or resolved_conversation.authority is None
+        else InternalTesterPolicy(
+            resolved_conversation.authority.loader,
+            settings.environment,
+        )
+    )
+    application.state.internal_tester_policy = tester_policy
+    try:
+        resolved_acquisition = compose_acquisition(settings, resolved_conversation)
+    except (ValueError, OSError):
+        resolved_acquisition = None
+        logger.warning("sales_xray_acquisition_unavailable")
+    application.state.sales_xray_acquisition_configured = resolved_acquisition is not None
+    install_acquisition_runtime(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        runtime=resolved_acquisition,
+    )
+    install_conversation_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake_runtime=resolved_conversation,
+    )
+    install_conversation_admin_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        # Recovery reads use the resolved hosted composition.  The old private
+        # draft importer remains an explicit test-only seam and is not enabled
+        # by passing the raw caller-supplied runtime here.
+        recovery_storage=resolved_conversation.storage if resolved_conversation else None,
+    )
+    install_execution_control_http(
+        application, settings=settings, sessions=session_factory, require_actor=require_actor
+    )
+    install_conversation_review_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        require_reviewer=install_reviewer_identity_http(
+            application,
+            settings=settings,
+            sessions=session_factory,
+        ),
+        storage=resolved_conversation.storage if resolved_conversation else None,
+    )
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
@@ -170,6 +252,11 @@ def create_app(
         require_actor=require_actor,
     )
     install_admin_learning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+    )
+    install_admin_diagnosis_http(
         application,
         settings=settings,
         require_actor=require_actor,
@@ -239,11 +326,29 @@ def create_app(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
         and settings.media_local_avatar_enabled,
+        filesystem_avatar_upload_enabled=(
+            resolved_media_runtime.filesystem_avatar_runtime is not None
+        ),
         studio_video_upload_max_bytes=studio_video_max_source_bytes,
+        conversation_upload_max_bytes=resolved_conversation.storage.max_bytes
+        if resolved_conversation
+        else None,
+        acquisition_upload_max_bytes=resolved_acquisition.intake.storage.max_bytes
+        if resolved_acquisition
+        else None,
     )
     application.add_middleware(
         RateLimitMiddleware,
         trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
+        exemption=(
+            None
+            if tester_policy is None
+            else tester_rate_limit_resolver(
+                settings=settings,
+                sessions=session_factory,
+                policy=tester_policy,
+            )
+        ),
     )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     application.add_middleware(CoachSurfaceMiddleware, settings=settings)
@@ -260,6 +365,7 @@ def create_app(
                 "if-match",
                 "x-request-id",
                 "x-playback-token",
+                "x-analysis-quote",
             ],
             expose_headers=["etag", "x-request-id", "x-ac-release-id"],
             max_age=600,

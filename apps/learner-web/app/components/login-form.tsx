@@ -12,11 +12,18 @@ import {
 
 import { googleAuthStartUrl } from "../lib/auth-links";
 import { type CourseIntent } from "../lib/course-intent";
+import { parseCourseIntent } from "../lib/course-intent";
 import {
-  activityIntentHref,
   activityReturnHref,
+  parseActivityIntent,
   type ActivityIntent,
 } from "../lib/activity-intent";
+import {
+  authIntentHref,
+  parseSalesAuthNext,
+  SALES_XRAY_PATH,
+  type SalesAuthNext,
+} from "../lib/sales-auth-return";
 import {
   ApiError,
   createLearnerApi,
@@ -37,6 +44,7 @@ type LoginFormProps = {
   stagingBridge?: boolean;
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 };
 
 const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
@@ -52,10 +60,23 @@ export function routeAfterOnboarding(
   status?: OnboardingStatus,
   courseIntent: CourseIntent = null,
   activityIntent: ActivityIntent = null,
+  salesNext: SalesAuthNext = null,
 ): string {
-  return status === "completed" || status === "skipped"
-    ? activityReturnHref(activityIntent, courseIntent)
-    : activityIntentHref(ROUTES.onboarding, activityIntent, courseIntent);
+  if (status === "completed" || status === "skipped") {
+    if (
+      parseCourseIntent(courseIntent) ||
+      parseActivityIntent(activityIntent)
+    ) {
+      return activityReturnHref(activityIntent, courseIntent);
+    }
+    return parseSalesAuthNext(salesNext) ? SALES_XRAY_PATH : ROUTES.learnerHome;
+  }
+  return authIntentHref(
+    ROUTES.onboarding,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
 }
 
 export function LoginForm({
@@ -63,6 +84,7 @@ export function LoginForm({
   stagingBridge = false,
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: LoginFormProps) {
   const hydrated = useSyncExternalStore(
     subscribeHydration,
@@ -76,13 +98,36 @@ export function LoginForm({
   const errorRef = useRef<HTMLDivElement>(null);
   const authenticateUrl = stagingBridge
     ? stagingHref(
-        googleAuthStartUrl("authenticate", courseIntent, activityIntent),
+        googleAuthStartUrl(
+          "authenticate",
+          courseIntent,
+          activityIntent,
+          salesNext,
+        ),
       )
-    : googleAuthStartUrl("authenticate", courseIntent, activityIntent);
-  const registrationHref = activityIntentHref(
+    : googleAuthStartUrl(
+        "authenticate",
+        courseIntent,
+        activityIntent,
+        salesNext,
+      );
+  const registrationHref = authIntentHref(
     ROUTES.register,
     activityIntent,
     courseIntent,
+    salesNext,
+  );
+  const verificationHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
+  const forgotPasswordHref = authIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
 
   useEffect(() => {
@@ -105,11 +150,21 @@ export function LoginForm({
       try {
         const onboarding = await api.onboarding();
         window.location.assign(
-          routeAfterOnboarding(onboarding.status, courseIntent, activityIntent),
+          routeAfterOnboarding(
+            onboarding.status,
+            courseIntent,
+            activityIntent,
+            salesNext,
+          ),
         );
       } catch {
         window.location.assign(
-          routeAfterOnboarding(undefined, courseIntent, activityIntent),
+          routeAfterOnboarding(
+            undefined,
+            courseIntent,
+            activityIntent,
+            salesNext,
+          ),
         );
       }
     } catch (requestError) {
@@ -198,11 +253,11 @@ export function LoginForm({
             <p>{error}</p>
             {verificationRequired ? (
               stagingBridge ? (
-                <a className="text-link" href={stagingHref(ROUTES.verifyEmail)}>
+                <a className="text-link" href={stagingHref(verificationHref)}>
                   Request on deployed staging
                 </a>
               ) : (
-                <Link className="text-link" href={ROUTES.verifyEmail}>
+                <Link className="text-link" href={verificationHref}>
                   Request a fresh verification link
                 </Link>
               )
@@ -217,11 +272,11 @@ export function LoginForm({
           <ArrowRight size={17} aria-hidden="true" />
         </button>
         {stagingBridge ? (
-          <a className="text-link" href={stagingHref(ROUTES.forgotPassword)}>
+          <a className="text-link" href={stagingHref(forgotPasswordHref)}>
             Forgot your password? Continue on staging
           </a>
         ) : (
-          <Link className="text-link" href={ROUTES.forgotPassword}>
+          <Link className="text-link" href={forgotPasswordHref}>
             Forgot your password?
           </Link>
         )}
