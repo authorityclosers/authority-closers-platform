@@ -1021,4 +1021,7 @@ class ConversationApplication:
             ).all():
                 review.proposal, review.erased_at = None, now
         recording.state, recording.deleted_at = "deleted", now
+        # Flush all retention clears before acknowledging the deletion job so
+        # the durable erasure is visible before the worker lease is completed.
+        await self.database.flush()
         await JobRepository(self.database).complete(job_id, lease_token)

@@ -563,6 +563,7 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                 version.proof = None
                 version.payload = None
                 version.erased_at = utc(prepared.state.now)
+                await database.flush()
             async with sessions() as database:
                 version = await database.get(ConversationRetainedC5Version, corrected["id"])
                 assert (
