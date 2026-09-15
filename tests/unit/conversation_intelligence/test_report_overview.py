@@ -88,6 +88,47 @@ def test_financial_estimates_traits_and_boolean_focus_indices_are_rejected() -> 
             parse_report_draft(payload, transcript)
 
 
+def test_optional_root_business_impact_round_trips_and_absence_stays_omitted() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+
+    without_root_impact = parse_report_draft(payload, transcript)
+    assert without_root_impact.overview is not None
+    assert "business_impact" not in without_root_impact.overview.model_dump(mode="json")
+
+    root_impact = {
+        "status": "insufficient_data",
+        "missing_inputs": ["Comparable conversion history", "Lead volume"],
+    }
+    payload["overview"]["business_impact"] = root_impact
+    with_root_impact = parse_report_draft(payload, transcript)
+    assert with_root_impact.overview is not None
+    assert with_root_impact.overview.model_dump(mode="json")["business_impact"] == root_impact
+
+
+@pytest.mark.parametrize(
+    "root_impact",
+    [
+        {"status": "known", "missing_inputs": ["Lead volume"]},
+        {"status": "insufficient_data", "missing_inputs": []},
+        {"status": "insufficient_data", "missing_inputs": ["" ]},
+        {
+            "status": "insufficient_data",
+            "missing_inputs": ["Lead volume"],
+            "estimate": 5000,
+        },
+    ],
+)
+def test_root_business_impact_rejects_non_contract_values(root_impact: dict[str, Any]) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["business_impact"] = root_impact
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
 def test_interpretation_and_change_require_source_and_chronological_context() -> None:
     transcript = _transcript()
     payload = _payload(transcript)
@@ -177,7 +218,7 @@ def test_direct_coaching_voice_changes_c5_binding_without_retranscription(
     assert previous.max_completion_tokens == current.max_completion_tokens
     assert b"REPORT_VOICE: direct-coaching-v1" in current.payload
     assert b"using you/your" in current.payload
-    assert b"Preserve verbatim source quotes and speaker labels" in current.payload
+    assert b"use server-bound references instead of copying source quotes" in current.payload
     assert b"never personalize prospect/customer statements" in current.payload
     assert transcript == original_transcript
     assert packet.model_dump(mode="json") == before_facts

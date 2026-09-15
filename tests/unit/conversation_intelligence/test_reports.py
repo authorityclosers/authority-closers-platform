@@ -114,6 +114,103 @@ def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
         parse_report_draft(unknown, transcript)
 
 
+@pytest.mark.parametrize(
+    ("reference", "expected_quote"),
+    [
+        (
+            {"segment_id": "s1"},
+            "Native line 1: the buyer asks about price and timing.",
+        ),
+        (
+            {"segment_id": "s1", "quote_start": 0, "quote_end": 13},
+            "Native line 1",
+        ),
+    ],
+)
+def test_c5_references_resolve_canonical_quote_and_native_times(
+    reference: dict[str, Any], expected_quote: str
+) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["strengths"][0]["evidence"][0] = reference
+
+    draft = parse_report_draft(payload, transcript)
+    evidence = draft.strengths[0].evidence[0]
+    assert evidence.quote == expected_quote
+    assert (evidence.start_ms, evidence.end_ms) == (0, 900)
+
+
+def test_c5_offsets_are_python_codepoint_ranges_for_unicode_text() -> None:
+    transcript = _transcript(count=1)
+    payload = _payload(transcript)
+    transcript["segments"][0]["text"] = "😀price — timing"
+    payload["strengths"][0]["evidence"][0] = {
+        "segment_id": "s1",
+        "quote_start": 1,
+        "quote_end": 6,
+    }
+
+    draft = parse_report_draft(payload, transcript)
+    assert draft.strengths[0].evidence[0].quote == "price"
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {"segment_id": "s1", "quote": "Native line 1", "start_ms": 0},
+        {
+            "segment_id": "s1",
+            "quote": "Native line 1",
+            "start_ms": 0,
+            "end_ms": 900,
+            "quote_start": 0,
+            "quote_end": 11,
+        },
+        {"segment_id": "s1", "quote_start": 0, "quote_end": 0},
+        {"segment_id": "s1", "quote_start": -1, "quote_end": 4},
+        {"segment_id": "s1", "quote_start": 0, "quote_end": 10_000},
+    ],
+)
+def test_c5_references_reject_mixed_fields_and_invalid_bounds(
+    reference: dict[str, Any],
+) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["strengths"][0]["evidence"][0] = reference
+
+    with pytest.raises(ReportError, match="report_evidence_"):
+        parse_report_draft(payload, transcript)
+
+
+def test_c5_full_reference_rejects_casefolded_literal_without_repair() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["strengths"][0]["evidence"][0] = {
+        "segment_id": "s1",
+        "quote": "native line 1",
+        "start_ms": 0,
+        "end_ms": 900,
+    }
+
+    with pytest.raises(ReportError, match="report_evidence_quote_mismatch"):
+        parse_report_draft(payload, transcript)
+
+
+def test_c4_evidence_keeps_the_strict_copied_quote_contract() -> None:
+    transcript = _transcript()
+    with pytest.raises(ReportError, match="report_evidence_quote_mismatch"):
+        parse_fact_packet(
+            {
+                "overview": "A source-bound fact.",
+                "observations": [
+                    {"fact": "A fact.", "evidence": [{"segment_id": "s1"}]}
+                ],
+                "uncertainties": [],
+            },
+            transcript,
+        )
+
+
 def test_parser_rejects_unsupported_citation_and_empty_transcript() -> None:
     transcript = _transcript()
     profile = load_report_profile()

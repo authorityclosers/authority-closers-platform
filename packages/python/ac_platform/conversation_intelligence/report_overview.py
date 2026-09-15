@@ -133,6 +133,9 @@ class DetailedOverview(_Strict):
     version: Literal["dipak-14-point-v1"]
     diagnosis: CallDiagnosis | None
     outcome: ObservedOutcome | None
+    business_impact: BusinessImpact | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     strength_details: list[StrengthDetail] = Field(max_length=3)
     improvement_details: list[ImprovementDetail] = Field(max_length=3)
     golden_moments: list[GoldenMoment] = Field(max_length=3)
@@ -162,10 +165,14 @@ def normalize_overview(
     The caller's raw response remains untouched.
     """
 
-    evidence_fields = {"segment_id", "quote", "start_ms", "end_ms"}
+    evidence_shapes = (
+        {"segment_id"},
+        {"segment_id", "quote_start", "quote_end"},
+        {"segment_id", "quote", "start_ms", "end_ms"},
+    )
 
     def evidence_collection(value: Any) -> Any:
-        if isinstance(value, Mapping) and set(value) == evidence_fields:
+        if isinstance(value, Mapping) and set(value) in evidence_shapes:
             value = [value]
         if isinstance(value, list):
             return [normalize_evidence(item) for item in value]
@@ -228,15 +235,12 @@ def normalize_overview(
 
 
 OVERVIEW_INSTRUCTION = (
-    " EVIDENCE_ARRAYS: v1. span={segment_id,quote,start_ms,end_ms}. Every evidence value is a "
-    "nonempty JSON array of span objects, even for one; never a bare object or string. "
-    "No invented/duplicate findings. Golden moments: evidenced strengths. "
-    "Interpretations/causes:hypotheses. Unknown diagnosis/outcome/change:null. "
-    "Follow-up windows are not bookings/sales. ONE focus/drill: improvement 0, observable target. "
-    "Business impact:insufficient_data; name missing inputs. No invented name/level/"
-    "ethics verdict; ethics need evidence/human review. Omit server-derived "
-    "source_label, source_sha256, transcript_revision, report_sections, "
-    "dimension labels/citations. "
+    " EVIDENCE_ARRAYS: v1. span={segment_id} for ordinary bounded segments; zero-based Python "
+    "code-point offsets; Retained legacy full references are exact-only. Every evidence value is "
+    "a nonempty JSON array of span objects, even for one. No invented/duplicate findings. "
+    "Interpretations are hypotheses; unknown diagnosis/outcome/change:null. Follow-up windows are "
+    "not bookings/sales. Business impact:insufficient_data; missing_inputs required. Omit server "
+    "fields and dimension labels/citations. "
 )
 
 # Compact semantic contract in the judge input; the Pydantic model above is the
@@ -273,6 +277,7 @@ OVERVIEW_FORMAT = {
     "ethics_notes": "[{text,evidence:[span]}], at most 3; observations only",
     "next_call_focus": "{improvement_index:0,behavior,target}|null if no improvement",
     "practice": "{improvement_index:0,instructions,success_condition}|null if no improvement",
+    "business_impact": "{status:insufficient_data,missing_inputs:[text]}|omitted",
     "progress": None,
     "final_assessment": "{repeat,fix_first,next_focus,assessment:2-4 sentences}",
 }

@@ -141,7 +141,9 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
     )
     assert "EVIDENCE_ARRAYS: v1" in system
     assert "nonempty JSON array of span objects, even for one" in system
-    assert "span={segment_id,quote,start_ms,end_ms}" in system
+    assert "span={segment_id} for ordinary bounded segments" in system
+    assert "zero-based Python code-point offsets" in system
+    assert "Retained legacy full references" in system
     assert json.loads(system.rsplit("Profile:\n", 1)[1]) == reports._prompt_profile(
         reports.load_report_profile()
     )
