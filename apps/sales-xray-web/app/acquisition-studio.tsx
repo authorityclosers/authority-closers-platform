@@ -14,8 +14,6 @@ import {
   LoaderCircle,
   Printer,
   ShieldCheck,
-  Upload,
-  X,
 } from "lucide-react";
 import {
   CallStudio,
@@ -809,6 +807,27 @@ export function AcquisitionStudio({
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
+  const audioPlayer = (
+    <audio
+      ref={audio}
+      src={source || undefined}
+      controls
+      preload="metadata"
+      onError={() =>
+        setPlaybackMessage(
+          "Audio playback is unavailable. Your report remains below.",
+        )
+      }
+      onTimeUpdate={() => {
+        if (
+          moment &&
+          audio.current &&
+          audio.current.currentTime >= moment.end_ms / 1000
+        )
+          audio.current.pause();
+      }}
+    />
+  );
 
   const content = (
     <div
@@ -824,6 +843,7 @@ export function AcquisitionStudio({
               ? "uploading"
               : "upload"
       }
+      data-selected={file ? "true" : "false"}
     >
       <div className="studio-main">
         <AnalysisAvailability onChange={setAnalysisPaused} />
@@ -848,11 +868,8 @@ export function AcquisitionStudio({
         {!submission && !report && (
           <div className="studio-intro">
             <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
-            <h1>Make your next call clearer.</h1>
-            <p>
-              Upload one call, keep the moments that matter, and leave with one
-              practical next step based on Dipak’s sales principles.
-            </p>
+            <h1>Make your next call better.</h1>
+            <p>Upload a sales call. Get clear feedback you can use.</p>
           </div>
         )}
         {!entry && !error && (
@@ -999,21 +1016,21 @@ export function AcquisitionStudio({
                 </button>
               </>
             ) : !file && !submission ? (
-              <>
+              <div className={styles.dropZone} data-upload-dropzone>
                 <span className="studio-upload-icon">
-                  <Upload size={30} />
+                  <AudioLines size={30} />
                 </span>
                 <h2>Start with your sales call</h2>
-                <p>
-                  Choose a recording from your phone, meeting app or computer.
+                <p className={styles.dropTitle}>
+                  Drag and drop an audio file here
                 </p>
                 <label
-                  className={`primary-button upload-label ${!policy ? styles.disabled : ""}`}
+                  className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
                   htmlFor="acquisition-file"
                 >
-                  <Upload size={18} /> Choose audio file
+                  or click to choose a file
                 </label>
-                <p className={styles.dropHint}>Or drop an audio file here</p>
+                <span className="visually-hidden">Choose audio file</span>
                 <p className="muted">
                   MP3, MPEG, WAV, M4A, OGG or FLAC
                   <br />
@@ -1021,9 +1038,37 @@ export function AcquisitionStudio({
                     ? `Up to ${Math.floor(policy.maximum_file_bytes / 1048576)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
                     : "Checking file limits…"}
                 </p>
-              </>
+              </div>
             ) : (
               <>
+                {!submission && !result && (
+                  <div
+                    className={`${styles.dropZone} ${styles.dropZoneSelected}`}
+                    data-upload-dropzone
+                  >
+                    <span className="studio-upload-icon">
+                      <AudioLines size={25} />
+                    </span>
+                    <h2>Choose another sales call</h2>
+                    <p className={styles.dropTitle}>
+                      Drag and drop an audio file here
+                    </p>
+                    <label
+                      className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
+                      htmlFor="acquisition-file"
+                    >
+                      or click to choose a file
+                    </label>
+                    <span className="visually-hidden">Choose audio file</span>
+                    <p className="muted">
+                      MP3, MPEG, WAV, M4A, OGG or FLAC
+                      <br />
+                      {policy
+                        ? `Up to ${Math.floor(policy.maximum_file_bytes / 1048576)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
+                        : "Checking file limits…"}
+                    </p>
+                  </div>
+                )}
                 <div className="studio-file">
                   <span className="studio-upload-icon">
                     <AudioLines size={25} />
@@ -1034,42 +1079,31 @@ export function AcquisitionStudio({
                       {result
                         ? time(result.transcript.duration_ms)
                         : file
-                          ? `${(file.size / 1048576).toFixed(1)} MB`
+                          ? `Selected locally · ${(file.size / 1048576).toFixed(1)} MB`
                           : "Private original recording"}
                     </p>
                   </div>
                   {!submission && (
                     <button
                       type="button"
-                      className="icon-button"
-                      aria-label="Remove selected call"
+                      className="secondary-button"
+                      aria-label="Change selected call"
                       disabled={!!busy}
                       onClick={() => reset()}
                     >
-                      <X size={18} />
+                      Change file
                     </button>
                   )}
                 </div>
-                <audio
-                  ref={audio}
-                  src={source || undefined}
-                  controls
-                  preload="metadata"
-                  onError={() =>
-                    setPlaybackMessage(
-                      "Audio playback is unavailable. Your report remains below.",
-                    )
-                  }
-                  onTimeUpdate={() => {
-                    if (
-                      moment &&
-                      audio.current &&
-                      audio.current.currentTime >= moment.end_ms / 1000
-                    )
-                      audio.current.pause();
-                  }}
-                />
-                <p className="small-text">
+                {!submission && !result ? (
+                  <details className={styles.previewDetails}>
+                    <summary>Preview recording</summary>
+                    {audioPlayer}
+                  </details>
+                ) : (
+                  audioPlayer
+                )}
+                <p className={`small-text ${styles.previewHint}`}>
                   {submission
                     ? "Select any timestamp to listen to that moment."
                     : "Listen to check this is the right call. Selecting a file does not upload it."}
@@ -1112,14 +1146,14 @@ export function AcquisitionStudio({
                   </span>
                   Free analysis · included in your trial
                 </p>
-                <p>{policy.description}</p>
-                <p className="small-text">
-                  Your recording is retained for {policy.retention_days} days so
-                  this review can finish and remain available. You can request
-                  deletion from Privacy &amp; support.
-                </p>
                 <details className={styles.privacyDetails}>
                   <summary>Privacy details</summary>
+                  <p>{policy.description}</p>
+                  <p>
+                    Your recording is retained for {policy.retention_days} days
+                    so this review can finish and remain available. You can
+                    request deletion from Privacy &amp; support.
+                  </p>
                   <p>
                     {policy.privacy_details ||
                       "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
@@ -1169,9 +1203,14 @@ export function AcquisitionStudio({
                     {busy ? (
                       <LoaderCircle className="spin" size={17} />
                     ) : (
-                      <Upload size={17} />
+                      <ArrowRight size={17} aria-hidden="true" />
                     )}
-                    {busy || "Upload my call"}
+                    {busy || (
+                      <>
+                        <span aria-hidden="true">Analyse my call</span>
+                        <span className="visually-hidden">Upload my call</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
