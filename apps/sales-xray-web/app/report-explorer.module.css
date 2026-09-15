@@ -1,124 +1,52 @@
 .explorer {
   min-width: 0;
-  margin-block: 24px;
+  margin-block: 20px 28px;
 }
 
-.tabs {
-  display: flex;
-  gap: 6px;
-  max-width: 100%;
-  padding: 5px;
-  overflow-x: auto;
-  background: var(--canvas, #f5f7fb);
-  border: 1px solid var(--border, #dbe2ef);
-  border-radius: 14px;
-  scrollbar-width: thin;
-}
-
-.tabs button {
-  flex: 1 0 auto;
-  min-height: 44px;
-  padding: 10px 15px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted, #55657a);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 650;
-  cursor: pointer;
-  transition:
-    color 140ms ease,
-    background-color 140ms ease;
-}
-
-.tabs button:hover {
-  background: var(--surface, #fff);
-  color: var(--ink, #203243);
-}
-
-.tabs button[aria-selected="true"] {
-  color: var(--accent, #3357ce);
-  background: var(--surface, #fff);
-  border-color: var(--border, #dbe2ef);
-  box-shadow: 0 2px 5px #2032430a;
-}
-
-.tabs button:focus-visible,
-.panel:focus-visible {
-  outline: 2px solid var(--accent, #3357ce);
-  outline-offset: -2px;
-}
-
-.panel {
-  min-width: 0;
-  padding-block-start: 22px;
-}
-
-.panel > section + section {
-  border-top: 1px solid var(--border, #dbe2ef);
-  padding-block-start: 24px;
-  margin-block-start: 24px;
-}
-
-.panel > aside + section {
-  margin-block-start: 24px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tabs button {
-    transition: none;
-  }
-}
-
-@media print {
-  .tabs {
-    display: none !important;
-  }
-
-  .panel,
-  .panel[hidden] {
-    display: block !important;
-    padding-block-start: 0;
-  }
-}
-
-/* Keep the report's map in view while the learner reads a long source-bound page. */
-.explorer {
-  margin-block: 18px 28px;
-}
 .tabs {
   position: sticky;
   top: 10px;
   z-index: 10;
-  gap: 5px;
-  padding: 5px;
+  display: flex;
+  gap: 7px;
+  max-width: 100%;
+  padding: 6px;
+  overflow-x: auto;
   border: 1px solid #d3dfe2;
   border-radius: 16px;
-  background: color-mix(in srgb, #f7faf9 86%, transparent);
+  background: rgb(248 251 250 / 94%);
   box-shadow: 0 10px 24px rgb(23 43 58 / 8%);
+  scrollbar-width: thin;
   backdrop-filter: blur(14px);
 }
+
 .tabs button {
   position: relative;
-  min-height: 40px;
-  padding: 8px 14px;
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid transparent;
   border-radius: 11px;
+  background: transparent;
   color: #5d7080;
-  font-size: 12px;
-  letter-spacing: 0.01em;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
   transition:
-    background 140ms ease,
-    color 140ms ease,
+    background-color 140ms ease,
     border-color 140ms ease,
+    color 140ms ease,
     transform 140ms ease;
 }
+
 .tabs button::after {
   position: absolute;
   right: 12px;
   bottom: 4px;
   left: 12px;
-  height: 2px;
+  height: 3px;
   border-radius: 99px;
   background: #0f766e;
   content: "";
@@ -128,38 +56,60 @@
     opacity 140ms ease,
     transform 140ms ease;
 }
+
 .tabs button:hover {
-  color: #172b3a;
+  border-color: #b9cdcc;
   background: #fff;
+  color: #172b3a;
   transform: translateY(-1px);
 }
+
 .tabs button[aria-selected="true"] {
-  color: #172b3a;
   border-color: #bad7cf;
   background: #fff;
+  color: #172b3a;
   box-shadow: 0 4px 12px rgb(23 43 58 / 7%);
 }
+
 .tabs button[aria-selected="true"]::after {
   opacity: 1;
   transform: scaleX(1);
 }
-.panel {
-  padding-block-start: 18px;
-}
+
+.tabs button:focus-visible,
 .panel:focus-visible {
-  outline-offset: 5px;
+  outline: 3px solid #6d7ce0;
+  outline-offset: 2px;
 }
+
+.panel {
+  min-width: 0;
+  padding-block-start: 22px;
+}
+
+.panel > section + section {
+  margin-block-start: 24px;
+  padding-block-start: 24px;
+  border-top: 1px solid #dbe2ef;
+}
+
+.panel > aside + section {
+  margin-block-start: 24px;
+}
+
 @media (max-width: 640px) {
   .tabs {
     top: 5px;
     border-radius: 13px;
   }
+
   .tabs button {
-    min-height: 38px;
-    padding-inline: 11px;
-    font-size: 11px;
+    min-height: 44px;
+    padding-inline: 14px;
+    font-size: 14px;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .tabs button,
   .tabs button::after {
@@ -167,9 +117,17 @@
     transform: none;
   }
 }
+
 @media print {
   .tabs {
     position: static;
+    display: none !important;
     box-shadow: none;
+  }
+
+  .panel,
+  .panel[hidden] {
+    display: block !important;
+    padding-block-start: 0;
   }
 }

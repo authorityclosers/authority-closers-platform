@@ -161,7 +161,7 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
   expect(container.textContent).toContain("Possible effect · inference");
   expect(
     container.querySelector('[data-review-point="10"]')?.textContent,
-  ).toContain("No supported qualitative observation");
+  ).toContain("No clear skill takeaway");
   expect(
     container.querySelector('[aria-label="Ethics observations"]'),
   ).not.toBeNull();
@@ -198,6 +198,35 @@ it("does not relabel unselected strengths as assessed golden moments", async () 
     container.querySelector('[data-review-point="05"] blockquote'),
   ).toBeNull();
   expect(container.querySelector('[data-review-point="08"] button')).toBeNull();
+});
+
+it("keeps every chapter mounted while showing one focused section", async () => {
+  await render();
+  const tabs = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      '[role="tab"][aria-controls*="chapter-panel"]',
+    ),
+  ];
+  expect(tabs).toHaveLength(4);
+  expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+  expect(
+    container.querySelector('[data-chapter="start"]')?.hasAttribute("hidden"),
+  ).toBe(false);
+  expect(
+    container.querySelector('[data-chapter="read"]')?.hasAttribute("hidden"),
+  ).toBe(true);
+  expect(container.querySelector('[data-review-point="09"]')).not.toBeNull();
+
+  await act(async () => tabs[1].click());
+  expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  expect(
+    container.querySelector('[data-chapter="start"]')?.hasAttribute("hidden"),
+  ).toBe(true);
+  expect(
+    container.querySelector('[data-chapter="read"]')?.hasAttribute("hidden"),
+  ).toBe(false);
+  expect(container.querySelector('[data-review-point="01"]')).not.toBeNull();
+  expect(container.querySelector('[data-review-point="14"]')).not.toBeNull();
 });
 
 it("shows the impact limitations for the third detailed priority too", async () => {

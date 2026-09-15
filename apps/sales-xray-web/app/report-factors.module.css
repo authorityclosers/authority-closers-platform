@@ -1,183 +1,145 @@
 .section {
-  margin: 24px 0;
-}
-.note {
-  color: var(--muted, #617085);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-  align-items: start;
-}
-.factor {
-  border: 1px solid var(--border, #d9e0e8);
-  border-radius: 8px;
-  margin: 0;
-  padding: 14px;
-  min-width: 0;
-}
-/* The report shell applies a margin to every details element; keep factor cards tight. */
-.section .factor {
-  margin: 0;
-}
-.factor summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-}
-.factor summary::after {
-  content: "+";
-  margin-left: auto;
-}
-.factor[open] summary::after {
-  content: "−";
-}
-.factor summary small {
-  display: block;
-  padding: 3px 7px;
-  background: var(--bg, #f5f7fb);
-  border-radius: 4px;
-  color: var(--muted, #617085);
-  font-size: 10px;
-  font-weight: 500;
-}
-.factor p {
-  font-size: 13px;
-  line-height: 1.65;
-  margin: 14px 0 0;
-  overflow-wrap: anywhere;
-}
-.factor summary:focus-visible {
-  outline: 3px solid var(--blue, #3150c8);
-  outline-offset: 4px;
-}
-@media (max-width: 600px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media print {
-  .section {
-    break-inside: auto !important;
-  }
-  .factor {
-    break-inside: avoid;
-  }
-}
-
-/* Qualitative factor tiles: signal the evidence state without turning it into a score. */
-.section {
-  margin: 10px 0 24px;
+  margin: 12px 0 26px;
   padding: clamp(18px, 3vw, 28px);
   border: 1px solid #d6e2e4;
   border-radius: 18px;
   background: linear-gradient(135deg, #f8fcfb, #fff 72%);
   box-shadow: 0 10px 24px rgb(23 43 58 / 4%);
 }
+
 .section h2 {
   margin: 0;
   color: #172b3a;
   font-size: clamp(20px, 2.6vw, 27px);
   letter-spacing: -0.035em;
+  line-height: 1.2;
 }
+
 .note {
   max-width: 680px;
   margin: 8px 0 0;
   color: #5d7080;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
 }
+
 .grid {
+  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin-top: 20px;
+  align-items: start;
 }
+
 .factor {
   position: relative;
-  min-height: 104px;
-  padding: 14px;
+  min-width: 0;
+  min-height: 112px;
+  margin: 0;
+  padding: 15px;
   border: 1px solid #d6e2e4;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 5px 14px rgb(23 43 58 / 3%);
   transition:
+    background-color 150ms ease,
     border-color 150ms ease,
-    background 150ms ease,
     transform 150ms ease;
 }
+
 .factor:hover {
   border-color: #9bc6bb;
   background: #fbfffd;
   transform: translateY(-1px);
 }
+
 .factor[open] {
   grid-column: span 2;
   border-color: #9bc6bb;
   background: #f3fbf8;
 }
+
 .factor summary {
-  gap: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
   color: #172b3a;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.45;
+  cursor: pointer;
 }
+
 .factor summary::after {
+  margin-left: auto;
   color: #3f4f9c;
-  font-size: 17px;
+  content: "+";
+  font-size: 19px;
+  line-height: 1;
 }
+
+.factor[open] summary::after {
+  content: "−";
+}
+
 .factor summary small {
-  padding: 3px 7px;
+  display: block;
+  padding: 4px 8px;
   border: 1px solid #d7e3e5;
   border-radius: 999px;
   background: #f4f8f8;
   color: #5d7080;
-  font-size: 9px;
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
 }
+
 .factor p {
   max-width: 630px;
   margin: 14px 0 0;
   color: #334d5c;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
+
 .factor summary:focus-visible {
   outline: 3px solid #3f4f9c;
   outline-offset: 5px;
 }
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .factor[open] {
     grid-column: span 2;
   }
 }
+
 @media (max-width: 600px) {
   .section {
     padding: 18px 14px;
   }
+
   .grid {
     grid-template-columns: 1fr;
   }
+
   .factor[open] {
     grid-column: span 1;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .factor {
     transition: none;
-    transform: none;
   }
 }
+
 @media print {
   .section {
     padding: 0;
@@ -185,13 +147,16 @@
     box-shadow: none;
     background: #fff;
   }
+
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .factor,
   .factor[open] {
     grid-column: span 1;
     box-shadow: none;
     background: #fff;
+    break-inside: avoid;
   }
 }

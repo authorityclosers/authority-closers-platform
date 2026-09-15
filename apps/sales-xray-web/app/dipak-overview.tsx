@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useEffect, useRef, type ReactNode } from "react";
+import { useId, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
   Gem,
@@ -23,6 +23,34 @@ type Props = {
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
 };
+
+const chapterNavigation = [
+  {
+    id: "start",
+    range: "01—04",
+    label: "Start here",
+    hint: "Takeaway and first change",
+  },
+  {
+    id: "read",
+    range: "05—09",
+    label: "Read the call",
+    hint: "Moments and missed turns",
+  },
+  {
+    id: "practice",
+    range: "10—12",
+    label: "Practice",
+    hint: "Skills and next move",
+  },
+  {
+    id: "close",
+    range: "13—14",
+    label: "Close the loop",
+    hint: "Takeaway and limits",
+  },
+] as const;
+type ChapterId = (typeof chapterNavigation)[number]["id"];
 
 const time = (ms: number) =>
   `${Math.floor(ms / 60000)
@@ -132,9 +160,15 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
     };
   }, []);
   const prefix = useId();
+  const [activeChapter, setActiveChapter] = useState<ChapterId>("start");
   const focusId = `${prefix}-focus`;
   const fixesId = `${prefix}-fixes`;
   const rewatchId = `${prefix}-rewatch`;
+
+  function selectChapter(index: number) {
+    const chapter = chapterNavigation[index];
+    if (chapter) setActiveChapter(chapter.id);
+  }
   const primary = report.improvements[0];
   const detail = report.overview;
   const priorities = report.improvements.slice(0, 3);
@@ -282,25 +316,25 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
     >
       <div className={styles.intro}>
         <div>
-          <p className={styles.eyebrow}>FOCUSED COACHING WORKSPACE</p>
-          <h2>Actionable readout</h2>
+          <p className={styles.eyebrow}>CALL REVIEW</p>
+          <h2>A clear next step</h2>
           <p className={styles.heroSubcopy}>
             Start with the takeaway, then open the source moment behind it.
           </p>
         </div>
         <nav className={styles.shortcuts} aria-label="Jump within the overview">
-          <a href={`#${fixesId}`}>
+          <a href={`#${fixesId}`} onClick={() => setActiveChapter("start")}>
             Priority fixes <ArrowUpRight size={14} aria-hidden="true" />
           </a>
-          <a href={`#${rewatchId}`}>
+          <a href={`#${rewatchId}`} onClick={() => setActiveChapter("read")}>
             Rewatch list <ArrowUpRight size={14} aria-hidden="true" />
           </a>
-          <a href={`#${focusId}`}>
+          <a href={`#${focusId}`} onClick={() => setActiveChapter("practice")}>
             Next-call focus <ArrowUpRight size={14} aria-hidden="true" />
           </a>
         </nav>
         <div className={styles.heroMeta} aria-label="Report status">
-          <span className={styles.statusPill}>Source-bound draft</span>
+          <span className={styles.statusPill}>Draft report</span>
           <span>{report.source_label}</span>
         </div>
       </div>
@@ -316,7 +350,7 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
           </p>
           <span className={styles.summaryMeta}>
             {report.review_status === "draft_not_dipak_adjudicated"
-              ? "Draft · Dipak has not adjudicated this report"
+              ? "Draft · Dipak review pending"
               : "Review status is recorded in the report"}
           </span>
         </article>
@@ -365,7 +399,65 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </div>
       )}
 
-      <section className={styles.chapter} data-chapter="start">
+      <nav
+        className={styles.chapterNav}
+        aria-label="Report sections"
+        role="tablist"
+      >
+        {chapterNavigation.map((chapter, index) => {
+          const tabId = `${prefix}-chapter-tab-${chapter.id}`;
+          const panelId = `${prefix}-chapter-panel-${chapter.id}`;
+          const selected = activeChapter === chapter.id;
+          return (
+            <button
+              key={chapter.id}
+              type="button"
+              role="tab"
+              id={tabId}
+              aria-controls={panelId}
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActiveChapter(chapter.id)}
+              onKeyDown={(event) => {
+                let next: number;
+                if (event.key === "ArrowRight")
+                  next = (index + 1) % chapterNavigation.length;
+                else if (event.key === "ArrowLeft")
+                  next =
+                    (index + chapterNavigation.length - 1) %
+                    chapterNavigation.length;
+                else if (event.key === "Home") next = 0;
+                else if (event.key === "End")
+                  next = chapterNavigation.length - 1;
+                else return;
+                event.preventDefault();
+                selectChapter(next);
+                document
+                  .getElementById(
+                    `${prefix}-chapter-tab-${chapterNavigation[next].id}`,
+                  )
+                  ?.focus();
+              }}
+            >
+              <span className={styles.chapterRange}>{chapter.range}</span>
+              <span>
+                <strong>{chapter.label}</strong>
+                <small>{chapter.hint}</small>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <section
+        className={styles.chapter}
+        data-chapter="start"
+        id={`${prefix}-chapter-panel-start`}
+        role="tabpanel"
+        aria-labelledby={`${prefix}-chapter-tab-start`}
+        tabIndex={0}
+        hidden={activeChapter !== "start"}
+      >
         <div className={styles.chapterHeading}>
           <span className={styles.chapterRange}>01—04</span>
           <div>
@@ -469,7 +561,15 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </div>
       </section>
 
-      <section className={styles.chapter} data-chapter="read">
+      <section
+        className={styles.chapter}
+        data-chapter="read"
+        id={`${prefix}-chapter-panel-read`}
+        role="tabpanel"
+        aria-labelledby={`${prefix}-chapter-tab-read`}
+        tabIndex={0}
+        hidden={activeChapter !== "read"}
+      >
         <div className={styles.chapterHeading}>
           <span className={styles.chapterRange}>05—09</span>
           <div>
@@ -633,20 +733,28 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </ReviewBlock>
       </section>
 
-      <section className={styles.chapter} data-chapter="practice">
+      <section
+        className={styles.chapter}
+        data-chapter="practice"
+        id={`${prefix}-chapter-panel-practice`}
+        role="tabpanel"
+        aria-labelledby={`${prefix}-chapter-tab-practice`}
+        tabIndex={0}
+        hidden={activeChapter !== "practice"}
+      >
         <div className={styles.chapterHeading}>
           <span className={styles.chapterRange}>10—12</span>
           <div>
             <p className={styles.eyebrow}>PRACTICE AND REFLECT</p>
             <h3>Turn the observation into a next-call move.</h3>
           </div>
-          <span className={styles.chapterNote}>Qualitative notes only</span>
+          <span className={styles.chapterNote}>Based on this call</span>
         </div>
 
         <ReviewBlock
           number="10"
           title="Your sales skills"
-          description="Qualitative observations supported by this call."
+          description="What this call shows, based on the evidence."
           tone="positive"
           expanded
         >
@@ -676,7 +784,7 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
             </div>
           ) : (
             <p className={styles.empty}>
-              No supported qualitative observation is recorded for this call.
+              No clear skill takeaway was recorded for this call.
             </p>
           )}
         </ReviewBlock>
@@ -758,7 +866,15 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </ReviewBlock>
       </section>
 
-      <section className={styles.chapter} data-chapter="close">
+      <section
+        className={styles.chapter}
+        data-chapter="close"
+        id={`${prefix}-chapter-panel-close`}
+        role="tabpanel"
+        aria-labelledby={`${prefix}-chapter-tab-close`}
+        tabIndex={0}
+        hidden={activeChapter !== "close"}
+      >
         <div className={styles.chapterHeading}>
           <span className={styles.chapterRange}>13—14</span>
           <div>
