@@ -200,15 +200,12 @@ it("does not relabel unselected strengths as assessed golden moments", async () 
   expect(container.querySelector('[data-review-point="08"] button')).toBeNull();
 });
 
-it("keeps every chapter mounted while showing one focused section", async () => {
+it("keeps every chapter mounted while the review map focuses one section", async () => {
   await render();
-  const tabs = [
-    ...container.querySelectorAll<HTMLButtonElement>(
-      '[role="tab"][aria-controls*="chapter-panel"]',
-    ),
+  const mapItems = [
+    ...container.querySelectorAll<HTMLButtonElement>("[data-insight-number]"),
   ];
-  expect(tabs).toHaveLength(4);
-  expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+  expect(mapItems).toHaveLength(14);
   expect(
     container.querySelector('[data-chapter="start"]')?.hasAttribute("hidden"),
   ).toBe(false);
@@ -217,8 +214,16 @@ it("keeps every chapter mounted while showing one focused section", async () => 
   ).toBe(true);
   expect(container.querySelector('[data-review-point="09"]')).not.toBeNull();
 
-  await act(async () => tabs[1].click());
-  expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[data-insight-number="05"]')
+      ?.click(),
+  );
+  expect(
+    container
+      .querySelector<HTMLButtonElement>('[data-insight-number="05"]')
+      ?.getAttribute("aria-current"),
+  ).toBe("true");
   expect(
     container.querySelector('[data-chapter="start"]')?.hasAttribute("hidden"),
   ).toBe(true);
@@ -276,12 +281,25 @@ it("replays literal mixed-script evidence with its exact source span and no HTML
   );
   expect(container.querySelector("script")).toBeNull();
   const button = container.querySelector<HTMLButtonElement>(
-    'button[aria-label^="Play source moment"]',
+    '[data-review-point="01"] button[aria-label^="Play source moment"]',
   )!;
   await act(async () => button.click());
   expect(select).toHaveBeenCalledExactlyOnceWith(
     source,
     value.strengths[0].title,
+  );
+});
+
+it("plays the first source moment from the compact overview action", async () => {
+  const value = report();
+  await render(value);
+  const button = container.querySelector<HTMLButtonElement>(
+    "[data-source-moment]",
+  )!;
+  await act(async () => button.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.improvements[0].evidence[0],
+    value.improvements[0].title,
   );
 });
 
