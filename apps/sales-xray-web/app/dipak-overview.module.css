@@ -702,6 +702,51 @@
   color: var(--positive);
 }
 
+@media (min-width: 681px) {
+  .takeawayReview {
+    position: static;
+    grid-column: span 2;
+    max-height: 184px;
+    padding: 14px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  .takeawayReview .insightRailHeading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding-bottom: 7px;
+  }
+
+  .takeawayReview .insightRailHeading > span {
+    font-size: 12px;
+  }
+
+  .takeawayReview .insightRail button {
+    min-height: 34px;
+    padding: 4px 2px;
+    font-size: 12px;
+  }
+
+  .takeawayReview .insightNumber {
+    width: 24px;
+    height: 24px;
+  }
+
+  .workspaceLayout {
+    grid-template-areas:
+      "above"
+      "detail";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspaceLayout > .insightRail {
+    display: none;
+  }
+}
+
 .chapter {
   scroll-margin-top: 110px;
 }
@@ -1701,7 +1746,7 @@
 }
 
 .takeawayCardLead {
-  grid-column: span 4;
+  grid-column: span 2;
   border-color: #b3ded5;
   background: linear-gradient(145deg, #effaf7, #fff);
 }
@@ -1882,6 +1927,16 @@
   .takeawayGrid {
     display: block;
     margin-bottom: 9px;
+  }
+
+  .takeawayReview {
+    display: block;
+    max-height: none;
+    padding: 16px 0 0;
+    overflow: visible;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
   }
 
   .takeawayCard {

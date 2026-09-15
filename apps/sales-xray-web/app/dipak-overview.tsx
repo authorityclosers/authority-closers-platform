@@ -436,6 +436,45 @@ export function DipakOverview({
     );
   }
 
+  function reviewRail(className = "") {
+    return (
+      <aside
+        className={`${styles.insightRail} ${className}`.trim()}
+        aria-label="Review points"
+      >
+        <div className={styles.insightRailHeading}>
+          <div>
+            <p className={styles.eyebrow}>REVIEW MAP</p>
+            <h3>Review points</h3>
+          </div>
+          <span>Open a point to read its evidence.</span>
+        </div>
+        <ol>
+          {insightRailItems.map((item) => (
+            <li key={item.number}>
+              <button
+                type="button"
+                data-insight-number={item.number}
+                aria-controls={`${prefix}-chapter-panel-${item.chapter}`}
+                aria-current={
+                  activeReviewNumber === item.number ? "true" : undefined
+                }
+                onClick={(event) => {
+                  lastInsightButton.current = event.currentTarget;
+                  focusInsight(item.number, item.chapter);
+                }}
+              >
+                <span className={styles.insightNumber}>{item.number}</span>
+                <span>{item.label}</span>
+                <ArrowUpRight size={14} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ol>
+      </aside>
+    );
+  }
+
   return (
     <div
       ref={overview}
@@ -582,6 +621,7 @@ export function DipakOverview({
             Open plan <ArrowUpRight size={15} aria-hidden="true" />
           </button>
         </article>
+        {reviewRail(styles.takeawayReview)}
         <div className={styles.takeawayControls} aria-label="Takeaway cards">
           <button
             type="button"
@@ -662,38 +702,6 @@ export function DipakOverview({
             )}
           </section>
         </div>
-
-        <aside className={styles.insightRail} aria-label="Review points">
-          <div className={styles.insightRailHeading}>
-            <div>
-              <p className={styles.eyebrow}>REVIEW MAP</p>
-              <h3>Review points</h3>
-            </div>
-            <span>Open a point to read its evidence.</span>
-          </div>
-          <ol>
-            {insightRailItems.map((item) => (
-              <li key={item.number}>
-                <button
-                  type="button"
-                  data-insight-number={item.number}
-                  aria-controls={`${prefix}-chapter-panel-${item.chapter}`}
-                  aria-current={
-                    activeReviewNumber === item.number ? "true" : undefined
-                  }
-                  onClick={(event) => {
-                    lastInsightButton.current = event.currentTarget;
-                    focusInsight(item.number, item.chapter);
-                  }}
-                >
-                  <span className={styles.insightNumber}>{item.number}</span>
-                  <span>{item.label}</span>
-                  <ArrowUpRight size={14} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ol>
-        </aside>
 
         <div className={styles.detailArea}>
           <ReviewDialog
