@@ -50,17 +50,23 @@ class ConversationRetainedC5Version(Base):
             ["conversation_runs.id", "conversation_runs.tenant_id", "conversation_runs.person_id"],
         ),
         member_fk(),
-        UniqueConstraint("run_id", "version"),
-        UniqueConstraint("run_id", "fingerprint"),
+        UniqueConstraint(
+            "run_id",
+            "version",
+            name="uq_conversation_retained_c5_versions_run_id_version",
+        ),
+        UniqueConstraint(
+            "run_id",
+            "fingerprint",
+            name="uq_conversation_retained_c5_versions_run_id_fingerprint",
+        ),
         CheckConstraint("version >= 1", name="positive_version"),
         CheckConstraint("generation >= 1", name="positive_generation"),
         CheckConstraint(
             "validation_state IN ('needs_correction','revalidated','corrected')",
             name="validation_state",
         ),
-        CheckConstraint(
-            "review_origin = 'Codex automated proposal'", name="review_origin"
-        ),
+        CheckConstraint("review_origin = 'Codex automated proposal'", name="review_origin"),
         CheckConstraint("human_approved = false", name="never_human_approved"),
         CheckConstraint("dipak_adjudicated = false", name="never_dipak_adjudicated"),
         CheckConstraint("official_score = false", name="never_official_score"),
@@ -93,24 +99,24 @@ class ConversationRetainedC5Version(Base):
     c4_checkpoint_ids: Mapped[list[str]] = mapped_column(JSON)
     c4_manifest_sha256s: Mapped[list[str]] = mapped_column(JSON)
     c5_input_sha256: Mapped[str] = mapped_column(String(64))
-    c5_input: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    original_quote: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    original_attempt: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    original_receipt: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    c5_input: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
+    original_quote: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
+    original_attempt: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
+    original_receipt: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     original_raw_sha256: Mapped[str] = mapped_column(String(64))
     raw_blob_id: Mapped[UUID] = mapped_column(Uuid)
     version: Mapped[int] = mapped_column(Integer)
     fingerprint: Mapped[str] = mapped_column(String(64))
     validation_state: Mapped[str] = mapped_column(String(32))
     failure_code: Mapped[str | None] = mapped_column(String(128))
-    correction: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    correction: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     correction_payload_sha256: Mapped[str | None] = mapped_column(String(64))
     review_origin: Mapped[str] = mapped_column(String(64), default="Codex automated proposal")
     human_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     dipak_adjudicated: Mapped[bool] = mapped_column(Boolean, default=False)
     official_score: Mapped[bool] = mapped_column(Boolean, default=False)
-    proof: Mapped[dict[str, Any] | None] = mapped_column(JSON)
-    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    proof: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
     report_sha256: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

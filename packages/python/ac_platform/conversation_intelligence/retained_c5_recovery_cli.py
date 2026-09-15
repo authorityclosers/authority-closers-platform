@@ -218,7 +218,13 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    print(json.dumps(result, sort_keys=True))
+    # Keep private report content out of routine operator stdout.  The command
+    # still returns proof metadata needed for a receipt; callers that need the
+    # draft can use the Admin read boundary after authorization.
+    summary = dict(result)
+    summary.pop("report", None)
+    summary["report_available"] = result.get("report") is not None
+    print(json.dumps(summary, sort_keys=True))
     return 0
 
 

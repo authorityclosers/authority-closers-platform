@@ -18,7 +18,9 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
+from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationProcessingPlan,
     ConversationRecording,
@@ -151,6 +153,36 @@ class AcquisitionReports:
         self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
     ) -> dict[str, Any]:
         _, recording = await self.recording(submission_id, token=token, actor=actor)
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
+        if recovered is not None:
+            checkpoint = await self.database.scalar(
+                select(ConversationCheckpoint).where(
+                    ConversationCheckpoint.id == recovered.c2_checkpoint_id,
+                    ConversationCheckpoint.recording_id == recording.id,
+                    ConversationCheckpoint.tenant_id == recording.tenant_id,
+                    ConversationCheckpoint.person_id == recording.person_id,
+                    ConversationCheckpoint.stage == "C2",
+                    ConversationCheckpoint.manifest_sha256 == recovered.c2_manifest_sha256,
+                    ConversationCheckpoint.erased_at.is_(None),
+                )
+            )
+            if checkpoint is None or checkpoint.payload is None:
+                raise ConversationConflict("The recovered transcript is unavailable.")
+            try:
+                verified_checkpoint(checkpoint, binding_for(recording))
+            except (KeyError, TypeError, ValueError):
+                raise ConversationConflict(
+                    "The recovered transcript binding is unavailable."
+                ) from None
+            transcript = checkpoint.payload
+            if not isinstance(transcript, dict):
+                raise ConversationConflict("The recovered transcript is unavailable.")
+            return {
+                name: transcript[name]
+                for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
+            }
         draft = await self._draft(recording)
         if draft is None:
             raise ConversationNotFound("The transcript will appear with your sales report.")

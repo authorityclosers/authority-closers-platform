@@ -105,7 +105,9 @@ def upgrade() -> None:
             name=op.f("fk_conversation_retained_c5_versions_permission_id_conversation_permissions"),
         ),
         sa.UniqueConstraint(
-            "run_id", "version", name=op.f("uq_conversation_retained_c5_versions_run_id")
+            "run_id",
+            "version",
+            name=op.f("uq_conversation_retained_c5_versions_run_id_version"),
         ),
         sa.UniqueConstraint(
             "run_id",

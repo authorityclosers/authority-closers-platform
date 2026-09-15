@@ -14,8 +14,8 @@ import copy
 import hashlib
 import json
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -38,7 +38,7 @@ from ac_platform.conversation_intelligence.inference import binding_for, verifie
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     PreparedTaskInput,
-    _text_response,
+    prepare_coaching_input,
     validate_coaching_result,
 )
 from ac_platform.conversation_intelligence.models import (
@@ -55,6 +55,7 @@ from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
 from ac_platform.conversation_intelligence.reports import (
+    FactPacket,
     load_report_profile,
 )
 from ac_platform.conversation_intelligence.storage import (
@@ -332,6 +333,26 @@ def _model_envelope_with_report(
     raise ConversationConflict("The retained provider route is unavailable.")
 
 
+def _report_from_model_envelope(data: dict[str, Any], *, provider: str) -> dict[str, Any]:
+    """Decode the report object inside a retained native provider envelope."""
+
+    if provider == "groq":
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            raise ConversationConflict("The retained provider response is invalid.") from None
+    elif provider == "gemini":
+        try:
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError):
+            raise ConversationConflict("The retained provider response is invalid.") from None
+    else:
+        raise ConversationConflict("The retained provider route is unavailable.")
+    if not isinstance(content, str):
+        raise ConversationConflict("The retained provider response is invalid.")
+    return _json_object(content.encode("utf-8"))
+
+
 class RetainedC5RecoveryService:
     """Admin command and owner/admin read boundary for retained C5 recovery."""
 
@@ -557,8 +578,33 @@ class RetainedC5RecoveryService:
             if not isinstance(profile, dict):
                 profile = load_report_profile()
             if historical_input is None:
-                raise ValueError("The exact historical C5 request bytes are required.")
-            prepared = PreparedTaskInput.from_dict(input_metadata, payload=historical_input)
+                # Admin HTTP can use this only when the current prompt builder
+                # reproduces the exact stored input hash.  A prompt or profile
+                # drift fails closed and requires the CLI's private historical
+                # byte source instead of silently validating a new request.
+                fact_packets = tuple(FactPacket.model_validate(row.payload) for row in c4)
+                provider = input_metadata.get("provider")
+                model = input_metadata.get("model")
+                maximum = input_metadata.get("max_completion_tokens")
+                output_profile = request.get("output_profile", "detailed")
+                if (
+                    not isinstance(provider, str)
+                    or not isinstance(model, str)
+                    or type(maximum) is not int
+                    or output_profile not in {"standard", "detailed"}
+                ):
+                    raise ValueError
+                prepared = prepare_coaching_input(
+                    transcript,
+                    fact_packets,
+                    provider=provider,
+                    model=model,
+                    max_completion_tokens=maximum,
+                    profile=profile,
+                    output_profile=output_profile,
+                )
+            else:
+                prepared = PreparedTaskInput.from_dict(input_metadata, payload=historical_input)
             if prepared.input_sha256 != task.input_sha256:
                 raise ValueError
         except (InferenceTaskError, KeyError, TypeError, ValueError):
@@ -622,6 +668,7 @@ class RetainedC5RecoveryService:
         validation_state: str,
         failure_code: str | None,
         correction: RetainedC5CorrectionIntent | None,
+        retention_until: datetime | None = None,
     ) -> dict[str, Any]:
         return {
             "schema_id": _RECOVERY_SCHEMA,
@@ -642,7 +689,9 @@ class RetainedC5RecoveryService:
                 "source_revision": bound.recording.source_revision,
                 "generation": bound.recording.generation,
                 "permission_id": str(bound.permission.id),
-                "retention_until": utc(bound.permission.retention_until).isoformat(),
+                "retention_until": utc(
+                    bound.permission.retention_until if retention_until is None else retention_until
+                ).isoformat(),
                 "c2_checkpoint_id": str(bound.c2.id),
                 "c2_manifest_sha256": bound.c2.manifest_sha256,
                 "c3_checkpoint_id": str(bound.c3.id),
@@ -774,11 +823,8 @@ class RetainedC5RecoveryService:
             )
         data = _json_object(bound.raw)
         try:
-            original_model = _text_response(self._provider_result(bound, data))
-            if not isinstance(original_model, Mapping):
-                raise ValueError
-            model_object = dict(original_model)
             if correction is not None:
+                model_object = _report_from_model_envelope(data, provider=bound.receipt["provider"])
                 segment_ids = {
                     str(segment.get("id"))
                     for segment in bound.transcript.get("segments", [])
@@ -860,6 +906,7 @@ class RetainedC5RecoveryService:
             validation_state=validation_state,
             failure_code=failure_code,
             correction=correction,
+            retention_until=final_permission.retention_until,
         )
         row = ConversationRetainedC5Version(
             id=version_id,
@@ -874,7 +921,7 @@ class RetainedC5RecoveryService:
             source_revision=bound.recording.source_revision,
             source_sha256=bound.recording.source_sha256,
             generation=bound.recording.generation,
-            retention_until=bound.permission.retention_until,
+            retention_until=final_permission.retention_until,
             c2_checkpoint_id=bound.c2.id,
             c2_manifest_sha256=bound.c2.manifest_sha256,
             c3_checkpoint_id=bound.c3.id,
@@ -1014,7 +1061,10 @@ class RetainedC5RecoveryService:
                     ConversationRetainedC5Version.payload.is_not(None),
                     ConversationRetainedC5Version.generation == recording.generation,
                 )
-                .order_by(ConversationRetainedC5Version.version.desc())
+                .order_by(
+                    ConversationRetainedC5Version.created_at.desc(),
+                    ConversationRetainedC5Version.id.desc(),
+                )
                 .limit(1)
             ),
         )
