@@ -36,10 +36,10 @@ except ImportError:  # pragma: no cover - Windows test hosts do not expose POSIX
 
 APPLICATION_ROOT = Path("/srv/authority-closers/application")
 SYSTEMD_UNIT_ROOT = Path("/etc/systemd/system")
-NATIVE_RELEASE = "c437c1758d8a66ede0221f83fe787bb13de33c40"
-HELPER_SOURCE_SHA = "6204dc48df72ec133d30ce32e24dbddf3ea4993d"
-NATIVE_IMAGE_REF = "sha256:fd29cbf1edc9f6b13ca9fcebc6903adee0fd70583c77b60bd1753816f7f57ef9"
-NATIVE_IMAGE_CONFIG_ID = "sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2f66a223b72b481866"
+NATIVE_RELEASE = "64a8014d4f395f7c9b763a2bb38613dabaf2662e"
+HELPER_SOURCE_SHA = "64a8014d4f395f7c9b763a2bb38613dabaf2662e"
+NATIVE_IMAGE_REF = "sha256:a580b0ddab5b80dfa23703b71020d639acab1f398767df106d60e3ed2e0c400f"
+NATIVE_IMAGE_CONFIG_ID = "sha256:fd1a4eff43cf131b2cbda46a0e3df095035bc993501f0cbfbf8109f65253276b"
 # These immutable identities were recorded together in the reviewed native
 # image artifact. Docker 29/containerd may report the transport manifest while
 # classic Docker may report the config ID; either is safe only as this pair.

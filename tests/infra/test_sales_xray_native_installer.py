@@ -177,8 +177,16 @@ def _install_args(tmp_path: Path, descriptor: Path, digest: str) -> dict[str, An
 
 
 def test_descriptor_must_match_source_renderer_and_image_identity(tmp_path: Path) -> None:
+    assert installer.NATIVE_RELEASE == "64a8014d4f395f7c9b763a2bb38613dabaf2662e"
+    assert installer.HELPER_SOURCE_SHA == "64a8014d4f395f7c9b763a2bb38613dabaf2662e"
+    assert installer.NATIVE_IMAGE_REF == (
+        "sha256:a580b0ddab5b80dfa23703b71020d639acab1f398767df106d60e3ed2e0c400f"
+    )
     assert installer.NATIVE_IMAGE_CONFIG_ID == (
-        "sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2f66a223b72b481866"
+        "sha256:fd1a4eff43cf131b2cbda46a0e3df095035bc993501f0cbfbf8109f65253276b"
+    )
+    assert installer.RENDERER_SHA256 == (
+        "33787dcc6d08219f6e595d86ccc0a80574f822678d13f629471171cdd5ce2544"
     )
     descriptor, digest = _render_descriptor(tmp_path / "native-units.json")
     payload = json.loads(descriptor.read_text())
