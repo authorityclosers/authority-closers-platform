@@ -333,40 +333,69 @@
 }
 
 .resultLead {
-  margin: 8px 0 18px;
-  padding: 22px 24px 20px;
-  border: 1px solid #b8ddd5;
-  border-radius: 18px;
-  background: #effaf7;
+  margin: 0 0 12px;
+  padding: 16px 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
 }
 
 .resultLead h2 {
-  max-width: 31ch;
+  max-width: 42ch;
   margin: 0;
   color: var(--ink);
   font-family: inherit;
-  font-size: clamp(28px, 3.2vw, 44px);
+  font-size: clamp(26px, 2.2vw, 32px);
   font-weight: 780;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.035em;
   line-height: 1.08;
 }
 
 .resultLead .heroSubcopy {
   max-width: 66ch;
-  margin: 10px 0 0;
-  font-size: 16px;
+  margin: 8px 0 0;
+  font-size: 15px;
 }
 
 .resultLead .heroMeta {
-  margin-top: 16px;
+  margin-top: 10px;
+}
+
+.sourceDetails {
+  margin-top: 10px;
+}
+
+.sourceDetailsSummary {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  color: var(--indigo);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sourceDetailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.sourceDetailsSummary svg {
+  transition: transform 160ms ease;
+}
+
+.sourceDetails[open] .sourceDetailsSummary svg {
+  transform: rotate(90deg);
 }
 
 .sourceContext {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  margin-top: 18px;
-  padding-top: 16px;
+  margin-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid #c9e4df;
 }
 
@@ -526,6 +555,31 @@
 .detailArea {
   grid-area: detail;
   min-width: 0;
+}
+
+.backToOverview {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--indigo);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.backToOverview svg {
+  transform: rotate(-90deg);
+}
+
+.backToOverview:focus-visible {
+  outline: 3px solid #6d7ce0;
+  outline-offset: 3px;
 }
 
 .chapterStack {
@@ -1252,13 +1306,12 @@
 @media (max-width: 680px) {
   .resultLead {
     margin-top: 4px;
-    padding: 20px 18px;
-    border-radius: 15px;
+    padding: 14px 0 12px;
   }
 
   .resultLead h2 {
     max-width: none;
-    font-size: clamp(28px, 8vw, 36px);
+    font-size: clamp(26px, 8vw, 32px);
   }
 
   .sourceContext {
@@ -1396,7 +1449,9 @@
 @media (prefers-reduced-motion: reduce) {
   .primaryAction,
   .sourceMomentButton,
-  .insightRail button {
+  .insightRail button,
+  .backToOverview,
+  .sourceDetailsSummary {
     transition: none;
   }
 
@@ -1416,6 +1471,10 @@
   .shortcuts,
   .insightRail {
     display: none !important;
+  }
+
+  .chapterStack[hidden] {
+    display: block !important;
   }
 
   .workspaceLayout {

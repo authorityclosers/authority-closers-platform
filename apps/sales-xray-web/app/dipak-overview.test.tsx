@@ -177,6 +177,55 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
   );
 });
 
+it("keeps source context behind an explicit disclosure", async () => {
+  const value = parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: fixture.report,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+  await render(value);
+  const details = container.querySelector<HTMLDetailsElement>(
+    "[data-source-details]",
+  );
+  expect(details).not.toBeNull();
+  expect(details?.open).toBe(false);
+  expect(details?.textContent).toContain(value.overview!.diagnosis!.text);
+  expect(details?.textContent).toContain(value.overview!.outcome!.text);
+});
+
+it("opens source context for print and restores its closed state", async () => {
+  const value = parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: fixture.report,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+  await render(value);
+  const details = container.querySelector<HTMLDetailsElement>(
+    "[data-source-details]",
+  )!;
+  expect(details.open).toBe(false);
+  await act(async () => window.dispatchEvent(new Event("beforeprint")));
+  expect(details.open).toBe(true);
+  await act(async () => window.dispatchEvent(new Event("afterprint")));
+  expect(details.open).toBe(false);
+});
+
 it("does not relabel unselected strengths as assessed golden moments", async () => {
   const value = parseJobResponse(
     {
@@ -200,7 +249,7 @@ it("does not relabel unselected strengths as assessed golden moments", async () 
   expect(container.querySelector('[data-review-point="08"] button')).toBeNull();
 });
 
-it("keeps every chapter mounted while the review map focuses one section", async () => {
+it("keeps every chapter mounted while the review map opens one section", async () => {
   await render();
   const mapItems = [
     ...container.querySelectorAll<HTMLButtonElement>("[data-insight-number]"),
@@ -208,7 +257,7 @@ it("keeps every chapter mounted while the review map focuses one section", async
   expect(mapItems).toHaveLength(14);
   expect(
     container.querySelector('[data-chapter="start"]')?.hasAttribute("hidden"),
-  ).toBe(false);
+  ).toBe(true);
   expect(
     container.querySelector('[data-chapter="read"]')?.hasAttribute("hidden"),
   ).toBe(true);
@@ -230,8 +279,28 @@ it("keeps every chapter mounted while the review map focuses one section", async
   expect(
     container.querySelector('[data-chapter="read"]')?.hasAttribute("hidden"),
   ).toBe(false);
+  expect(container.querySelector("[data-back-to-overview]")).not.toBeNull();
   expect(container.querySelector('[data-review-point="01"]')).not.toBeNull();
   expect(container.querySelector('[data-review-point="14"]')).not.toBeNull();
+
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  });
+  expect(document.activeElement).toBe(
+    container.querySelector('[data-review-point="05"]'),
+  );
+
+  await act(async () =>
+    (
+      container.querySelector("[data-back-to-overview]") as HTMLButtonElement
+    ).click(),
+  );
+  expect(
+    container.querySelector('[data-chapter="read"]')?.hasAttribute("hidden"),
+  ).toBe(true);
+  expect(document.activeElement).toBe(
+    container.querySelector('[data-insight-number="05"]'),
+  );
 });
 
 it("shows the impact limitations for the third detailed priority too", async () => {

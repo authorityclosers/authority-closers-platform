@@ -78,6 +78,7 @@ function ReviewBlock({
         data-review-fold
         data-tone={tone}
         data-review-point={number}
+        tabIndex={-1}
       >
         <summary className={styles.blockHeading}>
           {header}
@@ -94,6 +95,7 @@ function ReviewBlock({
       className={styles.block}
       data-tone={tone}
       data-review-point={number}
+      tabIndex={-1}
     >
       <div className={styles.blockHeading}>{header}</div>
       {children}
@@ -111,7 +113,7 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
       previous = new Map(
         [
           ...(overview.current?.querySelectorAll<HTMLDetailsElement>(
-            "[data-review-fold]",
+            "[data-review-fold], [data-source-details]",
           ) ?? []),
         ].map((detail) => [detail, detail.open]),
       );
@@ -134,7 +136,8 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
     };
   }, []);
   const prefix = useId();
-  const [activeChapter, setActiveChapter] = useState<ChapterId>("start");
+  const [activeChapter, setActiveChapter] = useState<ChapterId | null>(null);
+  const lastInsightButton = useRef<HTMLButtonElement | null>(null);
   const focusId = `${prefix}-focus`;
   const fixesId = `${prefix}-fixes`;
   const rewatchId = `${prefix}-rewatch`;
@@ -247,7 +250,24 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
       );
       if (!item) return;
       if (item instanceof HTMLDetailsElement) item.open = true;
-      item.scrollIntoView({ behavior: "smooth", block: "start" });
+      item.focus({ preventScroll: true });
+      const reduceMotion =
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ??
+        false;
+      item.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
+  function closeReader() {
+    setActiveChapter(null);
+    window.setTimeout(() => {
+      const fallback = overview.current?.querySelector<HTMLButtonElement>(
+        "[data-insight-number]",
+      );
+      (lastInsightButton.current ?? fallback)?.focus();
     }, 0);
   }
 
@@ -343,11 +363,17 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
           <span>Evidence appears below</span>
         </div>
         {(detail?.diagnosis || detail?.outcome) && (
-          <div className={styles.sourceContext} aria-label="Source context">
-            {detail.diagnosis && sourceNote(detail.diagnosis, "Diagnosis")}
-            {detail.outcome &&
-              sourceNote(detail.outcome, "Observed outcome · draft")}
-          </div>
+          <details className={styles.sourceDetails} data-source-details>
+            <summary className={styles.sourceDetailsSummary}>
+              <span>Read source context</span>
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </summary>
+            <div className={styles.sourceContext} aria-label="Source context">
+              {detail.diagnosis && sourceNote(detail.diagnosis, "Diagnosis")}
+              {detail.outcome &&
+                sourceNote(detail.outcome, "Observed outcome · draft")}
+            </div>
+          </details>
         )}
       </section>
 
@@ -445,11 +471,11 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
           </section>
         </div>
 
-        <aside className={styles.insightRail} aria-label="All 14 review points">
+        <aside className={styles.insightRail} aria-label="Review points">
           <div className={styles.insightRailHeading}>
             <div>
               <p className={styles.eyebrow}>REVIEW MAP</p>
-              <h3>All 14 points</h3>
+              <h3>Review points</h3>
             </div>
             <span>Open a point to read its evidence.</span>
           </div>
@@ -463,7 +489,10 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
                   aria-current={
                     activeChapter === item.chapter ? "true" : undefined
                   }
-                  onClick={() => focusInsight(item.number, item.chapter)}
+                  onClick={(event) => {
+                    lastInsightButton.current = event.currentTarget;
+                    focusInsight(item.number, item.chapter);
+                  }}
                 >
                   <span className={styles.insightNumber}>{item.number}</span>
                   <span>{item.label}</span>
@@ -475,7 +504,18 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </aside>
 
         <div className={styles.detailArea}>
-          <div className={styles.chapterStack}>
+          {activeChapter && (
+            <button
+              className={styles.backToOverview}
+              type="button"
+              data-back-to-overview
+              onClick={closeReader}
+            >
+              <ArrowUpRight size={15} aria-hidden="true" />
+              Back to review points
+            </button>
+          )}
+          <div className={styles.chapterStack} hidden={!activeChapter}>
             <section
               className={styles.chapter}
               data-chapter="start"
