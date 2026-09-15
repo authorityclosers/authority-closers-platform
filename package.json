@@ -12,6 +12,8 @@
     "dev": "pnpm run dev:dependencies && concurrently --kill-others-on-fail --names learner,admin,api,worker --prefix-colors cyan,magenta,green,yellow \"pnpm --filter @ac/learner-web dev\" \"pnpm --filter @ac/admin-web dev\" \"uv run python -m ac_platform.http --reload --port 8000\" \"uv run python -m ac_platform.worker\"",
     "dev:staging": "pwsh -NoProfile -File scripts/Start-LocalStagingBridge.ps1",
     "dev:staging:down": "pwsh -NoProfile -File scripts/Stop-LocalStagingBridge.ps1",
+    "dev:sales-xray:production": "pwsh -NoProfile -File scripts/Start-LocalSalesXrayProductionBridge.ps1",
+    "dev:sales-xray:production:down": "pwsh -NoProfile -File scripts/Stop-LocalSalesXrayProductionBridge.ps1",
     "dev:dependencies": "docker compose --env-file .env.example -f infra/local/compose.yaml up -d --wait",
     "dev:down": "docker compose --env-file .env.example -f infra/local/compose.yaml down",
     "format": "prettier --write apps packages/typescript package.json pnpm-workspace.yaml .github/workflows/application.yml && uv run ruff format packages/python tests",
