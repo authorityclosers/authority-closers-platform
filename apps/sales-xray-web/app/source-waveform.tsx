@@ -80,6 +80,8 @@ export function SourceWaveformProvider({
       `/v1/conversation/acquisition/submissions/${encodeURIComponent(submissionId)}/waveform`,
       {
         credentials: "same-origin",
+        redirect: "error",
+        cache: "no-store",
         headers: { Accept: "application/json" },
         signal: controller.signal,
       },
