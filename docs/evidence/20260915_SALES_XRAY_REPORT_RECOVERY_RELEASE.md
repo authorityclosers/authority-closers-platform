@@ -146,8 +146,10 @@ passed after the matching notification was enabled in the candidate catalogue.
 ## Release CI repair
 
 The first frozen candidate `f0a29b2` failed CI: a legacy report browser assertion
-matched two summary paragraphs, the retention-denial fixture assigned expiry
-before its consent timestamp, and an existing frontend test needed formatting.
+matched two summary paragraphs, the retention-denial fixture assigned its
+retention deadline before its creation timestamp, and an existing frontend test
+needed formatting. The expired-permission fixture now creates a valid historical
+interval before checking denial; it does not depend on the runner being slow.
 The report proof now scopes the saved summary and explicitly opens the on-demand
 strength review point before checking its detailed feedback.
 

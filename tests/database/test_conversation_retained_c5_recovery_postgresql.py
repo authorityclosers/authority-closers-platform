@@ -807,13 +807,11 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                 assert owner is not None and owner["report"] is not None
                 assert admin is not None and admin["report"] is not None
             async with sessions() as database, database.begin():
-                person = await database.get(Person, prepared.state.person_id)
                 permission = await database.get(
                     ConversationPermission, prepared.state.permission_id
                 )
-                assert person is not None and person.consented_at is not None
                 assert permission is not None
-                expired_at = utc(person.consented_at) + timedelta(seconds=1)
+                expired_at = utc(permission.created_at) + timedelta(seconds=1)
                 permission.expires_at = expired_at
             async with sessions() as database, database.begin():
                 service = RetainedC5RecoveryService(
@@ -833,7 +831,13 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                 permission.expires_at = prepared.state.now + timedelta(hours=1)
                 database_now = await database.scalar(select(func.clock_timestamp()))
                 assert database_now is not None
-                permission.retention_until = utc(database_now) - timedelta(seconds=1)
+                retention_expired_at = min(utc(database_now), utc(prepared.state.now)) - timedelta(
+                    seconds=1
+                )
+                # Seed a valid already-expired permission. On a fast runner,
+                # subtracting one second from DB time can precede created_at.
+                permission.created_at = retention_expired_at - timedelta(hours=1)
+                permission.retention_until = retention_expired_at
             async with sessions() as database, database.begin():
                 service = RetainedC5RecoveryService(
                     ConversationApplication(
