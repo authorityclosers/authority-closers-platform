@@ -201,12 +201,24 @@ export function parseAllowance(value: unknown): Allowance {
     committed_seconds = integer(item.committed_seconds, 2147483647),
     available_seconds = integer(item.available_seconds, 6000);
   const unlimited = item.unlimited === true;
-  if (item.unlimited !== undefined && item.unlimited !== true && item.unlimited !== false)
+  if (
+    item.unlimited !== undefined &&
+    item.unlimited !== true &&
+    item.unlimited !== false
+  )
     throw new ReportContractError("acquisition_allowance");
-  if (!unlimited && available_seconds !== Math.max(0, allowance_seconds - committed_seconds))
+  if (
+    !unlimited &&
+    available_seconds !== Math.max(0, allowance_seconds - committed_seconds)
+  )
     throw new ReportContractError("acquisition_allowance");
   return unlimited
-    ? { allowance_seconds, committed_seconds, available_seconds, unlimited: true }
+    ? {
+        allowance_seconds,
+        committed_seconds,
+        available_seconds,
+        unlimited: true,
+      }
     : { allowance_seconds, committed_seconds, available_seconds };
 }
 export function parsePolicy(value: unknown): UploadPolicy {
@@ -379,6 +391,16 @@ export const submissionPath = (id: string) => {
   if (!UUID.test(id)) throw new ReportContractError("submission_id");
   return `/submissions/${id}`;
 };
+export function requestedSubmissionId(): string | null {
+  const id = new URLSearchParams(window.location.search).get("call");
+  return id && UUID.test(id) ? id : null;
+}
+export function clearRequestedSubmission() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("call")) return;
+  url.searchParams.delete("call");
+  window.history.replaceState(window.history.state, "", url);
+}
 export function savedSubmissionId(): string | null {
   try {
     const id = localStorage.getItem("ac.xray.submission.v1");

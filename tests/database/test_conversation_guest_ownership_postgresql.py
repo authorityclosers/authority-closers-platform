@@ -32,6 +32,7 @@ from ac_platform.conversation_intelligence.application import (
     DELETE_JOB,
     LOCAL_JOB,
     ConversationApplication,
+    ConversationConflict,
     ConversationDenied,
     ConversationNotFound,
 )
@@ -765,6 +766,9 @@ def test_processing_lease_fence_preserves_claimed_owner_scope(
                 if mutation == "revoke":
                     lease.revoked_at = state.now
 
+            other_guest, other_source, _, _ = await _guest(
+                engine, state, duration_seconds=3, marker=f"unclaimed-cookie-{mutation}"
+            )
             async with AsyncSession(engine) as database, database.begin():
                 check_now = state.now + timedelta(minutes=6) if mutation == "expire" else state.now
                 with pytest.raises(ConversationDenied):
@@ -782,6 +786,26 @@ def test_processing_lease_fence_preserves_claimed_owner_scope(
                 assert scope.claimed_account is True
                 assert scope.recording_id == UUID(view["recording_id"])
                 assert scope.processing_lease_id == processing_actor.processing_lease_id
+                sessions = AcquisitionSessions(
+                    database,
+                    tenant_id=state.tenant_id,
+                    policy_revision="guest-processing-v1",
+                    clock=lambda: state.now,
+                )
+                # A different guest upload left in this browser cannot hide an
+                # existing account call. Nor does opening the library claim it.
+                selected = await GuestOwnership(sessions).require_submission_owner(
+                    measured.submission_id, token=other_guest.token, actor=state.actor
+                )
+                assert selected.recording_id == scope.recording_id
+                with pytest.raises(ConversationNotFound):
+                    await GuestOwnership(sessions).require_submission_owner(
+                        other_source.submission_id, token=other_guest.token, actor=state.actor
+                    )
+                assert await database.get(ConversationVisitorClaim, other_guest.visitor_id) is None
+                # New upload admission still requires the explicit guest claim.
+                with pytest.raises(ConversationConflict):
+                    await sessions.allowance(token=other_guest.token, actor=state.actor)
                 with pytest.raises(ConversationDenied):
                     await GuestOwnership(
                         AcquisitionSessions(

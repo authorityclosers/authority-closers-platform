@@ -3,6 +3,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const { openSelectedCall } = vi.hoisted(() => ({ openSelectedCall: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: openSelectedCall }),
+}));
+
 import { AccountNavigation } from "./account-navigation";
 import { CallsLibrary } from "./calls-library";
 import { WorkspaceAccessProvider } from "./workspace-access";
@@ -56,6 +61,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   fetchMock = vi.fn();
+  openSelectedCall.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   navigate = vi.spyOn(window.location, "assign").mockImplementation(() => {});
   localStorage.clear();
@@ -137,7 +143,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
     ).click(),
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(secondId);
-  expect(navigate).toHaveBeenCalledWith("/");
+  expect(openSelectedCall).toHaveBeenCalledWith(`/?call=${secondId}`);
   expect(fetchMock.mock.calls).toHaveLength(2);
 });
 

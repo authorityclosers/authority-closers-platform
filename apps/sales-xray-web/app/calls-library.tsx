@@ -2,6 +2,7 @@
 
 import { AudioLines, ArrowRight, LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "./acquisition-shell";
@@ -63,6 +64,7 @@ export function CallsLibrary({
   const embedded = variant === "embedded";
   const Main = "div";
   const access = useWorkspaceAccess();
+  const router = useRouter();
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,8 +210,7 @@ export function CallsLibrary({
     if (opening) return;
     setOpening(true);
     rememberSubmission(submission.id);
-    // Explicit row activation opens the selected studio in a fresh document.
-    window.location.assign(studioHref);
+    router.push(`${studioHref}?call=${submission.id}`);
   }
 
   const content = (

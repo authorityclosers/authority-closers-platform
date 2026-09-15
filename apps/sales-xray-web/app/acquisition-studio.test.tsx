@@ -113,6 +113,7 @@ beforeEach(() => {
   quoteFailure = null;
   analysisPaused = false;
   localStorage.clear();
+  window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -904,6 +905,40 @@ it("login return offers an explicit claim before reading the saved report", asyn
   expect(
     container.querySelector('[aria-label="Sales call report"]'),
   ).not.toBeNull();
+});
+
+it("opens an explicitly selected account call despite an unrelated guest claim", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  localStorage.setItem("ac.xray.submission.v1", recordingId);
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain("Save to my account");
+  expect(calls.some((call) => call.path.endsWith("/claim"))).toBe(false);
+  expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  await click("Analyse another call");
+  expect(new URLSearchParams(window.location.search).has("call")).toBe(false);
+  expect(container.querySelector('input[type="file"]')).not.toBeNull();
+});
+
+it("does not expose a report when an explicit call selector is denied", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  lookupUnavailable = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  expect(container.textContent).toContain("Saved call unavailable");
+  expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/claim"))).toBe(false);
 });
 
 it("requires explicit deletion and waits for server acceptance", async () => {

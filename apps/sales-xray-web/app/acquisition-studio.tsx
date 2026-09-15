@@ -41,6 +41,7 @@ import {
   ACQUISITION,
   AcquisitionError,
   acquisition,
+  clearRequestedSubmission,
   parseAllowance,
   parseEntry,
   parsePolicy,
@@ -48,6 +49,7 @@ import {
   parseSubmission,
   record,
   rememberSubmission,
+  requestedSubmissionId,
   savedSubmissionId,
   submissionPath,
   type Allowance,
@@ -219,7 +221,10 @@ export function AcquisitionStudio({
         const terms = parsePolicy(
           await acquisition("/upload-policy", { signal }),
         );
-        const saved = savedSubmissionId();
+        // A library selection identifies the call to open. It is only a
+        // selector: the service still verifies the current owner's access.
+        const requested = requestedSubmissionId();
+        const saved = requested ?? savedSubmissionId();
         let current: Record<string, unknown> | null = null;
         try {
           current = record(await acquisition("/session", { signal }));
@@ -237,12 +242,14 @@ export function AcquisitionStudio({
           setAllowance(parseAllowance(current.allowance));
           setAllowanceUnknown(false);
           setClaimAvailable(
-            current.claim_available === true ||
-              current.state === "claim_required",
+            !requested &&
+              (current.claim_available === true ||
+                current.state === "claim_required"),
           );
           if (
-            current.claim_available === true ||
-            current.state === "claim_required"
+            !requested &&
+            (current.claim_available === true ||
+              current.state === "claim_required")
           )
             return;
         }
@@ -253,6 +260,7 @@ export function AcquisitionStudio({
             if (signal.aborted) return;
             const bound = parseSubmission(loaded);
             if (bound.id !== saved) throw new Error("submission_mismatch");
+            if (requested) rememberSubmission(bound.id);
             setSubmission(bound);
             setProgress(parseProgress(loaded, bound));
             setDeletionOnlyId(null);
@@ -688,6 +696,7 @@ export function AcquisitionStudio({
     chosenId.current = "";
     requestedPlan.current = "";
     quoteKey.current = "";
+    clearRequestedSubmission();
     if (!options?.preserveSavedSubmission) rememberSubmission(null);
     if (input.current) input.current.value = "";
   }
@@ -699,6 +708,7 @@ export function AcquisitionStudio({
   function forgetSavedCall() {
     if (inFlight.current) return;
     rememberSubmission(null);
+    clearRequestedSubmission();
     setDeletionOnlyId(null);
     setDeleteConfirm(false);
     setError("");
@@ -1156,7 +1166,8 @@ export function AcquisitionStudio({
                       !consent ||
                       (!session && !token) ||
                       !!busy ||
-                      (allowance?.available_seconds === 0 && !allowance?.unlimited)
+                      (allowance?.available_seconds === 0 &&
+                        !allowance?.unlimited)
                     }
                     onClick={() => void upload()}
                   >

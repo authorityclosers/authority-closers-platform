@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
 import {
   acquisition,
+  clearRequestedSubmission,
   AcquisitionError,
   parseAllowance,
   parseEntry,
@@ -9,6 +10,7 @@ import {
   parseProgress,
   parseSubmission,
   rememberSubmission,
+  requestedSubmissionId,
   savedSubmissionId,
 } from "./acquisition-client";
 import {
@@ -24,6 +26,7 @@ import {
 
 afterEach(() => {
   localStorage.clear();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });
 describe("acquisition permission recovery", () => {
@@ -180,6 +183,24 @@ describe("acquisition source-bound presentation", () => {
       "https://other.example/private",
     );
     expect(savedSubmissionId()).toBeNull();
+  });
+  it("uses a validated call selector and clears it without losing other navigation state", () => {
+    window.history.replaceState(
+      { marker: true },
+      "",
+      `/?call=${submissionId}&view=report#overview`,
+    );
+    expect(requestedSubmissionId()).toBe(submissionId);
+    clearRequestedSubmission();
+    expect(window.location.search).toBe("?view=report");
+    expect(window.location.hash).toBe("#overview");
+    expect(window.history.state).toEqual({ marker: true });
+    window.history.replaceState(
+      null,
+      "",
+      "/?call=https://other.example/private",
+    );
+    expect(requestedSubmissionId()).toBeNull();
   });
   it("keeps historical consumption visible when the server reduces the trial to sixty minutes", () => {
     expect(

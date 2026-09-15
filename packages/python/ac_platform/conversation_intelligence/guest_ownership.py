@@ -154,7 +154,13 @@ class GuestOwnership:
         if actor is not None:
             await ConversationApplication(self.database, clock=self.clock).admit(actor)
         now = await self.sessions._admit(mutation=mutation)
-        visitor_id, person_id = await self.sessions._owner(token, actor, now)
+        # An exact existing-call lookup uses the current account when signed
+        # in. An unrelated guest cookie must not block that account's library.
+        # The usage/claim match below still rejects unclaimed guest calls and
+        # calls belonging to another account; this never creates a claim.
+        visitor_id, person_id = await self.sessions._owner(
+            None if actor is not None else token, actor, now
+        )
         usage = await self.database.scalar(
             select(ConversationAcquisitionUsage).where(
                 ConversationAcquisitionUsage.tenant_id == self.tenant_id,
