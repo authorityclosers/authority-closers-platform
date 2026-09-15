@@ -1600,13 +1600,20 @@
   white-space: nowrap;
 }
 
-.resultLead {
+.overview .resultLead {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   margin: 0 0 18px;
   padding: 4px 0 0;
   border: 0;
+}
+
+.overview .resultLead .sourceDetails,
+.overview .resultLead .sourceDetails[open] {
+  grid-area: auto;
+  grid-column: 1 / -1;
+  grid-row: auto;
 }
 
 .resultLeadCopy {
@@ -1844,21 +1851,32 @@
     gap: 14px;
   }
 
+  .resultLead .sourceDetails,
+  .resultLead .sourceDetails[open] {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
   .resultLead h1 {
     font-size: clamp(32px, 10vw, 42px);
   }
 
   .reportMetrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .metric {
     min-height: 82px;
-    padding: 12px;
+    padding: 10px 8px;
+  }
+
+  .metric span {
+    font-size: 10px;
   }
 
   .metric strong {
-    font-size: 21px;
+    font-size: 18px;
   }
 
   .takeawayGrid {

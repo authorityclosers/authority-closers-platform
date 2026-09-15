@@ -1652,9 +1652,6 @@ export function AcquisitionStudio({
               aria-label="Sales call report"
             >
               <div className={styles.reportHeader}>
-                <div>
-                  <h1 className={styles.reportTitle}>Your call, clearly.</h1>
-                </div>
                 <div className="studio-report-actions">
                   <button
                     type="button"

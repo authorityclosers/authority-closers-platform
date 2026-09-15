@@ -1005,21 +1005,24 @@ it("opens an explicitly selected account call despite an unrelated guest claim",
   expect(container.querySelector('input[type="file"]')).not.toBeNull();
 });
 
-it("expands playback controls without replacing the saved source or restarting analysis", async () => {
+it("keeps report audio in the fixed dock without remounting the saved source", async () => {
   existing = true;
   claimed = true;
   accepted = true;
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
-  const savedAudio = container.querySelector("#acquisition-saved-audio audio");
+  const savedAudio = container.querySelector(
+    '[aria-label="Call audio player"] audio',
+  );
   const source = savedAudio?.getAttribute("src");
   expect(source).toContain(`/submissions/${submissionId}/source`);
-  expect(button("Playback").getAttribute("aria-expanded")).toBe("false");
-  await click("Playback");
-  expect(button("Hide player").getAttribute("aria-expanded")).toBe("true");
-  await click("Hide player");
-  expect(container.querySelector("#acquisition-saved-audio audio")).toBe(
-    savedAudio,
+  expect(container.querySelector("#acquisition-saved-audio audio")).toBeNull();
+  expect(container.querySelectorAll("audio")).toHaveLength(1);
+  expect(
+    container.querySelector('[aria-label="Seek recording"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[aria-label="Call audio player"]')).toBe(
+    savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
