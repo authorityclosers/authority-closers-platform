@@ -416,7 +416,7 @@ class ConversationMeasurements:
             )
         try:
             envelope = WaveformEnvelope(
-                schema=WAVEFORM_SCHEMA,
+                schema_=WAVEFORM_SCHEMA,
                 kind="rms_envelope",
                 duration_ms=view.audioatlas.duration_ms,
                 points=tuple(projected),

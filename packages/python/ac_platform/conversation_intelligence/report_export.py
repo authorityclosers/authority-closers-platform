@@ -9,7 +9,7 @@ import io
 import re
 import zipfile
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 from ac_platform.conversation_intelligence.reports import ReportDraft
@@ -164,7 +164,7 @@ def _docx_evidence(body: ET.Element, evidence: Mapping[str, Any]) -> None:
     start_ms = evidence.get("start_ms")
     end_ms = evidence.get("end_ms")
     quote = evidence.get("quote")
-    if not all(isinstance(item, str) for item in (segment_id, quote)):
+    if not isinstance(segment_id, str) or not isinstance(quote, str):
         raise ValueError("report_docx_evidence_invalid")
     if type(start_ms) is not int or type(end_ms) is not int:
         raise ValueError("report_docx_evidence_invalid")
@@ -253,7 +253,7 @@ def _docx_styles() -> bytes:
     style("Heading3", name="Heading 3", size="21")
     style("Quote", name="Quote", size="21")
     style("ListBullet", name="List Bullet", size="21")
-    return ET.tostring(styles, encoding="utf-8", xml_declaration=True)
+    return cast(bytes, ET.tostring(styles, encoding="utf-8", xml_declaration=True))
 
 
 def _docx_document(body: ET.Element) -> bytes:
@@ -266,7 +266,7 @@ def _docx_document(body: ET.Element) -> bytes:
     )
     document = ET.Element(_w("document"))
     document.append(body)
-    return ET.tostring(document, encoding="utf-8", xml_declaration=True)
+    return cast(bytes, ET.tostring(document, encoding="utf-8", xml_declaration=True))
 
 
 def _docx_core_properties(title: str) -> bytes:
@@ -276,7 +276,7 @@ def _docx_core_properties(title: str) -> bytes:
     created = ET.SubElement(root, f"{{{_DCTERMS_NS}}}created")
     created.set(f"{{{_XSI_NS}}}type", "dcterms:W3CDTF")
     created.text = "2026-01-01T00:00:00Z"
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    return cast(bytes, ET.tostring(root, encoding="utf-8", xml_declaration=True))
 
 
 def _docx_package(document: bytes, *, title: str) -> bytes:
@@ -292,7 +292,7 @@ def _docx_package(document: bytes, *, title: str) -> bytes:
         b'officedocument.wordprocessingml.styles+xml"/>\n'
         b'<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-'
         b'package.core-properties+xml"/>\n'
-        b'</Types>'
+        b"</Types>"
     )
     package_rels = (
         b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
@@ -301,14 +301,14 @@ def _docx_package(document: bytes, *, title: str) -> bytes:
         b'2006/relationships/officeDocument" Target="word/document.xml"/>\n'
         b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/'
         b'relationships/metadata/core-properties" Target="docProps/core.xml"/>\n'
-        b'</Relationships>'
+        b"</Relationships>"
     )
     document_rels = (
         b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
         b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
         b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/'
         b'2006/relationships/styles" Target="styles.xml"/>\n'
-        b'</Relationships>'
+        b"</Relationships>"
     )
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -389,13 +389,17 @@ def report_docx_bytes(envelope: Mapping[str, Any]) -> bytes:
     for dimension in dimensions:
         if not isinstance(dimension, Mapping):
             raise ValueError("report_docx_dimension_invalid")
-        label = dimension.get("label")
+        dimension_label = dimension.get("label")
         status = dimension.get("status")
         observation = dimension.get("observation")
         citations = dimension.get("citations")
-        if not all(isinstance(item, str) for item in (label, status, observation)):
+        if (
+            not isinstance(dimension_label, str)
+            or not isinstance(status, str)
+            or not isinstance(observation, str)
+        ):
             raise ValueError("report_docx_dimension_invalid")
-        _docx_heading(body, label, 2)
+        _docx_heading(body, dimension_label, 2)
         body.append(_docx_labeled_paragraph("Status", status))
         body.append(_docx_labeled_paragraph("Observation", observation))
         if not isinstance(citations, list):
@@ -405,8 +409,10 @@ def report_docx_bytes(envelope: Mapping[str, Any]) -> bytes:
                 raise ValueError("report_docx_citation_invalid")
             doc = citation.get("doc")
             sections = citation.get("sections")
-            if not isinstance(doc, str) or not isinstance(sections, list) or not all(
-                isinstance(section, str) for section in sections
+            if (
+                not isinstance(doc, str)
+                or not isinstance(sections, list)
+                or not all(isinstance(section, str) for section in sections)
             ):
                 raise ValueError("report_docx_citation_invalid")
             _docx_bullet(body, f"Source reference: {doc}, {', '.join(sections)}")
