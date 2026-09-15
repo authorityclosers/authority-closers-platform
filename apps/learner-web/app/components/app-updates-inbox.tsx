@@ -201,7 +201,7 @@ export function AppUpdatesInbox() {
         </ul>
       ) : null}
       <p className={styles.sourceNote}>
-        App release notes. Learning and account alerts are not connected yet.
+        What’s new in your academy, saved here for whenever you need it.
       </p>
     </div>
   );

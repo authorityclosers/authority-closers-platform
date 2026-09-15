@@ -71,3 +71,23 @@ of these checks made an inference-provider request or settled a provider bill.
 At candidate `b77e1fb`, the two disposable PostgreSQL cases pass, including actual Admin revalidate/correct/report requests and owner report, transcript, progress and source requests. Unauthorized guest and anonymous Admin reads are rejected. Recovery responses include the metadata accepted by the Admin frontend. Receipt: `D:/AC-authority-closers-release-audit/integrated-retained-http-final-pg-20260915-v2.xml`. The first root invocation used a temp directory under a parent Git checkout and failed the storage-root fixture guard; the corrected invocation uses an isolated `D:/Temp` directory. No provider call or production write occurred.
 
 This is candidate verification, not production deployment evidence. Report and processing visual work continues on isolated branches with normal Pro design handoffs.
+
+## Release notes and CI repairs
+
+The new Sales Xray note is prepared in the artifact catalogue as a draft. It must
+only become visible with the matching verified UI release. Existing stable note
+IDs and account-scoped read receipts are unchanged. Notification copy and body
+type are clearer. The existing learner notification tests passed 21 cases; the
+app-update application and HTTP tests passed 32 cases.
+
+Candidate `aef50b8` includes the async Admin route-save test repair and the
+reviewed row-count parity entry for migration `20260915_0043`. The isolated
+provider-control tests passed 17 cases; model registry and restore-drill checks
+passed 92 cases with two Docker/explicit-integration skips. Full final-candidate
+CI remains necessary.
+
+The first processing visual check established horizontal fit and reduced
+motion, but the user's screenshot exposed vertical overflow and poor hierarchy.
+That check is not accepted as one-viewport UX proof. The revised mounted route
+must show its status and main action without default page scrolling at the
+declared desktop/mobile sizes, while remaining reachable at enlarged text.

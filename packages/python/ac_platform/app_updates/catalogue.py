@@ -98,8 +98,25 @@ class AppReleaseCatalogue:
 
 
 CURRENT_ARTIFACT_RELEASES = AppReleaseCatalogue(
-    version="app-updates-v0-2-alpha-catalogue-2",
+    version="app-updates-v0-2-alpha-catalogue-3",
     releases=(
+        AppRelease(
+            id="sales-xray-focused-report-20260915",
+            title="A clearer view of your next call",
+            message=(
+                "Your Sales Xray report puts the main takeaway first, "
+                "with a clearer path to the moments and practice that matter."
+            ),
+            version="Sales Xray",
+            highlights=(
+                "See what to keep doing and what to work on next.",
+                "Explore the report by section and return to the supporting audio.",
+                "Follow your call’s progress in a simpler processing view.",
+            ),
+            target_href="/sales-xray",
+            created_at=datetime(2026, 9, 15, 5, 30, tzinfo=UTC),
+            state="draft",
+        ),
         AppRelease(
             id="app-updates-v0-2-read-recovery",
             title="A quieter notification bell",
