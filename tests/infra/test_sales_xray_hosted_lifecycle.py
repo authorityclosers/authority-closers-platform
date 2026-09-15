@@ -326,9 +326,7 @@ def test_hosted_validator_accepts_explicit_inert_bootstrap(activation_root: Path
     service["providers"] = []
     paths["service"].write_bytes(_json_bytes(service))
     approval = json.loads(paths["approval"].read_bytes())
-    approval.update(
-        {"allowances": [], "internal_tester_accounts": [], "stages": []}
-    )
+    approval.update({"allowances": [], "internal_tester_accounts": [], "stages": []})
     paths["approval"].write_bytes(_json_bytes(approval))
     env = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
     env["AC_XRAY_ACQUISITION_ENABLED"] = "false"
