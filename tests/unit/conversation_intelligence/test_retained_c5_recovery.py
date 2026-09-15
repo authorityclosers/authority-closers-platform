@@ -80,9 +80,7 @@ def test_correction_requires_exact_old_text_and_retained_segment() -> None:
         source_segment_ids=("seg-1",),
         rationale="The retained quote supports the correction.",
     )
-    assert _apply_corrections({"summary": "old"}, (correction,), {"seg-1"}) == {
-        "summary": "new"
-    }
+    assert _apply_corrections({"summary": "old"}, (correction,), {"seg-1"}) == {"summary": "new"}
     with pytest.raises(ValueError, match="no longer matches"):
         _apply_corrections({"summary": "changed"}, (correction,), {"seg-1"})
     with pytest.raises(ValueError, match="outside"):
@@ -104,9 +102,12 @@ def test_correction_allows_only_typed_timestamp_and_evidence_replacements() -> N
             }
         }
     }
-    assert _apply_corrections(report, (timestamp,), {"seg-1"})["overview"][
-        "conversation_change"
-    ]["change"]["evidence"][0]["end_ms"] == 120
+    assert (
+        _apply_corrections(report, (timestamp,), {"seg-1"})["overview"]["conversation_change"][
+            "change"
+        ]["evidence"][0]["end_ms"]
+        == 120
+    )
     with pytest.raises(ValidationError):
         RetainedC5Correction(
             path="/overview",

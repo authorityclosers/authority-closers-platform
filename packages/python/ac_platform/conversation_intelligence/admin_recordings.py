@@ -260,8 +260,10 @@ def _status(
         return "cancelled"
     # A native C1 run can be newer than a verified report without invalidating
     # that report. Provider runs, and an explicitly newer plan, do supersede it.
-    if has_report and not recovered_report and (
-        run is None or run.id == report_run_id or run.id not in provider_run_ids
+    if (
+        has_report
+        and not recovered_report
+        and (run is None or run.id == report_run_id or run.id not in provider_run_ids)
     ):
         return "completed"
     if run is not None:
