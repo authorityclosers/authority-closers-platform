@@ -77,6 +77,25 @@ const adminReportSchema = z
       })
       .strict(),
     report: reportSchema,
+    recovery: z
+      .object({
+        validation_state: z.enum([
+          "needs_correction",
+          "revalidated",
+          "corrected",
+        ]),
+        provider_calls: z.literal(0),
+        canonical_c5_checkpoint_id: z.null(),
+        canonical_c6_checkpoint_id: z.null(),
+        human_approved: z.literal(false),
+        dipak_adjudicated: z.literal(false),
+        official_score: z.literal(false),
+        review_origin: z.literal("Codex automated proposal"),
+        original_raw_sha256: digestSchema,
+        raw_blob_id: uuidSchema,
+      })
+      .strict()
+      .optional(),
     message: z.string().min(1),
   })
   .strict();

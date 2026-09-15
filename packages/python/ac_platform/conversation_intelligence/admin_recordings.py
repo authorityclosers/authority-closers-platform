@@ -45,6 +45,9 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.conversation_intelligence.recovery_models import (
+    ConversationRetainedC5Version,
+)
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
@@ -245,6 +248,7 @@ def _status(
     plan: ConversationProcessingPlan | None,
     *,
     has_report: bool,
+    recovered_report: bool = False,
     report_run_id: UUID | None = None,
     provider_run_ids: frozenset[UUID] = frozenset(),
 ) -> str:
@@ -256,7 +260,9 @@ def _status(
         return "cancelled"
     # A native C1 run can be newer than a verified report without invalidating
     # that report. Provider runs, and an explicitly newer plan, do supersede it.
-    if has_report and (run is None or run.id == report_run_id or run.id not in provider_run_ids):
+    if has_report and not recovered_report and (
+        run is None or run.id == report_run_id or run.id not in provider_run_ids
+    ):
         return "completed"
     if run is not None:
         if run.state == "running":
@@ -428,10 +434,12 @@ class AdminConversationRecordings:
         operations_tenant_id: UUID,
         *,
         recording_tenant_ids: Sequence[UUID] | None = None,
+        recovery_enabled: bool = False,
     ) -> None:
         self.application = application
         self.database: AsyncSession = application.database
         self.operations_tenant_id = operations_tenant_id
+        self.recovery_enabled = recovery_enabled
         candidates = (operations_tenant_id, *(recording_tenant_ids or ()))
         if any(type(identifier) is not UUID for identifier in candidates):
             raise ValueError("recording tenant scope must contain UUIDs")
@@ -708,6 +716,20 @@ class AdminConversationRecordings:
             )
         ).all()
         latest_drafts = _latest(drafts, lambda row: row.recording_id)
+        if self.recovery_enabled:
+            recoveries = (
+                await self.database.scalars(
+                    select(ConversationRetainedC5Version).where(
+                        ConversationRetainedC5Version.tenant_id.in_(self.recording_tenant_ids),
+                        ConversationRetainedC5Version.recording_id.in_(recording_ids),
+                        ConversationRetainedC5Version.erased_at.is_(None),
+                        ConversationRetainedC5Version.payload.is_not(None),
+                    )
+                )
+            ).all()
+            latest_recoveries = _latest(recoveries, lambda row: row.recording_id)
+        else:
+            latest_recoveries = {}
         reports = ConversationReports(self.application)
 
         items: list[dict[str, Any]] = []
@@ -722,10 +744,22 @@ class AdminConversationRecordings:
             run = latest_runs.get(recording.id)
             plan = latest_plans.get(recording.id)
             draft = latest_drafts.get(recording.id)
+            recovered = latest_recoveries.get(recording.id)
+            if recovered is not None and recovered.generation != recording.generation:
+                recovered = None
             has_report = False
+            recovered_report = False
             report_run_id: UUID | None = None
             report_id: UUID | None = None
-            if draft is not None:
+            if recovered is not None:
+                # A retained recovery version is the read authority for this
+                # report, while the failed provider run remains the status and
+                # cost authority in the inventory.
+                has_report = True
+                recovered_report = True
+                report_run_id = recovered.run_id
+                report_id = recovered.id
+            elif draft is not None:
                 try:
                     reports._validated(draft, recording)
                     await reports._canonical_draft(draft, recording)
@@ -818,6 +852,7 @@ class AdminConversationRecordings:
                         run,
                         plan,
                         has_report=has_report,
+                        recovered_report=recovered_report,
                         report_run_id=report_run_id,
                         provider_run_ids=provider_run_ids,
                     ),
@@ -845,6 +880,15 @@ class AdminConversationRecordings:
                         "run_id": None if report_run_id is None else str(report_run_id),
                         "review_eligible": review_eligible,
                         "invite_eligible": review_eligible,
+                        "recovery": (
+                            None
+                            if recovered is None
+                            else {
+                                "validation_state": recovered.validation_state,
+                                "provider_calls": 0,
+                                "review_origin": recovered.review_origin,
+                            }
+                        ),
                     },
                     "cost": _cost_view(
                         cost_tasks[-1] if cost_tasks else None,

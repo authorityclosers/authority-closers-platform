@@ -192,7 +192,10 @@ def create_app(
         application,
         settings=settings,
         require_actor=require_actor,
-        import_storage=conversation_intake_runtime.storage if conversation_intake_runtime else None,
+        # Recovery reads use the resolved hosted composition.  The old private
+        # draft importer remains an explicit test-only seam and is not enabled
+        # by passing the raw caller-supplied runtime here.
+        recovery_storage=resolved_conversation.storage if resolved_conversation else None,
     )
     install_execution_control_http(
         application, settings=settings, sessions=session_factory, require_actor=require_actor

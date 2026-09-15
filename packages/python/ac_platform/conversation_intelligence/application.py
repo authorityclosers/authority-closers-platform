@@ -967,6 +967,26 @@ class ConversationApplication:
         ).all():
             draft.payload, draft.transcript, draft.evidence_receipt = None, None, None
             draft.erased_at = now
+        from ac_platform.conversation_intelligence.recovery_models import (
+            ConversationRetainedC5Version,
+        )
+
+        for version in (
+            await self.database.scalars(
+                select(ConversationRetainedC5Version).where(
+                    ConversationRetainedC5Version.recording_id == recording.id,
+                    ConversationRetainedC5Version.erased_at.is_(None),
+                )
+            )
+        ).all():
+            version.c5_input = None
+            version.original_quote = None
+            version.original_attempt = None
+            version.original_receipt = None
+            version.correction = None
+            version.proof = None
+            version.payload = None
+            version.erased_at = now
         for feedback in (
             await self.database.scalars(
                 select(ConversationReviewFeedback).where(

@@ -108,6 +108,7 @@ function InventoryRow({
     recording.report.available &&
     recording.report.review_eligible &&
     recording.report.run_id;
+  const canOpenReport = recording.report.available && recording.report.run_id;
   return (
     <article className={styles.assignmentCard}>
       <div className={styles.assignmentCardHeader}>
@@ -174,9 +175,11 @@ function InventoryRow({
         <div>
           <dt>Report</dt>
           <dd>
-            {recording.report.review_eligible
-              ? "Ready for review"
-              : "Not ready"}
+            {recording.report.recovery
+              ? "Recovered draft · review blocked"
+              : recording.report.review_eligible
+                ? "Ready for review"
+                : "Not ready"}
           </dd>
         </div>
       </dl>
@@ -201,7 +204,7 @@ function InventoryRow({
         </div>
       ) : null}
       <div className={styles.assignmentActions}>
-        {canUseForReview ? (
+        {canOpenReport ? (
           <>
             <Link
               className="button button-primary"
@@ -209,13 +212,20 @@ function InventoryRow({
             >
               Open report
             </Link>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={() => onSelectRun(recording.report.run_id as string)}
-            >
-              Use for review / invite
-            </button>
+            {canUseForReview ? (
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => onSelectRun(recording.report.run_id as string)}
+              >
+                Use for review / invite
+              </button>
+            ) : (
+              <span className={styles.panelIntro}>
+                Recovered report is available for inspection; canonical review
+                remains blocked.
+              </span>
+            )}
           </>
         ) : (
           <span className={styles.panelIntro}>

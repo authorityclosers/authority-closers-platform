@@ -93,7 +93,11 @@ function ReportBody({ report }: { report: AdminReport }) {
           <FileCheck2 size={20} />
         </div>
         <div>
-          <span className={styles.eyebrow}>Saved qualitative draft</span>
+          <span className={styles.eyebrow}>
+            {report.recovery
+              ? "Recovered qualitative draft"
+              : "Saved qualitative draft"}
+          </span>
           <h2 id="report-summary-title">{detail.summary}</h2>
           <p>{detail.verdict}</p>
         </div>
@@ -158,6 +162,12 @@ function ReportBody({ report }: { report: AdminReport }) {
         <span>
           <strong>Report</strong> <code>{shortId(report.id)}</code>
         </span>
+        {report.recovery ? (
+          <span>
+            <strong>Recovery</strong> {report.recovery.validation_state} · 0
+            provider calls · review blocked
+          </span>
+        ) : null}
       </details>
     </>
   );

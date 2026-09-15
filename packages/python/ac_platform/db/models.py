@@ -20,6 +20,7 @@ from ac_platform.conversation_intelligence import (
     acquisition_models,
     execution_control_models,
     guest_models,
+    recovery_models,
 )
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
@@ -44,6 +45,7 @@ MODEL_MODULES = (
     acquisition_models,
     guest_models,
     execution_control_models,
+    recovery_models,
     authorization_models,
     knowledge_models,
     catalog_models,

@@ -32,6 +32,8 @@ from ac_platform.conversation_intelligence.report_access import (
     project_bound_report,
 )
 from ac_platform.conversation_intelligence.report_store import ConversationReports
+from ac_platform.conversation_intelligence.reports import ReportDraft
+from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
 from ac_platform.kernel.authz import ActorContext
 
 
@@ -86,6 +88,39 @@ class AcquisitionReports:
         self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
     ) -> dict[str, Any]:
         scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
+        if recovered is not None and recovered.payload is not None:
+            report = ReportDraft.model_validate(recovered.payload)
+            run = await self.database.scalar(
+                select(ConversationRun).where(
+                    ConversationRun.id == recovered.run_id,
+                    ConversationRun.recording_id == recording.id,
+                    ConversationRun.tenant_id == recording.tenant_id,
+                    ConversationRun.person_id == recording.person_id,
+                )
+            )
+            if run is None:
+                raise ConversationConflict("The recovered report's run is unavailable.")
+            envelope = project_bound_report(
+                report,
+                access=ReportAccess.ACCOUNT if scope.claimed_account else ReportAccess.GUEST,
+                source=ReportSourceBinding(
+                    recording.id, run.id, recording.source_sha256, report.transcript_revision
+                ),
+            )
+            return {
+                "submission_id": str(submission_id),
+                **envelope,
+                "recovery": {
+                    "version": recovered.version,
+                    "validation_state": recovered.validation_state,
+                    "provider_calls": 0,
+                    "human_approved": False,
+                    "official_score": False,
+                },
+            }
         draft = await self._draft(recording)
         if draft is None:
             raise ConversationNotFound("Your sales report is not ready yet.")
@@ -172,6 +207,11 @@ class AcquisitionReports:
             )
         ).all()
         has_report = False
+        recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
+            recording
+        )
+        if recovered is not None:
+            has_report = True
         draft = await self._draft(recording)
         if draft is not None:
             try:
@@ -179,7 +219,8 @@ class AcquisitionReports:
                 await self.reports._canonical_draft(draft, recording)
                 has_report = True
             except ConversationConflict:
-                pass
+                if recovered is None:
+                    has_report = False
         return {
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),

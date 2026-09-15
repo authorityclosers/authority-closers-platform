@@ -140,6 +140,15 @@ const recordingSchema = z
         run_id: uuidSchema.nullable(),
         review_eligible: z.boolean(),
         invite_eligible: z.boolean(),
+        recovery: z
+          .object({
+            validation_state: z.enum(["revalidated", "corrected"]),
+            provider_calls: z.literal(0),
+            review_origin: z.literal("Codex automated proposal"),
+          })
+          .strict()
+          .nullable()
+          .optional(),
       })
       .strict(),
     cost: z

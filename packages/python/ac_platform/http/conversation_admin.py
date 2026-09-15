@@ -32,6 +32,11 @@ from ac_platform.conversation_intelligence.report_store import (
     ConversationReports,
     PrivateDraftIntent,
 )
+from ac_platform.conversation_intelligence.retained_c5_recovery import (
+    RetainedC5CorrectionIntent,
+    RetainedC5RecoveryService,
+    RetainedC5RevalidationIntent,
+)
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -65,6 +70,7 @@ def install_conversation_admin_http(
     settings: Settings,
     require_actor: RequireActor,
     import_storage: PrivateLocalRecordingStorage | None = None,
+    recovery_storage: PrivateLocalRecordingStorage | None = None,
 ) -> None:
     if import_storage is not None and settings.environment not in {"local", "test"}:
         raise ValueError("Internal proof import is limited to the local test composition.")
@@ -161,6 +167,7 @@ def install_conversation_admin_http(
                 ConversationApplication(auth.database),
                 operations_tenant_id,
                 recording_tenant_ids=recording_tenant_ids,
+                recovery_enabled=recovery_storage is not None,
             ).list(
                 auth.resolved.actor,
                 limit=limit,
@@ -189,6 +196,14 @@ def install_conversation_admin_http(
                 if settings.public_learner_tenant_id is not None
                 else ()
             )
+            if recovery_storage is not None:
+                recovered = await RetainedC5RecoveryService(
+                    ConversationApplication(auth.database),
+                    operations_tenant_id=operations_tenant_id,
+                    recording_tenant_ids=recording_tenant_ids,
+                ).admin_report(auth.resolved.actor, run_id)
+                if recovered is not None:
+                    return recovered
             return await AdminConversationReports(
                 ConversationApplication(auth.database),
                 operations_tenant_id,
@@ -296,6 +311,75 @@ def install_conversation_admin_http(
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
+
+    if recovery_storage is not None:
+
+        @router.post("/runs/{run_id}/retained-c5/revalidate", status_code=201)
+        async def revalidate_retained_c5(
+            run_id: UUID,
+            intent: RetainedC5RevalidationIntent,
+            request: Request,
+            response: Response,
+            key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+            auth: AuthenticatedTransaction = dependency,
+        ) -> dict[str, Any]:
+            surface(request, response)
+            require_safe_origin(request, settings)
+            operations_tenant_id = settings.operations_tenant_id
+            if operations_tenant_id is None:
+                raise HTTPException(503, "Conversation recovery is not configured.")
+            try:
+                return await RetainedC5RecoveryService(
+                    ConversationApplication(auth.database),
+                    operations_tenant_id=operations_tenant_id,
+                    recording_tenant_ids=(
+                        (settings.public_learner_tenant_id,)
+                        if settings.public_learner_tenant_id is not None
+                        else ()
+                    ),
+                ).revalidate(
+                    auth.resolved.actor,
+                    run_id,
+                    original_raw_sha256=intent.original_raw_sha256,
+                    key=key,
+                    storage=recovery_storage,
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error)) from None
+
+        @router.post("/runs/{run_id}/retained-c5/correct", status_code=201)
+        async def correct_retained_c5(
+            run_id: UUID,
+            intent: RetainedC5CorrectionIntent,
+            request: Request,
+            response: Response,
+            key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+            auth: AuthenticatedTransaction = dependency,
+        ) -> dict[str, Any]:
+            surface(request, response)
+            require_safe_origin(request, settings)
+            operations_tenant_id = settings.operations_tenant_id
+            if operations_tenant_id is None:
+                raise HTTPException(503, "Conversation recovery is not configured.")
+            try:
+                return await RetainedC5RecoveryService(
+                    ConversationApplication(auth.database),
+                    operations_tenant_id=operations_tenant_id,
+                    recording_tenant_ids=(
+                        (settings.public_learner_tenant_id,)
+                        if settings.public_learner_tenant_id is not None
+                        else ()
+                    ),
+                ).revalidate(
+                    auth.resolved.actor,
+                    run_id,
+                    original_raw_sha256=intent.original_raw_sha256,
+                    key=key,
+                    storage=recovery_storage,
+                    correction=intent,
+                )
+            except ConversationError as error:
+                raise HTTPException(error.status, str(error)) from None
 
     if import_storage is not None:
 

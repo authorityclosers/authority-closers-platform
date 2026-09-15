@@ -38,6 +38,7 @@ from ac_platform.conversation_intelligence.reports import (
     load_report_profile,
     parse_report_draft,
 )
+from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
     ObjectKind,
@@ -287,6 +288,11 @@ class ConversationReports:
                     "recipe_revision": latest.recipe_revision,
                     "provider_calls": current["provider_calls"],
                 }
+                recovered = await RetainedC5RecoveryService(self.application).owner_report(
+                    actor, latest.id
+                )
+                if recovered is not None:
+                    has_report = True
                 draft = await self.database.scalar(
                     select(ConversationReportDraft)
                     .where(
@@ -303,7 +309,8 @@ class ConversationReports:
                         await self._canonical_draft(draft, recording)
                         has_report = True
                     except (ConversationConflict, ValueError, TypeError, KeyError):
-                        has_report = False
+                        if recovered is None:
+                            has_report = False
                 run_view["has_report"] = has_report
             result.append(
                 {
@@ -384,6 +391,14 @@ class ConversationReports:
 
     async def get(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
         run = await self.application.get_run(actor, run_id)
+        recovered = await RetainedC5RecoveryService(self.application).owner_report(actor, run_id)
+        if recovered is not None:
+            return {
+                **run,
+                "report": recovered["report"],
+                "message": recovered["message"],
+                "recovery": recovered["recovery"],
+            }
         draft = await self.database.scalar(
             select(ConversationReportDraft)
             .where(
