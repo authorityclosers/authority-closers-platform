@@ -1525,7 +1525,7 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
         "mutation_started=1"
     )
     assert "max_artifact_bytes=450000000" in WORKFLOW
-    assert "max_artifact_pool_bytes=450000000" in WORKFLOW
+    assert 'max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"' in WORKFLOW
     assert "refusing upload above" in WORKFLOW
     assert "group: application-release-packaging" in WORKFLOW
     assert "actions: write" in WORKFLOW
