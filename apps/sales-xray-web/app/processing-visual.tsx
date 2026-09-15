@@ -7,13 +7,13 @@ export type ProcessingVisualPhase =
   | "C5"
   | "processing";
 
-const phaseLabels: Record<ProcessingVisualPhase, string> = {
-  upload: "Upload check",
-  C2: "Transcription",
-  C4: "Conversation check",
-  C5: "Coaching report",
-  processing: "Private processing",
-};
+// Decorative bars give the processing state a calm visual rhythm. They are
+// intentionally not derived from audio data or progress percentages.
+const waveformBars = [
+  4, 6, 8, 10, 13, 18, 25, 34, 46, 62, 84, 108, 78, 52, 32, 22, 14, 10, 8, 12,
+  18, 29, 44, 64, 92, 112, 86, 58, 34, 22, 15, 11, 8, 10, 14, 21, 32, 48, 70,
+  92, 66, 42, 27, 17, 12, 9, 7, 6, 5,
+];
 
 export function ProcessingVisual({
   phase,
@@ -32,44 +32,26 @@ export function ProcessingVisual({
       <svg
         className={styles.art}
         data-paused={paused}
-        viewBox="0 0 160 160"
+        viewBox="0 0 760 160"
+        preserveAspectRatio="none"
         focusable="false"
       >
-        <defs>
-          <linearGradient
-            id="processing-visual-ring"
-            x1="20"
-            y1="20"
-            x2="140"
-            y2="140"
-          >
-            <stop offset="0" stopColor="currentColor" stopOpacity="0.28" />
-            <stop offset="0.52" stopColor="currentColor" stopOpacity="0.96" />
-            <stop offset="1" stopColor="currentColor" stopOpacity="0.22" />
-          </linearGradient>
-          <radialGradient id="processing-visual-core">
-            <stop offset="0" stopColor="currentColor" stopOpacity="0.9" />
-            <stop offset="1" stopColor="currentColor" stopOpacity="0.12" />
-          </radialGradient>
-        </defs>
-        <circle className={styles.backdrop} cx="80" cy="80" r="64" />
-        <circle className={styles.ring} cx="80" cy="80" r="49" />
-        <circle className={styles.ringSecondary} cx="80" cy="80" r="37" />
-        <path
-          className={styles.orbit}
-          d="M80 17a63 63 0 1 1-44.55 18.45"
-          pathLength="100"
-        />
-        <path
-          className={styles.wave}
-          d="M42 80h13l7-14 10 29 10-38 11 46 9-23 7 11h12"
-          pathLength="100"
-        />
-        <circle className={styles.core} cx="80" cy="80" r="19" />
-        <circle className={styles.coreDot} cx="80" cy="80" r="5" />
+        <line className={styles.baseline} x1="54" y1="80" x2="706" y2="80" />
+        {waveformBars.map((height, index) => (
+          <rect
+            key={`${height}-${index}`}
+            className={styles.bar}
+            x={54 + index * 13.6}
+            y={80 - height / 2}
+            width="5"
+            height={height}
+            rx="2.5"
+            style={{ animationDelay: `${index * -42}ms` }}
+          />
+        ))}
+        <circle className={styles.dot} cx="54" cy="80" r="3" />
+        <circle className={styles.dot} cx="706" cy="80" r="3" />
       </svg>
-      <span className={styles.phase}>{phaseLabels[phase]}</span>
-      <span className={styles.status}>{paused ? "Paused" : "In progress"}</span>
     </div>
   );
 }

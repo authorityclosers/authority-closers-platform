@@ -359,6 +359,15 @@
 .shell[data-compact-busy="true"] .breadcrumb {
   display: none;
 }
+.shell[data-compact-busy="true"] .sidebarNote {
+  display: none;
+}
+.shell[data-compact-busy="true"] {
+  background: #fffdf9;
+}
+.shell[data-compact-busy="true"] .content {
+  background: #fffdf9;
+}
 .collapsed {
   grid-template-columns: 84px minmax(0, 1fr);
 }
@@ -442,6 +451,7 @@
   }
   .shell[data-compact-busy="true"] {
     padding-bottom: 0;
+    background: #fffdf9;
   }
   .sidebar,
   .breadcrumb {

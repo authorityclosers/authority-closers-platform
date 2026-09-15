@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   FileText,
+  FolderOpen,
   LoaderCircle,
   Printer,
   ShieldCheck,
@@ -1248,7 +1249,7 @@ export function AcquisitionStudio({
                       ? "SAVED WORK · PAUSED"
                       : processingNeedsAttention
                         ? "STATUS NEEDS ATTENTION"
-                        : "PRIVATE PROCESSING"}
+                        : "ANALYSIS IN PROGRESS"}
                   </p>
                   <h3>
                     {processingPaused
@@ -1340,6 +1341,7 @@ export function AcquisitionStudio({
                     href={savedCallsHref(embedded)}
                     className="secondary-button"
                   >
+                    <FolderOpen size={17} aria-hidden="true" />
                     Open saved calls
                   </Link>
                   {processingNeedsAttention && (
