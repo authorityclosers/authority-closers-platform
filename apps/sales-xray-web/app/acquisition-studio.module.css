@@ -1090,6 +1090,17 @@
 .app[data-stage="report"] .withReport .upload audio + :global(.small-text) {
   display: none;
 }
+.app[data-stage="report"] .withReport .previewHint {
+  display: none;
+}
+.savedPlayback {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+}
+.playbackToggle {
+  display: none;
+}
 .app[data-stage="report"] .withReport .upload .callActions {
   grid-column: 3;
   grid-row: 1;
@@ -1154,12 +1165,57 @@
 }
 @media (max-width: 760px) {
   .app[data-stage="report"] .withReport .upload {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .app[data-stage="report"] .withReport .upload .callActions,
+  .app[data-stage="report"] .withReport .upload .callActions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
   .app[data-stage="report"] .withReport .upload audio {
     grid-column: 1;
     grid-row: auto;
+  }
+  .app[data-stage="report"] .withReport .savedPlayback {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  .app[data-stage="report"] .savedPlayback > div {
+    display: none;
+  }
+  .app[data-stage="report"] .savedPlayback[data-expanded="true"] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .app[data-stage="report"] .savedPlayback[data-expanded="true"] > div {
+    display: block;
+  }
+  .app[data-stage="report"] .playbackToggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: #edf8f5;
+    color: #08776e;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .app[data-stage="report"] .playbackToggle:focus-visible {
+    outline: 3px solid #6d7ce0;
+    outline-offset: 2px;
+  }
+  .app[data-stage="report"] .reportTitle,
+  .app[data-stage="report"] .printLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .app[data-variant="standalone"] :global(.studio-main) {
     padding: 18px 16px 12px;

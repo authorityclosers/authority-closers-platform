@@ -286,11 +286,11 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
       'a[href="https://app.authorityclosers.com/privacy"]',
     ),
   ).not.toBeNull();
-  expect(button("Upload my call").disabled).toBe(true);
+  expect(button("Analyse my call").disabled).toBe(true);
   await consent();
-  expect(button("Upload my call").disabled).toBe(true);
+  expect(button("Analyse my call").disabled).toBe(true);
   await click("Complete upload check");
-  await click("Upload my call");
+  await click("Analyse my call");
   expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
   expect(
     calls.filter((call) => call.path.endsWith("/plan/quote")),
@@ -359,7 +359,7 @@ it.each([
     await select();
     await consent();
     await click("Complete upload check");
-    await click("Upload my call");
+    await click("Analyse my call");
     await flush();
     const alert = container.querySelector('[role="alert"]')!;
     expect(alert.textContent).toContain(expected);
@@ -406,7 +406,7 @@ it("refreshes one stale plan into an explicit review without retrying acceptance
   await select();
   await consent();
   await click("Complete upload check");
-  await click("Upload my call");
+  await click("Analyse my call");
 
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(container.textContent).toContain("Ready to continue");
@@ -445,7 +445,7 @@ it("clears consent when the selected file changes", async () => {
   );
   await flush();
 
-  expect(button("Upload my call").disabled).toBe(true);
+  expect(button("Analyse my call").disabled).toBe(true);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
   expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
 });
@@ -835,10 +835,10 @@ it("retry keeps the same submission and source instead of a second charge", asyn
   await mount();
   await select();
   await consent();
-  await click("Upload my call");
+  await click("Analyse my call");
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   failedUpload = false;
-  await click("Upload my call");
+  await click("Analyse my call");
   const puts = calls.filter((call) => call.init.method === "PUT");
   expect(puts).toHaveLength(2);
   expect(puts[0].path).toBe(puts[1].path);
@@ -935,6 +935,27 @@ it("opens an explicitly selected account call despite an unrelated guest claim",
   await click("Analyse another call");
   expect(new URLSearchParams(window.location.search).has("call")).toBe(false);
   expect(container.querySelector('input[type="file"]')).not.toBeNull();
+});
+
+it("expands playback controls without replacing the saved source or restarting analysis", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  const savedAudio = container.querySelector("#acquisition-saved-audio audio");
+  const source = savedAudio?.getAttribute("src");
+  expect(source).toContain(`/submissions/${submissionId}/source`);
+  expect(button("Playback").getAttribute("aria-expanded")).toBe("false");
+  await click("Playback");
+  expect(button("Hide player").getAttribute("aria-expanded")).toBe("true");
+  await click("Hide player");
+  expect(container.querySelector("#acquisition-saved-audio audio")).toBe(
+    savedAudio,
+  );
+  expect(savedAudio?.getAttribute("src")).toBe(source);
+  expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/accept"))).toBe(false);
 });
 
 it("does not expose a report when an explicit call selector is denied", async () => {

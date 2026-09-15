@@ -4,7 +4,7 @@
   --shell-border: #d8e0e9;
   --shell-surface: #ffffff;
   --shell-canvas: #f3f6f8;
-  --shell-action: #3150c8;
+  --shell-action: #08776e;
   --shell-mint: #177362;
   min-height: 100vh;
   display: grid;
@@ -41,7 +41,7 @@
   min-height: 0;
   overflow-y: auto;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
   padding: 1.5rem 1.15rem 1.2rem;
   border-right: 1px solid var(--shell-border);
   background: color-mix(in srgb, var(--shell-surface) 92%, var(--shell-canvas));
@@ -147,6 +147,7 @@
 }
 .navLink,
 .bottomLink {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -155,7 +156,7 @@
   border: 1px solid transparent;
   border-radius: 0.7rem;
   color: var(--shell-muted);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 650;
   text-decoration: none;
 }
@@ -170,17 +171,18 @@
 }
 .navLink.active,
 .bottomLink.bottomActive {
-  border-color: #cbd8f6;
-  background: #edf2ff;
+  border-color: #d3ebe5;
+  background: #ecf8f4;
   color: var(--shell-action);
 }
 .sidebarNote {
+  box-sizing: border-box;
   position: relative;
-  min-height: 11.5rem;
+  min-height: 10rem;
   overflow: hidden;
   display: grid;
   gap: 0.45rem;
-  margin-top: 1.25rem;
+  margin-top: 0;
   padding: 1rem;
   border: 1px solid #163447;
   border-radius: 0.8rem;
@@ -402,6 +404,26 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (max-height: 740px) and (min-width: 761px) {
+  .sidebar {
+    gap: 12px;
+    padding-block: 16px;
+  }
+  .workspaceLabel {
+    display: none;
+  }
+  .navLink {
+    min-height: 48px;
+  }
+  .sidebarNote {
+    min-height: 140px;
+    margin-top: auto;
+  }
+  .sidebarNote p {
+    display: none;
+  }
 }
 @media (max-width: 900px) {
   .shell {

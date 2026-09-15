@@ -107,3 +107,38 @@ action ends at y=605px. Visual review caught the old canvas background and the
 need to retain mobile navigation. Those findings remain open until the follow-up
 is verified. The report implementation is still being revised to match its
 image reference. None of these local checks establishes deployed behavior.
+
+The integrated image-led revisions include upload and selected-file consent,
+the processing waveform and stage rail, and the report overview with on-demand
+review points. The report uses its saved one-line diagnosis as the heading;
+the final assessment stays in point 14. No generated reference copy, invented
+scores, model name, price, waveform measurement or new upload limit is adopted.
+
+On the actual AcquisitionStudio route, the synthetic processing fixture at
+390×844 has document height 844px and width 390px. Its saved-calls action occupies
+y=590.45–634.45px and the bottom navigation remains visible. The desktop first
+change action and source entry are checked at 1536×674. The report's mobile
+toolbar collapses native playback controls, preserves the same source element,
+and presents the first change before the strengths. Longer report content
+remains readable through sections and normal accessible reflow.
+
+Manual browser checks confirmed that opening point 02 moves focus to that point,
+returning restores the review navigation, selecting the source moment updates
+the saved audio to 00:01.000–00:02.200, and starting another call clears only the
+current selector. The local API uses a synthetic tone and authored fixture,
+accepts no POST and makes no provider calls. The Chrome extension file chooser
+was unavailable in the final root pass; earlier selected-file desktop/mobile
+checks from the upload implementation and the component regressions remain
+separate evidence, not a fresh production-upload claim.
+
+The matching catalogue notification is included as shipped in this candidate
+artifact. It becomes visible only when this artifact is deployed. Existing
+notification IDs and account-scoped read receipts are preserved. Final CI and
+production guest/learner/Admin verification are still required.
+
+Final local UI verification on Node 24.19.0: 187 tests across 18 files passed,
+ESLint passed with no warnings, and the optimized Sales Xray production build
+passed, including TypeScript and all six static pages. The playback regression
+proves expanding/collapsing its controls preserves the same saved source and
+does not resubmit or restart analysis. All 32 app-update application/HTTP tests
+passed after the matching notification was enabled in the candidate catalogue.

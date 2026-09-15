@@ -156,6 +156,7 @@ export function AcquisitionStudio({
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState("");
+  const [playbackExpanded, setPlaybackExpanded] = useState(false);
   const [error, setError] = useState<string | AcquisitionError>("");
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
@@ -1101,7 +1102,21 @@ export function AcquisitionStudio({
                     {audioPlayer}
                   </details>
                 ) : (
-                  audioPlayer
+                  <div
+                    className={styles.savedPlayback}
+                    data-expanded={playbackExpanded}
+                  >
+                    <button
+                      type="button"
+                      className={styles.playbackToggle}
+                      aria-expanded={playbackExpanded}
+                      aria-controls="acquisition-saved-audio"
+                      onClick={() => setPlaybackExpanded((value) => !value)}
+                    >
+                      {playbackExpanded ? "Hide player" : "Playback"}
+                    </button>
+                    <div id="acquisition-saved-audio">{audioPlayer}</div>
+                  </div>
                 )}
                 <p className={`small-text ${styles.previewHint}`}>
                   {submission
@@ -1205,12 +1220,7 @@ export function AcquisitionStudio({
                     ) : (
                       <ArrowRight size={17} aria-hidden="true" />
                     )}
-                    {busy || (
-                      <>
-                        <span aria-hidden="true">Analyse my call</span>
-                        <span className="visually-hidden">Upload my call</span>
-                      </>
-                    )}
+                    {busy || "Analyse my call"}
                   </button>
                 </div>
               </div>
@@ -1564,7 +1574,7 @@ export function AcquisitionStudio({
           >
             <div className={styles.reportHeader}>
               <div>
-                <h1>Your coaching report</h1>
+                <h1 className={styles.reportTitle}>Your coaching report</h1>
               </div>
               <div className="studio-report-actions">
                 <button
@@ -1572,7 +1582,8 @@ export function AcquisitionStudio({
                   className="secondary-button"
                   onClick={() => window.print()}
                 >
-                  <Printer size={16} /> Print / save PDF
+                  <Printer size={16} aria-hidden="true" />
+                  <span className={styles.printLabel}>Print / save PDF</span>
                 </button>
                 <button
                   type="button"

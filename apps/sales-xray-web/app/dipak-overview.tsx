@@ -436,7 +436,6 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
               <Play size={18} />
             </span>
             <div className={styles.sourceMomentCopy}>
-              <p className={styles.label}>SOURCE MOMENT</p>
               {sourceMoment ? (
                 <>
                   <strong>{sourceMoment.finding.title}</strong>

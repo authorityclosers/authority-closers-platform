@@ -115,7 +115,7 @@ CURRENT_ARTIFACT_RELEASES = AppReleaseCatalogue(
             ),
             target_href="/sales-xray",
             created_at=datetime(2026, 9, 15, 5, 30, tzinfo=UTC),
-            state="draft",
+            state="shipped",
         ),
         AppRelease(
             id="app-updates-v0-2-read-recovery",
