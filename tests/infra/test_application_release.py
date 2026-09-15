@@ -723,6 +723,20 @@ def test_oauth_secret_preflight_runs_before_image_loading_and_compose_mutation()
     assert "-u AC_OPERATIONS_TENANT_ID" in secret_wrapper
 
 
+def test_compose_for_clears_all_sales_xray_identity_overrides() -> None:
+    compose_for = _installer_function(
+        "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+
+    for identity_dir in (
+        "AC_XRAY_ELEVENLABS_IDENTITY_DIR",
+        "AC_XRAY_DEEPGRAM_IDENTITY_DIR",
+        "AC_XRAY_GROQ_IDENTITY_DIR",
+        "AC_XRAY_GEMINI_IDENTITY_DIR",
+    ):
+        assert f"-u {identity_dir}" in compose_for
+
+
 def test_practice_scope_preflight_runs_before_image_loading_and_mutation() -> None:
     preflight = "\nvalidate_practice_pilot_references\n"
     image_load = 'gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz"'
