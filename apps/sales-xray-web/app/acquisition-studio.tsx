@@ -1521,25 +1521,28 @@ export function AcquisitionStudio({
             className={`studio-report panel ${styles.report}`}
             aria-label="Sales call report"
           >
-            <p className="eyebrow">YOUR SALES CALL REPORT</p>
-            <h1>Your coaching report</h1>
-            <p className="studio-report-summary">{report.summary}</p>
-            <div className="studio-report-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => window.print()}
-              >
-                <Printer size={16} /> Print / save PDF
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={!!busy}
-                onClick={() => reset()}
-              >
-                Analyse another call <ArrowRight size={16} />
-              </button>
+            <div className={styles.reportHeader}>
+              <div>
+                <p className="eyebrow">YOUR SALES CALL REPORT</p>
+                <h1>Your coaching report</h1>
+              </div>
+              <div className="studio-report-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => window.print()}
+                >
+                  <Printer size={16} /> Print / save PDF
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!!busy}
+                  onClick={() => reset()}
+                >
+                  Analyse another call <ArrowRight size={16} />
+                </button>
+              </div>
             </div>
             <ReportExplorer
               label="Explore your sales report"

@@ -308,7 +308,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     container.querySelector('[aria-label="Current analysis step"] strong')
       ?.textContent,
   ).toBe("Report ready");
-  expect(container.textContent).toContain(envelope.report.content.summary);
+  expect(container.querySelector(".studio-report-summary")).toBeNull();
   expect(container.textContent).toContain("Remaining analysis time · 99m 55s");
   expect(container.textContent).not.toContain("free audio minutes");
   expect(container.textContent).not.toContain(
