@@ -1022,20 +1022,53 @@ class RetainedC5RecoveryService:
         if row is None:
             return None
         recording = await self.database.scalar(
-            select(ConversationRecording).where(
+            select(ConversationRecording)
+            .where(
                 ConversationRecording.id == row.recording_id,
                 ConversationRecording.tenant_id == row.tenant_id,
                 ConversationRecording.person_id == row.person_id,
             )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
         )
         if recording is None:
             raise ConversationNotFound("Report not found.")
-        now = utc(self.application.clock())
-        permission = await self.database.get(ConversationPermission, row.permission_id)
+        # Erasure locks the recording before clearing retained recovery content.
+        # Re-read the version after taking that lock so a report selected before
+        # an erasure commit cannot be returned from the stale identity map.
+        row = await self.database.scalar(
+            select(ConversationRetainedC5Version)
+            .where(
+                ConversationRetainedC5Version.id == row.id,
+                ConversationRetainedC5Version.run_id == run_id,
+                ConversationRetainedC5Version.recording_id == recording.id,
+                ConversationRetainedC5Version.tenant_id == recording.tenant_id,
+                ConversationRetainedC5Version.person_id == recording.person_id,
+                ConversationRetainedC5Version.erased_at.is_(None),
+                ConversationRetainedC5Version.payload.is_not(None),
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return None
+        database_now = await self.database.scalar(select(func.clock_timestamp()))
+        now = utc(database_now if database_now is not None else self.application.clock())
+        permission = await self.database.scalar(
+            select(ConversationPermission)
+            .where(
+                ConversationPermission.id == row.permission_id,
+                ConversationPermission.tenant_id == recording.tenant_id,
+                ConversationPermission.person_id == recording.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
         if (
             recording.state != "ready"
             or permission is None
             or permission.revoked_at is not None
+            or utc(permission.expires_at) <= now
             or utc(permission.retention_until) <= now
             or row.generation != recording.generation
         ):

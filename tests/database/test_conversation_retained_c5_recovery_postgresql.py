@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.conversation_intelligence.acquisition_processing import (
@@ -811,7 +811,26 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                     ConversationPermission, prepared.state.permission_id
                 )
                 assert permission is not None
-                permission.retention_until = prepared.state.now + timedelta(seconds=1)
+                permission.expires_at = prepared.state.now - timedelta(seconds=1)
+            async with sessions() as database, database.begin():
+                service = RetainedC5RecoveryService(
+                    ConversationApplication(
+                        database, clock=lambda: prepared.state.now + timedelta(seconds=2)
+                    ),
+                    operations_tenant_id=prepared.state.tenant_id,
+                    recording_tenant_ids=(prepared.state.tenant_id,),
+                )
+                with pytest.raises(ConversationConflict):
+                    await service.admin_report(admin_actor, case["run_id"])
+            async with sessions() as database, database.begin():
+                permission = await database.get(
+                    ConversationPermission, prepared.state.permission_id
+                )
+                assert permission is not None
+                permission.expires_at = prepared.state.now + timedelta(hours=1)
+                database_now = await database.scalar(select(func.clock_timestamp()))
+                assert database_now is not None
+                permission.retention_until = utc(database_now) - timedelta(seconds=1)
             async with sessions() as database, database.begin():
                 service = RetainedC5RecoveryService(
                     ConversationApplication(
