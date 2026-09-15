@@ -7,6 +7,7 @@ import pytest
 
 from ac_platform.conversation_intelligence.application import ConversationDenied
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
+from ac_platform.conversation_intelligence.inference import DEEPGRAM_TRANSCRIPT_RECIPE
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
@@ -104,6 +105,25 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
     assert value.max_entitlement_seconds == 0
+
+
+def test_saved_plan_accepts_the_explicit_deepgram_c2_route() -> None:
+    data = manifest_for(saved_plan()).as_dict()
+    data["stages"][0].update(
+        {
+            "provider_id": "deepgram",
+            "model_id": "nova-3",
+            "recipe_revision": DEEPGRAM_TRANSCRIPT_RECIPE,
+        }
+    )
+
+    parsed = PlanManifest.model_validate_json(canonical(data))
+
+    assert (parsed.stages[0].provider_id, parsed.stages[0].model_id) == (
+        "deepgram",
+        "nova-3",
+    )
+    assert parsed.stages[0].recipe_revision == DEEPGRAM_TRANSCRIPT_RECIPE
 
 
 def test_paid_plan_adds_one_asr_all_fact_requests_and_one_judge() -> None:

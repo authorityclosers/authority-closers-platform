@@ -10,7 +10,15 @@ from typing import Any
 
 import pytest
 
-from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.checkpoints import (
+    SourceBinding,
+    build_checkpoint,
+    canonical,
+)
+from ac_platform.conversation_intelligence.inference import (
+    DEEPGRAM_TRANSCRIPT_RECIPE,
+    TranscriptionPlan,
+)
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     prepare_coaching_input,
@@ -173,6 +181,37 @@ def test_deepgram_result_is_normalized_through_the_same_c2_contract() -> None:
     assert normalized.raw_json == result.raw_json
     assert normalized.data()["raw_text"] == "hello there"
     assert normalized.data()["segments"][0]["speaker_id"] == "speaker_0"
+
+
+def test_deepgram_transcription_plan_uses_its_approved_recipe() -> None:
+    source_sha256 = hashlib.sha256(b"synthetic-audio").hexdigest()
+    prepared = prepare_scribe_input(
+        source_sha256,
+        2_000,
+        provider="deepgram",
+        model="nova-3",
+    )
+    binding = SourceBinding("tenant", "recording", source_sha256, "1")
+    c0 = build_checkpoint(
+        binding,
+        "C0",
+        "recording-v1",
+        {},
+        (),
+        "0" * 64,
+    )
+    checkpoint = build_checkpoint(
+        binding,
+        "C2",
+        DEEPGRAM_TRANSCRIPT_RECIPE,
+        {"provider": "deepgram", "model": "nova-3", "operation": prepared.operation},
+        (c0,),
+        "0" * 64,
+    )
+
+    plan = TranscriptionPlan(prepared, checkpoint, 2_000)
+
+    assert plan.recipe_revision == DEEPGRAM_TRANSCRIPT_RECIPE
 
 
 @pytest.mark.parametrize(

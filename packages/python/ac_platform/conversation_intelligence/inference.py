@@ -67,6 +67,21 @@ if TYPE_CHECKING:
 
 INFERENCE_JOB = "conversation.infer_provider.v1"
 TRANSCRIPT_RECIPE = "scribe-v2-native-normalized-v1"
+DEEPGRAM_TRANSCRIPT_RECIPE = "deepgram-nova-3-multilingual-v1"
+TRANSCRIPT_RECIPE_BY_ROUTE = {
+    ("elevenlabs", "scribe_v2"): TRANSCRIPT_RECIPE,
+    ("deepgram", "nova-3"): DEEPGRAM_TRANSCRIPT_RECIPE,
+}
+TRANSCRIPT_RECIPES = frozenset(TRANSCRIPT_RECIPE_BY_ROUTE.values())
+
+
+def transcription_recipe_for_route(provider: str, model: str) -> str:
+    """Return the exact C2 recipe bound to a supported ASR route."""
+
+    try:
+        return TRANSCRIPT_RECIPE_BY_ROUTE[(provider, model)]
+    except KeyError:
+        raise ConversationConflict("The selected transcription route is unavailable.") from None
 
 
 def binding_for(recording: ConversationRecording) -> SourceBinding:
@@ -119,7 +134,7 @@ class TranscriptionPlan:
 
     @property
     def recipe_revision(self) -> str:
-        return TRANSCRIPT_RECIPE
+        return transcription_recipe_for_route(self.prepared.provider, self.prepared.model)
 
     def intent(self) -> dict[str, Any]:
         return {
@@ -230,10 +245,11 @@ class ConversationInference:
             provider=provider,
             model=model,
         )
+        recipe = transcription_recipe_for_route(prepared.provider, prepared.model)
         template = build_checkpoint(
             binding,
             "C2",
-            TRANSCRIPT_RECIPE,
+            recipe,
             {
                 "provider": prepared.provider,
                 "model": prepared.model,

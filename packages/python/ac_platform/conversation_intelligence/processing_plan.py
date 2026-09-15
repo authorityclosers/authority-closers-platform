@@ -28,7 +28,8 @@ from ac_platform.conversation_intelligence.authority import ConversationAuthorit
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount, Quote
 from ac_platform.conversation_intelligence.inference import (
-    TRANSCRIPT_RECIPE,
+    TRANSCRIPT_RECIPE_BY_ROUTE,
+    TRANSCRIPT_RECIPES,
     ConversationInference,
     ServicePlan,
 )
@@ -120,7 +121,9 @@ class PlanManifest(BaseModel):
             raise ValueError("processing_plan_scope_invalid")
         c2, c4, c5 = self.stages
         if (
-            c2.recipe_revision != TRANSCRIPT_RECIPE
+            (c2.provider_id, c2.model_id) not in TRANSCRIPT_RECIPE_BY_ROUTE
+            or c2.recipe_revision != TRANSCRIPT_RECIPE_BY_ROUTE[(c2.provider_id, c2.model_id)]
+            or c2.recipe_revision not in TRANSCRIPT_RECIPES
             or c4.recipe_revision != FACT_RECIPE
             or c5.recipe_revision != COACHING_RECIPE
             or c4.max_completion_tokens < 256
