@@ -1,0 +1,175 @@
+.dock {
+  position: fixed;
+  z-index: 35;
+  inset: auto 0 0;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 24px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid #dce5ed;
+  background: rgba(253, 254, 255, 0.97);
+  box-shadow: 0 -5px 24px #17364e08;
+  color: #142d46;
+  backdrop-filter: blur(18px);
+}
+.dock audio {
+  display: none;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 260px;
+  min-width: 100px;
+}
+.identity > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.identity strong {
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.identity span:not(.fileIcon) {
+  color: #65788f;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fileIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  background: #ecf3f6;
+}
+.play {
+  display: grid;
+  place-items: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: linear-gradient(135deg, #009394, #006271);
+  cursor: pointer;
+}
+.timeline {
+  min-width: 80px;
+  flex: 1;
+  position: relative;
+  height: 44px;
+  display: grid;
+  align-items: center;
+}
+.timeline input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.timeline:focus-within {
+  outline: 3px solid #78cdcf;
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.clock {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: #60778f;
+  white-space: nowrap;
+}
+.tool {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: 10px;
+  color: #25445f;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tool:hover {
+  background: #edf7f7;
+}
+.dock button:focus-visible {
+  outline: 3px solid #78cdcf;
+  outline-offset: 3px;
+}
+.message {
+  position: absolute;
+  right: 16px;
+  bottom: calc(100% + 8px);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: 1px solid #dce5ed;
+  border-radius: 12px;
+  background: white;
+  font-size: 14px;
+  box-shadow: 0 4px 20px #17364e0f;
+}
+@media (max-width: 760px) {
+  .dock {
+    bottom: 72px;
+    gap: 8px;
+    padding: 8px 12px;
+    min-height: 70px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+  }
+  .dock[data-embedded="true"] {
+    bottom: 76px;
+  }
+  .identity {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+  }
+  .identity strong {
+    font-size: 13px;
+  }
+  .identity span:not(.fileIcon) {
+    font-size: 12px;
+  }
+  .fileIcon,
+  .clock {
+    display: none;
+  }
+  .play {
+    grid-column: 1;
+    grid-row: 1;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+  .timeline {
+    grid-column: 2;
+    grid-row: 2;
+    height: 14px;
+    margin-top: -6px;
+  }
+  .timeline > svg,
+  .timeline > span {
+    height: 14px;
+  }
+  .timeline input {
+    height: 30px;
+    top: -8px;
+  }
+  .tool {
+    grid-row: 1 / span 2;
+  }
+}

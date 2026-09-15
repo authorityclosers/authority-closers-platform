@@ -1,0 +1,29 @@
+.waveform {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  overflow: hidden;
+}
+.waveform line {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.played {
+  stroke: #007d80;
+}
+.pending {
+  stroke: #c9d7e1;
+}
+.unavailable {
+  display: block;
+  height: 42px;
+  min-width: 0;
+  background: linear-gradient(#dce5eb, #dce5eb) center/100% 2px no-repeat;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .waveform line {
+    transition: stroke 160ms ease;
+  }
+}
