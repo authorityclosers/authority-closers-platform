@@ -58,6 +58,24 @@ async function request(bridge, path, init = {}) {
   return fetch(`${bridge.browserOrigin}${path}`, { ...init, headers, redirect: "manual" });
 }
 
+async function rawRequest(bridge, path) {
+  return new Promise((resolve, reject) => {
+    const requestValue = http.request({
+      hostname: "127.0.0.1",
+      port: bridge.port,
+      method: "GET",
+      path,
+      headers: { host: bridge.browserHost },
+    });
+    requestValue.once("error", reject);
+    requestValue.once("response", (responseValue) => {
+      responseValue.resume();
+      responseValue.once("end", () => resolve(responseValue));
+    });
+    requestValue.end();
+  });
+}
+
 test("production destination is pinned and Sales Xray route surface is narrow", () => {
   assert.throws(
     () => validateBridgeConfig({ upstreamOrigin: "https://api.authorityclosers.com" }),
@@ -66,10 +84,50 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
   assert.deepEqual(resolveApiRoute("GET", "/v1/me/workspaces"), {
     kind: "api",
     auth: "session",
+    requiresSession: true,
   });
-  assert.deepEqual(resolveApiRoute("GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report"), { kind: "api" });
+  const allowedRoutes = [
+    ["GET", "/v1/me"],
+    ["GET", "/v1/me/workspaces"],
+    ["GET", "/v1/context"],
+    ["POST", "/v1/context"],
+    ["GET", "/v1/conversation/workspace"],
+    ["GET", "/v1/conversation/acquisition/entry"],
+    ["GET", "/v1/conversation/acquisition/upload-policy"],
+    ["GET", "/v1/conversation/acquisition/session"],
+    ["POST", "/v1/conversation/acquisition/session"],
+    ["GET", "/v1/conversation/acquisition/availability"],
+    ["POST", "/v1/conversation/acquisition/claim"],
+    ["GET", "/v1/conversation/acquisition/submissions"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/transcript"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/source"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/waveform"],
+    ["GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report.docx"],
+    ["POST", "/v1/conversation/intake/quote"],
+    ["GET", "/v1/conversation/recordings"],
+    ["GET", "/v1/conversation/recordings/1adde9e9-42c8-4a53-bf01-31acd3a240c1/transcript"],
+    ["GET", "/v1/conversation/recordings/1adde9e9-42c8-4a53-bf01-31acd3a240c1/measurements"],
+    ["POST", "/v1/conversation/runs"],
+    ["GET", "/v1/conversation/runs/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report"],
+  ];
+  for (const [method, path] of allowedRoutes)
+    assert.equal(resolveApiRoute(method, path).kind, "api", `${method} ${path}`);
+  assert.deepEqual(resolveApiRoute("GET", "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report"), {
+    kind: "api",
+    auth: "session",
+    requiresSession: true,
+  });
+  assert.deepEqual(resolveApiRoute("GET", "/v1/conversation/example"), {
+    kind: "api",
+    auth: "public",
+    requiresSession: false,
+  });
   assert.deepEqual(resolveApiRoute("GET", "/v1/admin/people/directory"), { kind: "blocked" });
   assert.deepEqual(resolveApiRoute("GET", "/v1/me/workspaces?tenant_id=other"), { kind: "blocked" });
+  assert.deepEqual(resolveApiRoute("POST", "/v1/conversation/acquisition/submissions"), { kind: "blocked" });
+  assert.deepEqual(resolveApiRoute("GET", "/v1/conversation/runs/1adde9e9-42c8-4a53-bf01-31acd3a240c1/unknown"), { kind: "blocked" });
 });
 
 test("password login maps only the opaque upstream cookie to an ephemeral local handle", async () => {
@@ -78,7 +136,20 @@ test("password login maps only the opaque upstream cookie to an ephemeral local 
   const bridge = await startTestBridge(async (target, init = {}) => {
     calls.push({ target: new URL(target), init });
     const url = new URL(target);
-    if (url.origin === innerOrigin) return response("<html>local app</html>", { headers: { "content-type": "text/html" } });
+    if (url.origin === innerOrigin) {
+      if (url.pathname === "/safe-redirect")
+        return response(null, {
+          status: 307,
+          headers: { location: `${innerOrigin}/login` },
+        });
+      return response("<html>local app</html>", {
+        headers: {
+          "content-type": "text/html",
+          "content-encoding": "gzip",
+          "content-length": "999",
+        },
+      });
+    }
     if (url.pathname === "/v1/auth/password/login") {
       return response(JSON.stringify({ authenticated: true }), {
         status: 200,
@@ -115,7 +186,13 @@ test("password login maps only the opaque upstream cookie to an ephemeral local 
     assert.equal(inner.status, 200);
     assert.equal(calls[2].target.origin, innerOrigin);
     assert.equal(calls[2].init.headers.get("cookie"), null);
+    assert.equal(calls[2].init.headers.get("accept-encoding"), "identity");
+    assert.equal(inner.headers.get("content-length"), null);
     assert.equal(inner.headers.get("x-ac-dev-data-mode"), "production-live");
+
+    const safeRedirect = await request(bridge, "/safe-redirect");
+    assert.equal(safeRedirect.status, 307);
+    assert.equal(safeRedirect.headers.get("location"), `${bridge.browserOrigin}/login`);
 
     const logout = await request(bridge, "/v1/auth/logout", {
       method: "POST",
@@ -123,7 +200,8 @@ test("password login maps only the opaque upstream cookie to an ephemeral local 
     });
     assert.equal(logout.status, 204);
     assert.match(logout.headers.get("set-cookie") ?? "", /Max-Age=0/);
-    assert.equal(calls[3].init.headers.get("cookie"), `__Host-ac_session=${sessionValue}`);
+    assert.equal(calls[4].init.headers.get("cookie"), `__Host-ac_session=${sessionValue}`);
+    assert.equal(calls[0].init.headers.get("accept-encoding"), "identity");
   } finally {
     await bridge.close();
   }
@@ -136,6 +214,8 @@ test("the bridge rejects copied credentials and cross-origin state changes", asy
     return response(JSON.stringify({ ok: true }));
   });
   try {
+    const anonymous = await request(bridge, "/v1/me/workspaces");
+    assert.equal(anonymous.status, 401);
     const copiedCookie = await request(bridge, "/v1/me/workspaces", {
       headers: { cookie: `__Host-ac_session=${sessionValue}` },
     });
@@ -151,6 +231,8 @@ test("the bridge rejects copied credentials and cross-origin state changes", asy
     });
     assert.equal(crossOrigin.status, 403);
     assert.equal(upstreamCalls, 0);
+    const absoluteTarget = await rawRequest(bridge, "http://evil.example/v1/me/workspaces");
+    assert.equal(absoluteTarget.statusCode, 400);
   } finally {
     await bridge.close();
   }

@@ -30,6 +30,12 @@
   letter-spacing: 0.02em;
 }
 
+.sales-xray-live-data-banner a {
+  color: #4d421d;
+  font-weight: 700;
+  text-underline-offset: 3px;
+}
+
 @media (max-width: 620px) {
   .sales-xray-live-data-banner {
     display: block;

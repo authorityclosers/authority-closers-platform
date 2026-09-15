@@ -6,6 +6,13 @@ export function LiveDataBanner() {
         Sign in normally. This browser reads your production account, and any
         explicit save, delete, workspace, or analysis action affects real data.
       </span>
+      <a
+        href="https://admin.authorityclosers.com/sales-xray/settings"
+        target="_blank"
+        rel="noreferrer"
+      >
+        Production provider settings · authorized admins
+      </a>
     </aside>
   );
 }

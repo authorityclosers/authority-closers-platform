@@ -15,6 +15,8 @@ export const UPSTREAM_OAUTH_COOKIE_PREFIX = "__Host-ac_oauth_transaction";
 export const MAX_REQUEST_BODY_BYTES = 34 * 1024 ** 2;
 export const MAX_AUTH_RESPONSE_BYTES = 1024 ** 2;
 export const LOCAL_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+export const API_REQUEST_TIMEOUT_MS = 30 * 1000;
+export const UPLOAD_REQUEST_TIMEOUT_MS = 3 * 60 * 1000;
 
 const LOCAL_SESSION_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UPSTREAM_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
@@ -257,15 +259,15 @@ export class EphemeralSessionStore {
   }
 }
 
-function uuidPath(pattern, pathname) {
-  const match = pathname.match(pattern);
-  return Boolean(match && match[1]);
-}
-
 export function resolveApiRoute(method, pathname, search = "") {
   const verb = method.toUpperCase();
   const exact = (allowedVerb, path) => verb === allowedVerb && pathname === path;
   const noQuery = search.length === 0;
+  const api = (auth = "session", requiresSession = auth === "session") => ({
+    kind: "api",
+    auth,
+    requiresSession,
+  });
   const safeCursorQuery = () => {
     const params = new URLSearchParams(search);
     return (
@@ -283,7 +285,9 @@ export function resolveApiRoute(method, pathname, search = "") {
     exact("POST", "/v1/auth/logout")
   ) {
     if (!noQuery) return { kind: "blocked" };
-    return { kind: "api", auth: pathname === "/v1/auth/password/login" ? "login" : "session" };
+    return pathname === "/v1/auth/password/login"
+      ? api("login", false)
+      : api();
   }
 
   if (
@@ -292,27 +296,25 @@ export function resolveApiRoute(method, pathname, search = "") {
   )
     return { kind: "oauth" };
 
-  if (exact("GET", "/v1/conversation/workspace")) return { kind: "api" };
+  if (exact("GET", "/v1/conversation/workspace") && noQuery) return api();
   if (
     (exact("GET", "/v1/conversation/capabilities") ||
       exact("GET", "/v1/conversation/example")) &&
     noQuery
   )
-    return { kind: "api" };
+    return api("public", false);
 
-  const acquisitionExact = new Map([
-    ["/v1/conversation/acquisition/entry", "GET"],
-    ["/v1/conversation/acquisition/upload-policy", "GET"],
-    ["/v1/conversation/acquisition/session", "GET"],
-    ["/v1/conversation/acquisition/session", "POST"],
-    ["/v1/conversation/acquisition/availability", "GET"],
-    ["/v1/conversation/acquisition/claim", "POST"],
-  ]);
-  if (acquisitionExact.get(pathname) === verb && noQuery)
-    return { kind: "api" };
+  const acquisitionExact = {
+    "/v1/conversation/acquisition/entry": new Set(["GET"]),
+    "/v1/conversation/acquisition/upload-policy": new Set(["GET"]),
+    "/v1/conversation/acquisition/session": new Set(["GET", "POST"]),
+    "/v1/conversation/acquisition/availability": new Set(["GET"]),
+    "/v1/conversation/acquisition/claim": new Set(["POST"]),
+  };
+  if (acquisitionExact[pathname]?.has(verb) && noQuery) return api();
 
   if (pathname === "/v1/conversation/acquisition/submissions") {
-    if (verb === "GET" && safeCursorQuery()) return { kind: "api" };
+    if (verb === "GET" && safeCursorQuery()) return api();
     return { kind: "blocked" };
   }
 
@@ -322,30 +324,30 @@ export function resolveApiRoute(method, pathname, search = "") {
   if (submission) {
     const suffix = submission[2];
     if (!suffix && (verb === "GET" || verb === "DELETE") && noQuery)
-      return { kind: "api" };
+      return api();
     if (
       suffix === "source" &&
       (verb === "GET" || verb === "PUT") &&
       noQuery
     )
-      return { kind: "api" };
+      return api();
     if (
       ["report", "transcript", "waveform", "measurements", "plan", "report.docx"].includes(suffix) &&
       verb === "GET" &&
       noQuery
     )
-      return { kind: "api" };
+      return api();
     if (suffix === "plan" && verb === "POST" && noQuery)
-      return { kind: "api" };
+      return api();
     if (suffix === "plan/quote" && verb === "POST" && noQuery)
-      return { kind: "api" };
+      return api();
     return { kind: "blocked" };
   }
 
   if (pathname === "/v1/conversation/intake/quote" && verb === "POST" && noQuery)
-    return { kind: "api" };
+    return api();
   if (pathname === "/v1/conversation/recordings" && verb === "GET" && noQuery)
-    return { kind: "api" };
+    return api();
 
   const recording = new RegExp(
     `^/v1/conversation/recordings/(${UUID})(?:/(transcript|source|measurements|plan|plan/quote))?$`,
@@ -353,32 +355,32 @@ export function resolveApiRoute(method, pathname, search = "") {
   if (recording) {
     const suffix = recording[2];
     if (!suffix && (verb === "GET" || verb === "DELETE") && noQuery)
-      return { kind: "api" };
+      return api();
     if (
       suffix === "source" &&
       (verb === "GET" || verb === "PUT") &&
       noQuery
     )
-      return { kind: "api" };
+      return api();
     if (
       ["transcript", "measurements", "plan"].includes(suffix) &&
       verb === "GET" &&
       noQuery
     )
-      return { kind: "api" };
+      return api();
     if (suffix === "plan" && verb === "POST" && noQuery)
-      return { kind: "api" };
+      return api();
     if (suffix === "plan/quote" && verb === "POST" && noQuery)
-      return { kind: "api" };
+      return api();
     return { kind: "blocked" };
   }
 
   if (pathname === "/v1/conversation/runs" && verb === "POST" && noQuery)
-    return { kind: "api" };
+    return api();
   const run = new RegExp(`^/v1/conversation/runs/(${UUID})(?:/report)?$`).exec(
     pathname,
   );
-  if (run && verb === "GET" && noQuery) return { kind: "api" };
+  if (run && verb === "GET" && noQuery) return api();
 
   return { kind: "blocked" };
 }
@@ -449,6 +451,7 @@ function upstreamRequestHeaders(request, upstreamCookie) {
     headers.set(name, Array.isArray(value) ? value.join(", ") : value);
   }
   headers.set("origin", PRODUCTION_UPSTREAM_ORIGIN);
+  headers.set("accept-encoding", "identity");
   headers.set("cache-control", "no-store");
   if (upstreamCookie) headers.set("cookie", `${UPSTREAM_SESSION_COOKIE}=${upstreamCookie}`);
   return headers;
@@ -468,6 +471,81 @@ function rejectCredentialHeaders(request) {
   );
 }
 
+function rejectUpgrade(socket, status = 403) {
+  socket.end(
+    `HTTP/1.1 ${status} ${status === 403 ? "Forbidden" : "Bad Request"}\r\n` +
+      "Connection: close\r\nContent-Length: 0\r\n\r\n",
+  );
+}
+
+function proxyInnerUpgrade(request, socket, head, config) {
+  if (
+    !isLoopbackAddress(request.socket.remoteAddress) ||
+    request.headers.host !== config.browserHost ||
+    (request.headers.origin && request.headers.origin !== config.browserOrigin) ||
+    rejectCredentialHeaders(request) ||
+    !request.url ||
+    !request.url.startsWith("/") ||
+    request.url.startsWith("//")
+  ) {
+    rejectUpgrade(socket);
+    return;
+  }
+  const target = new URL(request.url, config.innerOrigin);
+  if (target.pathname !== "/_next/webpack-hmr") {
+    rejectUpgrade(socket, 400);
+    return;
+  }
+  const headers = {
+    host: target.host,
+    connection: "Upgrade",
+    upgrade: "websocket",
+  };
+  for (const name of [
+    "sec-websocket-key",
+    "sec-websocket-version",
+    "sec-websocket-protocol",
+    "sec-websocket-extensions",
+  ]) {
+    const value = request.headers[name];
+    if (value) headers[name] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  const upstreamRequest = http.request({
+    hostname: target.hostname,
+    port: target.port || 80,
+    path: target.pathname + target.search,
+    method: "GET",
+    headers,
+    agent: false,
+  });
+  const close = () => {
+    if (!socket.destroyed) socket.destroy();
+  };
+  upstreamRequest.once("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    if (socket.destroyed) {
+      upstreamSocket.destroy();
+      return;
+    }
+    const statusLine = `HTTP/1.1 ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage ?? "Switching Protocols"}\r\n`;
+    socket.write(statusLine);
+    for (const [name, value] of Object.entries(upstreamResponse.headers)) {
+      if (name === "set-cookie" || value === undefined) continue;
+      const values = Array.isArray(value) ? value : [value];
+      for (const item of values) socket.write(`${name}: ${item}\r\n`);
+    }
+    socket.write("\r\n");
+    if (head.length) upstreamSocket.write(head);
+    if (upstreamHead.length) socket.write(upstreamHead);
+    upstreamSocket.pipe(socket);
+    socket.pipe(upstreamSocket);
+    socket.once("close", () => upstreamSocket.destroy());
+    upstreamSocket.once("close", () => socket.destroy());
+  });
+  upstreamRequest.once("response", () => close());
+  upstreamRequest.once("error", close);
+  upstreamRequest.end();
+}
+
 async function readBody(request, maxBytes) {
   if (["GET", "HEAD"].includes(request.method)) return undefined;
   const declared = request.headers["content-length"];
@@ -484,7 +562,10 @@ async function readBody(request, maxBytes) {
   return Buffer.concat(chunks);
 }
 
-function responseHeaders(upstream, { localCookie, clearLocalCookie } = {}) {
+function responseHeaders(
+  upstream,
+  { localCookie, clearLocalCookie, allowLocationOrigin, rewriteLocationOrigin } = {},
+) {
   const headers = {};
   for (const name of RESPONSE_HEADER_NAMES) {
     const value = upstream.headers.get(name);
@@ -495,6 +576,21 @@ function responseHeaders(upstream, { localCookie, clearLocalCookie } = {}) {
   headers["x-content-type-options"] = "nosniff";
   headers["x-frame-options"] = "DENY";
   headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()";
+  const contentEncoding = upstream.headers.get("content-encoding");
+  if (contentEncoding && contentEncoding.toLowerCase() !== "identity")
+    delete headers["content-length"];
+  if (allowLocationOrigin && rewriteLocationOrigin) {
+    const location = upstream.headers.get("location");
+    if (location) {
+      try {
+        const parsed = new URL(location, allowLocationOrigin);
+        if (parsed.origin === allowLocationOrigin)
+          headers.location = `${rewriteLocationOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        // Do not expose an invalid or cross-origin local redirect.
+      }
+    }
+  }
   headers["x-ac-dev-data-mode"] = "production-live";
   headers["x-ac-dev-bridge"] = "loopback-fixed-production-origin";
   if (localCookie) headers["set-cookie"] = sessionCookie(localCookie);
@@ -535,11 +631,16 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
     localError(response, 405, "Only browser page and asset reads are available on this bridge.");
     return;
   }
+  if (!request.url || !request.url.startsWith("/") || request.url.startsWith("//")) {
+    localError(response, 400, "The local UI request target must be a relative path.");
+    return;
+  }
   const target = new URL(request.url, innerOrigin);
   const headers = new Headers();
   if (request.headers.accept) headers.set("accept", request.headers.accept);
   if (request.headers["accept-language"])
     headers.set("accept-language", request.headers["accept-language"]);
+  headers.set("accept-encoding", "identity");
   let upstream;
   try {
     upstream = await fetcher(target, {
@@ -547,12 +648,17 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
       headers,
       redirect: "manual",
       cache: "no-store",
+      signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
     });
   } catch {
     localError(response, 502, "The local Sales Xray UI is not running.");
     return;
   }
-  sendUpstreamResponse(response, upstream, { head: request.method === "HEAD" });
+  sendUpstreamResponse(response, upstream, {
+    head: request.method === "HEAD",
+    allowLocationOrigin: innerOrigin,
+    rewriteLocationOrigin: new URL(request.headers.host ? `http://${request.headers.host}` : DEFAULT_BROWSER_ORIGIN).origin,
+  });
 }
 
 export function createSalesXrayProductionBridge({
@@ -583,6 +689,10 @@ export function createSalesXrayProductionBridge({
       return;
     }
 
+    if (!request.url || !request.url.startsWith("/") || request.url.startsWith("//")) {
+      localError(response, 400, "The local bridge request target must be a relative path.");
+      return;
+    }
     const incoming = new URL(request.url, config.browserOrigin);
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
@@ -642,6 +752,10 @@ export function createSalesXrayProductionBridge({
       response.end(JSON.stringify({ detail: "Your local Sales Xray session expired." }));
       return;
     }
+    if (route.requiresSession && !upstreamCookie) {
+      localError(response, 401, "Sign in to this local Sales Xray workspace first.");
+      return;
+    }
     let body;
     try {
       body = await readBody(request, MAX_REQUEST_BODY_BYTES);
@@ -660,6 +774,9 @@ export function createSalesXrayProductionBridge({
         redirect: "manual",
         credentials: "omit",
         cache: "no-store",
+        signal: AbortSignal.timeout(
+          request.method === "PUT" ? UPLOAD_REQUEST_TIMEOUT_MS : API_REQUEST_TIMEOUT_MS,
+        ),
       });
     } catch {
       localError(response, 502, "The production Sales Xray service could not be reached.");
@@ -730,6 +847,9 @@ export function createServer(options = {}) {
       else response.destroy();
     });
   });
+  server.on("upgrade", (request, socket, head) =>
+    proxyInnerUpgrade(request, socket, head, bridge.config),
+  );
   return { server, bridge };
 }
 

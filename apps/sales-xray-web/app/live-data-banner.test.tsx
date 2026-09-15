@@ -21,5 +21,10 @@ it("makes live production mutation scope explicit", async () => {
   await act(async () => root.render(<LiveDataBanner />));
   expect(container.textContent).toContain("live AC data");
   expect(container.textContent).toContain("affects real data");
+  expect(
+    container.querySelector<HTMLAnchorElement>(
+      'a[href="https://admin.authorityclosers.com/sales-xray/settings"]',
+    ),
+  ).not.toBeNull();
   expect(container.querySelector('[role="note"]')).not.toBeNull();
 });

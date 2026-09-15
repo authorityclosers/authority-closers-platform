@@ -3,6 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { ProcessingVisual } from "./processing-visual";
 
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let container: HTMLDivElement;
 
@@ -23,5 +27,5 @@ it("shows truthful phase-aware thinking copy without inventing progress", async 
   );
   expect(container.textContent).toContain("Reading the conversation");
   expect(container.textContent).toContain("Checking source evidence");
-  expect(container.querySelectorAll(".thought")).toHaveLength(3);
+  expect(container.querySelectorAll("span")).toHaveLength(3);
 });
