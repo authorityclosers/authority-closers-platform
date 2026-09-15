@@ -157,6 +157,74 @@ def test_unready_socket_times_out_before_docker(monkeypatch):
     inspect.assert_not_called()
 
 
+def test_edge_recovery_waits_for_docker_restart_restoration(monkeypatch):
+    edge = edge_container()
+    collision = collision_container()
+    collision_name = "ac-application-production-learner-web-1"
+    transient = {
+        MODULE.EDGE_NAME: [MODULE.RecoveryError("container_inspection_failed")],
+        collision_name: [MODULE.RecoveryError("container_inspection_failed")],
+    }
+    sleeps = []
+
+    def inspect(identifier):
+        pending = transient.get(identifier, [])
+        if pending:
+            raise pending.pop(0)
+        if identifier == MODULE.EDGE_NAME or identifier == edge["id"]:
+            return dict(edge)
+        return dict(collision)
+
+    monkeypatch.setattr(MODULE.time, "sleep", lambda seconds: sleeps.append(seconds))
+    observed_edge, observed_collision = MODULE._wait_for_edge_recovery_state(
+        "production", inspect
+    )
+
+    assert observed_edge["id"] == edge["id"]
+    assert observed_collision["id"] == collision["id"]
+    assert sleeps == [MODULE.EDGE_READINESS_POLL_SECONDS, MODULE.EDGE_READINESS_POLL_SECONDS]
+
+
+def test_edge_recovery_waits_through_restart_and_network_restore(monkeypatch):
+    edge_rows = [
+        edge_container(status="restarting", ip=None),
+        edge_container(status="running", ip=None),
+        edge_container(status="exited"),
+    ]
+    collision = collision_container()
+    sleeps = []
+
+    def inspect(identifier):
+        if identifier == MODULE.EDGE_NAME:
+            return dict(edge_rows.pop(0))
+        return dict(collision)
+
+    monkeypatch.setattr(MODULE.time, "sleep", lambda seconds: sleeps.append(seconds))
+    edge, observed_collision = MODULE._wait_for_edge_recovery_state("production", inspect)
+
+    assert edge["status"] == "exited"
+    assert observed_collision["id"] == collision["id"]
+    assert sleeps == [MODULE.EDGE_READINESS_POLL_SECONDS] * 2
+
+
+def test_edge_recovery_readiness_timeout_refuses_without_mutation(monkeypatch):
+    monkeypatch.setattr(MODULE.time, "monotonic", Mock(side_effect=[0, 31]))
+    monkeypatch.setattr(MODULE.time, "sleep", lambda _: None)
+    stop = Mock()
+    start = Mock()
+
+    with pytest.raises(MODULE.RecoveryError, match="edge_containers_not_ready"):
+        MODULE.reconcile_edge_collision(
+            "production",
+            inspect=Mock(side_effect=MODULE.RecoveryError("container_inspection_failed")),
+            stop=stop,
+            start=start,
+        )
+
+    stop.assert_not_called()
+    start.assert_not_called()
+
+
 def test_start_without_running_readback_fails(monkeypatch):
     monkeypatch.setattr(MODULE, "socket_ready", lambda _: True)
     with pytest.raises(MODULE.RecoveryError, match="container_not_running_after_start"):
@@ -223,6 +291,7 @@ def test_edge_unit_is_pinned_and_runs_before_consumer(environment):
     units = MODULE.render_edge_unit(environment, "d" * 40)
     unit = units[f"ac-sales-xray-edge-reconcile-{environment}.service"]
     assert "Requires=docker.service" in unit
+    assert "Wants=network-online.target" in unit
     assert "After=docker.service network-online.target" in unit
     assert f"Before=ac-sales-xray-startup-{environment}.service" in unit
     assert f"/releases/{'d' * 40}/scripts/recover-sales-xray-startup.py" in unit
@@ -320,7 +389,57 @@ def test_edge_start_failure_restores_exact_reviewed_collision():
 
     with pytest.raises(MODULE.RecoveryError, match="container_start_failed"):
         MODULE.reconcile_edge_collision("production", inspect=inspect, stop=stop, start=start)
-    assert calls == [("stop", "c" * 64), ("start", "e" * 64), ("start", "c" * 64)]
+    assert calls == [
+        ("stop", "c" * 64),
+        ("start", "e" * 64),
+        ("stop", "e" * 64),
+        ("start", "c" * 64),
+    ]
+    assert rows["collision"]["status"] == "running"
+
+
+def test_edge_readback_failure_stops_exact_edge_before_restoring_collision():
+    rows = {
+        MODULE.EDGE_NAME: edge_container(),
+        "collision": collision_container(),
+    }
+    calls = []
+
+    def inspect(identifier):
+        if identifier in (MODULE.EDGE_NAME, "e" * 64):
+            return dict(rows[MODULE.EDGE_NAME])
+        return dict(rows["collision"])
+
+    def stop(identifier):
+        calls.append(("stop", identifier))
+        if identifier == "c" * 64:
+            rows["collision"].update(status="exited", networks={})
+        else:
+            rows[MODULE.EDGE_NAME].update(status="exited", networks={})
+
+    def start(identifier):
+        calls.append(("start", identifier))
+        if identifier == "e" * 64:
+            rows[MODULE.EDGE_NAME].update(
+                status="running",
+                networks={MODULE.EDGE_NETWORK: {"IPAddress": "172.18.0.9"}},
+            )
+        else:
+            rows["collision"].update(
+                status="running",
+                networks={MODULE.EDGE_NETWORK: {"IPAddress": "172.18.0.3"}},
+            )
+
+    with pytest.raises(MODULE.RecoveryError, match="edge_container_network_mismatch"):
+        MODULE.reconcile_edge_collision("production", inspect=inspect, stop=stop, start=start)
+
+    assert calls == [
+        ("stop", "c" * 64),
+        ("start", "e" * 64),
+        ("stop", "e" * 64),
+        ("start", "c" * 64),
+    ]
+    assert rows[MODULE.EDGE_NAME]["status"] == "exited"
     assert rows["collision"]["status"] == "running"
 
 
@@ -385,9 +504,10 @@ def test_descriptor_install_is_atomic_and_activation_path_is_exact(tmp_path, mon
     assert result["action"] == "activate"
     assert calls == [
         ["daemon-reload"],
-        ["enable", "--now", "ac-sales-xray-edge-reconcile-production.service"],
         ["enable", "--now", "ac-sales-xray-startup-production.service"],
+        ["enable", "--now", "ac-sales-xray-edge-reconcile-production.service"],
     ]
+    assert result["edge_recovery"] == "enabled"
     assert sorted(p.name for p in unit_root.iterdir()) == sorted(result["units"])
 
 
@@ -413,3 +533,120 @@ def test_installer_refuses_existing_unit_drift_without_overwrite(tmp_path, monke
             systemctl=Mock(),
         )
     assert target.read_text(encoding="utf-8") == "operator-owned"
+
+
+def test_installer_edge_failure_keeps_native_recovery_and_rolls_back_edge_link(
+    tmp_path, monkeypatch
+):
+    release = "c" * 40
+    descriptor = MODULE.render_descriptor("production", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    unit_root = tmp_path / "units"
+    wants = unit_root / "multi-user.target.wants"
+    wants.mkdir(parents=True)
+    calls = []
+    startup_name = "ac-sales-xray-startup-production.service"
+    edge_name = "ac-sales-xray-edge-reconcile-production.service"
+
+    def systemctl(argv):
+        calls.append(argv)
+        name = argv[-1] if argv else ""
+        if argv[:1] == ["enable"]:
+            (wants / name).symlink_to(unit_root / name)
+            if name == edge_name:
+                raise INSTALLER.InstallerError("systemd_command_failed")
+        elif argv[:1] == ["disable"]:
+            link = wants / name
+            if link.is_symlink() or link.exists():
+                link.unlink()
+
+    monkeypatch.setattr(INSTALLER.os, "geteuid", lambda: 0, raising=False)
+    result = INSTALLER.install(
+        path,
+        environment="production",
+        release=release,
+        descriptor_sha=INSTALLER.sha256(raw),
+        execute=True,
+        unit_root=unit_root,
+        systemctl=systemctl,
+    )
+
+    assert result["installed"] is True
+    assert result["edge_recovery"] == "failed"
+    assert (wants / startup_name).is_symlink()
+    assert not (wants / edge_name).exists()
+    assert calls.index(["enable", "--no-reload", startup_name]) < calls.index(
+        ["enable", "--no-reload", edge_name]
+    )
+    assert ["disable", "--no-reload", edge_name] in calls
+
+
+def test_installer_required_activation_failure_rolls_back_enable_link_and_files(
+    tmp_path, monkeypatch
+):
+    release = "d" * 40
+    descriptor = MODULE.render_descriptor("staging", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    unit_root = tmp_path / "units"
+    wants = unit_root / "multi-user.target.wants"
+    wants.mkdir(parents=True)
+    startup_name = "ac-sales-xray-startup-staging.service"
+    calls = []
+
+    def systemctl(argv):
+        calls.append(argv)
+        if argv[:1] == ["enable"] and argv[-1] == startup_name:
+            (wants / startup_name).symlink_to(unit_root / startup_name)
+            raise INSTALLER.InstallerError("systemd_command_failed")
+        if argv[:1] == ["disable"] and (wants / argv[-1]).is_symlink():
+            (wants / argv[-1]).unlink()
+
+    monkeypatch.setattr(INSTALLER.os, "geteuid", lambda: 0, raising=False)
+    with pytest.raises(INSTALLER.InstallerError, match="systemd_command_failed"):
+        INSTALLER.install(
+            path,
+            environment="staging",
+            release=release,
+            descriptor_sha=INSTALLER.sha256(raw),
+            execute=True,
+            activate=True,
+            unit_root=unit_root,
+            systemctl=systemctl,
+        )
+
+    assert ["disable", "--now", startup_name] in calls
+    assert not (wants / startup_name).exists()
+    assert not (unit_root / startup_name).exists()
+    assert not (unit_root / "ac-sales-xray-edge-reconcile-staging.service").exists()
+
+
+def test_installer_refuses_dangling_unit_symlink(tmp_path, monkeypatch):
+    release = "e" * 40
+    descriptor = MODULE.render_descriptor("staging", release)
+    path = tmp_path / "descriptor.json"
+    raw = __import__("json").dumps(descriptor, sort_keys=True).encode()
+    path.write_bytes(raw)
+    unit_root = tmp_path / "units"
+    unit_root.mkdir()
+    target = unit_root / "ac-sales-xray-edge-reconcile-staging.service"
+    try:
+        target.symlink_to(tmp_path / "missing-unit")
+    except OSError:
+        pytest.skip("this host does not permit an unprivileged symlink fixture")
+
+    monkeypatch.setattr(INSTALLER.os, "geteuid", lambda: 0, raising=False)
+    with pytest.raises(INSTALLER.InstallerError, match="unit_target_invalid"):
+        INSTALLER.install(
+            path,
+            environment="staging",
+            release=release,
+            descriptor_sha=INSTALLER.sha256(raw),
+            execute=True,
+            unit_root=unit_root,
+            systemctl=Mock(),
+        )
+    assert target.is_symlink()

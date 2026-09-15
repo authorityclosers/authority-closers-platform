@@ -52,6 +52,8 @@ required_files = {
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/recover-sales-xray-startup.py",
+    "infra/application/scripts/install-sales-xray-startup-recovery.py",
     "infra/application/scripts/restore-drill.py",
     "infra/application/scripts/staging-public-films.py",
     "infra/application/scripts/validate-google-oauth-secrets.py",

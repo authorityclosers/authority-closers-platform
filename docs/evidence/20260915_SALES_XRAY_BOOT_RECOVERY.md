@@ -66,9 +66,14 @@ python3 /srv/authority-closers/application/releases/$release/scripts/install-sal
   --descriptor /var/tmp/ac-sales-xray-startup-production-$release.json \
   --descriptor-sha "$descriptor_sha" --execute --activate
 systemctl is-enabled --quiet ac-sales-xray-edge-reconcile-production.service
-systemctl is-active --quiet ac-sales-xray-edge-reconcile-production.service
 systemctl is-enabled --quiet ac-sales-xray-startup-production.service
 ```
+
+These are `Type=oneshot` units, so the installer exit status and enablement
+readback are the durable checks; `is-active` is not used after a successful
+one-shot action because systemd may report it inactive once the action exits.
+The installer JSON must also report `"edge_recovery": "enabled"`; an edge
+failure is reported while the native startup unit remains enabled for recovery.
 
 Run the same sequence for staging before production. The root release
 coordinator owns installation, immutable image checks, rollback, and live
@@ -88,15 +93,17 @@ Run from the isolated worktree using the existing Python environment:
 
 ```powershell
 $env:PYTHONPATH='D:/Projects/authority-closers-xray-boot-recovery-20260915/packages/python'
-& 'D:/Projects/authority-closers-v02-consolidation/.venv/Scripts/python.exe' -m pytest tests/infra/test_sales_xray_startup_recovery.py --basetemp D:/AC-authority-closers-release-audit/peer-boot-recovery-final-20260915 --junitxml D:/AC-authority-closers-release-audit/peer-boot-recovery-final-20260915.xml -q
+& 'D:/Projects/authority-closers-v02-consolidation/.venv/Scripts/python.exe' -m pytest tests/infra/test_sales_xray_startup_recovery.py tests/infra/test_application_release_archive.py --basetemp D:/AC-authority-closers-release-audit/peer-boot-recovery-final-20260915 --junitxml D:/AC-authority-closers-release-audit/peer-boot-recovery-final-20260915.xml -q
 ```
 
-The final receipt records 41 passing cases covering both environments, the actual
-boot error, refusal of unrelated failures and wrong identities, container-state
-races, immutable-ID readback, socket disappearance/timeout, unsafe filesystem
-metadata, unit ordering, and release-path injection. Ruff lint/format and
-`git diff --check` pass. These are deterministic tests with simulated Docker and
-filesystem state. No VPS reboot, runtime mutation, provider call, secret read or
+The focused receipt records 108 passing cases covering both environments, the
+actual boot error, bounded Docker restoration waits, refusal of unrelated
+failures and wrong identities, immutable-ID readback and edge rollback,
+transactional unit activation, dangling-link refusal, socket
+disappearance/timeout, unsafe filesystem metadata, unit ordering, and
+release-path/archive binding. Ruff lint/format and `git diff --check` pass.
+These are deterministic tests with simulated Docker, systemd, and filesystem
+state. No VPS reboot, runtime mutation, provider call, secret read or
 production database action is performed by these tests.
 
 External incident evidence:

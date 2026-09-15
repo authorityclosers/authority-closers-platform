@@ -30,6 +30,8 @@ EDGE_SERVICE = "edge-router"
 # production/staging learner container.  A future incident must add a reviewed
 # service here before this helper is changed; it never guesses an occupant.
 REVIEWED_COLLISION_SERVICE = "learner-web"
+EDGE_READINESS_TIMEOUT_SECONDS = 30.0
+EDGE_READINESS_POLL_SECONDS = 0.5
 DOCKER = "/usr/bin/docker"
 INSPECT_FORMAT = (
     '{"id":{{json .Id}},"name":{{json .Name}},'
@@ -120,6 +122,7 @@ def render_edge_unit(environment: str, release: str) -> dict[str, str]:
         f"ac-sales-xray-edge-reconcile-{environment}.service": f"""[Unit]
 Description=Reconcile the reviewed Sales Xray edge-router address for {environment}
 Requires=docker.service
+Wants=network-online.target
 After=docker.service network-online.target
 Before=ac-sales-xray-startup-{environment}.service
 StartLimitIntervalSec=120
@@ -311,10 +314,70 @@ def _collision_identity(row: dict[str, Any], environment: str) -> None:
         or row.get("project") != project
         or row.get("service") != REVIEWED_COLLISION_SERVICE
         or re.fullmatch(r"[0-9a-f]{64}", str(row.get("id", ""))) is None
-        or row.get("status") != "running"
-        or _network_ip(row) != EDGE_IP
     ):
         raise RecoveryError("edge_collision_unknown_occupant")
+    if row.get("status") != "running" or _network_ip(row) != EDGE_IP:
+        raise RecoveryError("edge_collision_unknown_occupant")
+
+
+def _collision_labels(row: dict[str, Any], environment: str) -> None:
+    """Validate the reviewed collision identity without requiring readiness."""
+    environment_value(environment)
+    project = f"ac-application-{environment}"
+    expected_name = f"/{project}-{REVIEWED_COLLISION_SERVICE}-1"
+    if (
+        row.get("name") != expected_name
+        or row.get("project") != project
+        or row.get("service") != REVIEWED_COLLISION_SERVICE
+        or re.fullmatch(r"[0-9a-f]{64}", str(row.get("id", ""))) is None
+    ):
+        raise RecoveryError("edge_collision_unknown_occupant")
+
+
+def _is_transient_inspection_error(error: RecoveryError) -> bool:
+    return str(error) in {"container_inspection_failed", "container_inspection_invalid"}
+
+
+def _wait_for_edge_recovery_state(
+    environment: str,
+    inspect: Any,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Wait briefly for Docker restart-policy restoration before mutating IDs."""
+    deadline = time.monotonic() + EDGE_READINESS_TIMEOUT_SECONDS
+    collision_name = f"ac-application-{environment}-{REVIEWED_COLLISION_SERVICE}-1"
+    while True:
+        try:
+            edge = inspect(EDGE_NAME)
+            _edge_identity(edge)
+            if edge.get("status") == "running":
+                if _network_ip(edge) in {None, ""}:
+                    raise RecoveryError("edge_container_not_ready")
+                _edge_identity(edge, running=True)
+                return edge, None
+            if edge.get("status") in {"restarting", "removing"}:
+                raise RecoveryError("edge_container_not_ready")
+            _edge_identity(edge, running=False)
+
+            collision = inspect(collision_name)
+            _collision_labels(collision, environment)
+            # Docker may expose the reviewed container before its network is
+            # restored. Keep waiting while its state is incomplete; a running
+            # row with a different address is an occupant mismatch and fails
+            # closed immediately below.
+            if collision.get("status") != "running" or _network_ip(collision) in {None, ""}:
+                raise RecoveryError("edge_collision_not_ready")
+            _collision_identity(collision, environment)
+            return edge, collision
+        except RecoveryError as error:
+            if (
+                not _is_transient_inspection_error(error)
+                and str(error) != "edge_collision_not_ready"
+                and str(error) != "edge_container_not_ready"
+            ):
+                raise
+        if time.monotonic() >= deadline:
+            raise RecoveryError("edge_containers_not_ready")
+        time.sleep(EDGE_READINESS_POLL_SECONDS)
 
 
 def reconcile_edge_collision(
@@ -331,30 +394,28 @@ def reconcile_edge_collision(
     or replacement IDs fail closed without stopping anything.
     """
     environment_value(environment)
-    edge = inspect(EDGE_NAME)
-    if edge.get("status") == "running":
-        _edge_identity(edge, running=True)
+    edge, collision = _wait_for_edge_recovery_state(environment, inspect)
+    if collision is None:
         return {"environment": environment, "result": "edge_already_healthy"}
-    _edge_identity(edge, running=False)
-    collision_name = f"ac-application-{environment}-{REVIEWED_COLLISION_SERVICE}-1"
-    collision = inspect(collision_name)
-    _collision_identity(collision, environment)
     edge_id = edge["id"]
     collision_id = collision["id"]
     if inspect(edge_id) != edge or inspect(collision_id) != collision:
         raise RecoveryError("edge_collision_identity_changed_before_stop")
 
     stopped = False
-    edge_started = False
+    edge_start_attempted = False
     try:
         stop(collision_id)
         stopped = True
         if inspect(collision_id).get("status") == "running":
             raise RecoveryError("edge_collision_stop_unverified")
+        # Mark the attempt before invoking Docker. A start can mutate the
+        # container and still return an error or fail readback; rollback must
+        # stop this exact edge ID in every such case.
+        edge_start_attempted = True
         start(edge_id)
         edge_after = inspect(edge_id)
         _edge_identity(edge_after, running=True)
-        edge_started = True
         start(collision_id)
         collision_after = inspect(collision_id)
         if collision_after.get("id") != collision_id or collision_after.get("status") != "running":
@@ -371,7 +432,7 @@ def reconcile_edge_collision(
         # The exact reviewed app ID is restored on every failure after stop.
         # If edge started but the app cannot return, stop only that exact edge
         # ID so a later operator retry sees the original safe topology.
-        if edge_started:
+        if edge_start_attempted:
             with contextlib.suppress(RecoveryError):
                 stop(edge_id)
         if stopped:
@@ -385,14 +446,19 @@ def reconcile_edge_collision(
         raise
 
 
-def recover(environment: str, *, inspect: Any = docker_inspect, start: Any = docker_start) -> dict:
+def recover(
+    environment: str,
+    *,
+    inspect: Any = docker_inspect,
+    start: Any = docker_start,
+) -> dict[str, Any]:
     environment_value(environment)
     deadline = time.monotonic() + 30
     while not socket_ready(environment):
         if time.monotonic() >= deadline:
             raise RecoveryError("native_socket_not_ready")
         time.sleep(0.5)
-    results = []
+    results: list[dict[str, str]] = []
     for service in SERVICES:
         row = inspect(f"ac-application-{environment}-{service}-1")
         if not recoverable(row, environment, service):

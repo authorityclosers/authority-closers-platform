@@ -118,6 +118,28 @@ def _safe_unit_path(root: Path, name: str) -> Path:
     return root / name
 
 
+def _enabled_link_present(unit_root: Path, name: str) -> bool:
+    """Read the managed multi-user enablement link without following it."""
+    link = unit_root / "multi-user.target.wants" / name
+    return link.exists() or link.is_symlink()
+
+
+def _rollback_enablement(
+    systemctl: Any,
+    names: list[str],
+    previously_enabled: Mapping[str, bool],
+    *,
+    activate: bool,
+) -> None:
+    """Remove only enablement attempted by this invocation."""
+    flag = "--now" if activate else "--no-reload"
+    for name in reversed(names):
+        if previously_enabled.get(name, False):
+            continue
+        with contextlib.suppress(Exception):
+            systemctl(["disable", flag, name])
+
+
 def _systemctl(argv: list[str]) -> None:
     result = subprocess.run(  # noqa: S603 -- fixed systemctl verbs and validated unit names
         ["/usr/bin/systemctl", *argv],
@@ -171,12 +193,20 @@ def install(
         "unit_root_invalid",
     )
     created: list[Path] = []
+    activation_attempted: list[str] = []
+    previously_enabled: dict[str, bool] = {}
+    startup_name = f"ac-sales-xray-startup-{environment}.service"
+    edge_name = f"ac-sales-xray-edge-reconcile-{environment}.service"
+    edge_result = "not_attempted"
     try:
         for name in names:
             target = _safe_unit_path(unit_root, name)
             content = descriptor["units"][name].encode("utf-8")
+            # exists() is false for a dangling link. Refuse it before the
+            # atomic replace so an operator-owned path cannot be displaced.
+            _require(not target.is_symlink(), "unit_target_invalid")
             if target.exists():
-                _require(not target.is_symlink() and target.is_file(), "unit_target_invalid")
+                _require(target.is_file(), "unit_target_invalid")
                 _require(target.read_bytes() == content, "unit_drift_requires_review")
                 continue
             with tempfile.NamedTemporaryFile(
@@ -188,9 +218,36 @@ def install(
             os.replace(temporary, target)
             created.append(target)
         systemctl(["daemon-reload"])
-        for name in names:
-            systemctl(["enable", "--now" if activate else "--no-reload", name])
+        previously_enabled = {
+            name: _enabled_link_present(unit_root, name) for name in names
+        }
+
+        # The native consumer recovery is the required path. Activate it
+        # before attempting the optional edge collision helper, so an edge
+        # refusal cannot suppress the durable native startup repair.
+        activation_attempted.append(startup_name)
+        systemctl(["enable", "--now" if activate else "--no-reload", startup_name])
+
+        activation_attempted.append(edge_name)
+        try:
+            systemctl(["enable", "--now" if activate else "--no-reload", edge_name])
+        except Exception:
+            _rollback_enablement(
+                systemctl,
+                [edge_name],
+                previously_enabled,
+                activate=activate,
+            )
+            edge_result = "failed"
+        else:
+            edge_result = "enabled"
     except Exception:
+        _rollback_enablement(
+            systemctl,
+            activation_attempted,
+            previously_enabled,
+            activate=activate,
+        )
         for target in created:
             with contextlib.suppress(OSError):
                 target.unlink()
@@ -198,6 +255,7 @@ def install(
             systemctl(["daemon-reload"])
         raise
     result["installed"] = True
+    result["edge_recovery"] = edge_result
     return result
 
 
