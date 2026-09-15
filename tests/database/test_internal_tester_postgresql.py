@@ -297,7 +297,61 @@ def test_real_postgres_asgi_tester_identity_allowance_rate_limit_and_revoke(
                 )
                 assert run_view["state"] == "queued"
 
-            bundle_box["bundle"] = bundle.model_copy(update={"internal_tester_accounts": ()})
+            second_source = b"second synthetic local audio"
+            second_intent = IntakeIntent(
+                source_sha256=hashlib.sha256(second_source).hexdigest(),
+                source_bytes=len(second_source),
+                content_type="audio/wav",
+                duration_ms=120_000,
+                purpose="internal_analysis",
+            )
+            async with AsyncSession(engine) as database, database.begin():
+                intake = ConversationIntake(
+                    ConversationApplication(database, clock=lambda: state.now),
+                    intake_policy,
+                    authority=authority,
+                )
+                second_quote = await intake.prepare(
+                    state.actor, second_intent, key="tester-second-reservation-quote"
+                )
+                await intake.accept(
+                    state.actor,
+                    UUID(second_quote["id"]),
+                    QuoteAcceptance(
+                        quote_fingerprint=second_quote["quote_fingerprint"],
+                        privacy_revision=second_quote["privacy_revision"],
+                        accepted=True,
+                    ),
+                )
+            async with AsyncSession(engine) as database, database.begin():
+                await ConversationApplication(database, clock=lambda: state.now).store_source(
+                    state.actor,
+                    UUID(second_quote["recording_id"]),
+                    chunks=(second_source,),
+                    storage=storage,
+                )
+
+            finite_allowance = finite_bundle.allowances[0].model_copy(update={"seconds": 60})
+            bundle_box["bundle"] = finite_bundle.model_copy(
+                update={
+                    "allowances": (finite_allowance,),
+                    "internal_tester_accounts": (),
+                }
+            )
+            async with AsyncSession(engine) as database, database.begin():
+                with pytest.raises(ConversationConflict):
+                    await ConversationApplication(database, clock=lambda: state.now).request_run(
+                        state.actor,
+                        RunIntent(
+                            recording_id=UUID(second_quote["recording_id"]),
+                            source_revision=second_quote["source_revision"],
+                            quote_id=UUID(second_quote["id"]),
+                            recipe_revision=second_quote["recipe_revision"],
+                        ),
+                        key="tester-direct-run-after-revoke",
+                        authority=authority,
+                    )
+
             async with AsyncSession(engine) as database, database.begin():
                 assert (
                     await tester_policy.for_actor(database, state.actor, "account_minutes") is None
@@ -311,12 +365,13 @@ def test_real_postgres_asgi_tester_identity_allowance_rate_limit_and_revoke(
                 assert minute_row is not None
                 finite = MinuteAccount.from_dict(minute_row.snapshot)
                 assert finite.unlimited is False
-                assert finite.available_seconds == 60
+                assert finite.available_seconds == -180
+                assert len(finite.reservations) == 1
 
-            second_source = b"second synthetic local audio"
-            second_intent = IntakeIntent(
-                source_sha256=hashlib.sha256(second_source).hexdigest(),
-                source_bytes=len(second_source),
+            third_source = b"third synthetic local audio"
+            third_intent = IntakeIntent(
+                source_sha256=hashlib.sha256(third_source).hexdigest(),
+                source_bytes=len(third_source),
                 content_type="audio/wav",
                 duration_ms=120_000,
                 purpose="internal_analysis",
@@ -332,7 +387,7 @@ def test_real_postgres_asgi_tester_identity_allowance_rate_limit_and_revoke(
                     match="exceeds your available processing allowance",
                 ):
                     await intake.prepare(
-                        state.actor, second_intent, key="tester-reservation-after-revoke"
+                        state.actor, third_intent, key="tester-reservation-after-revoke"
                     )
         finally:
             await engine.dispose()

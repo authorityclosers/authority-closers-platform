@@ -422,6 +422,41 @@ def test_internal_tester_minute_account_bypasses_finite_grant_without_bypassing_
     assert committed.budget.available_paise == 500
 
 
+def test_finite_downgrade_preserves_outstanding_usage_and_blocks_new_reservations():
+    minutes, budget = accounts(seconds=0)
+    unlimited = replace(minutes, unlimited=True)
+    value = quote(entitlement_seconds=120)
+    committed = reserve(unlimited, budget, "tester-reserve", value, permission(value), 200)
+    finite = replace(
+        committed.minutes,
+        unlimited=False,
+        grants=(
+            MinuteGrant(
+                "tenant-a",
+                "account-a",
+                "finite-grant",
+                60,
+                "explicit-grant",
+                "authorized-actor",
+                "pilot",
+            ),
+        ),
+    )
+
+    assert finite.available_seconds == -60
+    assert finite.reservations == committed.minutes.reservations
+    next_quote = quote(quote_id="after-downgrade")
+    with pytest.raises(ValueError, match="insufficient explicit minute grant"):
+        reserve(
+            finite,
+            committed.budget,
+            "after-downgrade",
+            next_quote,
+            permission(next_quote),
+            200,
+        )
+
+
 def test_replacing_tester_exemption_with_finite_grant_clears_unlimited_flag():
     minutes = MinuteAccount("tenant-a", "account-a", unlimited=True)
     bounded = replace(minutes, unlimited=False)

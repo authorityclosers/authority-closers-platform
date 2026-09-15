@@ -7,7 +7,7 @@ import json
 import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -58,6 +58,10 @@ from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository
+
+if TYPE_CHECKING:
+    from ac_platform.conversation_intelligence.authority import ConversationAuthority
+
 from ac_platform.tenancy.models import Membership, Tenant
 
 LOCAL_JOB = "conversation.inspect_local.v1"
@@ -506,8 +510,12 @@ class ConversationApplication:
         intent: RunIntent,
         *,
         key: str,
+        authority: ConversationAuthority | None = None,
     ) -> dict[str, Any]:
         now = await self.admit(actor)
+        authority_bundle = None
+        if authority is not None:
+            authority_bundle = await authority.admit(self, actor)
         recording = await self._recording(actor, intent.recording_id)
         await self._permission(actor, recording.permission_id, recording.source_sha256, now)
         if recording.state != "ready" or str(recording.source_revision) != intent.source_revision:
@@ -572,6 +580,11 @@ class ConversationApplication:
         )
         if budget_row is None or minute_row is None:
             raise ConversationDenied("An explicit processing entitlement is required.")
+        if authority is not None:
+            assert authority_bundle is not None
+            await authority.reconcile_existing_minute_account(
+                self, actor, bundle=authority_bundle
+            )
         # Canonical admission above already holds this person's lock, shared by
         # guest claims and account acquisition reservations. The older upload
         # path must also count those minutes instead of issuing a second pool.

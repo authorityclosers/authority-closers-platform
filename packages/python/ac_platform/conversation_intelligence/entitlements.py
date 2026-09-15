@@ -421,7 +421,15 @@ class MinuteAccount(Snapshot):
             for r in self.reservations
             if r.state == "reconciliation_required"
         )
-        if not self.unlimited and self.available_seconds + observed_excess < 0:
+        if (
+            not self.unlimited
+            and self.available_seconds + observed_excess < 0
+            and not self.reservations
+        ):
+            # A tester exemption can be revoked after reservations were made
+            # and replaced by a finite grant smaller than that committed use.
+            # Preserve those immutable reservations and let reserve() fence
+            # any further work against the negative finite balance.
             raise ValueError("minute snapshot overdraws explicit grants")
 
     @property

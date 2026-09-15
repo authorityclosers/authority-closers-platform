@@ -151,6 +151,48 @@ class ConversationAuthority:
                 raise ConversationDenied("This account has no approved processing allowance.")
         return bundle
 
+    async def reconcile_existing_minute_account(
+        self,
+        app: ConversationApplication,
+        actor: ConversationActor,
+        *,
+        bundle: HostedApprovalBundle,
+    ) -> None:
+        """Apply the current tester-derived flag before a hosted run reserves minutes.
+
+        This only changes the derived unlimited flag on an existing account. A
+        finite grant is still created by the explicit allowance claim command,
+        while a revocation cannot leave an old unlimited flag active on a run
+        that was already quoted.
+        """
+
+        if isinstance(actor, ProcessingActor) or actor.tenant_id is None:
+            return
+        tester = (
+            None
+            if self.tester_policy is None
+            else await self.tester_policy.for_actor(
+                app.database, actor, "account_minutes", bundle=bundle
+            )
+        )
+        row = await app.database.scalar(
+            select(ConversationMinuteAccount)
+            .where(
+                ConversationMinuteAccount.tenant_id == actor.tenant_id,
+                ConversationMinuteAccount.person_id == actor.person_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return
+        before = MinuteAccount.from_dict(row.snapshot)
+        if before.unlimited == (tester is not None):
+            return
+        after = replace(before, unlimited=tester is not None)
+        row.snapshot, row.revision = after.as_dict(), row.revision + 1
+        await app.database.flush()
+
     async def require_execution_enabled(self, app: ConversationApplication) -> None:
         await require_execution_enabled(
             app.database,
@@ -215,6 +257,7 @@ class ConversationAuthority:
             # needs to exist so a later paid provider plan can reserve against
             # its approved project cap.
             return
+        await self.reconcile_existing_minute_account(app, actor, bundle=bundle)
         tester = (
             None
             if self.tester_policy is None
