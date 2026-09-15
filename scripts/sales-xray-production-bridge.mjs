@@ -35,7 +35,6 @@ const RESPONSE_HEADER_NAMES = [
   "accept-ranges",
   "cache-control",
   "content-disposition",
-  "content-length",
   "content-range",
   "content-type",
   "etag",
@@ -492,7 +491,7 @@ function proxyInnerUpgrade(request, socket, head, config) {
     return;
   }
   const target = new URL(request.url, config.innerOrigin);
-  if (target.pathname !== "/_next/webpack-hmr") {
+  if (target.pathname !== "/_next/hmr" && target.pathname !== "/_next/webpack-hmr") {
     rejectUpgrade(socket, 400);
     return;
   }
@@ -576,9 +575,6 @@ function responseHeaders(
   headers["x-content-type-options"] = "nosniff";
   headers["x-frame-options"] = "DENY";
   headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()";
-  const contentEncoding = upstream.headers.get("content-encoding");
-  if (contentEncoding && contentEncoding.toLowerCase() !== "identity")
-    delete headers["content-length"];
   if (allowLocationOrigin && rewriteLocationOrigin) {
     const location = upstream.headers.get("location");
     if (location) {
@@ -640,6 +636,16 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   if (request.headers.accept) headers.set("accept", request.headers.accept);
   if (request.headers["accept-language"])
     headers.set("accept-language", request.headers["accept-language"]);
+  for (const name of [
+    "next-router-state-tree",
+    "next-router-prefetch",
+    "next-url",
+    "rsc",
+    "x-nextjs-data",
+  ]) {
+    const value = request.headers[name];
+    if (value) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+  }
   headers.set("accept-encoding", "identity");
   let upstream;
   try {
