@@ -753,6 +753,13 @@ def test_analysis_settings_parity_contract_tracks_0042_table() -> None:
     )
 
 
+def test_retained_c5_recovery_parity_contract_tracks_0043_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260915_0043") == "ac-postgres-parity-v23"
+    assert restore_drill.parity_tables_for_head("20260915_0043") == (
+        restore_drill.ANALYSIS_SETTINGS_PARITY_TABLES + ("conversation_retained_c5_versions",)
+    )
+
+
 def test_processing_ownership_migration_command_targets_only_0037() -> None:
     target = restore_drill._target_for("0123456789ab")
     command = restore_drill._migration_command(
