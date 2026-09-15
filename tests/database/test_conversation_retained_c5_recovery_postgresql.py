@@ -8,6 +8,8 @@ no provider transport, worker dispatch or production database is involved.
 from __future__ import annotations
 
 import hashlib
+import io
+import zipfile
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -974,8 +976,15 @@ def test_retained_c5_recovery_http_admin_and_acquisition_reads(
                 source = await guest_client.get(prefix + "/source")
                 assert source.status_code == 200, source.text
                 assert source.content == case["source_bytes"]
+                docx = await guest_client.get(prefix + "/report.docx")
+                assert docx.status_code == 200, docx.text
+                assert docx.headers["content-disposition"] == (
+                    'attachment; filename="sales-call-report.docx"'
+                )
+                with zipfile.ZipFile(io.BytesIO(docx.content)) as archive:
+                    assert "word/document.xml" in archive.namelist()
                 guest_client.cookies.set("ac_xray_guest", setup.stranger.token)
-                for suffix in ("", "/report", "/transcript"):
+                for suffix in ("", "/report", "/report.docx", "/transcript"):
                     denied = await guest_client.get(prefix + suffix)
                     assert denied.status_code == 404, denied.text
 

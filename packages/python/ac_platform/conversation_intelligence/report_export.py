@@ -5,8 +5,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import html
+import io
+import re
+import zipfile
 from collections.abc import Mapping
 from typing import Any
+from xml.etree import ElementTree as ET
 
 from ac_platform.conversation_intelligence.reports import ReportDraft
 
@@ -77,6 +81,358 @@ _SCRIPT = (
     "}));\n"
     "document.getElementById('print').addEventListener('click',()=>window.print());"
 )
+
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_CP_NS = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+_DC_NS = "http://purl.org/dc/elements/1.1/"
+_DCTERMS_NS = "http://purl.org/dc/terms/"
+_XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+
+ET.register_namespace("w", _W_NS)
+ET.register_namespace("r", _R_NS)
+ET.register_namespace("cp", _CP_NS)
+ET.register_namespace("dc", _DC_NS)
+ET.register_namespace("dcterms", _DCTERMS_NS)
+ET.register_namespace("xsi", _XSI_NS)
+
+
+def _w(tag: str) -> str:
+    return f"{{{_W_NS}}}{tag}"
+
+
+def _docx_run(text: str, *, bold: bool = False, italic: bool = False) -> ET.Element:
+    run = ET.Element(_w("r"))
+    if bold or italic:
+        properties = ET.SubElement(run, _w("rPr"))
+        if bold:
+            ET.SubElement(properties, _w("b"))
+        if italic:
+            ET.SubElement(properties, _w("i"))
+    lines = text.splitlines() or [""]
+    for index, line in enumerate(lines):
+        if index:
+            ET.SubElement(run, _w("br"))
+        node = ET.SubElement(run, _w("t"))
+        if line[:1].isspace() or line[-1:].isspace():
+            node.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        node.text = line
+    return run
+
+
+def _docx_paragraph(
+    text: str = "",
+    *,
+    style: str | None = None,
+    bold: bool = False,
+    italic: bool = False,
+) -> ET.Element:
+    paragraph = ET.Element(_w("p"))
+    properties = ET.SubElement(paragraph, _w("pPr"))
+    if style is not None:
+        style_node = ET.SubElement(properties, _w("pStyle"))
+        style_node.set(_w("val"), style)
+    if style in {"Title", "Subtitle", "Heading1", "Heading2", "Heading3"}:
+        ET.SubElement(properties, _w("keepNext"))
+    paragraph.append(_docx_run(text, bold=bold, italic=italic))
+    return paragraph
+
+
+def _docx_labeled_paragraph(label: str, value: object) -> ET.Element:
+    paragraph = ET.Element(_w("p"))
+    paragraph.append(_docx_run(f"{label}: ", bold=True))
+    paragraph.append(_docx_run(str(value)))
+    return paragraph
+
+
+def _human_label(value: str) -> str:
+    return value.replace("_", " ").strip().capitalize()
+
+
+def _docx_heading(body: ET.Element, text: str, level: int) -> None:
+    body.append(_docx_paragraph(text, style=f"Heading{min(max(level, 1), 3)}"))
+
+
+def _docx_bullet(body: ET.Element, text: str) -> None:
+    body.append(_docx_paragraph(text, style="ListBullet"))
+
+
+def _docx_evidence(body: ET.Element, evidence: Mapping[str, Any]) -> None:
+    segment_id = evidence.get("segment_id")
+    start_ms = evidence.get("start_ms")
+    end_ms = evidence.get("end_ms")
+    quote = evidence.get("quote")
+    if not all(isinstance(item, str) for item in (segment_id, quote)):
+        raise ValueError("report_docx_evidence_invalid")
+    if type(start_ms) is not int or type(end_ms) is not int:
+        raise ValueError("report_docx_evidence_invalid")
+    body.append(
+        _docx_paragraph(
+            f"{timestamp(start_ms)}-{timestamp(end_ms)} · {segment_id}",
+            style="Heading3",
+        )
+    )
+    body.append(_docx_paragraph(quote, style="Quote"))
+
+
+def _docx_findings(body: ET.Element, findings: object) -> None:
+    if not isinstance(findings, list):
+        raise ValueError("report_docx_findings_invalid")
+    if not findings:
+        body.append(_docx_paragraph("No evidence-backed finding was recorded."))
+        return
+    for finding in findings:
+        if not isinstance(finding, Mapping):
+            raise ValueError("report_docx_finding_invalid")
+        title = finding.get("title")
+        explanation = finding.get("explanation")
+        evidence = finding.get("evidence")
+        if not isinstance(title, str) or not isinstance(explanation, str):
+            raise ValueError("report_docx_finding_invalid")
+        _docx_heading(body, title, 2)
+        body.append(_docx_paragraph(explanation))
+        if not isinstance(evidence, list):
+            raise ValueError("report_docx_finding_invalid")
+        for item in evidence:
+            if not isinstance(item, Mapping):
+                raise ValueError("report_docx_evidence_invalid")
+            _docx_evidence(body, item)
+
+
+def _docx_nested_value(body: ET.Element, label: str, value: object, depth: int = 2) -> None:
+    if isinstance(value, Mapping):
+        _docx_heading(body, label, depth)
+        for key, child in value.items():
+            _docx_nested_value(body, _human_label(str(key)), child, min(depth + 1, 3))
+        return
+    if isinstance(value, list):
+        if not value:
+            body.append(_docx_labeled_paragraph(label, "None recorded"))
+            return
+        for index, child in enumerate(value, start=1):
+            if isinstance(child, Mapping):
+                _docx_heading(body, f"{label} {index}", depth)
+                for key, nested in child.items():
+                    if key == "evidence" and isinstance(nested, list):
+                        for evidence in nested:
+                            if isinstance(evidence, Mapping):
+                                _docx_evidence(body, evidence)
+                            else:
+                                raise ValueError("report_docx_evidence_invalid")
+                    else:
+                        _docx_nested_value(body, _human_label(str(key)), nested, min(depth + 1, 3))
+            else:
+                _docx_bullet(body, str(child))
+        return
+    body.append(_docx_labeled_paragraph(label, "None recorded" if value is None else value))
+
+
+def _docx_styles() -> bytes:
+    styles = ET.Element(_w("styles"))
+
+    def style(style_id: str, *, name: str, based_on: str = "Normal", size: str = "22") -> None:
+        node = ET.SubElement(
+            styles,
+            _w("style"),
+            {_w("type"): "paragraph", _w("styleId"): style_id},
+        )
+        ET.SubElement(node, _w("name"), {_w("val"): name})
+        ET.SubElement(node, _w("basedOn"), {_w("val"): based_on})
+        properties = ET.SubElement(node, _w("rPr"))
+        ET.SubElement(properties, _w("rFonts"), {_w("ascii"): "Aptos", _w("hAnsi"): "Aptos"})
+        ET.SubElement(properties, _w("sz"), {_w("val"): size})
+        ET.SubElement(properties, _w("color"), {_w("val"): "000000"})
+
+    style("Normal", name="Normal", size="22")
+    style("Title", name="Title", size="36")
+    style("Subtitle", name="Subtitle", size="22")
+    style("Heading1", name="Heading 1", size="28")
+    style("Heading2", name="Heading 2", size="24")
+    style("Heading3", name="Heading 3", size="21")
+    style("Quote", name="Quote", size="21")
+    style("ListBullet", name="List Bullet", size="21")
+    return ET.tostring(styles, encoding="utf-8", xml_declaration=True)
+
+
+def _docx_document(body: ET.Element) -> bytes:
+    section = ET.SubElement(body, _w("sectPr"))
+    ET.SubElement(section, _w("pgSz"), {_w("w"): "12240", _w("h"): "15840"})
+    ET.SubElement(
+        section,
+        _w("pgMar"),
+        {_w("top"): "1080", _w("right"): "1080", _w("bottom"): "1080", _w("left"): "1080"},
+    )
+    document = ET.Element(_w("document"))
+    document.append(body)
+    return ET.tostring(document, encoding="utf-8", xml_declaration=True)
+
+
+def _docx_core_properties(title: str) -> bytes:
+    root = ET.Element(f"{{{_CP_NS}}}coreProperties")
+    ET.SubElement(root, f"{{{_DC_NS}}}title").text = title
+    ET.SubElement(root, f"{{{_DC_NS}}}creator").text = "Authority Closers"
+    created = ET.SubElement(root, f"{{{_DCTERMS_NS}}}created")
+    created.set(f"{{{_XSI_NS}}}type", "dcterms:W3CDTF")
+    created.text = "2026-01-01T00:00:00Z"
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _docx_package(document: bytes, *, title: str) -> bytes:
+    content_types = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
+        b'<Default Extension="rels" ContentType="application/vnd.openxmlformats-'
+        b'package.relationships+xml"/>\n'
+        b'<Default Extension="xml" ContentType="application/xml"/>\n'
+        b'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-'
+        b'officedocument.wordprocessingml.document.main+xml"/>\n'
+        b'<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-'
+        b'officedocument.wordprocessingml.styles+xml"/>\n'
+        b'<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-'
+        b'package.core-properties+xml"/>\n'
+        b'</Types>'
+    )
+    package_rels = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/'
+        b'2006/relationships/officeDocument" Target="word/document.xml"/>\n'
+        b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/'
+        b'relationships/metadata/core-properties" Target="docProps/core.xml"/>\n'
+        b'</Relationships>'
+    )
+    document_rels = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/'
+        b'2006/relationships/styles" Target="styles.xml"/>\n'
+        b'</Relationships>'
+    )
+    result = io.BytesIO()
+    with zipfile.ZipFile(result, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", package_rels)
+        archive.writestr("word/document.xml", document)
+        archive.writestr("word/styles.xml", _docx_styles())
+        archive.writestr("word/_rels/document.xml.rels", document_rels)
+        archive.writestr("docProps/core.xml", _docx_core_properties(title))
+    return result.getvalue()
+
+
+def report_docx_bytes(envelope: Mapping[str, Any]) -> bytes:
+    """Build a genuine, self-contained Word document from a projected report envelope."""
+
+    if (
+        not isinstance(envelope, Mapping)
+        or envelope.get("schema") != "ac.sales-xray.report-envelope/2"
+    ):
+        raise ValueError("report_docx_envelope_invalid")
+    source_label = envelope.get("source_label")
+    source_sha256 = envelope.get("source_sha256")
+    transcript_revision = envelope.get("transcript_revision")
+    report = envelope.get("report")
+    access = report.get("access") if isinstance(report, Mapping) else None
+    if access not in {"guest_preview", "claimed_account"}:
+        raise ValueError("report_docx_access_invalid")
+    if (
+        not isinstance(source_label, str)
+        or not isinstance(source_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", source_sha256) is None
+        or not isinstance(transcript_revision, str)
+        or not isinstance(report, Mapping)
+        or report.get("schema") != "ac.sales-xray.report-access/2"
+        or report.get("access") != access
+        or not isinstance(report.get("content"), Mapping)
+    ):
+        raise ValueError("report_docx_envelope_invalid")
+    content = report["content"]
+    body = ET.Element(_w("body"))
+    body.append(_docx_paragraph("Your Sales Call Report", style="Title"))
+    body.append(_docx_paragraph(source_label, style="Subtitle"))
+    body.append(
+        _docx_paragraph(
+            "Private qualitative AI draft. This document preserves the saved report and its "
+            "source references; it is not a numeric score or human adjudication."
+        )
+    )
+    preview = report.get("preview")
+    if access == "guest_preview" and isinstance(preview, Mapping):
+        hidden = sum(
+            int(item.get("hidden_count", 0))
+            for item in preview.get("sections", {}).values()
+            if isinstance(item, Mapping) and type(item.get("hidden_count")) is int
+        )
+        if hidden:
+            body.append(
+                _docx_paragraph(
+                    "Guest preview: some saved findings remain available after account claim."
+                )
+            )
+
+    _docx_heading(body, "Call summary", 1)
+    for key in ("summary", "verdict"):
+        value = content.get(key)
+        if not isinstance(value, str):
+            raise ValueError("report_docx_content_invalid")
+        body.append(_docx_labeled_paragraph(_human_label(key), value))
+
+    for field, label in SECTIONS:
+        _docx_heading(body, label, 1)
+        _docx_findings(body, content.get(field))
+
+    dimensions = content.get("dimensions")
+    if not isinstance(dimensions, list):
+        raise ValueError("report_docx_dimensions_invalid")
+    _docx_heading(body, "Dimensions and uncertainty", 1)
+    for dimension in dimensions:
+        if not isinstance(dimension, Mapping):
+            raise ValueError("report_docx_dimension_invalid")
+        label = dimension.get("label")
+        status = dimension.get("status")
+        observation = dimension.get("observation")
+        citations = dimension.get("citations")
+        if not all(isinstance(item, str) for item in (label, status, observation)):
+            raise ValueError("report_docx_dimension_invalid")
+        _docx_heading(body, label, 2)
+        body.append(_docx_labeled_paragraph("Status", status))
+        body.append(_docx_labeled_paragraph("Observation", observation))
+        if not isinstance(citations, list):
+            raise ValueError("report_docx_dimension_invalid")
+        for citation in citations:
+            if not isinstance(citation, Mapping):
+                raise ValueError("report_docx_citation_invalid")
+            doc = citation.get("doc")
+            sections = citation.get("sections")
+            if not isinstance(doc, str) or not isinstance(sections, list) or not all(
+                isinstance(section, str) for section in sections
+            ):
+                raise ValueError("report_docx_citation_invalid")
+            _docx_bullet(body, f"Source reference: {doc}, {', '.join(sections)}")
+
+    overview = content.get("overview")
+    if overview is not None:
+        if not isinstance(overview, Mapping):
+            raise ValueError("report_docx_overview_invalid")
+        _docx_heading(body, "Detailed overview", 1)
+        for key, value in overview.items():
+            _docx_nested_value(body, _human_label(str(key)), value)
+
+    _docx_heading(body, "Report provenance", 1)
+    body.append(_docx_labeled_paragraph("Access", access))
+    body.append(_docx_labeled_paragraph("Review status", report.get("review_status")))
+    body.append(_docx_labeled_paragraph("Numeric publication", report.get("numeric_publication")))
+    body.append(_docx_labeled_paragraph("Source SHA-256", source_sha256))
+    body.append(_docx_labeled_paragraph("Transcript revision", transcript_revision))
+    body.append(
+        _docx_paragraph(
+            "Speaker labels and provider timestamps remain unverified. The report does not make "
+            "acoustic, personality or vocal-tone claims."
+        )
+    )
+    document = _docx_document(body)
+    return _docx_package(document, title=f"Sales call report - {source_label}")
 
 
 def timestamp(milliseconds: int) -> str:
@@ -319,4 +675,4 @@ retraining · No public publication<br>Source SHA-256: {escape(report.source_sha
 </main><script>{_SCRIPT}</script></body></html>"""
 
 
-__all__ = ["SECTIONS", "report_html", "report_markdown", "timestamp"]
+__all__ = ["SECTIONS", "report_docx_bytes", "report_html", "report_markdown", "timestamp"]

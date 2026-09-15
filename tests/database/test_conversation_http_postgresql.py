@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import io
 import secrets
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -103,6 +105,7 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
         source_path = f"{root}/recordings/{prepared.recording_id}/source"
         transcript_path = f"{root}/recordings/{prepared.recording_id}/transcript"
         report_path = f"{root}/runs/{prepared.run_id}/report"
+        docx_path = f"{report_path}.docx"
         admin_path = f"/v1/admin/conversation/runs/{prepared.run_id}/draft"
         admin_headers = {
             **cookie(token),
@@ -114,7 +117,13 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://learner.test"
             ) as client:
-                for path in (source_path, transcript_path, report_path, f"{root}/recordings"):
+                for path in (
+                    source_path,
+                    transcript_path,
+                    report_path,
+                    docx_path,
+                    f"{root}/recordings",
+                ):
                     assert (await client.get(path)).status_code == 401
                 stale_run = await client.post(
                     f"{root}/runs",
@@ -137,6 +146,8 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                 assert before.json()["report"] is None
                 assert before.json()["state"] == "completed"
                 assert (await client.get(transcript_path, headers=cookie(token))).status_code == 404
+                before_docx = await client.get(docx_path, headers=cookie(token))
+                assert before_docx.status_code == 409
                 blocked_surface = await client.post(
                     admin_path, headers=admin_headers, json=fixture.intent.model_dump(mode="json")
                 )
@@ -159,6 +170,17 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                 assert report.json() == imported.json()
                 assert report.json()["report"]["source_sha256"] == prepared.state.source_sha256
                 assert report.json()["report"]["review_status"] == "draft_not_dipak_adjudicated"
+                docx = await client.get(docx_path, headers=cookie(token))
+                assert docx.status_code == 200, docx.text
+                assert (
+                    docx.headers["content-type"]
+                    == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                assert docx.headers["content-disposition"] == (
+                    'attachment; filename="sales-call-report.docx"'
+                )
+                with zipfile.ZipFile(io.BytesIO(docx.content)) as archive:
+                    assert "word/document.xml" in archive.namelist()
                 history = await client.get(f"{root}/recordings", headers=cookie(token))
                 assert history.status_code == 200
                 entries = history.json()["recordings"]
@@ -213,7 +235,7 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     assert (
                         await client.get("/v1/me", headers=cookie(other_token))
                     ).status_code == 200
-                    for path in (source_path, transcript_path, report_path):
+                    for path in (source_path, transcript_path, report_path, docx_path):
                         denied = await client.get(path, headers=cookie(other_token))
                         assert denied.status_code == 404, denied.text
                     assert (
@@ -231,7 +253,7 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                         .where(ConversationPermission.id == prepared.state.permission_id)
                         .values(revoked_at=prepared.state.now)
                     )
-                for path in (source_path, transcript_path, report_path):
+                for path in (source_path, transcript_path, report_path, docx_path):
                     assert (await client.get(path, headers=cookie(token))).status_code == 403
                 assert (await client.get(f"{root}/recordings", headers=cookie(token))).json() == {
                     "recordings": []

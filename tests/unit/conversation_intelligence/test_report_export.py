@@ -3,17 +3,28 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import re
+import zipfile
 from typing import Any
+from uuid import UUID
 
 import pytest
 
+from ac_platform.conversation_intelligence.report_access import (
+    ReportAccess,
+    ReportSourceBinding,
+    project_bound_report,
+)
 from ac_platform.conversation_intelligence.report_export import (
+    report_docx_bytes,
     report_html,
     report_markdown,
     timestamp,
 )
+from ac_platform.conversation_intelligence.report_overview import DetailedOverview
 from ac_platform.conversation_intelligence.reports import parse_report_draft
+from tests.conversation_overview_fixtures import overview_for
 
 
 def _transcript(audio: bytes) -> dict[str, Any]:
@@ -154,3 +165,106 @@ def test_export_uses_derived_segment_bounds_for_timestamps() -> None:
         report_html(report, {**transcript, "duration_ms": 10}, original_audio=audio)
     with pytest.raises(ValueError, match="report_timestamp_invalid"):
         timestamp(-1)
+
+
+def test_docx_is_real_ooxml_and_guest_export_excludes_hidden_findings() -> None:
+    audio = b"synthetic-audio"
+    transcript = _transcript(audio)
+    visible = _report(transcript, audio=audio)
+    hidden = visible.strengths[0].model_copy(update={"title": "Hidden guest finding"})
+    report = visible.model_copy(update={"strengths": [visible.strengths[0], hidden]})
+    envelope = project_bound_report(
+        report,
+        access=ReportAccess.GUEST,
+        source=ReportSourceBinding(
+            UUID("00000000-0000-4000-8000-000000000001"),
+            UUID("00000000-0000-4000-8000-000000000002"),
+            report.source_sha256,
+            report.transcript_revision,
+        ),
+    )
+
+    document = report_docx_bytes(envelope)
+
+    assert zipfile.is_zipfile(io.BytesIO(document))
+    with zipfile.ZipFile(io.BytesIO(document)) as archive:
+        names = set(archive.namelist())
+        assert {
+            "[Content_Types].xml",
+            "word/document.xml",
+            "word/styles.xml",
+            "_rels/.rels",
+        } <= names
+        xml = archive.read("word/document.xml").decode("utf-8")
+    assert "Your Sales Call Report" in xml
+    assert report.source_sha256 in xml
+    assert "Hidden guest finding" not in xml
+    assert "Guest preview" in xml
+
+
+def test_docx_rejects_unprojected_or_mismatched_envelopes() -> None:
+    audio = b"synthetic-audio"
+    transcript = _transcript(audio)
+    report = _report(transcript, audio=audio)
+    source = ReportSourceBinding(
+        UUID("00000000-0000-4000-8000-000000000001"),
+        UUID("00000000-0000-4000-8000-000000000002"),
+        report.source_sha256,
+        report.transcript_revision,
+    )
+    envelope = project_bound_report(report, access=ReportAccess.ACCOUNT, source=source)
+
+    with pytest.raises(ValueError, match="report_docx_access_invalid"):
+        report_docx_bytes({**envelope, "report": {}})
+    with pytest.raises(ValueError, match="report_docx_envelope_invalid"):
+        report_docx_bytes({**envelope, "source_sha256": "not-a-sha"})
+
+
+def test_docx_preserves_detailed_overview_long_prose_and_unicode() -> None:
+    audio = b"synthetic-audio"
+    transcript = _transcript(audio)
+    report = _report(transcript, audio=audio)
+    overview = DetailedOverview.model_validate(overview_for(report.model_dump(mode="json")))
+    long_text = "Source-bound long qualitative prose. " * 80
+    report = report.model_copy(
+        update={
+            "overview": overview,
+            "summary": f"नमस्ते — {long_text}",
+            "verdict": long_text,
+        }
+    )
+    envelope = project_bound_report(
+        report,
+        access=ReportAccess.ACCOUNT,
+        source=ReportSourceBinding(
+            UUID("00000000-0000-4000-8000-000000000001"),
+            UUID("00000000-0000-4000-8000-000000000002"),
+            report.source_sha256,
+            report.transcript_revision,
+        ),
+    )
+
+    document = report_docx_bytes(envelope)
+
+    with zipfile.ZipFile(io.BytesIO(document)) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8")
+    assert "नमस्ते" in xml
+    assert long_text in xml
+    for label in (
+        "Diagnosis",
+        "Outcome",
+        "Business impact",
+        "Strength details",
+        "Improvement details",
+        "Golden moments",
+        "Missed details",
+        "Prospect interpretations",
+        "Rewatch",
+        "Conversation change",
+        "Ethics notes",
+        "Next call focus",
+        "Practice",
+        "Progress",
+        "Final assessment",
+    ):
+        assert label in xml

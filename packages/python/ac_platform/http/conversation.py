@@ -14,7 +14,14 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.contracts import Capabilities, RecordingIntent, RunIntent
 from ac_platform.conversation_intelligence.example import example_report
+from ac_platform.conversation_intelligence.report_access import (
+    ReportAccess,
+    ReportSourceBinding,
+    project_bound_report,
+)
+from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.report_store import ConversationReports
+from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     AuthenticationRequired,
@@ -209,6 +216,47 @@ def install_conversation_http(
                 ConversationReports(ConversationApplication(auth.database)).get(
                     auth.resolved.actor, run_id
                 )
+            )
+
+        @router.get("/runs/{run_id}/report.docx")
+        async def download_report(
+            run_id: UUID,
+            request: Request,
+            response: Response,
+            auth: AuthenticatedTransaction = dependency,
+        ) -> Response:
+            admitted(request, response)
+            payload = await result(
+                ConversationReports(ConversationApplication(auth.database)).get(
+                    auth.resolved.actor, run_id
+                )
+            )
+            if not isinstance(payload, dict) or payload.get("report") is None:
+                raise HTTPException(409, "The saved sales report is not ready to export.")
+            try:
+                report = ReportDraft.model_validate(payload["report"])
+                envelope = project_bound_report(
+                    report,
+                    access=ReportAccess.ACCOUNT,
+                    source=ReportSourceBinding(
+                        UUID(payload["recording_id"]),
+                        run_id,
+                        report.source_sha256,
+                        report.transcript_revision,
+                    ),
+                )
+                document = report_docx_bytes(envelope)
+            except (KeyError, TypeError, ValueError):
+                raise HTTPException(409, "The saved sales report could not be exported.") from None
+            return Response(
+                content=document,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={
+                    "Cache-Control": "private, no-store",
+                    "Vary": "Cookie",
+                    "Content-Disposition": 'attachment; filename="sales-call-report.docx"',
+                    "X-Content-Type-Options": "nosniff",
+                },
             )
 
         @router.get("/recordings/{recording_id}/transcript")

@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
     ConversationProcessingPlans,
     PlanAcceptance,
 )
+from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     ObjectKey,
@@ -421,6 +422,30 @@ def install_submission_http(
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
+
+    @router.get("/submissions/{submission_id}/report.docx")
+    async def download_report(
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+    ) -> Response:
+        guard(request, response)
+        try:
+            envelope = await AcquisitionReports(owner.ownership).report(
+                submission_id, **owner.arguments
+            )
+            document = report_docx_bytes(envelope)
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except (KeyError, TypeError, ValueError):
+            raise fail(409, "The saved sales report could not be exported.") from None
+        return Response(
+            content=document,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={
+                **_PRIVATE,
+                "Content-Disposition": 'attachment; filename="sales-call-report.docx"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/submissions/{submission_id}/transcript")
     async def transcript(
