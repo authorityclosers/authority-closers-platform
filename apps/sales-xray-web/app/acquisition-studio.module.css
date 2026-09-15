@@ -558,7 +558,7 @@
 .app[data-stage="processing"] .stepHeader,
 .app[data-stage="uploading"] :global(.studio-steps),
 .app[data-stage="uploading"] .stepHeader,
-.app[data-stage="uploading"] .studio-intro {
+.app[data-stage="uploading"] :global(.studio-intro) {
   display: none;
 }
 .app[data-stage="processing"] .withProcessing .upload {
@@ -570,7 +570,9 @@
   padding: 7px 10px;
   border-radius: 10px;
 }
-.app[data-stage="processing"] :global(.studio-file) .studio-upload-icon {
+.app[data-stage="processing"]
+  :global(.studio-file)
+  :global(.studio-upload-icon) {
   width: 34px;
   height: 34px;
   flex-basis: 34px;
@@ -586,7 +588,7 @@
 .app[data-stage="processing"] .allowance,
 .app[data-stage="processing"] .callActions,
 .app[data-stage="processing"] :global(.studio-upload) audio,
-.app[data-stage="processing"] :global(.studio-upload) > .small-text {
+.app[data-stage="processing"] :global(.studio-upload) > :global(.small-text) {
   display: none;
 }
 .app[data-stage="processing"] .processingPanel {

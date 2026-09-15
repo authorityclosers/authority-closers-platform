@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigateToAccount }),
 }));
 import Page from "./page";
-import { remainingAllowanceLabel } from "./acquisition-studio";
+import { remainingAllowanceLabel, savedCallsHref } from "./acquisition-studio";
 import {
   allowance,
   entry,
@@ -511,6 +511,11 @@ it("renders an explicit unlimited tester allowance", () => {
       false,
     ),
   ).toBe("Unlimited testing");
+});
+
+it("keeps saved calls navigation aligned with the mounted studio variant", () => {
+  expect(savedCallsHref(false)).toBe("/calls");
+  expect(savedCallsHref(true)).toBe("/sales-xray/calls");
 });
 
 it("shows the live processing stages without inventing a percentage", async () => {

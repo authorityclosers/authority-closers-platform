@@ -97,6 +97,10 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+export function savedCallsHref(embedded: boolean): string {
+  return embedded ? "/sales-xray/calls" : "/calls";
+}
+
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
@@ -1332,7 +1336,10 @@ export function AcquisitionStudio({
                   <p className={styles.coachingCopy} aria-live="polite">
                     {coachingCopy[coachingIndex]}
                   </p>
-                  <Link href="/calls" className="secondary-button">
+                  <Link
+                    href={savedCallsHref(embedded)}
+                    className="secondary-button"
+                  >
                     Open saved calls
                   </Link>
                   {processingNeedsAttention && (
