@@ -58,6 +58,7 @@ import {
   type Submission,
   type UploadPolicy,
 } from "./acquisition-client";
+import { ProcessingVisual } from "./processing-visual";
 import { UploadCheck } from "./upload-check";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./acquisition-studio.module.css";
@@ -91,25 +92,6 @@ function stageStatusLabel(status: string | null) {
   return status === null ? "Not started" : "Status needs checking";
 }
 
-function ProcessingSignal({ paused }: { paused: boolean }) {
-  return (
-    <svg
-      className={styles.processingSignal}
-      data-paused={paused}
-      viewBox="0 0 64 64"
-      aria-hidden="true"
-    >
-      <circle className={styles.signalHalo} cx="32" cy="32" r="23" />
-      <path
-        className={styles.signalOrbit}
-        d="M32 9a23 23 0 1 1-16.26 6.74"
-        pathLength="100"
-      />
-      <circle className={styles.signalCore} cx="32" cy="32" r="7" />
-      <circle className={styles.signalDot} cx="32" cy="9" r="3" />
-    </svg>
-  );
-}
 const message = (error: unknown) =>
   error instanceof AcquisitionError
     ? error
@@ -944,7 +926,7 @@ export function AcquisitionStudio({
                 role="status"
                 aria-live="polite"
               >
-                <ProcessingSignal paused={false} />
+                <ProcessingVisual phase="upload" paused={false} />
                 <div className={styles.progressCopy}>
                   <p className={styles.progressKicker}>UPLOAD IN PROGRESS</p>
                   <h3>Checking your recording</h3>
@@ -1232,7 +1214,22 @@ export function AcquisitionStudio({
                 role="status"
                 aria-live="polite"
               >
-                <ProcessingSignal paused={processingNeedsAttention} />
+                <ProcessingVisual
+                  phase={
+                    processingPaused
+                      ? pausedStage?.stage === "C2" ||
+                        pausedStage?.stage === "C4" ||
+                        pausedStage?.stage === "C5"
+                        ? pausedStage.stage
+                        : "processing"
+                      : currentStage?.stage === "C2" ||
+                          currentStage?.stage === "C4" ||
+                          currentStage?.stage === "C5"
+                        ? currentStage.stage
+                        : "processing"
+                  }
+                  paused={processingNeedsAttention}
+                />
                 <div className={styles.progressCopy}>
                   <p className={styles.progressKicker}>
                     {processingPaused
@@ -1507,7 +1504,7 @@ export function AcquisitionStudio({
             aria-label="Sales call report"
           >
             <p className="eyebrow">YOUR SALES CALL REPORT</p>
-            <h1>What to keep. What to change.</h1>
+            <h1>Your coaching report</h1>
             <p className="studio-report-summary">{report.summary}</p>
             <div className="studio-report-actions">
               <button

@@ -1,0 +1,147 @@
+.visual {
+  --visual-color: var(--mint);
+  display: grid;
+  width: 150px;
+  min-width: 150px;
+  justify-items: center;
+  align-content: center;
+  gap: 5px;
+  color: var(--visual-color);
+}
+
+.visual[data-phase="upload"] {
+  --visual-color: var(--action);
+}
+
+.visual[data-paused="true"] {
+  --visual-color: var(--ink);
+}
+
+.art {
+  display: block;
+  width: 142px;
+  height: 142px;
+  overflow: visible;
+}
+
+.backdrop {
+  fill: color-mix(in srgb, currentColor 6%, transparent);
+  stroke: color-mix(in srgb, currentColor 16%, transparent);
+  stroke-width: 1;
+}
+
+.ring,
+.ringSecondary {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 16%, transparent);
+  stroke-width: 1;
+}
+
+.ringSecondary {
+  stroke-dasharray: 1 7;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.orbit {
+  fill: none;
+  stroke: url(#processing-visual-ring);
+  stroke-linecap: round;
+  stroke-width: 3;
+  stroke-dasharray: 29 71;
+  transform-origin: 80px 80px;
+  animation: orbit 4.5s linear infinite;
+}
+
+.wave {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  stroke-dasharray: 9 7;
+  opacity: 0.78;
+  animation: wave 2.8s ease-in-out infinite;
+}
+
+.core {
+  fill: url(#processing-visual-core);
+  stroke: color-mix(in srgb, currentColor 52%, transparent);
+  stroke-width: 1;
+}
+
+.coreDot {
+  fill: currentColor;
+  opacity: 0.9;
+}
+
+.phase,
+.status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.phase {
+  color: var(--ink);
+}
+
+.status {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.visual[data-paused="true"] .orbit,
+.visual[data-paused="true"] .wave {
+  animation-play-state: paused;
+  opacity: 0.48;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(-3px);
+  }
+  50% {
+    opacity: 0.92;
+    transform: translateX(3px);
+  }
+}
+
+@media (max-width: 760px) {
+  .visual {
+    width: 104px;
+    min-width: 104px;
+  }
+
+  .art {
+    width: 98px;
+    height: 98px;
+  }
+
+  .phase {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .status {
+    font-size: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit,
+  .wave {
+    animation: none;
+  }
+}
