@@ -14,8 +14,7 @@ export default function Layout({
   return (
     <html lang="en">
       <body className="sales-xray-document">
-        {liveDataMode ? <LiveDataBanner /> : null}
-        {children}
+        {liveDataMode ? <LiveDataBanner>{children}</LiveDataBanner> : children}
       </body>
     </html>
   );

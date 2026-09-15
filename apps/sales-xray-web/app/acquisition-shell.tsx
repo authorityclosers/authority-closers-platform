@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AccountNavigation } from "./account-navigation";
+import { LocalSettingsButton } from "./live-data-banner";
 import styles from "./acquisition-shell.module.css";
 
 export function AcquisitionShell({
@@ -129,6 +130,7 @@ export function AcquisitionShell({
             <CircleUserRound size={18} aria-hidden="true" />
             <span>{accountLabel}</span>
           </Link>
+          <LocalSettingsButton className={styles.navLink} />
         </nav>
         <div className={styles.sidebarNote}>
           <Image
@@ -227,6 +229,7 @@ export function AcquisitionShell({
           <CircleUserRound size={20} aria-hidden="true" />
           <span>{authenticated ? "Account" : "Profile"}</span>
         </Link>
+        <LocalSettingsButton className={styles.bottomLink} />
       </nav>
     </div>
   );

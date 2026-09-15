@@ -36,6 +36,112 @@
   text-underline-offset: 3px;
 }
 
+.sales-xray-live-data-banner button,
+.sales-xray-local-settings header button {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sales-xray-local-settings {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid #d8e0e9;
+  border-radius: 18px;
+  background: #fffdf9;
+  color: #1c2a39;
+  box-shadow: 0 20px 70px #10233a33;
+  font-family: var(--font-sans, "Segoe UI"), sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sales-xray-local-settings::backdrop {
+  background: #10233a66;
+}
+
+.sales-xray-local-settings header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sales-xray-local-settings h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.sales-xray-local-settings-details {
+  display: grid;
+  gap: 12px;
+  color: #637386;
+}
+
+.sales-xray-local-settings-details strong {
+  color: #1c2a39;
+}
+
+.sales-xray-local-settings-details a {
+  color: #08776e;
+  text-underline-offset: 3px;
+}
+
+.sales-xray-local-settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding-block: 18px;
+  border-top: 1px solid #d8e0e9;
+  cursor: pointer;
+}
+
+.sales-xray-local-settings-toggle small {
+  display: block;
+  color: #637386;
+}
+
+.sales-xray-local-settings-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: #08776e;
+}
+
+.sales-xray-local-settings-shortcut {
+  margin: 0;
+  color: #637386;
+  font-size: 12px;
+}
+
+.sales-xray-local-settings kbd {
+  padding: 2px 5px;
+  border: 1px solid #d8e0e9;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.sales-xray-local-settings :focus-visible,
+.sales-xray-live-data-banner button:focus-visible {
+  outline: 3px solid #08776e;
+  outline-offset: 3px;
+}
+
 @media (max-width: 620px) {
   .sales-xray-live-data-banner {
     display: block;

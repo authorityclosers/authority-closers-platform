@@ -36,9 +36,13 @@ parameter set. Password login is the normal local path.
 
 ## Live-data and provider boundary
 
-The local banner is enabled only by the start script and states that reads and
-explicit mutations use live AC data. It links authorized administrators to the
-canonical production Sales Xray settings page:
+The start script enables local development settings. The banner is hidden by
+default; its details live under the Settings gear in desktop and mobile
+navigation. The Settings checkbox, banner dismiss button, and `Ctrl+Alt+B`
+shortcut update a preference remembered in this browser. The shortcut ignores
+editable fields and repeated keydown events. These controls change only banner
+visibility. The settings explain that reads and explicit mutations use live AC
+data and link authorized administrators to the canonical production page:
 
 `https://admin.authorityclosers.com/sales-xray/settings`
 
@@ -59,3 +63,13 @@ native source PUT remains a backend/admission performance issue and must be
 fixed and verified in the core service. The progress visual is phase-aware UI
 copy and animation only; it does not fabricate provider progress, scores, or
 analysis results.
+
+## Settings visibility verification
+
+- Seven targeted tests passed for hidden default, settings access and close,
+  checkbox/dismiss behavior, shortcut persistence, typing/repeat exclusions,
+  absence outside the local layout, and CSS scope integration.
+- Sales Xray lint and TypeScript checks passed.
+- In-app browser: verified the Settings gear, styled native modal, Escape
+  dismissal, shortcut showing/hiding the banner, and hidden default after refresh.
+  Left the signed-in upload screen with the banner hidden.

@@ -147,6 +147,10 @@
 }
 .navLink,
 .bottomLink {
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -378,10 +382,31 @@
   padding-inline: 0.6rem;
 }
 .collapsed .sidebarTop {
+  position: relative;
   width: 100%;
+  min-height: 2.5rem;
+  display: block;
+}
+.collapsed .brand {
   display: grid;
-  justify-items: center;
-  gap: 0.7rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+}
+.collapsed .sidebarToggle {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  border-radius: 0.75rem 0.75rem 0.75rem 0.25rem;
+  opacity: 0;
+  transition: opacity 140ms ease, background-color 140ms ease;
+}
+.collapsed .sidebarToggle:hover,
+.collapsed .sidebarToggle:focus-visible {
+  opacity: 1;
 }
 .collapsed .brand > span:last-child,
 .collapsed .workspaceLabel,
@@ -432,9 +457,6 @@
   .sidebar {
     align-items: center;
     padding-inline: 0.6rem;
-  }
-  .sidebarToggle {
-    display: none;
   }
   .brand {
     justify-content: center;
@@ -553,7 +575,8 @@
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     gap: 0.25rem;
     padding: 0.45rem max(0.65rem, env(safe-area-inset-left))
       max(0.5rem, env(safe-area-inset-bottom));
