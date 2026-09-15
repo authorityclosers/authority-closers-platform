@@ -179,6 +179,56 @@
   gap: 12px;
 }
 
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.presetCard {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+
+.presetHeader,
+.presetFooter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.presetHeader > div,
+.presetFooter > small {
+  min-width: 0;
+}
+
+.presetHeader h3 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.presetRoutes {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.presetFooter {
+  align-items: center;
+}
+
+.presetFooter small {
+  color: var(--quiet);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.7rem;
+}
+
 .stageCard {
   display: grid;
   gap: 13px;
@@ -529,6 +579,7 @@
 @media (max-width: 880px) {
   .summaryGrid,
   .stageGrid,
+  .presetGrid,
   .catalogList {
     grid-template-columns: 1fr;
   }

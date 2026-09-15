@@ -223,6 +223,47 @@ type ImportedProfile = {
   savedRevision?: number;
 };
 
+type ActivationOption = ProviderView["activation_options"][number];
+
+function providerDisplayName(providerId: string) {
+  const knownNames: Record<string, string> = {
+    deepgram: "Deepgram",
+    elevenlabs: "ElevenLabs",
+    gemini: "Gemini",
+  };
+  return (
+    knownNames[providerId] ??
+    providerId
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" ")
+  );
+}
+
+function activationOptionLabel(option: ActivationOption) {
+  const transcription = option.routes.find((route) => route.task === "asr");
+  const analysis = option.routes.find((route) => route.task === "facts");
+  if (transcription && analysis) {
+    return `${providerDisplayName(transcription.provider)} transcription · ${providerDisplayName(analysis.provider)} analysis`;
+  }
+  return option.routes
+    .map(
+      (route) =>
+        `${route.task}: ${providerDisplayName(route.provider)} ${route.model}`,
+    )
+    .join(" · ");
+}
+
+function activationOptionRoutes(option: ActivationOption) {
+  return option.routes
+    .map(
+      (route) =>
+        `${route.task} → ${providerDisplayName(route.provider)} / ${route.model}`,
+    )
+    .join(" · ");
+}
+
 function preferredActivationRevision(
   current: ProviderView | null,
 ): number | null {
@@ -1037,6 +1078,7 @@ export function ProviderControlsPanel() {
   const [activationState, setActivationState] = useState<
     "idle" | "activating" | "activated" | "error"
   >("idle");
+  const [activationTarget, setActivationTarget] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const requestRef = useRef<AbortController | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -1120,6 +1162,8 @@ export function ProviderControlsPanel() {
         );
         setActivationRevision(preferredActivationRevision(payload.current));
         setSaveState("idle");
+        setActivationState("idle");
+        setActivationTarget(null);
         setMessage("");
       })
       .catch((error: unknown) => {
@@ -1364,7 +1408,7 @@ export function ProviderControlsPanel() {
     );
   }
 
-  async function activate() {
+  async function activateRevision(targetRevision: number) {
     if (
       state.status !== "ready" ||
       !current ||
@@ -1372,15 +1416,19 @@ export function ProviderControlsPanel() {
     )
       return;
     const options = current.activation_options;
-    const target = options.find((item) => item.revision === activationRevision);
+    const target = options.find((item) => item.revision === targetRevision);
     if (!target) {
       setActivationState("error");
+      setActivationTarget(targetRevision);
       setMessage(
         "This revision is not in the pinned approval. Save an approved provider/model route before activating.",
       );
       return;
     }
+    setActivationRevision(targetRevision);
+    setActivationTarget(targetRevision);
     setActivationState("activating");
+    setSaveState("idle");
     setMessage("");
     try {
       const value = await requestJson(
@@ -1404,21 +1452,39 @@ export function ProviderControlsPanel() {
           : previous,
       );
       setActivationState("activated");
+      setSaveState("saved");
       setMessage(
         `Revision #${target.revision} is active for new plans. Existing plans keep their saved provider route.`,
       );
     } catch (error: unknown) {
       setActivationState("error");
-      setMessage(
-        error instanceof Error && error.message === "http_409"
-          ? "Provider settings changed. Reload before activating."
-          : "This revision could not be activated. The server kept the prior selection.",
-      );
+      if (error instanceof Error && error.message === "http_409") {
+        setSaveState("conflict");
+        setMessage(
+          "Provider settings changed. Reload the current revision before switching presets.",
+        );
+      } else {
+        setSaveState("idle");
+        setMessage(
+          "This revision could not be activated. The server kept the prior selection.",
+        );
+      }
     }
+  }
+
+  async function activate() {
+    if (activationRevision === null) {
+      setActivationState("error");
+      setMessage("Choose an approved provider preset before activating.");
+      return;
+    }
+    await activateRevision(activationRevision);
   }
 
   function retry() {
     setState((previous) => ({ status: "loading", retry: previous.retry }));
+    setActivationState("idle");
+    setActivationTarget(null);
     setLoadAttempt((value) => value + 1);
   }
 
@@ -1730,13 +1796,17 @@ export function ProviderControlsPanel() {
       {message ? (
         <div
           className={
-            saveState === "saved"
+            saveState === "saved" || activationState === "activated"
               ? styles.success
-              : saveState === "conflict"
+              : saveState === "conflict" || activationState === "error"
                 ? styles.error
                 : styles.notice
           }
-          role={saveState === "conflict" ? "alert" : "status"}
+          role={
+            saveState === "conflict" || activationState === "error"
+              ? "alert"
+              : "status"
+          }
         >
           <p>{message}</p>
           {saveState === "conflict" ? (
@@ -1779,46 +1849,100 @@ export function ProviderControlsPanel() {
             </p>
           </div>
         ) : (
-          <div className={styles.fieldRow}>
-            <label className={styles.field}>
-              <span className={styles.fieldLabel}>Approved revision</span>
-              <select
-                aria-label="Approved provider revision"
-                value={activationRevision ?? activationOptions[0]?.revision}
-                onChange={(event) =>
-                  setActivationRevision(Number(event.target.value))
-                }
-              >
-                {activationOptions.map((option) => (
-                  <option value={option.revision} key={option.revision}>
-                    Revision #{option.revision} ·{" "}
-                    {option.routes
-                      .map((route) => `${route.provider}/${route.model}`)
-                      .join(" · ")}
-                  </option>
-                ))}
-              </select>
-              <small>
-                Active now:{" "}
-                {current?.activation
-                  ? `revision #${current.activation.revision}`
-                  : "the saved default"}
-              </small>
-            </label>
-            <div className={styles.buttonRow}>
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() => void activate()}
-                disabled={activationState === "activating"}
-              >
-                <ShieldCheck size={15} aria-hidden="true" />
-                {activationState === "activating"
-                  ? "Activating…"
-                  : "Activate for new plans"}
-              </button>
+          <>
+            <div
+              className={styles.presetGrid}
+              aria-label="Approved provider presets"
+            >
+              {activationOptions.map((option) => {
+                const active =
+                  current?.activation?.revision === option.revision;
+                const busy =
+                  activationState === "activating" &&
+                  activationTarget === option.revision;
+                return (
+                  <article
+                    className={styles.presetCard}
+                    key={option.id}
+                    aria-label={activationOptionLabel(option)}
+                  >
+                    <div className={styles.presetHeader}>
+                      <div>
+                        <span className={styles.eyebrow}>Approved preset</span>
+                        <h3>{activationOptionLabel(option)}</h3>
+                      </div>
+                      <span
+                        className={
+                          active ? styles.stageStatus : styles.stageStatusMuted
+                        }
+                      >
+                        {active ? "Active" : "Approved"}
+                      </span>
+                    </div>
+                    <p className={styles.presetRoutes}>
+                      {activationOptionRoutes(option)}
+                    </p>
+                    <div className={styles.presetFooter}>
+                      <small>Saved revision #{option.revision}</small>
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        aria-label={`Switch to ${activationOptionLabel(option)} revision #${option.revision}`}
+                        onClick={() => void activateRevision(option.revision)}
+                        disabled={active || activationState === "activating"}
+                      >
+                        {busy
+                          ? "Switching…"
+                          : active
+                            ? "Active for new plans"
+                            : "Use this preset"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-          </div>
+            <div className={styles.fieldRow}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Approved revision</span>
+                <select
+                  aria-label="Approved provider revision"
+                  value={activationRevision ?? activationOptions[0]?.revision}
+                  onChange={(event) =>
+                    setActivationRevision(Number(event.target.value))
+                  }
+                >
+                  {activationOptions.map((option) => (
+                    <option value={option.revision} key={option.revision}>
+                      Revision #{option.revision} ·{" "}
+                      {option.routes
+                        .map((route) => `${route.provider}/${route.model}`)
+                        .join(" · ")}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  Active now:{" "}
+                  {current?.activation
+                    ? `revision #${current.activation.revision}`
+                    : "the saved default"}
+                </small>
+              </label>
+              <div className={styles.buttonRow}>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => void activate()}
+                  disabled={activationState === "activating"}
+                >
+                  <ShieldCheck size={15} aria-hidden="true" />
+                  {activationState === "activating"
+                    ? "Activating…"
+                    : "Activate for new plans"}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </section>
 
