@@ -23,11 +23,13 @@ export function AcquisitionShell({
   authenticated,
   homeHref = "/",
   active = "analyse",
+  compactBusy = false,
 }: {
   children: ReactNode;
   authenticated: boolean;
   homeHref?: string;
   active?: "analyse" | "calls";
+  compactBusy?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -48,6 +50,7 @@ export function AcquisitionShell({
       className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
       data-authenticated={authenticated}
       data-sidebar-collapsed={collapsed}
+      data-compact-busy={compactBusy}
     >
       <a className={styles.skip} href="#main-content">
         Skip to workspace

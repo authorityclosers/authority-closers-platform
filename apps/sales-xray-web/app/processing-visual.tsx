@@ -69,9 +69,7 @@ export function ProcessingVisual({
         <circle className={styles.coreDot} cx="80" cy="80" r="5" />
       </svg>
       <span className={styles.phase}>{phaseLabels[phase]}</span>
-      <span className={styles.status}>
-        {paused ? "Paused" : "Status synced"}
-      </span>
+      <span className={styles.status}>{paused ? "Paused" : "In progress"}</span>
     </div>
   );
 }

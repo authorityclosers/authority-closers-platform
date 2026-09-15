@@ -525,6 +525,7 @@ it("shows the live processing stages without inventing a percentage", async () =
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
   expect(container.querySelector('[data-phase="C2"]')).not.toBeNull();
+  expect(container.querySelector('[data-compact-busy="true"]')).not.toBeNull();
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "In progress",
   );

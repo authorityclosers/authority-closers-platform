@@ -810,7 +810,15 @@ export function AcquisitionStudio({
       className={`xray-app simple-app ${styles.app}`}
       data-theme="light"
       data-variant={variant}
-      data-stage={report ? "report" : submission ? "processing" : "upload"}
+      data-stage={
+        report
+          ? "report"
+          : submission
+            ? "processing"
+            : busy
+              ? "uploading"
+              : "upload"
+      }
     >
       <div className="studio-main">
         <AnalysisAvailability onChange={setAnalysisPaused} />
@@ -1324,6 +1332,9 @@ export function AcquisitionStudio({
                   <p className={styles.coachingCopy} aria-live="polite">
                     {coachingCopy[coachingIndex]}
                   </p>
+                  <Link href="/calls" className="secondary-button">
+                    Open saved calls
+                  </Link>
                   {processingNeedsAttention && (
                     <button
                       type="button"
@@ -1603,6 +1614,7 @@ export function AcquisitionStudio({
     <AcquisitionShell
       authenticated={access?.authenticated === true}
       homeHref={homeHref}
+      compactBusy={Boolean(busy || (submission && !report))}
     >
       {content}
     </AcquisitionShell>

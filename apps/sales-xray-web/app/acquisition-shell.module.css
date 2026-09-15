@@ -356,6 +356,9 @@
 .bottomNav {
   display: none;
 }
+.shell[data-compact-busy="true"] .breadcrumb {
+  display: none;
+}
 .collapsed {
   grid-template-columns: 84px minmax(0, 1fr);
 }
@@ -436,6 +439,9 @@
     display: block;
     min-height: 100dvh;
     padding-bottom: 4.9rem;
+  }
+  .shell[data-compact-busy="true"] {
+    padding-bottom: 0;
   }
   .sidebar,
   .breadcrumb {
