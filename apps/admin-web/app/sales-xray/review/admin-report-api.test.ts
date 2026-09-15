@@ -61,4 +61,47 @@ describe("admin report API", () => {
     );
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("opens the complete retained recovery envelope returned by Admin", async () => {
+    const recovered = {
+      ...payload,
+      version: 2,
+      recovery: {
+        validation_state: "corrected",
+        failure_code: null,
+        provider_calls: 0,
+        canonical_c5_checkpoint_id: null,
+        canonical_c6_checkpoint_id: null,
+        human_approved: false,
+        dipak_adjudicated: false,
+        official_score: false,
+        review_origin: "Codex automated proposal",
+        original_raw_sha256: "b".repeat(64),
+        raw_blob_id: "55555555-5555-4555-8555-555555555555",
+      },
+    };
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(Response.json(recovered)),
+    );
+
+    const result = await loadAdminReport({ runId, fetcher });
+
+    expect(result.version).toBe(2);
+    expect(result.recovery?.failure_code).toBeNull();
+    expect(result.report.summary).toBe(payload.report.summary);
+    expect(result.recovery?.human_approved).toBe(false);
+
+    // A recovered draft must never silently become a human-approved report.
+    const invalidFetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        Response.json({
+          ...recovered,
+          recovery: { ...recovered.recovery, human_approved: true },
+        }),
+      ),
+    );
+    await expect(
+      loadAdminReport({ runId, fetcher: invalidFetcher }),
+    ).rejects.toThrow();
+  });
 });

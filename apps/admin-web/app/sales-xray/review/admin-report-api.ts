@@ -69,6 +69,7 @@ const adminReportSchema = z
     run_id: uuidSchema,
     recording_id: uuidSchema,
     tenant_id: uuidSchema,
+    version: z.number().int().positive().optional(),
     source: z
       .object({
         sha256: digestSchema,
@@ -84,6 +85,7 @@ const adminReportSchema = z
           "revalidated",
           "corrected",
         ]),
+        failure_code: z.string().nullable(),
         provider_calls: z.literal(0),
         canonical_c5_checkpoint_id: z.null(),
         canonical_c6_checkpoint_id: z.null(),

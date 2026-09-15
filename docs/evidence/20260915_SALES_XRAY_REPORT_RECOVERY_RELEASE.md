@@ -34,6 +34,11 @@ Starting another call clears the selector while keeping the saved library entry.
 The focused component tests and two disposable PostgreSQL ownership/lease cases
 passed; the latter also prove that new-upload guest-claim admission is unchanged.
 
+Admin's strict report reader now accepts the actual recovered-report envelope,
+including its version and nullable failure code. Previously the backend could
+return HTTP 200 while the frontend rejected those two fields. The regression
+uses that complete envelope and continues to reject false human approval.
+
 - Integrated Python report, prompt, entitlement, tester and runtime checks:
   199 tests passed. Four initial failures were caused by the Windows default
   temporary directory being beneath an unrelated Git root; all 25 hosted-runtime
@@ -57,6 +62,7 @@ passed; the latter also prove that new-upload guest-claim admission is unchanged
   systemd installer still requires a separate verified activation after release.
 - The Sales Xray production build passed, including route generation and
   TypeScript. Python type checking passed across 298 source files.
+- The Admin production build and retained-report API contract tests passed.
 
 Private local receipts retain exact commands, source hashes and outcomes. None
 of these checks made an inference-provider request or settled a provider bill.
