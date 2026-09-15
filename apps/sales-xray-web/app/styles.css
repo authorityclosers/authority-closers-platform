@@ -4,6 +4,44 @@
 .sales-xray-document {
   margin: 0;
 }
+
+.sales-xray-live-data-banner {
+  position: sticky;
+  z-index: 1000;
+  top: 0;
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 18px;
+  border-bottom: 1px solid #d7bd62;
+  background: #fff7d6;
+  color: #4d421d;
+  font-family: var(--font-sans, "Segoe UI"), sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.sales-xray-live-data-banner strong {
+  color: #3b3216;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 620px) {
+  .sales-xray-live-data-banner {
+    display: block;
+    padding-inline: 14px;
+    font-size: 11px;
+  }
+
+  .sales-xray-live-data-banner strong,
+  .sales-xray-live-data-banner span {
+    display: block;
+  }
+}
 @scope (.xray-app) {
   :scope,
   :scope * {
