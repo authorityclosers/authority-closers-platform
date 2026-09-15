@@ -92,10 +92,16 @@ it("presents the supplied priorities and one focus without generating scores, es
     "07",
     "08",
     "09",
+    "10",
     "11",
     "12",
+    "13",
     "14",
   ]);
+  expect(
+    container.querySelector('[data-summary-card="summary"]')?.textContent,
+  ).toContain(value.verdict);
+  expect(container.querySelectorAll("[data-chapter]")).toHaveLength(4);
   expect(
     container.querySelector('[data-review-point="11"] h4')?.textContent,
   ).toBe(value.improvements[0].title);
@@ -111,7 +117,9 @@ it("presents the supplied priorities and one focus without generating scores, es
   expect(container.textContent).not.toMatch(
     /XX|per 100|PASS|CONCERN|FAIL|\+\d+%|Overall Score/,
   );
-  expect(container.querySelector('[data-review-point="13"]')).toBeNull();
+  expect(
+    container.querySelector('[data-review-point="13"]')?.textContent,
+  ).toContain("no trend or improvement claim is inferred");
   for (const anchor of container.querySelectorAll<HTMLAnchorElement>("nav a")) {
     expect(document.getElementById(anchor.hash.slice(1))).not.toBeNull();
   }
@@ -151,11 +159,13 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
   expect(container.textContent).toContain(overview.ethics_notes[0].text);
   expect(container.textContent).toContain("Possible concern · inference");
   expect(container.textContent).toContain("Possible effect · inference");
-  expect(container.querySelector('[data-review-point="10"]')).toBeNull();
+  expect(
+    container.querySelector('[data-review-point="10"]')?.textContent,
+  ).toContain("No supported qualitative observation");
   expect(
     container.querySelector('[aria-label="Ethics observations"]'),
   ).not.toBeNull();
-  expect(container.querySelector('[data-review-point="13"]')).toBeNull();
+  expect(container.querySelector('[data-review-point="13"]')).not.toBeNull();
   const clips = container.querySelectorAll<HTMLButtonElement>(
     '[data-review-point="08"] button',
   );
@@ -281,7 +291,7 @@ it("does not pad an empty report with template examples or invented improvements
   expect(container.querySelector('[data-review-point="12"] ol')).toBeNull();
   expect(container.textContent).not.toContain("I need to think");
   expect(container.querySelector("[data-skill-summary]")).toBeNull();
-  expect(container.querySelector('[data-review-point="10"]')).toBeNull();
+  expect(container.querySelector('[data-review-point="10"]')).not.toBeNull();
 });
 
 it("leads with supported qualitative skills and never renders a score", async () => {

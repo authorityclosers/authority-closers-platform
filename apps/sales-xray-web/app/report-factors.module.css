@@ -72,3 +72,126 @@
     break-inside: avoid;
   }
 }
+
+/* Qualitative factor tiles: signal the evidence state without turning it into a score. */
+.section {
+  margin: 10px 0 24px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid #d6e2e4;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8fcfb, #fff 72%);
+  box-shadow: 0 10px 24px rgb(23 43 58 / 4%);
+}
+.section h2 {
+  margin: 0;
+  color: #172b3a;
+  font-size: clamp(20px, 2.6vw, 27px);
+  letter-spacing: -0.035em;
+}
+.note {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: #5d7080;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+.factor {
+  position: relative;
+  min-height: 104px;
+  padding: 14px;
+  border: 1px solid #d6e2e4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 14px rgb(23 43 58 / 3%);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+.factor:hover {
+  border-color: #9bc6bb;
+  background: #fbfffd;
+  transform: translateY(-1px);
+}
+.factor[open] {
+  grid-column: span 2;
+  border-color: #9bc6bb;
+  background: #f3fbf8;
+}
+.factor summary {
+  gap: 7px;
+  color: #172b3a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.factor summary::after {
+  color: #3f4f9c;
+  font-size: 17px;
+}
+.factor summary small {
+  padding: 3px 7px;
+  border: 1px solid #d7e3e5;
+  border-radius: 999px;
+  background: #f4f8f8;
+  color: #5d7080;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+}
+.factor p {
+  max-width: 630px;
+  margin: 14px 0 0;
+  color: #334d5c;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.factor summary:focus-visible {
+  outline: 3px solid #3f4f9c;
+  outline-offset: 5px;
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .factor[open] {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 600px) {
+  .section {
+    padding: 18px 14px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .factor[open] {
+    grid-column: span 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .factor {
+    transition: none;
+    transform: none;
+  }
+}
+@media print {
+  .section {
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .factor,
+  .factor[open] {
+    grid-column: span 1;
+    box-shadow: none;
+    background: #fff;
+  }
+}
