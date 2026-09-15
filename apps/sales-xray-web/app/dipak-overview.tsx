@@ -355,12 +355,10 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         aria-label="Report summary"
         data-summary-card="summary"
       >
-        <p className={styles.eyebrow}>CALL REVIEW</p>
-        <h2>{detail?.final_assessment.assessment ?? report.verdict}</h2>
+        <h2>{detail?.diagnosis?.text ?? report.verdict}</h2>
         <p className={styles.heroSubcopy}>{report.summary}</p>
         <div className={styles.heroMeta} aria-label="Report status">
           <span className={styles.statusPill}>Draft report</span>
-          <span>Evidence appears below</span>
         </div>
         {(detail?.diagnosis || detail?.outcome) && (
           <details className={styles.sourceDetails} data-source-details>

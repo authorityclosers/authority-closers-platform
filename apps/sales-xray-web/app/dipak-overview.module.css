@@ -333,12 +333,20 @@
 }
 
 .resultLead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin: 0 0 12px;
-  padding: 16px 0 14px;
+  padding: 6px 0 12px;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   background: #fff;
+}
+
+.resultLead > .eyebrow,
+.resultLead > h2,
+.resultLead > .heroSubcopy {
+  grid-column: 1 / -1;
 }
 
 .resultLead h2 {
@@ -359,16 +367,25 @@
 }
 
 .resultLead .heroMeta {
+  grid-column: 1;
   margin-top: 10px;
 }
 
-.sourceDetails {
-  margin-top: 10px;
+.overview .resultLead .sourceDetails {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: end;
+  margin: 0;
+}
+
+.overview .resultLead .sourceDetails[open] {
+  grid-column: 1 / -1;
+  grid-row: auto;
 }
 
 .sourceDetailsSummary {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   gap: 7px;
   color: var(--indigo);
@@ -429,8 +446,8 @@
 }
 
 .focusGrid .summaryCard {
-  min-height: 194px;
-  padding: 22px;
+  min-height: 160px;
+  padding: 16px;
   box-shadow: none;
 }
 
@@ -450,7 +467,7 @@
 }
 
 .changeCopy {
-  margin: 12px 0 18px;
+  margin: 8px 0 12px;
   color: var(--ink-soft);
   font-size: 15px;
   line-height: 1.55;
@@ -501,7 +518,7 @@
   gap: 13px;
   min-width: 0;
   align-items: center;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);

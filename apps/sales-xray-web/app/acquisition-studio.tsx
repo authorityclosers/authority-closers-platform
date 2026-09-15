@@ -1525,7 +1525,6 @@ export function AcquisitionStudio({
           >
             <div className={styles.reportHeader}>
               <div>
-                <p className="eyebrow">YOUR SALES CALL REPORT</p>
                 <h1>Your coaching report</h1>
               </div>
               <div className="studio-report-actions">

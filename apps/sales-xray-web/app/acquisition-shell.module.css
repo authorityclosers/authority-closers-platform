@@ -450,7 +450,8 @@
     padding-bottom: 4.9rem;
   }
   .shell[data-compact-busy="true"] {
-    padding-bottom: 0;
+    box-sizing: border-box;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
     background: #fffdf9;
   }
   .sidebar,

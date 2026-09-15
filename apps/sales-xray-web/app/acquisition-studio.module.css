@@ -661,14 +661,30 @@
 .app[data-stage="report"] .withReport .allowance {
   display: none;
 }
+.app[data-stage="report"],
+.app[data-stage="report"] :global(.studio-main) {
+  background: #fff;
+}
+.app[data-stage="report"] :global(.studio-main) {
+  max-width: 1400px;
+  padding: 12px 24px 20px;
+}
 .app[data-stage="report"] .withReport .upload {
-  gap: 4px 18px;
-  padding: 12px 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr) auto;
+  gap: 0 18px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .app[data-stage="report"] .withReport .upload :global(.studio-file) {
   min-height: 44px;
   padding: 5px 8px;
-  border-radius: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .app[data-stage="report"]
   .withReport
@@ -692,32 +708,44 @@
   line-height: 1.45;
 }
 .app[data-stage="report"] .withReport .upload audio {
+  grid-row: 1;
   width: 100%;
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
+}
+.app[data-stage="report"] .withReport .upload audio + :global(.small-text) {
+  display: none;
 }
 .app[data-stage="report"] .withReport .upload .callActions {
-  margin-top: 4px;
-  padding-top: 8px;
+  grid-column: 3;
+  grid-row: 1;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
-.report {
-  margin-top: 14px;
-  padding: clamp(16px, 2.4vw, 24px);
+.app[data-stage="report"] .report {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .reportHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 6px;
 }
 .reportHeader > div:first-child {
   min-width: 0;
 }
-.reportHeader h1 {
-  margin: 3px 0 0;
+.app[data-stage="report"] .reportHeader h1 {
+  margin: 0;
   color: var(--ink);
   font-family: inherit;
-  font-size: clamp(22px, 2.6vw, 30px);
+  font-size: 19px;
   letter-spacing: -0.4px;
   line-height: 1.15;
 }
@@ -729,6 +757,9 @@
 }
 .report :global(.studio-report-actions) button {
   margin: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 .reportHeader :global(.studio-report-actions) {
   flex: 0 0 auto;
@@ -748,6 +779,14 @@
   gap: 16px;
 }
 @media (max-width: 760px) {
+  .app[data-stage="report"] .withReport .upload {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app[data-stage="report"] .withReport .upload .callActions,
+  .app[data-stage="report"] .withReport .upload audio {
+    grid-column: 1;
+    grid-row: auto;
+  }
   .app[data-variant="standalone"] :global(.studio-main) {
     padding: 18px 16px 12px;
   }
@@ -823,13 +862,12 @@
     padding: 18px;
   }
   .report {
-    padding: 20px 16px;
+    padding: 0;
   }
   .reportHeader {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
   }
   .report :global(.studio-report-actions) {
     width: 100%;
@@ -892,8 +930,7 @@
   line-height: 1.55;
 }
 
-.app :global(.studio-upload) h2,
-.app :global(.studio-report) h2 {
+.app :global(.studio-upload) h2 {
   font-size: clamp(24px, 2.8vw, 28px);
   line-height: 1.2;
 }
@@ -1029,7 +1066,6 @@
 
 @media (max-width: 760px) {
   .app :global(.studio-upload) h2,
-  .app :global(.studio-report) h2,
   .app :global(.studio-file) h2 {
     font-size: 24px;
   }

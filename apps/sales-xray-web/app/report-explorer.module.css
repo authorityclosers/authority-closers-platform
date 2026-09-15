@@ -1,6 +1,6 @@
 .explorer {
   min-width: 0;
-  margin-block: 14px 28px;
+  margin-block: 6px 20px;
 }
 
 .tabs {
@@ -12,6 +12,7 @@
   max-width: 100%;
   padding: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid #dbe6e7;
   background: #fff;
   scrollbar-width: thin;
@@ -20,7 +21,7 @@
 .tabs button {
   position: relative;
   flex: 0 0 auto;
-  min-height: 54px;
+  min-height: 48px;
   padding: 12px 2px;
   border: 0;
   border-radius: 0;
@@ -75,7 +76,7 @@
 
 .panel {
   min-width: 0;
-  padding-block-start: 20px;
+  padding-block-start: 12px;
 }
 
 .panel > section + section {

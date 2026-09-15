@@ -91,3 +91,19 @@ motion, but the user's screenshot exposed vertical overflow and poor hierarchy.
 That check is not accepted as one-viewport UX proof. The revised mounted route
 must show its status and main action without default page scrolling at the
 declared desktop/mobile sizes, while remaining reachable at enlarged text.
+
+## Image-led visual revision
+
+The user rejected the HTML-derived report and processing direction. The new
+references were generated as actual raster images in normal ChatGPT Pro chats:
+processing desktop/mobile revision 3 and report desktop/mobile revision 4.
+Private asset receipts record their provenance and SHA-256 values. These are
+design references; sample findings and decorative graphics are not evidence
+from a recording and do not replace the canonical report contract.
+
+The initial processing implementation at `a7ed00d` was checked in the mounted
+standalone route at 1536×674. Document height equals 674px and the saved-calls
+action ends at y=605px. Visual review caught the old canvas background and the
+need to retain mobile navigation. Those findings remain open until the follow-up
+is verified. The report implementation is still being revised to match its
+image reference. None of these local checks establishes deployed behavior.
