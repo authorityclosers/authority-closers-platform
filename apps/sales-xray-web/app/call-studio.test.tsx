@@ -582,7 +582,7 @@ describe("CallStudio", () => {
     await act(async () => window.dispatchEvent(new Event("afterprint")));
     expect(factorRows.filter((detail) => detail.open)).toEqual([factorRows[0]]);
     expect(container.textContent).not.toContain("Observed: 0 of 8");
-    expect(container.querySelector('[data-review-point="10"]')).toBeNull();
+    expect(container.querySelector('[data-review-point="10"]')).not.toBeNull();
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 
@@ -694,7 +694,11 @@ describe("CallStudio", () => {
       "Upload your call",
     );
     expect(
-      [...container.querySelectorAll('[role="tab"]')].map(
+      [
+        ...container.querySelectorAll(
+          '[role="tablist"][aria-label="Explore your report"] [role="tab"]',
+        ),
+      ].map(
         (tab) => tab.textContent,
       ),
     ).toEqual([

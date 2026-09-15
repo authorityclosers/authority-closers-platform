@@ -325,7 +325,11 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   );
   expect(details).not.toBeNull();
   expect(details?.open).toBe(false);
-  expect(container.querySelectorAll('[role="tab"]')).toHaveLength(3);
+  expect(
+    container.querySelectorAll(
+      '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
+    ),
+  ).toHaveLength(3);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
