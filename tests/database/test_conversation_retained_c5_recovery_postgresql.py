@@ -811,7 +811,7 @@ def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Pat
                     ConversationPermission, prepared.state.permission_id
                 )
                 assert permission is not None
-                permission.expires_at = prepared.state.now - timedelta(seconds=1)
+                permission.expires_at = prepared.state.now + timedelta(seconds=1)
             async with sessions() as database, database.begin():
                 service = RetainedC5RecoveryService(
                     ConversationApplication(
