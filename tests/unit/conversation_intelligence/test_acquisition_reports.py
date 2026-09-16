@@ -84,9 +84,7 @@ async def test_recovered_guest_transcript_projects_native_tail_for_playback(
     async def recovery_read(self: RetainedC5RecoveryService, value: object) -> SimpleNamespace:
         return recovered
 
-    async def source_plan(
-        self: ConversationInference, value: SimpleNamespace
-    ) -> SimpleNamespace:
+    async def source_plan(self: ConversationInference, value: SimpleNamespace) -> SimpleNamespace:
         assert value is recording
         return SimpleNamespace(duration_ms=1_000)
 
