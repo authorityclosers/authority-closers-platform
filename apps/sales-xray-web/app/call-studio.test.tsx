@@ -1,7 +1,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallStudio, type CallStudioProps } from "./call-studio";
+import {
+  CallStudio,
+  parseProcessingPlan,
+  type CallStudioProps,
+} from "./call-studio";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -32,6 +36,7 @@ const processingPlan = {
   state: "quoted",
   cost_label: "₹0 · approved allowance",
   max_cost_paise: 0,
+  automatic_c5_repair_cost_paise: 0,
   max_entitlement_seconds: 0,
   expires_at_epoch: 4_102_444_800,
   stages: [
@@ -356,6 +361,50 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("processing plan repair budget contract", () => {
+  it("accepts the server repair reservation without increasing the total", () => {
+    const parsed = parseProcessingPlan(
+      {
+        ...processingPlan,
+        max_cost_paise: 35_560,
+        automatic_c5_repair_cost_paise: 780,
+        cost_label: "Up to ₹355.60 · approved budget",
+        max_entitlement_seconds: 3_600,
+      },
+      "recording-1",
+    );
+    expect(parsed.max_cost_paise).toBe(35_560);
+    expect(parsed.automatic_c5_repair_cost_paise).toBe(780);
+    expect(parsed.max_entitlement_seconds).toBe(3_600);
+  });
+
+  it("keeps legacy plans without a repair field readable", () => {
+    const legacy: Record<string, unknown> = { ...processingPlan };
+    delete legacy.automatic_c5_repair_cost_paise;
+    expect(
+      parseProcessingPlan(legacy, "recording-1").automatic_c5_repair_cost_paise,
+    ).toBe(0);
+  });
+
+  it.each([-1, 0.5, "0", null, 1])(
+    "rejects invalid or over-budget repair cost %s",
+    (cost) => {
+      expect(() =>
+        parseProcessingPlan(
+          { ...processingPlan, automatic_c5_repair_cost_paise: cost },
+          "recording-1",
+        ),
+      ).toThrow("plan_repair_cost_limit_invalid");
+    },
+  );
+
+  it("continues rejecting unrelated unknown fields", () => {
+    expect(() =>
+      parseProcessingPlan({ ...processingPlan, bypass: true }, "recording-1"),
+    ).toThrow("plan_unknown_field");
+  });
 });
 
 describe("CallStudio", () => {
