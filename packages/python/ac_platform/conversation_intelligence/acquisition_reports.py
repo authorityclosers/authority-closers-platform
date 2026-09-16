@@ -12,13 +12,21 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.conversation_intelligence.alignment import (
+    AlignmentError,
+    project_transcript_for_playback,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership, SubmissionScope
-from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
+from ac_platform.conversation_intelligence.inference import (
+    ConversationInference,
+    binding_for,
+    verified_checkpoint,
+)
 from ac_platform.conversation_intelligence.measurement_view import ConversationMeasurements
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
@@ -180,6 +188,20 @@ class AcquisitionReports:
             transcript = checkpoint.payload
             if not isinstance(transcript, dict):
                 raise ConversationConflict("The recovered transcript is unavailable.")
+            source = await ConversationInference(self.application).plan_transcription(recording)
+            if (
+                transcript.get("source_sha256") != recording.source_sha256
+                or transcript.get("duration_ms") != source.duration_ms
+            ):
+                raise ConversationConflict("The recovered transcript's source measurement differs.")
+            try:
+                transcript = project_transcript_for_playback(
+                    transcript, duration_ms=source.duration_ms
+                )
+            except AlignmentError:
+                raise ConversationConflict(
+                    "The recovered transcript's playback bounds are unavailable."
+                ) from None
             return {
                 name: transcript[name]
                 for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
