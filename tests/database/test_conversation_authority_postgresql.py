@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionProviderPolicy,
+    AcquisitionStagePolicy,
     AllowanceApproval,
     HostedApprovalBundle,
     StageApproval,
@@ -38,7 +40,7 @@ from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, Run
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
-    TRANSCRIPT_RECIPE,
+    TRANSCRIPT_RECIPE_BY_ROUTE,
     ConversationInference,
 )
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
@@ -145,6 +147,7 @@ def _registry_config(
         if asr_provider == "deepgram"
         else "https://api.elevenlabs.io/v1/speech-to-text"
     )
+    asr_recipe = TRANSCRIPT_RECIPE_BY_ROUTE[(asr_provider, asr_model)]
     text_model = "gemini-3.8-flash" if text_provider == "gemini" else "openai/gpt-oss-120b"
     text_endpoint = (
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
@@ -176,7 +179,7 @@ def _registry_config(
                 "asr",
                 asr_provider,
                 asr_model,
-                TRANSCRIPT_RECIPE,
+                asr_recipe,
                 "profile-none-v1",
                 "prompt-asr-v1",
                 "C0",
@@ -269,6 +272,7 @@ def _bundle(
     bundle_expires = expires_at_epoch or now_epoch + 3_600
     stage_expires = min(bundle_expires, now_epoch + 1_800)
     asr_model = "nova-3" if asr_provider == "deepgram" else "scribe_v2"
+    asr_recipe = TRANSCRIPT_RECIPE_BY_ROUTE[(asr_provider, asr_model)]
     profile_sha256 = hashlib.sha256(canonical(load_report_profile())).hexdigest()
     return HostedApprovalBundle(
         schema="ac.sales-xray.hosted-approval/1",
@@ -308,7 +312,7 @@ def _bundle(
                 stage="C2",
                 provider=asr_provider,
                 model=asr_model,
-                recipe=TRANSCRIPT_RECIPE,
+                recipe=asr_recipe,
                 expires_at_epoch=stage_expires,
                 entitlement_seconds=None,
                 max_completion_tokens=0,
@@ -417,6 +421,62 @@ async def _setup(
             environment="test",
             operations_tenant_id=prepared.state.tenant_id,
         )
+        if asr_provider == "deepgram":
+            fields = (
+                "stage",
+                "configuration_sha256",
+                "provider_id",
+                "model_id",
+                "recipe_revision",
+                "permission_ref",
+                "retention_ref",
+                "professional_gate_ref",
+                "pricing_ref",
+                "provider_terms_ref",
+                "privacy_ref",
+                "credential_ref",
+                "free_allowance_ref",
+                "no_paid_overage_ref",
+                "privacy_revision",
+                "privacy_notice",
+                "expires_at_epoch",
+                "max_requests",
+                "entitlement_seconds",
+                "zero_cost_basis",
+                "price_evidence_sha256",
+                "max_cost_paise",
+                "max_source_duration_ms",
+                "max_input_bytes",
+                "max_completion_tokens",
+                "profile_sha256",
+            )
+            policy = AcquisitionProviderPolicy(
+                schema="ac.sales-xray.acquisition-provider-policy/1",
+                id=uuid4(),
+                tenant_id=prepared.state.tenant_id,
+                processing_person_id=prepared.state.person_id,
+                authorization_ref="ref:approval/acquisition-deepgram-test",
+                expires_at_epoch=bundle.expires_at_epoch - 1,
+                max_recordings=64,
+                max_source_bytes=134_217_728,
+                max_stored_source_bytes=8_589_934_592,
+                stages=tuple(
+                    AcquisitionStagePolicy(**{field: getattr(stage, field) for field in fields})
+                    for stage in bundle.stages
+                ),
+            )
+            bundle = bundle.model_copy(update={"acquisition_policy": policy})
+            bundle_box["bundle"] = bundle
+            async with sessions() as database, database.begin():
+                await ConversationProviderAdmin(
+                    ConversationApplication(database, clock=lambda: prepared.state.now)
+                ).activate(
+                    actor,
+                    target_revision=1,
+                    expected_revision=1,
+                    key="hosted-config-activation-v1",
+                    bundle=bundle,
+                )
         async with sessions() as database, database.begin():
             await authority.claim_allowance(
                 ConversationApplication(database, clock=lambda: prepared.state.now), actor

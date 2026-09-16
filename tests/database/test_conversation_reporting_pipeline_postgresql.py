@@ -61,7 +61,6 @@ class ReportingBroker(FakeBroker):
             return await super().execute(reservation, payload)
         self.calls += 1
         self.payloads.append(payload)
-        body = json.loads(payload)
         provider = reservation.quote.provider_id
         if provider == "deepgram":
             data = {
@@ -102,6 +101,7 @@ class ReportingBroker(FakeBroker):
                 usage={},
                 input_sha256=reservation.quote.input_sha256,
             )
+        body = json.loads(payload)
         user = (
             body["contents"][0]["parts"][0]["text"]
             if provider == "gemini"

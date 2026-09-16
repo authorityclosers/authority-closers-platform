@@ -20,6 +20,19 @@ Validation on 2026-09-16:
 - Ruff format/check on all five changed Python files: **passed**.
 - Mypy on `alignment.py`: **passed**.
 - Compileall and `git diff --check`: **passed**.
-- PostgreSQL scheduler regression: **collected but not executed** because this
-  environment has neither `AC_CONVERSATION_POSTGRES_TEST_URL` nor
-  `AC_TEST_DATABASE_URL`; CI must run it with the disposable PostgreSQL URL.
+- PostgreSQL scheduler regression in the integration tree: **1 passed** on the
+  disposable loopback PostgreSQL harness. The identical fixture changes also
+  passed all processing-plan (**11**), authority (**7**) and reporting-pipeline
+  (**4**) tests in the isolated proof worktree.
+
+The first integration CI attempt failed in synthetic setup, before testing the
+continuation: its Deepgram configuration still used the ElevenLabs recipe and
+was saved without activation. The fixture now selects the provider's recipe
+and activates Deepgram through the normal Admin authority with a synthetic
+acquisition policy derived from the stage approvals. The fake broker handles
+Deepgram audio bytes before parsing JSON for text providers. These changes
+affect tests only; they do not bypass production approval or invoke providers.
+
+This proves stored Deepgram C2 work advances through the real scheduler to C4
+with exactly one synthetic transcription call. It does not prove a live C5
+report or production cost settlement; those need post-release verification.
