@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.acquisition_processing import (
 from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredSource
 from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpload
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
     ConversationApplication,
     ConversationConflict,
     utc,
@@ -500,18 +501,22 @@ async def _seed_guest_retained_case(postgres_harness: Any, scratch_root: Path) -
             c0 = build_checkpoint(
                 binding,
                 "C0",
-                "synthetic-recording-v1",
+                "recording-v1",
                 {},
                 (),
                 content_hash(c0_payload),
             )
+            c1_payload = {
+                "source_sha256": recording.source_sha256,
+                "media_duration_ms": 1_000,
+            }
             c1 = build_checkpoint(
                 binding,
                 "C1",
-                "synthetic-measurement-v1",
-                {},
+                AUDIOATLAS_HOSTED_RECIPE,
+                {"decode_rate": 16_000, "window_profile": "audioatlas-40ms-10ms"},
                 (c0,),
-                content_hash({"schema": "synthetic-measurement"}),
+                content_hash(c1_payload),
             )
             transcript = _transcript(recording.source_sha256)
             facts = _facts(recording.source_sha256, transcript["revision"])
@@ -557,7 +562,13 @@ async def _seed_guest_retained_case(postgres_harness: Any, scratch_root: Path) -
                 (c2, c3),
                 content_hash(fact_payload),
             )
-            for checkpoint, payload in ((c2, transcript), (c3, c3_payload), (c4, fact_payload)):
+            for checkpoint, payload in (
+                (c0, c0_payload),
+                (c1, c1_payload),
+                (c2, transcript),
+                (c3, c3_payload),
+                (c4, fact_payload),
+            ):
                 database.add(
                     ConversationCheckpoint(
                         id=uuid4(),
