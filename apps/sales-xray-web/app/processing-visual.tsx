@@ -39,11 +39,18 @@ export function ProcessingVisual({
       aria-hidden="true"
     >
       <span className={styles.halo} />
+      <span className={styles.spinner} />
       <span className={styles.icon}>
         <Icon size={42} strokeWidth={1.8} />
       </span>
       <span className={styles.satellite}>
-        <AudioLines size={18} />
+        <span className={styles.wave}>
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
       </span>
     </div>
   );

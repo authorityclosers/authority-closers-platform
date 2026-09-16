@@ -40,6 +40,37 @@
   background: var(--phase-soft);
   animation: settle 320ms ease-out both;
 }
+.spinner {
+  position: absolute;
+  inset: 1px;
+  border: 3px solid transparent;
+  border-top-color: var(--phase);
+  border-right-color: var(--phase-soft);
+  border-radius: 50%;
+  animation: orbit 1.6s linear infinite;
+}
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+}
+.wave i {
+  width: 2px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: sound 1.2s ease-in-out infinite alternate;
+}
+.wave i:nth-child(2),
+.wave i:nth-child(4) {
+  height: 12px;
+  animation-delay: -0.4s;
+}
+.wave i:nth-child(3) {
+  height: 18px;
+  animation-delay: -0.8s;
+}
 .satellite {
   position: absolute;
   right: 6px;
@@ -57,8 +88,24 @@
   --phase: #bd6e20;
   --phase-soft: #fff0dc;
 }
-.visual[data-paused="true"] .halo {
+.visual[data-paused="true"] .halo,
+.visual[data-paused="true"] .icon,
+.visual[data-paused="true"] .spinner,
+.visual[data-paused="true"] .wave i {
   animation: none;
+}
+.visual[data-paused="true"] .spinner {
+  display: none;
+}
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sound {
+  to {
+    transform: scaleY(0.4);
+  }
 }
 @keyframes breathe {
   50% {
@@ -99,7 +146,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .halo,
-  .icon {
+  .icon,
+  .spinner,
+  .wave i {
     animation: none;
   }
 }
