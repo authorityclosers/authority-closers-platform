@@ -22,6 +22,7 @@ vm.runInNewContext(
 );
 const fixture = fixtureModule.exports;
 const normalMotion = process.env.SALES_XRAY_QA_MOTION === "normal";
+const activityChecks = process.env.SALES_XRAY_QA_ACTIVITY === "1";
 const reportEnvelope = structuredClone(fixture.envelope);
 if (process.env.SALES_XRAY_QA_LONG === "1") {
   const content = reportEnvelope.report.content;
@@ -271,7 +272,7 @@ try {
             submission_id: sourceId,
             source_sha256: sourceSha,
             state: liveState === "held" ? "held" : "active",
-            local_state: "completed",
+            local_state: liveState === "checking" ? "running" : "completed",
             automatic_progression: true,
             has_report: liveState === "report",
             stages: ["C2", "C4", "C5"].map((stage, i) => ({
@@ -301,7 +302,7 @@ try {
         route.abort(),
       );
       const page = await context.newPage();
-      if (delayedState) await page.clock.install();
+      if (delayedState || activityChecks) await page.clock.install();
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       const selected = ["selected", "verification", "uploading"].includes(
@@ -360,6 +361,68 @@ try {
             requestAnimationFrame(() => requestAnimationFrame(resolve)),
           ),
       );
+      if (activityChecks) {
+        const active = !["held", "report"].includes(state);
+        const activity = await page.evaluate(() => {
+          const visual = document.querySelector("[data-phase][data-paused]");
+          return {
+            present: Boolean(visual),
+            running:
+              visual
+                ?.getAnimations({ subtree: true })
+                .filter(
+                  (animation) =>
+                    animation.effect.getTiming().iterations === Infinity &&
+                    animation.playState === "running",
+                ).length ?? 0,
+          };
+        });
+        assert.equal(activity.present, state !== "report");
+        assert.equal(activity.running > 0, normalMotion && active);
+        if (["checking", "C2", "C4", "C5"].includes(state)) {
+          const read = () =>
+            page.evaluate(() => {
+              const copy = document.querySelector("[data-update-delayed]");
+              const { x, y, width, height } = copy.getBoundingClientRect();
+              return {
+                text: copy.querySelector('[data-visible="true"]').textContent,
+                title: copy.querySelector("h3").textContent,
+                rect: { x, y, width, height },
+                stages: document.querySelector(
+                  '[aria-label="Processing stages"]',
+                ).textContent,
+              };
+            });
+          const before = await read();
+          await page.clock.fastForward(8_001);
+          const after = await read();
+          assert.equal(before.text === after.text, !normalMotion);
+          for (const key of ["x", "y", "width", "height"])
+            assert.ok(
+              Math.abs(before.rect[key] - after.rect[key]) < 0.5,
+              `${state} cue changed ${key} at ${viewport.width}`,
+            );
+          assert.equal(before.title, after.title);
+          assert.equal(before.stages, after.stages);
+          assert.deepEqual(mutations, []);
+          results.push({
+            state: `${state}-activity`,
+            ...viewport,
+            normalMotion,
+            activity,
+            before,
+            after,
+            verified: true,
+          });
+        } else
+          results.push({
+            state: `${state}-activity`,
+            ...viewport,
+            normalMotion,
+            activity,
+            verified: true,
+          });
+      }
       if (delayedState) {
         const readLayout = () =>
           page.evaluate(() => {
