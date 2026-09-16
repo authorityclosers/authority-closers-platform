@@ -689,7 +689,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 # real provider validation failure.  Do this through the
                 # worker so the immutable inference-history trigger is tested
                 # instead of being bypassed with a direct row mutation.
-                broker = ReportingBroker(data, elevenlabs_malformed=True)
+                broker = ReportingBroker(data)
                 router = FixedProviderRouter(
                     {
                         provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
@@ -803,7 +803,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                     "privacy_revision": source_plan["privacy_revision"],
                     "accepted": True,
                 }
-                broker = ReportingBroker(data)
+                broker = ReportingBroker(data, elevenlabs_malformed=True)
                 router = FixedProviderRouter(
                     {
                         provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
