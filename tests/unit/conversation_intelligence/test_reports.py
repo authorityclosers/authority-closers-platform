@@ -91,6 +91,78 @@ def test_parser_binds_source_and_derives_profile_metadata() -> None:
     assert draft.strengths[0].evidence[0].start_ms == 0
 
 
+def test_parser_losslessly_binds_the_retained_legacy_feedback_shape() -> None:
+    transcript = _transcript()
+    profile = load_report_profile()
+    legacy_finding = {
+        "behavior": "Asked about timing before the next step.",
+        "why_it_matters": "This gives a source-bound coaching moment.",
+        "uncertainty": "The line alone does not establish intent.",
+        "evidence": [{"segment_id": "s1", "quote_start": 0, "quote_end": 13}],
+    }
+    payload = _payload(transcript)
+    payload["strengths"] = [legacy_finding]
+    payload["dimension_assessments"] = [
+        {
+            "dimension_id": dimension["id"],
+            "status": "observed",
+            "strengths": [legacy_finding] if index == 0 else [],
+            "missed_opportunities": [],
+            "improvements": [],
+            "uncertainty": "The supplied words are the available evidence.",
+        }
+        for index, dimension in enumerate(profile["dimensions"])
+    ]
+
+    draft = parse_report_draft(payload, transcript, profile=profile)
+
+    assert draft.strengths[0].title == legacy_finding["behavior"]
+    assert legacy_finding["behavior"] in draft.strengths[0].explanation
+    assert legacy_finding["why_it_matters"] in draft.strengths[0].explanation
+    assert legacy_finding["uncertainty"] in draft.strengths[0].explanation
+    assert draft.strengths[0].evidence[0].quote == "Native line 1"
+    assert legacy_finding["behavior"] in draft.dimensions[0].observation
+    assert legacy_finding["why_it_matters"] in draft.dimensions[0].observation
+    assert legacy_finding["uncertainty"] in draft.dimensions[0].observation
+    assert "s1[0,900]" in draft.dimensions[0].observation
+
+
+def test_parser_rejects_mixed_or_incomplete_legacy_feedback_shapes() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    legacy = {
+        "behavior": "A source-bound behavior.",
+        "why_it_matters": "It is relevant to the conversation.",
+        "uncertainty": "The words do not establish motive.",
+        "evidence": [{"segment_id": "s1"}],
+    }
+    payload["strengths"] = [legacy, _payload(transcript)["strengths"][0]]
+    with pytest.raises(ReportError, match="report_legacy_finding_invalid"):
+        parse_report_draft(payload, transcript)
+
+    payload = _payload(transcript)
+    incomplete = dict(legacy)
+    incomplete.pop("uncertainty")
+    payload["strengths"] = [incomplete]
+    with pytest.raises(ReportError, match="report_legacy_finding_invalid"):
+        parse_report_draft(payload, transcript)
+
+    payload = _payload(transcript)
+    payload["dimension_assessments"] = [
+        {
+            "dimension_id": "human_connection_trust",
+            "status": "observed",
+            "strengths": [],
+            "missed_opportunities": [],
+            "improvements": [],
+            "uncertainty": "Source words only.",
+            "unexpected": "ambiguous expansion",
+        }
+    ]
+    with pytest.raises(ReportError, match="report_legacy_dimension_invalid"):
+        parse_report_draft(payload, transcript)
+
+
 def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
     transcript = _transcript()
     bad_quote = _payload(transcript)
@@ -418,6 +490,27 @@ def test_groq_envelope_parser_keeps_raw_response_out_of_draft() -> None:
     draft = parse_groq_response(response, transcript)
     assert "usage" not in draft.model_dump()
     assert draft.source_label.startswith("Scribe transcript revision")
+
+
+def test_report_prompt_locks_the_wire_schema_after_profile_instructions() -> None:
+    transcript = _transcript(count=1)
+    packet = parse_fact_packet(
+        {
+            "overview": "Literal facts.",
+            "observations": [
+                {"fact": "The source mentions price.", "segment_id": "s1", "quote": "price"}
+            ],
+            "uncertainties": [],
+        },
+        transcript,
+    )
+    system = build_report_groq_prompt(transcript, [packet])["messages"][0]["content"]
+
+    assert "WIRE f:title/explanation/evidence" in system
+    assert "d:dimension_id/status/observation/citations root:dimensions" in system
+    assert '"feedback_fields"' in system
+    assert "dimensions[] and overview{}" in system
+    assert "dimension_assessments[] and overview{}" not in system
 
 
 def test_fact_prompt_binds_evidence_to_canonical_segment_selectors() -> None:

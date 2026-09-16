@@ -76,10 +76,11 @@ REPORT_STRUCTURE_INSTRUCTION = (
     "strengths, missed_opportunities, improvements, objection_analysis and closing_analysis must "
     "each be a JSON array. Use [] when no evidence-backed finding exists. status must be "
     "observed, insufficient_evidence, not_applicable, conflicted or unknown. "
-    "Never transliterate, translate or rewrite quotes. C5 server refs: spans {segment_id}; "
-    "excerpts "
-    "{segment_id,quote_start,quote_end}; retained refs exact-only. No mixed fields, quote repair, "
-    "casefold or fuzzy matching. One doable action + sample phrase per item. "
+    "WIRE f:title/explanation/evidence d:dimension_id/status/observation/citations "
+    "root:dimensions. "
+    "Never transliterate, translate or rewrite quotes. Refs "
+    "{segment_id,quote_start,quote_end}; no mixed fields or quote repair. One doable action + "
+    "sample phrase per item. "
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_NUMERIC_KEY = re.compile(
@@ -779,7 +780,151 @@ def _profile_dimensions(profile: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [dimension for dimension in dimensions if isinstance(dimension, dict)]
 
 
-def _normalise_dimensions(raw_value: Any, *, profile: Mapping[str, Any]) -> list[dict[str, Any]]:
+_LEGACY_FINDING_KEYS = frozenset({"behavior", "evidence", "uncertainty", "why_it_matters"})
+_LEGACY_FINDING_MARKERS = frozenset({"behavior", "uncertainty", "why_it_matters"})
+_LEGACY_DIMENSION_KEYS = frozenset(
+    {"dimension_id", "improvements", "missed_opportunities", "status", "strengths", "uncertainty"}
+)
+_LEGACY_DIMENSION_MARKERS = frozenset(
+    {"improvements", "missed_opportunities", "strengths", "uncertainty"}
+)
+
+
+def _legacy_finding(
+    value: Any,
+    *,
+    transcript: Mapping[str, Any],
+    error_code: str = "report_legacy_finding_invalid",
+) -> dict[str, Any]:
+    """Bind the observed pre-wire-schema finding without dropping its qualifiers."""
+
+    if not isinstance(value, Mapping) or frozenset(value) != _LEGACY_FINDING_KEYS:
+        raise ReportError(error_code)
+    behavior = value.get("behavior")
+    why_it_matters = value.get("why_it_matters")
+    uncertainty = value.get("uncertainty")
+    if (
+        not isinstance(behavior, str)
+        or not behavior.strip()
+        or not isinstance(why_it_matters, str)
+        or not why_it_matters.strip()
+    ):
+        raise ReportError(error_code)
+    if not isinstance(uncertainty, str):
+        raise ReportError(error_code)
+    evidence = value.get("evidence")
+    if not isinstance(evidence, list) or not evidence:
+        raise ReportError(error_code)
+    normalized_evidence = [_normalise_c5_evidence(item, transcript) for item in evidence]
+    explanation = (
+        f"Behavior: {behavior}\nWhy it matters: {why_it_matters}\nUncertainty: {uncertainty}"
+    )
+    if len(explanation) > 4_000:
+        raise ReportError(error_code)
+    title = behavior.strip() if len(behavior.strip()) <= 240 else "Source-backed behavior"
+    return {"title": title, "explanation": explanation, "evidence": normalized_evidence}
+
+
+def _normalise_legacy_findings(
+    value: Any, *, transcript: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ReportError("report_legacy_finding_invalid")
+    return [_legacy_finding(item, transcript=transcript) for item in value]
+
+
+def _legacy_dimension_observation(
+    item: Mapping[str, Any],
+    *,
+    transcript: Mapping[str, Any],
+) -> str:
+    groups = (
+        ("Strengths", item["strengths"]),
+        ("Missed opportunities", item["missed_opportunities"]),
+        ("Improvements", item["improvements"]),
+    )
+    lines: list[str] = []
+    for label, raw_findings in groups:
+        findings = _normalise_legacy_findings(raw_findings, transcript=transcript)
+        lines.append(f"{label}:")
+        if not findings:
+            lines.append("None returned.")
+            continue
+        for finding in findings:
+            lines.append(f"- {finding['title']}")
+            lines.append(finding["explanation"])
+            for evidence in finding["evidence"]:
+                lines.append(
+                    "Evidence: "
+                    f"{evidence['segment_id']}[{evidence['start_ms']},{evidence['end_ms']}]: "
+                    f"{evidence['quote']}"
+                )
+    lines.append(f"Uncertainty: {item['uncertainty']}")
+    observation = "\n".join(lines)
+    if len(observation) > 4_000:
+        raise ReportError("report_legacy_dimension_invalid")
+    return observation
+
+
+def _normalise_legacy_dimensions(
+    raw_items: list[Any],
+    *,
+    profile: Mapping[str, Any],
+    transcript: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    profile_dimensions = _profile_dimensions(profile)
+    by_id = {str(item["id"]): item for item in profile_dimensions}
+    supplied: dict[str, dict[str, Any]] = {}
+    for item in raw_items:
+        if not isinstance(item, Mapping) or frozenset(item) != _LEGACY_DIMENSION_KEYS:
+            raise ReportError("report_legacy_dimension_invalid")
+        dimension_id = item.get("dimension_id")
+        if not isinstance(dimension_id, str) or dimension_id not in by_id:
+            raise ReportError("report_dimension_unsupported")
+        if dimension_id in supplied:
+            raise ReportError("report_dimension_duplicate")
+        status = item.get("status")
+        uncertainty = item.get("uncertainty")
+        if status not in _ALLOWED_DIMENSION_STATES or not isinstance(uncertainty, str):
+            raise ReportError("report_legacy_dimension_invalid")
+        expected = by_id[dimension_id]
+        expected_citations = [
+            citation for citation in expected.get("citations", []) if isinstance(citation, Mapping)
+        ]
+        supplied[dimension_id] = {
+            "dimension_id": dimension_id,
+            "label": expected["label"],
+            "status": status,
+            "observation": _legacy_dimension_observation(item, transcript=transcript),
+            "citations": expected_citations,
+        }
+    output: list[dict[str, Any]] = []
+    for expected in profile_dimensions:
+        dimension_id = str(expected["id"])
+        if dimension_id in supplied:
+            output.append(supplied[dimension_id])
+            continue
+        derived_citations: list[Mapping[str, Any]] = [
+            citation for citation in expected.get("citations", []) if isinstance(citation, Mapping)
+        ]
+        output.append(
+            {
+                "dimension_id": dimension_id,
+                "label": expected["label"],
+                "status": "unknown",
+                "observation": "No qualitative assessment was returned for this dimension.",
+                "citations": derived_citations,
+            }
+        )
+    return output
+
+
+def _normalise_dimensions(
+    raw_value: Any,
+    *,
+    profile: Mapping[str, Any],
+    transcript: Mapping[str, Any],
+) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
     by_id = {str(item["id"]): item for item in profile_dimensions}
     if raw_value is None:
@@ -788,6 +933,11 @@ def _normalise_dimensions(raw_value: Any, *, profile: Mapping[str, Any]) -> list
         raw_items = raw_value
     else:
         raise ReportError("report_dimensions_invalid")
+    if any(
+        isinstance(item, Mapping) and _LEGACY_DIMENSION_MARKERS.intersection(item)
+        for item in raw_items
+    ):
+        return _normalise_legacy_dimensions(raw_items, profile=profile, transcript=transcript)
     supplied: dict[str, dict[str, Any]] = {}
     for item in raw_items:
         if not isinstance(item, Mapping):
@@ -999,6 +1149,10 @@ def _normalise_c5_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[st
 def _normalise_findings(value: Any, *, transcript: Mapping[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReportError("report_findings_invalid")
+    if any(
+        isinstance(item, Mapping) and _LEGACY_FINDING_MARKERS.intersection(item) for item in value
+    ):
+        return _normalise_legacy_findings(value, transcript=transcript)
     normalized: list[dict[str, Any]] = []
     for finding in value:
         if not isinstance(finding, Mapping):
@@ -1233,7 +1387,7 @@ def build_report_groq_prompt(
     resolved_profile = load_report_profile() if profile is None else dict(profile)
     prompt_profile = _prompt_profile(resolved_profile)
     output_fields = (
-        "dimension_assessments[] and overview{}. "
+        "dimensions[] and overview{}. "
         if detailed_overview
         else "source_label, dimensions and report_sections. "
     )
@@ -1374,7 +1528,11 @@ def parse_report_draft(
     if "dimension_assessments" in payload:
         dimensions = payload["dimension_assessments"]
         normalized.pop("dimension_assessments", None)
-    normalized["dimensions"] = _normalise_dimensions(dimensions, profile=resolved_profile)
+    normalized["dimensions"] = _normalise_dimensions(
+        dimensions,
+        profile=resolved_profile,
+        transcript=validated_transcript,
+    )
     normalized["report_sections"] = _normalise_sections(
         payload.get("report_sections"), profile=resolved_profile
     )
