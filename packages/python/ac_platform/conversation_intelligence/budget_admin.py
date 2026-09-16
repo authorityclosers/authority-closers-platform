@@ -103,9 +103,7 @@ class ConversationBudgetAdmin:
             "budget": budget_view(snapshot),
         }
 
-    async def current(
-        self, actor: ActorContext, *, bundle: HostedApprovalBundle
-    ) -> dict[str, Any]:
+    async def current(self, actor: ActorContext, *, bundle: HostedApprovalBundle) -> dict[str, Any]:
         await self.admit(actor)
         now = utc(self.app.clock())
         approved_cap = self._approved_cap(bundle, int(now.timestamp()))
@@ -150,7 +148,7 @@ class ConversationBudgetAdmin:
             "reason": reason,
             "approval_ref": admin_budget_approval_ref(bundle.digest, actor.person_id, key),
         }
-        replay = await self.app._replay(actor, key, "conversation_budget_cap", intent)
+        replay = await self.app._replay(actor, key, "budget_cap", intent)
         if replay is not None and replay.result_id is not None:
             row = await self.database.get(ConversationBudgetAccount, replay.result_id)
             if row is None or row.scope_id != bundle.budget_scope_id:

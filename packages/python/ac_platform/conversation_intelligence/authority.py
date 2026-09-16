@@ -83,17 +83,12 @@ def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundl
         previous.cap_approval.approval_ref == bundle.budget_authorization_ref
         and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     )
-    admin_approval = is_admin_budget_approval_ref(
-        previous.cap_approval.approval_ref, bundle.digest
-    )
+    admin_approval = is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
     try:
         effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
     except ValueError:
         return False
-    return (
-        previous.scope_id == str(bundle.budget_scope_id)
-        and (release_approval or admin_approval)
-    )
+    return previous.scope_id == str(bundle.budget_scope_id) and (release_approval or admin_approval)
 
 
 class ConversationAuthority:
@@ -1041,8 +1036,7 @@ class ConversationAuthority:
         minutes, budget = await service.accounts(recording, row)
         budget_snapshot = BudgetAccount.from_dict(budget.snapshot)
         already = any(
-            item.quote.quote_id == quote.quote_id
-            for item in budget_snapshot.reservations
+            item.quote.quote_id == quote.quote_id for item in budget_snapshot.reservations
         )
         cached = await app.database.scalar(
             select(ConversationInferenceTask).where(

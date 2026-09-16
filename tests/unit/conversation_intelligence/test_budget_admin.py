@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence.application import ConversationConflict
 from ac_platform.conversation_intelligence.authority import _budget_matches_release
 from ac_platform.conversation_intelligence.budget_admin import (
     ADMIN_BUDGET_CEILING_PAISE,
@@ -13,6 +14,7 @@ from ac_platform.conversation_intelligence.budget_admin import (
     admin_budget_approval_ref,
     is_admin_budget_approval_ref,
 )
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     BudgetCapApproval,
@@ -164,6 +166,55 @@ async def test_save_accepts_lower_cap_above_held_commitments_and_binds_admin_rec
         bundle.digest, actor.person_id, "budget-cap-lower"
     )
     application._receipt.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_save_retries_same_key_against_the_recorded_receipt_action():
+    scope_id = uuid4()
+    held = held_budget(scope_id)
+    bundle = bundle_for(scope_id, cap=200_000)
+    row = SimpleNamespace(scope_id=scope_id, revision=4, snapshot=held.budget.as_dict())
+    receipts: dict[str, SimpleNamespace] = {}
+
+    async def replay(_actor, key, action, intent):
+        recorded = receipts.get(key)
+        if recorded is None:
+            return None
+        if recorded.action != action or recorded.intent_sha256 != content_hash(intent):
+            raise ConversationConflict("The request key belongs to a different command.")
+        return recorded
+
+    async def receipt(_actor, key, action, intent, result_id, _now, **_kwargs):
+        receipts[key] = SimpleNamespace(
+            action=action,
+            intent_sha256=content_hash(intent),
+            result_id=result_id,
+        )
+
+    service, application = service_for(row, bundle)
+    application._replay = replay
+    application._receipt = receipt
+    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+
+    first = await service.save(
+        actor,
+        bundle=bundle,
+        new_cap_paise=149_000,
+        expected_revision=4,
+        reason="reduce future provider exposure",
+        key="budget-cap-retry",
+    )
+    second = await service.save(
+        actor,
+        bundle=bundle,
+        new_cap_paise=149_000,
+        expected_revision=4,
+        reason="reduce future provider exposure",
+        key="budget-cap-retry",
+    )
+
+    assert first == second
+    assert receipts["budget-cap-retry"].action == "budget_cap"
 
 
 def test_admin_ceiling_is_ten_thousand_inr():

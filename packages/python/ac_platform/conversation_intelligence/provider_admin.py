@@ -415,13 +415,9 @@ class ConversationProviderAdmin:
             .with_for_update(read=True)
         )
         effective_budget_cap = (
-            None
-            if budget_row is None
-            else BudgetAccount.from_dict(budget_row.snapshot).cap_paise
+            None if budget_row is None else BudgetAccount.from_dict(budget_row.snapshot).cap_paise
         )
-        self._approved_configuration(
-            target, bundle, budget_limit_paise=effective_budget_cap
-        )
+        self._approved_configuration(target, bundle, budget_limit_paise=effective_budget_cap)
         payload = {
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,
