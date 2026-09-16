@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { LocalSettingsButton } from "./live-data-banner";
 import { ProfileMenu } from "./profile-menu";
+import { newCallHref } from "./new-call-navigation";
 import styles from "./acquisition-shell.module.css";
 
 export function AcquisitionShell({
@@ -109,14 +110,15 @@ export function AcquisitionShell({
         </div>
         <p className={styles.workspaceLabel}>CONVERSATION STUDIO</p>
         <nav className={styles.nav} aria-label="Workspace">
-          <Link
+          {/* Full navigation resets a restored call even on the same route. */}
+          <a
             className={`${styles.navLink} ${active === "analyse" ? styles.active : ""}`}
-            href={homeHref}
+            href={newCallHref(homeHref)}
             aria-current={active === "analyse" ? "page" : undefined}
           >
             <AudioLines size={18} aria-hidden="true" />
             <span>Analyse a call</span>
-          </Link>
+          </a>
           <Link
             className={`${styles.navLink} ${active === "calls" ? styles.active : ""}`}
             href="/calls"
@@ -191,14 +193,14 @@ export function AcquisitionShell({
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
       >
-        <Link
+        <a
           className={`${styles.bottomLink} ${active === "analyse" ? styles.bottomActive : ""}`}
-          href={homeHref}
+          href={newCallHref(homeHref)}
           aria-current={active === "analyse" ? "page" : undefined}
         >
           <AudioLines size={20} aria-hidden="true" />
           <span>Analyse</span>
-        </Link>
+        </a>
         <Link
           className={`${styles.bottomLink} ${active === "calls" ? styles.bottomActive : ""}`}
           href="/calls"
