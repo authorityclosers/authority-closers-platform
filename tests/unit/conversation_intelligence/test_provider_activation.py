@@ -263,9 +263,7 @@ def test_activation_cap_counts_c2_and_c5_once() -> None:
 
 
 def test_activation_uses_the_persisted_admin_limit_below_release_cap() -> None:
-    config = _registry_config(
-        "approved-effective-cap-v1", funded=True, text_cost_paise=40
-    )
+    config = _registry_config("approved-effective-cap-v1", funded=True, text_cost_paise=40)
     bundle = _approved_bundle(config, funded=True, text_cost_paise=40)
 
     with pytest.raises(ConversationDenied, match="pinned activation approval"):

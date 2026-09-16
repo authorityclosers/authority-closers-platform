@@ -141,12 +141,13 @@ class ConversationBudgetAdmin:
         if type(expected_revision) is not int or not 0 <= expected_revision < 2_147_483_647:
             raise ConversationError("Use the current budget revision.")
         reason = _bounded_reason(reason)
+        approval_ref = admin_budget_approval_ref(bundle.digest, actor.person_id, key)
         intent = {
             "scope_id": str(bundle.budget_scope_id),
             "new_cap_paise": new_cap_paise,
             "expected_revision": expected_revision,
             "reason": reason,
-            "approval_ref": admin_budget_approval_ref(bundle.digest, actor.person_id, key),
+            "approval_ref": approval_ref,
         }
         replay = await self.app._replay(actor, key, "budget_cap", intent)
         if replay is not None and replay.result_id is not None:
@@ -169,7 +170,7 @@ class ConversationBudgetAdmin:
                 raise ValueError("scope")
             approval = BudgetCapApproval(
                 scope_id=str(bundle.budget_scope_id),
-                approval_ref=intent["approval_ref"],
+                approval_ref=approval_ref,
                 owner_actor_id=str(actor.person_id),
                 approved_cap_paise=new_cap_paise,
                 previous_budget_fingerprint=before.fingerprint,

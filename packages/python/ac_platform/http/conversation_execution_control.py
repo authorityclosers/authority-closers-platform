@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.activation_contract import HostedApprovalBundle
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -71,7 +72,7 @@ def install_execution_control_http(
             operations_tenant_id=scope(),
         )
 
-    def approved_budget_bundle():
+    def approved_budget_bundle() -> HostedApprovalBundle:
         try:
             bundle = load_pinned_approval(settings)
             if bundle.provider_control_tenant_id != scope():
