@@ -242,6 +242,7 @@ describe("acquisition source-bound presentation", () => {
   it("rejects forged quota, paid upload policy and mismatched progress", () => {
     expect(parseAllowance(allowance).available_seconds).toBe(6000);
     expect(parsePolicy(policy).maximum_file_bytes).toBe(32 * 1024 ** 2);
+    expect(parsePolicy(policy).maximum_call_seconds).toBe(3600);
     expect(
       parsePolicy({
         ...policy,
@@ -252,6 +253,7 @@ describe("acquisition source-bound presentation", () => {
     expect(() =>
       parsePolicy({ ...policy, maximum_file_bytes: 32 * 1024 ** 2 + 1 }),
     ).toThrow();
+    expect(() => parsePolicy({ ...policy, maximum_call_seconds: 3601 })).toThrow();
     expect(parseEntry(entry).site_key).toBe(entry.site_key);
     expect(() =>
       parseAllowance({ ...allowance, available_seconds: 5999 }),
@@ -263,6 +265,11 @@ describe("acquisition source-bound presentation", () => {
         parseSubmission(progress),
       ),
     ).toThrow();
+  });
+  it.each([3599, 3600])("accepts a call policy at %s seconds", (seconds) => {
+    expect(parsePolicy({ ...policy, maximum_call_seconds: seconds }).maximum_call_seconds).toBe(
+      seconds,
+    );
   });
   it("remembers only a UUID and rejects injected paths", () => {
     rememberSubmission(submissionId);
