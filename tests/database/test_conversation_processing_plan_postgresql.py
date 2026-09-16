@@ -607,11 +607,9 @@ def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired
 
             async def invalid_first_c5(reservation: Any, payload: bytes) -> ProviderResult:
                 nonlocal invalid_returned
-                body = json.loads(payload)
-                user = body["messages"][1]["content"]
                 if (
                     reservation.quote.provider_id == "groq"
-                    and not user.startswith("{")
+                    and setup.broker.routes.count("groq") == 1
                     and not invalid_returned
                 ):
                     invalid_returned = True
