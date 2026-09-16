@@ -345,6 +345,63 @@ describe("server-withheld guest report preview", () => {
     ).toBeUndefined();
   });
 
+  it("accepts the bounded retained recovery projection without implying review or score", () => {
+    const envelope = previewEnvelope();
+    Object.assign(envelope, {
+      recovery: {
+        version: 1,
+        validation_state: "corrected",
+        provider_calls: 0,
+        human_approved: false,
+        official_score: false,
+      },
+    });
+    const value = parseAcquisitionReport(
+      envelope,
+      expectedSubmission,
+      transcript,
+    );
+    expect(value.recovery).toEqual({
+      version: 1,
+      validation_state: "corrected",
+      provider_calls: 0,
+      human_approved: false,
+      official_score: false,
+    });
+    expect(value.report.review_status).toBe(REPORT_REVIEW_STATUS);
+  });
+
+  it("rejects arbitrary or privileged retained recovery metadata", () => {
+    const unknown = previewEnvelope();
+    Object.assign(unknown, {
+      recovery: {
+        version: 1,
+        validation_state: "corrected",
+        provider_calls: 0,
+        human_approved: false,
+        official_score: false,
+        review_origin: "human",
+      },
+    });
+    expect(() =>
+      parseAcquisitionReport(unknown, expectedSubmission, transcript),
+    ).toThrow("report_recovery_unknown_field");
+
+    const privileged = previewEnvelope();
+    Object.assign(privileged, {
+      recovery: {
+        version: 1,
+        validation_state: "corrected",
+        provider_calls: 0,
+        human_approved: true,
+        official_score: false,
+      },
+    });
+    expect(() =>
+      parseAcquisitionReport(privileged, expectedSubmission, transcript),
+    ).toThrow("report_recovery_human_approved_invalid");
+  });
+
   it("does not let preview metadata bypass quote or source validation", () => {
     const wrongQuote = previewEnvelope();
     wrongQuote.report.content.strengths[0].evidence[0].quote = "Invented words";

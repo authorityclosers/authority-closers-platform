@@ -23,6 +23,7 @@ const DIMENSION_STATES = new Set([
   "conflicted",
   "unknown",
 ]);
+const RECOVERY_VALIDATION_STATES = new Set(["revalidated", "corrected"]);
 const DOCUMENTS = new Set(["Doc-1", "Doc-2", "Doc-3", "Doc-4", "Doc-5"]);
 
 export type ReportEvidence = {
@@ -95,6 +96,54 @@ export type GuestReportPreview = {
     }
   >;
 };
+
+/**
+ * A retained C5 recovery remains an unapproved draft. These are the only
+ * fields the acquisition report endpoint projects from its recovery row.
+ */
+export type ReportRecovery = {
+  version: number;
+  validation_state: "revalidated" | "corrected";
+  provider_calls: 0;
+  human_approved: false;
+  official_score: false;
+};
+
+function parseRecovery(value: unknown): ReportRecovery {
+  const recovery = object(value, "report_recovery");
+  keys(
+    recovery,
+    [
+      "version",
+      "validation_state",
+      "provider_calls",
+      "human_approved",
+      "official_score",
+    ],
+    "report_recovery",
+  );
+  const version = integer(recovery.version, "report_recovery_version", 1);
+  const validationState = text(
+    recovery.validation_state,
+    "report_recovery_validation_state",
+    32,
+  );
+  if (!RECOVERY_VALIDATION_STATES.has(validationState))
+    throw new ReportContractError("report_recovery_validation_state_invalid");
+  if (recovery.provider_calls !== 0)
+    throw new ReportContractError("report_recovery_provider_calls_invalid");
+  if (recovery.human_approved !== false)
+    throw new ReportContractError("report_recovery_human_approved_invalid");
+  if (recovery.official_score !== false)
+    throw new ReportContractError("report_recovery_official_score_invalid");
+  return {
+    version,
+    validation_state: validationState as ReportRecovery["validation_state"],
+    provider_calls: 0,
+    human_approved: false,
+    official_score: false,
+  };
+}
 
 function parsePreview(value: unknown, report: SalesReport): GuestReportPreview {
   const preview = object(value, "report_preview");
@@ -558,7 +607,7 @@ export function parseAcquisitionReport(
   value: unknown,
   expected: { submissionId: string; recordingId: string },
   transcript: Transcript,
-): { report: SalesReport; claimed: boolean } {
+): { report: SalesReport; claimed: boolean; recovery?: ReportRecovery } {
   const envelope = object(value, "report_envelope");
   keys(
     envelope,
@@ -571,6 +620,7 @@ export function parseAcquisitionReport(
       "transcript_revision",
       "source_label",
       "report",
+      "recovery",
     ],
     "report_envelope",
   );
@@ -646,7 +696,13 @@ export function parseAcquisitionReport(
       throw new ReportContractError("report_preview_account_invalid");
     report.preview = parsePreview(projection.preview, report);
   }
-  return { claimed, report };
+  const recovery =
+    envelope.recovery === undefined
+      ? undefined
+      : parseRecovery(envelope.recovery);
+  return recovery === undefined
+    ? { claimed, report }
+    : { claimed, report, recovery };
 }
 
 export function parseJobResponse(

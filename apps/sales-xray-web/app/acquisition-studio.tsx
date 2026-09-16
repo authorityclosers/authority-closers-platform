@@ -104,6 +104,8 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+const quoteRequestKey = () => `report-plan:${crypto.randomUUID()}`;
+
 export function savedCallsHref(embedded: boolean): string {
   return embedded ? "/sales-xray/calls" : "/calls";
 }
@@ -335,15 +337,24 @@ export function AcquisitionStudio({
 
   const getPlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
-      if (!quoteKey.current) quoteKey.current = `report-plan:${bound.id}`;
-      return parseProcessingPlan(
-        await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
-          method: "POST",
-          signal,
-          headers: { "Idempotency-Key": quoteKey.current },
-        }),
-        bound.recordingId,
-      );
+      if (!quoteKey.current) quoteKey.current = quoteRequestKey();
+      try {
+        return parseProcessingPlan(
+          await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
+            method: "POST",
+            signal,
+            headers: { "Idempotency-Key": quoteKey.current },
+          }),
+          bound.recordingId,
+        );
+      } catch (error) {
+        // A failed quote cannot safely be retried with the same request key:
+        // the server may already have recorded that key for a different
+        // approval bundle. The quote is side-effect free, so the next explicit
+        // recovery attempt gets a new bounded key.
+        quoteKey.current = "";
+        throw error;
+      }
     },
     [],
   );
@@ -458,35 +469,42 @@ export function AcquisitionStudio({
           requestedPlan.current !== bound.id
         ) {
           requestedPlan.current = bound.id;
-          const approved = await getPlan(bound, abort.signal);
-          if (!abort.signal.aborted) {
-            setPlan(approved);
-            setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
-            const canAutoApprove =
-              consentedSubmissionId === bound.id &&
-              !planRequiresAction &&
-              !analysisPaused &&
-              approved.expires_at_epoch * 1000 > Date.now();
-            if (canAutoApprove) {
-              try {
-                await acceptPlanRequest(bound, approved, abort.signal);
-              } catch (error) {
-                if (
-                  error instanceof AcquisitionError &&
-                  error.reason === "plan_stale"
-                ) {
-                  if (!(await refreshStalePlan(bound, abort.signal))) {
+          try {
+            const approved = await getPlan(bound, abort.signal);
+            if (!abort.signal.aborted) {
+              setPlan(approved);
+              setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
+              const canAutoApprove =
+                consentedSubmissionId === bound.id &&
+                !planRequiresAction &&
+                !analysisPaused &&
+                approved.expires_at_epoch * 1000 > Date.now();
+              if (canAutoApprove) {
+                try {
+                  await acceptPlanRequest(bound, approved, abort.signal);
+                } catch (error) {
+                  if (
+                    error instanceof AcquisitionError &&
+                    error.reason === "plan_stale"
+                  ) {
+                    if (!(await refreshStalePlan(bound, abort.signal))) {
+                      setPlanRequiresAction(true);
+                      throw error;
+                    }
+                  } else {
                     setPlanRequiresAction(true);
                     throw error;
                   }
-                } else {
-                  setPlanRequiresAction(true);
-                  throw error;
                 }
+              } else {
+                // A reloaded submission has no ephemeral upload consent and
+                // must always stop at this explicit approval boundary.
+                setPlanRequiresAction(true);
               }
-            } else {
-              setPlanRequiresAction(true);
             }
+          } catch (error) {
+            requestedPlan.current = "";
+            throw error;
           }
         }
         failures = 0;
@@ -838,6 +856,9 @@ export function AcquisitionStudio({
         (["failed", "cancelled"].includes(progress.local_state ?? "") ||
           ["cancelled", "completed"].includes(progress.state))),
   );
+  const quotePending = progress?.state === "quoted" && !plan;
+  const showProcessingPanel =
+    submission && !report && (!plan || plan.accepted) && !quotePending;
   const hasSavedTranscript = progress?.stages.some(
     (stage) => stage.stage === "C2" && stage.state === "completed",
   );
@@ -1386,7 +1407,7 @@ export function AcquisitionStudio({
                 )}
               </div>
             )}
-            {submission && !report && (!plan || plan.accepted) && (
+            {showProcessingPanel && (
               <div
                 className={`studio-progress ${styles.processingPanel}`}
                 data-paused={processingNeedsAttention}
@@ -1626,7 +1647,17 @@ export function AcquisitionStudio({
                 disabled={!!busy}
                 onClick={() => {
                   setError("");
-                  if (submission) setPollAttempt((n) => n + 1);
+                  if (submission) {
+                    if (
+                      !plan &&
+                      progress?.local_state === "completed" &&
+                      !progress.automatic_progression
+                    ) {
+                      requestedPlan.current = "";
+                      quoteKey.current = "";
+                    }
+                    setPollAttempt((n) => n + 1);
+                  }
                   else setAttempt((n) => n + 1);
                 }}
               >

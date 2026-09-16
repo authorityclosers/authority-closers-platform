@@ -48,6 +48,8 @@ let progressOverride: unknown;
 let planFailure: { status: number; body: unknown } | null;
 let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
+let quoteFailureOnce: boolean;
+let rejectStaticQuoteKey: boolean;
 let analysisPaused: boolean;
 let savedLookupDelayed: boolean;
 const response = (value: unknown, status = 200) =>
@@ -116,6 +118,8 @@ beforeEach(() => {
   planFailure = null;
   planFailureOnce = false;
   quoteFailure = null;
+  quoteFailureOnce = false;
+  rejectStaticQuoteKey = false;
   analysisPaused = false;
   savedLookupDelayed = false;
   localStorage.clear();
@@ -182,10 +186,25 @@ beforeEach(() => {
               },
               202,
             );
-      if (path.endsWith("/plan/quote"))
-        return quoteFailure
-          ? response(quoteFailure.body, quoteFailure.status)
-          : response(plan, 201);
+      if (path.endsWith("/plan/quote")) {
+        const key = (init.headers as Record<string, string> | undefined)?.[
+          "Idempotency-Key"
+        ];
+        if (rejectStaticQuoteKey && key === `report-plan:${submissionId}`)
+          return response(
+            { detail: "The request key belongs to a different command." },
+            409,
+          );
+        if (quoteFailure) {
+          const failure = quoteFailure;
+          if (quoteFailureOnce) {
+            quoteFailure = null;
+            quoteFailureOnce = false;
+          }
+          return response(failure.body, failure.status);
+        }
+        return response(plan, 201);
+      }
       if (path.endsWith("/plan")) {
         if (planFailure) {
           const failure = planFailure;
@@ -781,6 +800,70 @@ function reloadHeldCall() {
     ],
   };
 }
+
+function reloadQuotedCall() {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  progressOverride = {
+    ...progress,
+    state: "quoted",
+    local_state: "completed",
+    has_report: false,
+    automatic_progression: false,
+    stages: [{ stage: "C2", state: "completed" }],
+  };
+}
+
+it("reloads quoted work with a fresh in-memory quote key and explicit approval", async () => {
+  reloadQuotedCall();
+  rejectStaticQuoteKey = true;
+  vi.stubGlobal("crypto", {
+    randomUUID: () => "quote-recovery-key",
+    subtle: { digest: async () => new Uint8Array(32).buffer },
+  });
+
+  await mount();
+
+  const quotes = calls.filter(({ path }) => path.endsWith("/plan/quote"));
+  expect(quotes).toHaveLength(1);
+  expect(
+    (quotes[0].init.headers as Record<string, string>)["Idempotency-Key"],
+  ).toBe("report-plan:quote-recovery-key");
+  expect(container.textContent).toContain("Ready to continue");
+  expect(container.textContent).not.toContain("ANALYSIS IN PROGRESS");
+  expect(container.textContent).not.toContain("Preparing your analysis");
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+});
+
+it("retries a failed restored quote after Check again without accepting it", async () => {
+  reloadQuotedCall();
+  quoteFailure = { status: 409, body: { detail: "private-provider-context" } };
+  quoteFailureOnce = true;
+  vi.stubGlobal("crypto", {
+    randomUUID: (() => {
+      let count = 0;
+      return () => `quote-recovery-key-${++count}`;
+    })(),
+    subtle: { digest: async () => new Uint8Array(32).buffer },
+  });
+
+  await mount();
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(container.textContent).not.toContain("ANALYSIS IN PROGRESS");
+  expect(container.textContent).not.toContain("Preparing your analysis");
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+
+  await click("Check again");
+
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    2,
+  );
+  expect(container.textContent).toContain("Ready to continue");
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+});
 
 it("lets a reloaded held call request one quote, then requires explicit approval", async () => {
   reloadHeldCall();
