@@ -227,6 +227,7 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
     return SimpleNamespace(
         engine=engine,
         state=state,
+        processing_person_id=principal,
         sessions=sessions,
         clock=clock,
         factory=factory,
@@ -843,7 +844,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                     )
                     source_minute = await database.get(
                         ConversationMinuteAccount,
-                        (setup.state.tenant_id, setup.state.person_id),
+                        (setup.state.tenant_id, setup.processing_person_id),
                     )
                     assert (
                         source_run is not None
@@ -990,7 +991,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                     )
                     source_minute = await database.get(
                         ConversationMinuteAccount,
-                        (setup.state.tenant_id, setup.state.person_id),
+                        (setup.state.tenant_id, setup.processing_person_id),
                     )
                     source_checkpoint = await database.get(
                         ConversationCheckpoint, source_snapshot["checkpoint"][0]

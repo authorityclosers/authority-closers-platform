@@ -730,6 +730,10 @@ class RetainedC2ReuseService:
                 completed_at=now,
             )
         )
+        # The task carries a composite foreign key to the run.  Flush the
+        # parent explicitly before adding the child; SQLAlchemy cannot infer
+        # this ordering from the scalar UUID fields alone.
+        await self.database.flush()
         self.database.add(
             ConversationInferenceTask(
                 run_id=identifier,
