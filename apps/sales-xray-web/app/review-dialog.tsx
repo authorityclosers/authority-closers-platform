@@ -48,6 +48,7 @@ export function ReviewDialog({
 }: Props) {
   const prefix = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
+  const modal = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const previousPosition = useRef<string | null>(null);
@@ -68,6 +69,10 @@ export function ReviewDialog({
   useEffect(() => {
     if (!open) return;
     previousFocus.current = document.activeElement as HTMLElement | null;
+    const element = modal.current;
+    // Native top-layer modality escapes transformed/scrolling report panels
+    // while retaining their inherited styles and the report's print content.
+    if (element && !element.open) element.showModal();
     const frame = window.setTimeout(() => {
       const dialog = closeButton.current?.closest('[role="dialog"]');
       if (!dialog?.contains(document.activeElement))
@@ -75,6 +80,7 @@ export function ReviewDialog({
     }, 20);
     return () => {
       window.clearTimeout(frame);
+      element?.close();
       previousFocus.current?.focus?.();
     };
   }, [open]);
@@ -91,7 +97,7 @@ export function ReviewDialog({
     return () => document.removeEventListener("keydown", escape);
   }, [onClose, open]);
 
-  function trapFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
+  function trapFocus(event: ReactKeyboardEvent<HTMLDialogElement>) {
     if (event.key !== "Tab") return;
     const dialog = event.currentTarget;
     const focusable = [
@@ -131,23 +137,25 @@ export function ReviewDialog({
   }
 
   const body = (
-    <div
-      className={open ? styles.backdrop : undefined}
+    <dialog
+      ref={modal}
+      className={styles.backdrop}
       data-review-backdrop={open ? "open" : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${prefix}-title`}
+      aria-describedby={`${prefix}-position`}
+      onKeyDown={trapFocus}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       {open ? (
-        <div
-          className={styles.dialog}
-          data-tone={tone}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={`${prefix}-title`}
-          aria-describedby={`${prefix}-position`}
-          onKeyDown={trapFocus}
-        >
+        <div className={styles.dialog} data-tone={tone}>
           <header className={styles.header}>
             {icon && (
               <span className={styles.icon} aria-hidden="true">
@@ -198,7 +206,7 @@ export function ReviewDialog({
       ) : (
         children
       )}
-    </div>
+    </dialog>
   );
-  return body;
+  return open ? body : children;
 }

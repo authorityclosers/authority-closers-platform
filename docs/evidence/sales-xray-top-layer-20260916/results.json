@@ -1,0 +1,1234 @@
+{
+  "capturedAt": "2026-09-16T07:25:31.678Z",
+  "origin": "http://127.0.0.1:3116",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": false,
+  "results": [
+    {
+      "state": "report",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Overview",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 560.375,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Overview page 2",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 560.375,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 568.375,
+      "playerTop": 593.21875
+    },
+    {
+      "state": "Moments fit",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 568.375,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1536,
+      "height": 674,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 61.90625,
+        "bottom": 612.078125,
+        "left": 408,
+        "right": 1128,
+        "footer": 611.078125
+      },
+      "after": {
+        "top": 61.90625,
+        "bottom": 612.078125,
+        "left": 408,
+        "right": 1128,
+        "footer": 611.078125
+      },
+      "verified": true
+    },
+    {
+      "state": "Moments last",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 568.375,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments navigation, transcript and print",
+      "width": 1536,
+      "height": 674,
+      "verified": true
+    },
+    {
+      "state": "Sales skills",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 501.953125,
+      "playerTop": 593.21875
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 501.953125,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1536,
+      "height": 674,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 72.421875,
+        "bottom": 601.5625,
+        "left": 388,
+        "right": 1148,
+        "footer": 600.5625
+      },
+      "after": {
+        "top": 72.421875,
+        "bottom": 601.5625,
+        "left": 388,
+        "right": 1148,
+        "footer": 600.5625
+      },
+      "verified": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 501.953125,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 1536,
+      "height": 674,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 512,
+      "playerTop": 593.21875
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 1536,
+      "height": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "contentBottom": 512,
+      "playerTop": 593.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1536,
+      "height": 674,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 86.265625,
+        "bottom": 587.734375,
+        "left": 388,
+        "right": 1148,
+        "footer": 586.734375
+      },
+      "after": {
+        "top": 86.265625,
+        "bottom": 587.734375,
+        "left": 388,
+        "right": 1148,
+        "footer": 586.734375
+      },
+      "verified": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 1536,
+      "height": 674,
+      "verified": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1536,
+      "height": 674,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 12,
+        "bottom": 662,
+        "left": 388,
+        "right": 1148,
+        "footer": 661
+      },
+      "after": {
+        "top": 12,
+        "bottom": 662,
+        "left": 388,
+        "right": 1148,
+        "footer": 661
+      },
+      "verified": true
+    },
+    {
+      "state": "All focused review points",
+      "width": 1536,
+      "height": 674,
+      "pointCount": 12,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Overview",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 746.375,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 794.375,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Moments fit",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 794.375,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1440,
+      "height": 900,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 174.90625,
+        "bottom": 725.078125,
+        "left": 360,
+        "right": 1080,
+        "footer": 724.078125
+      },
+      "after": {
+        "top": 174.90625,
+        "bottom": 725.078125,
+        "left": 360,
+        "right": 1080,
+        "footer": 724.078125
+      },
+      "verified": true
+    },
+    {
+      "state": "Moments last",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 794.375,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments navigation, transcript and print",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "Sales skills",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 742.984375,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 742.984375,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1440,
+      "height": 900,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 185.421875,
+        "bottom": 714.5625,
+        "left": 340,
+        "right": 1100,
+        "footer": 713.5625
+      },
+      "after": {
+        "top": 185.421875,
+        "bottom": 714.5625,
+        "left": 340,
+        "right": 1100,
+        "footer": 713.5625
+      },
+      "verified": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 692,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 692,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1440,
+      "height": 900,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 199.265625,
+        "bottom": 700.734375,
+        "left": 340,
+        "right": 1100,
+        "footer": 699.734375
+      },
+      "after": {
+        "top": 199.265625,
+        "bottom": 700.734375,
+        "left": 340,
+        "right": 1100,
+        "footer": 699.734375
+      },
+      "verified": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1440,
+      "height": 900,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 99.46875,
+        "bottom": 800.515625,
+        "left": 340,
+        "right": 1100,
+        "footer": 799.515625
+      },
+      "after": {
+        "top": 99.46875,
+        "bottom": 800.515625,
+        "left": 340,
+        "right": 1100,
+        "footer": 799.515625
+      },
+      "verified": true
+    },
+    {
+      "state": "All focused review points",
+      "width": 1440,
+      "height": 900,
+      "pointCount": 12,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Overview",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 510.296875,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Overview page 2",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 510.296875,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 514.296875,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Moments fit",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 514.296875,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1024,
+      "height": 626,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 37.90625,
+        "bottom": 588.078125,
+        "left": 152,
+        "right": 872,
+        "footer": 587.078125
+      },
+      "after": {
+        "top": 37.90625,
+        "bottom": 588.078125,
+        "left": 152,
+        "right": 872,
+        "footer": 587.078125
+      },
+      "verified": true
+    },
+    {
+      "state": "Moments last",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 514.296875,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Moments navigation, transcript and print",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "Sales skills",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1024,
+      "height": 626,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 48.421875,
+        "bottom": 577.5625,
+        "left": 132,
+        "right": 892,
+        "footer": 576.5625
+      },
+      "after": {
+        "top": 48.421875,
+        "bottom": 577.5625,
+        "left": 132,
+        "right": 892,
+        "footer": 576.5625
+      },
+      "verified": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 524.515625,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 524.515625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1024,
+      "height": 626,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 62.265625,
+        "bottom": 563.734375,
+        "left": 132,
+        "right": 892,
+        "footer": 562.734375
+      },
+      "after": {
+        "top": 62.265625,
+        "bottom": 563.734375,
+        "left": 132,
+        "right": 892,
+        "footer": 562.734375
+      },
+      "verified": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 1024,
+      "height": 626,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 12,
+        "bottom": 614,
+        "left": 132,
+        "right": 892,
+        "footer": 613
+      },
+      "after": {
+        "top": 12,
+        "bottom": 614,
+        "left": 132,
+        "right": 892,
+        "footer": 613
+      },
+      "verified": true
+    },
+    {
+      "state": "All focused review points",
+      "width": 1024,
+      "height": 626,
+      "pointCount": 12,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Overview",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Keep",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Change",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Outcome",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Practice",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Review",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 675.5,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Moments",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 677,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Moments fit",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 677,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 390,
+      "height": 844,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 86.9375,
+        "bottom": 757.046875,
+        "left": 8,
+        "right": 382,
+        "footer": 756.046875
+      },
+      "after": {
+        "top": 86.9375,
+        "bottom": 757.046875,
+        "left": 8,
+        "right": 382,
+        "footer": 756.046875
+      },
+      "verified": true
+    },
+    {
+      "state": "Moments last",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 677,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Moments navigation, transcript and print",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "Sales skills",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 390,
+      "height": 844,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 320.0625,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "after": {
+        "top": 320.0625,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "verified": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 390,
+      "height": 844,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 384.640625,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "after": {
+        "top": 384.640625,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "verified": true
+    },
+    {
+      "state": "Plan Change",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Practise",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 390,
+      "height": 844,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 160.921875,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "after": {
+        "top": 160.921875,
+        "bottom": 844,
+        "left": 0,
+        "right": 390,
+        "footer": 843
+      },
+      "verified": true
+    },
+    {
+      "state": "All focused review points",
+      "width": 390,
+      "height": 844,
+      "pointCount": 12,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Overview",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Keep",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Change",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Outcome",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Practice",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Overview Review",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 501.5,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Moments",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 500,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Moments fit",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 500,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 375,
+      "height": 667,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 9,
+        "bottom": 658,
+        "left": 8,
+        "right": 367,
+        "footer": 657
+      },
+      "after": {
+        "top": 9,
+        "bottom": 658,
+        "left": 8,
+        "right": 367,
+        "footer": 657
+      },
+      "verified": true
+    },
+    {
+      "state": "Moments last",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 500,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Moments navigation, transcript and print",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "Sales skills",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 375,
+      "height": 667,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 144.0625,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "after": {
+        "top": 144.0625,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "verified": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 375,
+      "height": 667,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 207.640625,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "after": {
+        "top": 207.640625,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "verified": true
+    },
+    {
+      "state": "Plan Change",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Practise",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 469.78125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "Top-layer scrolled-shell reader",
+      "width": 375,
+      "height": 667,
+      "modal": true,
+      "transform": "matrix(1, 0, 0, 1, 0, 0)",
+      "scrollTop": 400,
+      "before": {
+        "top": 53.375,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "after": {
+        "top": 53.375,
+        "bottom": 667,
+        "left": 0,
+        "right": 375,
+        "footer": 666
+      },
+      "verified": true
+    },
+    {
+      "state": "All focused review points",
+      "width": 375,
+      "height": 667,
+      "pointCount": 12,
+      "verified": true
+    }
+  ]
+}
