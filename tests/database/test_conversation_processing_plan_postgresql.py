@@ -315,11 +315,10 @@ def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
                 # transaction. Use a separate inspection session so the
                 # preceding ORM reads do not leave an implicit transaction
                 # with the wrong origin.
-                async with setup.sessions() as view_database:
-                    async with view_database.begin():
-                        target_view = await ConversationApplication(
-                            view_database, clock=lambda: setup.prepared.state.now
-                        ).get_run(setup.actor, target_c2.run_id)
+                async with setup.sessions() as view_database, view_database.begin():
+                    target_view = await ConversationApplication(
+                        view_database, clock=lambda: setup.prepared.state.now
+                    ).get_run(setup.actor, target_c2.run_id)
                 assert target_view["provider_calls"] == 0
 
             completed = await _drive_to_completion(
