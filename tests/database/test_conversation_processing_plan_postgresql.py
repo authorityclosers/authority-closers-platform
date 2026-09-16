@@ -8,6 +8,7 @@ provider service.
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -21,7 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
     ConversationNotFound,
 )
-from ac_platform.conversation_intelligence.checkpoints import SourceBinding
+from ac_platform.conversation_intelligence.checkpoints import SourceBinding, canonical
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     ExecutionPermission,
@@ -52,7 +53,9 @@ from ac_platform.conversation_intelligence.processing_plan import (
     PlanAcceptance,
     ProcessingPlanScheduler,
 )
+from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
     _application,
     _setup,
@@ -581,6 +584,112 @@ def test_processing_plan_acceptance_drives_c2_to_c6_with_exact_bindings(
                 assert draft.profile_sha256 == manifest["stages"][2]["profile_sha256"]
                 assert draft.payload is not None
                 assert draft.evidence_receipt["human_approved"] is False
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired_report(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    """Exercise scheduler -> worker validation failure -> bounded repair -> C6."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            c5 = setup.bundle.stages[2].model_copy(update={"max_requests": 2})
+            setup.bundle_box["bundle"] = setup.bundle.model_copy(
+                update={"stages": (*setup.bundle.stages[:2], c5)}
+            )
+            original_execute = setup.broker.execute
+            invalid_returned = False
+
+            async def invalid_first_c5(reservation: Any, payload: bytes) -> ProviderResult:
+                nonlocal invalid_returned
+                body = json.loads(payload)
+                user = body["messages"][1]["content"]
+                if (
+                    reservation.quote.provider_id == "groq"
+                    and not user.startswith("{")
+                    and not invalid_returned
+                ):
+                    invalid_returned = True
+                    setup.broker.routes.append("groq")
+                    setup.broker.calls += 1
+                    setup.broker.payloads.append(payload)
+                    envelope = {"choices": [{"message": {"content": json.dumps({})}}]}
+                    raw = canonical(envelope)
+                    return ProviderResult(
+                        provider="groq",
+                        model=reservation.quote.provider_model,
+                        request_id="synthetic-c5-missing-field",
+                        response_sha256=hashlib.sha256(raw).hexdigest(),
+                        raw_json=raw,
+                        data=envelope,
+                        usage={"total_tokens": 0},
+                        input_sha256=reservation.quote.input_sha256,
+                    )
+                return await original_execute(reservation, payload)
+
+            setup.broker.execute = invalid_first_c5
+            quote = await _quote(setup, "processing-plan-c5-repair-quote")
+            assert quote["stages"][2]["max_requests"] == 2
+            assert quote["automatic_c5_repair_cost_paise"] == 0
+            await _accept(setup, quote, "processing-plan-c5-repair-accept")
+            plan_id = UUID(quote["id"])
+            scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+            for _ in range(12):
+                await setup.worker.run_once()
+                await _make_due(setup, plan_id)
+                await scheduler.step()
+                view = await _view(setup, plan_id)
+                if view["state"] == "completed":
+                    break
+            assert invalid_returned is True
+            assert view["state"] == "completed"
+            assert view["report_ready"] is True
+            assert view["current_stage"] == "C6"
+            assert view["stages"][2]["max_requests"] == 2
+
+            async with setup.sessions() as database:
+                plan = await database.get(ConversationProcessingPlan, plan_id)
+                assert plan is not None
+                assert plan.progress["c5_repair"]["attempt"] == 1
+                assert plan.progress["c5_repair"]["failure_code"] == (
+                    "conversation_report_payload_missing_field"
+                )
+                tasks = list(
+                    (
+                        await database.scalars(
+                            select(ConversationInferenceTask)
+                            .where(
+                                ConversationInferenceTask.recording_id
+                                == setup.prepared.recording_id,
+                                ConversationInferenceTask.stage == "C5",
+                            )
+                            .order_by(ConversationInferenceTask.created_at)
+                        )
+                    ).all()
+                )
+                assert len(tasks) == 2
+                assert tasks[0].state == "uncertain"
+                assert tasks[1].state == "completed"
+                assert tasks[1].intent["request"]["repair"]["attempt"] == 1
+                assert view["report_run_id"] == str(tasks[1].run_id)
+                original_job = await database.get(Job, tasks[0].job_id)
+                assert original_job is not None and original_job.provider_receipt is not None
+                assert original_job.provider_receipt["validation_state"] == "provider_returned"
+                assert original_job.provider_receipt["raw_blob_id"] == str(tasks[0].run_id)
+                report = await database.scalar(
+                    select(ConversationReportDraft).where(
+                        ConversationReportDraft.run_id == tasks[1].run_id,
+                        ConversationReportDraft.recording_id == setup.prepared.recording_id,
+                        ConversationReportDraft.erased_at.is_(None),
+                    )
+                )
+                assert report is not None and report.payload is not None
+            assert setup.broker.routes == ["elevenlabs", "groq", "groq", "groq"]
         finally:
             await setup.engine.dispose()
 
