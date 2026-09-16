@@ -111,6 +111,96 @@ describe("acquisition permission recovery", () => {
       message: new AcquisitionError(403).message,
     });
   });
+
+  it.each([
+    [
+      "The provider budget cannot cover this complete plan.",
+      "provider_budget_insufficient",
+      "shared analysis budget",
+    ],
+    [
+      "Finish local audio inspection before transcription.",
+      "source_checking_not_ready",
+      "still being checked privately",
+    ],
+    [
+      "This call already has an active processing plan.",
+      "active_plan",
+      "already has an active analysis plan",
+    ],
+    [
+      "Provider analysis is not enabled for this upload yet.",
+      "analysis_unavailable",
+      "not enabled for this upload yet",
+    ],
+    [
+      "The approved allowance cannot cover this bounded processing plan.",
+      "processing_allowance_unavailable",
+      "approved processing allowance cannot cover",
+    ],
+    [
+      "The approved private recording capacity is full.",
+      "recording_capacity_full",
+      "private recording capacity is full",
+    ],
+    [
+      "Claim this upload before starting another analysis.",
+      "claim_required",
+      "Claim this upload",
+    ],
+  ])("translates the exact plan conflict %s", async (detail, reason, copy) => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail }), { status: 409 }),
+        ),
+    );
+    await expect(acquisition(path, { method: "POST" })).rejects.toMatchObject({
+      status: 409,
+      reason,
+      message: expect.stringContaining(copy),
+    });
+  });
+
+  it("translates an exhausted trial allowance on source upload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              detail: "Your current free call allowance has been used.",
+            }),
+            { status: 409 },
+          ),
+        ),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
+    ).rejects.toMatchObject({
+      status: 409,
+      reason: "trial_allowance_used",
+      message: expect.stringContaining("trial allowance is used"),
+    });
+  });
+
+  it("keeps an unknown conflict private and generic", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "private-provider-context" }), {
+          status: 409,
+        }),
+      ),
+    );
+    await expect(acquisition(path)).rejects.toMatchObject({
+      status: 409,
+      message: new AcquisitionError(409).message,
+    });
+  });
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {

@@ -49,36 +49,123 @@ export type Progress = {
   stages: { stage: string; state: string }[];
 };
 
+type AcquisitionReason =
+  | "provider_allowance_used"
+  | "plan_permission"
+  | "plan_stale"
+  | "execution_paused"
+  | "provider_budget_insufficient"
+  | "source_checking_not_ready"
+  | "active_plan"
+  | "analysis_unavailable"
+  | "processing_allowance_unavailable"
+  | "recording_capacity_full"
+  | "trial_allowance_used"
+  | "claim_required";
+
+const SUBMISSION_SOURCE_PATH = /^\/submissions\/[0-9a-f-]{36}\/source$/;
+const SUBMISSION_PLAN_PATH = /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/;
+
+function responseDetail(value: unknown): string | null {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !("detail" in value) ||
+    typeof value.detail !== "string"
+  )
+    return null;
+  return value.detail;
+}
+
+function knownConflictReason(
+  path: string,
+  body: unknown,
+): AcquisitionReason | undefined {
+  const detail = responseDetail(body);
+  if (detail === null) return undefined;
+  if (SUBMISSION_SOURCE_PATH.test(path)) {
+    if (detail === "Your current free call allowance has been used.")
+      return "trial_allowance_used";
+    return undefined;
+  }
+  if (!SUBMISSION_PLAN_PATH.test(path)) return undefined;
+  switch (detail) {
+    case "The provider budget cannot cover this complete plan.":
+      return "provider_budget_insufficient";
+    case "Finish local audio inspection before transcription.":
+    case "The recording is not ready.":
+    case "The recording needs a verified duration.":
+    case "The requested recording revision is not ready.":
+    case "The source measurement checkpoint is required.":
+      return "source_checking_not_ready";
+    case "This call already has an active processing plan.":
+      return "active_plan";
+    case "Your recording is private. Provider analysis is not enabled yet.":
+    case "Provider analysis is not enabled for this upload yet.":
+      return "analysis_unavailable";
+    case "The approved allowance cannot cover this bounded processing plan.":
+    case "The remaining approved processing allowance is unavailable.":
+    case "The approved quote or remaining allowance is unavailable.":
+      return "processing_allowance_unavailable";
+    case "The approved private recording capacity is full.":
+      return "recording_capacity_full";
+    case "Claim this upload before starting another analysis.":
+      return "claim_required";
+    default:
+      return undefined;
+  }
+}
+
+function acquisitionErrorMessage(
+  status: number,
+  reason: AcquisitionReason | undefined,
+): string {
+  if (reason === "execution_paused") return ACQUISITION_PAUSED_MESSAGE;
+  if (status === 401)
+    return "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls.";
+  if (status === 403)
+    return reason === "provider_allowance_used"
+      ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+      : reason === "plan_stale"
+        ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+        : reason === "plan_permission"
+          ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+          : "This action is not available with your current access. Ask the AC team to check your permission.";
+  if (status === 404)
+    return "This call is unavailable in your current session. It may have expired or been deleted.";
+  if (status === 429)
+    return "Another call is uploading. Please try again shortly.";
+  if (status === 409)
+    switch (reason) {
+      case "provider_budget_insufficient":
+        return "Analysis is paused because the shared analysis budget cannot cover this call. Your recording is saved. The AC team needs to adjust the analysis settings or add budget.";
+      case "source_checking_not_ready":
+        return "Your recording is still being checked privately. Wait for that check to finish before continuing analysis.";
+      case "active_plan":
+        return "This call already has an active analysis plan. Reload the call to continue it.";
+      case "analysis_unavailable":
+        return "Provider analysis is not enabled for this upload yet. Your recording remains private. Ask the AC team to enable analysis before continuing.";
+      case "processing_allowance_unavailable":
+        return "The approved processing allowance cannot cover this analysis. Your recording remains private. Ask the AC team to review the available allowance.";
+      case "recording_capacity_full":
+        return "The approved private recording capacity is full. Your recording remains private. Ask the AC team to review its storage capacity before continuing.";
+      case "trial_allowance_used":
+        return "Your trial allowance is used. Your recording remains private. Sign in or ask the AC team for more access.";
+      case "claim_required":
+        return "Claim this upload before starting another analysis.";
+      default:
+        return "Analysis is not available for this call yet. Your recording remains private; try again shortly.";
+    }
+  return "This request did not finish. Check your connection and try again.";
+}
+
 export class AcquisitionError extends Error {
   constructor(
     readonly status: number,
-    readonly reason?:
-      | "provider_allowance_used"
-      | "plan_permission"
-      | "plan_stale"
-      | "execution_paused",
+    readonly reason?: AcquisitionReason,
   ) {
-    super(
-      reason === "execution_paused"
-        ? ACQUISITION_PAUSED_MESSAGE
-        : status === 401
-          ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
-          : status === 403
-            ? reason === "provider_allowance_used"
-              ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-              : reason === "plan_stale"
-                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                : reason === "plan_permission"
-                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                  : "This action is not available with your current access. Ask the AC team to check your permission."
-            : status === 404
-              ? "This call is unavailable in your current session. It may have expired or been deleted."
-              : status === 429
-                ? "Another call is uploading. Please try again shortly."
-                : status === 409
-                  ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                  : "This request did not finish. Check your connection and try again.",
-    );
+    super(acquisitionErrorMessage(status, reason));
   }
 }
 export async function acquisition(
@@ -110,25 +197,21 @@ export async function acquisition(
       // Translate only an exact, known denial. Never display server/provider
       // bodies, which can contain private context or infrastructure details.
       const body: unknown = await response.json().catch(() => null);
-      const allowanceUsed =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "This recording's approved provider allowance is used.";
-      const planStale =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "Approve the current displayed processing plan.";
+      const detail = responseDetail(body);
       throw new AcquisitionError(
         response.status,
-        allowanceUsed
+        detail === "This recording's approved provider allowance is used."
           ? "provider_allowance_used"
-          : planStale
+          : detail === "Approve the current displayed processing plan."
             ? "plan_stale"
             : "plan_permission",
+      );
+    }
+    if (response.status === 409) {
+      const body: unknown = await response.json().catch(() => null);
+      throw new AcquisitionError(
+        response.status,
+        knownConflictReason(path, body),
       );
     }
     throw new AcquisitionError(response.status);
