@@ -21,7 +21,12 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     utc,
 )
+from ac_platform.conversation_intelligence.entitlements import (
+    BudgetAccount,
+    effective_budget_cap_paise,
+)
 from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
     ConversationProviderActivation,
     ConversationProviderConfiguration,
 )
@@ -148,7 +153,11 @@ class ConversationProviderAdmin:
 
     @classmethod
     def _approved_configuration(
-        cls, configuration: ConversationProviderConfiguration, bundle: HostedApprovalBundle
+        cls,
+        configuration: ConversationProviderConfiguration,
+        bundle: HostedApprovalBundle,
+        *,
+        budget_limit_paise: int | None = None,
     ) -> tuple[Any, ...]:
         try:
             config = parse_registry_config(configuration.configuration)
@@ -218,7 +227,12 @@ class ConversationProviderAdmin:
             projected_cost_paise = (
                 stage_costs["C2"] + stage_costs["C4"] * stage_max_requests["C4"] + stage_costs["C5"]
             )
-            if projected_cost_paise > bundle.budget_cap_paise:
+            effective_cap = bundle.budget_cap_paise
+            if budget_limit_paise is not None:
+                effective_cap = effective_budget_cap_paise(
+                    bundle.budget_cap_paise, budget_limit_paise
+                )
+            if projected_cost_paise > effective_cap:
                 raise ValueError
             if any(item.max_cost_paise > 0 for item in dispatches) and (
                 not config.policy.allow_paid
@@ -236,6 +250,14 @@ class ConversationProviderAdmin:
     ) -> list[dict[str, Any]]:
         if bundle is None or actor.tenant_id != bundle.provider_control_tenant_id:
             return []
+        budget_row = await self.database.scalar(
+            select(ConversationBudgetAccount).where(
+                ConversationBudgetAccount.scope_id == bundle.budget_scope_id
+            )
+        )
+        effective_budget_cap = None
+        if budget_row is not None:
+            effective_budget_cap = BudgetAccount.from_dict(budget_row.snapshot).cap_paise
         rows = (
             await self.database.scalars(
                 select(ConversationProviderConfiguration)
@@ -247,7 +269,9 @@ class ConversationProviderAdmin:
         result: list[dict[str, Any]] = []
         for row in rows:
             try:
-                dispatches = self._approved_configuration(row, bundle)
+                dispatches = self._approved_configuration(
+                    row, bundle, budget_limit_paise=effective_budget_cap
+                )
             except ConversationDenied:
                 continue
             result.append(
@@ -385,7 +409,19 @@ class ConversationProviderAdmin:
             raise ConversationConflict("Provider revision is unavailable. Reload settings.")
         if latest.revision != expected_revision:
             raise ConversationConflict("Provider settings changed. Reload before activating.")
-        self._approved_configuration(target, bundle)
+        budget_row = await self.database.scalar(
+            select(ConversationBudgetAccount)
+            .where(ConversationBudgetAccount.scope_id == bundle.budget_scope_id)
+            .with_for_update(read=True)
+        )
+        effective_budget_cap = (
+            None
+            if budget_row is None
+            else BudgetAccount.from_dict(budget_row.snapshot).cap_paise
+        )
+        self._approved_configuration(
+            target, bundle, budget_limit_paise=effective_budget_cap
+        )
         payload = {
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,

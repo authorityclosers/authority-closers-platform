@@ -23,6 +23,16 @@ def _integer(value: Any, field: str, minimum: int = 0) -> int:
     return value
 
 
+def effective_budget_cap_paise(release_cap_paise: int, persisted_cap_paise: int) -> int:
+    """Return the persisted Admin limit after checking the release upper bound."""
+
+    _integer(release_cap_paise, "release cap paise")
+    _integer(persisted_cap_paise, "persisted cap paise")
+    if persisted_cap_paise > release_cap_paise:
+        raise ValueError("persisted budget cap exceeds release approval")
+    return persisted_cap_paise
+
+
 def _strings(instance: Any, names: tuple[str, ...]) -> None:
     for name in names:
         require_text(getattr(instance, name), name)

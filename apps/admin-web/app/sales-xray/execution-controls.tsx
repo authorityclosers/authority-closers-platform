@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pause, Play, RefreshCw, ShieldCheck } from "lucide-react";
+import { Pause, Play, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { newIdempotencyKey } from "@ac/operations-web/api";
 import styles from "./execution-controls.module.css";
@@ -14,37 +14,47 @@ const control = z
   })
   .strict();
 const amount = z.number().int().nonnegative();
+const budgetAccount = z
+  .object({
+    cap_paise: amount.max(1_000_000),
+    available_paise: z.number().int(),
+    committed_paise: amount,
+    settled_paise: amount,
+    held_paise: amount,
+    uncertain_paise: amount,
+    reservation_count: amount,
+    warning: z.enum(["normal", "warning", "critical", "exhausted"]),
+    warning_percent: amount,
+    critical_percent: amount,
+  })
+  .strict();
 const schema = z
   .object({
     environment: z.enum(["local", "test", "staging", "production"]),
     control,
-    budget: z
-      .object({
-        cap_paise: amount,
-        available_paise: z.number().int(),
-        committed_paise: amount,
-        settled_paise: amount,
-        held_paise: amount,
-        uncertain_paise: amount,
-        reservation_count: amount,
-        warning: z.enum(["normal", "warning", "critical", "exhausted"]),
-        warning_percent: amount,
-        critical_percent: amount,
-      })
-      .strict()
-      .nullable(),
+    budget: budgetAccount.nullable(),
     history: z.array(control).max(10),
   })
   .strict();
 type State = z.infer<typeof schema>;
+const budgetSchema = z
+  .object({
+    scope_id: z.string().uuid(),
+    revision: z.number().int().nonnegative(),
+    approved_cap_paise: amount.max(1_000_000),
+    budget: budgetAccount.nullable(),
+  })
+  .strict();
+type BudgetState = z.infer<typeof budgetSchema>;
 const endpoint = "/v1/admin/conversation/execution";
+const budgetEndpoint = "/v1/admin/conversation/budget";
 const money = (paise: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
     paise / 100,
   );
 
-async function request(init: RequestInit = {}) {
-  const response = await fetch(endpoint, {
+async function request(path: string, init: RequestInit = {}) {
+  const response = await fetch(path, {
     ...init,
     cache: "no-store",
     credentials: "same-origin",
@@ -62,11 +72,31 @@ async function request(init: RequestInit = {}) {
   return response.json() as Promise<unknown>;
 }
 
+function formatBudgetAmount(paise: number) {
+  return (paise / 100).toFixed(2);
+}
+
+function parseBudgetAmount(value: string) {
+  const trimmed = value.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
+  const [whole, fraction = ""] = trimmed.split(".");
+  const paise = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(paise) ? paise : null;
+}
+
 export function ExecutionControlsPanel() {
   const [state, setState] = useState<State | null>(null);
+  const [budgetState, setBudgetState] = useState<BudgetState | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState("");
+  const [budgetReason, setBudgetReason] = useState(
+    "Reviewed shared processing budget",
+  );
   const [busy, setBusy] = useState(false);
+  const [budgetBusy, setBudgetBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [budgetMessage, setBudgetMessage] = useState<string | null>(null);
   const pending = useRef<{
     key: string;
     paused: boolean;
@@ -74,10 +104,19 @@ export function ExecutionControlsPanel() {
   } | null>(null);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const next = schema.parse(await request({ signal }));
+      const [executionValue, budgetValue] = await Promise.all([
+        request(endpoint, { signal }),
+        request(budgetEndpoint, { signal }),
+      ]);
+      const next = schema.parse(executionValue);
+      const nextBudget = budgetSchema.parse(budgetValue);
       if (signal?.aborted) return;
       setState(next);
+      setBudgetState(nextBudget);
+      if (nextBudget.budget)
+        setBudgetDraft(formatBudgetAmount(nextBudget.budget.cap_paise));
       setError(null);
+      setBudgetError(null);
       if (pending.current && next.control.revision > pending.current.revision)
         pending.current = null;
     } catch (failure) {
@@ -116,7 +155,7 @@ export function ExecutionControlsPanel() {
     setMessage(null);
     try {
       const result = control.parse(
-        await request({
+        await request(endpoint, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -146,7 +185,63 @@ export function ExecutionControlsPanel() {
       setBusy(false);
     }
   }
-  const budget = state?.budget;
+  async function changeBudget() {
+    if (!budgetState || budgetBusy) return;
+    const newCapPaise = parseBudgetAmount(budgetDraft);
+    if (
+      newCapPaise == null ||
+      newCapPaise > budgetState.approved_cap_paise ||
+      newCapPaise > 1_000_000
+    ) {
+      setBudgetError(
+        `Enter a valid amount up to ${money(budgetState.approved_cap_paise)}.`,
+      );
+      setBudgetMessage(null);
+      return;
+    }
+    if (!budgetReason.trim()) {
+      setBudgetError("Add a short reason so the budget change is auditable.");
+      setBudgetMessage(null);
+      return;
+    }
+    setBudgetBusy(true);
+    setBudgetError(null);
+    setBudgetMessage(null);
+    try {
+      const next = budgetSchema.parse(
+        await request(budgetEndpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "Idempotency-Key": newIdempotencyKey(),
+          },
+          body: JSON.stringify({
+            expected_revision: budgetState.revision,
+            new_cap_paise: newCapPaise,
+            reason: budgetReason.trim(),
+          }),
+        }),
+      );
+      setBudgetState(next);
+      if (next.budget)
+        setBudgetDraft(formatBudgetAmount(next.budget.cap_paise));
+      setBudgetMessage(
+        `Saved shared budget limit as revision ${next.revision}.`,
+      );
+      const refreshed = schema.parse(await request(endpoint));
+      setState(refreshed);
+    } catch (failure) {
+      setBudgetError(
+        failure instanceof Error && !(failure instanceof z.ZodError)
+          ? failure.message
+          : "The budget limit could not be verified. Refresh before continuing.",
+      );
+    } finally {
+      setBudgetBusy(false);
+    }
+  }
+  const budget = budgetState?.budget ?? state?.budget;
+  const approvedBudgetCap = budgetState?.approved_cap_paise;
   return (
     <section
       className={styles.panel}
@@ -209,7 +304,7 @@ export function ExecutionControlsPanel() {
         <>
           <dl className={styles.metrics}>
             <div>
-              <dt>Approved ceiling</dt>
+              <dt>Active budget limit</dt>
               <dd>{money(budget.cap_paise)}</dd>
             </div>
             <div>
@@ -241,6 +336,57 @@ export function ExecutionControlsPanel() {
             Usage refreshes every 30 seconds. Warnings include reserved money;
             the server checks the hard ceiling before each new reservation.
           </p>
+          {budgetState && approvedBudgetCap != null && (
+            <div className={styles.budgetEditor}>
+              <label className={styles.field}>
+                <span>Shared budget limit (INR)</span>
+                <input
+                  aria-label="Shared budget limit in INR"
+                  type="number"
+                  min="0"
+                  max={approvedBudgetCap / 100}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={budgetDraft}
+                  onChange={(event) => setBudgetDraft(event.target.value)}
+                  disabled={budgetBusy}
+                />
+                <small>
+                  Up to the release-approved ceiling of{" "}
+                  {money(approvedBudgetCap)}. Existing reservations remain held.
+                </small>
+              </label>
+              <label className={styles.field}>
+                <span>Reason for change</span>
+                <input
+                  aria-label="Budget change reason"
+                  type="text"
+                  maxLength={512}
+                  value={budgetReason}
+                  onChange={(event) => setBudgetReason(event.target.value)}
+                  disabled={budgetBusy}
+                />
+              </label>
+              <div className={styles.budgetActions}>
+                <button
+                  type="button"
+                  className={styles.action}
+                  onClick={() => void changeBudget()}
+                  disabled={budgetBusy}
+                >
+                  <Save size={16} aria-hidden />
+                  {budgetBusy ? "Saving…" : "Save budget limit"}
+                </button>
+                <span>Revision {budgetState.revision}</span>
+              </div>
+              {budgetError && (
+                <p role="alert" className={styles.alert}>
+                  {budgetError}
+                </p>
+              )}
+              {budgetMessage && <p role="status">{budgetMessage}</p>}
+            </div>
+          )}
         </>
       ) : (
         state && (

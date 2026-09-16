@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -5,9 +6,12 @@ from uuid import uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence.authority import _budget_matches_release
 from ac_platform.conversation_intelligence.budget_admin import (
     ADMIN_BUDGET_CEILING_PAISE,
     ConversationBudgetAdmin,
+    admin_budget_approval_ref,
+    is_admin_budget_approval_ref,
 )
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
@@ -21,6 +25,7 @@ from .test_entitlements import accounts, permission, quote
 
 def bundle_for(scope_id, *, cap=150_000):
     return SimpleNamespace(
+        digest="a" * 64,
         provider_control_tenant_id=uuid4(),
         budget_scope_id=scope_id,
         budget_cap_paise=cap,
@@ -102,7 +107,7 @@ async def test_save_preserves_held_reservations_and_records_an_append_only_recei
 
 
 @pytest.mark.asyncio
-async def test_save_requires_release_cap_and_optimistic_revision():
+async def test_save_requires_release_ceiling_and_optimistic_revision():
     scope_id = uuid4()
     budget = held_budget(scope_id).budget
     bundle = bundle_for(scope_id, cap=200_000)
@@ -124,12 +129,99 @@ async def test_save_requires_release_cap_and_optimistic_revision():
         await service.save(
             actor,
             bundle=bundle,
-            new_cap_paise=199_999,
+            new_cap_paise=200_001,
             expected_revision=4,
-            reason="different amount",
-            key="budget-cap-different",
+            reason="above release ceiling",
+            key="budget-cap-above-ceiling",
         )
+
+
+@pytest.mark.asyncio
+async def test_save_accepts_lower_cap_above_held_commitments_and_binds_admin_receipt():
+    scope_id = uuid4()
+    held = held_budget(scope_id)
+    bundle = bundle_for(scope_id, cap=200_000)
+    row = SimpleNamespace(scope_id=scope_id, revision=4, snapshot=held.budget.as_dict())
+    service, application = service_for(row, bundle)
+    actor = ActorContext(uuid4(), uuid4(), bundle.provider_control_tenant_id)
+
+    value = await service.save(
+        actor,
+        bundle=bundle,
+        new_cap_paise=149_000,
+        expected_revision=4,
+        reason="reduce future provider exposure",
+        key="budget-cap-lower",
+    )
+
+    updated = BudgetAccount.from_dict(row.snapshot)
+    assert updated.cap_paise == 149_000
+    assert updated.reservations == held.budget.reservations
+    assert value["budget"]["available_paise"] == 146_500
+    approval = updated.cap_approval
+    assert approval.owner_actor_id == str(actor.person_id)
+    assert approval.approval_ref == admin_budget_approval_ref(
+        bundle.digest, actor.person_id, "budget-cap-lower"
+    )
+    application._receipt.assert_awaited_once()
 
 
 def test_admin_ceiling_is_ten_thousand_inr():
     assert ADMIN_BUDGET_CEILING_PAISE == 1_000_000
+
+
+def test_admin_approval_ref_is_bound_to_the_release_digest():
+    actor_id = uuid4()
+    value = admin_budget_approval_ref("a" * 64, actor_id, "budget-key")
+    assert is_admin_budget_approval_ref(value, "a" * 64)
+    assert not is_admin_budget_approval_ref(value, "b" * 64)
+
+
+def test_authority_accepts_a_lower_admin_limit_but_rejects_an_over_ceiling_snapshot():
+    scope_id = uuid4()
+    bundle = bundle_for(scope_id, cap=200_000)
+    owner = uuid4()
+    release_budget = BudgetAccount(
+        str(scope_id),
+        150_000,
+        BudgetCapApproval(
+            str(scope_id),
+            "release-budget-approval",
+            str(owner),
+            150_000,
+            "0" * 64,
+            "release",
+        ),
+    )
+    release_bundle = SimpleNamespace(
+        **{
+            **vars(bundle),
+            "budget_authorization_ref": "release-budget-approval",
+            "budget_owner_id": owner,
+        }
+    )
+    assert _budget_matches_release(release_budget, release_bundle)
+
+    admin_budget = replace(
+        release_budget,
+        cap_paise=100_000,
+        cap_approval=BudgetCapApproval(
+            str(scope_id),
+            admin_budget_approval_ref(bundle.digest, uuid4(), "budget-key"),
+            "admin-actor",
+            100_000,
+            release_budget.fingerprint,
+            "admin limit",
+        ),
+    )
+    assert _budget_matches_release(admin_budget, release_bundle)
+    over_ceiling = replace(
+        admin_budget,
+        cap_paise=250_000,
+        cap_approval=replace(
+            admin_budget.cap_approval,
+            approved_cap_paise=250_000,
+            explicit_above_ceiling=True,
+        ),
+    )
+    assert not _budget_matches_release(over_ceiling, release_bundle)

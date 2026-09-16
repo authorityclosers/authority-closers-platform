@@ -25,6 +25,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
+from ac_platform.conversation_intelligence.budget_admin import is_admin_budget_approval_ref
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
@@ -34,6 +35,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     MinuteAccount,
     MinuteGrant,
     Quote,
+    effective_budget_cap_paise,
     reserve,
 )
 from ac_platform.conversation_intelligence.execution_control import require_execution_enabled
@@ -74,6 +76,24 @@ from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
+
+
+def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundle) -> bool:
+    release_approval = (
+        previous.cap_approval.approval_ref == bundle.budget_authorization_ref
+        and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
+    )
+    admin_approval = is_admin_budget_approval_ref(
+        previous.cap_approval.approval_ref, bundle.digest
+    )
+    try:
+        effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
+    except ValueError:
+        return False
+    return (
+        previous.scope_id == str(bundle.budget_scope_id)
+        and (release_approval or admin_approval)
+    )
 
 
 class ConversationAuthority:
@@ -242,12 +262,7 @@ class ConversationAuthority:
             db.add(budget)
         else:
             previous = BudgetAccount.from_dict(budget.snapshot)
-            if (
-                previous.scope_id != str(bundle.budget_scope_id)
-                or previous.cap_paise != bundle.budget_cap_paise
-                or previous.cap_approval.approval_ref != bundle.budget_authorization_ref
-                or previous.cap_approval.owner_actor_id != str(bundle.budget_owner_id)
-            ):
+            if not _budget_matches_release(previous, bundle):
                 raise ConversationDenied("The approved shared testing budget does not match.")
         if isinstance(actor, ProcessingActor):
             # Public acquisition minutes belong to the append-only acquisition
@@ -1024,9 +1039,10 @@ class ConversationAuthority:
             )
         await self.validate_quote(app, actor, recording, plan, row, quote, permission, now)
         minutes, budget = await service.accounts(recording, row)
+        budget_snapshot = BudgetAccount.from_dict(budget.snapshot)
         already = any(
             item.quote.quote_id == quote.quote_id
-            for item in BudgetAccount.from_dict(budget.snapshot).reservations
+            for item in budget_snapshot.reservations
         )
         cached = await app.database.scalar(
             select(ConversationInferenceTask).where(
@@ -1040,7 +1056,7 @@ class ConversationAuthority:
             try:
                 reserve(
                     MinuteAccount.from_dict(minutes.snapshot),
-                    BudgetAccount.from_dict(budget.snapshot),
+                    budget_snapshot,
                     str(uuid4()),
                     quote,
                     permission,
@@ -1073,7 +1089,7 @@ class ConversationAuthority:
             "privacy_notice": approval.privacy_notice,
             "cost_label": cost_label,
             "max_cost_paise": quote.max_cost_paise,
-            "budget_cap_paise": bundle.budget_cap_paise,
+            "budget_cap_paise": budget_snapshot.cap_paise,
             "entitlement_seconds": quote.entitlement_seconds,
             "input_sha256": quote.input_sha256,
             "expires_at_epoch": quote.expires_at_epoch,

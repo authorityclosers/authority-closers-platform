@@ -26,7 +26,12 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
-from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount, Quote
+from ac_platform.conversation_intelligence.entitlements import (
+    BudgetAccount,
+    MinuteAccount,
+    Quote,
+    effective_budget_cap_paise,
+)
 from ac_platform.conversation_intelligence.inference import (
     TRANSCRIPT_RECIPE_BY_ROUTE,
     TRANSCRIPT_RECIPES,
@@ -554,14 +559,22 @@ class ConversationProcessingPlans:
         # authorized call consumed the account's entire allowance.
         maximum_seconds = 0
         maximum_cost = maximum_plan_cost((c2, c4, c5))
-        if maximum_cost > bundle.budget_cap_paise:
-            raise ConversationDenied("The complete plan exceeds the approved provider budget.")
         if maximum_cost:
             budget_row = await self.db.get(ConversationBudgetAccount, bundle.budget_scope_id)
-            if (
-                budget_row is None
-                or BudgetAccount.from_dict(budget_row.snapshot).available_paise < maximum_cost
-            ):
+            if budget_row is None:
+                raise ConversationConflict("The provider budget cannot cover this complete plan.")
+            budget = BudgetAccount.from_dict(budget_row.snapshot)
+            try:
+                effective_cap = effective_budget_cap_paise(
+                    bundle.budget_cap_paise, budget.cap_paise
+                )
+            except ValueError:
+                raise ConversationDenied(
+                    "The persisted provider budget exceeds its release approval."
+                ) from None
+            if maximum_cost > effective_cap:
+                raise ConversationDenied("The complete plan exceeds the effective provider budget.")
+            if budget.available_paise < maximum_cost:
                 raise ConversationConflict("The provider budget cannot cover this complete plan.")
         minutes = await self.db.get(
             ConversationMinuteAccount, (recording.tenant_id, recording.person_id)

@@ -8,6 +8,7 @@ transition; no settlement, access grant, or provider call is inferred here.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 from uuid import UUID
 
@@ -35,6 +36,19 @@ from ac_platform.kernel.authz import ActorContext
 # The user-authorized ceiling is INR 10,000.  The pinned release approval must
 # still carry the exact amount before this service can persist it.
 ADMIN_BUDGET_CEILING_PAISE = 1_000_000
+
+
+def admin_budget_approval_ref(bundle_digest: str, actor_id: UUID, key: str) -> str:
+    """Bind an Admin amendment to the exact release approval and request."""
+
+    suffix = hashlib.sha256(f"{actor_id}:{key}".encode()).hexdigest()
+    return f"ref:budget-admin/{bundle_digest}/{suffix}"
+
+
+def is_admin_budget_approval_ref(value: str, bundle_digest: str) -> bool:
+    prefix = f"ref:budget-admin/{bundle_digest}/"
+    suffix = value[len(prefix) :] if value.startswith(prefix) else ""
+    return len(suffix) == 64 and all(character in "0123456789abcdef" for character in suffix)
 
 
 def _bounded_reason(reason: str) -> str:
@@ -124,8 +138,8 @@ class ConversationBudgetAdmin:
         approved_cap = self._approved_cap(bundle, int(now.timestamp()))
         if type(new_cap_paise) is not int or not 0 <= new_cap_paise <= ADMIN_BUDGET_CEILING_PAISE:
             raise ConversationError("The budget cap must be between INR 0 and INR 10,000.")
-        if new_cap_paise != approved_cap:
-            raise ConversationDenied("The budget cap must match the pinned release approval.")
+        if new_cap_paise > approved_cap:
+            raise ConversationDenied("The budget cap cannot exceed the pinned release approval.")
         if type(expected_revision) is not int or not 0 <= expected_revision < 2_147_483_647:
             raise ConversationError("Use the current budget revision.")
         reason = _bounded_reason(reason)
@@ -134,7 +148,7 @@ class ConversationBudgetAdmin:
             "new_cap_paise": new_cap_paise,
             "expected_revision": expected_revision,
             "reason": reason,
-            "approval_ref": bundle.budget_authorization_ref,
+            "approval_ref": admin_budget_approval_ref(bundle.digest, actor.person_id, key),
         }
         replay = await self.app._replay(actor, key, "conversation_budget_cap", intent)
         if replay is not None and replay.result_id is not None:
@@ -157,8 +171,8 @@ class ConversationBudgetAdmin:
                 raise ValueError("scope")
             approval = BudgetCapApproval(
                 scope_id=str(bundle.budget_scope_id),
-                approval_ref=bundle.budget_authorization_ref,
-                owner_actor_id=str(bundle.budget_owner_id),
+                approval_ref=intent["approval_ref"],
+                owner_actor_id=str(actor.person_id),
                 approved_cap_paise=new_cap_paise,
                 previous_budget_fingerprint=before.fingerprint,
                 reason=reason,
@@ -185,4 +199,9 @@ class ConversationBudgetAdmin:
         return self._view(row, approved_cap_paise=approved_cap)
 
 
-__all__ = ["ADMIN_BUDGET_CEILING_PAISE", "ConversationBudgetAdmin"]
+__all__ = [
+    "ADMIN_BUDGET_CEILING_PAISE",
+    "ConversationBudgetAdmin",
+    "admin_budget_approval_ref",
+    "is_admin_budget_approval_ref",
+]

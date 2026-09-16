@@ -260,3 +260,20 @@ def test_activation_cap_counts_c2_and_c5_once() -> None:
     dispatches = ConversationProviderAdmin._approved_configuration(_row(config), bounded)
 
     assert len(dispatches) == 3
+
+
+def test_activation_uses_the_persisted_admin_limit_below_release_cap() -> None:
+    config = _registry_config(
+        "approved-effective-cap-v1", funded=True, text_cost_paise=40
+    )
+    bundle = _approved_bundle(config, funded=True, text_cost_paise=40)
+
+    with pytest.raises(ConversationDenied, match="pinned activation approval"):
+        ConversationProviderAdmin._approved_configuration(
+            _row(config), bundle, budget_limit_paise=50_079
+        )
+
+    dispatches = ConversationProviderAdmin._approved_configuration(
+        _row(config), bundle, budget_limit_paise=50_080
+    )
+    assert len(dispatches) == 3
