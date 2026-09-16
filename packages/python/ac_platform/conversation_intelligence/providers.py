@@ -384,10 +384,7 @@ def deepgram_transcript(
     words = alternative.get("words")
     if not isinstance(words, list) or len(words) > 50000:
         raise ProviderError("deepgram_words_invalid")
-    segments: list[dict[str, Any]] = []
-    last_start = -1.0
-    furthest_end = -1.0
-    overlap_observed = False
+    validated_words: list[tuple[dict[str, Any], str, float, float]] = []
     for word in words:
         if not isinstance(word, dict):
             raise ProviderError("deepgram_word_invalid")
@@ -404,10 +401,19 @@ def deepgram_transcript(
             or start < 0
             or end < start
             or end * 1000 > duration_ms + 1000
-            or start < last_start
         ):
             raise ProviderError("deepgram_timing_invalid")
-        last_start = start
+        validated_words.append((word, text, start, end))
+
+    # Deepgram can return a small out-of-order timestamp while all individual
+    # word bounds remain valid. Keep the raw provider response untouched and
+    # derive a stable chronological playback view from the validated words.
+    validated_words.sort(key=lambda item: (item[2], item[3]))
+
+    segments: list[dict[str, Any]] = []
+    furthest_end = -1.0
+    overlap_observed = False
+    for word, text, start, end in validated_words:
         overlap_observed = overlap_observed or start < furthest_end
         furthest_end = max(furthest_end, end)
         if not text.strip() or start == end:

@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
+    ProviderResult,
     deepgram_transcript,
     scribe_transcript,
 )
@@ -452,6 +453,123 @@ def test_deepgram_preserves_hinglish_text_switching_and_unverified_speakers():
     assert normalized["segments"][1]["text"] == "Haan, bilkul."
     assert normalized["speaker_identity"] == "unverified_provider_labels"
     assert all("channel" not in segment for segment in normalized["segments"])
+
+
+def _deepgram_from_response(payload, *, duration_ms=2_000):
+    audio = b"synthetic-audio"
+    g = grant(audio, provider="deepgram", model="nova-3", operation="transcribe_deepgram_nova3")
+
+    def handler(_):
+        return httpx.Response(200, json=payload)
+
+    result = client(handler).transcribe(g, audio)
+    return result, deepgram_transcript(
+        result,
+        duration_ms=duration_ms,
+        source_sha256=g.quote.source.source_sha256,
+    )
+
+
+def test_deepgram_stably_sorts_valid_out_of_order_words_for_playback():
+    payload = {
+        "results": {
+            "channels": [
+                {
+                    "alternatives": [
+                        {
+                            "transcript": "late first overlap middle",
+                            "words": [
+                                {"word": "late", "start": 1.0, "end": 1.4, "speaker": 0},
+                                {"word": "first", "start": 0.0, "end": 0.8, "speaker": 1},
+                                {"word": "overlap", "start": 0.5, "end": 0.9, "speaker": 1},
+                                {"word": "middle", "start": 0.8, "end": 1.1, "speaker": 0},
+                            ],
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    result, normalized = _deepgram_from_response(payload)
+
+    assert result.data == payload
+    assert normalized["raw_text"] == "late first overlap middle"
+    assert normalized["raw_response_sha256"] == result.response_sha256
+    assert normalized["segments"] == [
+        {
+            "id": "s1",
+            "speaker_id": "speaker_1",
+            "start_ms": 0,
+            "end_ms": 900,
+            "text": "first overlap",
+        },
+        {
+            "id": "s2",
+            "speaker_id": "speaker_0",
+            "start_ms": 800,
+            "end_ms": 1400,
+            "text": "middle late",
+        },
+    ]
+    assert normalized["overlap_observed"] is True
+
+
+@pytest.mark.parametrize(
+    "word",
+    [
+        {"word": "negative", "start": -0.1, "end": 0.2, "speaker": 0},
+        {"word": "backwards", "start": 0.7, "end": 0.2, "speaker": 0},
+        {"word": "tail", "start": 1.0, "end": 2.1, "speaker": 0},
+    ],
+)
+def test_deepgram_rejects_invalid_individual_timestamps(word):
+    payload = {
+        "results": {
+            "channels": [
+                {
+                    "alternatives": [
+                        {"transcript": "synthetic", "words": [word]},
+                    ]
+                }
+            ]
+        }
+    }
+
+    with pytest.raises(ProviderError, match="deepgram_timing_invalid"):
+        _deepgram_from_response(payload, duration_ms=1_000)
+
+
+def test_deepgram_rejects_nonfinite_individual_timestamps():
+    audio = b"synthetic-audio"
+    g = grant(audio, provider="deepgram", model="nova-3", operation="transcribe_deepgram_nova3")
+    payload = {
+        "results": {
+            "channels": [
+                {
+                    "alternatives": [
+                        {
+                            "transcript": "synthetic",
+                            "words": [{"word": "nonfinite", "start": float("nan"), "end": 0.2}],
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    raw = json.dumps(payload, allow_nan=True).encode()
+    result = ProviderResult(
+        "deepgram",
+        "nova-3",
+        None,
+        hashlib.sha256(raw).hexdigest(),
+        raw,
+        payload,
+        input_sha256=g.quote.source.source_sha256,
+    )
+
+    with pytest.raises(ProviderError, match="deepgram_timing_invalid"):
+        deepgram_transcript(result, duration_ms=1_000, source_sha256=g.quote.source.source_sha256)
 
 
 def _scribe_from_response(payload, *, duration_ms=1000):
