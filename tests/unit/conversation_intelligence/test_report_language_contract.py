@@ -43,10 +43,7 @@ def test_coaching_prompt_has_one_action_and_a_sample_phrase() -> None:
 def test_structured_overview_contract_describes_plain_actions_and_uncertainty() -> None:
     shape = reports.OVERVIEW_FORMAT
 
-    assert (
-        "replacement_behavior: one doable action + sample phrase"
-        in shape["improvement_details"]
-    )
+    assert "replacement_behavior: one doable action + sample phrase" in shape["improvement_details"]
 
 
 def test_language_contract_keeps_existing_stage_and_profile_approval_bindings() -> None:
