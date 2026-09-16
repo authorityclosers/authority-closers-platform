@@ -21,6 +21,7 @@ vm.runInNewContext(
   { exports: fixtureModule.exports, require: createRequire(fixturePath) },
 );
 const fixture = fixtureModule.exports;
+const normalMotion = process.env.SALES_XRAY_QA_MOTION === "normal";
 const reportEnvelope = structuredClone(fixture.envelope);
 if (process.env.SALES_XRAY_QA_LONG === "1") {
   const content = reportEnvelope.report.content;
@@ -55,11 +56,78 @@ assert.match(
 const output = path.join(
   root,
   ".tmp/sales-xray-ui-qa",
+  normalMotion ? "normal-motion" : ".",
   process.env.SALES_XRAY_QA_LONG === "1" ? "long" : ".",
 );
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
+async function assertTopLayerInScrolledShell(page, viewport) {
+  await page.waitForFunction(() =>
+    document
+      .querySelector("dialog:modal")
+      ?.getAnimations({ subtree: true })
+      .every((animation) => animation.playState === "finished"),
+  );
+  const measured = await page.evaluate(() => {
+    const dialog = document.querySelector("dialog:modal");
+    const sheet = dialog?.hasAttribute("data-review-backdrop")
+      ? dialog.firstElementChild
+      : dialog;
+    if (!dialog || !sheet) return { modal: false };
+    const main = document.querySelector(".studio-main");
+    const report = document.querySelector(".studio-report");
+    const originalHeight = report.style.minHeight;
+    const originalScroll = main.scrollTop;
+    const read = () => {
+      const rect = sheet.getBoundingClientRect();
+      const footer = sheet.querySelector("footer").getBoundingClientRect();
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        footer: footer.bottom,
+      };
+    };
+    const before = read();
+    report.style.minHeight = "1800px";
+    main.scrollTop = 400;
+    const scrollTop = main.scrollTop;
+    const after = read();
+    report.style.minHeight = originalHeight;
+    main.scrollTop = originalScroll;
+    return {
+      modal: dialog.matches(":modal"),
+      transform: getComputedStyle(report).transform,
+      scrollTop,
+      before,
+      after,
+    };
+  });
+  assert.equal(measured.modal, true, "shared reader must use native top layer");
+  assert.ok(
+    measured.scrollTop >= 399,
+    "regression must exercise a scrolled shell",
+  );
+  assert.deepEqual(
+    measured.after,
+    measured.before,
+    "shell scrolling cannot move the reader",
+  );
+  assert.ok(
+    measured.after.top >= 0 &&
+      measured.after.bottom <= viewport.height + 1 &&
+      measured.after.footer <= viewport.height + 1,
+    "whole reader and footer stay in viewport",
+  );
+  results.push({
+    state: "Top-layer scrolled-shell reader",
+    ...viewport,
+    ...measured,
+    verified: true,
+  });
+}
 async function assertReportFits(page, state, viewport) {
   const metrics = await page.evaluate(() => {
     const main = document.querySelector(".studio-main");
@@ -100,6 +168,7 @@ sampleAudio.write("data", 36);
 sampleAudio.writeUInt32LE(16000, 40);
 try {
   for (const viewport of [
+    ...(normalMotion ? [{ width: 1536, height: 674 }] : []),
     { width: 1440, height: 900 },
     { width: 1024, height: 626 },
     { width: 390, height: 844 },
@@ -116,7 +185,7 @@ try {
     ).split(",")) {
       const context = await browser.newContext({
         viewport,
-        reducedMotion: "reduce",
+        reducedMotion: normalMotion ? "no-preference" : "reduce",
       });
       let apiRequests = 0;
       const delayedState = state.startsWith("delayed-");
@@ -565,6 +634,7 @@ try {
             await opener.click();
             const dialog = page.getByRole("dialog", { name: "Review moment" });
             await dialog.waitFor();
+            await assertTopLayerInScrolledShell(page, viewport);
             await page.screenshot({
               path: path.join(
                 output,
@@ -614,6 +684,7 @@ try {
             await opener.click();
             const dialog = page.getByRole("dialog");
             await dialog.waitFor();
+            await assertTopLayerInScrolledShell(page, viewport);
             await page.screenshot({
               path: path.join(
                 output,
@@ -677,6 +748,7 @@ try {
             });
             await opener.click();
             await page.getByRole("dialog").waitFor();
+            await assertTopLayerInScrolledShell(page, viewport);
             await page.screenshot({
               path: path.join(
                 output,
@@ -745,6 +817,7 @@ try {
         });
         await reviewOpener.click();
         await page.getByRole("dialog").waitFor();
+        await assertTopLayerInScrolledShell(page, viewport);
         await page.screenshot({
           path: path.join(
             output,
@@ -888,7 +961,7 @@ try {
         origin,
         data: "synthetic-only",
         browser: "Chromium",
-        reducedMotion: true,
+        reducedMotion: !normalMotion,
         results,
       },
       null,

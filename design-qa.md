@@ -539,3 +539,19 @@ Evidence and exact measurements:
 `docs/evidence/sales-xray-report-20260916/`.
 
 final result: passed
+
+---
+
+## 2026-09-16 — Actual-shell dialog correction
+
+Production20:53 report confirmed identity-transform/scroll containment clipping
+the shared fixed dialog. Reduced-motion QA had masked the root cause. Native
+top-layer dialog preserves styles and escapes this containing block. Normal-motion
+compiled checks now include1536×674 and force400px shell scroll:20 sheet-position
+invariance checks passed across5viewports,105total report result records.
+Full238tests (2workers), independent27tests and build/TypeScript passed.
+Actual candidate private-call verification remains release-coordinator owned:
+normal local Google login requested a passkey and was not bypassed.
+Evidence: `docs/evidence/20260916_SALES_XRAY_TOP_LAYER_DIALOG.md`.
+
+Local correction result: passed. Production verification: pending.
