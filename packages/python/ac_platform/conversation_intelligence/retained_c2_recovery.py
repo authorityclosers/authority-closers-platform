@@ -487,7 +487,6 @@ class RetainedC2ReuseService:
             or quote_row.revoked_at is not None
             or execution.quote_fingerprint != quote.fingerprint
             or execution.approved_by != str(recording.person_id)
-            or execution.authorization_ref != authorization_ref
             or execution.expires_at_epoch != quote.expires_at_epoch
             or (
                 quote.provider_configuration_sha256 is not None

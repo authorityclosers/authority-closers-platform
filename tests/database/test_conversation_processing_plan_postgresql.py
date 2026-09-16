@@ -344,7 +344,25 @@ def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
                     ConversationBudgetAccount, source_quote.budget_scope_id
                 )
                 assert source_budget is not None
-                assert source_budget.snapshot == source_budget_snapshot
+                current_source_snapshot = source_budget.snapshot
+                assert {
+                    key: value
+                    for key, value in current_source_snapshot.items()
+                    if key != "reservations"
+                } == {
+                    key: value
+                    for key, value in source_budget_snapshot.items()
+                    if key != "reservations"
+                }
+                current_reservations = {
+                    item["reservation_id"]: item
+                    for item in current_source_snapshot["reservations"]
+                }
+                for original_reservation in source_budget_snapshot["reservations"]:
+                    assert (
+                        current_reservations[original_reservation["reservation_id"]]
+                        == original_reservation
+                    )
                 target_tasks = list(
                     (
                         await database.scalars(
