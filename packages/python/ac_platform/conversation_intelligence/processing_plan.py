@@ -26,6 +26,10 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
+from ac_platform.conversation_intelligence.contracts import (
+    C5_REPAIR_FAILURE_CODES,
+    C5RepairIntent,
+)
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     MinuteAccount,
@@ -66,15 +70,65 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
+C5_AUTO_REPAIR_ATTEMPTS = 1
+
+
+def planned_c5_requests(stage: StageApproval) -> int:
+    """Reserve one bounded C5 repair only when the pinned approval permits it."""
+
+    return 1 + min(C5_AUTO_REPAIR_ATTEMPTS, max(0, stage.max_requests - 1))
+
+
+def automatic_c5_repair_cost(stage: StageApproval) -> int:
+    return stage.max_cost_paise if planned_c5_requests(stage) > 1 else 0
 
 
 def maximum_plan_cost(stages: tuple[StageApproval, StageApproval, StageApproval]) -> int:
-    """Upper bound: one ASR, each permitted fact chunk, then one judge request."""
+    """Base upper bound: one ASR, each fact chunk and one C5 judge request."""
     c2, c4, c5 = stages
     return c2.max_cost_paise + c4.max_cost_paise * c4.max_requests + c5.max_cost_paise
+
+
+def maximum_plan_cost_with_repair(
+    stages: tuple[StageApproval, StageApproval, StageApproval],
+) -> int:
+    return maximum_plan_cost(stages) + automatic_c5_repair_cost(stages[2])
+
+
+def c5_repair_intent(task: ConversationInferenceTask, job: Job) -> C5RepairIntent | None:
+    """Return a repair intent only for a persisted, returned C5 validation failure."""
+
+    if task.stage != "C5" or task.state != "uncertain":
+        return None
+    request = task.intent.get("request") if isinstance(task.intent, dict) else None
+    if not isinstance(request, dict) or request.get("repair") is not None:
+        return None
+    receipt = job.provider_receipt
+    if (
+        job.kind != "conversation.infer_provider.v1"
+        or job.dispatch_started_at is None
+        or job.provider_idempotency_key != job.dedupe_key
+        or not isinstance(receipt, dict)
+        or receipt.get("schema") != "ac.sales-xray.provider-receipt/1"
+        or receipt.get("validation_state") != "provider_returned"
+        or receipt.get("idempotency_key") != job.provider_idempotency_key
+        or receipt.get("raw_blob_id") != str(task.run_id)
+        or not isinstance(job.last_error, str)
+        or job.last_error not in C5_REPAIR_FAILURE_CODES
+    ):
+        return None
+    try:
+        return C5RepairIntent(
+            failure_code=job.last_error,
+            original_run_id=task.run_id,
+            original_response_sha256=receipt.get("response_sha256"),
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def plan_cost_label(maximum: int) -> str:
@@ -105,6 +159,9 @@ class PlanManifest(BaseModel):
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
     max_cost_paise: int = Field(default=0, strict=True, ge=0, le=2_147_483_647)
+    automatic_c5_repair_cost_paise: int | None = Field(
+        default=None, strict=True, ge=0, le=2_147_483_647
+    )
     max_entitlement_seconds: int = Field(strict=True, ge=0, le=86400)
     analysis_settings_revision: int | None = Field(default=None, strict=True, ge=1)
     output_profile: Literal["standard", "detailed"] = "detailed"
@@ -125,6 +182,7 @@ class PlanManifest(BaseModel):
         ):
             raise ValueError("processing_plan_scope_invalid")
         c2, c4, c5 = self.stages
+        repair_cost = self.automatic_c5_repair_cost_paise or 0
         if (
             (c2.provider_id, c2.model_id) not in TRANSCRIPT_RECIPE_BY_ROUTE
             or c2.recipe_revision != TRANSCRIPT_RECIPE_BY_ROUTE[(c2.provider_id, c2.model_id)]
@@ -138,7 +196,11 @@ class PlanManifest(BaseModel):
             # provider requests have separate request/token/budget approvals and
             # must not add the same audio duration or text work to that ledger.
             or self.max_entitlement_seconds != 0
-            or self.max_cost_paise != maximum_plan_cost(self.stages)
+            or (
+                self.automatic_c5_repair_cost_paise is not None
+                and (planned_c5_requests(c5) <= 1 or repair_cost != automatic_c5_repair_cost(c5))
+            )
+            or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
         return self
@@ -151,6 +213,8 @@ class PlanManifest(BaseModel):
             value.pop("continuation_grant_id", None)
         if self.analysis_settings_revision is None:
             value.pop("analysis_settings_revision", None)
+        if self.automatic_c5_repair_cost_paise is None:
+            value.pop("automatic_c5_repair_cost_paise", None)
         if self.output_profile == "detailed":
             value.pop("output_profile", None)
         return value
@@ -406,6 +470,20 @@ class ConversationProcessingPlans:
             raise ConversationNotFound("No processing plan has been prepared for this call.")
         return row
 
+    async def _automatic_c5_repair(
+        self, value: PlanManifest, task: ConversationInferenceTask
+    ) -> C5RepairIntent | None:
+        """Authorize one repair from the accepted plan's explicit retry budget."""
+
+        if (
+            value.automatic_c5_repair_cost_paise is None
+            or value.automatic_c5_repair_cost_paise != automatic_c5_repair_cost(value.stages[2])
+            or planned_c5_requests(value.stages[2]) <= 1
+        ):
+            return None
+        job = await self.db.get(Job, task.job_id)
+        return None if job is None else c5_repair_intent(task, job)
+
     @staticmethod
     def view(row: ConversationProcessingPlan) -> dict[str, Any]:
         value = manifest_for(row)
@@ -419,6 +497,7 @@ class ConversationProcessingPlans:
             "automatic_progression": True,
             "cost_label": plan_cost_label(value.max_cost_paise),
             "max_cost_paise": value.max_cost_paise,
+            "automatic_c5_repair_cost_paise": value.automatic_c5_repair_cost_paise or 0,
             "max_entitlement_seconds": value.max_entitlement_seconds,
             "expires_at_epoch": value.expires_at_epoch,
             "stages": [
@@ -558,7 +637,8 @@ class ConversationProcessingPlans:
         # provider plan needs zero additional user minutes, even when the last
         # authorized call consumed the account's entire allowance.
         maximum_seconds = 0
-        maximum_cost = maximum_plan_cost((c2, c4, c5))
+        maximum_cost = maximum_plan_cost_with_repair((c2, c4, c5))
+        repair_cost = automatic_c5_repair_cost(c5)
         if maximum_cost:
             budget_row = await self.db.get(ConversationBudgetAccount, bundle.budget_scope_id)
             if budget_row is None:
@@ -615,6 +695,9 @@ class ConversationProcessingPlans:
                 ),
                 max_entitlement_seconds=maximum_seconds,
                 max_cost_paise=maximum_cost,
+                automatic_c5_repair_cost_paise=(
+                    repair_cost if planned_c5_requests(c5) > 1 else None
+                ),
                 analysis_settings_revision=None if settings_row is None else settings_row.revision,
                 output_profile=analysis_settings.c5_output_profile,
             )
@@ -771,6 +854,7 @@ class ConversationProcessingPlans:
         c2 = await self._enqueue(actor, row, value, None)
         tasks = [c2]
         current = "C2"
+        repair_progress: dict[str, Any] | None = None
         if c2.state == "completed" and c2.checkpoint_id is not None:
             c4 = value.stages[1]
             first_request = StageRequest(
@@ -803,27 +887,44 @@ class ConversationProcessingPlans:
             if len(facts) == count:
                 c5 = value.stages[2]
                 current = "C5"
+                c5_request = StageRequest(
+                    stage="C5",
+                    transcript_checkpoint_id=c2.checkpoint_id,
+                    fact_checkpoint_ids=tuple(facts),
+                    provider=c5.provider_id,
+                    model=c5.model_id,
+                    max_input_chars=value.max_input_chars,
+                    max_completion_tokens=stage_completion_limit(
+                        "C5",
+                        c5.max_completion_tokens,
+                        provider=c5.provider_id,
+                        model=c5.model_id,
+                    ),
+                    output_profile=value.output_profile,
+                    profile=value.profile,
+                )
                 judge = await self._enqueue(
                     actor,
                     row,
                     value,
-                    StageRequest(
-                        stage="C5",
-                        transcript_checkpoint_id=c2.checkpoint_id,
-                        fact_checkpoint_ids=tuple(facts),
-                        provider=c5.provider_id,
-                        model=c5.model_id,
-                        max_input_chars=value.max_input_chars,
-                        max_completion_tokens=stage_completion_limit(
-                            "C5",
-                            c5.max_completion_tokens,
-                            provider=c5.provider_id,
-                            model=c5.model_id,
-                        ),
-                        output_profile=value.output_profile,
-                        profile=value.profile,
-                    ),
+                    c5_request,
                 )
+                if judge.state == "uncertain":
+                    repair = await self._automatic_c5_repair(value, judge)
+                    if repair is not None:
+                        repair_progress = {
+                            "attempt": repair.attempt,
+                            "failure_code": repair.failure_code,
+                            "original_run_id": str(repair.original_run_id),
+                            "original_response_sha256": repair.original_response_sha256,
+                        }
+                        judge = await self._enqueue(
+                            actor,
+                            row,
+                            value,
+                            c5_request.model_copy(update={"repair": repair}),
+                        )
+                        repair_progress.update({"run_id": str(judge.run_id), "state": judge.state})
                 tasks.append(judge)
                 if judge.state == "completed":
                     report = await self.db.scalar(
@@ -837,6 +938,8 @@ class ConversationProcessingPlans:
                         raise ConversationConflict("The completed coaching report is unavailable.")
                     row.state = "completed"
                     row.progress = {"current_stage": "C6", "report_run_id": str(judge.run_id)}
+                    if repair_progress is not None:
+                        row.progress["c5_repair"] = repair_progress
                     return
         bad = next(
             (item for item in tasks if item.state in {"failed", "uncertain", "cancelled"}), None
@@ -846,6 +949,8 @@ class ConversationProcessingPlans:
             row.progress = {"current_stage": bad.stage, "failure_code": f"stage_{bad.state}"}
         else:
             row.progress = {"current_stage": current}
+        if repair_progress is not None:
+            row.progress["c5_repair"] = repair_progress
         row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
 
 
