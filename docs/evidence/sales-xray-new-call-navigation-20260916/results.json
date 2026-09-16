@@ -1,0 +1,58 @@
+{
+  "capturedAt": "2026-09-16T13:16:42.077Z",
+  "origin": "http://127.0.0.1:3119",
+  "data": "synthetic-only",
+  "results": [
+    {
+      "width": 1024,
+      "height": 626,
+      "escapeBounds": {
+        "x": 697.734375,
+        "y": 290.640625,
+        "width": 170.453125,
+        "height": 42.390625
+      },
+      "sidebarNewCall": true,
+      "reloadStaysNew": true,
+      "errorEscape": true,
+      "explicitCallRestores": true,
+      "savedSelectorPreserved": true,
+      "writes": [],
+      "errors": []
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "escapeBounds": {
+        "x": 145.953125,
+        "y": 289.453125,
+        "width": 170.453125,
+        "height": 42.390625
+      },
+      "sidebarNewCall": true,
+      "reloadStaysNew": true,
+      "errorEscape": true,
+      "explicitCallRestores": true,
+      "savedSelectorPreserved": true,
+      "writes": [],
+      "errors": []
+    },
+    {
+      "width": 375,
+      "height": 667,
+      "escapeBounds": {
+        "x": 145.953125,
+        "y": 281.453125,
+        "width": 170.453125,
+        "height": 42.390625
+      },
+      "sidebarNewCall": true,
+      "reloadStaysNew": true,
+      "errorEscape": true,
+      "explicitCallRestores": true,
+      "savedSelectorPreserved": true,
+      "writes": [],
+      "errors": []
+    }
+  ]
+}

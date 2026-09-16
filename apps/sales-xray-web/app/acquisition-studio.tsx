@@ -68,6 +68,7 @@ import {
 } from "./acquisition-client";
 import { ProcessingVisual } from "./processing-visual";
 import { ProcessingStatusCopy } from "./processing-status-copy";
+import { isNewCallRequested, setNewCallRequested } from "./new-call-navigation";
 import { UploadCheck } from "./upload-check";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
@@ -201,6 +202,11 @@ export function AcquisitionStudio({
   useEffect(() => {
     const abort = new AbortController();
     const signal = abort.signal;
+    // Capture this navigation before any awaits. A new upload can consume the
+    // URL marker while entry/session reads are still in flight.
+    const requested = requestedSubmissionId();
+    const newCall = !requested && isNewCallRequested();
+    const saved = requested ?? (newCall ? null : savedSubmissionId());
     let timedOut = false;
     const timeout = window.setTimeout(() => {
       timedOut = true;
@@ -215,10 +221,6 @@ export function AcquisitionStudio({
         const terms = parsePolicy(
           await acquisition("/upload-policy", { signal }),
         );
-        // A library selection identifies the call to open. It is only a
-        // selector: the service still verifies the current owner's access.
-        const requested = requestedSubmissionId();
-        const saved = requested ?? savedSubmissionId();
         let current: Record<string, unknown> | null = null;
         try {
           current = record(await acquisition("/session", { signal }));
@@ -236,11 +238,13 @@ export function AcquisitionStudio({
           setAllowance(parseAllowance(current.allowance));
           setAllowanceUnknown(false);
           setClaimAvailable(
-            !requested &&
+            !newCall &&
+              !requested &&
               (current.claim_available === true ||
                 current.state === "claim_required"),
           );
           if (
+            !newCall &&
             !requested &&
             (current.claim_available === true ||
               current.state === "claim_required")
@@ -622,6 +626,8 @@ export function AcquisitionStudio({
       // Only an opaque selector is remembered. Cookies stay HttpOnly; no report,
       // transcript, filename, audio or credential is copied to browser storage.
       rememberSubmission(id);
+      // Once a new upload starts, reload must recover that attempt normally.
+      setNewCallRequested(false);
       const raw = record(
         await acquisition(`${submissionPath(id)}/source`, {
           method: "PUT",
@@ -721,7 +727,11 @@ export function AcquisitionStudio({
   }
 
   function startAnotherCall() {
+    if (inFlight.current) return;
     reset({ preserveSavedSubmission: true });
+    setNewCallRequested(true);
+    // Re-read entry/session without racing an older saved-call lookup.
+    setAttempt((n) => n + 1);
   }
 
   function forgetSavedCall() {
@@ -1657,8 +1667,7 @@ export function AcquisitionStudio({
                       quoteKey.current = "";
                     }
                     setPollAttempt((n) => n + 1);
-                  }
-                  else setAttempt((n) => n + 1);
+                  } else setAttempt((n) => n + 1);
                 }}
               >
                 Check again
@@ -1673,7 +1682,7 @@ export function AcquisitionStudio({
                   Request a fresh plan
                 </button>
               )}
-              {submission && (!progress || (plan && !plan.accepted)) && (
+              {(!submission || !progress || (plan && !plan.accepted)) && (
                 <button
                   type="button"
                   className="secondary-button"
