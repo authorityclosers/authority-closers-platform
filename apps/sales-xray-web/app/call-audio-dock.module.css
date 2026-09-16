@@ -110,16 +110,10 @@
   outline-offset: 3px;
 }
 .message {
-  position: absolute;
-  right: 16px;
-  bottom: calc(100% + 8px);
-  max-width: min(420px, calc(100vw - 32px));
-  padding: 10px 14px;
-  border: 1px solid #dce5ed;
-  border-radius: 12px;
-  background: white;
-  font-size: 14px;
-  box-shadow: 0 4px 20px #17364e0f;
+  display: block;
+  color: #60738f;
+  font-size: 11px;
+  line-height: 1.35;
 }
 @media (max-width: 760px) {
   .dock {

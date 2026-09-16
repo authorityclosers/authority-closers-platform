@@ -31,7 +31,7 @@ import {
 import { AcquisitionShell } from "./acquisition-shell";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
-import { ReportFactors } from "./report-factors";
+import { SalesSkills } from "./sales-skills";
 import { NextCallPlan } from "./next-call-plan";
 import {
   ReportTranscript,
@@ -1681,6 +1681,12 @@ export function AcquisitionStudio({
               aria-label="Sales call report"
             >
               <div className={styles.reportHeader}>
+                <div className={styles.reportHeading}>
+                  <h1>Your call, clearly.</h1>
+                  <p>
+                    Actionable insights. Real conversations. A stronger you.
+                  </p>
+                </div>
                 <details className={styles.reportMoreActions}>
                   <summary
                     aria-label="More report actions"
@@ -1689,6 +1695,11 @@ export function AcquisitionStudio({
                     <MoreHorizontal size={19} aria-hidden="true" />
                   </summary>
                   <div className={styles.reportMoreMenu} role="menu">
+                    {!result.claimed && (
+                      <Link href="/login" role="menuitem">
+                        Sign in to save this call
+                      </Link>
+                    )}
                     <button
                       type="button"
                       role="menuitem"
@@ -1707,6 +1718,11 @@ export function AcquisitionStudio({
                       <ArrowRight size={16} aria-hidden="true" />
                       Analyse another call
                     </button>
+                    <p className={styles.reportMetadata}>
+                      Draft coaching; not adjudicated by Dipak. Speaker labels
+                      are unverified.
+                      {` Source: ${report.source_label}. Duration: ${time(result.transcript.duration_ms)}.`}
+                    </p>
                     {submission && (
                       <div className={styles.reportPrivacyMenu}>
                         <strong>Privacy &amp; support</strong>
@@ -1762,6 +1778,7 @@ export function AcquisitionStudio({
                     label: "Overview",
                     content: (
                       <DipakOverview
+                        showHeading={false}
                         report={report}
                         onSelectEvidence={seek}
                         onUnlock={() => router.push("/login")}
@@ -1790,12 +1807,7 @@ export function AcquisitionStudio({
                   {
                     id: "skills",
                     label: "Sales skills",
-                    content: (
-                      <ReportFactors
-                        dimensions={report.dimensions}
-                        language="en"
-                      />
-                    ),
+                    content: <SalesSkills dimensions={report.dimensions} />,
                   },
                   {
                     id: "next-call-plan",
@@ -1810,32 +1822,6 @@ export function AcquisitionStudio({
                   },
                 ]}
               />
-              {!result.claimed && (
-                <aside className={styles.claim}>
-                  <ShieldCheck size={22} />
-                  <div>
-                    <h2>Keep your report with your AC account</h2>
-                    <p>
-                      Sign in to keep this call and any future reviews together.
-                    </p>
-                  </div>
-                  <Link href="/login" className="primary-button">
-                    Sign in to save this call <ArrowRight size={16} />
-                  </Link>
-                </aside>
-              )}
-              <details className="studio-report-details">
-                <summary lang="en">Report details</summary>
-                <p lang="en">
-                  This draft uses evidence from the authorized recording.
-                  Speaker labels remain unverified.
-                  {` Source: ${report.source_label}.`}
-                  {report.review_status === "draft_not_dipak_adjudicated"
-                    ? " Review status: draft; Dipak has not adjudicated this report."
-                    : " Review status is recorded in the report."}
-                  {` Duration: ${time(result.transcript.duration_ms)}.`}
-                </p>
-              </details>
             </section>
             <CallAudioDock
               audioRef={audio}

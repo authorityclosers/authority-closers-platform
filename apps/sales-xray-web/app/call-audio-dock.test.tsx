@@ -102,6 +102,11 @@ it("keeps report-safe playback failures readable without fabricating waveform da
   );
   expect(container.textContent).not.toContain("private internals");
   expect(
+    container
+      .querySelector('[role="status"]')
+      ?.parentElement?.querySelector("strong")?.textContent,
+  ).toBe("Your saved sales call");
+  expect(
     container.querySelector('[aria-label="Audio level preview unavailable"]'),
   ).not.toBeNull();
   expect(

@@ -19,6 +19,9 @@ type Props = {
   onNext: () => void;
   previousDisabled?: boolean;
   nextDisabled?: boolean;
+  previousLabel?: string;
+  nextLabel?: string;
+  closeLabel?: string;
   children: ReactNode;
 };
 
@@ -33,11 +36,26 @@ export function ReviewDialog({
   onNext,
   previousDisabled = false,
   nextDisabled = false,
+  previousLabel = "Previous point",
+  nextLabel = "Next point",
+  closeLabel = "Close review point",
   children,
 }: Props) {
   const prefix = useId();
   const closeButton = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const previousPosition = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      open &&
+      previousPosition.current !== null &&
+      previousPosition.current !== position
+    )
+      heading.current?.focus();
+    previousPosition.current = open ? position : null;
+  }, [open, position]);
 
   useEffect(() => {
     if (!open) return;
@@ -76,7 +94,11 @@ export function ReviewDialog({
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    if (
+      event.shiftKey &&
+      (document.activeElement === first ||
+        document.activeElement === heading.current)
+    ) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -105,14 +127,16 @@ export function ReviewDialog({
           <header className={styles.header}>
             <div className={styles.heading}>
               <span className={styles.eyebrow}>{position}</span>
-              <h2 id={`${prefix}-title`}>{title}</h2>
+              <h2 ref={heading} tabIndex={-1} id={`${prefix}-title`}>
+                {title}
+              </h2>
               <p id={`${prefix}-position`}>{eyebrow}</p>
             </div>
             <button
               ref={closeButton}
               className={styles.close}
               type="button"
-              aria-label="Close review point"
+              aria-label={closeLabel}
               onClick={onClose}
             >
               ×
@@ -127,7 +151,7 @@ export function ReviewDialog({
               onClick={onPrevious}
               disabled={previousDisabled}
             >
-              <span aria-hidden="true">←</span> Previous point
+              <span aria-hidden="true">←</span> {previousLabel}
             </button>
             <button
               className={styles.primaryAction}
@@ -136,7 +160,7 @@ export function ReviewDialog({
               onClick={onNext}
               disabled={nextDisabled}
             >
-              Next point <span aria-hidden="true">→</span>
+              {nextLabel} <span aria-hidden="true">→</span>
             </button>
           </footer>
         </div>

@@ -22,7 +22,7 @@ export function ReportExplorer({
   if (!panels.length) return null;
 
   return (
-    <div className={styles.explorer}>
+    <div className={styles.explorer} data-report-section={active}>
       <div className={styles.tabs} role="tablist" aria-label={label}>
         {panels.map((panel, index) => (
           <button

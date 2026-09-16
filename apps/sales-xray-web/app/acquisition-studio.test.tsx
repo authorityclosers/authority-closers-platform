@@ -338,14 +338,21 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
   expect(container.textContent).not.toContain("Call length");
   expect(container.textContent).toContain(
-    "Review status: draft; Dipak has not adjudicated this report.",
+    "Draft coaching; not adjudicated by Dipak.",
   );
   expect(container.textContent).toContain(`Source: ${envelope.source_label}.`);
   const details = container.querySelector<HTMLDetailsElement>(
-    ".studio-report-details",
+    ".studio-report details",
   );
   expect(details).not.toBeNull();
   expect(details?.open).toBe(false);
+  await act(async () => details?.querySelector("summary")?.click());
+  expect(details?.open).toBe(true);
+  expect(details?.textContent).toContain("Source:");
+  expect(details?.textContent).toContain("Speaker labels");
+  expect(details?.querySelector('a[role="menuitem"]')?.textContent).toContain(
+    "Sign in to save this call",
+  );
   expect(
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',

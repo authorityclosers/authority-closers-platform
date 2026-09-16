@@ -1257,21 +1257,40 @@
 .reportHeader {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16px;
   min-height: 42px;
-  margin-bottom: 2px;
+  margin-bottom: 12px;
 }
 .reportHeader > div:first-child {
   min-width: 0;
 }
 .app[data-stage="report"] .reportHeader h1 {
   margin: 0;
-  color: var(--ink);
+  color: #10243d;
   font-family: inherit;
-  font-size: 19px;
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.15;
+}
+.reportHeading p {
+  margin: 6px 0 0;
+  color: #60738f;
+  font-size: 14px;
+  line-height: 1.4;
+}
+@media (max-width: 620px) {
+  .app[data-stage="report"] .reportHeader {
+    flex-wrap: nowrap;
+    margin-bottom: 4px;
+  }
+  .reportHeading p {
+    display: none;
+  }
+  .app[data-stage="report"] .reportHeader h1 {
+    font-size: 24px;
+  }
 }
 /* Report-ready state uses the fixed CallAudioDock; keep the upload entry
    controls out of the report flow while keeping secondary actions compact. */
@@ -1281,6 +1300,30 @@
 
 .reportMoreActions {
   position: relative;
+}
+.app[data-stage="report"] .reportMoreActions {
+  margin: 0;
+}
+.app[data-stage="report"] :global(.studio-main) {
+  padding-bottom: 90px;
+}
+.reportMoreMenu > a {
+  padding: 10px 12px;
+  color: #007d79;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.reportMoreMenu .reportMetadata {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: #60738f;
+}
+@media (max-width: 620px) {
+  .app[data-stage="report"][data-variant="standalone"] :global(.studio-main) {
+    padding: 6px 16px 80px;
+  }
 }
 
 .reportMoreActions summary {

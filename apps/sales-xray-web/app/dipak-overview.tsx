@@ -25,6 +25,7 @@ type Props = {
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
   durationMs?: number;
+  showHeading?: boolean;
 };
 
 type ChapterId = "start" | "read" | "practice" | "close";
@@ -178,6 +179,7 @@ export function DipakOverview({
   onSelectEvidence,
   onUnlock,
   durationMs,
+  showHeading = true,
 }: Props) {
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -448,7 +450,7 @@ export function DipakOverview({
         aria-label="Report summary"
         data-summary-card="summary"
       >
-        <div className={styles.resultLeadCopy}>
+        <div className={styles.resultLeadCopy} hidden={!showHeading}>
           <p className={styles.eyebrow}>CALL REVIEW</p>
           <h1>Your call, clearly.</h1>
           <p className={styles.heroSubcopy}>{report.summary}</p>

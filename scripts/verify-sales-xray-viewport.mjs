@@ -31,6 +31,30 @@ const output = path.join(root, ".tmp/sales-xray-ui-qa");
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
+async function assertReportFits(page, state, viewport) {
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector(".studio-main");
+    const panel = document.querySelector(
+      '[data-report-section] > [role="tabpanel"]:not([hidden])',
+    );
+    const dock = document.querySelector('[aria-label="Call audio player"]');
+    return {
+      mainHeight: main.clientHeight,
+      mainScroll: main.scrollHeight,
+      contentBottom: panel.getBoundingClientRect().bottom,
+      playerTop: dock.getBoundingClientRect().top,
+    };
+  });
+  assert.ok(
+    metrics.mainScroll <= metrics.mainHeight + 1,
+    `${state} inner overflow at ${viewport.width}: ${JSON.stringify(metrics)}`,
+  );
+  assert.ok(
+    metrics.contentBottom <= metrics.playerTop + 1,
+    `${state} covered by audio player at ${viewport.width}: ${JSON.stringify(metrics)}`,
+  );
+  results.push({ state, ...viewport, ...metrics, fits: true });
+}
 // A valid, silent one-second PCM WAV so preview errors do not distort layout.
 const sampleAudio = Buffer.alloc(16044);
 sampleAudio.write("RIFF", 0);
@@ -354,12 +378,161 @@ try {
       if (state === "report") {
         for (const tab of ["Moments", "Sales skills", "Next-call plan"]) {
           await page.getByRole("tab", { name: tab, exact: true }).click();
+          const tabMetrics = await page.evaluate(() => {
+            const main = document.querySelector(".studio-main");
+            const panel = document.querySelector(
+              '[data-report-section] > [role="tabpanel"]:not([hidden])',
+            );
+            const dock = document.querySelector(
+              '[aria-label="Call audio player"]',
+            );
+            return {
+              mainHeight: main.clientHeight,
+              mainScroll: main.scrollHeight,
+              contentBottom: panel.getBoundingClientRect().bottom,
+              playerTop: dock.getBoundingClientRect().top,
+            };
+          });
+          results.push({
+            state: tab,
+            width: viewport.width,
+            height: viewport.height,
+            ...tabMetrics,
+          });
+          if (tab !== "Moments")
+            await assertReportFits(page, `${tab} fit`, viewport);
           await page.screenshot({
             path: path.join(
               output,
               `${tab.toLowerCase().replaceAll(" ", "-")}-${viewport.width}x${viewport.height}.png`,
             ),
           });
+          if (tab === "Sales skills") {
+            const opener = page
+              .getByRole("button", { name: /^Open notes:/ })
+              .filter({ visible: true })
+              .first();
+            await opener.click();
+            const dialog = page.getByRole("dialog");
+            await dialog.waitFor();
+            await page.screenshot({
+              path: path.join(
+                output,
+                `skill-notes-${viewport.width}x${viewport.height}.png`,
+              ),
+            });
+            for (let index = 1; index < 8; index++)
+              await dialog.getByRole("button", { name: "Next skill" }).click();
+            assert.equal(
+              await dialog
+                .getByRole("button", { name: "Next skill" })
+                .isDisabled(),
+              true,
+            );
+            assert.equal(
+              await page.evaluate(() => document.activeElement.tagName),
+              "H2",
+            );
+            await page.keyboard.press("Shift+Tab");
+            assert.equal(
+              await dialog
+                .getByRole("button", { name: "Previous skill" })
+                .evaluate((el) => el === document.activeElement),
+              true,
+            );
+            await page.keyboard.press("Tab");
+            assert.equal(
+              await dialog
+                .getByRole("button", { name: "Close skill notes" })
+                .evaluate((el) => el === document.activeElement),
+              true,
+            );
+            await page.keyboard.press("Escape");
+            assert.equal(
+              await opener.evaluate((el) => el === document.activeElement),
+              true,
+            );
+            if (viewport.width <= 1100 || viewport.height <= 740) {
+              await page
+                .getByRole("button", { name: "Next skills", exact: true })
+                .click();
+              assert.equal(
+                await page
+                  .getByRole("button", { name: /^Open notes:/ })
+                  .filter({ visible: true })
+                  .count(),
+                4,
+              );
+              await page.screenshot({
+                path: path.join(
+                  output,
+                  `skills-page-2-${viewport.width}x${viewport.height}.png`,
+                ),
+              });
+              await assertReportFits(page, "Sales skills page 2", viewport);
+            }
+          }
+          if (tab === "Next-call plan") {
+            const opener = page.getByRole("button", {
+              name: /Read full notes.*Keep doing this/,
+            });
+            await opener.click();
+            await page.getByRole("dialog").waitFor();
+            await page.screenshot({
+              path: path.join(
+                output,
+                `plan-notes-${viewport.width}x${viewport.height}.png`,
+              ),
+            });
+            await page.keyboard.press("Escape");
+            if (viewport.width <= 620) {
+              for (const name of ["Change", "Practise"]) {
+                await page.getByRole("button", { name, exact: true }).click();
+                await assertReportFits(page, `Plan ${name}`, viewport);
+                await page.screenshot({
+                  path: path.join(
+                    output,
+                    `plan-${name.toLowerCase()}-${viewport.width}x${viewport.height}.png`,
+                  ),
+                });
+              }
+            }
+          }
+          if (tab !== "Moments") {
+            await page.emulateMedia({ media: "print" });
+            const printState = await page.evaluate((label) => {
+              const section = document.querySelector(
+                `section[aria-label="${label}"]`,
+              );
+              return [...section.querySelectorAll("article")].map((card) => ({
+                visible: getComputedStyle(card).display !== "none",
+                titleClamp: getComputedStyle(card.querySelector("h3"))
+                  .webkitLineClamp,
+                paragraphs: [...card.querySelectorAll("p")].map((p) => ({
+                  display: getComputedStyle(p).display,
+                  clamp: getComputedStyle(p).webkitLineClamp,
+                })),
+              }));
+            }, tab);
+            assert.equal(printState.length, tab === "Sales skills" ? 8 : 3);
+            assert.ok(
+              printState.every(
+                (card) =>
+                  card.visible &&
+                  card.titleClamp === "none" &&
+                  card.paragraphs.every(
+                    (p) => p.display !== "none" && p.clamp === "none",
+                  ),
+              ),
+              `${tab} print must include complete notes`,
+            );
+            await page.emulateMedia({ media: "screen" });
+            results.push({
+              state: `${tab} complete print`,
+              ...viewport,
+              verified: true,
+            });
+          }
         }
         await page.getByRole("tab", { name: "Overview", exact: true }).click();
         await page.locator('[data-insight-number="02"]').click();
@@ -378,6 +551,47 @@ try {
     }
   }
   console.log(JSON.stringify(results, null, 2));
+  if (results.some((result) => result.state === "Sales skills")) {
+    for (const [name, rendered] of [
+      ["skills", "sales-skills"],
+      ["plan", "next-call-plan"],
+    ]) {
+      for (const [kind, width, height] of [
+        ["desktop", 1440, 900],
+        ["mobile", 375, 667],
+      ]) {
+        if (
+          process.env.SALES_XRAY_QA_WIDTH &&
+          width !== Number(process.env.SALES_XRAY_QA_WIDTH)
+        )
+          continue;
+        const reference = await readFile(
+          path.join(
+            root,
+            `docs/design/sales-xray-20260916/${name}-${kind}-v1.png`,
+          ),
+        );
+        const implementation = await readFile(
+          path.join(output, `${rendered}-${width}x${height}.png`),
+        );
+        const comparison = await browser.newPage({
+          viewport: { width: width * 2, height: height + 36 },
+        });
+        await comparison.setContent(
+          `<style>body{margin:0;font:14px sans-serif;display:flex;background:#edf1f5}figure{margin:0;width:${width}px}figcaption{height:36px;box-sizing:border-box;padding:10px}img{width:${width}px;height:${height}px;object-fit:contain;display:block;background:white}</style><figure><figcaption>Generated reference · ${name} · normalized ${width}×${height}</figcaption><img src="data:image/png;base64,${reference.toString("base64")}"></figure><figure><figcaption>Compiled implementation · synthetic report · ${width}×${height}</figcaption><img src="data:image/png;base64,${implementation.toString("base64")}"></figure>`,
+        );
+        await comparison
+          .locator("img")
+          .evaluateAll((images) =>
+            Promise.all(images.map((img) => img.decode())),
+          );
+        await comparison.screenshot({
+          path: path.join(output, `comparison-${name}-${kind}.png`),
+        });
+        await comparison.close();
+      }
+    }
+  }
   await writeFile(
     path.join(output, "viewport-results.json"),
     JSON.stringify(

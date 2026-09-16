@@ -87,9 +87,15 @@ export function CallAudioDock({
         </span>
         <div>
           <strong title={title}>{title}</strong>
-          <span>
-            {time(current)} / {time(total)}
-          </span>
+          {message ? (
+            <span className={styles.message} role="status">
+              {message}
+            </span>
+          ) : (
+            <span>
+              {time(current)} / {time(total)}
+            </span>
+          )}
         </div>
       </div>
       <button
@@ -157,11 +163,6 @@ export function CallAudioDock({
       >
         {rate}×
       </button>
-      {message && (
-        <span className={styles.message} role="status">
-          {message}
-        </span>
-      )}
     </section>
   );
 }

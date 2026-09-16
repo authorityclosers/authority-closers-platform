@@ -29,6 +29,26 @@ dimensions. Functional one-viewport proof is in the separate compiled QA report.
 Final prompt set: [prompts.md](prompts.md). Remaining report/edge-state image
 references are **queued**, not generated. No new brand direction is proposed.
 
+### Superseding update — Skills / Next-call plan, 2026-09-16
+
+The four references below are now generated, inspected and selected as
+contract-faithful implementation guidance. The earlier queued statement remains
+historical for other unfinished surfaces. Original user masters are unchanged.
+Normal Chat source: https://chatgpt.com/c/6aaa0e75-1c68-83e8-92a4-9a0621fba541
+
+| Output | SHA256 | Original downloaded filename |
+| --- | --- | --- |
+| [Skills desktop](skills-desktop-v1.png) | `b13e34dc9bfeca5bc52f5f88cfc5b3e5c9da8fdcab03275e6f36e98bc3dddbdb` | ChatGPT Image Sep 16, 2026, 09_41_22 AM.png |
+| [Skills mobile](skills-mobile-v1.png) | `05d124426060e05d0d861c0d3ab855d3a2cca3bd51fcd54fa00a7a9c907b0a82` | ChatGPT Image Sep 16, 2026, 09_55_36 AM.png |
+| [Plan desktop](plan-desktop-v1.png) | `188484d6a33c24c1f2e25b067ac1562e45b19fd608648bac9d9f5286b45d5d58` | ChatGPT Image Sep 16, 2026, 10_12_50 AM.png |
+| [Plan mobile](plan-mobile-v1.png) | `6c78bb4ad76c85c679d8224a9396c607dbd70b0bdad05bbb79aac93f2bc843c3` | ChatGPT Image Sep 16, 2026, 10_30_02 AM.png |
+
+Desktop masters1586×992; mobile940×1672. These are generated references, not
+user approval of every detail or runtime evidence. See the bounded implemented
+slice and browser results in [Skills/Plan evidence](../../evidence/20260916_SALES_XRAY_SKILLS_PLAN.md).
+Sales skills retains eight real dimensions; plan does not fabricate a saved
+checklist. This supersedes those two implementation-gap rows below only.
+
 ## Route and data seams
 
 Public upload/report: `/` and `/?call=<authorized submission>` through
@@ -104,6 +124,25 @@ A read-only follow-up review of this exact source tree found:
 
 These are acceptance gaps from the inspected baseline, not claims about newer
 backend commits or new regressions caused by the upload slice.
+
+### Core373 audit correction
+
+Independent read-only inspection of backend3739396 on2026-09-16 confirms the
+owner-bound submission `/waveform` endpoint exists. The earlier2063 tree
+absence is not a production claim. The successful `ac.sales-xray.waveform/1`
+`rms_envelope` matches the frontend: positive duration, ordered fractional or
+integer timestamps, up to1200 points, levels null or0..1. Missing C1 gives409;
+wrong ownership/deletion/revocation/retention gives404; credentials401/403.
+Expired processing lease alone does not revoke retained owner reads.
+
+Still unverified by this UI slice: actual waveform delivery, transient-read
+retry (queued), and an acquisition-owner-authorized measurement endpoint for
+AudioAtlas. Do not reuse the processing-person-owned recording endpoint after
+claim or weaken ownership checks to make that integration appear complete.
+
+Release-coordinator report: web4c8cfe9 is live as of2026-09-16 04:00:18UTC,
+Core373 retained, with live processing desktop/mobile viewport checks. This is
+coordinator evidence, not a deployment performed by this Skills/Plan slice.
 
 ## Release and safety boundaries
 
