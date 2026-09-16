@@ -197,9 +197,7 @@ async def _add_quote(
     return quote_id
 
 
-async def _prepare(
-    postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 1_000
-) -> Prepared:
+async def _prepare(postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 1_000) -> Prepared:
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     data = _wav_one_second_48k(duration_ms)

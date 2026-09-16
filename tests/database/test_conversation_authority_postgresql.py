@@ -783,9 +783,7 @@ def test_deepgram_native_tail_is_bounded_through_c3_c5_and_report_read(
                 assert "playback_projection" not in early
 
             facts_request = StageRequest(stage="C4", transcript_checkpoint_id=c2)
-            c4_quote = await _issue(
-                setup, key="deepgram-tail-c4-quote", request=facts_request
-            )
+            c4_quote = await _issue(setup, key="deepgram-tail-c4-quote", request=facts_request)
             c4_run = await _start(
                 setup, c4_quote, key="deepgram-tail-c4-run", request=facts_request
             )
@@ -795,9 +793,7 @@ def test_deepgram_native_tail_is_bounded_through_c3_c5_and_report_read(
             coaching_request = StageRequest(
                 stage="C5", transcript_checkpoint_id=c2, fact_checkpoint_ids=(c4,)
             )
-            c5_quote = await _issue(
-                setup, key="deepgram-tail-c5-quote", request=coaching_request
-            )
+            c5_quote = await _issue(setup, key="deepgram-tail-c5-quote", request=coaching_request)
             c5_run = await _start(
                 setup, c5_quote, key="deepgram-tail-c5-run", request=coaching_request
             )

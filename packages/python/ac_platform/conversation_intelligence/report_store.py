@@ -414,9 +414,7 @@ class ConversationReports:
                 or transcript.get("duration_ms") != source.duration_ms
             ):
                 raise ConversationConflict("The transcript's source measurement differs.")
-            transcript = project_transcript_for_playback(
-                transcript, duration_ms=source.duration_ms
-            )
+            transcript = project_transcript_for_playback(transcript, duration_ms=source.duration_ms)
             extract_style_independent_facts(transcript)
         else:
             _, transcript = self._validated(draft, recording)

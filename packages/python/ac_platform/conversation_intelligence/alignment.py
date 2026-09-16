@@ -401,8 +401,7 @@ def _validate_playback_projection(
     timebase_id = transcript.get("timebase_id")
     if (
         timebase_id not in _NATIVE_TRANSCRIPT_TIMEBASES
-        or set(projection)
-        != {"schema", "duration_ms", "tail_tolerance_ms", "status", "segments"}
+        or set(projection) != {"schema", "duration_ms", "tail_tolerance_ms", "status", "segments"}
         or projection.get("schema") != "ac.sales-xray.transcript-playback-projection/1"
         or projection.get("duration_ms") != signal.duration_ms
         or projection.get("tail_tolerance_ms") != _PLAYBACK_TAIL_TOLERANCE_MS
@@ -413,11 +412,7 @@ def _validate_playback_projection(
     raw_segments = transcript.get("segments")
     if not isinstance(entries, list) or not isinstance(raw_segments, list) or not entries:
         _fail("alignment_playback_projection_invalid")
-    by_id = {
-        segment.get("id"): segment
-        for segment in raw_segments
-        if isinstance(segment, dict)
-    }
+    by_id = {segment.get("id"): segment for segment in raw_segments if isinstance(segment, dict)}
     seen: set[str] = set()
     for entry in entries:
         item = _object(entry, "playback_projection_segment")
@@ -433,13 +428,9 @@ def _validate_playback_projection(
         if segment_id in seen or segment_id not in by_id:
             _fail("alignment_playback_projection_invalid")
         segment = by_id[segment_id]
-        native_start = _integer(
-            item.get("native_start_ms"), "playback_projection_native_start_ms"
-        )
+        native_start = _integer(item.get("native_start_ms"), "playback_projection_native_start_ms")
         native_end = _integer(item.get("native_end_ms"), "playback_projection_native_end_ms")
-        playback_start = _integer(
-            item.get("playback_start_ms"), "playback_projection_start_ms"
-        )
+        playback_start = _integer(item.get("playback_start_ms"), "playback_projection_start_ms")
         playback_end = _integer(item.get("playback_end_ms"), "playback_projection_end_ms")
         if (
             native_start != segment.get("start_ms")

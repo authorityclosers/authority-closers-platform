@@ -577,11 +577,7 @@ class RetainedC5RecoveryService:
         c1_duration = None
         c3_manifest_payload = c3.manifest if isinstance(c3.manifest, dict) else {}
         c3_parents = c3_manifest_payload.get("parents")
-        c1_manifest = (
-            dict(c3_parents).get("C1")
-            if isinstance(c3_parents, list | tuple)
-            else None
-        )
+        c1_manifest = dict(c3_parents).get("C1") if isinstance(c3_parents, list | tuple) else None
         if isinstance(c1_manifest, str):
             c1 = await self.database.scalar(
                 select(ConversationCheckpoint).where(
