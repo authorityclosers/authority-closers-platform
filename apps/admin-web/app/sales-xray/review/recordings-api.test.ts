@@ -133,6 +133,89 @@ describe("admin recordings API", () => {
     );
   });
 
+  it("accepts a Deepgram per-minute planning snapshot without treating it as billing", async () => {
+    const deepgramPayload = JSON.parse(JSON.stringify(payload)) as {
+      items: Array<{
+        latest_run: {
+          provider_stages: Array<{
+            provider: string | null;
+            model: string | null;
+            usage: Record<string, number> | null;
+            usage_estimate_paise: number | null;
+            usage_estimate_basis: string | null;
+            pricing_snapshot: Record<string, unknown> | null;
+          }>;
+        } | null;
+      }>;
+    };
+    const stage = deepgramPayload.items[0]?.latest_run?.provider_stages[0];
+    if (!stage || !stage.pricing_snapshot)
+      throw new Error("fixture is incomplete");
+    stage.provider = "deepgram";
+    stage.model = "nova-3";
+    stage.usage = null;
+    stage.usage_estimate_paise = 23;
+    stage.usage_estimate_basis =
+      "native_duration_ms_x_approved_per_minute_rate";
+    stage.pricing_snapshot = {
+      ...stage.pricing_snapshot,
+      evidence_release_sha: "724f3ab549e1837bc0f5ed49aa298d4fd0f308a1",
+      provider: "deepgram",
+      model: "nova-3",
+      source_date: "2026-09-15",
+      pricing_ref: "ref:pricing/deepgram-nova-3-multilingual-20260915",
+      evidence_sha256:
+        "e4ac299a8e030cd9b6e22d517293fb979bf9bd8797f4d67faee86a28e3ffd1a7",
+      source_url: "https://deepgram.com/pricing",
+      rate_basis: "per_minute",
+      usd_per_hour: null,
+      usd_per_minute: 0.0052,
+      input_usd_per_million_tokens: null,
+      output_usd_per_million_tokens: null,
+    };
+
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(deepgramPayload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const result = await loadAdminRecordings({ fetcher });
+    const pricing =
+      result.items[0]?.latest_run?.provider_stages[0]?.pricing_snapshot;
+    expect(pricing?.rate_basis).toBe("per_minute");
+    expect(pricing?.usd_per_minute).toBe(0.0052);
+    expect(
+      result.items[0]?.latest_run?.provider_stages[0]?.usage_estimate_paise,
+    ).toBe(23);
+    expect(pricing?.is_billing_rate).toBe(false);
+  });
+
+  it("keeps pricing snapshots strict after adding the supported rate basis", async () => {
+    const invalidPayload = JSON.parse(
+      JSON.stringify(payload),
+    ) as typeof payload;
+    const snapshot =
+      invalidPayload.items[0]?.latest_run?.provider_stages[0]?.pricing_snapshot;
+    if (!snapshot) throw new Error("fixture is incomplete");
+    (snapshot as typeof snapshot & { untrusted_rate: number }).untrusted_rate =
+      1;
+
+    const fetcher = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(invalidPayload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(loadAdminRecordings({ fetcher })).rejects.toThrow();
+  });
+
   it("rejects an unbounded page size before making a request", async () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(loadAdminRecordings({ limit: 51, fetcher })).rejects.toThrow(
