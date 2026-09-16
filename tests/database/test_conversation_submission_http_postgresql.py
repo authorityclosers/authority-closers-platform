@@ -8,6 +8,7 @@ import io
 import secrets
 import tempfile
 import wave
+from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,7 +44,16 @@ from ac_platform.conversation_intelligence.authority import ConversationAuthorit
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
-from ac_platform.conversation_intelligence.models import ConversationRecording, ConversationRun
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationCheckpoint,
+    ConversationInferenceTask,
+    ConversationMinuteAccount,
+    ConversationProcessingPlan,
+    ConversationQuote,
+    ConversationRecording,
+    ConversationRun,
+)
 from ac_platform.conversation_intelligence.native_runtime import (
     NativeRuntimeError,
     SocketNativeRuntime,
@@ -57,6 +67,8 @@ from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.outbox.models import Job
+from ac_platform.outbox.repository import canonical_receipt_digest
 from tests.database.test_conversation_authority_postgresql import (
     _bundle,
     _promote_admin,
@@ -738,6 +750,279 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 assert broker.calls == 3
                 client.cookies.set("ac_xray_guest", setup.stranger.token)
                 assert (await client.get(path + "/report")).status_code == 404
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_call(
+    postgres_harness: Any,
+    tmp_path: Path,
+) -> None:
+    """The guest-safe recovery path reuses a retained uncertain C2 receipt."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                data = _wav_one_second_48k()
+                source_submission = uuid4()
+                source_path = f"{PREFIX}/submissions/{source_submission}"
+                source_upload = await client.put(
+                    source_path + "/source",
+                    content=data,
+                    headers=await _headers(client, data),
+                )
+                assert source_upload.status_code == 202, source_upload.text
+                source_recording_id = UUID(source_upload.json()["recording_id"])
+                await _reconcile(setup.sessions, setup.state)
+                local = OfflineConversationWorker(
+                    setup.sessions,
+                    storage=setup.runtime.storage,
+                    scratch=setup.runtime.scratch,
+                    environment="test",
+                )
+                assert await local.run_once()
+
+                source_quote_response = await client.post(
+                    source_path + "/plan/quote",
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "retained-source-quote"},
+                )
+                assert source_quote_response.status_code == 201, source_quote_response.text
+                source_plan = source_quote_response.json()
+                source_approval = {
+                    "plan_id": source_plan["id"],
+                    "plan_fingerprint": source_plan["plan_fingerprint"],
+                    "privacy_revision": source_plan["privacy_revision"],
+                    "accepted": True,
+                }
+                broker = ReportingBroker(data)
+                router = FixedProviderRouter(
+                    {
+                        provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
+                        for provider in ("elevenlabs", "gemini")
+                    },
+                    authority=setup.authority,
+                )
+                worker = ConversationInferenceWorker(
+                    setup.sessions, setup.runtime.storage, router, authority=setup.authority
+                )
+                source_acceptance = await client.post(
+                    source_path + "/plan",
+                    json=source_approval,
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "retained-source-accept"},
+                )
+                assert source_acceptance.status_code == 202, source_acceptance.text
+                assert await worker.run_once()
+                assert broker.calls == 1
+
+                async with setup.sessions() as database, database.begin():
+                    source_task = await database.scalar(
+                        select(ConversationInferenceTask)
+                        .where(
+                            ConversationInferenceTask.recording_id == source_recording_id,
+                            ConversationInferenceTask.stage == "C2",
+                        )
+                        .order_by(ConversationInferenceTask.created_at)
+                    )
+                    assert source_task is not None
+                    source_run = await database.get(ConversationRun, source_task.run_id)
+                    source_job = await database.get(Job, source_task.job_id)
+                    source_quote = await database.get(ConversationQuote, source_task.quote_id)
+                    source_plan_row = await database.get(
+                        ConversationProcessingPlan, UUID(source_plan["id"])
+                    )
+                    source_budget = (
+                        await database.get(ConversationBudgetAccount, source_quote.budget_scope_id)
+                        if source_quote is not None
+                        else None
+                    )
+                    source_minute = await database.get(
+                        ConversationMinuteAccount,
+                        (setup.state.tenant_id, setup.state.person_id),
+                    )
+                    assert (
+                        source_run is not None
+                        and source_job is not None
+                        and source_quote is not None
+                        and source_plan_row is not None
+                        and source_budget is not None
+                        and source_minute is not None
+                        and source_task.checkpoint_id is not None
+                        and source_job.provider_receipt is not None
+                    )
+                    source_run_id = source_run.id
+                    source_checkpoint = await database.get(
+                        ConversationCheckpoint, source_task.checkpoint_id
+                    )
+                    assert source_checkpoint is not None
+                    receipt = deepcopy(source_job.provider_receipt)
+                    receipt["checkpoint_id"] = None
+                    receipt["checkpoint_manifest_sha256"] = None
+                    receipt["validation_state"] = "provider_returned"
+                    source_response_sha256 = receipt["response_sha256"]
+                    source_task.state = "uncertain"
+                    source_task.checkpoint_id = None
+                    source_run.state = "failed"
+                    source_run.completed_at = None
+                    source_job.status = "dead_letter"
+                    source_job.last_error = "conversation_provider_result_validation_failed"
+                    source_job.dead_lettered_at = setup.clock[0]
+                    source_job.provider_receipt = receipt
+                    source_job.provider_receipt_digest = canonical_receipt_digest(receipt)
+                    source_plan_row.state = "held"
+                    source_plan_row.progress = {
+                        "current_stage": "C2",
+                        "failure_code": "stage_uncertain",
+                    }
+                    source_snapshot = {
+                        "task": (source_task.state, source_task.checkpoint_id),
+                        "run": (source_run.state, source_run.completed_at),
+                        "job": (
+                            source_job.status,
+                            source_job.provider_receipt,
+                            source_job.provider_receipt_digest,
+                            source_job.dispatch_started_at,
+                            source_job.provider_idempotency_key,
+                        ),
+                        "plan": (source_plan_row.state, source_plan_row.progress),
+                        "budget": deepcopy(source_budget.snapshot),
+                        "minute": deepcopy(source_minute.snapshot),
+                        "checkpoint": (
+                            source_checkpoint.id,
+                            source_checkpoint.manifest_sha256,
+                            source_checkpoint.payload_sha256,
+                            deepcopy(source_checkpoint.payload),
+                        ),
+                    }
+
+                target_submission = uuid4()
+                target_path = f"{PREFIX}/submissions/{target_submission}"
+                target_upload = await client.put(
+                    target_path + "/source",
+                    content=data,
+                    headers=await _headers(client, data),
+                )
+                assert target_upload.status_code == 202, target_upload.text
+                await _reconcile(setup.sessions, setup.state)
+                assert await local.run_once()
+                target_quote_response = await client.post(
+                    target_path + "/plan/quote",
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "retained-target-quote"},
+                )
+                assert target_quote_response.status_code == 201, target_quote_response.text
+                target_plan = target_quote_response.json()
+                target_acceptance = await client.post(
+                    target_path + "/plan",
+                    json={
+                        "plan_id": target_plan["id"],
+                        "plan_fingerprint": target_plan["plan_fingerprint"],
+                        "privacy_revision": target_plan["privacy_revision"],
+                        "accepted": True,
+                    },
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "retained-target-accept"},
+                )
+                assert target_acceptance.status_code == 202, target_acceptance.text
+                assert broker.calls == 1
+
+                target_recording_id = UUID(target_upload.json()["recording_id"])
+                async with setup.sessions() as database:
+                    target_task = await database.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id == target_recording_id,
+                            ConversationInferenceTask.stage == "C2",
+                        )
+                    )
+                    assert target_task is not None and target_task.state == "completed"
+                    target_job = await database.get(Job, target_task.job_id)
+                    target_quote = await database.get(ConversationQuote, target_task.quote_id)
+                    assert target_job is not None and target_quote is not None
+                    assert target_job.external_side_effect is False
+                    assert target_job.dispatch_started_at is None
+                    assert target_job.provider_idempotency_key is None
+                    assert target_job.provider_receipt is not None
+                    assert target_job.provider_receipt["raw_blob_id"] == str(source_run_id)
+                    assert target_job.provider_receipt["retained_reuse"] == {
+                        "schema": "ac.sales-xray.retained-c2-reuse/1",
+                        "provider_calls": 0,
+                        "source_recording_id": str(source_recording_id),
+                        "source_run_id": str(source_run_id),
+                        "source_response_sha256": source_response_sha256,
+                    }
+                    assert target_quote.quote["max_cost_paise"] == 0
+
+                scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+                for _ in range(8):
+                    await worker.run_once()
+                    await _make_due(setup, UUID(target_plan["id"]))
+                    await scheduler.step()
+                assert broker.calls == 3
+                assert broker.routes == ["elevenlabs", "gemini", "gemini"]
+                report = await client.get(target_path + "/report")
+                assert report.status_code == 200, report.text
+                envelope = report.json()
+                assert envelope["report"]["numeric_publication"] is False
+                transcript = await client.get(target_path + "/transcript")
+                assert transcript.status_code == 200, transcript.text
+
+                async with setup.sessions() as database:
+                    source_task = await database.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id == source_recording_id,
+                            ConversationInferenceTask.stage == "C2",
+                        )
+                    )
+                    assert source_task is not None
+                    source_run = await database.get(ConversationRun, source_task.run_id)
+                    source_job = await database.get(Job, source_task.job_id)
+                    source_plan_row = await database.get(
+                        ConversationProcessingPlan, UUID(source_plan["id"])
+                    )
+                    source_quote = await database.get(ConversationQuote, source_task.quote_id)
+                    source_budget = (
+                        await database.get(ConversationBudgetAccount, source_quote.budget_scope_id)
+                        if source_quote is not None
+                        else None
+                    )
+                    source_minute = await database.get(
+                        ConversationMinuteAccount,
+                        (setup.state.tenant_id, setup.state.person_id),
+                    )
+                    source_checkpoint = await database.get(
+                        ConversationCheckpoint, source_snapshot["checkpoint"][0]
+                    )
+                    assert (
+                        source_run is not None
+                        and source_job is not None
+                        and source_plan_row is not None
+                        and source_budget is not None
+                        and source_minute is not None
+                        and source_checkpoint is not None
+                    )
+                    assert {
+                        "task": (source_task.state, source_task.checkpoint_id),
+                        "run": (source_run.state, source_run.completed_at),
+                        "job": (
+                            source_job.status,
+                            source_job.provider_receipt,
+                            source_job.provider_receipt_digest,
+                            source_job.dispatch_started_at,
+                            source_job.provider_idempotency_key,
+                        ),
+                        "plan": (source_plan_row.state, source_plan_row.progress),
+                        "budget": source_budget.snapshot,
+                        "minute": source_minute.snapshot,
+                        "checkpoint": (
+                            source_checkpoint.id,
+                            source_checkpoint.manifest_sha256,
+                            source_checkpoint.payload_sha256,
+                            source_checkpoint.payload,
+                        ),
+                    } == source_snapshot
         finally:
             await setup.engine.dispose()
 

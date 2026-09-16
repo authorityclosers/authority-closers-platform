@@ -498,7 +498,7 @@ def install_submission_http(
         )
         actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
         return await ConversationProcessingPlans(
-            ConversationApplication(owner.ownership.database), runtime.authority
+            ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).quote(
             actor,
             scope.recording_id,
@@ -537,7 +537,7 @@ def install_submission_http(
         )
         actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
         return await ConversationProcessingPlans(
-            ConversationApplication(owner.ownership.database), runtime.authority
+            ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
 
     @router.get("/submissions/{submission_id}/source")

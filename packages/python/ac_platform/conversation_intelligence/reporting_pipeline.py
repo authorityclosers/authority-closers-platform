@@ -57,6 +57,39 @@ FACT_RECIPE = "source-fact-chunk-v1"
 COACHING_RECIPE = "qualitative-coaching-v1"
 
 
+def _raw_response_binding(
+    receipt: dict[str, Any], task: ConversationInferenceTask, recording: ConversationRecording
+) -> bool:
+    """Accept either the task-local raw blob or an explicit retained C2 source blob."""
+
+    marker = receipt.get("retained_reuse")
+    if marker is None:
+        return receipt.get("raw_blob_id") == str(task.run_id)
+    return (
+        isinstance(marker, dict)
+        and set(marker)
+        == {
+            "schema",
+            "provider_calls",
+            "source_recording_id",
+            "source_run_id",
+            "source_response_sha256",
+        }
+        and marker.get("schema") == "ac.sales-xray.retained-c2-reuse/1"
+        and type(marker.get("provider_calls")) is int
+        and marker.get("provider_calls") == 0
+        and marker.get("source_recording_id") != str(recording.id)
+        and marker.get("source_run_id") == receipt.get("raw_blob_id")
+        and marker.get("source_run_id") != str(task.run_id)
+        and marker.get("source_response_sha256") == receipt.get("response_sha256")
+        and isinstance(marker.get("source_run_id"), str)
+        and isinstance(marker.get("source_recording_id"), str)
+        and isinstance(marker.get("source_response_sha256"), str)
+        and len(marker["source_response_sha256"]) == 64
+        and all(character in "0123456789abcdef" for character in marker["source_response_sha256"])
+    )
+
+
 class StageRequest(BaseModel):
     """Internal exact checkpoint selection, never a client-supplied transcript."""
 
@@ -212,6 +245,12 @@ class ReportingPipeline:
         receipt = None if job is None else job.provider_receipt
         quoted = None if task is None else await self.database.get(ConversationQuote, task.quote_id)
         run = None if task is None else await self.database.get(ConversationRun, task.run_id)
+        retained_binding = (
+            task is not None
+            and isinstance(receipt, dict)
+            and receipt.get("retained_reuse") is not None
+            and _raw_response_binding(receipt, task, recording)
+        )
         if (
             task is None
             or job is None
@@ -220,9 +259,9 @@ class ReportingPipeline:
             or not isinstance(receipt, dict)
             or job.kind != "conversation.infer_provider.v1"
             or job.tenant_id != recording.tenant_id
-            or not job.external_side_effect
+            or (not job.external_side_effect and not retained_binding)
             or job.status not in {"succeeded", "leased", "queued"}
-            or job.dispatch_started_at is None
+            or (job.dispatch_started_at is None and not retained_binding)
             or run.state != "completed"
             or run.generation != recording.generation
             or run.job_id != task.job_id
@@ -238,11 +277,14 @@ class ReportingPipeline:
             or task.cache_key != row.cache_key
             or receipt.get("schema") != "ac.sales-xray.provider-receipt/1"
             or receipt.get("idempotency_key") != job.dedupe_key
-            or receipt.get("idempotency_key") != job.provider_idempotency_key
+            or (
+                not retained_binding
+                and receipt.get("idempotency_key") != job.provider_idempotency_key
+            )
             or receipt.get("checkpoint_id") != str(row.id)
             or receipt.get("checkpoint_manifest_sha256") != row.manifest_sha256
             or receipt.get("input_sha256") != task.input_sha256
-            or receipt.get("raw_blob_id") != str(task.run_id)
+            or not _raw_response_binding(receipt, task, recording)
             or receipt.get("human_approved") is not False
             or receipt.get("validation")
             != {

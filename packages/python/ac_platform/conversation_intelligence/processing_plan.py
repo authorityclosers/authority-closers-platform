@@ -41,6 +41,7 @@ from ac_platform.conversation_intelligence.inference import (
     TRANSCRIPT_RECIPES,
     ConversationInference,
     ServicePlan,
+    TranscriptionPlan,
 )
 from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
@@ -70,6 +71,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -447,8 +449,13 @@ async def require_stage_authorization(
 
 
 class ConversationProcessingPlans:
-    def __init__(self, app: ConversationApplication, authority: ConversationAuthority) -> None:
-        self.app, self.db, self.authority = app, app.database, authority
+    def __init__(
+        self,
+        app: ConversationApplication,
+        authority: ConversationAuthority,
+        storage: PrivateLocalRecordingStorage | None = None,
+    ) -> None:
+        self.app, self.db, self.authority, self.storage = app, app.database, authority, storage
         self.inference = ConversationInference(app, authority=authority)
 
     async def _row(
@@ -793,7 +800,7 @@ class ConversationProcessingPlans:
             for item in value.stages
             if item.stage == stage.checkpoint.stage
         )
-        await self.authority.approval(
+        bundle, stage_approval = await self.authority.approval(
             self.app,
             actor,
             recording,
@@ -819,6 +826,31 @@ class ConversationProcessingPlans:
                 )
                 await pipeline.provider_task(recording, checkpoint)
             return existing
+        if stage.checkpoint.stage == "C2" and self.storage is not None:
+            if not isinstance(stage, TranscriptionPlan):
+                raise ConversationConflict("The saved transcription plan is unavailable.")
+            from ac_platform.conversation_intelligence.retained_c2_recovery import (
+                RetainedC2ReuseService,
+            )
+
+            reused = await RetainedC2ReuseService(
+                self.app,
+                self.authority,
+                self.storage,
+            ).reuse(
+                actor,
+                row,
+                value,
+                recording,
+                stage,
+                stage_approval,
+                budget_scope_id=bundle.budget_scope_id,
+                authorization_ref=self.authority.authorization_ref(bundle, stage_approval),
+                key=f"run:{row.id}:{stage.checkpoint.cache_key}",
+                now=utc(self.app.clock()),
+            )
+            if reused is not None:
+                return reused
         key = f"plan:{row.id}:{stage.checkpoint.cache_key}"
         quote_view = await self.authority.issue(
             self.app, actor, row.recording_id, key=key, request=request
@@ -964,9 +996,12 @@ class ProcessingPlanScheduler:
     """Bounded database-driven coordinator; no browser or provider credentials."""
 
     def __init__(
-        self, sessions: async_sessionmaker[AsyncSession], authority: ConversationAuthority
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        authority: ConversationAuthority,
+        storage: PrivateLocalRecordingStorage | None = None,
     ) -> None:
-        self.sessions, self.authority = sessions, authority
+        self.sessions, self.authority, self.storage = sessions, authority, storage
 
     async def step(self) -> bool:
         async with self.sessions() as db, db.begin():
@@ -1000,7 +1035,9 @@ class ProcessingPlanScheduler:
                     )
                     if row is None or row.state != "active":
                         return False
-                    await ConversationProcessingPlans(app, self.authority).advance(actor, row)
+                    await ConversationProcessingPlans(app, self.authority, self.storage).advance(
+                        actor, row
+                    )
             except (ConversationError, InferenceTaskError):
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.

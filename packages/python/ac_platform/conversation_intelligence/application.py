@@ -666,13 +666,41 @@ class ConversationApplication:
         state = run.state
         if job is not None and job.status == "dead_letter" and state in {"queued", "running"}:
             state = "failed"
+        receipt = None if job is None else job.provider_receipt
+        marker = None if not isinstance(receipt, dict) else receipt.get("retained_reuse")
+        retained_reuse = (
+            isinstance(receipt, dict)
+            and isinstance(marker, dict)
+            and set(marker)
+            == {
+                "schema",
+                "provider_calls",
+                "source_recording_id",
+                "source_run_id",
+                "source_response_sha256",
+            }
+            and marker.get("schema") == "ac.sales-xray.retained-c2-reuse/1"
+            and type(marker.get("provider_calls")) is int
+            and marker.get("provider_calls") == 0
+            and marker.get("source_recording_id") != str(run.recording_id)
+            and marker.get("source_run_id") == receipt.get("raw_blob_id")
+            and marker.get("source_run_id") != str(run.id)
+            and marker.get("source_response_sha256") == receipt.get("response_sha256")
+            and isinstance(marker.get("source_recording_id"), str)
+            and isinstance(marker.get("source_run_id"), str)
+            and isinstance(marker.get("source_response_sha256"), str)
+            and len(marker["source_response_sha256"]) == 64
+            and all(
+                character in "0123456789abcdef" for character in marker["source_response_sha256"]
+            )
+        )
         return {
             "id": str(run.id),
             "recording_id": str(run.recording_id),
             "state": state,
             "recipe_revision": run.recipe_revision,
             # Confirmed responses only; an ambiguous dispatch has no receipt.
-            "provider_calls": int(job is not None and job.provider_receipt is not None),
+            "provider_calls": int(job is not None and receipt is not None and not retained_reuse),
         }
 
     async def get_run(self, actor: ConversationActor, run_id: UUID) -> dict[str, Any]:

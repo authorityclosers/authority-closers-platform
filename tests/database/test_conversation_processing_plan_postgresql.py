@@ -18,11 +18,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_RECIPE,
     ConversationApplication,
     ConversationDenied,
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.checkpoints import SourceBinding, canonical
+from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
 from ac_platform.conversation_intelligence.entitlements import (
     BudgetAccount,
     ExecutionPermission,
@@ -33,6 +35,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
     settle,
 )
+from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
     ConversationAnalysisSettings,
@@ -61,7 +64,7 @@ from tests.database.test_conversation_authority_postgresql import (
     _setup,
 )
 from tests.database.test_conversation_postgresql import run, seed
-from tests.database.test_conversation_worker_postgresql import _postgres_harness
+from tests.database.test_conversation_worker_postgresql import _add_quote, _postgres_harness
 
 
 @pytest.fixture
@@ -71,10 +74,20 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
-async def _quote(setup: Any, key: str) -> dict[str, Any]:
+async def _quote(
+    setup: Any,
+    key: str,
+    *,
+    storage: Any = None,
+    recording_id: UUID | None = None,
+) -> dict[str, Any]:
     async with setup.sessions() as database, database.begin():
-        service = ConversationProcessingPlans(_application(setup, database), setup.authority)
-        return await service.quote(setup.actor, setup.prepared.recording_id, key=key)
+        service = ConversationProcessingPlans(
+            _application(setup, database), setup.authority, storage
+        )
+        return await service.quote(
+            setup.actor, recording_id or setup.prepared.recording_id, key=key
+        )
 
 
 def test_admin_analysis_settings_bound_new_plan_only(postgres_harness: Any, tmp_path: Any) -> None:
@@ -112,7 +125,14 @@ def test_admin_analysis_settings_bound_new_plan_only(postgres_harness: Any, tmp_
     run(exercise())
 
 
-async def _accept(setup: Any, quote: dict[str, Any], key: str) -> dict[str, Any]:
+async def _accept(
+    setup: Any,
+    quote: dict[str, Any],
+    key: str,
+    *,
+    storage: Any = None,
+    recording_id: UUID | None = None,
+) -> dict[str, Any]:
     payload = PlanAcceptance(
         plan_id=UUID(quote["id"]),
         plan_fingerprint=quote["plan_fingerprint"],
@@ -120,21 +140,221 @@ async def _accept(setup: Any, quote: dict[str, Any], key: str) -> dict[str, Any]
         accepted=True,
     )
     async with setup.sessions() as database, database.begin():
-        service = ConversationProcessingPlans(_application(setup, database), setup.authority)
+        service = ConversationProcessingPlans(
+            _application(setup, database), setup.authority, storage
+        )
         return await service.accept(
             setup.actor,
-            setup.prepared.recording_id,
+            recording_id or setup.prepared.recording_id,
             payload,
             key=key,
         )
 
 
-async def _view(setup: Any, plan_id: UUID | None = None) -> dict[str, Any]:
+async def _duplicate_recording(setup: Any, key: str) -> UUID:
+    """Create a second ready recording with the exact source bytes and C1 proof."""
+
+    intent = setup.prepared.state.recording_intent.model_copy(
+        update={
+            "source_bytes": len(setup.prepared.data),
+            "content_type": "audio/wav",
+        }
+    )
+    async with setup.sessions() as database, database.begin():
+        registered = await ConversationApplication(
+            database, clock=lambda: setup.prepared.state.now
+        ).register(setup.actor, intent, key=f"{key}-register")
+    recording_id = UUID(registered["id"])
+    chunks = tuple(
+        setup.prepared.data[offset : offset + 1_048_576]
+        for offset in range(0, len(setup.prepared.data), 1_048_576)
+    )
+    async with setup.sessions() as database, database.begin():
+        stored = await ConversationApplication(
+            database, clock=lambda: setup.prepared.state.now
+        ).store_source(
+            setup.actor,
+            recording_id,
+            chunks=chunks,
+            storage=setup.prepared.storage,
+        )
+    assert stored["state"] == "ready"
+    local_quote_id = await _add_quote(
+        setup.sessions,
+        setup.prepared.state,
+        recording_id,
+        setup.bundle.budget_scope_id,
+        setup.prepared.state.source_sha256,
+    )
+    async with setup.sessions() as database, database.begin():
+        requested = await ConversationApplication(
+            database, clock=lambda: setup.prepared.state.now
+        ).request_run(
+            setup.actor,
+            RunIntent(
+                recording_id=recording_id,
+                source_revision="1",
+                quote_id=local_quote_id,
+                recipe_revision=AUDIOATLAS_RECIPE,
+            ),
+            key=f"{key}-local-run",
+        )
+    assert await setup.prepared.worker.run_once()
+    assert requested["state"] == "queued"
+    return recording_id
+
+
+async def _view(
+    setup: Any, plan_id: UUID | None = None, *, recording_id: UUID | None = None
+) -> dict[str, Any]:
     async with setup.sessions() as database, database.begin():
         service = ConversationProcessingPlans(_application(setup, database), setup.authority)
         if plan_id is None:
-            return await service.get(setup.actor, setup.prepared.recording_id)
+            return await service.get(setup.actor, recording_id or setup.prepared.recording_id)
         return service.view(await database.get(ConversationProcessingPlan, plan_id))
+
+
+async def _source_c2(setup: Any, key: str) -> dict[str, Any]:
+    async with setup.sessions() as database, database.begin():
+        application = _application(setup, database)
+        quoted = await setup.authority.issue(
+            application,
+            setup.actor,
+            setup.prepared.recording_id,
+            key=f"{key}-quote",
+        )
+        service = ConversationInference(application, authority=setup.authority)
+        await service.accept(
+            setup.actor,
+            setup.prepared.recording_id,
+            UUID(quoted["id"]),
+            QuoteAcceptance(
+                quote_fingerprint=quoted["quote_fingerprint"],
+                privacy_revision=quoted["privacy_revision"],
+                accepted=True,
+            ),
+        )
+        return await service.request_transcription(
+            setup.actor,
+            setup.prepared.recording_id,
+            UUID(quoted["id"]),
+            key=f"{key}-run",
+        )
+
+
+def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    """A verified retained C2 response completes the duplicate's full report path."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            source_run = await _source_c2(setup, "retained-c2-source")
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == 1
+
+            async with setup.sessions() as database:
+                source_task = await database.get(ConversationInferenceTask, UUID(source_run["id"]))
+                assert source_task is not None
+                source_job = await database.get(Job, source_task.job_id)
+                assert source_job is not None
+                source_quote = await database.get(ConversationQuote, source_task.quote_id)
+                assert source_quote is not None
+                source_budget = await database.get(
+                    ConversationBudgetAccount, source_quote.budget_scope_id
+                )
+                assert source_budget is not None
+                source_budget_snapshot = source_budget.snapshot
+                source_snapshot = (
+                    source_task.state,
+                    source_task.checkpoint_id,
+                    source_job.status,
+                    source_job.provider_receipt_digest,
+                )
+
+            target_recording_id = await _duplicate_recording(setup, "retained-c2-target")
+            target_quote = await _quote(
+                setup,
+                "retained-c2-target-quote",
+                storage=setup.prepared.storage,
+                recording_id=target_recording_id,
+            )
+            accepted = await _accept(
+                setup,
+                target_quote,
+                "retained-c2-target-accept",
+                storage=setup.prepared.storage,
+                recording_id=target_recording_id,
+            )
+            assert accepted["state"] == "active"
+            assert setup.broker.calls == 1
+
+            async with setup.sessions() as database:
+                target_tasks = list(
+                    (
+                        await database.scalars(
+                            select(ConversationInferenceTask)
+                            .where(ConversationInferenceTask.recording_id == target_recording_id)
+                            .order_by(ConversationInferenceTask.created_at)
+                        )
+                    ).all()
+                )
+                target_c2 = next(task for task in target_tasks if task.stage == "C2")
+                target_job = await database.get(Job, target_c2.job_id)
+                assert target_job is not None and target_job.provider_receipt is not None
+                marker = target_job.provider_receipt["retained_reuse"]
+                assert marker["provider_calls"] == 0
+                assert marker["source_run_id"] == str(source_task.run_id)
+                assert target_job.provider_receipt["raw_blob_id"] == str(source_task.run_id)
+                assert target_job.external_side_effect is False
+                assert target_job.dispatch_started_at is None
+                assert target_job.provider_idempotency_key is None
+                assert target_c2.state == "completed"
+                target_view = await ConversationApplication(
+                    database, clock=lambda: setup.prepared.state.now
+                ).get_run(setup.actor, target_c2.run_id)
+                assert target_view["provider_calls"] == 0
+
+            completed = await _drive_to_completion(
+                setup, UUID(target_quote["id"]), recording_id=target_recording_id
+            )
+            assert completed["state"] == "completed"
+            assert completed["report_ready"] is True
+            assert setup.broker.calls == 3
+            assert setup.broker.routes == ["elevenlabs", "groq", "groq"]
+
+            async with setup.sessions() as database:
+                source_task = await database.get(ConversationInferenceTask, UUID(source_run["id"]))
+                assert source_task is not None
+                source_job = await database.get(Job, source_task.job_id)
+                assert source_job is not None
+                assert (
+                    source_task.state,
+                    source_task.checkpoint_id,
+                    source_job.status,
+                    source_job.provider_receipt_digest,
+                ) == source_snapshot
+                source_budget = await database.get(
+                    ConversationBudgetAccount, source_quote.budget_scope_id
+                )
+                assert source_budget is not None
+                assert source_budget.snapshot == source_budget_snapshot
+                target_tasks = list(
+                    (
+                        await database.scalars(
+                            select(ConversationInferenceTask).where(
+                                ConversationInferenceTask.recording_id == target_recording_id
+                            )
+                        )
+                    ).all()
+                )
+                assert [task.stage for task in target_tasks] == ["C2", "C4", "C5"]
+                assert all(task.state == "completed" for task in target_tasks)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 def test_paused_plan_acceptance_preserves_quote_and_can_resume(
@@ -180,13 +400,15 @@ async def _make_due(setup: Any, plan_id: UUID) -> None:
         )
 
 
-async def _drive_to_completion(setup: Any, plan_id: UUID) -> dict[str, Any]:
+async def _drive_to_completion(
+    setup: Any, plan_id: UUID, *, recording_id: UUID | None = None
+) -> dict[str, Any]:
     scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
     for _ in range(12):
         await setup.worker.run_once()
         await _make_due(setup, plan_id)
         await scheduler.step()
-        view = await _view(setup)
+        view = await _view(setup, recording_id=recording_id)
         if view["state"] == "completed":
             return view
     raise AssertionError("The synthetic processing plan did not reach C6.")

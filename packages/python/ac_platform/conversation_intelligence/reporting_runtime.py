@@ -122,6 +122,6 @@ def compose_hosted_reporting(
         inference=ConversationInferenceWorker(
             sessions, intake.storage, router, authority=authority
         ),
-        plans=ProcessingPlanScheduler(sessions, authority),
+        plans=ProcessingPlanScheduler(sessions, authority, intake.storage),
         retention=ConversationRetentionScheduler(sessions),
     )
