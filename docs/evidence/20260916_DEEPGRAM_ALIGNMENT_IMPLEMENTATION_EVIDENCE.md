@@ -1,6 +1,9 @@
 # Deepgram C2 alignment implementation evidence
 
-Candidate commit: `1635260f83fea124786e6103bb8e4db77e4d3378`.
+Implementation-only predecessor: `1635260f83fea124786e6103bb8e4db77e4d3378`.
+The documented implementation is `608965a912bea5d53d0f9e995836aa28b4b6d3fd`.
+The integration release also includes the Admin per-minute pricing fix; its
+exact source commit is bound by the successful CI run and deployment receipt.
 
 The alignment contract now recognizes the existing normalized Deepgram
 `deepgram-native-seconds` timebase. It retains the fail-closed, honest result:
