@@ -255,7 +255,7 @@ OVERVIEW_FORMAT = {
     "strength_details": "[{finding_index, why_it_matters}] per strength",
     "improvement_details": (
         "[{finding_index, what_happened: {text,evidence:[span]}, why_it_matters, "
-        "replacement_behavior: one action + example phrase, "
+        "replacement_behavior: one doable action + sample phrase, "
         "business_impact: {status: insufficient_data, "
         "missing_inputs: [text]}}] per improvement"
     ),

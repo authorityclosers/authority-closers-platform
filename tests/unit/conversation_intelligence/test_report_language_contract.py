@@ -32,20 +32,19 @@ def test_fact_prompt_uses_plain_words_and_preserves_factual_boundaries() -> None
 def test_coaching_prompt_has_one_action_and_a_sample_phrase() -> None:
     system = _coaching_prompt()
 
-    assert "LANGUAGE: plain-coaching-v1" in system
     assert "Use everyday English" in system
-    assert "one action + example phrase per improvement" in system
-    assert "father/parent words do not prove availability" in system
+    assert "short sentences; one idea; explain jargon" in system
+    assert "One doable action + sample phrase per item" in system
+    assert "father/parent words may be advice/context, not proven availability" in system
     assert "Credit questions do not prove inability to pay" in system
     assert "next-day handoff is proposed" in system
-    assert "Plain words" in system
 
 
 def test_structured_overview_contract_describes_plain_actions_and_uncertainty() -> None:
     shape = reports.OVERVIEW_FORMAT
 
     assert (
-        "replacement_behavior: one action + example phrase"
+        "replacement_behavior: one doable action + sample phrase"
         in shape["improvement_details"]
     )
 
