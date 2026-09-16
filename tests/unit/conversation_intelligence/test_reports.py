@@ -100,13 +100,18 @@ def test_parser_losslessly_binds_the_retained_legacy_feedback_shape() -> None:
         "uncertainty": "The line alone does not establish intent.",
         "evidence": [{"segment_id": "s1", "quote_start": 0, "quote_end": 13}],
     }
+    nested_legacy_finding = {
+        "behavior": legacy_finding["behavior"],
+        "why_it_matters": legacy_finding["why_it_matters"],
+        "evidence": legacy_finding["evidence"],
+    }
     payload = _payload(transcript)
     payload["strengths"] = [legacy_finding]
     payload["dimension_assessments"] = [
         {
             "dimension_id": dimension["id"],
             "status": "observed",
-            "strengths": [legacy_finding] if index == 0 else [],
+            "strengths": [nested_legacy_finding] if index == 0 else [],
             "missed_opportunities": [],
             "improvements": [],
             "uncertainty": "The supplied words are the available evidence.",
@@ -123,7 +128,7 @@ def test_parser_losslessly_binds_the_retained_legacy_feedback_shape() -> None:
     assert draft.strengths[0].evidence[0].quote == "Native line 1"
     assert legacy_finding["behavior"] in draft.dimensions[0].observation
     assert legacy_finding["why_it_matters"] in draft.dimensions[0].observation
-    assert legacy_finding["uncertainty"] in draft.dimensions[0].observation
+    assert "The supplied words are the available evidence." in draft.dimensions[0].observation
     assert "s1[0,900]" in draft.dimensions[0].observation
 
 

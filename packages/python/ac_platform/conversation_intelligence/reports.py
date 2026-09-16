@@ -781,6 +781,7 @@ def _profile_dimensions(profile: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 _LEGACY_FINDING_KEYS = frozenset({"behavior", "evidence", "uncertainty", "why_it_matters"})
+_LEGACY_NESTED_FINDING_KEYS = frozenset({"behavior", "evidence", "why_it_matters"})
 _LEGACY_FINDING_MARKERS = frozenset({"behavior", "uncertainty", "why_it_matters"})
 _LEGACY_DIMENSION_KEYS = frozenset(
     {"dimension_id", "improvements", "missed_opportunities", "status", "strengths", "uncertainty"}
@@ -795,10 +796,17 @@ def _legacy_finding(
     *,
     transcript: Mapping[str, Any],
     error_code: str = "report_legacy_finding_invalid",
+    allow_missing_uncertainty: bool = False,
 ) -> dict[str, Any]:
     """Bind the observed pre-wire-schema finding without dropping its qualifiers."""
 
-    if not isinstance(value, Mapping) or frozenset(value) != _LEGACY_FINDING_KEYS:
+    if not isinstance(value, Mapping):
+        raise ReportError(error_code)
+    keys = frozenset(value)
+    allowed_keys = (
+        _LEGACY_NESTED_FINDING_KEYS if allow_missing_uncertainty else _LEGACY_FINDING_KEYS
+    )
+    if keys not in {allowed_keys, _LEGACY_FINDING_KEYS}:
         raise ReportError(error_code)
     behavior = value.get("behavior")
     why_it_matters = value.get("why_it_matters")
@@ -810,15 +818,15 @@ def _legacy_finding(
         or not why_it_matters.strip()
     ):
         raise ReportError(error_code)
-    if not isinstance(uncertainty, str):
+    if "uncertainty" in value and not isinstance(uncertainty, str):
         raise ReportError(error_code)
     evidence = value.get("evidence")
     if not isinstance(evidence, list) or not evidence:
         raise ReportError(error_code)
     normalized_evidence = [_normalise_c5_evidence(item, transcript) for item in evidence]
-    explanation = (
-        f"Behavior: {behavior}\nWhy it matters: {why_it_matters}\nUncertainty: {uncertainty}"
-    )
+    explanation = f"Behavior: {behavior}\nWhy it matters: {why_it_matters}"
+    if "uncertainty" in value:
+        explanation += f"\nUncertainty: {uncertainty}"
     if len(explanation) > 4_000:
         raise ReportError(error_code)
     title = behavior.strip() if len(behavior.strip()) <= 240 else "Source-backed behavior"
@@ -826,11 +834,18 @@ def _legacy_finding(
 
 
 def _normalise_legacy_findings(
-    value: Any, *, transcript: Mapping[str, Any]
+    value: Any, *, transcript: Mapping[str, Any], allow_missing_uncertainty: bool = False
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReportError("report_legacy_finding_invalid")
-    return [_legacy_finding(item, transcript=transcript) for item in value]
+    return [
+        _legacy_finding(
+            item,
+            transcript=transcript,
+            allow_missing_uncertainty=allow_missing_uncertainty,
+        )
+        for item in value
+    ]
 
 
 def _legacy_dimension_observation(
@@ -845,7 +860,11 @@ def _legacy_dimension_observation(
     )
     lines: list[str] = []
     for label, raw_findings in groups:
-        findings = _normalise_legacy_findings(raw_findings, transcript=transcript)
+        findings = _normalise_legacy_findings(
+            raw_findings,
+            transcript=transcript,
+            allow_missing_uncertainty=True,
+        )
         lines.append(f"{label}:")
         if not findings:
             lines.append("None returned.")
