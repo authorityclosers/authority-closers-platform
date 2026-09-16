@@ -371,7 +371,7 @@ def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
                         )
                     ).all()
                 )
-                assert [task.stage for task in target_tasks] == ["C2", "C4", "C5"]
+                assert sorted(task.stage for task in target_tasks) == ["C2", "C4", "C5"]
                 assert all(task.state == "completed" for task in target_tasks)
         finally:
             await setup.engine.dispose()

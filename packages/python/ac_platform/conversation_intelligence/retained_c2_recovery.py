@@ -111,13 +111,8 @@ class _VerifiedSource:
     normalized: dict[str, Any]
 
 
-def _conflict(reason: str = "unknown") -> ConversationConflict:
-    # Test diagnostics keep the public production message stable while making
-    # the isolated PostgreSQL guest proof identify its failed safety boundary.
-    import os
-
-    detail = f" [{reason}]" if os.getenv("AC_ENVIRONMENT") == "test" else ""
-    return ConversationConflict(f"A retained transcription cannot be safely reused.{detail}")
+def _conflict() -> ConversationConflict:
+    return ConversationConflict("A retained transcription cannot be safely reused.")
 
 
 def _safe_usage(value: Any) -> dict[str, int]:
@@ -292,7 +287,7 @@ class RetainedC2ReuseService:
                 task for task in source_tasks if task.cache_key == source_plan.checkpoint.cache_key
             )
             if len(matching) != 1:
-                raise _conflict("owner_link")
+                raise _conflict()
             return await self._verify_source(
                 source,
                 matching[0],
@@ -332,7 +327,7 @@ class RetainedC2ReuseService:
                     and link.processing_lease_id != actor.processing_lease_id
                 )
             ):
-                raise _conflict("owner_usage")
+                raise _conflict()
             usage = await self.database.get(ConversationAcquisitionUsage, link.usage_id)
             if (
                 usage is None
@@ -340,11 +335,11 @@ class RetainedC2ReuseService:
                 or usage.submission_id != link.submission_id
                 or usage.source_sha256 != recording.source_sha256
             ):
-                raise _conflict("owner_visitor")
+                raise _conflict()
             if usage.visitor_id is None and usage.person_id is not None:
                 return "person", usage.person_id
             if usage.visitor_id is None:
-                raise _conflict("owner_claim")
+                raise _conflict()
             claim = await self.database.get(ConversationVisitorClaim, usage.visitor_id)
             if claim is not None and claim.tenant_id != usage.tenant_id:
                 raise _conflict()
@@ -353,7 +348,7 @@ class RetainedC2ReuseService:
             return "visitor", usage.visitor_id
 
         if await owner(target) != await owner(source):
-            raise _conflict("owner_mismatch")
+            raise _conflict()
         source_link = await self.database.scalar(
             select(ConversationGuestSubmission).where(
                 ConversationGuestSubmission.recording_id == source.id,
@@ -362,7 +357,7 @@ class RetainedC2ReuseService:
             )
         )
         if source_link is None:
-            raise _conflict("owner_source_link")
+            raise _conflict()
         return source_link.processing_lease_id
 
     async def _verify_source(
@@ -402,14 +397,14 @@ class RetainedC2ReuseService:
                 )
             )
         ):
-            raise _conflict("source_basics")
+            raise _conflict()
         if (
             task.state == "completed"
             and task.checkpoint_id is not None
             or task.state in {"failed", "uncertain"}
             and task.checkpoint_id is None
         ) is False:
-            raise _conflict("source_state")
+            raise _conflict()
         if (
             task.state not in {"completed", "failed", "uncertain"}
             or task.recording_id != recording.id
@@ -460,12 +455,12 @@ class RetainedC2ReuseService:
             or not isinstance(job.provider_receipt, dict)
             or canonical_receipt_digest(job.provider_receipt) != job.provider_receipt_digest
         ):
-            raise _conflict("source_task")
+            raise _conflict()
         try:
             quote = Quote.from_dict(quote_row.quote)
             execution = ExecutionPermission.from_dict(quote_row.execution_permission)
         except (TypeError, ValueError, KeyError):
-            raise _conflict("source_quote_parse") from None
+            raise _conflict() from None
         receipt = job.provider_receipt
         if (
             quote.quote_id != str(quote_row.id)
@@ -511,18 +506,18 @@ class RetainedC2ReuseService:
             or receipt.get("human_approved") is not False
             or "retained_reuse" in receipt
         ):
-            raise _conflict("source_quote")
+            raise _conflict()
         dispatch_epoch = int(utc(job.dispatch_started_at).timestamp())
         if not (
             quote.created_at_epoch
             <= dispatch_epoch
             < min(quote.expires_at_epoch, execution.expires_at_epoch)
         ):
-            raise _conflict("source_dispatch")
+            raise _conflict()
         if task.intent is None or content_hash(task.intent) != task.intent_sha256:
-            raise _conflict("source_intent")
+            raise _conflict()
         if content_hash(task.intent) != content_hash(source_plan.intent()):
-            raise _conflict("source_plan")
+            raise _conflict()
         if (
             source_plan.duration_ms != target_stage.duration_ms
             or source_plan.prepared.input_sha256 != target_stage.prepared.input_sha256
@@ -538,11 +533,11 @@ class RetainedC2ReuseService:
         if task.checkpoint_id is not None:
             source_checkpoint = await self.database.get(ConversationCheckpoint, task.checkpoint_id)
             if source_checkpoint is None or source_checkpoint.recording_id != recording.id:
-                raise _conflict("source_checkpoint")
+                raise _conflict()
             try:
                 verified_checkpoint(source_checkpoint, binding_for(recording))
             except ConversationConflict:
-                raise _conflict("source_checkpoint_integrity") from None
+                raise _conflict() from None
             if (
                 receipt.get("checkpoint_id") != str(source_checkpoint.id)
                 or receipt.get("checkpoint_manifest_sha256") != source_checkpoint.manifest_sha256
@@ -551,7 +546,7 @@ class RetainedC2ReuseService:
                 or source_checkpoint.payload.get("raw_response_sha256")
                 != receipt.get("response_sha256")
             ):
-                raise _conflict("source_checkpoint_payload")
+                raise _conflict()
         elif (
             receipt.get("checkpoint_id") is not None
             or receipt.get("checkpoint_manifest_sha256") is not None
@@ -563,7 +558,7 @@ class RetainedC2ReuseService:
             if request_id is not None and (
                 not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None
             ):
-                raise _conflict("source_provider_request")
+                raise _conflict()
             raw = await asyncio.to_thread(
                 lambda: b"".join(
                     self.storage.iter_bytes(
@@ -578,10 +573,10 @@ class RetainedC2ReuseService:
                 )
             )
             if not 1 <= len(raw) <= MAX_JSON_BYTES:
-                raise _conflict("source_provider_bytes")
+                raise _conflict()
             data = json.loads(raw)
             if not isinstance(data, dict):
-                raise _conflict("source_provider_json")
+                raise _conflict()
             result = ProviderResult(
                 provider=receipt["provider"],
                 model=receipt["model"],
@@ -598,7 +593,7 @@ class RetainedC2ReuseService:
                 duration_ms=source_plan.duration_ms,
             ).data()
             if source_checkpoint is not None and source_checkpoint.payload != normalized:
-                raise _conflict("source_provider_checkpoint")
+                raise _conflict()
         except (
             StorageError,
             InferenceTaskError,
@@ -607,7 +602,7 @@ class RetainedC2ReuseService:
             ValueError,
             KeyError,
         ):
-            raise _conflict("source_provider_validation") from None
+            raise _conflict() from None
         return _VerifiedSource(
             recording, permission, task, run, job, quote_row, quote, receipt, normalized
         )

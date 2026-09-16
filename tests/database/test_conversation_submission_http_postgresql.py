@@ -67,6 +67,7 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
+from ac_platform.outbox.repository import canonical_receipt_digest
 from tests.database.test_conversation_authority_postgresql import (
     _bundle,
     _promote_admin,
@@ -803,7 +804,10 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                     "privacy_revision": source_plan["privacy_revision"],
                     "accepted": True,
                 }
-                broker = ReportingBroker(data, elevenlabs_malformed=True)
+                # Keep a valid provider response, then model the real
+                # recoverable failure window: the provider receipt was saved
+                # but checkpoint publication was interrupted.
+                broker = ReportingBroker(data)
                 router = FixedProviderRouter(
                     {
                         provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
@@ -822,6 +826,31 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                 assert source_acceptance.status_code == 202, source_acceptance.text
                 assert await worker.run_once()
                 assert broker.calls == 1
+
+                async with setup.sessions() as database, database.begin():
+                    source_task = await database.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id == source_recording_id,
+                            ConversationInferenceTask.stage == "C2",
+                        )
+                    )
+                    assert source_task is not None and source_task.checkpoint_id is not None
+                    source_run = await database.get(ConversationRun, source_task.run_id)
+                    source_job = await database.get(Job, source_task.job_id)
+                    assert source_run is not None and source_job is not None
+                    receipt = dict(source_job.provider_receipt or {})
+                    receipt.pop("checkpoint_id", None)
+                    receipt.pop("checkpoint_manifest_sha256", None)
+                    receipt["validation_state"] = "provider_returned"
+                    source_job.provider_receipt = receipt
+                    source_job.provider_receipt_digest = canonical_receipt_digest(receipt)
+                    source_job.status = "dead_letter"
+                    source_job.last_error = "synthetic post-receipt interruption"
+                    source_job.dead_lettered_at = setup.state.now
+                    source_task.state = "uncertain"
+                    source_task.checkpoint_id = None
+                    source_run.state = "failed"
+                    source_run.completed_at = None
 
                 async with setup.sessions() as database, database.begin():
                     source_task = await database.scalar(
