@@ -53,6 +53,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuote,
     ConversationQuoteAcceptance,
     ConversationRecording,
+    ConversationReportDraft,
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
@@ -225,6 +226,7 @@ def _stage(
     max_requests: int = 1,
     paid: bool = False,
     max_cost_paise: int = 0,
+    max_source_duration_ms: int = 1_000,
 ) -> StageApproval:
     refs = _refs(provider, paid=paid)
     refs.pop("endpoint_approval_ref")
@@ -250,7 +252,7 @@ def _stage(
         zero_cost_basis="paid_pricing_evidence" if paid else "synthetic",
         price_evidence_sha256="a" * 64,
         max_cost_paise=max_cost_paise,
-        max_source_duration_ms=1_000,
+        max_source_duration_ms=max_source_duration_ms,
         max_input_bytes=134_217_728,
         max_completion_tokens=max_completion_tokens,
         profile_sha256=profile_sha256,
@@ -268,6 +270,7 @@ def _bundle(
     text_provider: str = "groq",
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
+    max_source_duration_ms: int = 1_000,
 ) -> HostedApprovalBundle:
     bundle_expires = expires_at_epoch or now_epoch + 3_600
     stage_expires = min(bundle_expires, now_epoch + 1_800)
@@ -319,6 +322,7 @@ def _bundle(
                 profile_sha256=None,
                 paid=funded,
                 max_cost_paise=50_000 if funded else 0,
+                max_source_duration_ms=max_source_duration_ms,
             ),
             _stage(
                 state=state,
@@ -334,6 +338,7 @@ def _bundle(
                 profile_sha256=None,
                 paid=text_cost_paise > 0,
                 max_cost_paise=text_cost_paise,
+                max_source_duration_ms=max_source_duration_ms,
             ),
             _stage(
                 state=state,
@@ -349,6 +354,7 @@ def _bundle(
                 profile_sha256=profile_sha256,
                 paid=text_cost_paise > 0,
                 max_cost_paise=text_cost_paise,
+                max_source_duration_ms=max_source_duration_ms,
             ),
         ),
     )
@@ -385,8 +391,9 @@ async def _setup(
     text_provider: str = "groq",
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
+    duration_ms: int = 1_000,
 ) -> AuthorityFixture:
-    prepared = await prepare_local(postgres_harness, tmp_path)
+    prepared = await prepare_local(postgres_harness, tmp_path, duration_ms=duration_ms)
     assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -414,6 +421,7 @@ async def _setup(
             text_provider=text_provider,
             text_cost_paise=text_cost_paise,
             asr_provider=asr_provider,
+            max_source_duration_ms=duration_ms,
         )
         bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
@@ -742,6 +750,96 @@ def test_authority_runs_c2_c4_c5_and_reuses_cached_effect(
                 )
             assert report["report"] is not None
             assert report["report"]["summary"] == "A synthetic draft from saved facts."
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_deepgram_native_tail_is_bounded_through_c3_c5_and_report_read(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A tolerated native tail stays in C2 proof and is bounded for playback consumers."""
+
+    async def exercise() -> None:
+        setup = await _setup(
+            postgres_harness,
+            tmp_path,
+            asr_provider="deepgram",
+            duration_ms=60_000,
+        )
+        setup.broker.deepgram_tail_ms = 135
+        try:
+            c2_quote = await _issue(setup, key="deepgram-tail-c2-quote")
+            c2_run = await _start(setup, c2_quote, key="deepgram-tail-c2-run")
+            assert await setup.worker.run_once()
+            c2 = await completed_checkpoint(setup.sessions, c2_run)
+            async with setup.sessions() as database, database.begin():
+                early = await ConversationReports(_application(setup, database)).transcript(
+                    setup.actor, setup.prepared.recording_id
+                )
+                assert early["duration_ms"] == 60_000
+                assert early["segments"][-1]["end_ms"] == 60_000
+                assert "playback_projection" not in early
+
+            facts_request = StageRequest(stage="C4", transcript_checkpoint_id=c2)
+            c4_quote = await _issue(
+                setup, key="deepgram-tail-c4-quote", request=facts_request
+            )
+            c4_run = await _start(
+                setup, c4_quote, key="deepgram-tail-c4-run", request=facts_request
+            )
+            assert await setup.worker.run_once()
+            c4 = await completed_checkpoint(setup.sessions, c4_run)
+
+            coaching_request = StageRequest(
+                stage="C5", transcript_checkpoint_id=c2, fact_checkpoint_ids=(c4,)
+            )
+            c5_quote = await _issue(
+                setup, key="deepgram-tail-c5-quote", request=coaching_request
+            )
+            c5_run = await _start(
+                setup, c5_quote, key="deepgram-tail-c5-run", request=coaching_request
+            )
+            assert await setup.worker.run_once()
+
+            async with setup.sessions() as database, database.begin():
+                c2_row = await database.get(ConversationCheckpoint, c2)
+                c3_row = await database.scalar(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.recording_id == setup.prepared.recording_id,
+                        ConversationCheckpoint.stage == "C3",
+                    )
+                )
+                assert c2_row is not None and c2_row.payload is not None
+                assert c3_row is not None and c3_row.payload is not None
+                assert c2_row.payload["duration_ms"] == 60_000
+                assert c2_row.payload["segments"][-1]["end_ms"] == 60_135
+                assert c3_row.payload["duration_ms"] == 60_000
+                assert c3_row.payload["segments"][-1]["end_ms"] == 60_000
+                assert c3_row.payload["playback_projection"]["segments"][-1] == {
+                    "id": "s2",
+                    "native_start_ms": 54_135,
+                    "native_end_ms": 60_135,
+                    "playback_start_ms": 54_135,
+                    "playback_end_ms": 60_000,
+                }
+                reports = ConversationReports(_application(setup, database))
+                response = await reports.get(setup.actor, UUID(c5_run["id"]))
+                transcript = await reports.transcript(setup.actor, setup.prepared.recording_id)
+                draft = await database.scalar(
+                    select(ConversationReportDraft).where(
+                        ConversationReportDraft.run_id == UUID(c5_run["id"]),
+                    )
+                )
+                assert response["report"]["review_status"] == "draft_not_dipak_adjudicated"
+                assert transcript["duration_ms"] == 60_000
+                assert transcript["segments"][-1]["end_ms"] == 60_000
+                assert "playback_projection" not in transcript
+                assert draft is not None and draft.transcript is not None
+                assert draft.transcript["native"]["segments"][-1]["end_ms"] == 60_135
+            assert setup.broker.routes == ["deepgram", "groq", "groq"]
+            assert setup.broker.calls == 3
         finally:
             await setup.engine.dispose()
 

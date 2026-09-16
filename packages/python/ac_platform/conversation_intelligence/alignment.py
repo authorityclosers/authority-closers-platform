@@ -10,6 +10,7 @@ for an attribution result.
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, NoReturn
 
@@ -23,6 +24,10 @@ _AUDIOATLAS_SUPPORT = "[start_sample, start_sample + valid_samples); attribution
 _MAX_SOURCE_BYTES = 128 * 1024 * 1024
 _MAX_DURATION_MS = 7_200_000
 _MAX_SEGMENTS = 2_000
+_PLAYBACK_TAIL_TOLERANCE_MS = 1_000
+_NATIVE_TRANSCRIPT_TIMEBASES = frozenset(
+    {"elevenlabs-scribe-native-seconds", "deepgram-native-seconds"}
+)
 _KNOWN_TRANSCRIPT_TIMEBASES = frozenset(
     {
         "decoded_audio_track",
@@ -34,6 +39,69 @@ _KNOWN_TRANSCRIPT_TIMEBASES = frozenset(
 
 class AlignmentError(ValueError):
     """Stable, non-content-bearing failure from the C3 source-clock validator."""
+
+
+def project_transcript_for_playback(
+    transcript: dict[str, Any], *, duration_ms: int
+) -> dict[str, Any]:
+    """Project an accepted native transcript onto the decoded playback bounds.
+
+    Provider native clocks may end within the existing one-second normalizer
+    tolerance after C1's measured media duration.  C2 remains untouched; this
+    detached view is used only by downstream consumers that require playback
+    bounded intervals.  The original native end is recorded in an explicit
+    provenance record, and larger drift remains invalid.
+    """
+
+    if type(duration_ms) is not int or not 1 <= duration_ms <= _MAX_DURATION_MS:
+        raise AlignmentError("alignment_duration_invalid")
+    if not isinstance(transcript, dict):
+        raise AlignmentError("alignment_transcript_invalid")
+    projected = deepcopy(transcript)
+    timebase_id = transcript.get("timebase_id")
+    if timebase_id not in _NATIVE_TRANSCRIPT_TIMEBASES:
+        return projected
+    declared_duration = transcript.get("duration_ms")
+    if declared_duration is not None and declared_duration != duration_ms:
+        raise AlignmentError("alignment_duration_mismatch")
+    raw_segments = transcript.get("segments")
+    if not isinstance(raw_segments, list):
+        raise AlignmentError("alignment_segments_invalid")
+
+    changed: list[dict[str, int | str]] = []
+    segments: list[dict[str, Any]] = []
+    for raw in raw_segments:
+        if not isinstance(raw, dict):
+            raise AlignmentError("alignment_segment_invalid")
+        segment = dict(raw)
+        start_ms = segment.get("start_ms")
+        end_ms = segment.get("end_ms")
+        if type(start_ms) is not int or type(end_ms) is not int:
+            raise AlignmentError("alignment_segment_bounds_invalid")
+        if end_ms > duration_ms:
+            if end_ms > duration_ms + _PLAYBACK_TAIL_TOLERANCE_MS or start_ms >= duration_ms:
+                raise AlignmentError("alignment_segment_bounds_invalid")
+            changed.append(
+                {
+                    "id": segment.get("id", ""),
+                    "native_start_ms": start_ms,
+                    "native_end_ms": end_ms,
+                    "playback_start_ms": start_ms,
+                    "playback_end_ms": duration_ms,
+                }
+            )
+            segment["end_ms"] = duration_ms
+        segments.append(segment)
+    if changed:
+        projected["segments"] = segments
+        projected["playback_projection"] = {
+            "schema": "ac.sales-xray.transcript-playback-projection/1",
+            "duration_ms": duration_ms,
+            "tail_tolerance_ms": _PLAYBACK_TAIL_TOLERANCE_MS,
+            "status": "bounded_native_tail_clamped",
+            "segments": changed,
+        }
+    return projected
 
 
 def _fail(code: str) -> NoReturn:
@@ -323,6 +391,69 @@ def _validate_transcript(transcript: dict[str, Any], signal: _SignalInfo) -> _Tr
     )
 
 
+def _validate_playback_projection(
+    transcript: dict[str, Any], signal: _SignalInfo
+) -> dict[str, Any] | None:
+    value = transcript.get("playback_projection")
+    if value is None:
+        return None
+    projection = _object(value, "playback_projection")
+    timebase_id = transcript.get("timebase_id")
+    if (
+        timebase_id not in _NATIVE_TRANSCRIPT_TIMEBASES
+        or set(projection)
+        != {"schema", "duration_ms", "tail_tolerance_ms", "status", "segments"}
+        or projection.get("schema") != "ac.sales-xray.transcript-playback-projection/1"
+        or projection.get("duration_ms") != signal.duration_ms
+        or projection.get("tail_tolerance_ms") != _PLAYBACK_TAIL_TOLERANCE_MS
+        or projection.get("status") != "bounded_native_tail_clamped"
+    ):
+        _fail("alignment_playback_projection_invalid")
+    entries = projection.get("segments")
+    raw_segments = transcript.get("segments")
+    if not isinstance(entries, list) or not isinstance(raw_segments, list) or not entries:
+        _fail("alignment_playback_projection_invalid")
+    by_id = {
+        segment.get("id"): segment
+        for segment in raw_segments
+        if isinstance(segment, dict)
+    }
+    seen: set[str] = set()
+    for entry in entries:
+        item = _object(entry, "playback_projection_segment")
+        if set(item) != {
+            "id",
+            "native_start_ms",
+            "native_end_ms",
+            "playback_start_ms",
+            "playback_end_ms",
+        }:
+            _fail("alignment_playback_projection_invalid")
+        segment_id = _text(item.get("id"), "playback_projection_segment_id", maximum=128)
+        if segment_id in seen or segment_id not in by_id:
+            _fail("alignment_playback_projection_invalid")
+        segment = by_id[segment_id]
+        native_start = _integer(
+            item.get("native_start_ms"), "playback_projection_native_start_ms"
+        )
+        native_end = _integer(item.get("native_end_ms"), "playback_projection_native_end_ms")
+        playback_start = _integer(
+            item.get("playback_start_ms"), "playback_projection_start_ms"
+        )
+        playback_end = _integer(item.get("playback_end_ms"), "playback_projection_end_ms")
+        if (
+            native_start != segment.get("start_ms")
+            or native_end <= signal.duration_ms
+            or native_end > signal.duration_ms + _PLAYBACK_TAIL_TOLERANCE_MS
+            or playback_start != segment.get("start_ms")
+            or playback_end != segment.get("end_ms")
+            or playback_end != signal.duration_ms
+        ):
+            _fail("alignment_playback_projection_invalid")
+        seen.add(segment_id)
+    return projection
+
+
 def _candidate_window_count(
     segment: _TranscriptSegment,
     *,
@@ -358,6 +489,7 @@ def build_alignment(signal_payload: dict[str, Any], transcript: dict[str, Any]) 
 
     signal = _validate_audioatlas(signal_payload)
     native_transcript = _validate_transcript(transcript, signal)
+    playback_projection = _validate_playback_projection(transcript, signal)
     shared_decoded_clock = native_transcript.timebase_id == "decoded_audio_track"
     if shared_decoded_clock:
         mapping_status = "decoded_clock_shared_source_origin_unverified"
@@ -457,5 +589,7 @@ def build_alignment(signal_payload: dict[str, Any], transcript: dict[str, Any]) 
             "describes timing support.",
         ],
     }
+    if playback_projection is not None:
+        result["playback_projection"] = playback_projection
     result["revision"] = content_hash(result)
     return result

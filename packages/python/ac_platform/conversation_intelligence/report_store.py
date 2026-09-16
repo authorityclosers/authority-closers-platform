@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
+from ac_platform.conversation_intelligence.alignment import project_transcript_for_playback
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -23,6 +25,7 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
+from ac_platform.conversation_intelligence.inference_tasks import prepare_scribe_input
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationPermission,
@@ -196,6 +199,7 @@ class ConversationReports:
         c5_row, c5 = await pipeline.checkpoint(recording, proof.coaching_checkpoint_id, "C5")
         c6_row, c6 = await pipeline.checkpoint(recording, proof.presentation_checkpoint_id, "C6")
         transcription, c2_receipt = await pipeline.provider_task(recording, c2_row)
+        source = await pipeline.service.plan_transcription(recording)
         coaching, c5_receipt = await pipeline.provider_task(recording, c5_row)
         aggregate_row, aggregate = await pipeline.parent(recording, c5, "C4")
         _, alignment = await pipeline.parent(recording, aggregate, "C3")
@@ -203,9 +207,16 @@ class ConversationReports:
         aligned_c2, _ = await pipeline.parent(recording, alignment, "C2")
         config = json.loads(c5.config_json)
         request = (coaching.intent or {}).get("request", {})
+        if draft.transcript is None or c2_row.payload is None:
+            raise ConversationConflict("The stored report's transcript evidence is unavailable.")
+        native_transcript = draft.transcript.get("native", draft.transcript["normalized"])
+        projected_transcript = project_transcript_for_playback(
+            c2_row.payload, duration_ms=source.duration_ms
+        )
         if (
             draft.transcript is None
-            or c2_row.payload != draft.transcript["normalized"]
+            or c2_row.payload != native_transcript
+            or projected_transcript != draft.transcript["normalized"]
             or c5_row.payload != draft.payload
             or transcription.run_id != proof.transcription_task_id
             or coaching.run_id != draft.run_id
@@ -336,7 +347,10 @@ class ConversationReports:
             .limit(1)
         )
         if draft is None:
-            from ac_platform.conversation_intelligence.inference import ConversationInference
+            from ac_platform.conversation_intelligence.inference import (
+                TRANSCRIPT_RECIPE_BY_ROUTE,
+                ConversationInference,
+            )
             from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 
             latest = await self.database.scalar(
@@ -355,17 +369,54 @@ class ConversationReports:
                 raise ConversationNotFound("A saved transcript is not available yet.")
             pipeline = ReportingPipeline(ConversationInference(self.application))
             latest, _ = await pipeline.checkpoint(recording, latest.id, "C2")
-            _, receipt = await pipeline.provider_task(recording, latest)
+            task, receipt = await pipeline.provider_task(recording, latest)
             transcript = latest.payload
             if transcript is None or transcript.get("revision") != receipt.get("response_sha256"):
                 raise ConversationConflict("The saved transcript's receipt differs.")
             source = await pipeline.service.plan_transcription(recording)
+            provider = receipt.get("provider")
+            model = receipt.get("model")
+            try:
+                if not isinstance(provider, str) or not isinstance(model, str):
+                    raise ValueError
+                expected_recipe = TRANSCRIPT_RECIPE_BY_ROUTE.get((provider, model))
+                if expected_recipe is None:
+                    raise ValueError
+                prepared = prepare_scribe_input(
+                    source_sha256=recording.source_sha256,
+                    duration_ms=source.duration_ms,
+                    content_type=recording.content_type,
+                    provider=provider,
+                    model=model,
+                )
+                expected_checkpoint = replace(
+                    source.checkpoint,
+                    revision=expected_recipe,
+                    config_json=canonical(
+                        {
+                            "provider": prepared.provider,
+                            "model": prepared.model,
+                            "operation": prepared.operation,
+                            "duration_ms": source.duration_ms,
+                        }
+                    ).decode(),
+                )
+            except (TypeError, ValueError):
+                raise ConversationConflict("The saved transcript's route differs.") from None
+            if task.stage != "C2" or latest.cache_key != expected_checkpoint.cache_key:
+                raise ConversationConflict("The saved transcript's route differs.")
+            # C2 may be bound to a hosted native route selected by the release
+            # authority; this read path has no route authority. C1's measured
+            # duration is the only source fact needed for this projection; the
+            # saved C2 route is checked against its receipt and checkpoint above.
             if (
-                latest.cache_key != source.checkpoint.cache_key
-                or transcript.get("source_sha256") != recording.source_sha256
+                transcript.get("source_sha256") != recording.source_sha256
                 or transcript.get("duration_ms") != source.duration_ms
             ):
                 raise ConversationConflict("The transcript's source measurement differs.")
+            transcript = project_transcript_for_playback(
+                transcript, duration_ms=source.duration_ms
+            )
             extract_style_independent_facts(transcript)
         else:
             _, transcript = self._validated(draft, recording)

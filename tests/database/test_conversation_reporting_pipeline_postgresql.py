@@ -51,9 +51,10 @@ def postgres_harness() -> Any:
 
 
 class ReportingBroker(FakeBroker):
-    def __init__(self, data: bytes) -> None:
+    def __init__(self, data: bytes, *, deepgram_tail_ms: int | None = None) -> None:
         super().__init__(data)
         self.routes: list[str] = []
+        self.deepgram_tail_ms = deepgram_tail_ms
 
     async def execute(self, reservation: Any, payload: bytes) -> ProviderResult:
         self.routes.append(reservation.quote.provider_id)
@@ -63,6 +64,18 @@ class ReportingBroker(FakeBroker):
         self.payloads.append(payload)
         provider = reservation.quote.provider_id
         if provider == "deepgram":
+            native_tail_end = (60_000 + (self.deepgram_tail_ms or 0)) / 1_000
+            words = (
+                [
+                    {"word": "hello", "start": 0.0, "end": 54.135, "speaker": 0},
+                    {"word": "buyer", "start": 54.135, "end": native_tail_end, "speaker": 1},
+                ]
+                if self.deepgram_tail_ms is not None
+                else [
+                    {"word": "hello", "start": 0.0, "end": 0.5, "speaker": 0},
+                    {"word": "buyer", "start": 0.5, "end": 0.9, "speaker": 0},
+                ]
+            )
             data = {
                 "results": {
                     "channels": [
@@ -70,20 +83,7 @@ class ReportingBroker(FakeBroker):
                             "alternatives": [
                                 {
                                     "transcript": "hello buyer",
-                                    "words": [
-                                        {
-                                            "word": "hello",
-                                            "start": 0.0,
-                                            "end": 0.5,
-                                            "speaker": 0,
-                                        },
-                                        {
-                                            "word": "buyer",
-                                            "start": 0.5,
-                                            "end": 0.9,
-                                            "speaker": 0,
-                                        },
-                                    ],
+                                    "words": words,
                                 }
                             ]
                         }

@@ -98,6 +98,7 @@ class StagePlan:
     duration_ms: int
     request: StageRequest
     transcript: dict[str, Any] = field(repr=False)
+    native_transcript: dict[str, Any] = field(repr=False)
     profile: dict[str, Any] | None = field(repr=False)
 
     @property
@@ -265,7 +266,10 @@ class ReportingPipeline:
         return row
 
     async def plan(self, recording: ConversationRecording, request: StageRequest) -> StagePlan:
-        from ac_platform.conversation_intelligence.alignment import build_alignment
+        from ac_platform.conversation_intelligence.alignment import (
+            build_alignment,
+            project_transcript_for_playback,
+        )
         from ac_platform.conversation_intelligence.inference import binding_for
 
         # Revalidate a detached snapshot even for internal model_copy callers.
@@ -280,10 +284,13 @@ class ReportingPipeline:
         if transcript_checkpoint.cache_key != source.checkpoint.cache_key:
             raise ConversationConflict("The saved transcript uses a different source recipe.")
         _, transcript_receipt = await self.provider_task(recording, transcript_row)
-        transcript = transcript_row.payload
-        assert transcript is not None and signal_row.payload is not None
-        if transcript.get("revision") != transcript_receipt.get("response_sha256"):
+        native_transcript = transcript_row.payload
+        assert native_transcript is not None and signal_row.payload is not None
+        if native_transcript.get("revision") != transcript_receipt.get("response_sha256"):
             raise ConversationConflict("The transcript differs from its native receipt.")
+        transcript = project_transcript_for_playback(
+            native_transcript, duration_ms=source.duration_ms
+        )
         aligned = build_alignment(signal_row.payload, transcript)
         binding = binding_for(recording)
         alignment = build_checkpoint(
@@ -321,7 +328,15 @@ class ReportingPipeline:
                 parents,
                 "0" * 64,
             )
-            return StagePlan(prepared, template, source.duration_ms, request, transcript, None)
+            return StagePlan(
+                prepared,
+                template,
+                source.duration_ms,
+                request,
+                transcript,
+                native_transcript,
+                None,
+            )
 
         packets: list[tuple[FactPacket, Checkpoint, UUID]] = []
         for identifier in request.fact_checkpoint_ids:
@@ -382,7 +397,15 @@ class ReportingPipeline:
             (aggregate,),
             "0" * 64,
         )
-        return StagePlan(prepared, template, source.duration_ms, request, transcript, profile)
+        return StagePlan(
+            prepared,
+            template,
+            source.duration_ms,
+            request,
+            transcript,
+            native_transcript,
+            profile,
+        )
 
     async def finish(
         self,
@@ -418,6 +441,8 @@ class ReportingPipeline:
                 "response_sha256": transcription_receipt["response_sha256"],
             },
         }
+        if plan.transcript != plan.native_transcript:
+            transcript_bundle["native"] = plan.native_transcript
         presented = {
             "schema": "ac.sales-xray.draft-presentation/1",
             "report": normalized,

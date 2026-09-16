@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import func, select
 
+from ac_platform.conversation_intelligence.alignment import project_transcript_for_playback
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -569,6 +570,50 @@ class RetainedC5RecoveryService:
         )
         if c3 is None:
             raise ConversationConflict("The retained alignment checkpoint is unavailable.")
+        # A live C3 parent carries C1's measured duration. Historic retained
+        # recovery records may omit that row, but they must remain on their
+        # original in-bound transcript path; a native overflow requires the
+        # verified C1 measurement and cannot fall back to C2 duration.
+        c1_duration = None
+        c3_manifest_payload = c3.manifest if isinstance(c3.manifest, dict) else {}
+        c3_parents = c3_manifest_payload.get("parents")
+        c1_manifest = (
+            dict(c3_parents).get("C1")
+            if isinstance(c3_parents, list | tuple)
+            else None
+        )
+        if isinstance(c1_manifest, str):
+            c1 = await self.database.scalar(
+                select(ConversationCheckpoint).where(
+                    ConversationCheckpoint.recording_id == recording.id,
+                    ConversationCheckpoint.tenant_id == recording.tenant_id,
+                    ConversationCheckpoint.person_id == recording.person_id,
+                    ConversationCheckpoint.stage == "C1",
+                    ConversationCheckpoint.manifest_sha256 == c1_manifest,
+                    ConversationCheckpoint.erased_at.is_(None),
+                )
+            )
+            if c1 is not None and isinstance(c1.payload, dict):
+                verified_checkpoint(c1, binding_for(recording))
+                c1_duration = c1.payload.get("media_duration_ms")
+        declared_duration = transcript.get("duration_ms")
+        if type(declared_duration) is not int:
+            raise ConversationConflict("The retained transcript duration is unavailable.")
+        has_native_overflow = any(
+            isinstance(segment, dict)
+            and type(segment.get("end_ms")) is int
+            and segment["end_ms"] > declared_duration
+            for segment in transcript.get("segments", [])
+        )
+        if c1_duration is None:
+            if has_native_overflow:
+                raise ConversationConflict(
+                    "A verified C1 duration is required for native tail repair."
+                )
+        else:
+            if type(c1_duration) is not int:
+                raise ConversationConflict("The retained C1 duration is unavailable.")
+            transcript = project_transcript_for_playback(transcript, duration_ms=c1_duration)
         try:
             verified_checkpoint(c2, binding_for(recording))
             verified_checkpoint(c3, binding_for(recording))

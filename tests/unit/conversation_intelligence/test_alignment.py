@@ -9,15 +9,18 @@ from ac_platform.conversation_intelligence.alignment import (
     ALIGNMENT_SCHEMA,
     AlignmentError,
     build_alignment,
+    project_transcript_for_playback,
 )
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256
 
 SOURCE_SHA = "a" * 64
 
 
-def _signal(*, channels: int = 1, source_sha256: str = SOURCE_SHA) -> dict[str, Any]:
+def _signal(
+    *, channels: int = 1, source_sha256: str = SOURCE_SHA, duration_ms: int = 1_000
+) -> dict[str, Any]:
     rate = 16_000
-    sample_count = 16_000
+    sample_count = rate * duration_ms // 1_000
     hop_samples = 160
     rows = ((sample_count + hop_samples - 1) // hop_samples) * channels
     return {
@@ -27,7 +30,7 @@ def _signal(*, channels: int = 1, source_sha256: str = SOURCE_SHA) -> dict[str, 
         "source_bytes": 12_345,
         "source_rate": 48_000,
         "source_channels": channels,
-        "media_duration_ms": 1_000,
+        "media_duration_ms": duration_ms,
         "feature_sha256": "b" * 64,
         "acoustics": {
             "format": "ac.audioatlas.features/1",
@@ -172,6 +175,48 @@ def test_deepgram_native_clock_remains_unmapped_and_unverified() -> None:
     assert result["segments"][0]["attribution_status"] == (
         "abstained_no_verified_speaker_channel_mapping"
     )
+
+
+def test_native_tail_projects_only_the_playback_view_and_preserves_proof() -> None:
+    transcript = _transcript(
+        _segment("s1", 0, 54_135),
+        _segment("s2", 54_135, 60_135),
+        timebase_id="deepgram-native-seconds",
+        duration_ms=60_000,
+    )
+    projected = project_transcript_for_playback(transcript, duration_ms=60_000)
+
+    assert transcript["segments"][1]["end_ms"] == 60_135
+    assert projected["segments"][1]["end_ms"] == 60_000
+    assert projected["playback_projection"] == {
+        "schema": "ac.sales-xray.transcript-playback-projection/1",
+        "duration_ms": 60_000,
+        "tail_tolerance_ms": 1_000,
+        "status": "bounded_native_tail_clamped",
+        "segments": [
+            {
+                "id": "s2",
+                "native_start_ms": 54_135,
+                "native_end_ms": 60_135,
+                "playback_start_ms": 54_135,
+                "playback_end_ms": 60_000,
+            }
+        ],
+    }
+    alignment = build_alignment(_signal(duration_ms=60_000), projected)
+    assert alignment["segments"][1]["end_ms"] == 60_000
+    assert alignment["playback_projection"] == projected["playback_projection"]
+
+
+def test_native_tail_over_one_second_is_rejected() -> None:
+    transcript = _transcript(
+        _segment("s1", 0, 1_000),
+        _segment("s2", 1_000, 2_001),
+        timebase_id="deepgram-native-seconds",
+        duration_ms=1_000,
+    )
+    with pytest.raises(AlignmentError, match="^alignment_segment_bounds_invalid$"):
+        project_transcript_for_playback(transcript, duration_ms=1_000)
 
 
 @pytest.mark.parametrize(

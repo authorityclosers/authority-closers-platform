@@ -46,6 +46,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.storage import (
+    CHUNK_BYTES,
     ObjectKey,
     ObjectKind,
     PrivateLocalRecordingStorage,
@@ -87,9 +88,9 @@ class Prepared:
     scratch: PrivateLocalRecordingStorage
 
 
-def _wav_one_second_48k() -> bytes:
+def _wav_one_second_48k(duration_ms: int = 1_000) -> bytes:
     samples = bytearray()
-    for index in range(48_000):
+    for index in range(48_000 * duration_ms // 1_000):
         value = int(0.25 * 32_767 * math.sin(2 * math.pi * 440 * index / 48_000))
         samples.extend(struct.pack("<h", value))
     output = io.BytesIO()
@@ -196,10 +197,12 @@ async def _add_quote(
     return quote_id
 
 
-async def _prepare(postgres_harness: Any, tmp_path: Path) -> Prepared:
+async def _prepare(
+    postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 1_000
+) -> Prepared:
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    data = _wav_one_second_48k()
+    data = _wav_one_second_48k(duration_ms)
     source_sha256 = hashlib.sha256(data).hexdigest()
     state = await seed(engine)
     state = replace(state, source_sha256=source_sha256)
@@ -233,7 +236,10 @@ async def _prepare(postgres_harness: Any, tmp_path: Path) -> Prepared:
             stored = await build_application(database, state).store_source(
                 state.actor,
                 recording_id,
-                chunks=(data,),
+                chunks=tuple(
+                    data[offset : offset + CHUNK_BYTES]
+                    for offset in range(0, len(data), CHUNK_BYTES)
+                ),
                 storage=storage,
             )
         assert stored["state"] == "ready"
