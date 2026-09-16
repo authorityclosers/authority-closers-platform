@@ -23,7 +23,13 @@ _AUDIOATLAS_SUPPORT = "[start_sample, start_sample + valid_samples); attribution
 _MAX_SOURCE_BYTES = 128 * 1024 * 1024
 _MAX_DURATION_MS = 7_200_000
 _MAX_SEGMENTS = 2_000
-_KNOWN_TRANSCRIPT_TIMEBASES = frozenset({"decoded_audio_track", "elevenlabs-scribe-native-seconds"})
+_KNOWN_TRANSCRIPT_TIMEBASES = frozenset(
+    {
+        "decoded_audio_track",
+        "elevenlabs-scribe-native-seconds",
+        "deepgram-native-seconds",
+    }
+)
 
 
 class AlignmentError(ValueError):

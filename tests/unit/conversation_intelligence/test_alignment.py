@@ -153,6 +153,27 @@ def test_shared_decoded_clock_reports_support_without_measurements() -> None:
     assert result["measurement_parent"]["feature_sha256"] == "b" * 64
 
 
+def test_deepgram_native_clock_remains_unmapped_and_unverified() -> None:
+    result = build_alignment(
+        _signal(),
+        _transcript(
+            _segment("s1", 100, 200),
+            timebase_id="deepgram-native-seconds",
+            duration_ms=1_000,
+        ),
+    )
+
+    assert result["timebase"]["transcript_timebase_id"] == "deepgram-native-seconds"
+    assert result["timebase"]["mapping_status"] == (
+        "provider_native_clock_unmapped_to_decoded_audio_track"
+    )
+    assert result["timebase"]["mapping_certified"] is False
+    assert result["segments"][0]["channel"] is None
+    assert result["segments"][0]["attribution_status"] == (
+        "abstained_no_verified_speaker_channel_mapping"
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "error"),
     [

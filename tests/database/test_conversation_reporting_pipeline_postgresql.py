@@ -63,6 +63,45 @@ class ReportingBroker(FakeBroker):
         self.payloads.append(payload)
         body = json.loads(payload)
         provider = reservation.quote.provider_id
+        if provider == "deepgram":
+            data = {
+                "results": {
+                    "channels": [
+                        {
+                            "alternatives": [
+                                {
+                                    "transcript": "hello buyer",
+                                    "words": [
+                                        {
+                                            "word": "hello",
+                                            "start": 0.0,
+                                            "end": 0.5,
+                                            "speaker": 0,
+                                        },
+                                        {
+                                            "word": "buyer",
+                                            "start": 0.5,
+                                            "end": 0.9,
+                                            "speaker": 0,
+                                        },
+                                    ],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+            raw = canonical(data)
+            return ProviderResult(
+                provider="deepgram",
+                model=reservation.quote.provider_model,
+                request_id=f"synthetic-deepgram-{self.calls}",
+                response_sha256=hashlib.sha256(raw).hexdigest(),
+                raw_json=raw,
+                data=data,
+                usage={},
+                input_sha256=reservation.quote.input_sha256,
+            )
         user = (
             body["contents"][0]["parts"][0]["text"]
             if provider == "gemini"

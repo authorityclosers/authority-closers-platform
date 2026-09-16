@@ -637,6 +637,65 @@ def test_processing_plan_acceptance_and_scheduler_restart_do_not_duplicate_effec
     run(exercise())
 
 
+def test_deepgram_c2_receipt_advances_to_c4_without_reinvocation(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    """A completed Deepgram C2 receipt must survive the C3 planning boundary."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, asr_provider="deepgram")
+        try:
+            quote = await _quote(setup, "deepgram-processing-plan-quote")
+            await _accept(setup, quote, "deepgram-processing-plan-accept")
+            plan_id = UUID(quote["id"])
+            scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+
+            await setup.worker.run_once()
+            assert setup.broker.routes == ["deepgram"]
+            assert setup.broker.calls == 1
+
+            await _make_due(setup, plan_id)
+            assert await scheduler.step() is True
+
+            async with setup.sessions() as database:
+                tasks = list(
+                    (
+                        await database.scalars(
+                            select(ConversationInferenceTask)
+                            .where(
+                                ConversationInferenceTask.recording_id
+                                == setup.prepared.recording_id
+                            )
+                            .order_by(ConversationInferenceTask.created_at)
+                        )
+                    ).all()
+                )
+                assert [task.stage for task in tasks] == ["C2", "C4"]
+                assert tasks[0].state == "completed"
+                assert tasks[1].state == "queued"
+                alignment = await database.scalar(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.recording_id == setup.prepared.recording_id,
+                        ConversationCheckpoint.stage == "C3",
+                    )
+                )
+                assert alignment is not None and alignment.payload is not None
+                assert alignment.payload["timebase"]["transcript_timebase_id"] == (
+                    "deepgram-native-seconds"
+                )
+                assert alignment.payload["timebase"]["mapping_status"] == (
+                    "provider_native_clock_unmapped_to_decoded_audio_track"
+                )
+
+            # Planning reads the durable C2 receipt and must not invoke ASR again.
+            assert setup.broker.routes == ["deepgram"]
+            assert setup.broker.calls == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
     postgres_harness: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

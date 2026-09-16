@@ -132,8 +132,19 @@ def _provider(
 
 
 def _registry_config(
-    revision: str, *, funded: bool = False, text_provider: str = "groq", text_cost_paise: int = 0
+    revision: str,
+    *,
+    funded: bool = False,
+    text_provider: str = "groq",
+    text_cost_paise: int = 0,
+    asr_provider: str = "elevenlabs",
 ) -> RegistryConfig:
+    asr_model = "nova-3" if asr_provider == "deepgram" else "scribe_v2"
+    asr_endpoint = (
+        "https://api.deepgram.com/v1/listen"
+        if asr_provider == "deepgram"
+        else "https://api.elevenlabs.io/v1/speech-to-text"
+    )
     text_model = "gemini-3.8-flash" if text_provider == "gemini" else "openai/gpt-oss-120b"
     text_endpoint = (
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
@@ -148,9 +159,9 @@ def _registry_config(
         ),
         providers=(
             _provider(
-                "elevenlabs",
-                "scribe_v2",
-                "https://api.elevenlabs.io/v1/speech-to-text",
+                asr_provider,
+                asr_model,
+                asr_endpoint,
                 max_cost_paise=50_000 if funded else 0,
             ),
             _provider(
@@ -163,8 +174,8 @@ def _registry_config(
         routes=(
             RouteConfig(
                 "asr",
-                "elevenlabs",
-                "scribe_v2",
+                asr_provider,
+                asr_model,
                 TRANSCRIPT_RECIPE,
                 "profile-none-v1",
                 "prompt-asr-v1",
@@ -253,9 +264,11 @@ def _bundle(
     funded: bool = False,
     text_provider: str = "groq",
     text_cost_paise: int = 0,
+    asr_provider: str = "elevenlabs",
 ) -> HostedApprovalBundle:
     bundle_expires = expires_at_epoch or now_epoch + 3_600
     stage_expires = min(bundle_expires, now_epoch + 1_800)
+    asr_model = "nova-3" if asr_provider == "deepgram" else "scribe_v2"
     profile_sha256 = hashlib.sha256(canonical(load_report_profile())).hexdigest()
     return HostedApprovalBundle(
         schema="ac.sales-xray.hosted-approval/1",
@@ -293,8 +306,8 @@ def _bundle(
                 source_sha256=source_sha256,
                 config_sha256=config_sha256,
                 stage="C2",
-                provider="elevenlabs",
-                model="scribe_v2",
+                provider=asr_provider,
+                model=asr_model,
                 recipe=TRANSCRIPT_RECIPE,
                 expires_at_epoch=stage_expires,
                 entitlement_seconds=None,
@@ -367,6 +380,7 @@ async def _setup(
     funded: bool = False,
     text_provider: str = "groq",
     text_cost_paise: int = 0,
+    asr_provider: str = "elevenlabs",
 ) -> AuthorityFixture:
     prepared = await prepare_local(postgres_harness, tmp_path)
     assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
@@ -379,6 +393,7 @@ async def _setup(
             funded=funded,
             text_provider=text_provider,
             text_cost_paise=text_cost_paise,
+            asr_provider=asr_provider,
         )
         async with sessions() as database, database.begin():
             config_view = await ConversationProviderAdmin(
@@ -394,6 +409,7 @@ async def _setup(
             funded=funded,
             text_provider=text_provider,
             text_cost_paise=text_cost_paise,
+            asr_provider=asr_provider,
         )
         bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
