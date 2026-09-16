@@ -13,6 +13,7 @@
     "dev:staging": "pwsh -NoProfile -File scripts/Start-LocalStagingBridge.ps1",
     "dev:staging:down": "pwsh -NoProfile -File scripts/Stop-LocalStagingBridge.ps1",
     "dev:sales-xray:production": "pwsh -NoProfile -File scripts/Start-LocalSalesXrayProductionBridge.ps1",
+    "dev:sales-xray:production:check": "pwsh -NoProfile -File scripts/Test-LocalSalesXrayProductionBridge.ps1",
     "dev:sales-xray:production:down": "pwsh -NoProfile -File scripts/Stop-LocalSalesXrayProductionBridge.ps1",
     "dev:dependencies": "docker compose --env-file .env.example -f infra/local/compose.yaml up -d --wait",
     "dev:down": "docker compose --env-file .env.example -f infra/local/compose.yaml down",

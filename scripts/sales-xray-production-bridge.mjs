@@ -11,6 +11,7 @@ export const DEFAULT_BROWSER_ORIGIN = "http://salesxray.localhost:3016";
 export const DEFAULT_INNER_ORIGIN = "http://127.0.0.1:3116";
 export const LOCAL_SESSION_COOKIE = "ac_sales_xray_dev_session";
 export const UPSTREAM_SESSION_COOKIE = "__Host-ac_session";
+export const UPSTREAM_GUEST_COOKIE = "__Host-ac_xray_guest";
 export const UPSTREAM_OAUTH_COOKIE_PREFIX = "__Host-ac_oauth_transaction";
 export const MAX_REQUEST_BODY_BYTES = 34 * 1024 ** 2;
 export const MAX_AUTH_RESPONSE_BYTES = 1024 ** 2;
@@ -20,8 +21,7 @@ export const UPLOAD_REQUEST_TIMEOUT_MS = 3 * 60 * 1000;
 
 const LOCAL_SESSION_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UPSTREAM_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
-const UUID =
-  "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const SAFE_HEADER_NAMES = new Set([
   "accept",
   "accept-language",
@@ -30,6 +30,9 @@ const SAFE_HEADER_NAMES = new Set([
   "if-none-match",
   "idempotency-key",
   "range",
+  "x-source-sha256",
+  "x-upload-policy",
+  "x-upload-consent",
 ]);
 const RESPONSE_HEADER_NAMES = [
   "accept-ranges",
@@ -219,13 +222,15 @@ export class EphemeralSessionStore {
       this.#sessions.delete(this.#sessions.keys().next().value);
   }
 
-  create(upstreamValue) {
+  create(upstreamValue, name = UPSTREAM_SESSION_COOKIE, previous = {}) {
     if (!UPSTREAM_SESSION_PATTERN.test(upstreamValue))
       throw new Error("The upstream session cookie is malformed.");
+    if (![UPSTREAM_SESSION_COOKIE, UPSTREAM_GUEST_COOKIE].includes(name))
+      throw new Error("Unsupported upstream cookie.");
     this.#prune();
     const handle = randomBytes(32).toString("base64url");
     this.#sessions.set(handle, {
-      upstreamValue,
+      credentials: { ...previous, [name]: upstreamValue },
       expiresAt: Date.now() + LOCAL_SESSION_MAX_AGE_SECONDS * 1000,
     });
     return handle;
@@ -236,14 +241,19 @@ export class EphemeralSessionStore {
     const entry = this.#sessions.get(handle);
     if (!entry) return null;
     entry.expiresAt = Date.now() + LOCAL_SESSION_MAX_AGE_SECONDS * 1000;
-    return entry.upstreamValue;
+    return { ...entry.credentials };
   }
 
-  replace(handle, upstreamValue) {
+  replace(handle, upstreamValue, name = UPSTREAM_SESSION_COOKIE) {
     if (!UPSTREAM_SESSION_PATTERN.test(upstreamValue)) return false;
+    if (![UPSTREAM_SESSION_COOKIE, UPSTREAM_GUEST_COOKIE].includes(name))
+      return false;
     if (!this.#sessions.has(handle)) return false;
     this.#sessions.set(handle, {
-      upstreamValue,
+      credentials: {
+        ...this.#sessions.get(handle).credentials,
+        [name]: upstreamValue,
+      },
       expiresAt: Date.now() + LOCAL_SESSION_MAX_AGE_SECONDS * 1000,
     });
     return true;
@@ -253,6 +263,13 @@ export class EphemeralSessionStore {
     this.#sessions.delete(handle);
   }
 
+  removeCredential(handle, name) {
+    const entry = this.#sessions.get(handle);
+    if (!entry) return;
+    delete entry.credentials[name];
+    if (!Object.keys(entry.credentials).length) this.#sessions.delete(handle);
+  }
+
   clear() {
     this.#sessions.clear();
   }
@@ -260,7 +277,8 @@ export class EphemeralSessionStore {
 
 export function resolveApiRoute(method, pathname, search = "") {
   const verb = method.toUpperCase();
-  const exact = (allowedVerb, path) => verb === allowedVerb && pathname === path;
+  const exact = (allowedVerb, path) =>
+    verb === allowedVerb && pathname === path;
   const noQuery = search.length === 0;
   const api = (auth = "session", requiresSession = auth === "session") => ({
     kind: "api",
@@ -271,7 +289,9 @@ export function resolveApiRoute(method, pathname, search = "") {
     const params = new URLSearchParams(search);
     return (
       [...params.keys()].every((key) => key === "before") &&
-      (params.has("before") ? /^[A-Za-z0-9_-]{1,256}$/.test(params.get("before")) : true)
+      (params.has("before")
+        ? /^[A-Za-z0-9_-]{1,256}$/.test(params.get("before"))
+        : true)
     );
   };
 
@@ -284,9 +304,7 @@ export function resolveApiRoute(method, pathname, search = "") {
     exact("POST", "/v1/auth/logout")
   ) {
     if (!noQuery) return { kind: "blocked" };
-    return pathname === "/v1/auth/password/login"
-      ? api("login", false)
-      : api();
+    return pathname === "/v1/auth/password/login" ? api("login", false) : api();
   }
 
   if (
@@ -310,7 +328,16 @@ export function resolveApiRoute(method, pathname, search = "") {
     "/v1/conversation/acquisition/availability": new Set(["GET"]),
     "/v1/conversation/acquisition/claim": new Set(["POST"]),
   };
-  if (acquisitionExact[pathname]?.has(verb) && noQuery) return api();
+  if (acquisitionExact[pathname]?.has(verb) && noQuery) {
+    if (
+      pathname === "/v1/conversation/acquisition/entry" ||
+      pathname === "/v1/conversation/acquisition/upload-policy" ||
+      pathname === "/v1/conversation/acquisition/session" ||
+      pathname === "/v1/conversation/acquisition/availability"
+    )
+      return api("public", false);
+    return api();
+  }
 
   if (pathname === "/v1/conversation/acquisition/submissions") {
     if (verb === "GET" && safeCursorQuery()) return api();
@@ -324,26 +351,31 @@ export function resolveApiRoute(method, pathname, search = "") {
     const suffix = submission[2];
     if (!suffix && (verb === "GET" || verb === "DELETE") && noQuery)
       return api();
-    if (
-      suffix === "source" &&
-      (verb === "GET" || verb === "PUT") &&
-      noQuery
-    )
+    if (suffix === "source" && (verb === "GET" || verb === "PUT") && noQuery)
       return api();
     if (
-      ["report", "transcript", "waveform", "measurements", "plan", "report.docx"].includes(suffix) &&
+      [
+        "report",
+        "transcript",
+        "waveform",
+        "measurements",
+        "plan",
+        "report.docx",
+      ].includes(suffix) &&
       verb === "GET" &&
       noQuery
     )
       return api();
-    if (suffix === "plan" && verb === "POST" && noQuery)
-      return api();
-    if (suffix === "plan/quote" && verb === "POST" && noQuery)
-      return api();
+    if (suffix === "plan" && verb === "POST" && noQuery) return api();
+    if (suffix === "plan/quote" && verb === "POST" && noQuery) return api();
     return { kind: "blocked" };
   }
 
-  if (pathname === "/v1/conversation/intake/quote" && verb === "POST" && noQuery)
+  if (
+    pathname === "/v1/conversation/intake/quote" &&
+    verb === "POST" &&
+    noQuery
+  )
     return api();
   if (pathname === "/v1/conversation/recordings" && verb === "GET" && noQuery)
     return api();
@@ -355,11 +387,7 @@ export function resolveApiRoute(method, pathname, search = "") {
     const suffix = recording[2];
     if (!suffix && (verb === "GET" || verb === "DELETE") && noQuery)
       return api();
-    if (
-      suffix === "source" &&
-      (verb === "GET" || verb === "PUT") &&
-      noQuery
-    )
+    if (suffix === "source" && (verb === "GET" || verb === "PUT") && noQuery)
       return api();
     if (
       ["transcript", "measurements", "plan"].includes(suffix) &&
@@ -367,10 +395,8 @@ export function resolveApiRoute(method, pathname, search = "") {
       noQuery
     )
       return api();
-    if (suffix === "plan" && verb === "POST" && noQuery)
-      return api();
-    if (suffix === "plan/quote" && verb === "POST" && noQuery)
-      return api();
+    if (suffix === "plan" && verb === "POST" && noQuery) return api();
+    if (suffix === "plan/quote" && verb === "POST" && noQuery) return api();
     return { kind: "blocked" };
   }
 
@@ -402,9 +428,10 @@ function parseSetCookie(header) {
     const attribute = rawAttribute.trim();
     if (!attribute) continue;
     const attributeSeparator = attribute.indexOf("=");
-    const key = (attributeSeparator === -1
-      ? attribute
-      : attribute.slice(0, attributeSeparator)
+    const key = (
+      attributeSeparator === -1
+        ? attribute
+        : attribute.slice(0, attributeSeparator)
     ).toLowerCase();
     const attributeValue =
       attributeSeparator === -1
@@ -415,10 +442,18 @@ function parseSetCookie(header) {
   return { name, value, attributes };
 }
 
-export function readUpstreamSessionCookie(headers) {
+export function readUpstreamSessionCookie(
+  headers,
+  name = UPSTREAM_SESSION_COOKIE,
+) {
   for (const raw of getSetCookieHeaders(headers)) {
     const parsed = parseSetCookie(raw);
-    if (!parsed || parsed.name !== UPSTREAM_SESSION_COOKIE) continue;
+    if (!parsed || parsed.name !== name) continue;
+    if (
+      (parsed.value === "" || parsed.value === '""') &&
+      parsed.attributes.get("max-age") === "0"
+    )
+      return { kind: "cleared" };
     if (
       !UPSTREAM_SESSION_PATTERN.test(parsed.value) ||
       parsed.attributes.get("secure") !== true ||
@@ -438,6 +473,7 @@ function hasCredentialSetCookie(headers) {
     return (
       parsed &&
       (parsed.name === UPSTREAM_SESSION_COOKIE ||
+        parsed.name === UPSTREAM_GUEST_COOKIE ||
         parsed.name.startsWith(UPSTREAM_OAUTH_COOKIE_PREFIX))
     );
   });
@@ -452,13 +488,23 @@ function upstreamRequestHeaders(request, upstreamCookie) {
   headers.set("origin", PRODUCTION_UPSTREAM_ORIGIN);
   headers.set("accept-encoding", "identity");
   headers.set("cache-control", "no-store");
-  if (upstreamCookie) headers.set("cookie", `${UPSTREAM_SESSION_COOKIE}=${upstreamCookie}`);
+  if (upstreamCookie)
+    headers.set(
+      "cookie",
+      Object.entries(upstreamCookie)
+        .filter(([name]) =>
+          [UPSTREAM_SESSION_COOKIE, UPSTREAM_GUEST_COOKIE].includes(name),
+        )
+        .map(([name, value]) => `${name}=${value}`)
+        .join("; "),
+    );
   return headers;
 }
 
 function localRequestHasValidOrigin(request, browserOrigin, browserHost) {
   if (request.headers.host !== browserHost) return false;
-  if (request.headers.origin && request.headers.origin !== browserOrigin) return false;
+  if (request.headers.origin && request.headers.origin !== browserOrigin)
+    return false;
   if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method))
     return request.headers.origin === browserOrigin;
   return true;
@@ -481,7 +527,8 @@ function proxyInnerUpgrade(request, socket, head, config) {
   if (
     !isLoopbackAddress(request.socket.remoteAddress) ||
     request.headers.host !== config.browserHost ||
-    (request.headers.origin && request.headers.origin !== config.browserOrigin) ||
+    (request.headers.origin &&
+      request.headers.origin !== config.browserOrigin) ||
     rejectCredentialHeaders(request) ||
     !request.url ||
     !request.url.startsWith("/") ||
@@ -491,7 +538,10 @@ function proxyInnerUpgrade(request, socket, head, config) {
     return;
   }
   const target = new URL(request.url, config.innerOrigin);
-  if (target.pathname !== "/_next/hmr" && target.pathname !== "/_next/webpack-hmr") {
+  if (
+    target.pathname !== "/_next/hmr" &&
+    target.pathname !== "/_next/webpack-hmr"
+  ) {
     rejectUpgrade(socket, 400);
     return;
   }
@@ -517,29 +567,49 @@ function proxyInnerUpgrade(request, socket, head, config) {
     headers,
     agent: false,
   });
+  let connectedUpstreamSocket = null;
   const close = () => {
     if (!socket.destroyed) socket.destroy();
+    if (connectedUpstreamSocket && !connectedUpstreamSocket.destroyed)
+      connectedUpstreamSocket.destroy();
   };
-  upstreamRequest.once("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
-    if (socket.destroyed) {
-      upstreamSocket.destroy();
-      return;
-    }
-    const statusLine = `HTTP/1.1 ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage ?? "Switching Protocols"}\r\n`;
-    socket.write(statusLine);
-    for (const [name, value] of Object.entries(upstreamResponse.headers)) {
-      if (name === "set-cookie" || value === undefined) continue;
-      const values = Array.isArray(value) ? value : [value];
-      for (const item of values) socket.write(`${name}: ${item}\r\n`);
-    }
-    socket.write("\r\n");
-    if (head.length) upstreamSocket.write(head);
-    if (upstreamHead.length) socket.write(upstreamHead);
-    upstreamSocket.pipe(socket);
-    socket.pipe(upstreamSocket);
-    socket.once("close", () => upstreamSocket.destroy());
-    upstreamSocket.once("close", () => socket.destroy());
-  });
+  socket.on("error", close);
+  upstreamRequest.once(
+    "upgrade",
+    (upstreamResponse, upstreamSocket, upstreamHead) => {
+      connectedUpstreamSocket = upstreamSocket;
+      upstreamSocket.on("error", close);
+      if (socket.destroyed) {
+        upstreamSocket.destroy();
+        return;
+      }
+      const writeToBrowser = (value) => {
+        if (socket.destroyed || !socket.writable) return false;
+        try {
+          socket.write(value);
+          return true;
+        } catch {
+          close();
+          return false;
+        }
+      };
+      const statusLine = `HTTP/1.1 ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage ?? "Switching Protocols"}\r\n`;
+      if (!writeToBrowser(statusLine)) return;
+      for (const [name, value] of Object.entries(upstreamResponse.headers)) {
+        if (name === "set-cookie" || value === undefined) continue;
+        const values = Array.isArray(value) ? value : [value];
+        for (const item of values)
+          if (!writeToBrowser(`${name}: ${item}\r\n`)) return;
+      }
+      if (!writeToBrowser("\r\n")) return;
+      if (head.length && !upstreamSocket.destroyed) upstreamSocket.write(head);
+      if (upstreamHead.length && !writeToBrowser(upstreamHead)) return;
+      upstreamSocket.pipe(socket);
+      socket.pipe(upstreamSocket);
+      socket.once("close", () => upstreamSocket.destroy());
+      upstreamSocket.once("close", () => socket.destroy());
+    },
+  );
   upstreamRequest.once("response", () => close());
   upstreamRequest.once("error", close);
   upstreamRequest.end();
@@ -549,13 +619,17 @@ async function readBody(request, maxBytes) {
   if (["GET", "HEAD"].includes(request.method)) return undefined;
   const declared = request.headers["content-length"];
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > maxBytes))
-    throw Object.assign(new Error("Request body is too large."), { status: 413 });
+    throw Object.assign(new Error("Request body is too large."), {
+      status: 413,
+    });
   const chunks = [];
   let total = 0;
   for await (const chunk of request) {
     total += chunk.length;
     if (total > maxBytes)
-      throw Object.assign(new Error("Request body is too large."), { status: 413 });
+      throw Object.assign(new Error("Request body is too large."), {
+        status: 413,
+      });
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -563,7 +637,12 @@ async function readBody(request, maxBytes) {
 
 function responseHeaders(
   upstream,
-  { localCookie, clearLocalCookie, allowLocationOrigin, rewriteLocationOrigin } = {},
+  {
+    localCookie,
+    clearLocalCookie,
+    allowLocationOrigin,
+    rewriteLocationOrigin,
+  } = {},
 ) {
   const headers = {};
   for (const name of RESPONSE_HEADER_NAMES) {
@@ -601,19 +680,32 @@ function sendUpstreamResponse(response, upstream, options = {}) {
     response.end();
     return;
   }
-  Readable.fromWeb(upstream.body).pipe(response);
+  const body = Readable.fromWeb(upstream.body);
+  const closeBody = () => {
+    if (!body.destroyed) body.destroy();
+  };
+  const closeResponse = () => {
+    if (!response.destroyed) response.destroy();
+  };
+  response.on("error", closeBody);
+  response.once("close", () => {
+    closeBody();
+    response.off("error", closeBody);
+  });
+  body.once("error", closeResponse);
+  body.pipe(response);
 }
 
 function canonicalOAuthRedirect(pathname, search) {
   const target = new URL(pathname, PRODUCTION_UPSTREAM_ORIGIN);
   const incoming = new URLSearchParams(search);
-  const keys =
-    pathname.endsWith("/start")
-      ? ["action", "surface", "return_path"]
-      : ["code", "state", "error", "error_description"];
+  const keys = pathname.endsWith("/start")
+    ? ["action", "surface", "return_path"]
+    : ["code", "state", "error", "error_description"];
   for (const key of keys) {
     const value = incoming.get(key);
-    if (value !== null && value.length <= 4096) target.searchParams.set(key, value);
+    if (value !== null && value.length <= 4096)
+      target.searchParams.set(key, value);
   }
   if (pathname.endsWith("/start")) {
     target.searchParams.set("surface", "sales_xray");
@@ -624,11 +716,23 @@ function canonicalOAuthRedirect(pathname, search) {
 
 async function proxyInner(request, response, innerOrigin, fetcher) {
   if (!["GET", "HEAD"].includes(request.method)) {
-    localError(response, 405, "Only browser page and asset reads are available on this bridge.");
+    localError(
+      response,
+      405,
+      "Only browser page and asset reads are available on this bridge.",
+    );
     return;
   }
-  if (!request.url || !request.url.startsWith("/") || request.url.startsWith("//")) {
-    localError(response, 400, "The local UI request target must be a relative path.");
+  if (
+    !request.url ||
+    !request.url.startsWith("/") ||
+    request.url.startsWith("//")
+  ) {
+    localError(
+      response,
+      400,
+      "The local UI request target must be a relative path.",
+    );
     return;
   }
   const target = new URL(request.url, innerOrigin);
@@ -644,7 +748,8 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
     "x-nextjs-data",
   ]) {
     const value = request.headers[name];
-    if (value) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+    if (value)
+      headers.set(name, Array.isArray(value) ? value.join(", ") : value);
   }
   headers.set("accept-encoding", "identity");
   let upstream;
@@ -663,7 +768,11 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   sendUpstreamResponse(response, upstream, {
     head: request.method === "HEAD",
     allowLocationOrigin: innerOrigin,
-    rewriteLocationOrigin: new URL(request.headers.host ? `http://${request.headers.host}` : DEFAULT_BROWSER_ORIGIN).origin,
+    rewriteLocationOrigin: new URL(
+      request.headers.host
+        ? `http://${request.headers.host}`
+        : DEFAULT_BROWSER_ORIGIN,
+    ).origin,
   });
 }
 
@@ -674,29 +783,64 @@ export function createSalesXrayProductionBridge({
   fetcher = globalThis.fetch,
   sessionStore = new EphemeralSessionStore(),
 } = {}) {
-  const config = validateBridgeConfig({ browserOrigin, innerOrigin, upstreamOrigin });
-  if (typeof fetcher !== "function") throw new Error("A fetch implementation is required.");
+  const config = validateBridgeConfig({
+    browserOrigin,
+    innerOrigin,
+    upstreamOrigin,
+  });
+  if (typeof fetcher !== "function")
+    throw new Error("A fetch implementation is required.");
 
   const handle = async (request, response) => {
     if (!isLoopbackAddress(request.socket.remoteAddress)) {
-      localError(response, 403, "The Sales Xray development bridge is loopback-only.");
+      localError(
+        response,
+        403,
+        "The Sales Xray development bridge is loopback-only.",
+      );
       return;
     }
     if (rejectCredentialHeaders(request)) {
-      localError(response, 400, "Browser credentials must not be supplied to the local bridge.");
+      localError(
+        response,
+        400,
+        "Browser credentials must not be supplied to the local bridge.",
+      );
       return;
     }
-    if (!localRequestHasValidOrigin(request, config.browserOrigin, config.browserHost)) {
-      localError(response, 403, "The request origin is not the configured local Sales Xray origin.");
+    if (
+      !localRequestHasValidOrigin(
+        request,
+        config.browserOrigin,
+        config.browserHost,
+      )
+    ) {
+      localError(
+        response,
+        403,
+        "The request origin is not the configured local Sales Xray origin.",
+      );
       return;
     }
     if (containsCredentialCookie(request.headers.cookie)) {
-      localError(response, 400, "Production cookies are never accepted from the browser.");
+      localError(
+        response,
+        400,
+        "Production cookies are never accepted from the browser.",
+      );
       return;
     }
 
-    if (!request.url || !request.url.startsWith("/") || request.url.startsWith("//")) {
-      localError(response, 400, "The local bridge request target must be a relative path.");
+    if (
+      !request.url ||
+      !request.url.startsWith("/") ||
+      request.url.startsWith("//")
+    ) {
+      localError(
+        response,
+        400,
+        "The local bridge request target must be a relative path.",
+      );
       return;
     }
     const incoming = new URL(request.url, config.browserOrigin);
@@ -705,7 +849,8 @@ export function createSalesXrayProductionBridge({
         ...jsonHeaders(),
         "access-control-allow-origin": config.browserOrigin,
         "access-control-allow-methods": "GET,HEAD,POST,PUT,DELETE,OPTIONS",
-        "access-control-allow-headers": "content-type,accept,if-match,idempotency-key,range",
+        "access-control-allow-headers":
+          "content-type,accept,if-match,idempotency-key,range",
       });
       response.end();
       return;
@@ -728,7 +873,11 @@ export function createSalesXrayProductionBridge({
       return;
     }
 
-    const route = resolveApiRoute(request.method, incoming.pathname, incoming.search);
+    const route = resolveApiRoute(
+      request.method,
+      incoming.pathname,
+      incoming.search,
+    );
     if (route.kind === "oauth") {
       response.writeHead(303, {
         location: canonicalOAuthRedirect(incoming.pathname, incoming.search),
@@ -738,13 +887,21 @@ export function createSalesXrayProductionBridge({
       return;
     }
     if (route.kind !== "api") {
-      localError(response, 404, "That Sales Xray API route is not enabled by the local bridge.");
+      localError(
+        response,
+        404,
+        "That Sales Xray API route is not enabled by the local bridge.",
+      );
       return;
     }
 
     const localHandleResult = readLocalSessionHandle(request.headers.cookie);
     if (localHandleResult.kind === "invalid") {
-      localError(response, 400, "The local Sales Xray session handle is invalid.");
+      localError(
+        response,
+        400,
+        "The local Sales Xray session handle is invalid.",
+      );
       return;
     }
     const localHandle =
@@ -755,11 +912,17 @@ export function createSalesXrayProductionBridge({
         ...jsonHeaders(),
         "set-cookie": clearSessionCookie(),
       });
-      response.end(JSON.stringify({ detail: "Your local Sales Xray session expired." }));
+      response.end(
+        JSON.stringify({ detail: "Your local Sales Xray session expired." }),
+      );
       return;
     }
     if (route.requiresSession && !upstreamCookie) {
-      localError(response, 401, "Sign in to this local Sales Xray workspace first.");
+      localError(
+        response,
+        401,
+        "Sign in to this local Sales Xray workspace first.",
+      );
       return;
     }
     let body;
@@ -770,60 +933,134 @@ export function createSalesXrayProductionBridge({
       return;
     }
 
-    const target = new URL(incoming.pathname + incoming.search, config.upstreamOrigin);
+    const target = new URL(
+      incoming.pathname + incoming.search,
+      config.upstreamOrigin,
+    );
     let upstream;
     try {
       upstream = await fetcher(target, {
         method: request.method,
-        headers: upstreamRequestHeaders(request, route.auth === "login" ? null : upstreamCookie),
+        headers: upstreamRequestHeaders(
+          request,
+          route.auth === "login" ? null : upstreamCookie,
+        ),
         body,
         redirect: "manual",
         credentials: "omit",
         cache: "no-store",
         signal: AbortSignal.timeout(
-          request.method === "PUT" ? UPLOAD_REQUEST_TIMEOUT_MS : API_REQUEST_TIMEOUT_MS,
+          request.method === "PUT"
+            ? UPLOAD_REQUEST_TIMEOUT_MS
+            : API_REQUEST_TIMEOUT_MS,
         ),
       });
     } catch {
-      localError(response, 502, "The production Sales Xray service could not be reached.");
+      localError(
+        response,
+        502,
+        "The production Sales Xray service could not be reached.",
+      );
       return;
     }
 
-    const loginCookie = route.auth === "login" ? readUpstreamSessionCookie(upstream.headers) : null;
+    const loginCookie =
+      route.auth === "login"
+        ? readUpstreamSessionCookie(upstream.headers)
+        : null;
     if (route.auth === "login" && loginCookie?.kind === "invalid") {
-      localError(response, 502, "Production login returned an invalid session cookie.");
+      localError(
+        response,
+        502,
+        "Production login returned an invalid session cookie.",
+      );
       return;
     }
-    if (route.auth === "login" && upstream.ok && loginCookie?.kind !== "present") {
-      localError(response, 502, "Production login did not return a session cookie.");
+    if (
+      route.auth === "login" &&
+      upstream.ok &&
+      loginCookie?.kind !== "present"
+    ) {
+      localError(
+        response,
+        502,
+        "Production login did not return a session cookie.",
+      );
+      return;
+    }
+    let localCookie;
+    if (
+      request.method === "POST" &&
+      incoming.pathname === "/v1/conversation/acquisition/session" &&
+      upstream.status === 201 &&
+      readUpstreamSessionCookie(upstream.headers, UPSTREAM_GUEST_COOKIE)
+        .kind !== "present"
+    ) {
+      localError(
+        response,
+        502,
+        "Production upload entry did not return a valid session cookie.",
+      );
       return;
     }
     if (hasCredentialSetCookie(upstream.headers) && route.auth !== "login") {
-      const refreshed = readUpstreamSessionCookie(upstream.headers);
-      if (refreshed.kind === "present" && localHandle)
-        sessionStore.replace(localHandle, refreshed.value);
+      for (const name of [UPSTREAM_SESSION_COOKIE, UPSTREAM_GUEST_COOKIE]) {
+        const refreshed = readUpstreamSessionCookie(upstream.headers, name);
+        if (refreshed.kind === "present") {
+          if (localHandle || localCookie)
+            sessionStore.replace(
+              localHandle ?? localCookie,
+              refreshed.value,
+              name,
+            );
+          else localCookie = sessionStore.create(refreshed.value, name);
+        } else if (refreshed.kind === "cleared" && localHandle) {
+          sessionStore.removeCredential(localHandle, name);
+        }
+      }
     }
 
     if (route.auth === "login") {
       const raw = Buffer.from(await upstream.arrayBuffer());
-      if (raw.length > MAX_AUTH_RESPONSE_BYTES || /(?:access|refresh|id)?[_-]?token|authorization\s*:/i.test(raw.toString("utf8"))) {
-        localError(response, 502, "Production login returned an unsupported credential response.");
+      if (
+        raw.length > MAX_AUTH_RESPONSE_BYTES ||
+        /(?:access|refresh|id)?[_-]?token|authorization\s*:/i.test(
+          raw.toString("utf8"),
+        )
+      ) {
+        localError(
+          response,
+          502,
+          "Production login returned an unsupported credential response.",
+        );
         return;
       }
       const headers = responseHeaders(upstream, {
         localCookie:
           upstream.ok && loginCookie?.kind === "present"
-            ? sessionStore.create(loginCookie.value)
+            ? sessionStore.create(
+                loginCookie.value,
+                UPSTREAM_SESSION_COOKIE,
+                upstreamCookie ?? {},
+              )
             : undefined,
       });
       delete headers["content-length"];
       headers["content-length"] = raw.length;
       response.writeHead(upstream.status, headers);
       response.end(raw);
+      if (upstream.ok && localHandle) sessionStore.delete(localHandle);
       return;
     }
 
-    if (route.auth === "session" && upstream.status === 401 && localHandle) {
+    // Account-only endpoints legitimately return 401 for a valid guest. Do not
+    // destroy the guest's opaque handle (and thus their upload/resume access).
+    if (
+      route.auth === "session" &&
+      upstream.status === 401 &&
+      localHandle &&
+      !upstreamCookie?.[UPSTREAM_GUEST_COOKIE]
+    ) {
       sessionStore.delete(localHandle);
       sendUpstreamResponse(response, upstream, {
         clearLocalCookie: true,
@@ -831,7 +1068,12 @@ export function createSalesXrayProductionBridge({
       });
       return;
     }
-    if (request.method === "POST" && incoming.pathname === "/v1/auth/logout" && localHandle) {
+    if (
+      request.method === "POST" &&
+      incoming.pathname === "/v1/auth/logout" &&
+      upstream.status === 204 &&
+      localHandle
+    ) {
       sessionStore.delete(localHandle);
       sendUpstreamResponse(response, upstream, {
         clearLocalCookie: true,
@@ -839,7 +1081,10 @@ export function createSalesXrayProductionBridge({
       });
       return;
     }
-    sendUpstreamResponse(response, upstream, { head: request.method === "HEAD" });
+    sendUpstreamResponse(response, upstream, {
+      head: request.method === "HEAD",
+      localCookie,
+    });
   };
 
   return { config, handle, sessionStore };
@@ -848,8 +1093,12 @@ export function createSalesXrayProductionBridge({
 export function createServer(options = {}) {
   const bridge = createSalesXrayProductionBridge(options);
   const server = http.createServer((request, response) => {
+    // A browser can close a long-lived HMR or upload response at any time.
+    // Keep that client disconnect from becoming an uncaught process error.
+    response.on("error", () => {});
     bridge.handle(request, response).catch(() => {
-      if (!response.headersSent) localError(response, 500, "The local Sales Xray bridge failed safely.");
+      if (!response.headersSent)
+        localError(response, 500, "The local Sales Xray bridge failed safely.");
       else response.destroy();
     });
   });
@@ -863,10 +1112,12 @@ function parseCli(argv) {
   const values = new Map();
   for (let index = 0; index < argv.length; index += 1) {
     const item = argv[index];
-    if (!item.startsWith("--")) throw new Error(`Unexpected argument '${item}'.`);
+    if (!item.startsWith("--"))
+      throw new Error(`Unexpected argument '${item}'.`);
     const key = item.slice(2);
     const value = argv[index + 1];
-    if (!value || value.startsWith("--")) throw new Error(`Missing value for --${key}.`);
+    if (!value || value.startsWith("--"))
+      throw new Error(`Missing value for --${key}.`);
     values.set(key, value);
     index += 1;
   }
@@ -898,7 +1149,9 @@ if (
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : "Bridge startup failed."}\n`);
+    process.stderr.write(
+      `${error instanceof Error ? error.message : "Bridge startup failed."}\n`,
+    );
     process.exitCode = 1;
   }
 }

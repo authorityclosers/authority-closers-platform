@@ -140,7 +140,7 @@ try {
 
     if (Test-Path -LiteralPath $PidFile -PathType Leaf) {
         $Existing = Get-Content -LiteralPath $PidFile -Raw | ConvertFrom-Json
-        if ((Get-TrackedProcesses -Record $Existing).Count -gt 0) {
+        if (@(Get-TrackedProcesses -Record $Existing).Count -gt 0) {
             throw "A tracked local Sales Xray bridge is already running. Run the stop script first."
         }
         Remove-Item -LiteralPath $PidFile -Force

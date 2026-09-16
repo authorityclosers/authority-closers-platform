@@ -11,7 +11,7 @@ is not a staging bridge and it is not a production deployment.
 - Production API origin: exactly `https://salesxray.authorityclosers.com`.
 - Existing learner/admin staging bridge allowlists are unchanged.
 - The browser receives only a random, ephemeral HttpOnly local handle. The
-  opaque `__Host-ac_session` value remains in an in-memory server-side map and
+  opaque `__Host-ac_session` and `__Host-ac_xray_guest` values remain in an in-memory server-side map and
   is cleared when the bridge stops or the local session expires.
 - Existing browser cookies, bearer tokens, API keys, and guest cookies are
   rejected; they are never extracted or copied into the local workspace.
@@ -26,9 +26,17 @@ acquisition entry/session/library/submission report evidence, transcript,
 source, waveform, measurements, DOCX export, recording review, and the
 explicit plan/run actions. Unknown routes and admin routes return 404.
 
-Guest challenge-cookie flow is intentionally unsupported in this local
-workspace. Authenticated account flow is the supported path for the saved-call
-review requested here.
+The public guest funnel is supported through the production entry and upload
+policy endpoints. The challenge token is supplied by the UI and the resulting
+opaque upstream session cookie is mapped to an ephemeral local handle. Saved
+calls and account history still require the owning signed-in session.
+
+The bridge maps a newly created guest session only from its validated Secure,
+HttpOnly upstream cookie. An account-context 401 does not discard valid guest
+state. Explicit login/claim can carry both credentials; quoted or unquoted
+empty guest-cookie deletion removes only the guest credential. Source uploads
+forward the required SHA256, policy and consent headers unchanged. Failed
+logout does not erase the opaque handle; only a confirmed204 does.
 
 OAuth start/callback are not locally cookie-mapped. They redirect only to the
 canonical production Sales Xray host with a filtered Sales Xray callback
@@ -57,6 +65,15 @@ bridge starts no provider jobs automatically.
 `node --test scripts/sales-xray-production-bridge.test.mjs` covers the pinned
 destination, endpoint matrix, owner-session mapping, cookie/redirect behavior,
 credential rejection, CSRF-origin rejection, and absolute-target rejection.
+
+2026-09-16: all six synthetic bridge tests passed on Node24, including guest
+creation, source header forwarding, resume, account401 isolation, explicit
+login/claim and quoted-empty guest-cookie deletion. Invalid guest-cookie
+creation fails closed. Independent review reproduced the tests and found no
+remaining blocker in this scoped bridge change. No production API/provider
+request was made by these tests. The PowerShell start script now wraps tracked
+process output in an array before `.Count` under StrictMode. The health-check
+script verifies the declared loopback bridge, not successful live analysis.
 
 This bridge cannot make a production upload faster. The reported 408 on the
 native source PUT remains a backend/admission performance issue and must be
