@@ -750,9 +750,7 @@ describe("provider control contract", () => {
     expect(host.textContent).toContain(
       "Deepgram transcription · Gemini analysis",
     );
-    const switchButton = host.querySelector(
-      'button[aria-label^="Switch to Deepgram"]',
-    );
+    const switchButton = host.querySelector('button[aria-label*="Deepgram"]');
     expect(switchButton).toBeInstanceOf(HTMLButtonElement);
 
     await act(async () => {
@@ -836,6 +834,270 @@ describe("provider control contract", () => {
 
     expect(host.textContent).toContain("#4");
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("requires the approved digest as well as the revision for active identity", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 3,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-15T00:00:00Z",
+      execution_activated: true,
+      activation: {
+        id: "activation-revision-3",
+        sequence: 2,
+        revision: 3,
+        configuration_sha256: "b".repeat(64),
+        created_at: "2026-09-15T00:01:00Z",
+      },
+      activation_options: [
+        {
+          id: "approved-revision-3",
+          revision: 3,
+          configuration_sha256: "c".repeat(64),
+          routes: [
+            {
+              task: "asr",
+              provider: "deepgram",
+              model: "nova-3",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload(current)));
+
+    await renderPanel();
+
+    const preset = host.querySelector(
+      'button[aria-label*="Deepgram"]',
+    ) as HTMLButtonElement;
+    expect(preset.disabled).toBe(false);
+    expect(preset.textContent).toContain("Use this preset");
+  });
+
+  it("does not claim activation when the response identity does not match", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 3,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-15T00:00:00Z",
+      execution_activated: true,
+      activation: {
+        id: "activation-revision-2",
+        sequence: 1,
+        revision: 2,
+        configuration_sha256: "b".repeat(64),
+        created_at: "2026-09-15T00:01:00Z",
+      },
+      activation_options: [
+        {
+          id: "approved-revision-3",
+          revision: 3,
+          configuration_sha256: "c".repeat(64),
+          routes: [
+            {
+              task: "asr",
+              provider: "deepgram",
+              model: "nova-3",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    const mismatchedResponse = {
+      ...current,
+      activation: {
+        ...current.activation,
+        revision: 3,
+        configuration_sha256: "d".repeat(64),
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockResolvedValueOnce(jsonResponse(mismatchedResponse));
+
+    await renderPanel();
+    const preset = host.querySelector(
+      'button[aria-label*="Deepgram"]',
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      preset.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain(
+      "activation response did not match the approved preset",
+    );
+    expect(host.textContent).not.toContain(
+      "Revision #3 is active for new plans",
+    );
+    expect(
+      [...host.querySelectorAll("button")].find((button) =>
+        button.textContent?.includes("Reload current settings"),
+      ),
+    ).toBeInstanceOf(HTMLButtonElement);
+  });
+
+  it("disables save and import mutations while a preset activation is pending", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 3,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-15T00:00:00Z",
+      execution_activated: true,
+      activation: {
+        id: "activation-revision-2",
+        sequence: 1,
+        revision: 2,
+        configuration_sha256: "b".repeat(64),
+        created_at: "2026-09-15T00:01:00Z",
+      },
+      activation_options: [
+        {
+          id: "approved-revision-3",
+          revision: 3,
+          configuration_sha256: "c".repeat(64),
+          routes: [
+            {
+              task: "asr",
+              provider: "deepgram",
+              model: "nova-3",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    let resolveActivation!: (response: Response) => void;
+    const activationResponse = new Promise<Response>((resolve) => {
+      resolveActivation = resolve;
+    });
+    const activated = {
+      ...current,
+      activation: {
+        ...current.activation,
+        revision: 3,
+        configuration_sha256: "c".repeat(64),
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockImplementationOnce(() => activationResponse);
+
+    await renderPanel();
+    const textarea = host.querySelector(
+      'textarea[aria-label="Reviewed provider configuration JSON"]',
+    ) as HTMLTextAreaElement;
+    setTextareaValue(textarea, JSON.stringify(importedConfiguration));
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Check profile"))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const importedSave = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Save imported revision"),
+    ) as HTMLButtonElement;
+    expect(importedSave.disabled).toBe(false);
+    const preset = host.querySelector(
+      'button[aria-label*="Deepgram"]',
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      preset.click();
+      await Promise.resolve();
+    });
+
+    expect(preset.disabled).toBe(true);
+    expect(
+      [...host.querySelectorAll("button")]
+        .filter((button) => button.textContent?.includes("Save settings"))
+        .every((button) => (button as HTMLButtonElement).disabled),
+    ).toBe(true);
+    expect(importedSave.disabled).toBe(true);
+    expect(
+      host.querySelector(
+        'input[aria-label="Choose reviewed provider configuration JSON file"]',
+      ),
+    ).toHaveProperty("disabled", true);
+
+    await act(async () => {
+      resolveActivation(jsonResponse(activated));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  it("disables preset activation while a settings save is pending", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 3,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-15T00:00:00Z",
+      execution_activated: true,
+      activation: {
+        id: "activation-revision-2",
+        sequence: 1,
+        revision: 2,
+        configuration_sha256: "b".repeat(64),
+        created_at: "2026-09-15T00:01:00Z",
+      },
+      activation_options: [
+        {
+          id: "approved-revision-3",
+          revision: 3,
+          configuration_sha256: "c".repeat(64),
+          routes: [
+            {
+              task: "asr",
+              provider: "deepgram",
+              model: "nova-3",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    let resolveSave!: (response: Response) => void;
+    const saveResponse = new Promise<Response>((resolve) => {
+      resolveSave = resolve;
+    });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockImplementationOnce(() => saveResponse);
+
+    await renderPanel();
+    const saveButton = [...host.querySelectorAll("button")].find(
+      (button) =>
+        button.textContent?.includes("Save settings") && !button.disabled,
+    ) as HTMLButtonElement;
+    expect(saveButton).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      saveButton.click();
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    });
+
+    const preset = host.querySelector(
+      'button[aria-label*="Deepgram"]',
+    ) as HTMLButtonElement;
+    expect(preset.disabled).toBe(true);
+
+    await act(async () => {
+      resolveSave(jsonResponse({ ...current, revision: 4 }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   });
 
   it("builds a multi-task configuration with zero paid spend and reference-only settings", () => {

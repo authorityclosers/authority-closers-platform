@@ -225,6 +225,17 @@ type ImportedProfile = {
 
 type ActivationOption = ProviderView["activation_options"][number];
 
+function activationMatchesOption(
+  activation: ProviderView["activation"],
+  option: ActivationOption,
+) {
+  return Boolean(
+    activation &&
+      activation.revision === option.revision &&
+      activation.configuration_sha256 === option.configuration_sha256,
+  );
+}
+
 function providerDisplayName(providerId: string) {
   const knownNames: Record<string, string> = {
     deepgram: "Deepgram",
@@ -268,14 +279,11 @@ function preferredActivationRevision(
   current: ProviderView | null,
 ): number | null {
   if (!current) return null;
-  const activeRevision = current.activation?.revision;
-  if (
-    activeRevision !== undefined &&
-    current.activation_options.some(
-      (option) => option.revision === activeRevision,
-    )
-  ) {
-    return activeRevision;
+  const activeOption = current.activation_options.find((option) =>
+    activationMatchesOption(current.activation, option),
+  );
+  if (activeOption) {
+    return activeOption.revision;
   }
   return current.activation_options[0]?.revision ?? null;
 }
@@ -1093,6 +1101,12 @@ export function ProviderControlsPanel() {
   const importSequence = useRef(0);
 
   async function validateImportedText(text: string) {
+    if (
+      saveState === "saving" ||
+      saveState === "conflict" ||
+      activationState === "activating"
+    )
+      return;
     const sequence = ++importSequence.current;
     setImportBusy(true);
     setImportError("");
@@ -1115,7 +1129,13 @@ export function ProviderControlsPanel() {
   }
 
   async function readImportedFile(file: File | undefined) {
-    if (!file) return;
+    if (
+      !file ||
+      saveState === "saving" ||
+      saveState === "conflict" ||
+      activationState === "activating"
+    )
+      return;
     const sequence = ++importSequence.current;
     setImportBusy(true);
     setImportError("");
@@ -1206,8 +1226,15 @@ export function ProviderControlsPanel() {
       canonicalJson(current.configuration.providers) &&
     canonicalJson(draft.routes) === canonicalJson(current.configuration.routes);
   const currentRevisionIsActive = Boolean(
-    current?.activation && current.activation.revision === current.revision,
+    current?.activation &&
+      current.activation.revision === current.revision &&
+      current.activation.configuration_sha256 === current.configuration_sha256,
   );
+  const mutationBlocked =
+    saveState === "saving" ||
+    saveState === "conflict" ||
+    activationState === "activating" ||
+    importBusy;
 
   function updateRoute(task: RouteConfig["task"], patch: Partial<RouteConfig>) {
     setDraft((previous) => ({
@@ -1304,8 +1331,16 @@ export function ProviderControlsPanel() {
     configuration: RegistryConfiguration,
     successMessage: string,
     importedDigest?: string,
+    alreadyLocked = false,
   ) {
-    if (state.status !== "ready" || saveState === "saving") return;
+    if (
+      state.status !== "ready" ||
+      saveState === "conflict" ||
+      activationState === "activating" ||
+      importBusy ||
+      (!alreadyLocked && saveState === "saving")
+    )
+      return;
     const expectedRevision = state.current?.revision ?? 0;
     setSaveState("saving");
     setMessage("");
@@ -1371,13 +1406,14 @@ export function ProviderControlsPanel() {
   }
 
   async function save() {
-    if (state.status !== "ready" || saveState === "saving") return;
+    if (state.status !== "ready" || mutationBlocked) return;
     const validationError = validateDraft();
     if (validationError) {
       setMessage(validationError);
       setSaveState("idle");
       return;
     }
+    setSaveState("saving");
     let configuration: RegistryConfiguration;
     try {
       configuration = await prepareConfiguration(
@@ -1396,11 +1432,13 @@ export function ProviderControlsPanel() {
     await submitConfiguration(
       configuration,
       "Saved as a new immutable revision. Activate an approved revision for new plans.",
+      undefined,
+      true,
     );
   }
 
   async function saveImportedProfile() {
-    if (!importedProfile || state.status !== "ready") return;
+    if (!importedProfile || state.status !== "ready" || mutationBlocked) return;
     await submitConfiguration(
       importedProfile.configuration,
       "Imported revision saved. Activate it separately only when the server lists it as approved.",
@@ -1409,12 +1447,7 @@ export function ProviderControlsPanel() {
   }
 
   async function activateRevision(targetRevision: number) {
-    if (
-      state.status !== "ready" ||
-      !current ||
-      activationState === "activating"
-    )
-      return;
+    if (state.status !== "ready" || !current || mutationBlocked) return;
     const options = current.activation_options;
     const target = options.find((item) => item.revision === targetRevision);
     if (!target) {
@@ -1428,7 +1461,6 @@ export function ProviderControlsPanel() {
     setActivationRevision(targetRevision);
     setActivationTarget(targetRevision);
     setActivationState("activating");
-    setSaveState("idle");
     setMessage("");
     try {
       const value = await requestJson(
@@ -1446,6 +1478,9 @@ export function ProviderControlsPanel() {
         },
       );
       const activated = saveResponseSchema.parse(value);
+      if (!activationMatchesOption(activated.activation, target)) {
+        throw new Error("activation_response_mismatch");
+      }
       setState((previous) =>
         previous.status === "ready"
           ? { ...previous, current: activated }
@@ -1458,10 +1493,16 @@ export function ProviderControlsPanel() {
       );
     } catch (error: unknown) {
       setActivationState("error");
-      if (error instanceof Error && error.message === "http_409") {
+      if (
+        error instanceof Error &&
+        (error.message === "http_409" ||
+          error.message === "activation_response_mismatch")
+      ) {
         setSaveState("conflict");
         setMessage(
-          "Provider settings changed. Reload the current revision before switching presets.",
+          error.message === "http_409"
+            ? "Provider settings changed. Reload the current revision before switching presets."
+            : "The activation response did not match the approved preset. Reload the current revision before switching presets.",
         );
       } else {
         setSaveState("idle");
@@ -1473,6 +1514,7 @@ export function ProviderControlsPanel() {
   }
 
   async function activate() {
+    if (mutationBlocked) return;
     if (activationRevision === null) {
       setActivationState("error");
       setMessage("Choose an approved provider preset before activating.");
@@ -1598,7 +1640,7 @@ export function ProviderControlsPanel() {
             className="button button-primary"
             type="button"
             onClick={() => void save()}
-            disabled={saveState === "saving" || draftMatchesSaved}
+            disabled={mutationBlocked || draftMatchesSaved}
           >
             {saveState === "saving" ? (
               "Saving…"
@@ -1678,6 +1720,7 @@ export function ProviderControlsPanel() {
             <textarea
               aria-label="Reviewed provider configuration JSON"
               value={importText}
+              disabled={mutationBlocked}
               onChange={(event) => {
                 importSequence.current += 1;
                 setImportText(event.target.value);
@@ -1699,7 +1742,7 @@ export function ProviderControlsPanel() {
               className="button button-primary"
               type="button"
               onClick={() => void validateImportedText(importText)}
-              disabled={importBusy || !importText.trim()}
+              disabled={mutationBlocked || !importText.trim()}
             >
               {importBusy ? "Checking…" : "Check profile"}
             </button>
@@ -1710,6 +1753,7 @@ export function ProviderControlsPanel() {
                 type="file"
                 accept="application/json,.json"
                 aria-label="Choose reviewed provider configuration JSON file"
+                disabled={mutationBlocked}
                 onChange={(event) =>
                   void readImportedFile(event.target.files?.[0])
                 }
@@ -1774,9 +1818,7 @@ export function ProviderControlsPanel() {
                   type="button"
                   onClick={() => void saveImportedProfile()}
                   disabled={
-                    saveState === "saving" ||
-                    saveState === "conflict" ||
-                    Boolean(importedProfile.savedRevision)
+                    mutationBlocked || Boolean(importedProfile.savedRevision)
                   }
                 >
                   {saveState === "saving"
@@ -1855,8 +1897,10 @@ export function ProviderControlsPanel() {
               aria-label="Approved provider presets"
             >
               {activationOptions.map((option) => {
-                const active =
-                  current?.activation?.revision === option.revision;
+                const active = activationMatchesOption(
+                  current?.activation ?? null,
+                  option,
+                );
                 const busy =
                   activationState === "activating" &&
                   activationTarget === option.revision;
@@ -1889,7 +1933,7 @@ export function ProviderControlsPanel() {
                         type="button"
                         aria-label={`Switch to ${activationOptionLabel(option)} revision #${option.revision}`}
                         onClick={() => void activateRevision(option.revision)}
-                        disabled={active || activationState === "activating"}
+                        disabled={active || mutationBlocked}
                       >
                         {busy
                           ? "Switching…"
@@ -1911,6 +1955,7 @@ export function ProviderControlsPanel() {
                   onChange={(event) =>
                     setActivationRevision(Number(event.target.value))
                   }
+                  disabled={mutationBlocked}
                 >
                   {activationOptions.map((option) => (
                     <option value={option.revision} key={option.revision}>
@@ -1933,7 +1978,7 @@ export function ProviderControlsPanel() {
                   className="button button-primary"
                   type="button"
                   onClick={() => void activate()}
-                  disabled={activationState === "activating"}
+                  disabled={mutationBlocked}
                 >
                   <ShieldCheck size={15} aria-hidden="true" />
                   {activationState === "activating"
@@ -2135,7 +2180,7 @@ export function ProviderControlsPanel() {
             className="button button-primary"
             type="button"
             onClick={() => void save()}
-            disabled={saveState === "saving"}
+            disabled={mutationBlocked}
           >
             {saveState === "saving" ? (
               "Saving…"
