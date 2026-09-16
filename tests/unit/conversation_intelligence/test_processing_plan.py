@@ -196,7 +196,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
         dispatch_started_at=datetime.now(UTC),
         provider_idempotency_key="conversation:provider:repair",
         dedupe_key="conversation:provider:repair",
-        last_error="conversation_report_json_invalid",
+        last_error="conversation_report_payload_missing_field",
         provider_receipt={
             "schema": "ac.sales-xray.provider-receipt/1",
             "validation_state": "provider_returned",

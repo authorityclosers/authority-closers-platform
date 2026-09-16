@@ -505,7 +505,13 @@ class ConversationProcessingPlans:
                     "stage": item.stage,
                     "provider": item.provider_id,
                     "model": item.model_id,
-                    "max_requests": item.max_requests if item.stage == "C4" else 1,
+                    "max_requests": (
+                        item.max_requests
+                        if item.stage == "C4"
+                        else planned_c5_requests(item)
+                        if item.stage == "C5"
+                        else 1
+                    ),
                     "privacy_revision": item.privacy_revision,
                     "privacy_notice": item.privacy_notice,
                 }
