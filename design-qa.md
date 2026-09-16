@@ -481,3 +481,32 @@ player when additional vertical space is available; current hit areas do not
 overlap. No actionable P0/P1/P2 remains in this bounded slice.
 
 final result: passed
+
+---
+
+## 2026-09-16 — Delayed processing update (bounded follow-up)
+
+Selected source: the existing generated processing desktop/mobile references
+under `docs/design/sales-xray-20260916`, visually inspected with the compiled
+candidate. Reuses the approved white/navy and coloured stage-card composition.
+No brand reset, invented server state or new raster asset.
+
+After one minute with an unchanged progress projection, local copy changes
+inside its reserved text area. The actual stage remains visible. Identical
+polls do not reset the timer; new progress does. Paused/error/report states
+take precedence. Hidden copy is excluded from the accessibility tree.
+
+Compiled candidate loopback3125, Chromium, synthetic API fixtures, reduced
+motion: 28 state/viewport checks passed across1440×900,1024×626,390×844,375×667.
+All document/main scroll heights equal their available viewport heights.
+Twelve timed transitions measured identical panel child rectangles before and
+after; twelve delayed-to-held transitions fit and made zero mutations.
+Baseline and candidate screenshots/data:
+`docs/evidence/sales-xray-processing-delay-20260916/`.
+
+Full frontend221/221; independent focused50/50; lint/TypeScript/build passed.
+No open P0/P1/P2 in this bounded change. General offline/poll-error recovery,
+Overview/Moments/Admin and real-provider evidence remain separate open work.
+Detailed scope: `docs/evidence/20260916_SALES_XRAY_PROCESSING_DELAY.md`.
+
+final result: passed

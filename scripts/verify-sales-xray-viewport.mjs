@@ -83,14 +83,16 @@ try {
       continue;
     for (const state of (
       process.env.SALES_XRAY_QA_STATES ||
-      "entry,selected,verification,uploading,C2,C4,C5,held,report,calls"
+      "entry,selected,verification,uploading,C2,C4,C5,delayed-C2,delayed-C4,delayed-C5,held,report,calls"
     ).split(",")) {
       const context = await browser.newContext({
         viewport,
         reducedMotion: "reduce",
       });
       let apiRequests = 0;
-      let liveState = state;
+      const delayedState = state.startsWith("delayed-");
+      const mutations = [];
+      let liveState = delayedState ? state.slice("delayed-".length) : state;
       let sourceId = fixture.submissionId;
       let sourceSha = fixture.progress.source_sha256;
       let finishUpload;
@@ -117,6 +119,12 @@ try {
         });
       await context.route("**/v1/**", async (route) => {
         apiRequests++;
+        if (route.request().method() !== "GET")
+          mutations.push(
+            route.request().method() +
+              " " +
+              new URL(route.request().url()).pathname,
+          );
         const url = new URL(route.request().url());
         let body = {};
         let status = 200;
@@ -195,6 +203,7 @@ try {
         route.abort(),
       );
       const page = await context.newPage();
+      if (delayedState) await page.clock.install();
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       const selected = ["selected", "verification", "uploading"].includes(
@@ -253,6 +262,60 @@ try {
             requestAnimationFrame(() => requestAnimationFrame(resolve)),
           ),
       );
+      if (delayedState) {
+        const readLayout = () =>
+          page.evaluate(() => {
+            const status = document
+              .querySelector("[data-update-delayed]")
+              .closest('[role="status"]');
+            return [...status.children].map((element) => {
+              const { x, y, width, height } = element.getBoundingClientRect();
+              return { x, y, width, height };
+            });
+          });
+        const before = await readLayout();
+        await page.clock.fastForward(60_001);
+        await page.locator('[data-update-delayed="true"]').waitFor();
+        const after = await readLayout();
+        assert.deepEqual(
+          after,
+          before,
+          `${state} must not move the panel at ${viewport.width}`,
+        );
+        assert.equal(
+          await page
+            .locator(`[data-stage="${liveState}"][data-state="running"]`)
+            .count(),
+          1,
+        );
+        assert.equal(
+          await page
+            .getByRole("status")
+            .getByText("WAITING FOR AN UPDATE", { exact: true })
+            .count(),
+          1,
+        );
+        assert.equal(await page.locator('[data-paused="true"]').count(), 0);
+        assert.equal(
+          await page
+            .getByRole("link", { name: "Open saved calls", exact: true })
+            .getAttribute("href"),
+          "/calls",
+        );
+        assert.deepEqual(
+          mutations,
+          [],
+          "waiting must not submit, approve or reupload work",
+        );
+        results.push({
+          state: `${state}-stable-layout`,
+          ...viewport,
+          before,
+          after,
+          mutations,
+          verified: true,
+        });
+      }
       const metrics = await page.evaluate(() => {
         const main = document.querySelector(".studio-main");
         const primary = document.querySelector(".studio-wide");
@@ -297,6 +360,34 @@ try {
         );
       assert.deepEqual(errors, [], `${state} page errors`);
       results.push({ state, ...metrics, apiRequests });
+      if (delayedState) {
+        liveState = "held";
+        await page.clock.fastForward(3_001);
+        await page
+          .getByRole("heading", { name: "Analysis paused", exact: true })
+          .waitFor();
+        assert.equal(await page.locator("[data-update-delayed]").count(), 0);
+        assert.equal(
+          await page.locator('[data-stage="C2"] small').textContent(),
+          "Complete",
+        );
+        assert.deepEqual(
+          mutations,
+          [],
+          "paused recovery must not start itself",
+        );
+        assert.equal(
+          await page
+            .locator(".studio-main")
+            .evaluate((main) => main.scrollHeight <= main.clientHeight + 1),
+          true,
+        );
+        results.push({
+          state: `${state}-to-held`,
+          ...viewport,
+          verified: true,
+        });
+      }
       if (state === "entry") {
         const profile = page
           .getByRole("button", { name: "Open profile menu", exact: true })

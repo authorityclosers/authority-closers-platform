@@ -663,6 +663,78 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
 });
 
+it("shows delayed-update guidance without changing progress, identity or submitting more work", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(60_001));
+  await flush();
+  expect(
+    container.querySelector('[data-update-delayed="true"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Transcribing your call",
+  );
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "Queued",
+  );
+  expect(container.querySelector('[data-paused="true"]')).toBeNull();
+  expect(container.querySelector('a[href="/calls"]')?.textContent).toBeTruthy();
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "completed",
+    automatic_progression: true,
+    has_report: false,
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "running" },
+    ],
+  };
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(
+    container.querySelector('[data-update-delayed="false"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Checking the conversation",
+  );
+
+  progressOverride = { ...progress, has_report: true };
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.querySelector("[data-update-delayed]")).toBeNull();
+  expect(container.querySelector('[role="tab"]')?.textContent).toBe("Overview");
+});
+
+it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(60_001));
+  processingMode = "held";
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.querySelector("[data-update-delayed]")).toBeNull();
+  expect(container.textContent).toContain("Analysis paused");
+  expect(container.textContent).toContain(
+    "The completed transcript stays attached",
+  );
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
 it("shows saved completed work when an uncertain stage pauses processing", async () => {
   existing = true;
   processingMode = "held";

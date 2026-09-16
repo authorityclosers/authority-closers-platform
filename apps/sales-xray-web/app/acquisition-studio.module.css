@@ -813,6 +813,15 @@
   font-size: 14px;
   line-height: 1.6;
 }
+.progressUpdateMessage {
+  display: grid;
+}
+.progressUpdateMessage > span {
+  grid-area: 1 / 1;
+}
+.progressUpdateMessage > [data-visible="false"] {
+  visibility: hidden;
+}
 .progressRail {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

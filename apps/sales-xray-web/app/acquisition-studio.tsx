@@ -66,6 +66,7 @@ import {
   type UploadPolicy,
 } from "./acquisition-client";
 import { ProcessingVisual } from "./processing-visual";
+import { ProcessingStatusCopy } from "./processing-status-copy";
 import { UploadCheck } from "./upload-check";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
@@ -1407,31 +1408,19 @@ export function AcquisitionStudio({
                   }
                   paused={processingNeedsAttention}
                 />
-                <div className={styles.progressCopy}>
-                  <p className={styles.progressKicker}>
-                    {processingPaused
-                      ? "SAVED WORK · PAUSED"
-                      : processingNeedsAttention
-                        ? "STATUS NEEDS ATTENTION"
-                        : "ANALYSIS IN PROGRESS"}
-                  </p>
-                  <h3>
-                    {processingPaused
-                      ? "Analysis paused"
-                      : processingNeedsAttention
-                        ? "Your call needs attention"
-                        : progress?.local_state !== "completed"
-                          ? "Checking your recording"
-                          : currentStage
-                            ? stageNames[currentStage.stage]
-                            : "Preparing your analysis"}
-                  </h3>
-                  <p>
-                    {processingNeedsAttention
-                      ? "This stage needs checking before analysis can continue."
-                      : "Your call is saved. We’ll update each step as your analysis completes."}
-                  </p>
-                </div>
+                <ProcessingStatusCopy
+                  submissionId={submission.id}
+                  progress={progress}
+                  paused={processingPaused}
+                  needsAttention={processingNeedsAttention}
+                  title={
+                    progress?.local_state !== "completed"
+                      ? "Checking your recording"
+                      : currentStage
+                        ? stageNames[currentStage.stage]
+                        : "Preparing your analysis"
+                  }
+                />
                 <div
                   className={styles.progressRail}
                   aria-label="Processing stages"
