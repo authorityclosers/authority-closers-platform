@@ -69,11 +69,11 @@ it("plays exact supplied evidence and exposes all full notes in a bounded reader
     report.overview!.next_call_focus!.target,
   );
   expect(dialog.textContent).toContain(evidence.quote);
-  await act(async () => button("Next →").click());
+  await act(async () => button("Next").click());
   expect(dialog.textContent).toContain(
     report.overview!.practice!.success_condition,
   );
-  expect(button("Next →").disabled).toBe(true);
+  expect(button("Next").disabled).toBe(true);
   await act(async () => button("Close plan notes").click());
   expect(document.activeElement).toBe(opener);
 });

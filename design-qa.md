@@ -510,3 +510,32 @@ Overview/Moments/Admin and real-provider evidence remain separate open work.
 Detailed scope: `docs/evidence/20260916_SALES_XRAY_PROCESSING_DELAY.md`.
 
 final result: passed
+
+---
+
+## 2026-09-16 — Overview, Moments and focused review
+
+Selected user Sep16 generated Overview/Moments/modal references were implemented
+as real source-backed components: white/navy hierarchy, mint/violet/orange/blue
+cards, library line icons, desktop grid and mobile card navigation. Existing
+server labels, quotes, provenance and missing-data states remain authoritative.
+No fake waveform, scores or semantic categorisation to fill the mockup.
+
+Fixed measured Moments/player overlap and a long-Plan short-phone overlap.
+Independent P2 qualifier-hiding finding fixed; full source caveats preserved.
+Inherited open-dialog print clipping and hidden detail-tab printing corrected.
+
+Compiled loopback3130 Chromium: standard and long fixtures each passed70 result
+records across1440×900,1024×626,390×844,375×667. Four report tabs, all mobile
+Overview cards, compact desktop pages, all12 fixture review points, modal focus
+restoration, transcript access and full print verified. Workspace/document fit;
+long detailed readers intentionally have internal bounded scrolling.
+Frontend238/238; independent37/37; lint/build/TypeScript passed. No open P0–P2
+in this bounded report slice. Real-provider/audio E2E, native devices, zoom,
+screen-reader certification, Admin and prospect feature remain separate work.
+
+Evidence and exact measurements:
+`docs/evidence/20260916_SALES_XRAY_REPORT_OVERVIEW_MOMENTS.md` and
+`docs/evidence/sales-xray-report-20260916/`.
+
+final result: passed

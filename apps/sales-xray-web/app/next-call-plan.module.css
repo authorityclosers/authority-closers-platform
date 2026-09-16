@@ -419,6 +419,9 @@
   }
 }
 @media (max-width: 620px) and (max-height: 700px) {
+  .plan .preview p {
+    -webkit-line-clamp: 1;
+  }
   .source {
     padding: 0;
   }

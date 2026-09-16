@@ -21,13 +21,42 @@ vm.runInNewContext(
   { exports: fixtureModule.exports, require: createRequire(fixturePath) },
 );
 const fixture = fixtureModule.exports;
+const reportEnvelope = structuredClone(fixture.envelope);
+if (process.env.SALES_XRAY_QA_LONG === "1") {
+  const content = reportEnvelope.report.content;
+  content.summary =
+    "Synthetic long-content verification. Full context stays available in the focused reader. ".repeat(
+      30,
+    );
+  content.verdict =
+    "Synthetic long-title verification: understand the conversation and its source before choosing a next step. ".repeat(
+      2,
+    );
+  for (const finding of [...content.strengths, ...content.improvements]) {
+    finding.title =
+      "Synthetic detailed finding — keep the actual source and every qualifier accessible in the full review. ".repeat(
+        2,
+      );
+    finding.explanation =
+      "Synthetic rendering check only. This longer observation must not push navigation outside the viewport. ".repeat(
+        20,
+      );
+  }
+  for (const moment of content.overview.rewatch)
+    moment.text =
+      "Synthetic detailed source moment — read the complete context and listen to the exact cited excerpt before acting.";
+}
 const origin =
   process.env.SALES_XRAY_QA_ORIGIN || "http://salesxray.localhost:3016";
 assert.match(
   origin,
   /^http:\/\/(salesxray\.localhost|127\.0\.0\.1|localhost):\d+$/,
 );
-const output = path.join(root, ".tmp/sales-xray-ui-qa");
+const output = path.join(
+  root,
+  ".tmp/sales-xray-ui-qa",
+  process.env.SALES_XRAY_QA_LONG === "1" ? "long" : ".",
+);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
@@ -138,7 +167,7 @@ try {
           else body = { state: "guest", allowance: fixture.allowance };
         } else if (url.pathname.endsWith("/report"))
           body = {
-            ...fixture.envelope,
+            ...reportEnvelope,
             submission_id: sourceId,
             source_sha256: sourceSha,
           };
@@ -467,6 +496,34 @@ try {
         });
       }
       if (state === "report") {
+        await assertReportFits(page, "Overview", viewport);
+        if (viewport.width <= 760) {
+          for (const label of [
+            "Keep",
+            "Change",
+            "Outcome",
+            "Practice",
+            "Review",
+          ]) {
+            await page
+              .getByRole("navigation", { name: "Overview cards" })
+              .getByRole("button", { name: label, exact: true })
+              .click();
+            await assertReportFits(page, `Overview ${label}`, viewport);
+          }
+          await page
+            .getByRole("navigation", { name: "Overview cards" })
+            .getByRole("button", { name: "Takeaway", exact: true })
+            .click();
+        } else if (viewport.height <= 740) {
+          await page
+            .getByRole("button", { name: "Outcome, plan & review" })
+            .click();
+          await assertReportFits(page, "Overview page 2", viewport);
+          await page
+            .getByRole("button", { name: "Takeaway, keep & change" })
+            .click();
+        }
         for (const tab of ["Moments", "Sales skills", "Next-call plan"]) {
           await page.getByRole("tab", { name: tab, exact: true }).click();
           const tabMetrics = await page.evaluate(() => {
@@ -490,14 +547,65 @@ try {
             height: viewport.height,
             ...tabMetrics,
           });
-          if (tab !== "Moments")
-            await assertReportFits(page, `${tab} fit`, viewport);
+          await assertReportFits(page, `${tab} fit`, viewport);
           await page.screenshot({
             path: path.join(
               output,
               `${tab.toLowerCase().replaceAll(" ", "-")}-${viewport.width}x${viewport.height}.png`,
             ),
           });
+          if (tab === "Moments") {
+            const moments = page.getByRole("region", {
+              name: "Source moments",
+            });
+            const opener = moments.getByRole("button", {
+              name: "Open review",
+              exact: true,
+            });
+            await opener.click();
+            const dialog = page.getByRole("dialog", { name: "Review moment" });
+            await dialog.waitFor();
+            await page.screenshot({
+              path: path.join(
+                output,
+                `moment-review-${viewport.width}x${viewport.height}.png`,
+              ),
+            });
+            while (
+              !(await dialog
+                .getByRole("button", { name: "Next moment", exact: true })
+                .isDisabled())
+            )
+              await dialog
+                .getByRole("button", { name: "Next moment", exact: true })
+                .click();
+            await page.keyboard.press("Escape");
+            assert.equal(
+              await opener.evaluate((el) => el === document.activeElement),
+              true,
+            );
+            await assertReportFits(page, "Moments last", viewport);
+            await moments
+              .getByRole("button", { name: "Search full transcript" })
+              .click();
+            await page
+              .getByRole("dialog", { name: "Full transcript" })
+              .waitFor();
+            await page.keyboard.press("Escape");
+            await page.emulateMedia({ media: "print" });
+            assert.equal(
+              await moments
+                .locator("[data-moments-print]")
+                .evaluate((el) => getComputedStyle(el).display),
+              "block",
+            );
+            await page.emulateMedia({ media: "screen" });
+            results.push({
+              state: "Moments navigation, transcript and print",
+              ...viewport,
+              verified: true,
+            });
+          }
           if (tab === "Sales skills") {
             const opener = page
               .getByRole("button", { name: /^Open notes:/ })
@@ -626,7 +734,16 @@ try {
           }
         }
         await page.getByRole("tab", { name: "Overview", exact: true }).click();
-        await page.locator('[data-insight-number="02"]').click();
+        if (viewport.width <= 760)
+          await page
+            .getByRole("navigation", { name: "Overview cards" })
+            .getByRole("button", { name: "Change", exact: true })
+            .click();
+        const reviewOpener = page.getByRole("button", {
+          name: "Open review: First thing to change",
+          exact: true,
+        });
+        await reviewOpener.click();
         await page.getByRole("dialog").waitFor();
         await page.screenshot({
           path: path.join(
@@ -634,8 +751,88 @@ try {
             `review-${viewport.width}x${viewport.height}.png`,
           ),
         });
+        const reviewDialog = page.getByRole("dialog");
+        while (
+          !(await reviewDialog
+            .getByRole("button", { name: "Previous point", exact: true })
+            .isDisabled())
+        )
+          await reviewDialog
+            .getByRole("button", { name: "Previous point", exact: true })
+            .click();
+        let pointCount = 0;
+        do {
+          pointCount++;
+          assert.equal(
+            await reviewDialog
+              .locator("[data-review-point]:not([hidden])")
+              .count(),
+            1,
+          );
+          assert.equal(
+            await reviewDialog.evaluate((el) => {
+              const r = el.getBoundingClientRect();
+              const footer = el.querySelector("footer").getBoundingClientRect();
+              return (
+                r.top >= 0 &&
+                r.bottom <= innerHeight + 1 &&
+                footer.bottom <= innerHeight + 1
+              );
+            }),
+            true,
+            "review and navigation stay inside viewport",
+          );
+          if (
+            await reviewDialog
+              .getByRole("button", { name: "Next point", exact: true })
+              .isDisabled()
+          )
+            break;
+          await reviewDialog
+            .getByRole("button", { name: "Next point", exact: true })
+            .click();
+        } while (pointCount < 20);
+        assert.ok(pointCount >= 12 && pointCount <= 14);
+        await page.evaluate(() =>
+          window.dispatchEvent(new Event("beforeprint")),
+        );
+        await page.emulateMedia({ media: "print" });
+        assert.equal(
+          await reviewDialog.evaluate((el) => getComputedStyle(el).maxHeight),
+          "none",
+        );
+        const visiblePrintPoints = await page
+          .locator("[data-review-point]")
+          .evaluateAll(
+            (nodes) =>
+              nodes.filter((node) => getComputedStyle(node).display !== "none")
+                .length,
+          );
+        assert.equal(visiblePrintPoints, pointCount);
+        assert.equal(
+          await page
+            .locator('[data-improvement-tabs] [role="tabpanel"]')
+            .evaluateAll((nodes) =>
+              nodes.every((node) => getComputedStyle(node).display !== "none"),
+            ),
+          true,
+        );
+        await page.emulateMedia({ media: "screen" });
+        await page.evaluate(() =>
+          window.dispatchEvent(new Event("afterprint")),
+        );
+        results.push({
+          state: "All focused review points",
+          ...viewport,
+          pointCount,
+          verified: true,
+        });
         await page.keyboard.press("Escape");
         await page.getByRole("dialog").waitFor({ state: "hidden" });
+        assert.equal(
+          await reviewOpener.evaluate((el) => el === document.activeElement),
+          true,
+        );
       }
       finishUpload();
       await context.close();

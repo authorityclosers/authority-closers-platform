@@ -32,6 +32,7 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { SalesSkills } from "./sales-skills";
+import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
 import {
   ReportTranscript,
@@ -1779,16 +1780,22 @@ export function AcquisitionStudio({
                     id: "moments",
                     label: "Moments",
                     content: (
-                      <ReportTranscript
-                        transcript={result.transcript}
-                        language="en"
-                        onSelect={(segment) =>
-                          seek({
-                            segment_id: segment.id,
-                            quote: segment.text,
-                            start_ms: segment.start_ms,
-                            end_ms: segment.end_ms,
-                          })
+                      <ReportMoments
+                        report={report}
+                        onSelectEvidence={seek}
+                        transcriptSlot={
+                          <ReportTranscript
+                            transcript={result.transcript}
+                            language="en"
+                            onSelect={(segment) =>
+                              seek({
+                                segment_id: segment.id,
+                                quote: segment.text,
+                                start_ms: segment.start_ms,
+                                end_ms: segment.end_ms,
+                              })
+                            }
+                          />
                         }
                       />
                     ),

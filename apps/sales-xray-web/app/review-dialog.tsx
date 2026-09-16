@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import styles from "./review-dialog.module.css";
 
 type Props = {
@@ -22,6 +23,8 @@ type Props = {
   previousLabel?: string;
   nextLabel?: string;
   closeLabel?: string;
+  icon?: ReactNode;
+  tone?: "mint" | "orange" | "blue" | "violet";
   children: ReactNode;
 };
 
@@ -39,6 +42,8 @@ export function ReviewDialog({
   previousLabel = "Previous point",
   nextLabel = "Next point",
   closeLabel = "Close review point",
+  icon,
+  tone = "mint",
   children,
 }: Props) {
   const prefix = useId();
@@ -46,14 +51,17 @@ export function ReviewDialog({
   const previousFocus = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const previousPosition = useRef<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (
       open &&
       previousPosition.current !== null &&
       previousPosition.current !== position
-    )
-      heading.current?.focus();
+    ) {
+      if (bodyRef.current) bodyRef.current.scrollTop = 0;
+      heading.current?.focus({ preventScroll: true });
+    }
     previousPosition.current = open ? position : null;
   }, [open, position]);
 
@@ -88,9 +96,24 @@ export function ReviewDialog({
     const dialog = event.currentTarget;
     const focusable = [
       ...dialog.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [href], [tabindex]:not([tabindex="-1"])',
       ),
-    ];
+    ].filter((element) => {
+      if (element.closest("[hidden], [inert]")) return false;
+      const closed = element.closest("details:not([open])");
+      if (closed && !closed.querySelector("summary")?.contains(element))
+        return false;
+      for (
+        let node: HTMLElement | null = element;
+        node && node !== dialog;
+        node = node.parentElement
+      ) {
+        const style = getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden")
+          return false;
+      }
+      return true;
+    });
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -118,6 +141,7 @@ export function ReviewDialog({
       {open ? (
         <div
           className={styles.dialog}
+          data-tone={tone}
           role="dialog"
           aria-modal="true"
           aria-labelledby={`${prefix}-title`}
@@ -125,6 +149,11 @@ export function ReviewDialog({
           onKeyDown={trapFocus}
         >
           <header className={styles.header}>
+            {icon && (
+              <span className={styles.icon} aria-hidden="true">
+                {icon}
+              </span>
+            )}
             <div className={styles.heading}>
               <span className={styles.eyebrow}>{position}</span>
               <h2 ref={heading} tabIndex={-1} id={`${prefix}-title`}>
@@ -139,10 +168,12 @@ export function ReviewDialog({
               aria-label={closeLabel}
               onClick={onClose}
             >
-              ×
+              <X size={22} aria-hidden="true" />
             </button>
           </header>
-          <div className={styles.body}>{children}</div>
+          <div ref={bodyRef} className={styles.body}>
+            {children}
+          </div>
           <footer className={styles.footer}>
             <button
               className={styles.secondaryAction}
@@ -151,7 +182,7 @@ export function ReviewDialog({
               onClick={onPrevious}
               disabled={previousDisabled}
             >
-              <span aria-hidden="true">←</span> {previousLabel}
+              <ArrowLeft size={18} aria-hidden="true" /> {previousLabel}
             </button>
             <button
               className={styles.primaryAction}
@@ -160,7 +191,7 @@ export function ReviewDialog({
               onClick={onNext}
               disabled={nextDisabled}
             >
-              {nextLabel} <span aria-hidden="true">→</span>
+              {nextLabel} <ArrowRight size={18} aria-hidden="true" />
             </button>
           </footer>
         </div>

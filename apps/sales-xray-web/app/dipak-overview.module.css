@@ -19,6 +19,70 @@
 .overview :where(p, h2, h3, h4) {
   margin-top: 0;
 }
+/* The acquisition route uses the compact dashboard; retain the full source
+   body for review sheets, the legacy reader and unabridged print. */
+@media screen {
+  .overview[data-compact="true"] > .resultLead,
+  .overview[data-compact="true"] > .takeawayGrid,
+  .overview[data-compact="true"] > .workspaceLayout > .aboveFold,
+  .overview[data-compact="true"] > .workspaceLayout > .insightRail {
+    display: none;
+  }
+  .overview[data-compact="true"] > .workspaceLayout {
+    display: block;
+  }
+  .chapterStack[data-focused="true"] .chapterHeading,
+  .chapterStack[data-focused="true"] .groupHeading,
+  .overview[data-compact="true"] .backToOverview {
+    display: none;
+  }
+  .chapterStack[data-focused="true"]
+    [data-review-point]
+    > .blockHeading
+    .number,
+  .chapterStack[data-focused="true"] [data-review-point] > .blockHeading h3 {
+    display: none;
+  }
+  .chapterStack[data-focused="true"] [data-review-point] > .blockHeading {
+    margin-bottom: 10px;
+  }
+  .chapterStack[data-focused="true"] .chapter {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .chapterStack[data-focused="true"] .block {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .chapterStack[data-focused="true"] .block[hidden],
+  .chapterStack[data-focused="true"] .ethicsBlock[hidden] {
+    display: none;
+  }
+  .chapterStack[data-focused="true"] .anchor {
+    scroll-margin-top: 0;
+  }
+  .chapterStack[data-focused="true"] .verdict {
+    font-family: inherit;
+    font-weight: 750;
+    font-size: 20px !important;
+  }
+}
+@media print {
+  .compactSourceContext {
+    display: none;
+  }
+  .block[hidden],
+  .ethicsBlock[hidden] {
+    display: block !important;
+  }
+  .improvementTabPanel[hidden] {
+    display: block !important;
+  }
+}
 
 .intro {
   display: grid;
