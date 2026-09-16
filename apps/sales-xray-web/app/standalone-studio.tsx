@@ -12,6 +12,7 @@ import Link from "next/link";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
+import { SalesXrayPreloader } from "./sales-xray-preloader";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -256,16 +257,20 @@ export function StandaloneStudio({
         {children}
       </WorkspaceAccessProvider>
     );
+  if (view.kind === "loading" || (!embedded && view.kind === "unauthenticated"))
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        <SalesXrayPreloader phase="session" />
+      </WorkspaceAccessProvider>
+    );
   const chooser = view.kind === "chooser" || view.kind === "selecting";
   const heading = chooser
     ? "Choose your Sales Xray workspace."
     : view.kind === "empty"
       ? "No workspace is ready yet."
-      : view.kind === "loading"
-        ? "Checking workspace access."
-        : view.kind === "unauthenticated"
-          ? "Sign in to analyse your calls."
-          : "Workspace access needs attention.";
+      : view.kind === "unauthenticated"
+        ? "Sign in to analyse your calls."
+        : "Workspace access needs attention.";
 
   return (
     <WorkspaceAccessProvider value={accessValue}>
@@ -283,7 +288,7 @@ export function StandaloneStudio({
               }
             : shellStyle
         }
-        aria-busy={view.kind === "loading" || view.kind === "selecting"}
+        aria-busy={view.kind === "selecting"}
       >
         {!embedded && (
           <div className="standalone-account-navigation">
@@ -316,11 +321,7 @@ export function StandaloneStudio({
           >
             {heading}
           </h1>
-          {view.kind === "loading" ? (
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Confirming the workspace assigned to your session…
-            </p>
-          ) : view.kind === "unauthenticated" ? (
+          {view.kind === "unauthenticated" ? (
             <>
               <p>
                 Use your AC account to keep your calls, reports and remaining

@@ -21,11 +21,18 @@ afterEach(() => {
   container.remove();
 });
 
-it("shows truthful phase-aware thinking copy without inventing progress", async () => {
+it("shows a decorative phase-aware icon without duplicating the live status or inventing progress", async () => {
   await act(async () =>
     root.render(<ProcessingVisual phase="C4" paused={false} />),
   );
-  expect(container.textContent).toContain("Reading the conversation");
-  expect(container.textContent).toContain("Checking source evidence");
-  expect(container.querySelectorAll("span")).toHaveLength(3);
+  expect(
+    container.querySelector(
+      '[data-phase="C4"][data-paused="false"][aria-hidden="true"]',
+    ),
+  ).not.toBeNull();
+  expect(container.textContent).toBe("");
+  await act(async () => root.render(<ProcessingVisual phase="C5" paused />));
+  expect(
+    container.querySelector('[data-phase="C5"][data-paused="true"]'),
+  ).not.toBeNull();
 });

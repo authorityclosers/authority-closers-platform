@@ -62,7 +62,7 @@ export class AcquisitionError extends Error {
       reason === "execution_paused"
         ? ACQUISITION_PAUSED_MESSAGE
         : status === 401
-          ? "Your session needs attention. Sign in again or return to the browser where you uploaded this call."
+          ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
           : status === 403
             ? reason === "provider_allowance_used"
               ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
