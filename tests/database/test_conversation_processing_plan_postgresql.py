@@ -355,8 +355,7 @@ def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
                     if key != "reservations"
                 }
                 current_reservations = {
-                    item["reservation_id"]: item
-                    for item in current_source_snapshot["reservations"]
+                    item["reservation_id"]: item for item in current_source_snapshot["reservations"]
                 }
                 for original_reservation in source_budget_snapshot["reservations"]:
                     assert (
