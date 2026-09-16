@@ -46,7 +46,6 @@ from ac_platform.conversation_intelligence.inference_worker import ConversationI
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
-    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationProcessingPlan,
@@ -68,7 +67,6 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
-from ac_platform.outbox.repository import canonical_receipt_digest
 from tests.database.test_conversation_authority_postgresql import (
     _bundle,
     _promote_admin,
@@ -687,7 +685,11 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                     "gemini",
                     "gemini",
                 ]
-                broker = ReportingBroker(data)
+                # The source must enter the same durable uncertain state as a
+                # real provider validation failure.  Do this through the
+                # worker so the immutable inference-history trigger is tested
+                # instead of being bypassed with a direct row mutation.
+                broker = ReportingBroker(data, elevenlabs_malformed=True)
                 router = FixedProviderRouter(
                     {
                         provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
@@ -853,33 +855,15 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                         and source_plan_row is not None
                         and source_budget is not None
                         and source_minute is not None
-                        and source_task.checkpoint_id is not None
+                        and source_task.state == "uncertain"
+                        and source_task.checkpoint_id is None
+                        and source_run.state == "failed"
+                        and source_job.status == "dead_letter"
                         and source_job.provider_receipt is not None
+                        and source_job.provider_receipt["validation_state"] == "provider_returned"
                     )
                     source_run_id = source_run.id
-                    source_checkpoint = await database.get(
-                        ConversationCheckpoint, source_task.checkpoint_id
-                    )
-                    assert source_checkpoint is not None
-                    receipt = deepcopy(source_job.provider_receipt)
-                    receipt["checkpoint_id"] = None
-                    receipt["checkpoint_manifest_sha256"] = None
-                    receipt["validation_state"] = "provider_returned"
-                    source_response_sha256 = receipt["response_sha256"]
-                    source_task.state = "uncertain"
-                    source_task.checkpoint_id = None
-                    source_run.state = "failed"
-                    source_run.completed_at = None
-                    source_job.status = "dead_letter"
-                    source_job.last_error = "conversation_provider_result_validation_failed"
-                    source_job.dead_lettered_at = setup.clock[0]
-                    source_job.provider_receipt = receipt
-                    source_job.provider_receipt_digest = canonical_receipt_digest(receipt)
-                    source_plan_row.state = "held"
-                    source_plan_row.progress = {
-                        "current_stage": "C2",
-                        "failure_code": "stage_uncertain",
-                    }
+                    source_response_sha256 = source_job.provider_receipt["response_sha256"]
                     source_snapshot = {
                         "task": (source_task.state, source_task.checkpoint_id),
                         "run": (source_run.state, source_run.completed_at),
@@ -893,12 +877,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                         "plan": (source_plan_row.state, source_plan_row.progress),
                         "budget": deepcopy(source_budget.snapshot),
                         "minute": deepcopy(source_minute.snapshot),
-                        "checkpoint": (
-                            source_checkpoint.id,
-                            source_checkpoint.manifest_sha256,
-                            source_checkpoint.payload_sha256,
-                            deepcopy(source_checkpoint.payload),
-                        ),
+                        "checkpoint": None,
                     }
 
                 target_submission = uuid4()
@@ -993,16 +972,12 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                         ConversationMinuteAccount,
                         (setup.state.tenant_id, setup.processing_person_id),
                     )
-                    source_checkpoint = await database.get(
-                        ConversationCheckpoint, source_snapshot["checkpoint"][0]
-                    )
                     assert (
                         source_run is not None
                         and source_job is not None
                         and source_plan_row is not None
                         and source_budget is not None
                         and source_minute is not None
-                        and source_checkpoint is not None
                     )
                     assert {
                         "task": (source_task.state, source_task.checkpoint_id),
@@ -1017,12 +992,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                         "plan": (source_plan_row.state, source_plan_row.progress),
                         "budget": source_budget.snapshot,
                         "minute": source_minute.snapshot,
-                        "checkpoint": (
-                            source_checkpoint.id,
-                            source_checkpoint.manifest_sha256,
-                            source_checkpoint.payload_sha256,
-                            source_checkpoint.payload,
-                        ),
+                        "checkpoint": None,
                     } == source_snapshot
         finally:
             await setup.engine.dispose()

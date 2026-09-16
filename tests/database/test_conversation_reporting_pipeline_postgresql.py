@@ -51,8 +51,14 @@ def postgres_harness() -> Any:
 
 
 class ReportingBroker(FakeBroker):
-    def __init__(self, data: bytes, *, deepgram_tail_ms: int | None = None) -> None:
-        super().__init__(data)
+    def __init__(
+        self,
+        data: bytes,
+        *,
+        deepgram_tail_ms: int | None = None,
+        elevenlabs_malformed: bool = False,
+    ) -> None:
+        super().__init__(data, mode="malformed" if elevenlabs_malformed else "success")
         self.routes: list[str] = []
         self.deepgram_tail_ms = deepgram_tail_ms
 
