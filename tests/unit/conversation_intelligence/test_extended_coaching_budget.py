@@ -10,6 +10,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionStagePolicy,
     StageApproval,
 )
+from ac_platform.conversation_intelligence.contracts import C5RepairIntent
 from ac_platform.conversation_intelligence.gemini_tasks import (
     GeminiTaskError,
     _require_prompt_budget,
@@ -22,7 +23,10 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     validate_fact_result,
 )
 from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
-from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
+from ac_platform.conversation_intelligence.reporting_pipeline import (
+    StageRequest,
+    repair_coaching_input,
+)
 from ac_platform.conversation_intelligence.reports import FactPacket
 from tests.unit.conversation_intelligence.test_broker_router import _stage
 from tests.unit.conversation_intelligence.test_gemini_tasks import envelope, facts, result
@@ -118,6 +122,34 @@ def test_complete_input_reconstructs_with_new_hash_but_unchanged_facts_and_profi
     incomplete["candidates"][0]["finishReason"] = "MAX_TOKENS"
     with pytest.raises(InferenceTaskError, match="gemini_response_incomplete"):
         validate_coaching_result(result(new, incomplete), new, transcript)
+
+
+def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction():
+    transcript = _transcript()
+    fact_input = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
+    packet = FactPacket.model_validate(
+        validate_fact_result(
+            result(fact_input, envelope(facts(transcript))),
+            fact_input,
+            transcript,
+        ).data()
+    )
+    original = prepare_coaching_input(transcript, [packet])
+    repair = C5RepairIntent(
+        failure_code="conversation_report_json_invalid",
+        original_run_id=uuid4(),
+        original_response_sha256="a" * 64,
+    )
+    repaired = repair_coaching_input(original, repair)
+    original_body = original.as_provider_body()
+    repaired_body = repaired.as_provider_body()
+    assert original_body["messages"][1] == repaired_body["messages"][1]
+    assert "SERVER_REPAIR" not in original_body["messages"][0]["content"]
+    assert "conversation_report_json_invalid" in repaired_body["messages"][0]["content"]
+    assert repaired_body["messages"][0]["content"].endswith(
+        original_body["messages"][0]["content"].split("Profile:\n", 1)[1]
+    )
+    assert repaired.input_sha256 != original.input_sha256
 
 
 @pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 96000)])

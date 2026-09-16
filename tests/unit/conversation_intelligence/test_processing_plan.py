@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -13,7 +14,10 @@ from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
     PlanAcceptance,
     PlanManifest,
+    automatic_c5_repair_cost,
+    c5_repair_intent,
     manifest_for,
+    maximum_plan_cost_with_repair,
     plan_cost_label,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
@@ -140,6 +144,74 @@ def test_paid_plan_adds_one_asr_all_fact_requests_and_one_judge() -> None:
     for incorrect in (0, 79, 81, True, -1, 80.5):
         with pytest.raises(ValueError):
             PlanManifest.model_validate_json(canonical({**data, "max_cost_paise": incorrect}))
+
+
+def test_new_plan_can_reserve_one_c5_repair_without_rewriting_old_costs() -> None:
+    saved = manifest_for(saved_plan())
+    stages = tuple(
+        stage.model_copy(
+            update={
+                "max_cost_paise": price,
+                "zero_cost_basis": "paid_pricing_evidence",
+                "free_allowance_ref": None,
+            }
+        )
+        for stage, price in zip(saved.stages, (50, 7, 9), strict=True)
+    )
+    assert automatic_c5_repair_cost(stages[2]) == 9
+    assert maximum_plan_cost_with_repair(stages) == 89
+    data = saved.model_copy(
+        update={"stages": stages, "max_cost_paise": 89, "automatic_c5_repair_cost_paise": 9}
+    ).as_dict()
+    parsed = PlanManifest.model_validate_json(canonical(data))
+    assert parsed.automatic_c5_repair_cost_paise == 9
+    assert parsed.max_cost_paise == 89
+    free_stages = (
+        *stages[:2],
+        stages[2].model_copy(
+            update={
+                "max_cost_paise": 0,
+                "zero_cost_basis": "verified_free_allowance",
+                "free_allowance_ref": "ref:free-c5",
+            }
+        ),
+    )
+    free_data = saved.model_copy(
+        update={
+            "stages": free_stages,
+            "max_cost_paise": 71,
+            "automatic_c5_repair_cost_paise": 0,
+        }
+    ).as_dict()
+    free_parsed = PlanManifest.model_validate_json(canonical(free_data))
+    assert free_parsed.automatic_c5_repair_cost_paise == 0
+
+
+def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
+    task = SimpleNamespace(
+        stage="C5", state="uncertain", intent={"request": {"stage": "C5"}}, run_id=uuid4()
+    )
+    job = SimpleNamespace(
+        kind="conversation.infer_provider.v1",
+        dispatch_started_at=datetime.now(UTC),
+        provider_idempotency_key="conversation:provider:repair",
+        dedupe_key="conversation:provider:repair",
+        last_error="conversation_report_json_invalid",
+        provider_receipt={
+            "schema": "ac.sales-xray.provider-receipt/1",
+            "validation_state": "provider_returned",
+            "idempotency_key": "conversation:provider:repair",
+            "raw_blob_id": "PLACEHOLDER",
+            "response_sha256": "a" * 64,
+        },
+    )
+    job.provider_receipt["raw_blob_id"] = str(task.run_id)
+    repair = c5_repair_intent(task, job)
+    assert repair is not None
+    assert repair.attempt == 1
+    assert repair.original_run_id == task.run_id
+    job.last_error = "conversation_provider_execution_timeout"
+    assert c5_repair_intent(task, job) is None
 
 
 @pytest.mark.parametrize(

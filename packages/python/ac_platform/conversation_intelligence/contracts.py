@@ -44,6 +44,36 @@ class QuoteAcceptance(Contract):
     accepted: Literal[True]
 
 
+C5RepairFailureCode = Literal[
+    "conversation_report_evidence_quote_mismatch",
+    "conversation_report_evidence_segment_invalid",
+    "conversation_report_findings_invalid",
+    "conversation_report_dimension_status_invalid",
+    "conversation_report_overview_missing",
+    "conversation_report_json_invalid",
+]
+
+C5_REPAIR_FAILURE_CODES = frozenset(
+    {
+        "conversation_report_evidence_quote_mismatch",
+        "conversation_report_evidence_segment_invalid",
+        "conversation_report_findings_invalid",
+        "conversation_report_dimension_status_invalid",
+        "conversation_report_overview_missing",
+        "conversation_report_json_invalid",
+    }
+)
+
+
+class C5RepairIntent(Contract):
+    """One server-created repair of a returned, structurally invalid C5 object."""
+
+    attempt: Literal[1] = 1
+    failure_code: C5RepairFailureCode
+    original_run_id: UUID
+    original_response_sha256: Digest
+
+
 class ReviewIntent(Contract):
     run_revision: Revision
     transcript_revision: Revision

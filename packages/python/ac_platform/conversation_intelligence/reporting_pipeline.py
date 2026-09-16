@@ -6,7 +6,8 @@ its own immutable input, accepted quote, reservation and durable provider task.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import hashlib
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
@@ -23,6 +24,7 @@ from ac_platform.conversation_intelligence.checkpoints import (
     require_sha256,
 )
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+from ac_platform.conversation_intelligence.contracts import C5RepairIntent
 from ac_platform.conversation_intelligence.entitlements import Quote
 from ac_platform.conversation_intelligence.inference_tasks import (
     PreparedTaskInput,
@@ -73,6 +75,7 @@ class StageRequest(BaseModel):
         default="detailed", exclude_if=lambda value: value == "detailed"
     )
     profile: dict[str, Any] | None = Field(default=None, repr=False)
+    repair: C5RepairIntent | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
@@ -82,6 +85,8 @@ class StageRequest(BaseModel):
             raise ValueError("Facts cannot take coaching configuration.")
         if self.stage == "C4" and self.output_profile != "detailed":
             raise ValueError("Facts cannot select a coaching output profile.")
+        if self.stage == "C4" and self.repair is not None:
+            raise ValueError("Facts cannot use coaching repair.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):
             raise ValueError("Coaching requires complete fact checkpoints.")
         if len(set(self.fact_checkpoint_ids)) != len(self.fact_checkpoint_ids):
@@ -89,6 +94,57 @@ class StageRequest(BaseModel):
         if self.profile is not None and len(canonical(self.profile)) > 128 * 1024:
             raise ValueError("Profile exceeds its limit.")
         return self
+
+
+def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -> PreparedTaskInput:
+    """Add one bounded format repair instruction without changing source inputs."""
+
+    if prepared.task != "coaching":
+        raise ConversationConflict("Only a coaching response can be repaired.")
+    body = prepared.as_provider_body()
+    if prepared.provider == "groq":
+        messages = body.get("messages")
+        if (
+            not isinstance(messages, list)
+            or len(messages) != 2
+            or not isinstance(messages[0], dict)
+            or not isinstance(messages[0].get("content"), str)
+        ):
+            raise ConversationConflict("The coaching repair envelope is unavailable.")
+        system = messages[0]["content"]
+        messages[0]["content"] = _repair_system_content(system, repair)
+    else:
+        instruction = body.get("systemInstruction")
+        parts = instruction.get("parts") if isinstance(instruction, dict) else None
+        if (
+            not isinstance(parts, list)
+            or len(parts) != 1
+            or not isinstance(parts[0], dict)
+            or not isinstance(parts[0].get("text"), str)
+        ):
+            raise ConversationConflict("The coaching repair envelope is unavailable.")
+        parts[0]["text"] = _repair_system_content(parts[0]["text"], repair)
+    payload = canonical(body)
+    return replace(
+        prepared,
+        payload=payload,
+        input_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+
+def _repair_system_content(system: str, repair: C5RepairIntent) -> str:
+    marker = "Profile:\n"
+    head, separator, profile = system.rpartition(marker)
+    if not separator or not profile:
+        raise ConversationConflict("The coaching repair profile is unavailable.")
+    instruction = (
+        "SERVER_REPAIR: The previous provider-returned C5 object failed the server's "
+        f"canonical validation ({repair.failure_code}). Return one complete JSON object "
+        "matching the existing schema and exact source references. Use only the supplied "
+        "transcript, facts and frozen profile. Preserve uncertainty; do not add unsupported "
+        "claims, scores, approvals, identities or new provenance. This is a format repair."
+    )
+    return f"{head}\n{instruction}\n{marker}{profile}"
 
 
 @dataclass(frozen=True)
@@ -384,16 +440,21 @@ class ReportingPipeline:
             max_completion_tokens=request.max_completion_tokens,
             output_profile=request.output_profile,
         )
+        if request.repair is not None:
+            prepared = repair_coaching_input(prepared, request.repair)
+        c5_config: dict[str, Any] = {
+            "input_sha256": prepared.input_sha256,
+            "provider": prepared.provider,
+            "model": prepared.model,
+            "profile_sha256": content_hash(profile),
+        }
+        if request.repair is not None:
+            c5_config["repair"] = request.repair.model_dump(mode="json")
         template = build_checkpoint(
             binding,
             "C5",
             COACHING_RECIPE,
-            {
-                "input_sha256": prepared.input_sha256,
-                "provider": prepared.provider,
-                "model": prepared.model,
-                "profile_sha256": content_hash(profile),
-            },
+            c5_config,
             (aggregate,),
             "0" * 64,
         )
