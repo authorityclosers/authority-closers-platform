@@ -215,6 +215,80 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
 
 
 @pytest.mark.parametrize(
+    "failure_code",
+    [
+        "conversation_gemini_response_json_invalid",
+        "conversation_report_payload_missing_field",
+    ],
+)
+def test_c5_repair_accepts_only_known_returned_provider_report_failures(
+    failure_code: str,
+) -> None:
+    task = SimpleNamespace(
+        stage="C5", state="uncertain", intent={"request": {"stage": "C5"}}, run_id=uuid4()
+    )
+    job = SimpleNamespace(
+        kind="conversation.infer_provider.v1",
+        dispatch_started_at=datetime.now(UTC),
+        provider_idempotency_key="conversation:provider:original",
+        dedupe_key="conversation:provider:original",
+        last_error=failure_code,
+        # A returned receipt is authoritative evidence even if acknowledgement
+        # was separately marked ambiguous after validation failed.
+        delivery_ambiguous_at=datetime.now(UTC),
+        provider_receipt={
+            "schema": "ac.sales-xray.provider-receipt/1",
+            "validation_state": "provider_returned",
+            "idempotency_key": "conversation:provider:original",
+            "raw_blob_id": str(task.run_id),
+            "response_sha256": "b" * 64,
+        },
+    )
+
+    repair = c5_repair_intent(task, job)
+
+    assert repair is not None
+    assert repair.failure_code == failure_code
+    assert repair.original_response_sha256 == "b" * 64
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"last_error": "conversation_provider_result_validation_failed"},
+        {"provider_receipt": None},
+        {"dispatch_started_at": None},
+        {"provider_idempotency_key": "conversation:provider:other"},
+        {"provider_receipt": {"validation_state": "provider_returned"}},
+    ],
+)
+def test_c5_repair_rejects_unproven_or_ambiguous_provider_failures(
+    change: dict[str, object],
+) -> None:
+    task = SimpleNamespace(
+        stage="C5", state="uncertain", intent={"request": {"stage": "C5"}}, run_id=uuid4()
+    )
+    job = SimpleNamespace(
+        kind="conversation.infer_provider.v1",
+        dispatch_started_at=datetime.now(UTC),
+        provider_idempotency_key="conversation:provider:original",
+        dedupe_key="conversation:provider:original",
+        last_error="conversation_gemini_response_json_invalid",
+        provider_receipt={
+            "schema": "ac.sales-xray.provider-receipt/1",
+            "validation_state": "provider_returned",
+            "idempotency_key": "conversation:provider:original",
+            "raw_blob_id": str(task.run_id),
+            "response_sha256": "c" * 64,
+        },
+    )
+    for name, value in change.items():
+        setattr(job, name, value)
+
+    assert c5_repair_intent(task, job) is None
+
+
+@pytest.mark.parametrize(
     ("paise", "label"),
     [
         (0, "₹0 · approved allowance"),

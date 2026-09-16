@@ -53,6 +53,7 @@ C5RepairFailureCode = Literal[
     "conversation_report_json_invalid",
     "conversation_report_payload_invalid",
     "conversation_report_payload_missing_field",
+    "conversation_gemini_response_json_invalid",
 ]
 
 C5_REPAIR_FAILURE_CODES = frozenset(
@@ -65,6 +66,7 @@ C5_REPAIR_FAILURE_CODES = frozenset(
         "conversation_report_json_invalid",
         "conversation_report_payload_invalid",
         "conversation_report_payload_missing_field",
+        "conversation_gemini_response_json_invalid",
     }
 )
 

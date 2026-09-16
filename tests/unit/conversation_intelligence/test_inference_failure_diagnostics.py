@@ -31,6 +31,10 @@ from ac_platform.conversation_intelligence.storage import StorageError
             "conversation_report_findings_invalid",
         ),
         (
+            InferenceTaskError("gemini_response_json_invalid"),
+            "conversation_gemini_response_json_invalid",
+        ),
+        (
             InferenceTaskError("report_findings_invalid: private response"),
             "conversation_provider_result_validation_failed",
         ),
