@@ -11,11 +11,16 @@ type Findings = Pick<
 function fail(): never {
   throw new Error("report_overview_invalid");
 }
-function object(value: unknown, keys: string[]): ObjectValue {
+function object(
+  value: unknown,
+  keys: string[],
+  optionalKeys: string[] = [],
+): ObjectValue {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail();
   const item = value as ObjectValue;
+  const allowedKeys = new Set([...keys, ...optionalKeys]);
   if (
-    Object.keys(item).length !== keys.length ||
+    Object.keys(item).some((key) => !allowedKeys.has(key)) ||
     keys.some((key) => !Object.hasOwn(item, key))
   )
     fail();
@@ -54,7 +59,7 @@ function nullable<T>(value: unknown, parse: (item: unknown) => T): T | null {
   return value === null ? null : parse(value);
 }
 
-/** Every new field is required in v1; historical reports may omit the whole overview. */
+/** v1 fields stay strict; business impact is the server-governed optional field. */
 export function parseDetailedOverview(
   value: unknown,
   findings: Findings,
@@ -76,7 +81,7 @@ export function parseDetailedOverview(
     "practice",
     "progress",
     "final_assessment",
-  ]);
+  ], ["business_impact"]);
   function source(value: unknown, max = 1200): SourceNote {
     const note = object(value, ["text", "evidence"]);
     return {
@@ -108,6 +113,9 @@ export function parseDetailedOverview(
         ...source({ text: data.text, evidence: data.evidence }),
       };
     }),
+    ...(item.business_impact === undefined
+      ? {}
+      : { business_impact: nullable(item.business_impact, impact) }),
     strength_details: list(item.strength_details, 3, (v) => {
       const data = object(v, ["finding_index", "why_it_matters"]);
       return {

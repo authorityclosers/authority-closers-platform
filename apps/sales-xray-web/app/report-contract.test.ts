@@ -444,4 +444,73 @@ describe("server-withheld guest report preview", () => {
       ),
     ).toThrow("report_overview_invalid");
   });
+
+  it("accepts only the governed optional overview business impact", () => {
+    const fixtureContent = () => {
+      const {
+        report_sections: _sections,
+        source_sha256: _source,
+        transcript_revision: _revision,
+        source_label: _label,
+        review_status: _status,
+        ...content
+      } = structuredClone(overviewFixture.report);
+      void [_sections, _source, _revision, _label, _status];
+      return content;
+    };
+    const fixtureEnvelope = (overview: unknown) => {
+      const envelope = previewEnvelope();
+      envelope.transcript_revision = overviewFixture.transcript.revision;
+      Object.assign(envelope.report, {
+        content: { ...fixtureContent(), overview },
+        preview: null,
+      });
+      return envelope;
+    };
+    const expectedImpact = {
+      status: "insufficient_data",
+      missing_inputs: ["Comparable conversion history", "Lead volume"],
+    };
+    const complete = {
+      ...structuredClone(overviewFixture.report.overview),
+      business_impact: expectedImpact,
+    };
+    const parsed = parseAcquisitionReport(
+      fixtureEnvelope(complete),
+      expectedSubmission,
+      overviewFixture.transcript,
+    );
+    expect(parsed.report.overview?.business_impact).toEqual(expectedImpact);
+
+    const omitted = structuredClone(complete);
+    Reflect.deleteProperty(omitted, "business_impact");
+    expect(
+      parseAcquisitionReport(
+        fixtureEnvelope(omitted),
+        expectedSubmission,
+        overviewFixture.transcript,
+      ).report.overview?.business_impact,
+    ).toBeUndefined();
+
+    const nullable = { ...complete, business_impact: null };
+    expect(
+      parseAcquisitionReport(
+        fixtureEnvelope(nullable),
+        expectedSubmission,
+        overviewFixture.transcript,
+      ).report.overview?.business_impact,
+    ).toBeNull();
+
+    const unknown = {
+      ...complete,
+      business_impact: { ...expectedImpact, score: 1 },
+    };
+    expect(() =>
+      parseAcquisitionReport(
+        fixtureEnvelope(unknown),
+        expectedSubmission,
+        overviewFixture.transcript,
+      ),
+    ).toThrow("report_overview_invalid");
+  });
 });
