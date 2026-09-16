@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.budget_admin import ConversationBudgetAdmin
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount
 from ac_platform.conversation_intelligence.execution_control import (
     ExecutionControls,
@@ -32,6 +33,13 @@ class ExecutionControlIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2147483647)
     paused: bool
+
+
+class BudgetCapIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(ge=0, lt=2147483647)
+    new_cap_paise: int = Field(ge=0, le=1_000_000)
+    reason: str = Field(min_length=1, max_length=512)
 
 
 def install_execution_control_http(
@@ -55,6 +63,22 @@ def install_execution_control_http(
             environment=settings.environment,
             operations_tenant_id=scope(),
         )
+
+    def budget_service(database: AsyncSession) -> ConversationBudgetAdmin:
+        return ConversationBudgetAdmin(
+            ConversationApplication(database),
+            environment=settings.environment,
+            operations_tenant_id=scope(),
+        )
+
+    def approved_budget_bundle():
+        try:
+            bundle = load_pinned_approval(settings)
+            if bundle.provider_control_tenant_id != scope():
+                raise ValueError
+            return bundle
+        except (ValueError, OSError):
+            raise HTTPException(503, "The pinned budget approval is unavailable.") from None
 
     def approved_budget_scope() -> UUID | None:
         try:
@@ -127,6 +151,40 @@ def install_execution_control_http(
                 auth.resolved.actor,
                 paused=intent.paused,
                 expected_revision=intent.expected_revision,
+                key=key,
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/v1/admin/conversation/budget")
+    async def current_budget(
+        request: Request, response: Response, auth: AuthenticatedTransaction = dependency
+    ) -> dict[str, Any]:
+        surface(request, response)
+        try:
+            return await budget_service(auth.database).current(
+                auth.resolved.actor, bundle=approved_budget_bundle()
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/v1/admin/conversation/budget", status_code=201)
+    async def change_budget(
+        intent: BudgetCapIntent,
+        request: Request,
+        response: Response,
+        key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        surface(request, response)
+        require_safe_origin(request, settings)
+        try:
+            return await budget_service(auth.database).save(
+                auth.resolved.actor,
+                bundle=approved_budget_bundle(),
+                new_cap_paise=intent.new_cap_paise,
+                expected_revision=intent.expected_revision,
+                reason=intent.reason,
                 key=key,
             )
         except ConversationError as error:
