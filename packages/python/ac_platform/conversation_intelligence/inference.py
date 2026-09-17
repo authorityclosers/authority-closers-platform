@@ -160,7 +160,11 @@ class ConversationInference:
         self.authority = authority
 
     async def plan_transcription(
-        self, recording: ConversationRecording, *, signal_recipe: str | None = None
+        self,
+        recording: ConversationRecording,
+        *,
+        signal_recipe: str | None = None,
+        route: tuple[str, str] | None = None,
     ) -> TranscriptionPlan:
         """Internal only: caller must already lock and authorize this recording."""
         binding = binding_for(recording)
@@ -234,10 +238,15 @@ class ConversationInference:
         ):
             raise ConversationConflict("The recording needs a verified duration.")
         provider, model = "elevenlabs", "scribe_v2"
-        if self.authority is not None:
+        if route is not None:
+            provider, model = route
+        elif self.authority is not None:
             selected = await self.authority.selected_asr_route(self.application)
             if selected is not None:
                 provider, model = selected
+        # Validate frozen or newly selected routes through the same canonical
+        # recipe map before constructing the immutable C2 checkpoint.
+        transcription_recipe_for_route(provider, model)
         prepared = prepare_scribe_input(
             source_sha256=recording.source_sha256,
             duration_ms=duration,
@@ -265,7 +274,16 @@ class ConversationInference:
         self, recording: ConversationRecording, task: ConversationInferenceTask
     ) -> ServicePlan:
         if task.stage == "C2":
-            return await self.plan_transcription(recording)
+            frozen_route: tuple[str, str] | None = None
+            if isinstance(task.intent, dict):
+                checkpoint = task.intent.get("checkpoint")
+                config = checkpoint.get("config") if isinstance(checkpoint, dict) else None
+                if isinstance(config, dict):
+                    provider = config.get("provider")
+                    model = config.get("model")
+                    if isinstance(provider, str) and isinstance(model, str):
+                        frozen_route = (provider, model)
+            return await self.plan_transcription(recording, route=frozen_route)
         if task.intent is None:
             raise ConversationConflict("The saved provider intent is unavailable.")
         try:
