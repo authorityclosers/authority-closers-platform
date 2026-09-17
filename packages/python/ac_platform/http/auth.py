@@ -815,16 +815,30 @@ def require_admin_surface(request: Request, settings: Settings) -> None:
         )
 
 
-def require_safe_origin(request: Request, settings: Settings) -> None:
+def require_safe_origin(
+    request: Request,
+    settings: Settings,
+    *,
+    allow_missing_sales_xray_origin: bool = False,
+) -> None:
+    """Require an allowed same-surface Origin for cookie-authenticated writes.
+
+    Some browsers omit ``Origin`` for same-origin requests.  That exception is
+    deliberately opt-in and is used only by the standalone Sales Xray guest
+    acquisition boundary, where the request is already constrained to the
+    exact Sales Xray host by its route guard.  All other mutation surfaces stay
+    fail-closed when the header is absent.
+    """
+
     origin = request.headers.get("origin")
     normalized_origin = None if origin is None else origin.rstrip("/")
-    # Browsers omit the Origin header for same-origin PUT requests. Sales Xray
-    # is served through the same host as its acquisition API, so accepting that
-    # one exact host without an Origin preserves the host boundary while keeping
-    # the upload transport usable. Cross-origin writes still require an exact
-    # configured Origin below.
     sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
-    if normalized_origin is None and sales_host is not None and request.url.hostname == sales_host:
+    if (
+        allow_missing_sales_xray_origin
+        and normalized_origin is None
+        and sales_host is not None
+        and request.url.hostname == sales_host
+    ):
         return
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")

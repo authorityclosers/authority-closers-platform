@@ -1373,7 +1373,7 @@ def test_sales_xray_same_origin_put_without_origin_is_allowed() -> None:
         }
     )
 
-    require_safe_origin(request, settings)
+    require_safe_origin(request, settings, allow_missing_sales_xray_origin=True)
 
     request = Request(
         {

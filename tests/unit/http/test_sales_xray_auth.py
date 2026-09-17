@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -484,4 +484,47 @@ def test_same_surface_origin_helper_accepts_sales_xray_and_rejects_learner_bridg
                 origin="https://staging.authorityclosers.com",
             ),
             settings,
+        )
+
+
+def test_missing_origin_is_opt_in_for_sales_xray_acquisition_only() -> None:
+    settings = _sales_staging_settings()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/v1/conversation/acquisition/session",
+            "headers": [(b"host", SALES_STAGING_HOST.encode("ascii"))],
+            "query_string": b"",
+            "server": (SALES_STAGING_HOST, 443),
+            "client": ("127.0.0.1", 1),
+        }
+    )
+
+    with pytest.raises(RequestOriginDenied):
+        auth_module.require_safe_origin(request, settings)
+
+    auth_module.require_safe_origin(
+        request,
+        settings,
+        allow_missing_sales_xray_origin=True,
+    )
+
+    with pytest.raises(RequestOriginDenied):
+        auth_module.require_safe_origin(
+            Request(
+                {
+                    "type": "http",
+                    "method": "POST",
+                    "scheme": "https",
+                    "path": "/v1/conversation/acquisition/session",
+                    "headers": [(b"host", b"staging.authorityclosers.com")],
+                    "query_string": b"",
+                    "server": ("staging.authorityclosers.com", 443),
+                    "client": ("127.0.0.1", 1),
+                }
+            ),
+            settings,
+            allow_missing_sales_xray_origin=True,
         )
