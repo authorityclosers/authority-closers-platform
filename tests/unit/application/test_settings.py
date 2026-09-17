@@ -13,6 +13,15 @@ def test_blank_optional_public_learner_tenant_is_unconfigured() -> None:
     assert settings.operations_tenant_id is None
 
 
+def test_sales_xray_upload_budget_is_configurable_and_bounded() -> None:
+    settings = Settings(_env_file=None, sales_xray_upload_response_budget_seconds=600)
+
+    assert settings.sales_xray_upload_response_budget_seconds == 600
+    for invalid in (89, 3601):
+        with pytest.raises(ValidationError, match="AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS"):
+            Settings(_env_file=None, sales_xray_upload_response_budget_seconds=invalid)
+
+
 def test_public_learner_and_operations_tenants_must_be_distinct() -> None:
     tenant_id = "10000000-0000-4000-8000-000000000001"
 

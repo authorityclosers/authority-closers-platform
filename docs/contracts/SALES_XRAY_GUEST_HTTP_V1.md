@@ -88,7 +88,8 @@ C1 under the durable worker. It does not repeat transcription. Removing that
 duplicate local computation needs a separately validated preflight-to-worker
 artifact handoff; it is not assumed here. The native helper's bounded runtime can
 exceed an ordinary proxy response timeout. The guest upload adapter therefore
-uses a fixed 90-second combined upload-and-preflight response budget. The body
+uses the deployment-configured `AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS`
+window (90–3600 seconds; the release profile defaults to 900 seconds). The body
 stream and the native socket receive only the time remaining in that window; a
 408 response is returned before usage reservation, source publication or job
 enqueue when the budget expires. The worker's independent 750-second native

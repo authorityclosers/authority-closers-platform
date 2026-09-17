@@ -73,7 +73,6 @@ from ac_platform.kernel.errors import DomainError
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
-_UPLOAD_RESPONSE_BUDGET_SECONDS = 90.0
 _MIN_NATIVE_TIMEOUT_SECONDS = 1.0
 Factory = Callable[[AsyncSession], AcquisitionSessions]
 
@@ -282,7 +281,9 @@ def install_submission_http(
     @router.put("/submissions/{submission_id}/source", status_code=202)
     async def upload(submission_id: UUID, request: Request, response: Response) -> dict[str, Any]:
         guard(request, response, write=True)
-        request_deadline = asyncio.get_running_loop().time() + _UPLOAD_RESPONSE_BUDGET_SECONDS
+        request_deadline = (
+            asyncio.get_running_loop().time() + settings.sales_xray_upload_response_budget_seconds
+        )
         lengths = request.headers.getlist("content-length")
         hashes = request.headers.getlist("x-source-sha256")
         policies = request.headers.getlist("x-upload-policy")

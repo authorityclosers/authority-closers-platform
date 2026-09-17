@@ -284,6 +284,9 @@ initialize_release_profile_contract() {
   # surface. When present, validate_release_profile binds it to the exact
   # environment-owned origin below; it never permits a generic host.
   profile_allowed_keys[AC_SALES_XRAY_APP_URL]=1
+  # Keep the guest upload response budget deployment-configurable while
+  # constraining it to the audited range enforced by application settings.
+  profile_allowed_keys[AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS]=1
 }
 
 initialize_release_profile_contract
@@ -400,6 +403,14 @@ validate_release_profile() {
         )
         ;;
     esac
+  fi
+  if [[ -n "${profile_values[AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS]+present}" ]]; then
+    local upload_response_budget_seconds="${profile_values[AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS]}"
+    if ! [[ "$upload_response_budget_seconds" =~ ^[0-9]+$ ]] ||
+      (( upload_response_budget_seconds < 90 || upload_response_budget_seconds > 3600 )); then
+      printf 'AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS must be between 90 and 3600.\n' >&2
+      return 1
+    fi
   fi
   for expected_profile_assignment in "${expected_profile_assignments[@]}"; do
     expected_profile_key="${expected_profile_assignment%%=*}"
@@ -859,6 +870,7 @@ compose_for() {
         -u AC_STATE_ROOT \
         -u AC_PUBLIC_APP_URL \
         -u AC_SALES_XRAY_APP_URL \
+        -u AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS \
         -u AC_ADMIN_APP_URL \
         -u AC_COACH_APP_URL \
         -u AC_API_URL \

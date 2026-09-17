@@ -170,6 +170,9 @@ class Settings(BaseSettings):
     sales_xray_challenge_site_key: str | None = None
     sales_xray_native_socket_path: str | None = None
     sales_xray_native_image_ref: str | None = None
+    # Network admission is bounded, but must accommodate real guest uploads on
+    # slower connections. Keep it deployment-configurable and auditable.
+    sales_xray_upload_response_budget_seconds: float = 900.0
 
     @field_validator(
         "public_learner_tenant_id",
@@ -289,6 +292,10 @@ class Settings(BaseSettings):
                 "different tenants"
             )
         self._validate_media_stress_fixtures()
+        if not 90 <= self.sales_xray_upload_response_budget_seconds <= 3600:
+            raise ValueError(
+                "AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS must be between 90 and 3600"
+            )
         self._validate_public_films()
         self._validate_media_provider()
         self._validate_filesystem_media()
