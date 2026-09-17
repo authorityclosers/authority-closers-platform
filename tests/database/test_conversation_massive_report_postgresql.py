@@ -113,6 +113,7 @@ def test_sixty_minute_upload_reaches_saved_report(
         return await original_prepare(harness, root, duration_ms=3_600_000)
 
     monkeypatch.setattr(reporting, "prepare_local", prepare_long)
+    failures: list[str] = []
     # Production's hosted C1 adapter is the 16 kHz profile.  Keep this
     # end-to-end report fixture on that exact profile while retaining the
     # local recipe/ledger so it exercises the same durable C1→C5 path.
@@ -123,8 +124,14 @@ def test_sixty_minute_upload_reaches_saved_report(
             super().__init__(*args, **kwargs)
             self.c1_rate = 16_000
 
+        async def _inspect_job(self, work: Any) -> None:
+            try:
+                await super()._inspect_job(work)
+            except Exception as error:
+                failures.append(f"{type(error).__name__}:{error}")
+                raise
+
     monkeypatch.setattr(worker, "OfflineConversationWorker", HostedProfileWorker)
-    failures: list[str] = []
     original_inspect = worker_module.inspect_media
 
     def traced_inspect(*args: Any, **kwargs: Any) -> dict[str, Any]:
