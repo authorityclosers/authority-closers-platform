@@ -197,7 +197,13 @@ async def _add_quote(
     return quote_id
 
 
-async def _prepare(postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 1_000) -> Prepared:
+async def _prepare(
+    postgres_harness: Any,
+    tmp_path: Path,
+    *,
+    duration_ms: int = 1_000,
+    recipe_revision: str = AUDIOATLAS_RECIPE,
+) -> Prepared:
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     data = _wav_one_second_48k(duration_ms)
@@ -247,7 +253,14 @@ async def _prepare(postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 
         assert stored["state"] == "ready"
         scope_id = await seed_budget(engine)
         await _seed_minutes(engine, state)
-        quote_id = await _add_quote(sessions, state, recording_id, scope_id, source_sha256)
+        quote_id = await _add_quote(
+            sessions,
+            state,
+            recording_id,
+            scope_id,
+            source_sha256,
+            recipe_revision=recipe_revision,
+        )
         async with sessions() as database, database.begin():
             requested = await build_application(database, state).request_run(
                 state.actor,
@@ -255,7 +268,7 @@ async def _prepare(postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 
                     recording_id=recording_id,
                     source_revision="1",
                     quote_id=quote_id,
-                    recipe_revision=AUDIOATLAS_RECIPE,
+                    recipe_revision=recipe_revision,
                 ),
                 key=f"worker-run-{uuid4().hex}",
             )

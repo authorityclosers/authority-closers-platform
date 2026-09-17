@@ -110,7 +110,12 @@ def test_sixty_minute_upload_reaches_saved_report(
     original_prepare = reporting.prepare_local
 
     async def prepare_long(harness: Any, root: Path) -> Any:
-        return await original_prepare(harness, root, duration_ms=3_600_000)
+        return await original_prepare(
+            harness,
+            root,
+            duration_ms=3_600_000,
+            recipe_revision=worker.AUDIOATLAS_HOSTED_RECIPE,
+        )
 
     monkeypatch.setattr(reporting, "prepare_local", prepare_long)
     failures: list[str] = []
@@ -123,6 +128,7 @@ def test_sixty_minute_upload_reaches_saved_report(
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             self.c1_rate = 16_000
+            self.c1_recipe = worker.AUDIOATLAS_HOSTED_RECIPE
 
         async def _inspect_job(self, work: Any) -> None:
             try:
