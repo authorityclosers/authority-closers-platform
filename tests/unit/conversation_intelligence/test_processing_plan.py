@@ -219,6 +219,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
     [
         "conversation_gemini_response_json_invalid",
         "conversation_report_payload_missing_field",
+        "conversation_report_overview_invalid",
     ],
 )
 def test_c5_repair_accepts_only_known_returned_provider_report_failures(
