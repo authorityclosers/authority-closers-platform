@@ -319,6 +319,24 @@ def test_hosted_validator_supports_the_production_policy_shape(activation_root: 
     ]
 
 
+def test_hosted_validator_accepts_terminal_blank_lines_from_approval_export(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root, environment="production")
+    _refresh_activation_inputs(paths)
+    paths["env"].write_bytes(paths["env"].read_bytes() + b"\n\n")
+    descriptor = json.loads(paths["descriptor"].read_bytes())
+    descriptor["compose_env_sha256"] = hashlib.sha256(paths["env"].read_bytes()).hexdigest()
+    paths["descriptor"].write_bytes(_json_bytes(descriptor))
+    paths["digest"].write_bytes(
+        (hashlib.sha256(paths["descriptor"].read_bytes()).hexdigest() + "\n").encode("ascii")
+    )
+
+    result = _validator_result(release, "production")
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_hosted_validator_accepts_explicit_inert_bootstrap(activation_root: Path) -> None:
     release, paths = _make_release(activation_root)
     service = json.loads(paths["service"].read_bytes())

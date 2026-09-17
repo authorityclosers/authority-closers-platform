@@ -281,7 +281,13 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         raise _fail("compose environment file is not UTF-8") from exc
     result: dict[str, str] = {}
     for line in text.splitlines():
-        if not line or "=" not in line:
+        # Activation env files are emitted by the external approval lane and
+        # may carry more than one terminal newline. Empty lines have no
+        # authority; all non-empty lines still require the exact assignment
+        # grammar and the complete approved key set below.
+        if not line:
+            continue
+        if "=" not in line:
             raise _fail("compose environment must use assignment lines")
         key, value = line.split("=", 1)
         if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS:
