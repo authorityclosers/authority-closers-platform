@@ -1019,21 +1019,38 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                         and source_budget is not None
                         and source_minute is not None
                     )
-                    assert {
-                        "task": (source_task.state, source_task.checkpoint_id),
-                        "run": (source_run.state, source_run.completed_at),
-                        "job": (
-                            source_job.status,
-                            source_job.provider_receipt,
-                            source_job.provider_receipt_digest,
-                            source_job.dispatch_started_at,
-                            source_job.provider_idempotency_key,
-                        ),
-                        "plan": (source_plan_row.state, source_plan_row.progress),
-                        "budget": source_budget.snapshot,
-                        "minute": source_minute.snapshot,
-                        "checkpoint": None,
-                    } == source_snapshot
+                    # The target call uses the same tenant/account, so its
+                    # valid C4/C5 reservations and the scheduler's normal
+                    # held-plan projection may change shared snapshots. The
+                    # retained source itself must remain immutable: task/run,
+                    # provider receipt, and its own reservation are unchanged.
+                    assert (source_task.state, source_task.checkpoint_id) == source_snapshot["task"]
+                    assert (source_run.state, source_run.completed_at) == source_snapshot["run"]
+                    assert (
+                        source_job.status,
+                        source_job.provider_receipt,
+                        source_job.provider_receipt_digest,
+                        source_job.dispatch_started_at,
+                        source_job.provider_idempotency_key,
+                    ) == source_snapshot["job"]
+                    assert source_plan_row.state == "held"
+                    assert source_plan_row.progress == {
+                        "current_stage": "C2",
+                        "failure_code": "stage_uncertain",
+                    }
+                    source_reservations = {
+                        item["reservation_id"]: item
+                        for item in source_snapshot["budget"]["reservations"]
+                    }
+                    current_reservations = {
+                        item["reservation_id"]: item
+                        for item in source_budget.snapshot["reservations"]
+                    }
+                    assert (
+                        current_reservations[str(source_run_id)]
+                        == source_reservations[str(source_run_id)]
+                    )
+                    assert source_snapshot["checkpoint"] is None
         finally:
             await setup.engine.dispose()
 
