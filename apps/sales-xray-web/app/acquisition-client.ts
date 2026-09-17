@@ -237,7 +237,7 @@ export function parsePolicy(value: unknown): UploadPolicy {
       item.maximum_file_bytes,
       MAX_ACQUISITION_FILE_BYTES,
     ),
-    maximum_call_seconds = integer(item.maximum_call_seconds, 1800),
+    maximum_call_seconds = integer(item.maximum_call_seconds, 3600),
     retention_days = integer(item.retention_days, 7);
   const privacy_details =
     typeof item.privacy_details === "string"
