@@ -818,6 +818,14 @@ def require_admin_surface(request: Request, settings: Settings) -> None:
 def require_safe_origin(request: Request, settings: Settings) -> None:
     origin = request.headers.get("origin")
     normalized_origin = None if origin is None else origin.rstrip("/")
+    # Browsers omit the Origin header for same-origin PUT requests. Sales Xray
+    # is served through the same host as its acquisition API, so accepting that
+    # one exact host without an Origin preserves the host boundary while keeping
+    # the upload transport usable. Cross-origin writes still require an exact
+    # configured Origin below.
+    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
+    if normalized_origin is None and sales_host is not None and request.url.hostname == sales_host:
+        return
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
     coach_origin = str(settings.coach_app_url).rstrip("/")
