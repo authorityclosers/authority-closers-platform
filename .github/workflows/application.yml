@@ -594,7 +594,7 @@ jobs:
               published_id="$(docker image inspect --format '{{.Id}}' "$image")"
               published_revision="$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' "$image")"
               if [ "$published_revision" != "$GITHUB_SHA" ]; then
-                printf 'Refusing to use immutable release tag %s with revision %s (expected %s)\n' "$image" "$published_revision" "$GITHUB_SHA" >&2
+                printf 'Refusing to overwrite immutable release tag %s: revision %s (expected %s)\n' "$image" "$published_revision" "$GITHUB_SHA" >&2
                 exit 1
               fi
               printf 'Reusing immutable release tag %s (image id %s; rebuilt id %s)\n' "$image" "$published_id" "$built_id"
