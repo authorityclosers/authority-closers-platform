@@ -23,6 +23,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import ac_platform.conversation_intelligence.inference_worker as inference_worker_module
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -67,7 +68,6 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
-from ac_platform.outbox.repository import canonical_receipt_digest
 from tests.database.test_conversation_authority_postgresql import (
     _bundle,
     _promote_admin,
@@ -763,6 +763,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
 def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_call(
     postgres_harness: Any,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The guest-safe recovery path reuses a retained uncertain C2 receipt."""
 
@@ -818,6 +819,23 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                 worker = ConversationInferenceWorker(
                     setup.sessions, setup.runtime.storage, router, authority=setup.authority
                 )
+                original_validate = inference_worker_module.validate_scribe_result
+                validation_failed = False
+
+                def fail_once_after_receipt(*args: Any, **kwargs: Any) -> Any:
+                    nonlocal validation_failed
+                    if not validation_failed:
+                        validation_failed = True
+                        raise inference_worker_module.InferenceTaskError(
+                            "synthetic_post_receipt_validation_failure"
+                        )
+                    return original_validate(*args, **kwargs)
+
+                monkeypatch.setattr(
+                    inference_worker_module,
+                    "validate_scribe_result",
+                    fail_once_after_receipt,
+                )
                 source_acceptance = await client.post(
                     source_path + "/plan",
                     json=source_approval,
@@ -826,6 +844,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                 assert source_acceptance.status_code == 202, source_acceptance.text
                 assert await worker.run_once()
                 assert broker.calls == 1
+                assert validation_failed is True
 
                 async with setup.sessions() as database, database.begin():
                     source_task = await database.scalar(
@@ -834,23 +853,15 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                             ConversationInferenceTask.stage == "C2",
                         )
                     )
-                    assert source_task is not None and source_task.checkpoint_id is not None
+                    assert source_task is not None and source_task.checkpoint_id is None
                     source_run = await database.get(ConversationRun, source_task.run_id)
                     source_job = await database.get(Job, source_task.job_id)
                     assert source_run is not None and source_job is not None
-                    receipt = dict(source_job.provider_receipt or {})
-                    receipt.pop("checkpoint_id", None)
-                    receipt.pop("checkpoint_manifest_sha256", None)
-                    receipt["validation_state"] = "provider_returned"
-                    source_job.provider_receipt = receipt
-                    source_job.provider_receipt_digest = canonical_receipt_digest(receipt)
-                    source_job.status = "dead_letter"
-                    source_job.last_error = "synthetic post-receipt interruption"
-                    source_job.dead_lettered_at = setup.state.now
-                    source_task.state = "uncertain"
-                    source_task.checkpoint_id = None
-                    source_run.state = "failed"
-                    source_run.completed_at = None
+                    assert source_task.state == "uncertain"
+                    assert source_run.state == "failed"
+                    assert source_job.status == "dead_letter"
+                    assert source_job.provider_receipt is not None
+                    assert source_job.provider_receipt["validation_state"] == "provider_returned"
 
                 async with setup.sessions() as database, database.begin():
                     source_task = await database.scalar(
