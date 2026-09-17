@@ -128,3 +128,11 @@ def test_application_cleanup_stays_after_upload_proof_and_retains_one_day() -> N
         assert upload_index < reclaim_index
         assert upload_index < delete_index
         assert "retention-days: 1" in workflow
+
+
+def test_application_admission_accounts_for_verified_cleanup() -> None:
+    for workflow_path in WORKFLOWS[:2]:
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert 'superseded_release_bytes="$(jq' in workflow
+        assert 'test("^ac-application-[0-9a-f]{40}$")' in workflow
+        assert "retained_bytes - superseded_release_bytes + candidate_bytes" in workflow

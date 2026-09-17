@@ -748,7 +748,18 @@ jobs:
             printf 'Repository artifact usage could not be proven.\n' >&2
             exit 1
           }
-          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          # The verified upload step below removes every superseded
+          # ac-application bundle. Exclude those exact, reviewable bundles
+          # from admission so stale release history cannot block a new
+          # immutable candidate while unrelated artifacts remain counted.
+          superseded_release_bytes="$(jq '[.[]
+            | select((.name // "") | test("^ac-application-[0-9a-f]{40}$"))
+            | .size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$superseded_release_bytes" =~ ^[0-9]+$ && "$superseded_release_bytes" -le "$retained_bytes" ]] || {
+            printf 'Superseded release artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes - superseded_release_bytes + candidate_bytes))
           if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
             printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
               "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
