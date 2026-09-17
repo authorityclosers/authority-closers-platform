@@ -7,9 +7,12 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from ac_platform.conversation_intelligence.reports import (
     GROQ_MODEL,
+    MAX_AGGREGATE_OVERVIEW_CHARS,
+    AggregateFactPacket,
     ReportError,
     build_fact_groq_prompts,
     build_groq_prompts,
@@ -22,6 +25,37 @@ from ac_platform.conversation_intelligence.reports import (
     parse_report_draft,
     plan_transcript_chunks,
 )
+
+
+def test_aggregate_overview_ceiling_includes_chunk_join_separators() -> None:
+    transcript = _transcript(count=1)
+    packet = parse_fact_packet(
+        {
+            "overview": "Literal facts.",
+            "observations": [],
+            "uncertainties": [],
+        },
+        transcript,
+        chunk=plan_transcript_chunks(transcript, max_input_chars=220)[0],
+    )
+    aggregate = {
+        "schema": "ac.sales-xray.style-independent-facts/1",
+        "source_sha256": packet.source_sha256,
+        "transcript_revision": packet.transcript_revision,
+        "timebase_id": packet.timebase_id,
+        "chunk_index": 1,
+        "chunk_count": 1,
+        "covered_segment_ids": packet.covered_segment_ids,
+        "overview": "x" * MAX_AGGREGATE_OVERVIEW_CHARS,
+        "observations": [],
+        "uncertainties": [],
+    }
+    accepted = AggregateFactPacket.model_validate(aggregate)
+    assert len(accepted.overview) == 256_063
+    with pytest.raises(ValidationError):
+        AggregateFactPacket.model_validate(
+            {**aggregate, "overview": "x" * (MAX_AGGREGATE_OVERVIEW_CHARS + 1)}
+        )
 
 
 def _transcript(*, count: int = 3) -> dict[str, Any]:

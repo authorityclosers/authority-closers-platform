@@ -184,6 +184,9 @@ class FactPacket(_StrictModel):
         return self.uncertainties
 
 
+MAX_AGGREGATE_OVERVIEW_CHARS = 4_000 * 64 + 63
+
+
 class AggregateFactPacket(_StrictModel):
     """Whole-call fact aggregate with bounds separate from one C4 chunk.
 
@@ -200,7 +203,9 @@ class AggregateFactPacket(_StrictModel):
     chunk_index: Literal[1] = 1
     chunk_count: Literal[1] = 1
     covered_segment_ids: list[str] = Field(min_length=1, max_length=10_000)
-    overview: str = Field(min_length=1, max_length=256_000)
+    # The merge join inserts one separator between each of the 64 bounded
+    # chunk overviews. Keep the whole-call ceiling above that exact maximum.
+    overview: str = Field(min_length=1, max_length=MAX_AGGREGATE_OVERVIEW_CHARS)
     observations: list[StyleFact] = Field(max_length=4_096)
     uncertainties: list[str] = Field(max_length=4_096)
 
@@ -1641,6 +1646,7 @@ def parse_groq_response(
 __all__ = [
     "DEFAULT_INPUT_CHARS",
     "AggregateFactPacket",
+    "MAX_AGGREGATE_OVERVIEW_CHARS",
     "FactPacket",
     "GROQ_MODEL",
     "MAX_COMPLETION_TOKENS",
