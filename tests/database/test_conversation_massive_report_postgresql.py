@@ -117,6 +117,21 @@ def test_sixty_minute_upload_reaches_saved_report(
             self.c1_rate = 16_000
 
     monkeypatch.setattr(worker, "OfflineConversationWorker", HostedProfileWorker)
-    reporting.test_saved_transcript_to_private_report_and_profile_reuse(
-        postgres_harness, tmp_path, False, "groq", monkeypatch
-    )
+    failures: list[str] = []
+    original_inspect = worker.inspect_media
+
+    def traced_inspect(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        try:
+            return original_inspect(*args, **kwargs)
+        except Exception as error:
+            failures.append(f"{type(error).__name__}:{error}")
+            raise
+
+    monkeypatch.setattr(worker, "inspect_media", traced_inspect)
+    try:
+        reporting.test_saved_transcript_to_private_report_and_profile_reuse(
+            postgres_harness, tmp_path, False, "groq", monkeypatch
+        )
+    except RuntimeError as error:
+        assert failures, "C1 failed without a captured signal error"
+        raise AssertionError(f"C1 signal failure: {failures}") from error
