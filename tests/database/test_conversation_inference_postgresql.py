@@ -70,6 +70,7 @@ async def _provider_quote(
     provider_model: str = "scribe_v2",
     permission_fingerprint: str | None = None,
     expires_in_seconds: int = 3600,
+    entitlement_seconds: int = 1,
 ) -> tuple[UUID, Quote]:
     now = datetime.now(UTC)
     quoted_source_sha256 = quote_source_sha256 or source_sha256
@@ -89,7 +90,7 @@ async def _provider_quote(
         retention_ref="synthetic-provider-retention",
         professional_gate_ref="synthetic-provider-gate",
         pricing_ref="synthetic-zero-price",
-        entitlement_seconds=1,
+        entitlement_seconds=entitlement_seconds,
         max_cost_paise=0,
         created_at_epoch=int(now.timestamp()) - 1,
         expires_at_epoch=int(now.timestamp()) + expires_in_seconds,

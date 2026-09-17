@@ -304,6 +304,7 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
     multiple_chunks: bool,
     provider: str,
     monkeypatch: pytest.MonkeyPatch,
+    entitlement_seconds: int = 1,
 ) -> None:
     async def exercise() -> None:
         prepared = await prepare_local(postgres_harness, tmp_path)
@@ -319,6 +320,7 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                 prepared.recording_id,
                 prepared.scope_id,
                 hashlib.sha256(prepared.data).hexdigest(),
+                entitlement_seconds=entitlement_seconds,
             )
             asr = await enqueue(sessions, prepared, qid, quote, None, "report-asr")
             assert await worker.run_once()

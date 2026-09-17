@@ -150,7 +150,7 @@ def test_sixty_minute_upload_reaches_saved_report(
     monkeypatch.setattr(worker_module, "inspect_media", traced_inspect)
     try:
         reporting.test_saved_transcript_to_private_report_and_profile_reuse(
-            postgres_harness, tmp_path, False, "groq", monkeypatch
+            postgres_harness, tmp_path, False, "groq", monkeypatch, entitlement_seconds=3_600
         )
     except RuntimeError as error:
         assert failures, "C1 failed without a captured signal error"
