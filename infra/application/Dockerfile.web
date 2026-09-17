@@ -43,6 +43,9 @@ RUN pnpm --filter @ac/learner-web build && \
 
 FROM ${NODE_IMAGE} AS learner
 
+ARG AC_RELEASE_ID
+LABEL org.opencontainers.image.revision=${AC_RELEASE_ID}
+
 ENV HOSTNAME=0.0.0.0 \
     NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

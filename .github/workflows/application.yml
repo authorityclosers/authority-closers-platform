@@ -545,6 +545,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.LEARNER_IMAGE }}
+          build-args: |
+            AC_RELEASE_ID=${{ github.sha }}
           cache-from: type=gha,scope=application-web
           cache-to: type=gha,mode=max,scope=application-web
       - name: Build admin release image
@@ -590,10 +592,12 @@ jobs:
             if docker manifest inspect "$image" >/dev/null 2>&1; then
               docker pull "$image"
               published_id="$(docker image inspect --format '{{.Id}}' "$image")"
-              if [ "$published_id" != "$built_id" ]; then
-                printf 'Refusing to overwrite immutable release tag %s\n' "$image" >&2
+              published_revision="$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' "$image")"
+              if [ "$published_revision" != "$GITHUB_SHA" ]; then
+                printf 'Refusing to use immutable release tag %s with revision %s (expected %s)\n' "$image" "$published_revision" "$GITHUB_SHA" >&2
                 exit 1
               fi
+              printf 'Reusing immutable release tag %s (image id %s; rebuilt id %s)\n' "$image" "$published_id" "$built_id"
             else
               docker push "$image"
               docker pull "$image"
