@@ -106,7 +106,9 @@ until an independently validated conversion is supplied upstream.
 
 ## Limits and release boundary
 
-Input <=128 MiB, duration <=1800s, <=2 physical channels, <=360,000 feature rows.
+Input <=128 MiB, duration <=3600s, <=2 physical channels, <=360,000 feature rows.
+The hosted 16 kHz profile therefore supports one hour; the offline 48 kHz
+profile remains bounded by the same row ceiling and may reject longer sources.
 FFprobe has a 20s timeout; decoding has 90s and its own duration/byte/thread caps;
 native extraction has 600s and exact expected output size. The subprocess wrapper
 caps stdout, discards stderr, kills/reaps timed-out children, and passes only a

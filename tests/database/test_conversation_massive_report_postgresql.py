@@ -106,6 +106,17 @@ def test_sixty_minute_upload_reaches_saved_report(
         return quote_id
 
     monkeypatch.setattr(worker, "_add_quote", add_long_quote)
+    # Production's hosted C1 adapter is the 16 kHz profile.  Keep this
+    # end-to-end report fixture on that exact profile while retaining the
+    # local recipe/ledger so it exercises the same durable C1→C5 path.
+    original_worker = worker.OfflineConversationWorker
+
+    class HostedProfileWorker(original_worker):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.c1_rate = 16_000
+
+    monkeypatch.setattr(worker, "OfflineConversationWorker", HostedProfileWorker)
     reporting.test_saved_transcript_to_private_report_and_profile_reuse(
         postgres_harness, tmp_path, False, "groq", monkeypatch
     )

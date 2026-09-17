@@ -27,7 +27,10 @@ from typing import Any, BinaryIO
 NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
 NATIVE_ROOT = Path(__file__).resolve().parents[4] / "native" / "audioatlas"
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
-MAX_SECONDS = 1800
+# Hosted AudioAtlas runs at 16 kHz and supports a one-hour source window.  The
+# 360,000-frame bound below keeps the derived feature artifact bounded at that
+# profile (the offline 48 kHz profile remains intentionally smaller).
+MAX_SECONDS = 3600
 MAX_ROWS = 360_000
 FLOAT_COLUMNS = (
     "rms",
@@ -264,6 +267,54 @@ def raw_extract(
     if output.exists() or output.is_symlink():
         raise SignalError("signal_output_exists")
     try:
+        # Exact PCM silence has no spectral information to calculate.  Emit the
+        # same deterministic descriptors as AudioAtlas' native path directly;
+        # this keeps long silence/hold recordings bounded without changing the
+        # native algorithm for any non-silent source.
+        silent = True
+        with pcm.open("rb") as source:
+            while block := source.read(1024 * 1024):
+                if any(block):
+                    silent = False
+                    break
+        if silent:
+            sample_count = size // (4 * channels)
+            window, hop, _ = _layout(rate, channels, sample_count)
+            with output.open("xb") as destination:
+                for frame in range((sample_count + hop - 1) // hop):
+                    start = frame * hop
+                    valid = min(window, sample_count - start)
+                    for channel in range(channels):
+                        destination.write(
+                            _RAW_ROW.pack(
+                                start,
+                                channel,
+                                valid,
+                                0.0,
+                                -240.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                                0.0,
+                            )
+                        )
+            if output.stat().st_size != rows * _RAW_ROW.size:
+                raise SignalError("signal_native_coverage_mismatch")
+            return {
+                "source_sha256": NATIVE_SOURCE_SHA256,
+                "binary_sha256": file_sha256(native),
+                "mode": mode,
+                "rows": rows,
+            }
         _run_bounded(
             [
                 str(native),

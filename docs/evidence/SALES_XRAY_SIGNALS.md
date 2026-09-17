@@ -72,7 +72,7 @@ single local run does not establish KVM4 capacity or adversarial parser safety.
 
 ## Integration and remaining gates
 
-`inspect_media(source, outdir, rate=16000, max_seconds=1800)` returns the complete
+`inspect_media(source, outdir, rate=16000, max_seconds=3600)` returns the complete
 `ac.sales-xray.signal-checkpoint/1` JSON, including C1 identity, source/feature
 digests, acoustics metadata, decoded/source-clock limitations and display arrays.
 It has no provider dependency and no dependency change request. Native code needs

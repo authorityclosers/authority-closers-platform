@@ -41,7 +41,7 @@ are private/no-store and vary by Cookie.
 | Route | Action |
 | --- | --- |
 | GET `/entry` | Discover availability and the public challenge action/site key; no secret or private submission data. |
-| GET `/upload-policy` | Show the current private-upload terms, 128 MiB / 30-minute per-call limit, local ₹0 cost and retention. |
+| GET `/upload-policy` | Show the current private-upload terms, 128 MiB / 60-minute per-call limit, local ₹0 cost and retention. |
 | PUT `/submissions/{uuid}/source` | Accept the selected original bytes with `X-Source-SHA256`, `X-Upload-Policy` and explicit `X-Upload-Consent: accepted`. |
 | GET `/submissions/{uuid}` | Read stored processing status and report availability. |
 | POST `/submissions/{uuid}/plan/quote` | Obtain the exact server-approved provider plan; no caller-selected provider/model. |
