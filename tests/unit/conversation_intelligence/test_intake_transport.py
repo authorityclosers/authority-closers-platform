@@ -18,6 +18,7 @@ from ac_platform.http.auth import RequestOriginDenied
 from ac_platform.http.conversation_intake import (
     ConversationByteTransport,
     ConversationIntakeRuntime,
+    bounded_storage_chunks,
 )
 
 
@@ -131,3 +132,12 @@ def test_invalid_upload_headers_are_rejected_before_auth_or_body_read(transport,
     assert caught.value.status_code == 413
     assert calls["auth"] == 0
     assert received["count"] == 0
+
+
+def test_large_asgi_frame_is_split_into_bounded_storage_writes() -> None:
+    frame = bytes(range(256)) * (8 * 1024)
+    chunks = bounded_storage_chunks(frame)
+
+    assert b"".join(chunks) == frame
+    assert all(0 < len(chunk) <= 1024 * 1024 for chunk in chunks)
+    assert len(chunks) == 2

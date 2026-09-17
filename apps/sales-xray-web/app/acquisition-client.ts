@@ -1,4 +1,5 @@
 import { ReportContractError } from "./report-contract";
+import { RequestDeadlineError, withRequestDeadline } from "./request-deadline";
 
 export const ACQUISITION = "/v1/conversation/acquisition";
 export const ACQUISITION_PAUSED_MESSAGE =
@@ -56,28 +57,31 @@ export class AcquisitionError extends Error {
       | "provider_allowance_used"
       | "plan_permission"
       | "plan_stale"
-      | "execution_paused",
+      | "execution_paused"
+      | "request_timeout",
   ) {
     super(
-      reason === "execution_paused"
-        ? ACQUISITION_PAUSED_MESSAGE
-        : status === 401
-          ? "Your session needs attention. Sign in again or return to the browser where you uploaded this call."
-          : status === 403
-            ? reason === "provider_allowance_used"
-              ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-              : reason === "plan_stale"
-                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                : reason === "plan_permission"
-                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                  : "This action is not available with your current access. Ask the AC team to check your permission."
-            : status === 404
-              ? "This call is unavailable in your current session. It may have expired or been deleted."
-              : status === 429
-                ? "Another call is uploading. Please try again shortly."
-                : status === 409
-                  ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                  : "This request did not finish. Check your connection and try again.",
+      reason === "request_timeout"
+        ? "The connection timed out. This does not confirm that your call failed. Check the saved call before trying again."
+        : reason === "execution_paused"
+          ? ACQUISITION_PAUSED_MESSAGE
+          : status === 401
+            ? "Your session needs attention. Sign in again or return to the browser where you uploaded this call."
+            : status === 403
+              ? reason === "provider_allowance_used"
+                ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                : reason === "plan_stale"
+                  ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                  : reason === "plan_permission"
+                    ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                    : "This action is not available with your current access. Ask the AC team to check your permission."
+              : status === 404
+                ? "This call is unavailable in your current session. It may have expired or been deleted."
+                : status === 429
+                  ? "Another call is uploading. Please try again shortly."
+                  : status === 409
+                    ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                    : "This request did not finish. Check your connection and try again.",
     );
   }
 }
@@ -85,55 +89,70 @@ export async function acquisition(
   path: string,
   init: RequestInit = {},
 ): Promise<unknown> {
-  const response = await fetch(ACQUISITION + path, {
-    ...init,
-    credentials: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    headers: { accept: "application/json", ...init.headers },
-  });
-  if (!response.ok) {
-    if (response.status === 503) {
-      const body: unknown = await response.json().catch(() => null);
-      if (
-        body &&
-        typeof body === "object" &&
-        "detail" in body &&
-        body.detail === ACQUISITION_PAUSED_MESSAGE
-      )
-        throw new AcquisitionError(503, "execution_paused");
-    }
-    if (
-      response.status === 403 &&
-      /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)
-    ) {
-      // Translate only an exact, known denial. Never display server/provider
-      // bodies, which can contain private context or infrastructure details.
-      const body: unknown = await response.json().catch(() => null);
-      const allowanceUsed =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "This recording's approved provider allowance is used.";
-      const planStale =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "Approve the current displayed processing plan.";
-      throw new AcquisitionError(
-        response.status,
-        allowanceUsed
-          ? "provider_allowance_used"
-          : planStale
-            ? "plan_stale"
-            : "plan_permission",
-      );
-    }
-    throw new AcquisitionError(response.status);
+  const sourcePath = /^\/submissions\/[0-9a-f-]{36}\/source$/.test(path);
+  try {
+    return await withRequestDeadline(
+      init.signal,
+      sourcePath && init.method === "PUT" ? 120_000 : 20_000,
+      async (signal) => {
+        const response = await fetch(ACQUISITION + path, {
+          ...init,
+          signal,
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          headers: { accept: "application/json", ...init.headers },
+        });
+        if (!response.ok) {
+          if (response.status === 503) {
+            const body: unknown = await response.json().catch(() => null);
+            if (
+              body &&
+              typeof body === "object" &&
+              "detail" in body &&
+              body.detail === ACQUISITION_PAUSED_MESSAGE
+            )
+              throw new AcquisitionError(503, "execution_paused");
+          }
+          if (
+            response.status === 403 &&
+            /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)
+          ) {
+            // Translate only an exact, known denial. Never display server/provider
+            // bodies, which can contain private context or infrastructure details.
+            const body: unknown = await response.json().catch(() => null);
+            const allowanceUsed =
+              body !== null &&
+              typeof body === "object" &&
+              !Array.isArray(body) &&
+              "detail" in body &&
+              body.detail ===
+                "This recording's approved provider allowance is used.";
+            const planStale =
+              body !== null &&
+              typeof body === "object" &&
+              !Array.isArray(body) &&
+              "detail" in body &&
+              body.detail === "Approve the current displayed processing plan.";
+            throw new AcquisitionError(
+              response.status,
+              allowanceUsed
+                ? "provider_allowance_used"
+                : planStale
+                  ? "plan_stale"
+                  : "plan_permission",
+            );
+          }
+          throw new AcquisitionError(response.status);
+        }
+        return response.json();
+      },
+    );
+  } catch (error) {
+    if (error instanceof RequestDeadlineError)
+      throw new AcquisitionError(408, "request_timeout");
+    throw error;
   }
-  return response.json();
 }
 export function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))

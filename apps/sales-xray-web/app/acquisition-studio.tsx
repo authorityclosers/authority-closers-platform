@@ -80,6 +80,17 @@ function latestStage(progress: Progress | null, stage: ProcessingStage) {
   return progress?.stages.findLast((row) => row.stage === stage) ?? null;
 }
 
+export function clipBoundaryReached(
+  selected: ReportEvidence | null,
+  currentTimeSeconds: number,
+): boolean {
+  return (
+    selected !== null &&
+    Number.isFinite(currentTimeSeconds) &&
+    currentTimeSeconds >= selected.end_ms / 1000
+  );
+}
+
 function stageStatusLabel(status: string | null) {
   if (status === "completed") return "Complete";
   if (status === "saved") return "Work saved";
@@ -158,6 +169,7 @@ export function AcquisitionStudio({
   const [busy, setBusy] = useState("");
   const [playbackExpanded, setPlaybackExpanded] = useState(false);
   const [error, setError] = useState<string | AcquisitionError>("");
+  const [pollError, setPollError] = useState<string | AcquisitionError>("");
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [moment, setMoment] = useState<ReportEvidence | null>(null);
@@ -381,6 +393,9 @@ export function AcquisitionStudio({
         );
         if (abort.signal.aborted) return;
         setProgress(next);
+        // A successful read proves only that this poll recovered. Clear its
+        // transport warning while preserving any independent action failure.
+        if (failures > 0) setPollError("");
         if (next.has_report) {
           const transcript = parseTranscript(
             await acquisition(`${submissionPath(bound.id)}/transcript`, {
@@ -397,7 +412,7 @@ export function AcquisitionStudio({
           );
           if (!abort.signal.aborted) {
             setResult({ ...verified, transcript });
-            setError("");
+            setPollError("");
           }
           return;
         }
@@ -457,7 +472,7 @@ export function AcquisitionStudio({
       } catch (error) {
         if (abort.signal.aborted) return;
         failures += 1;
-        setError(message(error));
+        setPollError(message(error));
         if (
           failures >= 3 ||
           (error instanceof AcquisitionError &&
@@ -790,6 +805,7 @@ export function AcquisitionStudio({
   const processingNeedsAttention = Boolean(
     processingPaused ||
       error ||
+      pollError ||
       (progress &&
         (["failed", "cancelled"].includes(progress.local_state ?? "") ||
           ["cancelled", "completed"].includes(progress.state))),
@@ -802,12 +818,14 @@ export function AcquisitionStudio({
   );
   const canReviewHeldPlan =
     !error &&
+    !pollError &&
     progress?.state === "held" &&
     progress.local_state === "completed" &&
     latestStage(progress, "C2")?.state === "completed";
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
+  const visibleError = error || pollError;
   const audioPlayer = (
     <audio
       ref={audio}
@@ -821,11 +839,12 @@ export function AcquisitionStudio({
       }
       onTimeUpdate={() => {
         if (
-          moment &&
           audio.current &&
-          audio.current.currentTime >= moment.end_ms / 1000
-        )
+          clipBoundaryReached(moment, audio.current.currentTime)
+        ) {
           audio.current.pause();
+          setMoment(null);
+        }
       }}
     />
   );
@@ -1522,9 +1541,13 @@ export function AcquisitionStudio({
             </aside>
           )}
         </div>
-        {error && (
+        {visibleError && (
           <div className={`notice error ${styles.error}`} role="alert">
-            <p>{error instanceof AcquisitionError ? error.message : error}</p>
+            <p>
+              {visibleError instanceof AcquisitionError
+                ? visibleError.message
+                : visibleError}
+            </p>
             <div className={styles.errorActions}>
               <button
                 className="secondary-button"
@@ -1532,6 +1555,7 @@ export function AcquisitionStudio({
                 disabled={!!busy}
                 onClick={() => {
                   setError("");
+                  setPollError("");
                   if (submission) setPollAttempt((n) => n + 1);
                   else setAttempt((n) => n + 1);
                 }}
@@ -1559,11 +1583,12 @@ export function AcquisitionStudio({
                   Analyse another call
                 </button>
               )}
-              {error instanceof AcquisitionError && error.status === 401 && (
-                <Link className="text-button" href="/login">
-                  Sign in
-                </Link>
-              )}
+              {visibleError instanceof AcquisitionError &&
+                visibleError.status === 401 && (
+                  <Link className="text-button" href="/login">
+                    Sign in
+                  </Link>
+                )}
             </div>
           </div>
         )}
@@ -1589,7 +1614,7 @@ export function AcquisitionStudio({
                   type="button"
                   className="secondary-button"
                   disabled={!!busy}
-                  onClick={() => reset()}
+                  onClick={startAnotherCall}
                 >
                   Analyse another call <ArrowRight size={16} />
                 </button>

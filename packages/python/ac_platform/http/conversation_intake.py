@@ -32,6 +32,11 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, requir
 from ac_platform.http.conversation_playback import install_playback_route
 
 
+def bounded_storage_chunks(chunk: bytes) -> list[bytes]:
+    """Split one ASGI frame into storage-sized writes without changing bytes."""
+    return [chunk[offset : offset + CHUNK_BYTES] for offset in range(0, len(chunk), CHUNK_BYTES)]
+
+
 @dataclass(frozen=True)
 class ConversationIntakeRuntime:
     policy: IntakePolicy
@@ -113,7 +118,10 @@ class ConversationByteTransport:
                             received += len(chunk)
                             if received > admission["source_bytes"]:
                                 raise HTTPException(413, "The file exceeds its approved size.")
-                            await fenced.run(scratch.write, chunk)
+                            # ASGI receive boundaries are protocol-server
+                            # frames, not the storage adapter's chunk size.
+                            for piece in bounded_storage_chunks(chunk):
+                                await fenced.run(scratch.write, piece)
                     except (TimeoutError, ClientDisconnect):
                         raise HTTPException(
                             408, "The upload was interrupted. Retry this file."

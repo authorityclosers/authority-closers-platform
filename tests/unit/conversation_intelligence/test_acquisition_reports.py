@@ -22,6 +22,8 @@ def _recording() -> SimpleNamespace:
         source_bytes=128,
         content_type="audio/wav",
         permission_id=uuid4(),
+        generation=1,
+        state="ready",
     )
 
 
@@ -98,3 +100,56 @@ async def test_recovered_guest_transcript_projects_native_tail_for_playback(
     assert payload["segments"][-1]["end_ms"] == 1_000
     assert "playback_projection" not in payload
     assert checkpoint.payload["segments"][-1]["end_ms"] == 1_135
+
+
+@pytest.mark.asyncio
+async def test_progress_uses_newest_bounded_task_window_in_chronological_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recording = _recording()
+    scope = SimpleNamespace(
+        tenant_id=recording.tenant_id,
+        processing_person_id=recording.person_id,
+        processing_lease_id=uuid4(),
+        claimed_account=False,
+    )
+    captured: list[str] = []
+    newest = SimpleNamespace(stage="C5", state="running")
+    older = SimpleNamespace(stage="C4", state="completed")
+
+    class ScalarRows:
+        def all(self) -> list[SimpleNamespace]:
+            return [newest, older]
+
+    class Database:
+        async def scalar(self, query: object) -> None:
+            return None
+
+        async def scalars(self, query: object) -> ScalarRows:
+            captured.append(str(query))
+            return ScalarRows()
+
+    ownership = SimpleNamespace(database=Database(), clock=lambda: datetime.now(UTC))
+    reports = AcquisitionReports(ownership)
+
+    async def recording_read(*args: object, **kwargs: object) -> tuple[object, object]:
+        return scope, recording
+
+    async def recovery_read(self: RetainedC5RecoveryService, value: object) -> None:
+        return None
+
+    async def draft_read(value: object) -> None:
+        return None
+
+    monkeypatch.setattr(reports, "recording", recording_read)
+    monkeypatch.setattr(RetainedC5RecoveryService, "latest_for_recording", recovery_read)
+    monkeypatch.setattr(reports, "_draft", draft_read)
+
+    payload = await reports.progress(uuid4())
+
+    assert captured and "conversation_inference_tasks.created_at DESC" in captured[0]
+    assert "conversation_inference_tasks.run_id DESC" in captured[0]
+    assert payload["stages"] == [
+        {"stage": "C4", "state": "completed"},
+        {"stage": "C5", "state": "running"},
+    ]

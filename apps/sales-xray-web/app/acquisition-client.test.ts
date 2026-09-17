@@ -111,6 +111,30 @@ describe("acquisition permission recovery", () => {
       message: new AcquisitionError(403).message,
     });
   });
+
+  it("bounds an uncertain source upload without replaying it", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetch);
+    const pending = acquisition(`/submissions/${submissionId}/source`, {
+      method: "PUT",
+    });
+    const outcome = pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(120_000);
+    await expect(outcome).resolves.toMatchObject({
+      status: 408,
+      reason: "request_timeout",
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {

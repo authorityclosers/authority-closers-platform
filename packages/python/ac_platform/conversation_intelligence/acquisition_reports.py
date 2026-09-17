@@ -253,20 +253,29 @@ class AcquisitionReports:
             .order_by(ConversationProcessingPlan.created_at.desc())
             .limit(1)
         )
-        tasks = (
-            await self.database.scalars(
-                select(ConversationInferenceTask)
-                .where(
-                    ConversationInferenceTask.recording_id == recording.id,
-                    ConversationInferenceTask.tenant_id == recording.tenant_id,
-                    ConversationInferenceTask.person_id == recording.person_id,
-                    ConversationInferenceTask.processing_lease_id == scope.processing_lease_id,
-                    ConversationInferenceTask.erased_at.is_(None),
+        tasks = list(
+            (
+                await self.database.scalars(
+                    select(ConversationInferenceTask)
+                    .where(
+                        ConversationInferenceTask.recording_id == recording.id,
+                        ConversationInferenceTask.tenant_id == recording.tenant_id,
+                        ConversationInferenceTask.person_id == recording.person_id,
+                        ConversationInferenceTask.processing_lease_id == scope.processing_lease_id,
+                        ConversationInferenceTask.erased_at.is_(None),
+                    )
+                    # Keep the newest bounded window. A long-lived recording can
+                    # have more than 128 historical task rows, and the client
+                    # needs current stage state to render truthful recovery.
+                    .order_by(
+                        ConversationInferenceTask.created_at.desc(),
+                        ConversationInferenceTask.run_id.desc(),
+                    )
+                    .limit(128)
                 )
-                .order_by(ConversationInferenceTask.created_at)
-                .limit(128)
-            )
-        ).all()
+            ).all()
+        )
+        tasks.reverse()
         has_report = False
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording

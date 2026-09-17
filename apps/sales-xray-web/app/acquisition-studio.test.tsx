@@ -8,7 +8,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigateToAccount }),
 }));
 import Page from "./page";
-import { remainingAllowanceLabel, savedCallsHref } from "./acquisition-studio";
+import {
+  clipBoundaryReached,
+  remainingAllowanceLabel,
+  savedCallsHref,
+} from "./acquisition-studio";
 import {
   allowance,
   entry,
@@ -20,6 +24,7 @@ import {
   recordingId,
   transcript,
 } from "../tests/acquisition-fixture";
+import type { ReportEvidence } from "./report-contract";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -47,6 +52,7 @@ let planFailure: { status: number; body: unknown } | null;
 let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
+let pollFailureOnce: boolean;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -112,6 +118,7 @@ beforeEach(() => {
   planFailureOnce = false;
   quoteFailure = null;
   analysisPaused = false;
+  pollFailureOnce = false;
   localStorage.clear();
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
@@ -191,6 +198,14 @@ beforeEach(() => {
       if (path.endsWith("/claim")) {
         claimed = false;
         return response({ state: "claimed", allowance });
+      }
+      if (
+        path.endsWith(`/submissions/${submissionId}`) &&
+        init.method !== "DELETE" &&
+        pollFailureOnce
+      ) {
+        pollFailureOnce = false;
+        return response({}, 503);
       }
       if (
         path.endsWith(`/submissions/${submissionId}`) &&
@@ -337,6 +352,18 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   }
   await click("Transcript & moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
+});
+
+it("consumes a selected clip boundary so the next Play can continue the call", () => {
+  const selected: ReportEvidence = {
+    segment_id: "segment-1",
+    quote: "Synthetic evidence",
+    start_ms: 1_000,
+    end_ms: 2_000,
+  };
+  expect(clipBoundaryReached(selected, 1.99)).toBe(false);
+  expect(clipBoundaryReached(selected, 2)).toBe(true);
+  expect(clipBoundaryReached(null, 99)).toBe(false);
 });
 
 it.each([
@@ -546,6 +573,32 @@ it("shows the live processing stages without inventing a percentage", async () =
   );
   expect(container.textContent).not.toMatch(/\b\d+%\b/);
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
+});
+
+it("clears a recovered polling warning without hiding a later action error", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  pollFailureOnce = true;
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  await flush();
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "completed",
+    automatic_progression: true,
+    has_report: false,
+    stages: [
+      { stage: "C2", state: "running" },
+      { stage: "C4", state: "queued" },
+    ],
+  };
+  await act(async () => vi.advanceTimersByTimeAsync(6000));
+  await flush();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
 it("shows saved completed work when an uncertain stage pauses processing", async () => {
@@ -934,6 +987,7 @@ it("opens an explicitly selected account call despite an unrelated guest claim",
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   await click("Analyse another call");
   expect(new URLSearchParams(window.location.search).has("call")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(container.querySelector('input[type="file"]')).not.toBeNull();
 });
 
