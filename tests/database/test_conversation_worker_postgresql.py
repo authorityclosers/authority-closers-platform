@@ -221,7 +221,11 @@ async def _prepare(postgres_harness: Any, tmp_path: Path, *, duration_ms: int = 
             environment="test",
         )
         recording_intent = state.recording_intent.model_copy(
-            update={"source_bytes": len(data), "content_type": "audio/wav"}
+            update={
+                "source_bytes": len(data),
+                "content_type": "audio/wav",
+                "duration_ms": duration_ms,
+            }
         )
         async with sessions() as database, database.begin():
             registered = await build_application(database, state).register(

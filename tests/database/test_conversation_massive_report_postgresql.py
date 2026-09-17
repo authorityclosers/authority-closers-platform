@@ -107,6 +107,12 @@ def test_sixty_minute_upload_reaches_saved_report(
         return quote_id
 
     monkeypatch.setattr(worker, "_add_quote", add_long_quote)
+    original_prepare = reporting.prepare_local
+
+    async def prepare_long(harness: Any, root: Path) -> Any:
+        return await original_prepare(harness, root, duration_ms=3_600_000)
+
+    monkeypatch.setattr(reporting, "prepare_local", prepare_long)
     # Production's hosted C1 adapter is the 16 kHz profile.  Keep this
     # end-to-end report fixture on that exact profile while retaining the
     # local recipe/ledger so it exercises the same durable C1→C5 path.
