@@ -389,6 +389,35 @@ def test_fact_packet_accepts_compact_observations_and_requires_full_coverage() -
     assert merged.observations[0].evidence[0].start_ms == 0
 
 
+def test_merge_fact_packets_uses_whole_call_limits() -> None:
+    transcript = _transcript(count=2)
+    chunks = plan_transcript_chunks(transcript, max_input_chars=220)
+    packets = []
+    for chunk in chunks:
+        segment = chunk.segments[0]
+        packet = parse_fact_packet(
+            {
+                "overview": "Literal facts.",
+                "observations": [
+                    {
+                        "fact": "The line mentions price and timing.",
+                        "segment_id": segment["id"],
+                        "quote": "price and timing",
+                    }
+                ],
+                "uncertainties": [],
+            },
+            transcript,
+            chunk=chunk,
+        )
+        packets.append(packet.model_copy(update={"observations": packet.observations * 40}))
+
+    merged = merge_fact_packets(packets, transcript)
+
+    assert len(merged.observations) == 80
+    assert set(merged.covered_segment_ids) == {"s1", "s2"}
+
+
 def test_merge_fact_packets_rejects_duplicate_coverage_and_timebase_drift() -> None:
     transcript = _transcript(count=2)
     chunks = plan_transcript_chunks(transcript, max_input_chars=220)

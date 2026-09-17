@@ -184,6 +184,35 @@ class FactPacket(_StrictModel):
         return self.uncertainties
 
 
+class AggregateFactPacket(_StrictModel):
+    """Whole-call fact aggregate with bounds separate from one C4 chunk.
+
+    A chunk is intentionally small so a provider response stays reviewable.
+    A complete recording may contain many valid chunks, so merging them must
+    not re-apply the per-chunk 64-item limits. The report prompt still applies
+    its route-specific input budget before dispatch.
+    """
+
+    schema_id: Literal["ac.sales-xray.style-independent-facts/1"] = Field(alias="schema")
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    transcript_revision: str = Field(min_length=1, max_length=256)
+    timebase_id: str = Field(min_length=1, max_length=256)
+    chunk_index: Literal[1] = 1
+    chunk_count: Literal[1] = 1
+    covered_segment_ids: list[str] = Field(min_length=1, max_length=10_000)
+    overview: str = Field(min_length=1, max_length=256_000)
+    observations: list[StyleFact] = Field(max_length=4_096)
+    uncertainties: list[str] = Field(max_length=4_096)
+
+    @property
+    def facts(self) -> list[StyleFact]:
+        return self.observations
+
+    @property
+    def unknowns(self) -> list[str]:
+        return self.uncertainties
+
+
 class ReportDraft(_StrictModel):
     """A qualitative draft. It carries no grade, score or official adjudication."""
 
@@ -1313,7 +1342,9 @@ def parse_fact_packet(
         raise ReportError("fact_packet_invalid") from exc
 
 
-def merge_fact_packets(packets: Sequence[FactPacket], transcript: Mapping[str, Any]) -> FactPacket:
+def merge_fact_packets(
+    packets: Sequence[FactPacket], transcript: Mapping[str, Any]
+) -> AggregateFactPacket:
     """Merge complete chunk coverage while preserving every validated observation."""
 
     validated_transcript = _validated_transcript(transcript)
@@ -1365,20 +1396,23 @@ def merge_fact_packets(packets: Sequence[FactPacket], transcript: Mapping[str, A
         or seen_chunks != set(range(1, total + 1))
     ):
         raise ReportError("fact_packet_coverage_incomplete")
-    return FactPacket.model_validate(
-        {
-            "schema": "ac.sales-xray.style-independent-facts/1",
-            "source_sha256": source_hash,
-            "transcript_revision": revision,
-            "timebase_id": validated_transcript["timebase_id"],
-            "chunk_index": 1,
-            "chunk_count": 1,
-            "covered_segment_ids": ordered_ids,
-            "overview": " ".join(overviews),
-            "observations": observations,
-            "uncertainties": list(dict.fromkeys(uncertainties)),
-        }
-    )
+    try:
+        return AggregateFactPacket.model_validate(
+            {
+                "schema": "ac.sales-xray.style-independent-facts/1",
+                "source_sha256": source_hash,
+                "transcript_revision": revision,
+                "timebase_id": validated_transcript["timebase_id"],
+                "chunk_index": 1,
+                "chunk_count": 1,
+                "covered_segment_ids": ordered_ids,
+                "overview": " ".join(overviews),
+                "observations": observations,
+                "uncertainties": list(dict.fromkeys(uncertainties)),
+            }
+        )
+    except ValidationError as exc:
+        raise ReportError("fact_aggregate_invalid") from exc
 
 
 def build_report_groq_prompt(
@@ -1606,6 +1640,7 @@ def parse_groq_response(
 
 __all__ = [
     "DEFAULT_INPUT_CHARS",
+    "AggregateFactPacket",
     "FactPacket",
     "GROQ_MODEL",
     "MAX_COMPLETION_TOKENS",
