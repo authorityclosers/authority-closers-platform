@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence import worker as worker_module
 from ac_platform.conversation_intelligence.checkpoints import SourceBinding
 from ac_platform.conversation_intelligence.entitlements import ExecutionPermission, Quote
 from ac_platform.conversation_intelligence.models import ConversationQuote
@@ -118,7 +119,7 @@ def test_sixty_minute_upload_reaches_saved_report(
 
     monkeypatch.setattr(worker, "OfflineConversationWorker", HostedProfileWorker)
     failures: list[str] = []
-    original_inspect = worker.inspect_media
+    original_inspect = worker_module.inspect_media
 
     def traced_inspect(*args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
@@ -127,7 +128,7 @@ def test_sixty_minute_upload_reaches_saved_report(
             failures.append(f"{type(error).__name__}:{error}")
             raise
 
-    monkeypatch.setattr(worker, "inspect_media", traced_inspect)
+    monkeypatch.setattr(worker_module, "inspect_media", traced_inspect)
     try:
         reporting.test_saved_transcript_to_private_report_and_profile_reuse(
             postgres_harness, tmp_path, False, "groq", monkeypatch
