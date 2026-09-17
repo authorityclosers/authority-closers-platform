@@ -135,6 +135,29 @@ def test_build_alignment_accepts_current_scribe_shape_and_is_deterministic() -> 
     assert "No emotion" in first["limitations"][1]
 
 
+def test_build_alignment_accepts_hosted_audioatlas_one_hour_ceiling() -> None:
+    signal = _signal(duration_ms=3_600_000)
+    transcript = _transcript(
+        _segment("s1", 0, 200),
+        timebase_id="decoded_audio_track",
+        duration_ms=3_600_000,
+    )
+
+    alignment = build_alignment(signal, transcript)
+
+    assert alignment["duration_ms"] == 3_600_000
+    assert signal["acoustics"]["sample_count"] == 57_600_000
+    assert alignment["measurement_parent"]["feature_sha256"] == "b" * 64
+
+
+def test_build_alignment_rejects_audioatlas_beyond_one_hour() -> None:
+    signal = _signal(duration_ms=3_600_001)
+    transcript = _transcript(_segment("s1", 0, 200))
+
+    with pytest.raises(AlignmentError, match="^alignment_acoustics_duration_invalid$"):
+        build_alignment(signal, transcript)
+
+
 def test_shared_decoded_clock_reports_support_without_measurements() -> None:
     result = build_alignment(
         _signal(),

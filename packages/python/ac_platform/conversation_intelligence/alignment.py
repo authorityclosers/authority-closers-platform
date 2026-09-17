@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, NoReturn
 
 from .checkpoints import content_hash, require_sha256
-from .signals import NATIVE_SOURCE_SHA256
+from .signals import MAX_SECONDS, NATIVE_SOURCE_SHA256
 
 ALIGNMENT_SCHEMA = "ac.sales-xray.alignment-checkpoint/1"
 _SIGNAL_SCHEMA = "ac.sales-xray.signal-checkpoint/1"
@@ -206,7 +206,7 @@ def _validate_audioatlas(signal_payload: dict[str, Any]) -> _SignalInfo:
     rate = _integer(acoustics.get("rate"), "acoustics_rate", minimum=8_000, maximum=96_000)
     channels = _integer(acoustics.get("channels"), "acoustics_channels", minimum=1, maximum=2)
     sample_count = _integer(acoustics.get("sample_count"), "acoustics_sample_count", minimum=1)
-    if sample_count > rate * 1_800:
+    if sample_count > rate * MAX_SECONDS:
         _fail("alignment_acoustics_duration_invalid")
     rows = _integer(acoustics.get("rows"), "acoustics_rows", minimum=1)
     window_samples = rate * 40 // 1_000
