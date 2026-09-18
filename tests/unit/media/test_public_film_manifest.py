@@ -20,7 +20,11 @@ from ac_platform.media.errors import (
     MediaProcessingError,
     MediaStorageUnavailable,
 )
-from ac_platform.media.models import CaptionKind, MediaPurpose
+from ac_platform.media.models import (
+    CaptionKind,
+    MediaAsset,
+    MediaPurpose,
+)
 from ac_platform.media.processing import CaptionPassthrough
 from ac_platform.media.storage import UnconfiguredPrivateObjectStorage
 from tests.unit.media.test_staging_fixture_import import artifact_factory as artifact_factory
@@ -81,6 +85,147 @@ def process(pack, **overrides):
     }
     arguments.update(overrides)
     return public.VerifiedPublicFilmProcessor(pack).process(**arguments)
+
+
+def test_technical_playback_provenance_requires_the_exact_verified_source_checksum():
+    record = public.technical_playback_provenance_for_checksum(public.BBB_SOURCE_SHA256.upper())
+    assert record is not None
+    assert record.title == "Big Buck Bunny — Sunflower"
+    assert record.license == "Creative Commons Attribution 3.0"
+    assert record.license_url == "https://creativecommons.org/licenses/by/3.0/"
+    assert public.BBB_SOURCE_BYTES == 633_016_449
+    assert public.technical_playback_provenance_for_checksum("0" * 64) is None
+    assert public.technical_playback_provenance_for_checksum("bbb_sunflower.mp4") is None
+
+
+def test_known_checksum_does_not_claim_provenance_without_source_admission():
+    from ac_platform.media.api_contracts import ActivityMediaProvenanceResponse
+    from ac_platform.media.service import MediaService
+
+    class EmptyDatabase:
+        def scalars(self, _statement):
+            class EmptyResult:
+                def all(self):
+                    return []
+
+            return EmptyResult()
+
+    version = SimpleNamespace(
+        checksum_sha256=public.BBB_SOURCE_SHA256,
+        purpose="video",
+        state="ready",
+        content_type="video/mp4",
+        actual_bytes=public.BBB_SOURCE_BYTES,
+    )
+    assert (
+        MediaService._technical_playback_provenance(
+            EmptyDatabase(), activity_id=uuid4(), version=version
+        )
+        is None
+    )
+    # Keep the response type import exercised by the disclosure contract test.
+    assert ActivityMediaProvenanceResponse.model_fields["label"].is_required()
+
+
+def test_known_checksum_claim_requires_the_matching_promotion_and_studio_scope():
+    from ac_platform.media.service import MediaService
+
+    operations_tenant, public_tenant = uuid4(), uuid4()
+    owner, activity_id = uuid4(), uuid4()
+    source_asset_id, source_version_id = uuid4(), uuid4()
+    target_asset_id, target_version_id = uuid4(), uuid4()
+    source_key = (
+        f"tenants/{operations_tenant}/media/video/{source_asset_id}/{source_version_id}/original"
+    )
+    source_asset = SimpleNamespace(
+        tenant_id=operations_tenant,
+        id=source_asset_id,
+        owner_person_id=owner,
+        purpose="video",
+        state="ready",
+        current_version_id=source_version_id,
+    )
+    source_version = SimpleNamespace(
+        tenant_id=operations_tenant,
+        asset_id=source_asset_id,
+        id=source_version_id,
+        purpose="video",
+        state="ready",
+        content_type="video/mp4",
+        actual_bytes=public.BBB_SOURCE_BYTES,
+        object_key=source_key,
+        checksum_sha256=public.BBB_SOURCE_SHA256,
+    )
+    target_version = SimpleNamespace(
+        tenant_id=public_tenant,
+        asset_id=target_asset_id,
+        id=target_version_id,
+        purpose="video",
+        state="ready",
+        content_type="video/mp4",
+        actual_bytes=public.BBB_SOURCE_BYTES,
+        checksum_sha256=public.BBB_SOURCE_SHA256,
+    )
+    event = SimpleNamespace(
+        tenant_id=operations_tenant,
+        actor_person_id=owner,
+        payload={
+            "activity_id": str(activity_id),
+            "source_asset_id": str(source_asset_id),
+            "source_version_id": str(source_version_id),
+            "asset_id": str(target_asset_id),
+            "version_id": str(target_version_id),
+            "public_tenant_id": str(public_tenant),
+            "media_owner_person_id": str(owner),
+            "media_status": "ready_public_tenant_media_bound",
+        },
+    )
+    intent = SimpleNamespace(
+        actor_person_id=owner,
+        state="ready",
+        object_key=source_key,
+        content_type="video/mp4",
+        declared_bytes=public.BBB_SOURCE_BYTES,
+        checksum_sha256=public.BBB_SOURCE_SHA256,
+        completion_fingerprint="f" * 64,
+    )
+    upload = SimpleNamespace(program_id=uuid4())
+
+    class Database:
+        def scalars(self, _statement):
+            class Result:
+                def all(self):
+                    return [event]
+
+            return Result()
+
+        def scalar(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            return source_asset if entity is MediaAsset else source_version
+
+        def execute(self, _statement):
+            class Result:
+                def all(self):
+                    return [(upload, intent)]
+
+            return Result()
+
+    result = MediaService._technical_playback_provenance(
+        Database(), activity_id=activity_id, version=target_version
+    )
+    assert result is not None
+    assert result.label == "Technical playback test — not course instruction"
+    assert result.title == "Big Buck Bunny — Sunflower"
+    assert result.license_url == "https://creativecommons.org/licenses/by/3.0/"
+
+    # A receipt scoped to a different target cannot attest this version.
+    event.payload["version_id"] = str(uuid4())
+    assert (
+        MediaService._technical_playback_provenance(
+            Database(), activity_id=activity_id, version=target_version
+        )
+        is None
+    )
 
 
 def test_package_has_new_identity_and_exact_historical_bytes_and_attribution():

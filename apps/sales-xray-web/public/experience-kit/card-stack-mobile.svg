@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="358" height="340" viewBox="0 0 358 340" role="img" aria-labelledby="asset-title asset-description">
+  <title id="asset-title">Layered card stack — mobile</title>
+  <desc id="asset-description">Transparent layered shells only. Keep your semantic UI in HTML; do not flatten app controls into this illustration.</desc>
+  <defs>
+    <filter id="sx-shadow" x="-40%" y="-40%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#163E35" flood-opacity=".095"/>
+    </filter>
+    <filter id="sx-small-shadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163E35" flood-opacity=".06"/>
+    </filter>
+    <linearGradient id="sx-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFCFB"/>
+    </linearGradient>
+    <linearGradient id="sx-wave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#DFEEE7" stop-opacity=".72"/>
+      <stop offset="100%" stop-color="#F8FBF9" stop-opacity=".15"/>
+    </linearGradient>
+    <radialGradient id="sx-halo">
+      <stop offset="0%" stop-color="#E8F5ED" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#F9FBFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="rotate(-4 179 178)">
+    <rect x="28" y="35" width="302" height="245" rx="22" fill="url(#sx-surface)" stroke="#E4EEE8" filter="url(#sx-small-shadow)"/>
+  </g>
+  <g transform="rotate(4 179 178)">
+    <rect x="28" y="54" width="302" height="245" rx="22" fill="url(#sx-surface)" stroke="#E4EEE8" filter="url(#sx-small-shadow)"/>
+  </g>
+  <rect x="12" y="77" width="334" height="245" rx="24" fill="white" stroke="#E4EEE8" filter="url(#sx-shadow)"/>
+</svg>

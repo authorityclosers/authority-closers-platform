@@ -7,7 +7,10 @@ type ActivityIntentRoute =
   | typeof ROUTES.login
   | typeof ROUTES.register
   | typeof ROUTES.sessionExpired
-  | typeof ROUTES.onboarding;
+  | typeof ROUTES.onboarding
+  | typeof ROUTES.forgotPassword
+  | typeof ROUTES.verifyEmail
+  | typeof ROUTES.resetPassword;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

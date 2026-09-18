@@ -776,6 +776,216 @@
       "review_status": "needs_Dipak_review",
       "competition_eligible": false,
       "assessment_eligible": false
+    },
+    {
+      "id": "india-daily-english",
+      "version": 1,
+      "title": "India daily practice · English",
+      "kind": "choice",
+      "skill": "Discovery",
+      "description": "Short India-based scenarios for a clear, respectful next question.",
+      "art": "discovery-compass",
+      "color": "cobalt",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "A procurement lead in Pune says, “Our plant manager should be part of this decision.” What is the most useful next move?",
+          "options": [
+            "Ask what the plant manager needs to evaluate.",
+            "Offer a discount for deciding without them.",
+            "Assume the decision will be delayed."
+          ],
+          "answer": 0,
+          "feedback": "A stakeholder is useful context, not an obstacle. Ask what they need to evaluate before suggesting a next step.",
+          "id": "india-english-01",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Follow the person’s stated decision process before proposing a solution."
+        },
+        {
+          "prompt": "A buyer in Mumbai says, “Please give us time to compare this with our current process.” What should you clarify first?",
+          "options": [
+            "Which parts of the current process they want to compare.",
+            "Why they have not decided today.",
+            "Whether a bigger discount would end the comparison."
+          ],
+          "answer": 0,
+          "feedback": "A comparison request does not explain the buyer’s criteria. Invite them to share what they want to compare.",
+          "id": "india-english-02",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Ask about the decision criteria you do not yet know."
+        },
+        {
+          "prompt": "A team in Nagpur says, “Our budget review is next quarter.” What is established by that statement?",
+          "options": [
+            "The timing of their budget review.",
+            "That they want a price cut.",
+            "That they will definitely buy next quarter."
+          ],
+          "answer": 0,
+          "feedback": "The timing is clear; interest, budget and a future purchase are not established. Keep those questions open.",
+          "id": "india-english-03",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Separate what was said from what you are tempted to predict."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "india-daily-hinglish",
+      "version": 1,
+      "title": "India daily practice · Hinglish",
+      "kind": "choice",
+      "skill": "Discovery",
+      "description": "Roz ke India-based scenarios, natural Hinglish mein, ek clear next question ke liye.",
+      "art": "squad-orbit",
+      "color": "amber",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Pune ki team bolti hai, “Plant manager ko bhi is decision mein include karna hai.” Agla useful move kya hoga?",
+          "options": [
+            "Poochho ki plant manager ko evaluate karne ke liye kya chahiye.",
+            "Unke bina decide karne ke liye discount offer karo.",
+            "Assume karo ki decision ab delay hi hoga."
+          ],
+          "answer": 0,
+          "feedback": "Stakeholder ka hona normal decision process ka hissa ho sakta hai. Pehle samjho ki unhe kya evaluate karna hai.",
+          "id": "india-hinglish-01",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Jo decision process saamne wale ne bataya hai, usi ko explore karo."
+        },
+        {
+          "prompt": "Mumbai ka buyer bolta hai, “Humein current process ke saath compare karne ke liye thoda time chahiye.” Aap pehle kya clarify karoge?",
+          "options": [
+            "Woh current process ke kaunse parts compare karna chahte hain.",
+            "Unhone aaj decide kyun nahi kiya.",
+            "Kya bada discount dekar comparison rok sakte hain."
+          ],
+          "answer": 0,
+          "feedback": "Comparison ka matlab kya hai, yeh abhi clear nahi hai. Buyer ke criteria ko samajhne ke liye poochho.",
+          "id": "india-hinglish-02",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Jo criteria abhi pata nahi hai, uske baare mein open question poochho."
+        },
+        {
+          "prompt": "Nagpur ki team bolti hai, “Budget review next quarter hai.” Is statement se kya established hai?",
+          "options": [
+            "Budget review ka timing.",
+            "Ki unhe price cut chahiye.",
+            "Ki woh next quarter pakka buy karenge."
+          ],
+          "answer": 0,
+          "feedback": "Timing pata hai; interest, budget aur future purchase abhi prove nahi hue. Inhe assume mat karo.",
+          "id": "india-hinglish-03",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Jo bola gaya hai aur jo aap predict kar rahe ho, unko alag rakho."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "india-daily-marlish",
+      "version": 1,
+      "title": "India daily practice · Marathi-English (Marlish)",
+      "kind": "choice",
+      "skill": "Discovery",
+      "description": "India-based daily scenarios in Marathi-English, with space to ask one clear next question.",
+      "art": "checkpoint-seal",
+      "color": "mint",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Punechi team mhante, “Plant manager la pan ya decision madhye include karaycha aahe.” Pudhe konta step ghyal?",
+          "options": [
+            "Plant manager la kay evaluate karaycha aahe te vichara.",
+            "Tyanchya shivay decision ghyayla discount offer kara.",
+            "Decision ata delay honarach asa assume kara."
+          ],
+          "answer": 0,
+          "feedback": "Stakeholder la involve karne ha normal decision process asu shakto. Aadhee tyanna nemka kay evaluate karaycha aahe te samjun ghya.",
+          "id": "india-marlish-01",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Samorcha vyaktine sangitlela decision process aadhi samjun ghya."
+        },
+        {
+          "prompt": "Mumbai madhla buyer mhanto, “Current process sobat compare karayla amhala thoda time pahije.” Tumhi aadhi kay clear karal?",
+          "options": [
+            "Tyanna current process madhle konte parts compare karayche aahet te.",
+            "Tyanni aaj decision ka ghetla nahi.",
+            "Motha discount deun comparison thambel ka."
+          ],
+          "answer": 0,
+          "feedback": "Comparison che criteria ajun clear nahi aahet. Buyer la nemka kay compare karaycha aahe te vichara.",
+          "id": "india-marlish-02",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Ajun mahit naslelya criteria baddal ek open question vichara."
+        },
+        {
+          "prompt": "Nagpurchi team mhante, “Budget review next quarter aahe.” Ya statement madhun kay mahit padta?",
+          "options": [
+            "Budget review cha timing.",
+            "Tyanna price cut pahije.",
+            "Te next quarter nakki buy kartil."
+          ],
+          "answer": 0,
+          "feedback": "Timing samajla aahe; interest, budget ani future purchase ajun confirm nahi. Te assume karu naka.",
+          "id": "india-marlish-03",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
+            "authority": "controlled practice outcome; lines 53-60"
+          },
+          "hint": "Je sangitle aahe te ani tumhi predict karta te vegle theva."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
     }
   ]
 }

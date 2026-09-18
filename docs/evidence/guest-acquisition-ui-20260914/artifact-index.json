@@ -1,0 +1,26 @@
+[
+  {
+    "file": "report-desktop.png",
+    "sha256": "0252b50b25ad65b129b0bc5ddbcbb728e27dd0c654c6055b0eda5d8b9e50d668",
+    "bytes": 154927,
+    "synthetic": true
+  },
+  {
+    "file": "report-mobile.png",
+    "sha256": "07d300052a4c9044b874f249b9f039405351ab11d6dc6a6632661234b395f22a",
+    "bytes": 133946,
+    "synthetic": true
+  },
+  {
+    "file": "report-print.pdf",
+    "sha256": "e4906e2dd15259e86725ffd68e090b4da78229bf4157ef6675be0c93c47eb89d",
+    "bytes": 121575,
+    "synthetic": true
+  },
+  {
+    "file": "upload-desktop.png",
+    "sha256": "c8013d07da837caf9a2fec45ab28354b0500d982ebff16f19b59284f2a15c33f",
+    "bytes": 83230,
+    "synthetic": true
+  }
+]

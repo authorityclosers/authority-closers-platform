@@ -19,10 +19,8 @@ import {
 
 import { googleAuthReturnPath, googleAuthStartUrl } from "../lib/auth-links";
 import { type CourseIntent } from "../lib/course-intent";
-import {
-  activityIntentHref,
-  type ActivityIntent,
-} from "../lib/activity-intent";
+import { type ActivityIntent } from "../lib/activity-intent";
+import { authIntentHref, type SalesAuthNext } from "../lib/sales-auth-return";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 import {
@@ -42,7 +40,7 @@ function fragmentToken(): string | null {
   const parameters = new URLSearchParams(window.location.hash.slice(1));
   const token = parameters.get("token");
   window.history.replaceState(
-    null,
+    window.history.state,
     "",
     `${window.location.pathname}${window.location.search}`,
   );
@@ -56,19 +54,28 @@ const registrationServerHydrated = () => false;
 export function RegistrationForm({
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 }) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
     registrationClientHydrated,
     registrationServerHydrated,
   );
-  const loginHref = activityIntentHref(
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
+  );
+  const verifyHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -94,6 +101,14 @@ export function RegistrationForm({
         whatsappNumber: String(values.get("whatsappNumber") ?? ""),
         password: String(values.get("password") ?? ""),
         consent: true,
+        ...(courseIntent || activityIntent
+          ? {
+              ...(courseIntent ? { courseIntent } : {}),
+              ...(activityIntent ? { activityIntent } : {}),
+            }
+          : salesNext
+            ? { salesNext }
+            : {}),
       });
       setComplete(true);
     } catch (requestError) {
@@ -115,7 +130,7 @@ export function RegistrationForm({
         <Link className="button button--outline button--full" href={loginHref}>
           Return to sign in
         </Link>
-        <Link className="text-link" href={ROUTES.verifyEmail}>
+        <Link className="text-link" href={verifyHref}>
           Need a fresh verification link?
         </Link>
       </div>
@@ -132,8 +147,9 @@ export function RegistrationForm({
       </div>
       <h2>Account details.</h2>
       <p className="auth-card__intro">
-        Start the free course and keep progress, reflections, and recovery tied
-        to one verified identity.
+        {salesNext && !courseIntent && !activityIntent
+          ? "Create your account to continue to Sales Xray."
+          : "Start the free course and keep progress, reflections, and recovery tied to one verified identity."}
       </p>
       <form className="stack-form" method="post" onSubmit={submit}>
         <fieldset className="auth-fieldset">
@@ -264,7 +280,12 @@ export function RegistrationForm({
       </div>
       <form
         className="stack-form"
-        action={googleAuthStartUrl("register", courseIntent, activityIntent)}
+        action={googleAuthStartUrl(
+          "register",
+          courseIntent,
+          activityIntent,
+          salesNext,
+        )}
         method="get"
       >
         <input type="hidden" name="action" value="register" />
@@ -272,7 +293,12 @@ export function RegistrationForm({
         <input
           type="hidden"
           name="return_path"
-          value={googleAuthReturnPath("register", courseIntent, activityIntent)}
+          value={googleAuthReturnPath(
+            "register",
+            courseIntent,
+            activityIntent,
+            salesNext,
+          )}
         />
         <input
           type="hidden"
@@ -303,7 +329,15 @@ export function RegistrationForm({
   );
 }
 
-export function RecoveryRequestForm() {
+export function RecoveryRequestForm({
+  courseIntent = null,
+  activityIntent = null,
+  salesNext = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
+} = {}) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
     registrationClientHydrated,
@@ -313,6 +347,18 @@ export function RecoveryRequestForm() {
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
+  const verifyEmailHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -325,9 +371,16 @@ export function RecoveryRequestForm() {
     setError(null);
     const values = new FormData(event.currentTarget);
     try {
-      await createLearnerApi().requestPasswordRecovery(
-        String(values.get("email") ?? ""),
-      );
+      const email = String(values.get("email") ?? "");
+      if (courseIntent || activityIntent || salesNext) {
+        await createLearnerApi().requestPasswordRecovery(email, {
+          courseIntent,
+          activityIntent,
+          salesNext,
+        });
+      } else {
+        await createLearnerApi().requestPasswordRecovery(email);
+      }
       setComplete(true);
     } catch (requestError) {
       setError(requestErrorMessage(requestError));
@@ -348,14 +401,18 @@ export function RecoveryRequestForm() {
       {complete ? (
         <div className="auth-result" role="status">
           <p>
-            If the address belongs to an active account, a 30-minute reset link
-            is on its way.
+            If this address can receive an account recovery email, instructions
+            are on their way. Follow the latest email to verify your account or
+            choose a new password.
           </p>
           <Link
             className="button button--outline button--full"
-            href={ROUTES.login}
+            href={loginHref}
           >
             Return to sign in
+          </Link>
+          <Link className="text-link" href={verifyEmailHref}>
+            Request a fresh verification link
           </Link>
         </div>
       ) : (
@@ -399,15 +456,35 @@ export function RecoveryRequestForm() {
   );
 }
 
-export function VerifyEmailFlow() {
+export function VerifyEmailFlow({
+  courseIntent = null,
+  activityIntent = null,
+  salesNext = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
+} = {}) {
   const started = useRef(false);
-  const [state, setState] = useState<"working" | "success" | "error">(
-    "working",
-  );
+  const [state, setState] = useState<
+    "working" | "pending" | "success" | "error"
+  >("working");
   const [message, setMessage] = useState("Verifying your email…");
   const [resendPending, setResendPending] = useState(false);
   const [resendComplete, setResendComplete] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
+  const onboardingHref = authIntentHref(
+    ROUTES.onboarding,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
 
   async function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -415,9 +492,16 @@ export function VerifyEmailFlow() {
     setResendError(null);
     const values = new FormData(event.currentTarget);
     try {
-      await createLearnerApi().resendPasswordVerification(
-        String(values.get("email") ?? ""),
-      );
+      const email = String(values.get("email") ?? "");
+      if (courseIntent || activityIntent || salesNext) {
+        await createLearnerApi().resendPasswordVerification(email, {
+          courseIntent,
+          activityIntent,
+          salesNext,
+        });
+      } else {
+        await createLearnerApi().resendPasswordVerification(email);
+      }
       setResendComplete(true);
     } catch (requestError) {
       setResendError(requestErrorMessage(requestError));
@@ -432,8 +516,10 @@ export function VerifyEmailFlow() {
     const token = fragmentToken();
     if (!token) {
       queueMicrotask(() => {
-        setState("error");
-        setMessage("This verification link is missing its one-time token.");
+        setState("pending");
+        setMessage(
+          "If you just registered, check your inbox for the verification email. If it has not arrived, request a fresh link below.",
+        );
       });
       return;
     }
@@ -466,25 +552,24 @@ export function VerifyEmailFlow() {
       <h2>
         {state === "working"
           ? "One moment."
-          : state === "success"
-            ? "Email verified."
-            : "Link unavailable."}
+          : state === "pending"
+            ? "Check your inbox."
+            : state === "success"
+              ? "Email verified."
+              : "Link unavailable."}
       </h2>
       <p>{message}</p>
       {state === "success" ? (
-        <Link
-          className="button button--ink button--full"
-          href={ROUTES.onboarding}
-        >
+        <Link className="button button--ink button--full" href={onboardingHref}>
           Continue to onboarding
         </Link>
       ) : null}
-      {state === "error" ? (
+      {state === "pending" || state === "error" ? (
         <>
           {resendComplete ? (
             <p className="form-message" role="status">
-              If the address has an unverified password account, a fresh link is
-              on its way.
+              If this address has a pending verification, a fresh link is on its
+              way.
             </p>
           ) : (
             <form className="stack-form" onSubmit={resend}>
@@ -515,7 +600,7 @@ export function VerifyEmailFlow() {
           )}
           <Link
             className="button button--outline button--full"
-            href={ROUTES.login}
+            href={loginHref}
           >
             Return to sign in
           </Link>
@@ -525,7 +610,15 @@ export function VerifyEmailFlow() {
   );
 }
 
-export function PasswordResetForm() {
+export function PasswordResetForm({
+  courseIntent = null,
+  activityIntent = null,
+  salesNext = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
+} = {}) {
   const tokenRead = useRef(false);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
@@ -533,6 +626,18 @@ export function PasswordResetForm() {
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
+  const forgotPasswordHref = authIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
 
   useEffect(() => {
     if (tokenRead.current) return;
@@ -581,7 +686,7 @@ export function PasswordResetForm() {
         <p>This reset link is missing its one-time token.</p>
         <Link
           className="button button--outline button--full"
-          href={ROUTES.forgotPassword}
+          href={forgotPasswordHref}
         >
           Request another link
         </Link>
@@ -597,7 +702,7 @@ export function PasswordResetForm() {
           All earlier sessions were revoked. Sign in again with your new
           password.
         </p>
-        <Link className="button button--ink button--full" href={ROUTES.login}>
+        <Link className="button button--ink button--full" href={loginHref}>
           Sign in
         </Link>
       </div>

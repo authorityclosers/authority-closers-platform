@@ -1,0 +1,133 @@
+.preloader {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #fafcfb;
+}
+
+.preloader > ac-preloader {
+  display: block;
+  width: 100%;
+  min-height: 100dvh;
+}
+
+.fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 40%, #e8f5ed 0, rgb(232 245 237 / 0) 34rem),
+    #fafcfb;
+  color: #152638;
+  transition: opacity 180ms ease;
+}
+
+.fallback[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fallbackWave {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 52%;
+  object-fit: cover;
+  object-position: center bottom;
+  opacity: 0.72;
+}
+
+.fallbackCard {
+  position: relative;
+  width: min(638px, calc(100% - 40px));
+  padding: 54px 54px 42px;
+  border: 1px solid #e1ece5;
+  border-radius: 26px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 20px 45px rgb(22 62 53 / 9%);
+  text-align: center;
+}
+
+.fallbackMark {
+  position: relative;
+  display: grid;
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border: 1px solid #b9d8c8;
+  border-radius: 50%;
+  background: #eef6f1;
+  color: #19665c;
+}
+
+.fallbackMark::after {
+  position: absolute;
+  inset: -5px;
+  width: auto;
+  height: auto;
+  border: 2px solid #dce8e0;
+  border-top-color: #19665c;
+  border-radius: 50%;
+  content: "";
+  animation: spin 1.8s linear infinite;
+}
+
+.fallbackMark img {
+  position: relative;
+  z-index: 1;
+  width: 2.1rem;
+  height: 2.1rem;
+  object-fit: contain;
+}
+
+.fallbackEyebrow {
+  margin: 0 0 18px;
+  color: #536a64;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.fallbackCard h1 {
+  margin: 0 0 14px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 5vw, 2.45rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+.fallbackCard p:last-child {
+  margin: 0;
+  color: #536a64;
+  font-size: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 560px) {
+  .fallbackCard {
+    width: min(350px, calc(100% - 32px));
+    padding: 38px 28px 34px;
+  }
+
+  .fallbackWave {
+    height: 46%;
+    content: url("/experience-kit/waves-mobile-transparent.svg");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fallbackMark::after {
+    animation: none;
+  }
+}

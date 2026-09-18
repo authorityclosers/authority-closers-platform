@@ -1,0 +1,240 @@
+/* Authority Closers — Quiet Layers v1.0.0
+ * Offline, dependency-free controlled custom element.
+ * This component NEVER checks auth, selects a tenant, calls a provider, or advances a loading phase on a timer.
+ * Emit ac-retry / ac-sign-in requests; the host must implement them safely.
+ * Current brand release status is preserved in source-register.json.
+ */
+(() => {
+  "use strict";
+  if (customElements.get("ac-preloader")) return;
+  const BRANDS = {
+    ac: {
+      name: "Authority Closers",
+      product: "Sales Xray",
+      color: "#152638",
+      accent: "#19665C",
+      status: "proposal",
+      folder: "ac-v0.1",
+      points: [
+        "32.0,432.0 192.0,48.0 280.0,48.0 120.0,432.0",
+        "308.0,112.0 440.0,432.0 144.0,432.0 184.0,328.0 296.0,328.0 260.0,224.0",
+      ],
+    },
+    ca: {
+      name: "Closers Academy",
+      product: "Learning workspace",
+      color: "#173F43",
+      accent: "#21695F",
+      status: "starter-concept",
+      folder: "closers-academy-v0.1",
+      points: [
+        "48.0,104.0 232.0,176.0 232.0,408.0 48.0,336.0",
+        "272.0,176.0 456.0,104.0 456.0,336.0 272.0,408.0",
+        "112.0,432.0 392.0,432.0 392.0,480.0 112.0,480.0",
+      ],
+    },
+    cohorva: {
+      name: "Cohorva",
+      product: "Learning platform",
+      color: "#3155C6",
+      accent: "#3155C6",
+      status: "provisional-name",
+      folder: "cohorva-v0.1",
+      points: [
+        "72.0,80.0 224.0,80.0 224.0,176.0 168.0,176.0 168.0,352.0 72.0,352.0",
+        "256.0,80.0 432.0,80.0 432.0,352.0 336.0,352.0 336.0,176.0 256.0,176.0",
+        "168.0,384.0 336.0,384.0 336.0,448.0 168.0,448.0",
+      ],
+    },
+  };
+  const PHASES = new Set([
+    "session",
+    "workspace",
+    "view",
+    "ready",
+    "delayed",
+    "error",
+  ]);
+  const escape = (v) =>
+    String(v).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const mark = (brand, cls = "") =>
+    `<svg class="${cls}" viewBox="0 0 512 512" aria-hidden="true" focusable="false" fill="${BRANDS[brand].color}">${BRANDS[brand].points.map((p) => `<polygon points="${p}"/>`).join("")}</svg>`;
+  const icon = (name) => {
+    const paths = {
+      check: "m5 12 4 4L19 6",
+      audio: "M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4",
+      review: "M4 4h16v12h-7l-5 4v-4H4z M8 8h8 M8 12h5",
+      retry: "M19 8a8 8 0 1 0 1 7 M19 3v5h-5",
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.check}"/></svg>`;
+  };
+  const STYLE = `
+:host{display:block;width:100%;height:100%;min-width:280px;--sx-ink:#152638;--sx-muted:#536a64;--sx-accent:#19665c;--sx-canvas:#fafcfb;--sx-radius:26px;color:var(--sx-ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:16px;line-height:1.5;container-type:inline-size;color-scheme:light}
+*{box-sizing:border-box}button{font:inherit}svg{display:block}.scene{position:relative;isolation:isolate;display:flex;flex-direction:column;min-height:100%;height:100%;min-height:640px;background:var(--sx-canvas);overflow:hidden}
+.ambient{position:absolute;inset:0;z-index:-1;pointer-events:none}.ambient svg{width:100%;height:100%}.mobile-bg{display:none}.environment{flex:none;min-height:34px;padding:7px 32px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fbf5e8;color:#72582f;font-size:12px;line-height:1.5}.environment .flag{display:flex;align-items:center;gap:10px}.environment .flag:before{content:"";display:block;width:7px;height:7px;background:#aa6d2b;border-radius:50%;flex:none}.environment[hidden]{display:none}.header{flex:none;display:flex;justify-content:space-between;align-items:center;padding:28px 46px 18px;gap:28px}.brand-lockup{display:flex;align-items:center;gap:13px;text-align:left}.header-mark{width:43px;height:43px;flex:none}.brand-copy strong{display:block;font-size:17px;line-height:1.4;font-weight:600;letter-spacing:-.3px}.brand-copy small{display:block;color:var(--sx-muted);font-size:12px;margin-top:2px}.header-note{font-size:10px;letter-spacing:1.7px;color:#6a8077;font-weight:500}
+.center{display:flex;align-items:center;justify-content:center;flex:1 0 auto;position:relative;padding:34px 30px 24px;min-height:530px}.stack{width:min(638px,100%);position:relative;isolation:isolate}.rear{position:absolute;top:90px;width:218px;height:268px;border:1px solid #e5eee8;background:linear-gradient(135deg,#ffffff,#f9fcfa);border-radius:22px;box-shadow:0 12px 26px #193f3410;z-index:-1;opacity:.7;display:flex;align-items:center;flex-direction:column;padding:29px 23px;pointer-events:none}.rear.left{left:-120px;transform:rotate(-9deg);animation:float-left 8s ease-in-out infinite}.rear.right{right:-120px;transform:rotate(9deg);animation:float-right 8s ease-in-out infinite 1s}.module-icon{display:grid;place-items:center;width:49px;height:49px;border-radius:50%;background:#ebf5ef;color:#8cb4a4}.module-icon svg{width:24px;height:24px}.rear-name{color:#91a69d;font-size:15px;margin-top:22px}.skeleton{display:block;width:100%;height:9px;background:#e2ebe6;border-radius:10px;margin-top:21px}.skeleton.short{width:80%;align-self:flex-start;margin-top:11px;background:#ebf1ed}
+.card{width:100%;position:relative;border:1px solid #e1ece5;border-radius:var(--sx-radius);background:linear-gradient(135deg,#fff,#fafcfb);box-shadow:0 20px 45px #163e3518;padding:24px 64px 30px;text-align:center}.brand-orbit{width:84px;height:84px;margin:0 auto 22px;position:relative;border-radius:50%;background:#eef6f1;display:grid;place-items:center}.hero-mark{width:66px;height:66px;transform:translate(2px,-2px)}.orbit-line{position:absolute;inset:-5px;border-radius:50%;border:1px solid transparent;border-top-color:#8cb6a44d;animation:orbit 6s linear infinite}.eyebrow{font-size:11px;line-height:1.5;letter-spacing:1.35px;color:var(--sx-muted);font-weight:500;margin:0 0 21px}.headline{font-family:Georgia,"Times New Roman",serif;font-size:39px;font-weight:400;line-height:1.15;letter-spacing:-.6px;margin:0 -34px 16px;color:var(--sx-ink)}.description{font-size:17px;color:var(--sx-muted);line-height:1.5;margin:0 -20px;max-width:calc(100% + 40px)}.meter-wrap{margin-top:42px}.meter{height:5px;width:100%;position:relative;border-radius:5px;background:#e5eee8;overflow:hidden}.meter-line{position:absolute;width:126px;height:100%;left:0;background:var(--sx-accent);border-radius:5px;animation:glide 2.8s ease-in-out infinite}.meter.measured .meter-line{animation:none;width:var(--value);transition:width .25s ease;left:0}.value{font-size:12px;color:var(--sx-muted);text-align:right;margin-top:5px}.value:empty{display:none}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:30px}.step{min-height:60px;background:#f3f8f5;border-radius:18px;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px}.step-icon{width:24px;height:24px;flex:none}.step-icon.done{display:grid;place-items:center;border-radius:50%;background:#dcefe4;color:#216a56}.step-icon.done svg{width:16px;height:16px}.step-title{font-size:12.5px;line-height:1.45;font-weight:500}.step-sub{font-size:11.5px;color:var(--sx-muted);line-height:1.45}.ring{width:22px;height:22px;border:1.7px solid #dce8e0;border-top-color:var(--sx-accent);border-radius:50%;animation:orbit 1.8s linear infinite}.waiting{width:20px;height:20px;border:1.2px solid #c9d7cf;border-radius:50%;margin:2px}.status{font-size:12.5px;color:var(--sx-muted);margin:21px 0 0;min-height:20px;line-height:1.5}.status .ring{display:none}.mobile-context{display:none}.recovery-actions{display:grid;gap:12px;max-width:400px;margin:32px auto 0}.action{border:1px solid transparent;border-radius:14px;min-height:48px;padding:12px 18px;font-size:16px;line-height:1.4;font-weight:500;cursor:pointer;touch-action:manipulation}.primary{background:var(--sx-accent);color:white}.primary:hover{filter:brightness(.94)}.secondary{background:transparent;color:var(--sx-ink);border-color:#80998d}.secondary:hover{background:#f0f6f2}.action:focus-visible{outline:3px solid #be652d;outline-offset:4px}.recovery .description{font-size:16px;margin-left:-27px;margin-right:-27px}.recovery .headline{font-size:37px}.ready-badge{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:30px;color:var(--sx-accent);min-height:44px}.ready-badge svg{width:22px;height:22px}.footer{flex:none;text-align:center;padding:28px 18px 10.5vh;color:var(--sx-muted);font-size:13px}.footer:before{content:"";display:block;width:44px;height:1px;background:#c4864f;opacity:.6;margin:0 auto 17px}
+@keyframes orbit{to{transform:rotate(360deg)}}@keyframes glide{0%{left:-126px}100%{left:100%}}@keyframes float-left{50%{transform:translateY(-5px) rotate(-8deg)}}@keyframes float-right{50%{transform:translateY(5px) rotate(8deg)}}
+:host([reduce-motion]) *, :host([reduce-motion]) *:before{animation:none!important;transition:none!important}:host([reduce-motion]) .meter:not(.measured) .meter-line{left:calc(50% - 63px)}
+@media(prefers-reduced-motion:reduce){*,*:before{animation:none!important;transition:none!important}.meter:not(.measured) .meter-line{left:calc(50% - 63px)}}
+@container(max-width:760px){.header-note{display:none}.header{padding:24px 26px 14px}.card{padding:25px 42px 29px}.headline{font-size:36px}.center{padding-left:28px;padding-right:28px}.rear.left{left:-28px;top:-16px;transform:rotate(-4deg);animation:none}.rear.right{right:-28px;top:-8px;transform:rotate(4deg);animation:none}.rear{width:calc(100% - 25px);height:86%;border-radius:25px}.rear>*{visibility:hidden}.steps{gap:9px}.step{padding:10px 8px;gap:7px}}
+@container(max-width:480px){.scene{min-height:568px}.environment{min-height:38px;padding:9px 20px;font-size:12px}.env-right{display:none}.header{padding:20px 19px 17px}.header-mark{width:39px;height:39px}.brand-lockup{gap:10px}.brand-copy strong{font-size:16px}.brand-copy small{font-size:12px}.center{padding:42px 20px 20px;min-height:505px;flex:1 0 auto}.stack{max-width:350px}.rear{height:88%;width:calc(100% - 36px);background:#fcfefc;opacity:.95}.rear.left{left:18px;top:-19px}.rear.right{right:18px;top:-8px}.card{padding:26px 30px 23px;min-height:438px}.brand-orbit{width:72px;height:72px;margin-bottom:27px}.hero-mark{width:59px;height:59px}.eyebrow{font-size:10px;letter-spacing:1.2px;margin:0 -10px 17px}.headline{font-size:32px;line-height:1.12;letter-spacing:-.3px;margin:0 -5px 17px;max-width:290px}.description{font-size:16px;line-height:1.5;margin:0 auto;max-width:245px}.meter-wrap{margin-top:31px}.steps{display:none}.status{display:flex;justify-content:center;align-items:center;gap:12px;background:#f1f7f3;border-radius:16px;min-height:52px;margin:24px 0 0;padding:10px 10px;font-size:14px;font-weight:500;color:var(--sx-ink)}.status .ring{display:block;flex:none;width:18px;height:18px}.mobile-context{display:block;font-size:12px;color:var(--sx-muted);margin:11px -10px 0}.footer{padding:40px 18px max(26px,env(safe-area-inset-bottom));font-size:12px}.desktop-bg{display:none}.mobile-bg{display:block}.recovery.card{min-height:448px}.recovery .headline{font-size:29px;margin:0 -16px 17px}.recovery .description{font-size:16px;margin:0 -10px;max-width:none}.recovery .brand-orbit{margin-bottom:25px}.recovery-actions{margin-top:27px}.recovery .status{background:none;min-height:unset;font-size:12px;font-weight:400;color:var(--sx-muted);padding:0;margin-top:22px}.recovery .status .ring{display:none}.ready.card{min-height:360px}.ready .status{background:none}}
+@container(max-width:350px){.center{padding-left:15px;padding-right:15px}.card{padding-left:22px;padding-right:22px}.eyebrow{font-size:9px;letter-spacing:1px}.headline{font-size:29px}.status{font-size:13px;gap:8px}.environment{font-size:11px}.header{padding-left:17px}.recovery .headline{font-size:26px}}
+@media(max-height:700px){.scene{height:auto;min-height:100%}.center{min-height:480px;padding-top:32px}.footer{padding-top:18px;padding-bottom:24px}}
+`;
+  const bg = () =>
+    `<div class="ambient" aria-hidden="true"><svg class="desktop-bg" viewBox="0 0 1440 900" preserveAspectRatio="none"><defs><radialGradient id="halo"><stop stop-color="#e8f5ed" stop-opacity=".9"/><stop offset="1" stop-color="#fafcfb" stop-opacity="0"/></radialGradient><linearGradient id="wave" x2="0" y2="1"><stop stop-color="#dfeeE7" stop-opacity=".72"/><stop offset="1" stop-color="#f8fbf9" stop-opacity=".15"/></linearGradient></defs><ellipse cx="720" cy="414" rx="533" ry="369" fill="url(#halo)"/><path d="M0 603C245 594 389 846 720 846C1037 855 1195 684 1440 648V900H0Z" fill="url(#wave)"/><path d="M0 729C302 693 475 882 878 864S1253 756 1440 801V900H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 765C317 711 432 882 864 882S1282 783 1440 801" fill="none" stroke="#c9ded4" opacity=".65"/></svg><svg class="mobile-bg" viewBox="0 0 390 844" preserveAspectRatio="none"><path d="M0 564C67 556 106 793 195 793C281 801 324 641 390 608V844H0Z" fill="#e6f1eb" opacity=".65"/><path d="M0 684C82 650 129 827 238 810S339 709 390 751V844H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 717C86 666 117 827 234 827S347 734 390 751" fill="none" stroke="#c9ded4" opacity=".65"/></svg></div>`;
+  class ACPreloader extends HTMLElement {
+    static observedAttributes = [
+      "brand",
+      "phase",
+      "progress",
+      "environment",
+      "reduce-motion",
+    ];
+    constructor() {
+      super();
+      this.attachShadow({ mode: "open" });
+      this._batch = false;
+    }
+    connectedCallback() {
+      this.render();
+    }
+    attributeChangedCallback() {
+      if (this.isConnected && !this._batch) this.render();
+    }
+    /** Controlled host API; raises on invalid data rather than silently fabricating state. */
+    setState(next = {}) {
+      if (typeof next !== "object" || next === null || Array.isArray(next))
+        throw new TypeError("Expected a state object");
+      if (next.brand !== undefined && !Object.hasOwn(BRANDS, next.brand))
+        throw new RangeError("Unknown brand");
+      if (next.phase !== undefined && !PHASES.has(next.phase))
+        throw new RangeError("Unknown phase");
+      if (
+        next.environment !== undefined &&
+        !["preview", "production", "local-live"].includes(next.environment)
+      )
+        throw new RangeError("Unknown environment");
+      if (
+        next.progress !== undefined &&
+        next.progress !== null &&
+        (!Number.isFinite(next.progress) ||
+          next.progress < 0 ||
+          next.progress > 100)
+      )
+        throw new RangeError(
+          "Progress must be null or a measured number from 0 to 100",
+        );
+      this._batch = true;
+      for (const key of ["brand", "phase", "environment"])
+        if (next[key] !== undefined) this.setAttribute(key, next[key]);
+      if (next.progress === null) this.removeAttribute("progress");
+      else if (next.progress !== undefined)
+        this.setAttribute("progress", String(next.progress));
+      if (next.reduceMotion !== undefined)
+        this.toggleAttribute("reduce-motion", Boolean(next.reduceMotion));
+      this._batch = false;
+      if (this.isConnected) this.render();
+    }
+    render() {
+      const requested = this.getAttribute("brand") || "ac";
+      const brand = Object.hasOwn(BRANDS, requested) ? requested : "ac";
+      const b = BRANDS[brand];
+      const phase = PHASES.has(this.getAttribute("phase"))
+        ? this.getAttribute("phase")
+        : "session";
+      const environment = this.getAttribute("environment") || "preview";
+      const pv = this.getAttribute("progress");
+      const numeric =
+        pv !== null &&
+        pv.trim() !== "" &&
+        Number.isFinite(Number(pv)) &&
+        Number(pv) >= 0 &&
+        Number(pv) <= 100
+          ? Number(pv)
+          : null;
+      const recovery = phase === "delayed" || phase === "error";
+      const ready = phase === "ready";
+      const position = ["session", "workspace", "view", "ready"].indexOf(phase);
+      const currentText = {
+        session: "Checking your session",
+        workspace: "Checking workspace access",
+        view: "Preparing your view",
+        ready: "Your workspace is ready",
+        delayed: "Waiting for an access result",
+        error: "Access check not completed",
+      }[phase];
+      const title = recovery
+        ? phase === "delayed"
+          ? "Still checking access."
+          : "Workspace didn’t open."
+        : ready
+          ? "Your workspace is ready."
+          : {
+              ac: "Getting Sales Xray ready.",
+              ca: "Your next chapter starts here.",
+              cohorva: "Opening your learning space.",
+            }[brand];
+      const description = recovery
+        ? phase === "delayed"
+          ? "This is taking longer than expected. You can retry the access check."
+          : "We couldn’t finish the access check. Try again or return to sign in."
+        : ready
+          ? "You can continue to your workspace."
+          : {
+              session: "Confirming the session for this workspace.",
+              workspace: "Checking the workspace assigned to your session.",
+              view: "Preparing the view for your workspace.",
+            }[phase];
+      const eyebrow =
+        brand === "ac"
+          ? "AUTHORITY CLOSERS · SALES XRAY"
+          : brand === "ca"
+            ? "CLOSERS ACADEMY"
+            : "COHORVA · LEARNING PLATFORM";
+      const environmentText =
+        environment === "local-live"
+          ? "Local development · Live production data. Saves, deletes and analysis actions affect real data."
+          : "Design preview · No live data";
+      const steps = ["Session", "Workspace", "Your view"]
+        .map((label, i) => {
+          const state =
+            i < position ? "done" : i === position ? "active" : "waiting";
+          return `<div class="step"><span class="step-icon ${state === "done" ? "done" : ""}">${state === "done" ? icon("check") : `<span class="${state === "active" ? "ring" : "waiting"}" style="display:block"></span>`}</span><div><div class="step-title">${label}</div><div class="step-sub">${state === "done" ? "Found" : state === "active" ? "Checking" : "Next"}</div></div></div>`;
+        })
+        .join("");
+      const activeStatus = recovery ? currentText : currentText;
+      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="scene" style="--sx-accent:${b.accent}">${bg()}
+<div class="environment" ${environment === "production" ? "hidden" : ""}><span class="flag">${environmentText}</span><span class="env-right">${environment === "local-live" ? "Production account context" : "Local SVG experience kit"}</span></div>
+<header class="header"><div class="brand-lockup">${mark(brand, "header-mark")}<div class="brand-copy"><strong>${b.name}</strong><small>${b.product}</small></div></div><span class="header-note">A LITTLE CLARITY. A BETTER NEXT STEP.</span></header>
+<div class="center"><div class="stack"><div class="rear left" aria-hidden="true"><div class="module-icon">${icon("audio")}</div><span class="rear-name">${brand === "ac" ? "Recordings" : "Learning"}</span><i class="skeleton"></i><i class="skeleton short"></i></div><div class="rear right" aria-hidden="true"><div class="module-icon">${icon("review")}</div><span class="rear-name">${brand === "ac" ? "Review" : "Practice"}</span><i class="skeleton"></i><i class="skeleton short"></i></div>
+<section class="card ${recovery ? "recovery" : ready ? "ready" : ""}" aria-labelledby="headline"><div class="brand-orbit"><div class="orbit-line"></div>${mark(brand, "hero-mark")}</div>${!recovery ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h1 id="headline" class="headline">${title}</h1><p class="description">${description}</p>
+${recovery ? `<div class="recovery-actions"><button class="action primary" data-action="retry">Retry access check</button><button class="action secondary" data-action="sign-in">Return to sign in</button></div>` : ready ? `<div class="ready-badge">${icon("check")}<span>Ready to continue</span></div>` : `<div class="meter-wrap"><div class="meter ${numeric !== null ? "measured" : ""}" role="progressbar" aria-label="Workspace loading" aria-valuetext="${escape(currentText)}" ${numeric !== null ? `aria-valuenow="${numeric}" aria-valuemin="0" aria-valuemax="100"` : ""} style="--value:${numeric !== null ? numeric : 0}%"><i class="meter-line"></i></div><div class="value">${numeric !== null ? `${numeric}%` : ""}</div></div><div class="steps" aria-hidden="true">${steps}</div>`}
+<p class="status" role="${phase === "error" ? "alert" : "status"}" aria-live="${phase === "error" ? "assertive" : "polite"}" aria-atomic="true">${!recovery && !ready ? '<span class="ring" aria-hidden="true"></span>' : ""}<span>${activeStatus}</span></p>${!recovery && !ready ? `<p class="mobile-context">${phase === "workspace" ? "Session found · Your view is next" : phase === "view" ? "Access found · Preparing your view" : "Checking access before opening your view"}</p>` : ""}</section></div></div><footer class="footer">One clearer view. A better next step.</footer></div>`;
+      this.shadowRoot.querySelectorAll("[data-action]").forEach((button) =>
+        button.addEventListener("click", () => {
+          this.dispatchEvent(
+            new CustomEvent(`ac-${button.dataset.action}`, {
+              bubbles: true,
+              composed: true,
+              detail: { brand, phase },
+            }),
+          );
+        }),
+      );
+    }
+  }
+  customElements.define("ac-preloader", ACPreloader);
+})();

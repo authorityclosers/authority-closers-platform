@@ -37,6 +37,12 @@ from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import InMemoryPrivateObjectStorage
 from ac_platform.media.studio_video_completion import StudioCompletionSessionFactory
 from ac_platform.media.studio_video_delivery import compose_local_studio_video_delivery
+from ac_platform.media.studio_video_limits import (
+    STUDIO_VIDEO_MAX_SCAN_BYTES,
+    STUDIO_VIDEO_MAX_SOURCE_BYTES,
+    STUDIO_VIDEO_MAX_STORE_BYTES,
+    STUDIO_VIDEO_SCAN_TIMEOUT_SECONDS,
+)
 from ac_platform.media.studio_video_runner import (
     StudioVideoRunner,
     StudioVideoRunnerSummary,
@@ -45,8 +51,6 @@ from ac_platform.media.studio_video_runner import (
 from ac_platform.media.studio_video_runtime import compose_local_studio_video_runtime
 from ac_platform.media.studio_video_worker import StudioVideoWorkerResult
 
-_MIB = 1024 * 1024
-_GIB = 1024 * _MIB
 _MAX_PROOF_BYTES = 16 * 1024
 _MAX_PROOF_LIFETIME = timedelta(hours=24)
 _MAX_DAILY_DEFINITION_AGE = timedelta(hours=48)
@@ -100,10 +104,10 @@ class LocalStudioVideoScannerReadiness(BaseModel):
     environment: Literal["local"]
     host: Literal["127.0.0.1"]
     port: Literal[13310]
-    max_source_bytes: Literal[104857600]
-    stream_max_length: int = Field(ge=100 * _MIB, le=2 * 1024**3)
-    max_file_size: int = Field(ge=100 * _MIB, le=2 * 1024**3)
-    max_scan_size: int = Field(ge=200 * _MIB, le=8 * 1024**3)
+    max_source_bytes: Literal[2000000000]
+    stream_max_length: int = Field(ge=STUDIO_VIDEO_MAX_SOURCE_BYTES, le=2**31 - 1)
+    max_file_size: int = Field(ge=STUDIO_VIDEO_MAX_SOURCE_BYTES, le=2**31 - 1)
+    max_scan_size: int = Field(ge=STUDIO_VIDEO_MAX_SCAN_BYTES, le=8 * 1024**3)
     alert_exceeds_max: Literal[True]
     verified_at: AwareDatetime
     expires_at: AwareDatetime
@@ -475,6 +479,7 @@ def create_app() -> FastAPI:
         host=proof.host,
         port=proof.port,
         max_content_bytes=proof.max_source_bytes,
+        total_timeout_seconds=STUDIO_VIDEO_SCAN_TIMEOUT_SECONDS,
     )
     runtime = create_default_media_runtime(settings)
     sessions = cast(
@@ -486,7 +491,7 @@ def create_app() -> FastAPI:
         runtime,
         sessions=sessions,
         root=_VIDEO_ROOT,
-        max_store_bytes=8 * _GIB,
+        max_store_bytes=STUDIO_VIDEO_MAX_STORE_BYTES,
         scanner_config=config,
     )
     runtime = compose_local_studio_video_delivery(settings, runtime)

@@ -1,0 +1,465 @@
+.dashboard {
+  color: #10243d;
+  min-width: 0;
+}
+.dashboard [data-tone] {
+  --accent: #245bdf;
+  --badge: #e2ecff;
+  --surface: #f4f8ff;
+  --edge: #d5e5ff;
+}
+.dashboard [data-tone="mint"] {
+  --accent: #007e64;
+  --badge: #d7f8e6;
+  --surface: #effbf6;
+  --edge: #c4eddf;
+}
+.dashboard [data-tone="orange"] {
+  --accent: #bd5000;
+  --badge: #ffead5;
+  --surface: #fff7ed;
+  --edge: #ffe0bd;
+}
+.dashboard [data-tone="violet"] {
+  --accent: #6635d9;
+  --badge: #ece3ff;
+  --surface: #f7f3ff;
+  --edge: #e5d9ff;
+}
+.dashboard [data-tone="cyan"] {
+  --accent: #007d89;
+  --badge: #d7f4f5;
+  --surface: #effafd;
+  --edge: #c5e9f1;
+}
+.dashboard [data-tone="neutral"] {
+  --accent: #50647e;
+  --badge: #edf1f7;
+  --surface: #fff;
+  --edge: #dde6f0;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  color: var(--accent);
+  background: var(--badge);
+  border-radius: 13px;
+}
+.icon svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 2;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid #e0e7f0;
+  border-radius: 13px;
+  background: #fff;
+}
+.metric > div {
+  min-width: 0;
+}
+.metric > div > span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #60738f;
+}
+.metric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.dashboard .card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: clamp(190px, calc((100dvh - 480px) / 2), 250px);
+  padding: 18px;
+  border: 1px solid var(--edge);
+  border-radius: 15px;
+  background: var(--surface);
+  gap: 9px;
+}
+.card header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.card h2 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 780;
+}
+.card h3 {
+  margin: 0;
+  color: #10243d;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.dashboard .card > p {
+  margin: 0;
+  color: #536b87;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.card footer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: auto;
+}
+.card button,
+.desktopPager button,
+.mobilePager button {
+  font: inherit;
+  cursor: pointer;
+}
+.open,
+.listen {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  color: var(--accent);
+  background: var(--badge);
+}
+.listen {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.card[data-tone="orange"] .open {
+  background: #cf5b00;
+  color: #fff;
+  border-color: #cf5b00;
+}
+.reviewCard h2 small {
+  display: block;
+  margin-top: 2px;
+  color: #60738f;
+  font-size: 11px;
+  font-weight: 400;
+}
+.reviewCard ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reviewCard li[hidden] {
+  display: none;
+}
+.reviewCard li + li {
+  margin-top: 3px;
+}
+.reviewCard li button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 31px;
+  width: 100%;
+  padding: 3px 7px;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  color: #18324f;
+  background: #fff;
+}
+.reviewCard li button > span {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  font-size: 11px;
+  background: #edf1f7;
+}
+.reviewCard li strong {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reviewPager {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+}
+.reviewPager > span {
+  margin-right: auto;
+  font-size: 11px;
+  color: #60738f;
+}
+.reviewPager button,
+.cardArrows button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #dce5ef;
+  border-radius: 9px;
+  color: #28536e;
+  background: #fff;
+}
+.dashboard button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.dashboard button:focus-visible {
+  outline: 3px solid #6d7ce0;
+  outline-offset: 2px;
+}
+.desktopPager,
+.mobilePager {
+  display: none;
+}
+@media (min-width: 761px) and (max-height: 740px) {
+  .metric {
+    min-height: 60px;
+    padding: 8px 10px;
+    gap: 9px;
+  }
+  .metric strong {
+    font-size: 20px;
+  }
+  .metric .icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 10px;
+  }
+  .metric .icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .grid {
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .dashboard .card {
+    height: clamp(184px, calc(100dvh - 440px), 230px);
+    padding: 12px;
+    gap: 7px;
+  }
+  .card[data-page-visible="false"] {
+    display: none;
+  }
+  .card h2 {
+    font-size: 13px;
+  }
+  .card h3 {
+    font-size: 14px;
+  }
+  .dashboard .card > p {
+    font-size: 12px;
+    -webkit-line-clamp: 2;
+  }
+  .card .icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 10px;
+  }
+  .desktopPager {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .desktopPager button {
+    min-height: 36px;
+    padding: 5px 12px;
+    border: 1px solid #dae5ed;
+    border-radius: 10px;
+    background: #fff;
+    color: #60738f;
+    font-size: 12px;
+  }
+  .desktopPager button[aria-pressed="true"] {
+    background: #e5f6f1;
+    border-color: #b8e3d7;
+    color: #007e6f;
+  }
+}
+@media (max-width: 760px) {
+  .metrics {
+    gap: 5px;
+  }
+  .metric {
+    display: block;
+    padding: 8px 5px;
+    min-height: 62px;
+    text-align: center;
+  }
+  .metric .icon {
+    display: none;
+  }
+  .metric > div > span {
+    font-size: 10px;
+    line-height: 1.2;
+    min-height: 24px;
+  }
+  .metric strong {
+    font-size: 15px;
+  }
+  .grid {
+    display: block;
+    margin-top: 8px;
+  }
+  .dashboard .card {
+    height: clamp(188px, calc(100dvh - 488px), 350px);
+    padding: 14px;
+    gap: 8px;
+  }
+  .card:not([data-active="true"]) {
+    display: none;
+  }
+  .card header {
+    gap: 9px;
+  }
+  .card h2 {
+    font-size: 16px;
+  }
+  .card h3 {
+    font-size: 18px;
+    -webkit-line-clamp: 3;
+  }
+  .dashboard .card > p {
+    font-size: 14px;
+    -webkit-line-clamp: 5;
+  }
+  .open,
+  .listen {
+    min-height: 38px;
+  }
+  .mobilePager {
+    display: block;
+    margin-top: 8px;
+  }
+  .cardArrows {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cardArrows > span {
+    margin-right: auto;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .cardArrows small {
+    color: #60738f;
+    font-size: 11px;
+    font-weight: 400;
+  }
+  .cardArrows button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+  }
+  .categories {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .categories button {
+    min-height: 32px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 4px 1px;
+    color: var(--accent);
+    background: var(--badge);
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .categories button[aria-pressed="true"] {
+    background: var(--accent);
+    color: #fff;
+  }
+  .reviewCard li button {
+    min-height: 34px;
+  }
+}
+@media (max-width: 760px) and (max-height: 700px) {
+  .dashboard .card {
+    height: 176px;
+    padding: 12px;
+    gap: 5px;
+  }
+  .card h3 {
+    font-size: 16px;
+    -webkit-line-clamp: 2;
+  }
+  .dashboard .card > p {
+    font-size: 12px;
+    -webkit-line-clamp: 1;
+  }
+  .card .icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+  .dashboard .reviewCard {
+    padding: 8px 12px;
+    gap: 2px;
+  }
+  .reviewCard header {
+    margin-bottom: 2px;
+  }
+  .reviewCard li button {
+    min-height: 29px;
+  }
+}
+@media print {
+  .dashboard {
+    display: none;
+  }
+}

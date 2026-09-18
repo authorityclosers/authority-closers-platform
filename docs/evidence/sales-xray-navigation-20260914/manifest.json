@@ -1,0 +1,109 @@
+{
+  "schema": "ac.sales-xray.navigation-receipts/1",
+  "runtime_source": "cb886effe8f6d21c5fbe1e645d625adeca4d3107",
+  "scope": "local synthetic browser and actual HTTP/PostgreSQL/native proof; not provider or deployed proof",
+  "files": [
+    {
+      "file": "ui-tests.junit.xml",
+      "sha256": "da55c49f5616888ef0f3393a07c6a5eb9b246288fbf75e2e07bff8e74a4757cd",
+      "bytes": 14894,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-report-navigation-20260914-vitest.xml"
+    },
+    {
+      "file": "standalone-build.log",
+      "sha256": "d57116e9fe417770a48b4ae76410500d7ef69370fed1bc72ee4bc6058c99b834",
+      "bytes": 707,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-build.log"
+    },
+    {
+      "file": "learner-build.log",
+      "sha256": "dd742d9d1c512370c4321942a01275d756eee9f95f2377ac71082c7fc6eaac78",
+      "bytes": 1581,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-learner-build.log"
+    },
+    {
+      "file": "browser.junit.xml",
+      "sha256": "731d791dff30042383f022dcc3059c699ba59566c083bbff9de85ba6fcd64499",
+      "bytes": 684,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-auth-retry3-20260914\\browser.junit.xml"
+    },
+    {
+      "file": "identity-browser.json",
+      "sha256": "a8669702ba554fab84cdab35020347f83891c0de40729d56e6d8d746c6a71ebc",
+      "bytes": 6134,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-auth-retry3-20260914\\identity\\standalone-auth-browser.json"
+    },
+    {
+      "file": "upload-browser.json",
+      "sha256": "6db18753063f521fb7c77581c765e0def8ffa0cac151130d852a74674541595e",
+      "bytes": 4528,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-auth-retry3-20260914\\upload\\authenticated-browser.json"
+    },
+    {
+      "file": "durable-report-browser.json",
+      "sha256": "e966101539f89afb18883ac920aff66d364c2fa61ea14086c8f57a6e5988d68b",
+      "bytes": 4592,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-auth-retry3-20260914\\upload\\durable-authenticated-browser.json"
+    },
+    {
+      "file": "auth-runtime.json",
+      "sha256": "4acfc7080bc2786c16f45e54d5c1ab201973829e7bae4a37f356d81ba69365fc",
+      "bytes": 658,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-auth-retry3-20260914\\runtime-receipt.json"
+    },
+    {
+      "file": "ui-browser.json",
+      "sha256": "a420aa11c440e59eb1d06808c7a2fb05b062faff2ad21d8686844416a8a4d4ec",
+      "bytes": 3901,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\navigation-browser-receipt.json"
+    },
+    {
+      "file": "pdf-inspection.json",
+      "sha256": "b4c6d1ec54129c4293b4c19de7d34538fe1a99be08fc650ff830666b6250d51c",
+      "bytes": 182,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\pdf-inspection.json"
+    },
+    {
+      "file": "native-reuse.json",
+      "sha256": "bb43eb804f8c1122998dc6a7b6dfc1cf1af6307024c92d8b2d324f86684e3d6e",
+      "bytes": 356,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-native-reuse.json"
+    },
+    {
+      "file": "live-anonymous-baseline.json",
+      "sha256": "dfb5504b38dc6d14409db845545005397c772a2e723b94f664407a7e576bafe5",
+      "bytes": 1108,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-live-baseline-20260914-navigation.json"
+    },
+    {
+      "file": "synthetic-report.pdf",
+      "sha256": "ce58c060437973d456e512bc7eb4af9d52933e12c66ca367174260f563f37f9c",
+      "bytes": 121239,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\synthetic-report.pdf"
+    },
+    {
+      "file": "synthetic-factors-desktop.png",
+      "sha256": "355d34df93fb6a690d0910614933e5c4ca50bafa9884cb056a80e2f6711a190c",
+      "bytes": 104765,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\section-sales-factors.png"
+    },
+    {
+      "file": "synthetic-overview-marathi-mobile.png",
+      "sha256": "6541775e1e54c9012c2530238593241593d3ad959abd99dcd3cc3b310ac23354",
+      "bytes": 102579,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\report-mr-mobile.png"
+    },
+    {
+      "file": "synthetic-transcript-desktop.png",
+      "sha256": "5ecda3aea23b6b23188263d85536a3a31c8eeaba27f6c92b17b7e4abd1240a74",
+      "bytes": 96476,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\section-transcript.png"
+    },
+    {
+      "file": "synthetic-sound-desktop.png",
+      "sha256": "b808bd27c02ba1f3e78ab191065c3d72a89709d08b4ec196a6a8c5849cf50b52",
+      "bytes": 111238,
+      "original": "D:\\AC-authority-closers-release-audit\\sales-xray-navigation-cb886ef-20260914\\section-sound.png"
+    }
+  ]
+}

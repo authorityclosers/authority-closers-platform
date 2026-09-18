@@ -23,6 +23,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   ApiError,
   createLearnerApi,
+  type GoogleLinkStatusResponse,
   type LearnerApi,
   type MeResponse,
   type OnboardingResponse,
@@ -61,6 +62,8 @@ export type SettingsResource<T> =
 export type SettingsResources = {
   me: SettingsResource<MeResponse>;
   onboarding: SettingsResource<OnboardingResponse>;
+  /** Optional to keep older injected settings clients source-compatible. */
+  googleLink?: SettingsResource<GoogleLinkStatusResponse>;
 };
 
 export type SettingsResourceKey = keyof SettingsResources;
@@ -510,7 +513,7 @@ function MembershipBoundary({
   onRetryCleanup,
   headingRef,
 }: {
-  api: LearnerApi;
+  api: Pick<LearnerApi, "logout">;
   cleanup: SettingsDraftCleanupState;
   onRetryCleanup?: () => void;
   headingRef?: SettingsHeadingRef;
@@ -587,11 +590,88 @@ function AppearanceCard({
   );
 }
 
+const GOOGLE_LINK_START_HREF = `/v1/auth/google/start?${new URLSearchParams({
+  action: "link",
+  surface: "learner",
+  return_path: ROUTES.settings,
+})}`;
+
+function GoogleLinkStatus({
+  resource,
+  onRetry,
+}: {
+  resource?: SettingsResource<GoogleLinkStatusResponse>;
+  onRetry?: () => void;
+}) {
+  if (!resource) return null;
+  if (resource.status === "loading") {
+    return (
+      <p
+        className={styles.boundaryNote}
+        role="status"
+        aria-label="Checking Google link status"
+      >
+        Checking Google link status…
+      </p>
+    );
+  }
+  if (resource.status === "error") {
+    if (isSessionExpired(resource.error)) {
+      return (
+        <div className={styles.cleanupFailure} role="alert">
+          <p>Sign in again to check or link a Google account.</p>
+          <Link className={styles.outlineAction} href={ROUTES.sessionExpired}>
+            Sign in again <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+        </div>
+      );
+    }
+    return (
+      <div className={styles.cleanupFailure} role="alert">
+        <p>
+          Google link status is unavailable. You can try linking Google; the
+          account changes only after provider confirmation.
+        </p>
+        {onRetry ? (
+          <button
+            className={styles.cleanupRetry}
+            type="button"
+            onClick={onRetry}
+            aria-label="Retry Google status"
+          >
+            Retry Google status
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <p
+      className={styles.boundaryNote}
+      role="status"
+      aria-label={resource.data.linked ? "Google linked" : "Google not linked"}
+    >
+      {resource.data.linked
+        ? "Google is linked to this account."
+        : "Google is not linked to this account."}
+    </p>
+  );
+}
+
 function SecurityPrivacyCard({
   section,
+  meReady,
+  googleLink,
+  onRetryGoogleLink,
 }: {
   section: Extract<SettingsSection, { id: "security-privacy" }>;
+  meReady: boolean;
+  googleLink?: SettingsResource<GoogleLinkStatusResponse>;
+  onRetryGoogleLink?: () => void;
 }) {
+  const canStartGoogleLink =
+    meReady &&
+    !(googleLink?.status === "error" && isSessionExpired(googleLink.error));
   const links = [
     { href: ROUTES.forgotPassword, label: "Password recovery" },
     { href: ROUTES.terms, label: "Terms" },
@@ -606,12 +686,23 @@ function SecurityPrivacyCard({
     >
       <SectionHeader section={section} />
       <p className={styles.boundaryNote}>
-        Recover your password or review how your information is handled.
+        Link Google to this existing account, recover your password, or review
+        how your information is handled. Google confirmation returns you here;
+        if the provider stops the attempt, this account remains unchanged.
       </p>
+      {meReady ? (
+        <GoogleLinkStatus resource={googleLink} onRetry={onRetryGoogleLink} />
+      ) : null}
       <nav
         className={styles.policyLinks}
         aria-label="Security and privacy links"
       >
+        {canStartGoogleLink ? (
+          <a href={GOOGLE_LINK_START_HREF}>
+            <span>Link Google account</span>
+            <ChevronRight size={17} aria-hidden="true" />
+          </a>
+        ) : null}
         {links.map((link) => (
           <Link key={link.href} href={link.href}>
             <span>{link.label}</span>
@@ -627,7 +718,7 @@ function SessionCard({
   api,
   section,
 }: {
-  api: LearnerApi;
+  api: Pick<LearnerApi, "logout">;
   section: Extract<SettingsSection, { id: "session" }>;
 }) {
   return (
@@ -650,13 +741,17 @@ function SettingsSectionCard({
   api,
   onRetry,
   learnerAccessConfirmed,
+  meReady,
+  googleLink,
   focusTargets,
 }: {
   section: SettingsSection;
   resources: SettingsResources;
-  api: LearnerApi;
+  api: Pick<LearnerApi, "logout">;
   onRetry: (resource: SettingsResourceKey) => void;
   learnerAccessConfirmed: boolean;
+  meReady: boolean;
+  googleLink?: SettingsResource<GoogleLinkStatusResponse>;
   focusTargets?: SettingsFocusTargets;
 }) {
   switch (section.id) {
@@ -686,7 +781,14 @@ function SettingsSectionCard({
         />
       );
     case "security-privacy":
-      return <SecurityPrivacyCard section={section} />;
+      return (
+        <SecurityPrivacyCard
+          section={section}
+          meReady={meReady}
+          googleLink={googleLink}
+          onRetryGoogleLink={() => onRetry("googleLink")}
+        />
+      );
     case "session":
       return <SessionCard section={section} api={api} />;
   }
@@ -697,7 +799,8 @@ const settingsKeywords: Record<SettingsSectionId, string> = {
   appearance:
     "theme light dark system color accent density display motion animation preset",
   "learning-setup": "goal context weekly time practice preferences onboarding",
-  "security-privacy": "password recovery terms policies privacy security",
+  "security-privacy":
+    "password recovery google link terms policies privacy security",
   session: "logout log out sign out device session",
 };
 
@@ -722,7 +825,7 @@ export function SettingsView({
   initialSection = null,
 }: {
   resources: SettingsResources;
-  api?: LearnerApi;
+  api?: SettingsRuntimeApi;
   onRetry: (resource: SettingsResourceKey) => void;
   draftCleanup?: SettingsDraftCleanupState;
   onRetryCleanup?: () => void;
@@ -772,6 +875,10 @@ export function SettingsView({
       window.requestAnimationFrame(() => searchRef.current?.focus());
   }
 
+  const canonicalIdentityReady =
+    resources.me.status === "ready" &&
+    !getEarliestOfflineReadMetadata(resources.me.data);
+
   if (resources.me.status === "error" && isSessionExpired(resources.me.error)) {
     return (
       <ReauthenticationBoundary
@@ -785,12 +892,24 @@ export function SettingsView({
     !hasMembershipRole(resources.me.data)
   ) {
     return (
-      <MembershipBoundary
-        api={api}
-        cleanup={draftCleanup}
-        onRetryCleanup={onRetryCleanup}
-        headingRef={focusTargets?.routeEntry ?? focusTargets?.identity}
-      />
+      <>
+        <MembershipBoundary
+          api={api}
+          cleanup={draftCleanup}
+          onRetryCleanup={onRetryCleanup}
+          headingRef={focusTargets?.routeEntry ?? focusTargets?.identity}
+        />
+        <SecurityPrivacyCard
+          section={
+            SETTINGS_SECTIONS.find(
+              (section) => section.id === "security-privacy",
+            ) as Extract<SettingsSection, { id: "security-privacy" }>
+          }
+          meReady={canonicalIdentityReady}
+          googleLink={resources.googleLink}
+          onRetryGoogleLink={() => onRetry("googleLink")}
+        />
+      </>
     );
   }
 
@@ -947,6 +1066,8 @@ export function SettingsView({
               api={api}
               onRetry={onRetry}
               learnerAccessConfirmed={learnerAccessConfirmed}
+              meReady={canonicalIdentityReady}
+              googleLink={resources.googleLink}
               focusTargets={focusTargets}
             />
           </div>
@@ -956,8 +1077,12 @@ export function SettingsView({
   );
 }
 
+type SettingsResourceApi = Pick<LearnerApi, "me" | "onboarding"> &
+  Partial<Pick<LearnerApi, "googleLinkStatus">>;
+type SettingsRuntimeApi = SettingsResourceApi & Pick<LearnerApi, "logout">;
+
 export function startSettingsResourceLoad(
-  api: Pick<LearnerApi, "me" | "onboarding">,
+  api: SettingsResourceApi,
   onUpdate: <K extends SettingsResourceKey>(
     resource: K,
     result: SettingsResources[K],
@@ -987,6 +1112,30 @@ export function startSettingsResourceLoad(
     );
   }
 
+  function loadGoogleLinkStatus() {
+    if (!api.googleLinkStatus) return;
+    publish("googleLink", { status: "loading" });
+    let request: Promise<GoogleLinkStatusResponse>;
+    try {
+      request = api.googleLinkStatus({ signal: controller.signal });
+    } catch (error) {
+      publish("googleLink", { status: "error", error });
+      if (isSessionExpired(error)) {
+        publish("me", { status: "error", error });
+      }
+      return;
+    }
+    void Promise.resolve(request).then(
+      (data) => publish("googleLink", { status: "ready", data }),
+      (error: unknown) => {
+        publish("googleLink", { status: "error", error });
+        if (isSessionExpired(error)) {
+          publish("me", { status: "error", error });
+        }
+      },
+    );
+  }
+
   let identityRequest: Promise<MeResponse>;
   try {
     identityRequest = api.me({ signal: controller.signal });
@@ -999,6 +1148,7 @@ export function startSettingsResourceLoad(
   void Promise.resolve(identityRequest).then(
     (data) => {
       publish("me", { status: "ready", data });
+      if (!getEarliestOfflineReadMetadata(data)) loadGoogleLinkStatus();
       if (hasMembershipRole(data)) loadOnboarding();
     },
     (error: unknown) => publish("me", { status: "error", error }),
@@ -1012,7 +1162,7 @@ export function startSettingsResourceLoad(
 
 export function SettingsRuntime({
   api = defaultApi,
-}: { api?: LearnerApi } = {}) {
+}: { api?: SettingsRuntimeApi } = {}) {
   const [resources, setResources] = useState<SettingsResources>(
     initialSettingsResources,
   );
@@ -1032,6 +1182,7 @@ export function SettingsRuntime({
   const previousStatuses = useRef({
     me: initialSettingsResources.me.status,
     onboarding: initialSettingsResources.onboarding.status,
+    googleLink: initialSettingsResources.googleLink?.status,
   });
 
   useEffect(() => {
@@ -1102,6 +1253,7 @@ export function SettingsRuntime({
     const currentStatuses = {
       me: resources.me.status,
       onboarding: resources.onboarding.status,
+      googleLink: resources.googleLink?.status,
     };
     const resource = pendingFocus.current;
     if (
@@ -1109,8 +1261,12 @@ export function SettingsRuntime({
       previousStatuses.current[resource] !== currentStatuses[resource]
     ) {
       const headingRef =
-        resource === "me" ? identityHeadingRef : learningSetupHeadingRef;
-      headingRef.current?.focus();
+        resource === "me"
+          ? identityHeadingRef
+          : resource === "onboarding"
+            ? learningSetupHeadingRef
+            : null;
+      headingRef?.current?.focus();
       if (
         currentStatuses[resource] === "ready" ||
         currentStatuses[resource] === "error"
@@ -1119,7 +1275,11 @@ export function SettingsRuntime({
       }
     }
     previousStatuses.current = currentStatuses;
-  }, [resources.me.status, resources.onboarding.status]);
+  }, [
+    resources.me.status,
+    resources.onboarding.status,
+    resources.googleLink?.status,
+  ]);
 
   function loadOnboardingForGeneration(
     generation: number,
@@ -1155,6 +1315,47 @@ export function SettingsRuntime({
     );
   }
 
+  function loadGoogleLinkStatusForGeneration(
+    generation: number,
+    controller: AbortController,
+  ) {
+    if (!api.googleLinkStatus) return;
+    let request: Promise<GoogleLinkStatusResponse>;
+    try {
+      request = api.googleLinkStatus({ signal: controller.signal });
+    } catch (error) {
+      if (requestGeneration.current === generation) {
+        setResources((current) => ({
+          ...current,
+          googleLink: { status: "error", error },
+          ...(isSessionExpired(error)
+            ? { me: { status: "error" as const, error } }
+            : {}),
+        }));
+      }
+      return;
+    }
+    void Promise.resolve(request).then(
+      (data) => {
+        if (requestGeneration.current !== generation) return;
+        setResources((current) => ({
+          ...current,
+          googleLink: { status: "ready", data },
+        }));
+      },
+      (error: unknown) => {
+        if (requestGeneration.current !== generation) return;
+        setResources((current) => ({
+          ...current,
+          googleLink: { status: "error", error },
+          ...(isSessionExpired(error)
+            ? { me: { status: "error" as const, error } }
+            : {}),
+        }));
+      },
+    );
+  }
+
   function retry(resource: SettingsResourceKey) {
     pendingFocus.current = resource;
     const generation = requestGeneration.current + 1;
@@ -1170,12 +1371,90 @@ export function SettingsRuntime({
         ? {
             me: { status: "loading" as const },
             onboarding: { status: "loading" as const },
+            ...(api.googleLinkStatus
+              ? { googleLink: { status: "loading" as const } }
+              : {}),
           }
-        : { [resource]: { status: "loading" as const } }),
+        : resource === "googleLink"
+          ? {
+              me: { status: "loading" as const },
+              onboarding: { status: "loading" as const },
+              googleLink: { status: "loading" as const },
+            }
+          : { [resource]: { status: "loading" as const } }),
     }));
 
     if (resource === "onboarding") {
+      const identityIsFresh =
+        resources.me.status === "ready" &&
+        !getEarliestOfflineReadMetadata(resources.me.data);
+      if (api.googleLinkStatus) {
+        setResources((current) => ({
+          ...current,
+          googleLink: identityIsFresh ? { status: "loading" } : undefined,
+        }));
+        if (identityIsFresh) {
+          loadGoogleLinkStatusForGeneration(generation, controller);
+        }
+      }
       loadOnboardingForGeneration(generation, controller);
+      return;
+    }
+
+    if (resource === "googleLink") {
+      if (!api.googleLinkStatus) {
+        setResources((current) => ({
+          ...current,
+          googleLink: {
+            status: "error",
+            error: new Error("Google-link status is unavailable."),
+          },
+        }));
+        return;
+      }
+      let request: Promise<MeResponse>;
+      try {
+        request = api.me({ signal: controller.signal });
+      } catch (error) {
+        setResources((current) => ({
+          ...current,
+          me: { status: "error", error },
+          googleLink: { status: "error", error },
+        }));
+        return;
+      }
+      void Promise.resolve(request).then(
+        (data) => {
+          if (requestGeneration.current !== generation) return;
+          const identityIsFresh = !getEarliestOfflineReadMetadata(data);
+          setResources((current) => ({
+            ...current,
+            me: { status: "ready", data },
+            ...(api.googleLinkStatus
+              ? {
+                  googleLink: identityIsFresh
+                    ? { status: "loading" as const }
+                    : undefined,
+                }
+              : {}),
+            onboarding: { status: "loading" },
+          }));
+          if (identityIsFresh) {
+            loadGoogleLinkStatusForGeneration(generation, controller);
+          }
+          if (hasMembershipRole(data)) {
+            loadOnboardingForGeneration(generation, controller);
+          }
+        },
+        (error: unknown) => {
+          if (requestGeneration.current !== generation) return;
+          setResources((current) => ({
+            ...current,
+            me: { status: "error", error },
+            googleLink: { status: "error", error },
+          }));
+        },
+      );
       return;
     }
 
@@ -1192,11 +1471,22 @@ export function SettingsRuntime({
     void Promise.resolve(request).then(
       (data) => {
         if (requestGeneration.current !== generation) return;
+        const identityIsFresh = !getEarliestOfflineReadMetadata(data);
         setResources((current) => ({
           ...current,
           me: { status: "ready", data },
           onboarding: { status: "loading" },
+          ...(api.googleLinkStatus
+            ? {
+                googleLink: identityIsFresh
+                  ? { status: "loading" as const }
+                  : undefined,
+              }
+            : {}),
         }));
+        if (identityIsFresh) {
+          loadGoogleLinkStatusForGeneration(generation, controller);
+        }
         if (hasMembershipRole(data)) {
           loadOnboardingForGeneration(generation, controller);
         }

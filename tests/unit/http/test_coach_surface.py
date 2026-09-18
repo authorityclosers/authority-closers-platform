@@ -332,6 +332,9 @@ def test_coach_password_routes_use_existing_identity_service_and_origin_gate(
         async def begin_reset(self, **_kwargs: Any) -> None:
             calls.append("begin_reset")
 
+        async def begin_verification(self, **_kwargs: Any) -> None:
+            calls.append("begin_verification")
+
         async def consume_reset(self, *_args: Any) -> None:
             calls.append("consume_reset")
 
@@ -364,7 +367,7 @@ def test_coach_password_routes_use_existing_identity_service_and_origin_gate(
         calls
         == {
             "login": ["authenticate", "issue_authenticated_session"],
-            "recovery": ["begin_reset"],
+            "recovery": ["begin_reset", "begin_verification"],
             "reset": ["consume_reset"],
         }[operation]
     )

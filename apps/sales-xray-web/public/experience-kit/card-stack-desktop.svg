@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="490" viewBox="0 0 1000 490" role="img" aria-labelledby="asset-title asset-description">
+  <title id="asset-title">Layered card stack — desktop</title>
+  <desc id="asset-description">Transparent layered shells only. Keep your semantic UI in HTML; do not flatten app controls into this illustration.</desc>
+  <defs>
+    <filter id="sx-shadow" x="-40%" y="-40%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#163E35" flood-opacity=".095"/>
+    </filter>
+    <filter id="sx-small-shadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163E35" flood-opacity=".06"/>
+    </filter>
+    <linearGradient id="sx-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFCFB"/>
+    </linearGradient>
+    <linearGradient id="sx-wave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#DFEEE7" stop-opacity=".72"/>
+      <stop offset="100%" stop-color="#F8FBF9" stop-opacity=".15"/>
+    </linearGradient>
+    <radialGradient id="sx-halo">
+      <stop offset="0%" stop-color="#E8F5ED" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#F9FBFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g id="back-left" transform="translate(98 80) rotate(-9 117.5 144.0)" opacity="0.65">
+    <rect x="0" y="0" width="235" height="288" rx="22" fill="url(#sx-surface)" stroke="#E4EEE8" stroke-width=".8" filter="url(#sx-small-shadow)"/>
+    <circle cx="117.5" cy="51" r="25" fill="#EBF5EF"/>
+    <g transform="translate(106.5 40) scale(0.9166666666666666)" fill="none" stroke="#8CB4A4" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4" fill="none" stroke="#8CB4A4"/>
+    </g>
+    <text x="117.5" y="104" font-size="15" fill="#91A69D" font-weight="500" text-anchor="middle" font-family="Inter, Arial, sans-serif">Recordings</text>
+    <rect x="24" y="129" width="187" height="9" rx="5" fill="#E2EBE6"/>
+    <rect x="24" y="149" width="158" height="9" rx="5" fill="#EBF1ED"/>
+  </g>
+  <g id="back-right" transform="translate(668 91) rotate(8 117.5 144.0)" opacity="0.65">
+    <rect x="0" y="0" width="235" height="288" rx="22" fill="url(#sx-surface)" stroke="#E4EEE8" stroke-width=".8" filter="url(#sx-small-shadow)"/>
+    <circle cx="117.5" cy="51" r="25" fill="#EBF5EF"/>
+    <g transform="translate(106.5 40) scale(0.9166666666666666)" fill="none" stroke="#8CB4A4" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4h16v12h-7l-5 4v-4H4z M8 8h8 M8 12h5" fill="none" stroke="#8CB4A4"/>
+    </g>
+    <text x="117.5" y="104" font-size="15" fill="#91A69D" font-weight="500" text-anchor="middle" font-family="Inter, Arial, sans-serif">Review</text>
+    <rect x="24" y="129" width="187" height="9" rx="5" fill="#E2EBE6"/>
+    <rect x="24" y="149" width="158" height="9" rx="5" fill="#EBF1ED"/>
+  </g>
+  <rect x="220" y="40" width="560" height="405" rx="27" fill="white" stroke="#E4EEE8" filter="url(#sx-shadow)"/>
+</svg>

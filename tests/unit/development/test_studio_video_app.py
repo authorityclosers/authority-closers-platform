@@ -54,10 +54,10 @@ def _proof(*, now: datetime | None = None) -> dict[str, object]:
         "environment": "local",
         "host": "127.0.0.1",
         "port": 13310,
-        "max_source_bytes": 104857600,
-        "stream_max_length": 100 * 1024 * 1024,
-        "max_file_size": 100 * 1024 * 1024,
-        "max_scan_size": 200 * 1024 * 1024,
+        "max_source_bytes": 2_000_000_000,
+        "stream_max_length": 2_000_000_000,
+        "max_file_size": 2_000_000_000,
+        "max_scan_size": 4_000_000_000,
         "alert_exceeds_max": True,
         "verified_at": current.isoformat(),
         "expires_at": (current + timedelta(hours=1)).isoformat(),
@@ -130,7 +130,7 @@ def test_strict_proof_file_and_current_policy(tmp_path: Path) -> None:
     _write_proof(path)
     proof = studio_app._load_proof(path)
     assert proof.host == "127.0.0.1" and proof.port == 13310
-    assert proof.max_source_bytes == 100 * 1024 * 1024
+    assert proof.max_source_bytes == 2_000_000_000
     assert proof.max_scan_size >= 2 * proof.max_source_bytes
 
     _write_proof(path, unexpected=True)
@@ -184,7 +184,7 @@ def test_live_verification_requires_ping_version_clean_and_detection(
     monkeypatch.setattr(studio_app, "_clamd_command", command)
     monkeypatch.setattr(studio_app, "ClamAVContentScanner", Scanner)
     config = studio_app.ClamAVScannerConfig(
-        host="127.0.0.1", port=13310, max_content_bytes=100 * 1024 * 1024
+        host="127.0.0.1", port=13310, max_content_bytes=2_000_000_000
     )
     studio_app._verify_scanner(config, proof)
     assert commands == [b"zPING\x00", b"zVERSION\x00"]
@@ -219,7 +219,7 @@ def test_factory_composes_exact_real_graph_in_order(
     studio = runtime.pipeline.service
     assert studio.storage.root == video_root
     assert type(studio.scanner) is studio_app.ClamAVContentScanner
-    assert studio.storage.max_object_bytes == 100 * 1024 * 1024
+    assert studio.storage.max_object_bytes == 2_000_000_000
 
 
 @pytest.mark.asyncio

@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 from pydantic import SecretStr
 
 from ac_platform.media.errors import MediaConfigurationError
+from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
 
 _BUCKET_PATTERN = re.compile(r"^[a-z0-9][a-z0-9.-]{2,62}$")
 _ACCESS_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{5,127}$")
@@ -334,7 +335,7 @@ class MediaProviderConfig:
     approved_endpoint_hosts: tuple[str, ...] = ()
     upload_ttl_seconds: int = 900
     playback_ttl_seconds: int = 900
-    max_upload_bytes: int = 512 * 1024 * 1024
+    max_upload_bytes: int = STUDIO_VIDEO_MAX_SOURCE_BYTES
     quota_window_seconds: int = 3600
     quota_bytes_per_actor: int = 2 * 1024 * 1024 * 1024
     quota_uploads_per_actor: int = 100
@@ -395,7 +396,7 @@ class MediaProviderConfig:
             _bounded_int(
                 self.max_upload_bytes,
                 field_name="media max upload bytes",
-                default=512 * 1024 * 1024,
+                default=STUDIO_VIDEO_MAX_SOURCE_BYTES,
                 maximum=8 * 1024 * 1024 * 1024,
             ),
         )
@@ -664,7 +665,7 @@ class MediaProviderConfig:
             max_upload_bytes=_bounded_int(
                 first("AC_MEDIA_MAX_UPLOAD_BYTES"),
                 field_name="AC_MEDIA_MAX_UPLOAD_BYTES",
-                default=512 * 1024 * 1024,
+                default=STUDIO_VIDEO_MAX_SOURCE_BYTES,
                 maximum=8 * 1024 * 1024 * 1024,
             ),
             quota_window_seconds=_bounded_int(
@@ -735,7 +736,9 @@ class MediaProviderConfig:
             approved_endpoint_hosts=getattr(settings, "media_storage_approved_endpoint_hosts", ()),
             upload_ttl_seconds=getattr(settings, "media_upload_ttl_seconds", 900),
             playback_ttl_seconds=getattr(settings, "media_playback_ttl_seconds", 900),
-            max_upload_bytes=getattr(settings, "media_max_upload_bytes", 512 * 1024 * 1024),
+            max_upload_bytes=getattr(
+                settings, "media_max_upload_bytes", STUDIO_VIDEO_MAX_SOURCE_BYTES
+            ),
             quota_window_seconds=getattr(settings, "media_quota_window_seconds", 3600),
             quota_bytes_per_actor=getattr(
                 settings, "media_quota_bytes_per_actor", 2 * 1024 * 1024 * 1024

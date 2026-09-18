@@ -57,10 +57,13 @@ const availableLockManager: OnboardingRecoveryLockManager = {
   },
 };
 
-function readyResources(): SettingsResources {
+function readyResources(
+  googleLink?: SettingsResources["googleLink"],
+): SettingsResources {
   return {
     me: { status: "ready", data: me },
     onboarding: { status: "ready", data: onboarding },
+    ...(googleLink ? { googleLink } : {}),
   };
 }
 
@@ -160,6 +163,122 @@ describe("Focused Settings runtime", () => {
       searchSettingsSections("weekly").map((section) => section.id),
     ).toEqual(["learning-setup"]);
     expect(searchSettingsSections("billing")).toEqual([]);
+  });
+
+  it("offers an exact authenticated Google-link action without claiming provider state", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: readyResources(),
+        api,
+        onRetry: vi.fn(),
+        initialSection: "security-privacy",
+      }),
+    );
+    const link = html.match(
+      /<a href="([^\"]*auth\/google\/start[^\"]*)">\s*<span>Link Google account/s,
+    )?.[1];
+    expect(link).toBeDefined();
+    const url = new URL(
+      link!.replaceAll("&amp;", "&"),
+      "https://app.authorityclosers.com",
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      action: "link",
+      surface: "learner",
+      return_path: "/settings",
+    });
+    expect(html).toContain("Google confirmation returns you here");
+    expect(html).toContain("this account remains unchanged");
+    expect(html).not.toMatch(/Google (?:account )?is linked|linked Google/i);
+  });
+
+  it.each([
+    { linked: true, label: "Google linked", copy: "Google is linked" },
+    { linked: false, label: "Google not linked", copy: "Google is not linked" },
+  ])(
+    "exposes only the canonical Google-link state: $label",
+    ({ linked, label, copy }) => {
+      const html = renderToStaticMarkup(
+        createElement(SettingsView, {
+          resources: readyResources({ status: "ready", data: { linked } }),
+          api,
+          onRetry: vi.fn(),
+          initialSection: "security-privacy",
+        }),
+      );
+
+      expect(html).toContain(`aria-label="${label}"`);
+      expect(html).toContain(copy);
+      expect(html).toContain("Link Google account");
+    },
+  );
+
+  it("keeps the Google action and status fail-closed until live identity is ready", () => {
+    const loading = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: {
+          me: { status: "loading" },
+          onboarding: { status: "loading" },
+          googleLink: { status: "ready", data: { linked: true } },
+        },
+        api,
+        onRetry: vi.fn(),
+        initialSection: "security-privacy",
+      }),
+    );
+    expect(loading).not.toContain("auth/google/start");
+    expect(loading).not.toContain("Google linked");
+
+    const cachedMe = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: {
+          me: { status: "ready", data: markOfflineRead({ ...me }, 7_000) },
+          onboarding: { status: "ready", data: onboarding },
+          googleLink: { status: "ready", data: { linked: true } },
+        },
+        api,
+        onRetry: vi.fn(),
+        initialSection: "security-privacy",
+      }),
+    );
+    expect(cachedMe).not.toContain("auth/google/start");
+    expect(cachedMe).not.toContain('aria-label="Google linked"');
+  });
+
+  it("offers retry for an unavailable status and sign-in recovery for a 401", () => {
+    const retry = vi.fn();
+    const unavailable = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: readyResources({
+          status: "error",
+          error: new ApiError(503, "unavailable"),
+        }),
+        api,
+        onRetry: retry,
+        initialSection: "security-privacy",
+      }),
+    );
+    expect(unavailable).toContain('aria-label="Retry Google status"');
+    expect(unavailable).toContain("Google link status is unavailable");
+    expect(unavailable).toContain("Link Google account");
+
+    const expired = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: readyResources({
+          status: "error",
+          error: new ApiError(401, "expired"),
+        }),
+        api,
+        onRetry: retry,
+        initialSection: "security-privacy",
+      }),
+    );
+    expect(expired).toContain(
+      "Sign in again to check or link a Google account",
+    );
+    expect(expired).toContain('href="/session-expired"');
+    expect(expired).not.toContain("auth/google/start");
+    expect(expired).not.toContain('aria-label="Retry Google status"');
   });
 
   it("uses compact labeled appearance controls with immediate local-save semantics", () => {
@@ -316,7 +435,8 @@ describe("Focused Settings runtime", () => {
         me: () => new Promise((resolve) => (resolveMe = resolve)),
         onboarding: onboardingRequest,
       },
-      (resource, result) => updates.push(`${resource}:${result.status}`),
+      (resource, result) =>
+        updates.push(`${resource}:${result?.status ?? "missing"}`),
     );
 
     expect(updates).toEqual([]);
@@ -331,6 +451,42 @@ describe("Focused Settings runtime", () => {
     expect(updates).toEqual(["me:ready"]);
   });
 
+  it("loads canonical Google-link status only after a fresh identity", async () => {
+    let resolveMe!: (value: typeof me) => void;
+    let resolveGoogle!: (value: { linked: boolean }) => void;
+    const googleLinkStatus = vi.fn(
+      () =>
+        new Promise<{ linked: boolean }>((resolve) => {
+          resolveGoogle = resolve;
+        }),
+    );
+    const updates: string[] = [];
+    const clean = startSettingsResourceLoad(
+      {
+        me: () => new Promise((resolve) => (resolveMe = resolve)),
+        onboarding: vi.fn(async () => onboarding),
+        googleLinkStatus,
+      },
+      (resource, result) =>
+        updates.push(`${resource}:${result?.status ?? "missing"}`),
+    );
+
+    expect(googleLinkStatus).not.toHaveBeenCalled();
+    resolveMe(me);
+    await Promise.resolve();
+    expect(googleLinkStatus).toHaveBeenCalledTimes(1);
+    expect(updates).toEqual(["me:ready", "googleLink:loading"]);
+    resolveGoogle({ linked: false });
+    await Promise.resolve();
+    expect(updates).toEqual([
+      "me:ready",
+      "googleLink:loading",
+      "onboarding:ready",
+      "googleLink:ready",
+    ]);
+    clean();
+  });
+
   it("suppresses onboarding when identity resolves without learner membership", async () => {
     const nonLearner = { ...me, membership_role: "admin" };
     const onboardingRequest = vi.fn(async () => onboarding);
@@ -341,7 +497,8 @@ describe("Focused Settings runtime", () => {
         me: async () => nonLearner,
         onboarding: onboardingRequest,
       },
-      (resource, result) => updates.push(resource + ":" + result.status),
+      (resource, result) =>
+        updates.push(resource + ":" + (result?.status ?? "missing")),
     );
     await Promise.resolve();
 

@@ -18,7 +18,7 @@ from uuid import UUID
 
 import anyio
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from starlette.requests import ClientDisconnect
 
 from ac_platform.application.settings import Settings
@@ -33,7 +33,12 @@ from ac_platform.media.errors import (
     MediaQuotaExceeded,
 )
 from ac_platform.media.models import MediaAsset, MediaUploadIntent, MediaVersion, StudioVideoUpload
-from ac_platform.media.video_file_storage import CHUNK_BYTES, VideoFileStorage
+from ac_platform.media.video_file_storage import (
+    CHUNK_BYTES,
+    RESUMABLE_CHUNK_BYTES,
+    ResumableUploadResult,
+    VideoFileStorage,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,13 @@ class _Envelope:
     content_type: str
     length: int
     checksum: str
+    total_length: int
+    offset: int
+    chunk_checksum: str | None
+
+    @property
+    def resumable(self) -> bool:
+        return self.chunk_checksum is not None
 
 
 @dataclass(frozen=True)
@@ -48,6 +60,7 @@ class _Admission:
     person_id: UUID
     session_id: UUID
     tenant_id: UUID | None
+    upload_id: UUID
     object_key: str
     asset_id: UUID
     version_id: UUID
@@ -107,15 +120,38 @@ class StudioVideoByteTransport:
             raise MediaBadRequest("Supply one video type, byte length and SHA-256 checksum.")
         content_type, length, checksum = (items[0] for items in values)
         encodings = request.headers.getlist("content-encoding")
+        resumable_names = ("x-ac-upload-total", "x-ac-upload-offset", "x-ac-upload-chunk-sha256")
+        resumable_values = [request.headers.getlist(name) for name in resumable_names]
+        resumable = any(resumable_values)
+        if resumable and any(len(items) != 1 for items in resumable_values):
+            raise MediaBadRequest("Supply one resumable upload total, offset and chunk checksum.")
         if (
             encodings not in ([], ["identity"])
             or content_type not in {"video/mp4", "video/webm"}
             or re.fullmatch(r"[1-9][0-9]{0,10}", length) is None
             or int(length) > self.storage.max_object_bytes
             or re.fullmatch(r"[0-9a-f]{64}", checksum) is None
+            or resumable
+            and (
+                re.fullmatch(r"[1-9][0-9]{0,10}", resumable_values[0][0]) is None
+                or re.fullmatch(r"[0-9]{1,11}", resumable_values[1][0]) is None
+                or re.fullmatch(r"[0-9a-f]{64}", resumable_values[2][0]) is None
+                or int(resumable_values[1][0]) + int(length) > int(resumable_values[0][0])
+                or int(resumable_values[0][0]) > self.storage.max_object_bytes
+                or int(length) > RESUMABLE_CHUNK_BYTES
+            )
         ):
             raise MediaBadRequest("The video upload headers are invalid or exceed the file limit.")
-        return _Envelope(content_type, int(length), checksum)
+        if resumable:
+            return _Envelope(
+                content_type,
+                int(length),
+                checksum,
+                int(resumable_values[0][0]),
+                int(resumable_values[1][0]),
+                resumable_values[2][0],
+            )
+        return _Envelope(content_type, int(length), checksum, int(length), 0, None)
 
     async def _authorize(
         self, request: Request, program_id: UUID, upload_id: UUID, envelope: _Envelope
@@ -175,11 +211,12 @@ class StudioVideoByteTransport:
             ):
                 raise MediaConflict("This upload can no longer accept bytes. Check its status.")
             if (
-                envelope
-                != _Envelope(
-                    intent.content_type, intent.declared_bytes, intent.checksum_sha256 or ""
-                )
-                or envelope.length > intent.max_bytes
+                envelope.content_type != intent.content_type
+                or envelope.total_length != intent.declared_bytes
+                or envelope.checksum != (intent.checksum_sha256 or "")
+                or not envelope.resumable
+                and envelope.length != intent.declared_bytes
+                or envelope.total_length > intent.max_bytes
                 or version.object_key != intent.object_key
                 or not self.storage.owns(intent.object_key)
             ):
@@ -188,6 +225,7 @@ class StudioVideoByteTransport:
                 actor.person_id,
                 actor.session_id,
                 actor.tenant_id,
+                upload_id,
                 intent.object_key,
                 intent.asset_id,
                 intent.version_id,
@@ -196,7 +234,9 @@ class StudioVideoByteTransport:
         # Exit (including commit failure) before admitting any request body.
         return admission
 
-    async def accept(self, request: Request, *, program_id: UUID, upload_id: UUID) -> None:
+    async def accept(
+        self, request: Request, *, program_id: UUID, upload_id: UUID
+    ) -> ResumableUploadResult:
         envelope = self._envelope(request)
         try:
             self.limiter.acquire_nowait()
@@ -207,7 +247,7 @@ class StudioVideoByteTransport:
             self._accept_admitted(request, program_id, upload_id, envelope, stopped)
         )
         try:
-            await asyncio.shield(operation)
+            return await asyncio.shield(operation)
         except asyncio.CancelledError as cancellation:
             # Native Task.cancel() can abandon an awaited AnyIO worker thread.
             # Signal it to stop accepting bytes, then retain the request's slot
@@ -238,7 +278,7 @@ class StudioVideoByteTransport:
         upload_id: UUID,
         envelope: _Envelope,
         stopped: asyncio.Event,
-    ) -> None:
+    ) -> ResumableUploadResult:
         def require_running() -> None:
             if stopped.is_set():
                 raise MediaBadRequest("The video transfer was cancelled. Retry the upload.")
@@ -291,16 +331,93 @@ class StudioVideoByteTransport:
                 raise MediaForbidden("The upload session or admitted video changed.")
 
         try:
-            await anyio.to_thread.run_sync(
-                partial(
-                    self.storage.put_stream,
-                    object_key=admission.object_key,
-                    chunks=chunks(),
-                    content_type=envelope.content_type,
-                    content_length=envelope.length,
-                    checksum_sha256=envelope.checksum,
-                    before_publish=lambda: anyio.from_thread.run(reauthorize),
+            result: ResumableUploadResult
+            if envelope.resumable:
+                body = bytearray()
+                while (chunk := await next_chunk()) is not None:
+                    body.extend(chunk)
+                await reauthorize()
+                result = await anyio.to_thread.run_sync(
+                    partial(
+                        self.storage.put_resumable_chunk,
+                        object_key=admission.object_key,
+                        body=bytes(body),
+                        content_type=envelope.content_type,
+                        content_length=envelope.total_length,
+                        checksum_sha256=envelope.checksum,
+                        offset=envelope.offset,
+                        chunk_checksum_sha256=envelope.chunk_checksum or "",
+                        before_publish=lambda: anyio.from_thread.run(reauthorize),
+                    )
                 )
-            )
+            else:
+                stored = await anyio.to_thread.run_sync(
+                    partial(
+                        self.storage.put_stream,
+                        object_key=admission.object_key,
+                        chunks=chunks(),
+                        content_type=envelope.content_type,
+                        content_length=envelope.length,
+                        checksum_sha256=envelope.checksum,
+                        before_publish=lambda: anyio.from_thread.run(reauthorize),
+                    )
+                )
+                result = ResumableUploadResult(envelope.length, stored)
+            if envelope.resumable:
+                await self._record_progress(
+                    request,
+                    program_id=program_id,
+                    upload_id=upload_id,
+                    admission=admission,
+                    uploaded_bytes=result.uploaded_bytes,
+                )
+            return result
         finally:
             await stream.aclose()
+
+    async def _record_progress(
+        self,
+        request: Request,
+        *,
+        program_id: UUID,
+        upload_id: UUID,
+        admission: _Admission,
+        uploaded_bytes: int,
+    ) -> None:
+        if uploaded_bytes <= 0:
+            return
+        fresh = await self._authorize(request, program_id, upload_id, admission.envelope)
+        if fresh != admission:
+            raise MediaForbidden("The upload session or admitted video changed.")
+        async with asynccontextmanager(self.require_actor)(request) as auth:
+            actor: ActorContext = auth.resolved.actor
+            if actor.person_id != admission.person_id or actor.tenant_id != admission.tenant_id:
+                raise MediaForbidden("The upload session or admitted video changed.")
+            await auth.database.execute(
+                update(MediaVersion)
+                .where(
+                    MediaVersion.id == admission.version_id,
+                    MediaVersion.tenant_id == admission.tenant_id,
+                    MediaVersion.state == "uploading",
+                    MediaVersion.object_key == admission.object_key,
+                    or_(
+                        MediaVersion.actual_bytes.is_(None),
+                        MediaVersion.actual_bytes < uploaded_bytes,
+                    ),
+                    select(MediaUploadIntent.id)
+                    .where(
+                        MediaUploadIntent.id == upload_id,
+                        MediaUploadIntent.tenant_id == admission.tenant_id,
+                        MediaUploadIntent.version_id == admission.version_id,
+                        MediaUploadIntent.actor_person_id == actor.person_id,
+                        MediaUploadIntent.state == "uploading",
+                        MediaUploadIntent.expires_at > datetime.now(UTC),
+                        MediaUploadIntent.object_key == admission.object_key,
+                        MediaUploadIntent.content_type == admission.envelope.content_type,
+                        MediaUploadIntent.declared_bytes == admission.envelope.total_length,
+                        MediaUploadIntent.checksum_sha256 == admission.envelope.checksum,
+                    )
+                    .exists(),
+                )
+                .values(actual_bytes=uploaded_bytes)
+            )

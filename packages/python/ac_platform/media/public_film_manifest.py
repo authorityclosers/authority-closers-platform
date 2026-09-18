@@ -31,6 +31,11 @@ MANIFEST_SHA256 = "dc8f635df33432aee83c461535823881286ded1577a8f8a72dc5b10f0ad86
 PUBLIC_FILM_MANIFEST_ID = "public-films-technical-demo-12s-v1"
 REGISTRY_SHA256 = "fc61c87d5428d53d35b82061a53fbdbd9967b8bf658c6d0425a78a07bc106290"
 SOURCE_INVENTORY_SHA256 = "d693acc73dc3f66c1b13ad6e68d5e41cba8478dc719f4b68211ce829442b0222"
+# The full source bytes and checksum were verified before being admitted by
+# the ordinary Studio upload lifecycle. This lookup is deliberately exact;
+# it does not inspect filenames, URLs, or client metadata.
+BBB_SOURCE_SHA256 = "37f0ff251a606c2dcfa26c19fe6bf843234b4e7a8889cfab50bc26f644e55520"
+BBB_SOURCE_BYTES = 633_016_449
 _NAMESPACE = UUID("01883ebc-4166-42d5-9a70-6c5178c27bc9")
 _SEAL = object()
 _MAX_MANIFEST_BYTES = 2 * 1024**2
@@ -62,6 +67,33 @@ _PROVENANCE = {
         "directed by Pablo Vazquez; studio.blender.org",
     ),
 }
+
+
+def technical_playback_provenance_for_checksum(
+    checksum_sha256: str | None,
+) -> PublicFilmProvenance | None:
+    """Return the reviewed BBB record for one exact admitted source digest.
+
+    The media service calls this only with a persisted, server-measured
+    ``MediaVersion.checksum_sha256``. Unknown or malformed values never
+    receive a provenance claim.
+    """
+
+    if not isinstance(checksum_sha256, str) or checksum_sha256.lower() != BBB_SOURCE_SHA256:
+        return None
+    title, source_url, source_page, license_name, license_url, attribution = _PROVENANCE[
+        "bbb-4k-30-normal"
+    ]
+    return PublicFilmProvenance(
+        fixture_id="bbb-4k-30-normal",
+        title=title,
+        source_url=source_url,
+        source_page=source_page,
+        license=license_name,
+        license_url=license_url,
+        attribution=attribution,
+        modifications=_MODIFICATIONS,
+    )
 
 
 def _deny(message: str) -> MediaConfigurationError:
@@ -332,6 +364,8 @@ __all__ = [
     "PUBLIC_FILM_MANIFEST_ID",
     "REGISTRY_SHA256",
     "SOURCE_INVENTORY_SHA256",
+    "BBB_SOURCE_BYTES",
+    "BBB_SOURCE_SHA256",
     "PublicFilmManifest",
     "PublicFilmProvenance",
     "VerifiedPublicFilmClip",
@@ -341,4 +375,5 @@ __all__ = [
     "load_verified_public_film_pack",
     "public_film_media_identity",
     "require_public_film_scope",
+    "technical_playback_provenance_for_checksum",
 ]

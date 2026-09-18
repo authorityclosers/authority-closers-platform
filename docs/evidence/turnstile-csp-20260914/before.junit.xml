@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="11.105" timestamp="2026-09-14T07:32:21.129682+05:30" hostname="RSuyash"><testcase classname="tests.e2e.test_sales_xray_turnstile_csp_browser" name="test_sales_xray_policy_loads_only_the_approved_challenge_origin[staging]" time="5.665"><failure message="AssertionError: Locator expected to have attribute 'loaded'&#10;Actual value: None &#10;Call log:&#10;  - Expect &quot;to_have_attribute&quot; with timeout 3000ms&#10;  - waiting for locator(&quot;html&quot;)&#10;    7 Ã— locator resolved to &lt;html&gt;â€¦&lt;/html&gt;&#10;      - unexpected value &quot;null&quot;">tests\e2e\test_sales_xray_turnstile_csp_browser.py:110: in test_sales_xray_policy_loads_only_the_approved_challenge_origin
+    expect(page.locator("html")).to_have_attribute(
+E   AssertionError: Locator expected to have attribute 'loaded'
+E   Actual value: None
+E   Call log:
+E     - Expect "to_have_attribute" with timeout 3000ms
+E     - waiting for locator("html")
+E       7 Ã— locator resolved to &lt;html&gt;â€¦&lt;/html&gt;
+E         - unexpected value "null"</failure></testcase><testcase classname="tests.e2e.test_sales_xray_turnstile_csp_browser" name="test_sales_xray_policy_loads_only_the_approved_challenge_origin[production]" time="5.243"><failure message="AssertionError: Locator expected to have attribute 'loaded'&#10;Actual value: None &#10;Call log:&#10;  - Expect &quot;to_have_attribute&quot; with timeout 3000ms&#10;  - waiting for locator(&quot;html&quot;)&#10;    7 Ã— locator resolved to &lt;html&gt;â€¦&lt;/html&gt;&#10;      - unexpected value &quot;null&quot;">tests\e2e\test_sales_xray_turnstile_csp_browser.py:110: in test_sales_xray_policy_loads_only_the_approved_challenge_origin
+    expect(page.locator("html")).to_have_attribute(
+E   AssertionError: Locator expected to have attribute 'loaded'
+E   Actual value: None
+E   Call log:
+E     - Expect "to_have_attribute" with timeout 3000ms
+E     - waiting for locator("html")
+E       7 Ã— locator resolved to &lt;html&gt;â€¦&lt;/html&gt;
+E         - unexpected value "null"</failure></testcase></testsuite></testsuites>

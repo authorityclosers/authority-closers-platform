@@ -1,0 +1,154 @@
+.visual {
+  --phase: #007d79;
+  --phase-soft: #dff7ed;
+  position: relative;
+  display: grid;
+  width: 140px;
+  height: 140px;
+  margin: auto;
+  place-items: center;
+  color: var(--phase);
+}
+.visual[data-phase="C2"] {
+  --phase: #315cdb;
+  --phase-soft: #e7efff;
+}
+.visual[data-phase="C4"] {
+  --phase: #713ee9;
+  --phase-soft: #eee7ff;
+}
+.visual[data-phase="C5"] {
+  --phase: #dd7108;
+  --phase-soft: #fff0dc;
+}
+.halo {
+  position: absolute;
+  inset: 1px;
+  border: 1px solid var(--phase-soft);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 12px #fff,
+    inset 0 0 0 13px var(--phase-soft);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+.icon {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  place-items: center;
+  border-radius: 28px;
+  background: var(--phase-soft);
+  animation: settle 320ms ease-out both;
+}
+.spinner {
+  position: absolute;
+  inset: 1px;
+  border: 3px solid transparent;
+  border-top-color: var(--phase);
+  border-right-color: var(--phase-soft);
+  border-radius: 50%;
+  animation: orbit 1.6s linear infinite;
+}
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+}
+.wave i {
+  width: 2px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+  animation: sound 1.2s ease-in-out infinite alternate;
+}
+.wave i:nth-child(2),
+.wave i:nth-child(4) {
+  height: 12px;
+  animation-delay: -0.4s;
+}
+.wave i:nth-child(3) {
+  height: 18px;
+  animation-delay: -0.8s;
+}
+.satellite {
+  position: absolute;
+  right: 6px;
+  bottom: 12px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 13px;
+  background: var(--phase);
+  color: #fff;
+}
+.visual[data-paused="true"] {
+  --phase: #bd6e20;
+  --phase-soft: #fff0dc;
+}
+.visual[data-paused="true"] .halo,
+.visual[data-paused="true"] .icon,
+.visual[data-paused="true"] .spinner,
+.visual[data-paused="true"] .wave i {
+  animation: none;
+}
+.visual[data-paused="true"] .spinner {
+  display: none;
+}
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sound {
+  to {
+    transform: scaleY(0.4);
+  }
+}
+@keyframes breathe {
+  50% {
+    transform: scale(0.94);
+    opacity: 0.6;
+  }
+}
+@keyframes settle {
+  from {
+    opacity: 0.5;
+    transform: scale(0.93);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (max-width: 620px) {
+  .visual {
+    width: 112px;
+    height: 112px;
+  }
+  .icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 23px;
+  }
+  .icon svg {
+    width: 34px;
+    height: 34px;
+  }
+  .satellite {
+    width: 30px;
+    height: 30px;
+    right: 0;
+    bottom: 5px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .halo,
+  .icon,
+  .spinner,
+  .wave i {
+    animation: none;
+  }
+}

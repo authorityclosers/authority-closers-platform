@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="34" failures="0" errors="0" time="0.1371131">
+    <testsuite name="app/lib/platform-identity.test.ts" timestamp="2026-09-13T23:59:31.354Z" hostname="RSuyash" tests="34" failures="0" errors="0" skipped="0" time="0.1371131">
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; accepts a verified exact grant without changing membership or requiring selected tenant" time="0.0083814">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;person_id&quot;:&quot;22222222-2222-4222-8222-222222222222&quot;}" time="0.0010591">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;session_id&quot;:&quot;11111111-1111-4111-8111-111111111111&quot;}" time="0.000906">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;selected_tenant_id&quot;:&quot;11111111-1111-4111-8111-111111111111&quot;}" time="0.0008364">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;platform_permissions&quot;:[&quot;admin_surface&quot;]}" time="0.0029876">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;platform_permissions&quot;:[&quot;catalog_read&quot;]}" time="0.0009134">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;platform_permissions&quot;:[&quot;platform_tenants_read&quot;,&quot;platform_tenants_read&quot;]}" time="0.002578">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects mismatched or forged projection {&quot;role&quot;:&quot;owner&quot;}" time="0.0012755">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects inconsistent canonical snapshots {&quot;person_id&quot;:&quot;22222222-2222-4222-8222-222222222222&quot;}" time="0.0010837">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects inconsistent canonical snapshots {&quot;tenant_id&quot;:&quot;11111111-1111-4111-8111-111111111111&quot;}" time="0.000767">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects inconsistent canonical snapshots {&quot;membership_role&quot;:&quot;owner&quot;}" time="0.0004833">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects inconsistent canonical snapshots {&quot;permissions&quot;:[&quot;admin_surface&quot;]}" time="0.0011399">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; reads canonical identity with same-origin no-store, no redirects and abort bounds" time="0.0311393">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; fails closed for HTTP 401" time="0.0013123">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; fails closed for HTTP 403" time="0.0008951">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; fails closed for HTTP 500" time="0.0007388">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; fails closed for HTTP 302" time="0.0006408">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; cancels oversized streams before allocating an unlimited response" time="0.0055623">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; sends only opaque cookie to the fixed internal host" time="0.012519">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; never contacts an untrusted transport {&quot;cookieHeader&quot;:null}" time="0.0078919">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; never contacts an untrusted transport {&quot;cookieHeader&quot;:&quot;__Host-ac_session=sssssssssssssssssssssssssssssssssssssssssss; __Host-ac_session=sssssssssssssssssssssssssssssssssssssssssss&quot;}" time="0.0014549">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; never contacts an untrusted transport {&quot;internalApiHost&quot;:&quot;evil.test&quot;}" time="0.0011905">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; never contacts an untrusted transport {&quot;internalApiUrl&quot;:&quot;https://api.production.ac.internal.invalid:8000&quot;}" time="0.0005202">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; never contacts an untrusted transport {&quot;internalApiUrl&quot;:&quot;http://api.production.ac.internal.invalid:8000?override=1&quot;}" time="0.000693">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; admits only /platform and does not broaden legacy People or Coach routes" time="0.0225387">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; honors the selected academy at home while keeping Platform Admin an explicit destination" time="0.0041713">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; does not use academy access as a substitute for a platform grant" time="0.0029641">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; ignores stale dev flags on production Platform page" time="0.0015445">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; keeps new read route off Coach and denies writes /v1/me/platform-access" time="0.002115">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; keeps new read route off Coach and denies writes /v1/platform/tenants" time="0.0008171">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; keeps new read route off Coach and denies writes /v1/platform/tenants?after_id=11111111-1111-4111-8111-111111111111" time="0.0018683">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects new platform selectors ?person_id=11111111-1111-4111-8111-111111111111" time="0.0032531">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects new platform selectors ?after_id=bad" time="0.0018618">
+        </testcase>
+        <testcase classname="app/lib/platform-identity.test.ts" name="separate Platform Admin admission &gt; rejects new platform selectors ?after_id=11111111-1111-4111-8111-111111111111&amp;after_id=22222222-2222-4222-8222-222222222222" time="0.000563">
+        </testcase>
+    </testsuite>
+</testsuites>

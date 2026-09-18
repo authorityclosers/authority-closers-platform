@@ -1,5 +1,14 @@
 """Versioned catalog primitives for the G1 Free Course foundation."""
 
+from ac_platform.catalog.free_course_publication import (
+    AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
+    FREE_COURSE_ADOPTION_ACTION,
+    FREE_COURSE_PUBLICATION_ACTION,
+    FreeCoursePublicationApplication,
+    FreeCoursePublicationConflict,
+    FreeCoursePublicationError,
+    FreeCoursePublicationResult,
+)
 from ac_platform.catalog.models import (
     IMMUTABLE_VERSION_STATUSES,
     SUPPORTED_ACTIVITY_KINDS,
@@ -57,10 +66,34 @@ from ac_platform.catalog.services import (
     SupersessionRequiredError,
 )
 
+_FREE_COURSE_MEDIA_EXPORTS = frozenset(
+    {
+        "FreeCourseMediaBindingAuthorization",
+        "FreeCourseMediaPromotionApplication",
+        "FreeCourseMediaPromotionConflict",
+        "FreeCourseMediaPromotionError",
+        "FreeCourseMediaPromotionResult",
+    }
+)
+
+
+def __getattr__(name: str) -> object:
+    """Load media promotion symbols lazily to keep catalog/media imports acyclic."""
+
+    if name in _FREE_COURSE_MEDIA_EXPORTS:
+        from ac_platform.catalog import free_course_media
+
+        value = getattr(free_course_media, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "Activity",
     "ActivityKind",
     "ActivitySnapshot",
+    "AUTHORITY_CLOSERS_FREE_COURSE_SLUG",
     "AsyncCatalogApplication",
     "CATALOG_PUBLISH_PERMISSION",
     "CATALOG_READ_PERMISSION",
@@ -81,6 +114,17 @@ __all__ = [
     "CatalogTransactionRequiredError",
     "CatalogValidationError",
     "DraftRequiredError",
+    "FREE_COURSE_ADOPTION_ACTION",
+    "FREE_COURSE_PUBLICATION_ACTION",
+    "FreeCourseMediaBindingAuthorization",
+    "FreeCourseMediaPromotionApplication",
+    "FreeCourseMediaPromotionConflict",
+    "FreeCourseMediaPromotionError",
+    "FreeCourseMediaPromotionResult",
+    "FreeCoursePublicationApplication",
+    "FreeCoursePublicationConflict",
+    "FreeCoursePublicationError",
+    "FreeCoursePublicationResult",
     "IMMUTABLE_VERSION_STATUSES",
     "InMemoryCatalogStore",
     "InvalidActivityKindError",

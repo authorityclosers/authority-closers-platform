@@ -204,6 +204,7 @@ export function DashboardRuntime({
   const [error, setError] = useState<unknown>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [consentRenewalRequired, setConsentRenewalRequired] = useState(false);
   const [onboardingRedirecting, setOnboardingRedirecting] = useState(false);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
@@ -293,6 +294,7 @@ export function DashboardRuntime({
   async function handleEnroll(programVersionId: string) {
     setEnrolling(true);
     setEnrollError(null);
+    setConsentRenewalRequired(false);
     try {
       await api.enrollFree(programVersionId);
       if (!mountedRef.current) return;
@@ -305,6 +307,12 @@ export function DashboardRuntime({
       }
     } catch (err) {
       if (!mountedRef.current) return;
+      if (
+        err instanceof ApiError &&
+        err.code === "learner_consent_update_required"
+      ) {
+        setConsentRenewalRequired(true);
+      }
       setEnrollError(
         userFacingRequestError(
           err,
@@ -1150,6 +1158,14 @@ export function DashboardRuntime({
             {enrollError ? (
               <div className="alert-box alert-box--error" role="alert">
                 <p>{enrollError}</p>
+                {consentRenewalRequired ? (
+                  <Link
+                    className="button button--outline"
+                    href={courseIntentHref(ROUTES.consentRenewal, courseIntent)}
+                  >
+                    Review current consent
+                  </Link>
+                ) : null}
               </div>
             ) : null}
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "environment": "local",
+  "base_commit": "2beddc4",
+  "build_id": "QJhPrzqxGtv8K61MsPvr4",
+  "normalization": "UTF-8 LF; build console trailing whitespace removed; raw external logs preserved",
+  "receipts": [
+    {
+      "path": "routing.junit.xml",
+      "sha256": "b43580ef99169872e150d0511a2fae193c2205923ffd7a566026db20e91d711a"
+    },
+    {
+      "path": "platform-fixture.junit.xml",
+      "sha256": "64cf7769066252a5252327b5adb0ca23b206427c40c4da997185ebebca0b4c89"
+    },
+    {
+      "path": "browser.junit.xml",
+      "sha256": "3d9b84e548c63ab2ac0ebed8f8a3e4ca575b3a0003b545f084f238c4bfa223fa"
+    },
+    {
+      "path": "browser-receipt.json",
+      "sha256": "79611a5c363a634b589c77fd79c010d833bf958beb0800abeb49772d2f217545"
+    },
+    {
+      "path": "build.log",
+      "sha256": "bbc4206fb971edcafe933e21e7047829b5ae4f9e4c7f2045c118d3d876bcd425"
+    }
+  ]
+}

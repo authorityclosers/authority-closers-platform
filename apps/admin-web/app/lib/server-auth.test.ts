@@ -60,6 +60,37 @@ async function closeServer(server: Server): Promise<void> {
 afterEach(() => vi.restoreAllMocks());
 
 describe("server-owned admin context adapter", () => {
+  it("starts independent identity reads together but waits for every matching response before admission", async () => {
+    const release: Array<() => void> = [];
+    const bodies = [verifiedMe, verifiedContext, verifiedAccess];
+    const fetcher = vi.fn<typeof fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          const index = release.length;
+          release.push(() => resolve(Response.json(bodies[index])));
+        }),
+    );
+    let settled = false;
+    const result = resolveAdminServerContext({
+      cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+      internalApiUrl: PRODUCTION_INTERNAL_API_URL,
+      internalApiHost: PRODUCTION_INTERNAL_API_HOST,
+      fetcher,
+    }).then((value) => {
+      settled = true;
+      return value;
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    release[0]!();
+    release[1]!();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release[2]!();
+    await expect(result).resolves.toMatchObject({
+      actorId: verifiedContext.person_id,
+    });
+  });
   it("admits only the assigned Studio scope for a learner session", async () => {
     const capability = {
       permission: "catalog_read",

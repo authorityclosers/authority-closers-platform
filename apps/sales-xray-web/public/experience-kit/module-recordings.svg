@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="232" height="270" viewBox="0 0 232 270" role="img" aria-labelledby="asset-title asset-description">
+  <title id="asset-title">Recordings — floating module card</title>
+  <desc id="asset-description">Decorative skeleton illustration. No real customer data, chart, score or loaded state.</desc>
+  <defs>
+    <filter id="sx-shadow" x="-40%" y="-40%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#163E35" flood-opacity=".095"/>
+    </filter>
+    <filter id="sx-small-shadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163E35" flood-opacity=".06"/>
+    </filter>
+    <linearGradient id="sx-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFCFB"/>
+    </linearGradient>
+    <linearGradient id="sx-wave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#DFEEE7" stop-opacity=".72"/>
+      <stop offset="100%" stop-color="#F8FBF9" stop-opacity=".15"/>
+    </linearGradient>
+    <radialGradient id="sx-halo">
+      <stop offset="0%" stop-color="#E8F5ED" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#F9FBFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(24 18) rotate(0 92.0 107.0)" opacity="1">
+    <rect x="0" y="0" width="184" height="214" rx="22" fill="url(#sx-surface)" stroke="#E4EEE8" stroke-width=".8" filter="url(#sx-small-shadow)"/>
+    <circle cx="92.0" cy="51" r="25" fill="#EBF5EF"/>
+    <g transform="translate(81.0 40) scale(0.9166666666666666)" fill="none" stroke="#8CB4A4" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4" fill="none" stroke="#8CB4A4"/>
+    </g>
+    <text x="92.0" y="104" font-size="15" fill="#91A69D" font-weight="500" text-anchor="middle" font-family="Inter, Arial, sans-serif">Recordings</text>
+    <rect x="24" y="129" width="136" height="9" rx="5" fill="#E2EBE6"/>
+    <rect x="24" y="149" width="107" height="9" rx="5" fill="#EBF1ED"/>
+  </g>
+</svg>

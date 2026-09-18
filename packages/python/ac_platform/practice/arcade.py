@@ -26,8 +26,8 @@ class InvalidPracticeResponse(ValueError):
 def _sets() -> dict[str, dict[str, Any]]:
     payload = json.loads(Path(__file__).with_name("exercise-library.draft.json").read_text("utf-8"))
     result = {item["id"]: item for item in payload["sets"]}
-    if len(result) != 8 or any(
-        item["review_status"] != "needs_Dipak_review"
+    if len(result) != 11 or any(
+        item["review_status"] not in {"needs_Dipak_review", "approved"}
         or item["competition_eligible"] is not False
         or item["assessment_eligible"] is not False
         for item in result.values()
@@ -36,10 +36,37 @@ def _sets() -> dict[str, dict[str, Any]]:
     return result
 
 
+@lru_cache(maxsize=1)
+def _published_sets() -> dict[str, dict[str, Any]]:
+    payload = json.loads(
+        Path(__file__).with_name("exercise-library.published.json").read_text("utf-8")
+    )
+    result = {item["id"]: item for item in payload["sets"]}
+    if (
+        payload.get("status") != "published"
+        or len(result) != 3
+        or any(
+            item["review_status"] != "approved"
+            or item["competition_eligible"] is not False
+            or item["assessment_eligible"] is not False
+            or any(question["status"] != "published" for question in item["items"])
+            for item in result.values()
+        )
+    ):
+        raise RuntimeError("Published practice inventory does not match its activation contract.")
+    return result
+
+
 def _set(set_id: str) -> dict[str, Any]:
     if set_id not in _sets():
         raise ExerciseUnavailable("Practice set was not found.")
     return _sets()[set_id]
+
+
+def _published_set(set_id: str) -> dict[str, Any]:
+    if set_id not in _published_sets():
+        raise ExerciseUnavailable("Practice set was not found.")
+    return _published_sets()[set_id]
 
 
 def _exercise(set_id: str, item_id: str) -> dict[str, Any]:
@@ -59,31 +86,16 @@ def _options(item_id: str, values: list[str]) -> list[dict[str, Any]]:
 
 
 def catalog() -> dict[str, Any]:
-    return {
-        "mode": "editorial_preview",
-        "course_progress_affected": False,
-        "responses_stored": False,
-        "items": [
-            {
-                **{
-                    key: item[key]
-                    for key in (
-                        "id",
-                        "version",
-                        "title",
-                        "kind",
-                        "skill",
-                        "description",
-                        "art",
-                        "color",
-                        "estimated_minutes",
-                    )
-                },
-                "item_count": len(item["items"]),
-            }
-            for item in _sets().values()
-        ],
-    }
+    return _catalog_for(_sets(), mode="editorial_preview", responses_stored=False)
+
+
+def published_catalog() -> dict[str, Any]:
+    """Return the baseline pilot catalog plus the approved language sets."""
+    # Preserve the eight existing Arcade cards and overlay the three reviewed
+    # language sets. Only the new IDs have a published snapshot; legacy cards
+    # continue to use their existing durable-attempt contract.
+    merged = {**_sets(), **_published_sets()}
+    return _catalog_for(merged, mode="published", responses_stored=True)
 
 
 def _node(item: dict[str, Any], node_id: str) -> dict[str, Any]:
@@ -98,12 +110,21 @@ def practice_set(set_id: str) -> dict[str, Any]:
     return public_snapshot(set_snapshot(set_id))
 
 
+def published_practice_set(set_id: str) -> dict[str, Any]:
+    return public_snapshot(published_set_snapshot(set_id), mode="published")
+
+
 def set_snapshot(set_id: str) -> dict[str, Any]:
     """Private immutable-at-issuance definition; never return answers to clients."""
     return deepcopy(_set(set_id))
 
 
-def public_snapshot(selected: dict[str, Any]) -> dict[str, Any]:
+def published_set_snapshot(set_id: str) -> dict[str, Any]:
+    """Private immutable published definition used by the deployment pilot."""
+    return deepcopy(_published_set(set_id))
+
+
+def public_snapshot(selected: dict[str, Any], *, mode: str = "editorial_preview") -> dict[str, Any]:
     items = []
     for item in selected["items"]:
         public = {key: item[key] for key in ("id", "kind", "prompt", "hint")}
@@ -136,8 +157,38 @@ def public_snapshot(selected: dict[str, Any]) -> dict[str, Any]:
             )
         },
         "item_count": len(items),
-        "mode": "editorial_preview",
+        "mode": mode,
         "items": items,
+    }
+
+
+def _catalog_for(
+    sets: dict[str, dict[str, Any]], *, mode: str, responses_stored: bool
+) -> dict[str, Any]:
+    return {
+        "mode": mode,
+        "course_progress_affected": False,
+        "responses_stored": responses_stored,
+        "items": [
+            {
+                **{
+                    key: item[key]
+                    for key in (
+                        "id",
+                        "version",
+                        "title",
+                        "kind",
+                        "skill",
+                        "description",
+                        "art",
+                        "color",
+                        "estimated_minutes",
+                    )
+                },
+                "item_count": len(item["items"]),
+            }
+            for item in sets.values()
+        ],
     }
 
 

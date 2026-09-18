@@ -123,17 +123,17 @@ def test_thin_archive_manifest_is_identical_to_the_api_and_compiled_pin(harness)
     assert raw == SOURCE_MANIFEST.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == module.MANIFEST_SHA256
     assert json.loads((APPLICATION / module.POLICY_RELATIVE).read_bytes())["enabled"] == {
-        "staging": True,
+        "staging": False,
         "production": False,
     }
     files = module.load_manifest(harness.release())
     assert len(files) == 30 and sum(item.length for item in files) == 54_274_209
 
 
-def test_source_policy_is_staging_only_and_legacy_delivery_stays_off(harness):
+def test_source_policy_is_disabled_while_release_policy_remains_explicit(harness):
     module = harness.module
     source_policy = json.loads((APPLICATION / module.POLICY_RELATIVE).read_bytes())
-    assert source_policy["enabled"] == {"staging": True, "production": False}
+    assert source_policy["enabled"] == {"staging": False, "production": False}
     assert source_policy["manifest_sha256"] == module.MANIFEST_SHA256
     assert source_policy["learner_origins"] == module.LEARNER_ORIGINS
 
@@ -145,7 +145,7 @@ def test_source_policy_is_staging_only_and_legacy_delivery_stays_off(harness):
     release = harness.release()
     release_policy = release / module.POLICY_RELATIVE
     value = json.loads(release_policy.read_bytes())
-    value["enabled"] = source_policy["enabled"]
+    value["enabled"] = {"staging": True, "production": False}
     release_policy.write_text(json.dumps(value), encoding="utf-8")
     assert module.load_policy(release, "staging") is True
     assert module.load_policy(release, "production") is False
@@ -409,7 +409,7 @@ def test_new_preflight_checks_candidate_and_rollback_before_writer_stop():
         invocation = re.escape(f'preflight "${target}" "$target_environment"')
         assert re.search(prefix + r"\s+\\\n\s+" + invocation, installer)
         assert installer.index(f'preflight "${target}" "$target_environment"') < installer.index(
-            'compose_for "$writer_release" stop'
+            'stop_application_services_with_hosted_drain "$writer_release" false'
         )
 
 
@@ -440,7 +440,11 @@ def test_dispatch_uses_target_policy_scrubs_flags_and_rejects_legacy_overlap(
     binary_path = binary.as_posix()
     if os.name == "nt":
         binary_path = "/" + binary_path[0].lower() + binary_path[2:]
+    hosted_loader = "sales_xray_hosted_inputs=()\n" + _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+    )
     function = _installer_function("compose_for", '\n\ncompose_for "$release_dir" config --quiet')
+    filesystem_selector = "filesystem_media_compose_file_for() {\n  return 0\n}\n"
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )
@@ -453,6 +457,8 @@ target_environment={shlex.quote(environment)}
 compose_project=test-public-films
 with_release_secrets() {{ "$@"; }}
 {practice_scope}
+{filesystem_selector}
+{hosted_loader}
 python3() {{
   [[ "$2" == compose-file && "$4" == "$target_environment" ]]
   if [[ "$1" == "$release_dir/scripts/public-films.py" ]]; then

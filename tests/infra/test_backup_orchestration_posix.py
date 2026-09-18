@@ -302,8 +302,16 @@ exec 9>>"$synthetic_lock"
                 self.assertNotIn("synthetic-private-child-output", str(failure.exception))
                 child_pid = int(child_pid_file.read_text())
                 process_state = Path(f"/proc/{child_pid}/stat")
-                if process_state.exists():
-                    self.assertEqual(process_state.read_text().split()[2], "Z")
+                try:
+                    state = process_state.read_text().split()[2]
+                except FileNotFoundError:
+                    # The descendant may be reaped between the process-group
+                    # cleanup and this observation. Its disappearance is an
+                    # equally valid cleanup result; if proc still exposes it,
+                    # it must be a zombie rather than a live upload process.
+                    state = None
+                if state is not None:
+                    self.assertEqual(state, "Z")
                 self.assertFalse(
                     any(
                         thread.name.startswith("ac-upload-diagnostics-")

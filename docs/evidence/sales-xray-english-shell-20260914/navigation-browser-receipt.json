@@ -1,0 +1,104 @@
+{
+  "schema": "ac.sales-xray.report-navigation-browser/1",
+  "source_commit": "39dcb36 plus final English-shell diff; see exact source hashes",
+  "source_files": {
+    "apps\\sales-xray-web\\app\\call-studio.tsx": "452f57515bc2e480507f988d3395699eff6a746868f0a4b607b2b591f4f38c0b",
+    "apps\\sales-xray-web\\app\\report-explorer.tsx": "61953a2c8820a15d6ec9b7e8edb0f60c5301fd517a98cbbd61e0abf8652b20e3",
+    "apps\\sales-xray-web\\app\\finding-evidence.tsx": "8e5fe53ac39818a985bae2ee0a57ce355c6d79195d5563ba36f5b2daec5d2859",
+    "apps\\sales-xray-web\\app\\report-explorer.module.css": "fc81237606fc767590081f5cff5fd75144d6afd21b2538385889c98318aaa8d2"
+  },
+  "url": "http://127.0.0.1:3205",
+  "fixture_api": true,
+  "media_play_substituted_for_recovery": true,
+  "provider_calls": 0,
+  "checks": [
+    "six usable sections",
+    "collapsed source evidence expands by keyboard and remains complete for print",
+    "same media element across navigation",
+    "source moment seek and blocked/missing recovery",
+    "transcript filter and exact seek",
+    "retained sound channel and cursor",
+    "English shell without global language controls",
+    "literal Hindi/Marathi/English mixed transcript and report; Devanagari search",
+    "keyboard Home/End and selected focus at320px",
+    "print includes hidden sections and excludes tab controls"
+  ],
+  "result": "passed",
+  "artifacts": [
+    {
+      "file": "mixed-script-overview-1280.png",
+      "sha256": "b3c805535f66f7c411079b514da0073cd399482b7213f6942125662385b6d42f",
+      "bytes": 102257
+    },
+    {
+      "file": "mixed-script-overview-320.png",
+      "sha256": "51fa859e357328ad82a09c0bfb931d478819600e0451f73460eedf89637992ac",
+      "bytes": 92840
+    },
+    {
+      "file": "mixed-script-overview-390.png",
+      "sha256": "5cf3f9e4947e29162f72dd098288335ad69d279942178abb858dd963e3781345",
+      "bytes": 92889
+    },
+    {
+      "file": "mixed-script-transcript-1280.png",
+      "sha256": "046d74e65a4db39e0119eadf91a61f357924e83756fc3adf793f4124ac950376",
+      "bytes": 91677
+    },
+    {
+      "file": "mixed-script-transcript-320.png",
+      "sha256": "9e2ca32442cb4189416c9ccb0f5eb4a4b89a4e27df85bffedf9523db01b034d4",
+      "bytes": 83356
+    },
+    {
+      "file": "mixed-script-transcript-390.png",
+      "sha256": "c4d98c54447b0bec1723002768ddf904c3908365681c697d8b5edac329d955f2",
+      "bytes": 83724
+    },
+    {
+      "file": "report-playback-recovery.png",
+      "sha256": "543aee1928c04ea8b2272cf8f42c67d73b69e7234c220b22ba62366b5a5999a9",
+      "bytes": 90123
+    },
+    {
+      "file": "report-print-layout.png",
+      "sha256": "0ec0e5d4a5ba9b2651758292a8ba6e4b79cde7ce5780d78b0b47c8d29725568a",
+      "bytes": 151024
+    },
+    {
+      "file": "section-call-moments.png",
+      "sha256": "343053facc2ef8a09bce74dcd9f64cd1c6c05cfaf7861bede48eb98aa764103c",
+      "bytes": 91323
+    },
+    {
+      "file": "section-next-steps.png",
+      "sha256": "a26c69f65b97626f9fcf206d8a1357d3a8fbeca61faa119f6425050538233a85",
+      "bytes": 91944
+    },
+    {
+      "file": "section-overview.png",
+      "sha256": "b3c805535f66f7c411079b514da0073cd399482b7213f6942125662385b6d42f",
+      "bytes": 102257
+    },
+    {
+      "file": "section-sales-factors.png",
+      "sha256": "be6b823b0dc7b7f8a914e521ab45994beb4951c7c027ab0d82953c3e6b67cfa9",
+      "bytes": 98225
+    },
+    {
+      "file": "section-sound.png",
+      "sha256": "3d1899e4e8e81db8fe8155ff5eff30d0ebe225506aeb2841b2565c19b6e72934",
+      "bytes": 104699
+    },
+    {
+      "file": "section-transcript.png",
+      "sha256": "c73260e972d94b198766764fdd5fd1a9bc5280a6b05a242093bb4d4786864104",
+      "bytes": 91643
+    },
+    {
+      "file": "synthetic-report.pdf",
+      "sha256": "451cd7a1ef06850f1cc0b877bab2be3d3de3aa6f8e582f73e299d03393ab1f98",
+      "bytes": 132457
+    }
+  ]
+}

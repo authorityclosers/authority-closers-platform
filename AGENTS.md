@@ -39,3 +39,17 @@ Hostile audit findings are normalized into AC-IMP-03; do not invent original mis
 
 ## Raw founder evidence
 Use only for context and to verify intent. Controlled docs win.
+
+## Cloud research orchestration
+
+For expensive, separable research or review, follow the `cloud-chat-orchestration`
+skill at `C:\Users\Suyash\.codex\skills\cloud-chat-orchestration\SKILL.md`.
+Codex remains the integration and release owner: pin the source revision, keep
+file ownership separate, reproduce relevant claims locally, run the repository
+gates, and verify the real deployed journey. Use the authorized normal ChatGPT
+Pro chat in Chrome for research when available; if it is unavailable or capped,
+record that limitation and continue useful local work or a bounded Luna xhigh
+delegate. Never bypass service limits, silently substitute an unapproved model,
+send secrets or raw customer data, or treat a cloud-chat handoff as production
+evidence. A handoff is accepted only after its claims and artifacts are checked
+against the repository and release controls.

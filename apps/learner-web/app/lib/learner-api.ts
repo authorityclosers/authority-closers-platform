@@ -6,6 +6,9 @@ import {
   type OfflineReadCache,
   type OfflineReadCacheLease,
 } from "./offline-read-cache";
+import { parseActivityIntent, type ActivityIntent } from "./activity-intent";
+import { parseCourseIntent, type CourseIntent } from "./course-intent";
+import { parseSalesAuthNext, type SalesAuthNext } from "./sales-auth-return";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -15,6 +18,26 @@ export interface PasswordRegistrationInput {
   whatsappNumber: string;
   password: string;
   consent: true;
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
+}
+
+export interface PasswordEmailContext {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
+}
+
+function passwordEmailContextBody(
+  context?: PasswordEmailContext,
+): Record<string, string> {
+  const course = parseCourseIntent(context?.courseIntent);
+  const activity = parseActivityIntent(context?.activityIntent);
+  const salesNext = parseSalesAuthNext(context?.salesNext);
+  if (activity) return course ? { course, activity } : {};
+  if (!course) return salesNext ? { next: salesNext } : {};
+  return { course };
 }
 
 export interface PasswordRegistrationResponse {
@@ -34,6 +57,10 @@ export interface PasswordRecoveryResponse {
 
 export interface PasswordResetResponse {
   reset: true;
+}
+
+export interface GoogleLinkStatusResponse {
+  linked: boolean;
 }
 
 export type OnboardingStatus =
@@ -110,6 +137,37 @@ export interface CommunityLeaderboardResponse {
     is_current_learner: boolean;
   }>;
   next_cursor: string | null;
+}
+
+export interface CommunityDiscoveryResponse {
+  username: string | null;
+  discoverable: boolean;
+  public_display_name: string | null;
+  avatar_asset_id: string | null;
+  revision: number;
+}
+
+export interface CommunityPublicProfile {
+  username: string;
+  display_name: string | null;
+  avatar_asset_id: string | null;
+  practice_xp_total: number | null;
+  connection_state: "pending" | "accepted" | "declined" | "removed" | null;
+  connection_incoming: boolean | null;
+}
+
+export interface CommunitySearchResponse {
+  items: CommunityPublicProfile[];
+}
+
+export interface CommunityConnectionResponse {
+  username: string;
+  state: "pending" | "accepted" | "declined" | "removed";
+  incoming: boolean;
+}
+
+export interface CommunityConnectionsResponse {
+  items: CommunityConnectionResponse[];
 }
 
 export interface AvatarCropMetadata {
@@ -234,6 +292,22 @@ export interface FreeEnrollmentResponse {
   entitlement_id: string;
   provenance_id: string;
   created: boolean;
+  replayed: boolean;
+}
+
+export interface LearnerConsentDocumentResponse {
+  version: string;
+  acknowledgement: string;
+  terms_path: "/terms";
+  privacy_path: "/privacy";
+}
+
+export interface LearnerConsentResponse {
+  status: "current" | "renewal_required" | "consent_required";
+  current_version: string;
+  recorded_version: string | null;
+  consented_at: string | null;
+  document: LearnerConsentDocumentResponse;
   replayed: boolean;
 }
 
@@ -421,7 +495,16 @@ export interface ActivityMediaDescriptor {
     manifest_url: string | null;
     progressive_url: string | null;
   } | null;
+  provenance?: ActivityMediaProvenance | null;
   playback_available: boolean;
+}
+
+export interface ActivityMediaProvenance {
+  label: "Technical playback test — not course instruction";
+  title: "Big Buck Bunny — Sunflower";
+  attribution: "Blender Foundation 2008, Janus Bager Kristensen 2013; Big Buck Bunny, Sunflower version";
+  license: "Creative Commons Attribution 3.0";
+  license_url: "https://creativecommons.org/licenses/by/3.0/";
 }
 
 export interface DraftResponse {
@@ -573,6 +656,15 @@ async function parseBody(response: Response): Promise<unknown> {
   } catch {
     return { title: text };
   }
+}
+
+export function parseGoogleLinkStatusResponse(
+  body: unknown,
+): GoogleLinkStatusResponse {
+  if (!isRecord(body) || typeof body.linked !== "boolean") {
+    throw new Error("Learner API returned an invalid Google-link status.");
+  }
+  return { linked: body.linked };
 }
 
 function assertV1Path(path: string): void {
@@ -758,7 +850,7 @@ export function createLearnerApi(
     path: string,
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
-    method: "POST" | "PUT" = "POST",
+    method: "POST" | "PUT" | "DELETE" = "POST",
     idempotencyKey = makeKey(),
     signal?: AbortSignal,
   ): Promise<T> {
@@ -793,7 +885,7 @@ export function createLearnerApi(
     path: string,
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
-    method: "POST" | "PUT" = "POST",
+    method: "POST" | "PUT" | "DELETE" = "POST",
     signal?: AbortSignal,
   ): Promise<T> {
     const fingerprint = stableFingerprint({ body, extraHeaders, method, path });
@@ -842,6 +934,7 @@ export function createLearnerApi(
         password: input.password,
         consent: input.consent,
         consent_version: LEARNER_POLICY_VERSION,
+        ...passwordEmailContextBody(input),
       }),
     loginPassword: async (email: string, password: string) =>
       rememberAuthenticatedOwner(
@@ -850,14 +943,18 @@ export function createLearnerApi(
           password,
         }),
       ),
-    requestPasswordRecovery: (email: string) =>
+    requestPasswordRecovery: (email: string, context?: PasswordEmailContext) =>
       jsonMutation<PasswordRecoveryResponse>("/v1/auth/password/recovery", {
         email,
+        ...passwordEmailContextBody(context),
       }),
-    resendPasswordVerification: (email: string) =>
+    resendPasswordVerification: (
+      email: string,
+      context?: PasswordEmailContext,
+    ) =>
       jsonMutation<PasswordRecoveryResponse>(
         "/v1/auth/password/resend-verification",
-        { email },
+        { email, ...passwordEmailContextBody(context) },
       ),
     verifyPasswordEmail: async (token: string) =>
       rememberAuthenticatedOwner(
@@ -897,6 +994,13 @@ export function createLearnerApi(
       ),
     me: (options: LearnerReadOptions = {}) =>
       request<MeResponse>("/v1/me", { ...options, cache: "no-store" }),
+    googleLinkStatus: async (options: LearnerReadOptions = {}) =>
+      parseGoogleLinkStatusResponse(
+        await request<unknown>("/v1/me/google-link", {
+          ...options,
+          cache: "no-store",
+        }),
+      ),
     communityProfile: (options: LearnerReadOptions = {}) =>
       request<CommunityProfileResponse>("/v1/community/profile", {
         ...options,
@@ -936,6 +1040,109 @@ export function createLearnerApi(
         { ...options, cache: "no-store" },
       );
     },
+    communityDiscovery: (options: LearnerReadOptions = {}) =>
+      request<CommunityDiscoveryResponse>("/v1/community/discovery", {
+        ...options,
+        cache: "no-store",
+      }),
+    setCommunityDiscovery: (
+      discoverable: boolean,
+      publicDisplayName: string | null,
+      avatarAssetId: string | null,
+      expectedRevision: number,
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<CommunityDiscoveryResponse>(
+        `community-discovery:${expectedRevision}:${String(discoverable)}`,
+        "/v1/community/discovery",
+        {
+          discoverable,
+          public_display_name: publicDisplayName,
+          avatar_asset_id: avatarAssetId,
+          expected_revision: expectedRevision,
+        },
+        {},
+        "PUT",
+        signal,
+      ),
+    communitySearch: (
+      query: string,
+      limit = 10,
+      options: LearnerReadOptions = {},
+    ) =>
+      request<CommunitySearchResponse>(
+        `/v1/community/search?${new URLSearchParams({
+          query: query.trim().toLowerCase(),
+          limit: String(limit),
+        }).toString()}`,
+        { ...options, cache: "no-store" },
+      ),
+    communityPublicProfile: (
+      username: string,
+      options: LearnerReadOptions = {},
+    ) =>
+      request<CommunityPublicProfile>(
+        `/v1/community/public/${encodeURIComponent(username.trim().toLowerCase())}`,
+        { ...options, cache: "no-store" },
+      ),
+    communityConnections: (options: LearnerReadOptions = {}) =>
+      request<CommunityConnectionsResponse>("/v1/community/connections", {
+        ...options,
+        cache: "no-store",
+      }),
+    requestCommunityConnection: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:request:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    respondCommunityConnection: (
+      username: string,
+      action: "accept" | "decline",
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:${action}:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}/${action}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    removeCommunityConnection: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:remove:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "DELETE",
+        signal,
+      ),
+    blockCommunityLearner: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<{ username: string; blocked: true }>(
+        `community-block:${username.trim().toLowerCase()}`,
+        `/v1/community/blocks/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    reportCommunityLearner: (
+      username: string,
+      reason: "spam" | "harassment" | "impersonation" | "other",
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<{ username: string; reported: true }>(
+        `community-report:${username.trim().toLowerCase()}:${reason}`,
+        `/v1/community/reports/${encodeURIComponent(username.trim().toLowerCase())}`,
+        { reason },
+        {},
+        "POST",
+        signal,
+      ),
     profileAvatar: (options: LearnerReadOptions = {}) =>
       request<ProfileAvatarResponse>("/v1/profile/avatar", {
         ...options,
@@ -998,6 +1205,17 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
+    consent: (options: LearnerReadOptions = {}) =>
+      request<LearnerConsentResponse>("/v1/me/consent", {
+        ...options,
+        cache: "no-store",
+      }),
+    renewConsent: (expectedVersion: string) =>
+      logicalJsonMutation<LearnerConsentResponse>(
+        "learner-consent-renewal",
+        "/v1/me/consent/renew",
+        { accepted: true, expected_version: expectedVersion },
+      ),
     listPrograms: (limit = 50, options: LearnerReadOptions = {}) =>
       request<ProgramCollectionResponse>(`/v1/programs?limit=${limit}`, {
         ...options,

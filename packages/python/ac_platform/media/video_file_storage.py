@@ -38,6 +38,9 @@ from ac_platform.media.storage import (
 )
 
 CHUNK_BYTES = 1024 * 1024
+# Browser requests stay well below the smallest supported edge request limit.
+# The receiver still consumes each request in CHUNK_BYTES frames.
+RESUMABLE_CHUNK_BYTES = 16 * 1024 * 1024
 _HEADER_BYTES = 4096
 _GUARD_WAIT_SECONDS = 2.0
 _GUARD_RETRY_SECONDS = 0.01
@@ -66,6 +69,12 @@ _TYPES = frozenset(
 class _Object:
     metadata: StoredObjectMetadata
     identity: tuple[int, int, int, int, int]
+
+
+@dataclass(frozen=True)
+class ResumableUploadResult:
+    uploaded_bytes: int
+    metadata: StoredObjectMetadata | None = None
 
 
 @dataclass
@@ -224,6 +233,143 @@ class VideoFileStorage:
             raise MediaStorageUnavailable("The private video object namespace is invalid.")
         return self.root / (hashlib.sha256(key.encode()).hexdigest() + ".object")
 
+    def _resumable_path(self, key: str) -> Path:
+        if not self.owns(key):
+            raise MediaStorageUnavailable("The private video object namespace is invalid.")
+        # A stable name makes a process restart resumable without trusting a
+        # client-provided temporary path.  The suffix remains covered by the
+        # private-store inventory allowlist.
+        return self.root / (
+            hashlib.sha256(f"ac-resumable:{key}".encode()).hexdigest()[:32] + ".part"
+        )
+
+    @staticmethod
+    def _resumable_header(
+        *,
+        object_key: str,
+        content_type: str,
+        content_length: int,
+        checksum_sha256: str,
+        storage_version_id: str,
+        uploaded_bytes: int,
+    ) -> bytes:
+        value = json.dumps(
+            {
+                "schema": 1,
+                "object_key": object_key,
+                "content_type": content_type,
+                "content_length": content_length,
+                "checksum_sha256": checksum_sha256,
+                "storage_version_id": storage_version_id,
+                "uploaded_bytes": uploaded_bytes,
+            },
+            separators=(",", ":"),
+        ).encode()
+        if len(value) >= _HEADER_BYTES:
+            raise MediaStorageUnavailable("The resumable video header exceeds its limit.")
+        return value.ljust(_HEADER_BYTES - 1, b" ") + b"\n"
+
+    def _read_resumable_header(self, stream: BinaryIO) -> dict[str, object]:
+        header = stream.read(_HEADER_BYTES)
+        if len(header) != _HEADER_BYTES or not header.endswith(b"\n"):
+            raise MediaStorageUnavailable("The resumable video envelope is invalid.")
+        try:
+            value = json.loads(header)
+        except (TypeError, ValueError, UnicodeError):
+            raise MediaStorageUnavailable("The resumable video envelope is invalid.") from None
+        if not isinstance(value, dict) or value.get("schema") != 1:
+            raise MediaStorageUnavailable("The resumable video envelope is invalid.")
+        return value
+
+    def _verify_resumable_payload(
+        self, stream: BinaryIO, *, content_length: int, checksum_sha256: str
+    ) -> None:
+        digest = hashlib.sha256()
+        remaining = content_length
+        stream.seek(_HEADER_BYTES)
+        while remaining:
+            chunk = stream.read(min(CHUNK_BYTES, remaining))
+            if not chunk:
+                raise MediaStorageUnavailable("The resumable video payload is truncated.")
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if stream.read(1) != b"" or digest.hexdigest() != checksum_sha256:
+            raise MediaStorageUnavailable("The uploaded video checksum does not match.")
+
+    def _check_resumable_inventory(self, size: int) -> None:
+        total, count = 0, 0
+        for entry in self.root.iterdir():
+            _check_path(entry)
+            info = entry.lstat()
+            if not stat.S_ISREG(info.st_mode):
+                raise MediaStorageUnavailable("An unexpected private video entry exists.")
+            if entry.name not in {".guard", ".video-store-v1"} and not _ENTRY.fullmatch(entry.name):
+                raise MediaStorageUnavailable("An unexpected private video entry exists.")
+            if entry.suffix in {".part", ".object"}:
+                total += info.st_size
+                count += 1
+        if count >= self.max_objects or total + size > self.max_store_bytes:
+            raise MediaStorageUnavailable(
+                "Private video storage is full. Existing videos are preserved."
+            )
+
+    def _ensure_resumable_partial(
+        self,
+        path: Path,
+        *,
+        object_key: str,
+        content_type: str,
+        content_length: int,
+        checksum_sha256: str,
+        storage_version_id: str,
+    ) -> None:
+        expected = {
+            "object_key": object_key,
+            "content_type": content_type,
+            "content_length": content_length,
+            "checksum_sha256": checksum_sha256,
+            "storage_version_id": storage_version_id,
+        }
+        with self._lock(".guard"):
+            if path.exists() or path.is_symlink():
+                with self._open(path) as stream:
+                    header = self._read_resumable_header(stream)
+                    if any(header.get(key) != value for key, value in expected.items()):
+                        raise MediaConflict("The resumable video identity changed.")
+                    if os.fstat(stream.fileno()).st_size != content_length + _HEADER_BYTES:
+                        raise MediaStorageUnavailable("The resumable video reservation is invalid.")
+                return
+            # Counting and creating are one guarded operation. A separate key
+            # stripe may not reserve another full envelope between these steps.
+            self._check_resumable_inventory(content_length + _HEADER_BYTES)
+            created = False
+            try:
+                with path.open("xb") as stream:
+                    created = True
+                    stream.truncate(content_length + _HEADER_BYTES)
+                    stream.seek(0)
+                    self._write_all(
+                        stream,
+                        self._resumable_header(
+                            object_key=object_key,
+                            content_type=content_type,
+                            content_length=content_length,
+                            checksum_sha256=checksum_sha256,
+                            storage_version_id=storage_version_id,
+                            uploaded_bytes=0,
+                        ),
+                    )
+                    stream.flush()
+                    os.fsync(stream.fileno())
+            except BaseException as error:
+                if created:
+                    try:
+                        _check_path(path)
+                        path.unlink(missing_ok=True)
+                    except Exception:
+                        error.add_note("An incomplete private video reservation remains charged.")
+                raise
+
     @contextmanager
     def _lock(self, name: str) -> Iterator[None]:
         path = self.root / name
@@ -344,6 +490,27 @@ class VideoFileStorage:
             )
             try:
                 stream = os.fdopen(fd, "rb", buffering=0)
+            except BaseException:
+                os.close(fd)
+                raise
+            with stream:
+                self._check_stream(stream, _identity(before))
+                yield stream
+        except OSError:
+            raise MediaStorageUnavailable("The private video object is unavailable.") from None
+
+    @contextmanager
+    def _open_writable(self, path: Path) -> Iterator[BinaryIO]:
+        """Open a trusted regular file without following a replacement link."""
+        try:
+            _check_path(path)
+            before = path.lstat()
+            fd = os.open(
+                path,
+                os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0),
+            )
+            try:
+                stream = os.fdopen(fd, "r+b", buffering=0)
             except BaseException:
                 os.close(fd)
                 raise
@@ -651,6 +818,159 @@ class VideoFileStorage:
                             "An incomplete private video reservation remains charged."
                         )
 
+    def put_resumable_chunk(
+        self,
+        *,
+        object_key: str,
+        body: bytes,
+        content_type: str,
+        content_length: int,
+        checksum_sha256: str,
+        offset: int,
+        chunk_checksum_sha256: str,
+        storage_version_id: str | None = None,
+        before_publish: Callable[[], None] | None = None,
+    ) -> ResumableUploadResult:
+        """Append one bounded, replay-safe browser chunk.
+
+        The partial file is reserved at its complete envelope size before the
+        first byte is accepted.  Its fixed header records the admitted source
+        identity and written offset, while the final immutable object is only
+        made visible after the complete source hash and the caller's fresh
+        authority callback both succeed.
+        """
+        path = self._path(object_key)
+        if (
+            not isinstance(content_type, str)
+            or content_type not in _TYPES
+            or type(content_length) is not int
+            or not 1 <= content_length <= self.max_object_bytes
+            or not isinstance(checksum_sha256, str)
+            or not _HASH.fullmatch(checksum_sha256)
+            or type(offset) is not int
+            or not 0 <= offset <= content_length
+            or not isinstance(body, bytes)
+            or not 0 < len(body) <= RESUMABLE_CHUNK_BYTES
+            or offset + len(body) > content_length
+            or not isinstance(chunk_checksum_sha256, str)
+            or not _HASH.fullmatch(chunk_checksum_sha256)
+            or hashlib.sha256(body).hexdigest() != chunk_checksum_sha256
+            or storage_version_id is not None
+            and (not isinstance(storage_version_id, str) or not _HASH.fullmatch(storage_version_id))
+        ):
+            raise MediaStorageUnavailable("The resumable video chunk contract is invalid.")
+        version = (
+            storage_version_id
+            or hashlib.sha256(f"{object_key}:{content_type}:{checksum_sha256}".encode()).hexdigest()
+        )
+        expected = StoredObjectMetadata(
+            object_key, content_type, content_length, checksum_sha256, version
+        )
+        with self._lock(path.stem[:2] + ".lock"):
+            existing = self.head(object_key)
+            if existing is not None:
+                if existing != expected:
+                    raise MediaConflict("Video bytes are immutable. Create a new version.")
+                if offset + len(body) > content_length:
+                    raise MediaConflict("The resumable video retry exceeds its source.")
+                with self._open(path) as stream:
+                    stream.seek(_HEADER_BYTES + offset)
+                    if stream.read(len(body)) != body:
+                        raise MediaConflict("The resumable video retry does not match its bytes.")
+                if before_publish is not None:
+                    before_publish()
+                return ResumableUploadResult(content_length, existing)
+            partial = self._resumable_path(object_key)
+            self._ensure_resumable_partial(
+                partial,
+                object_key=object_key,
+                content_type=content_type,
+                content_length=content_length,
+                checksum_sha256=checksum_sha256,
+                storage_version_id=version,
+            )
+            with self._open_writable(partial) as stream:
+                header = self._read_resumable_header(stream)
+                written = header.get("uploaded_bytes")
+                if type(written) is not int or not 0 <= written <= content_length:
+                    raise MediaStorageUnavailable("The resumable video offset is invalid.")
+                if offset > written:
+                    raise MediaConflict("The resumable video has a gap before this chunk.")
+                if offset < written:
+                    if offset + len(body) > written:
+                        raise MediaConflict(
+                            "The resumable video chunk overlaps its current offset."
+                        )
+                    stream.seek(_HEADER_BYTES + offset)
+                    already = stream.read(len(body))
+                    if already != body:
+                        raise MediaConflict("The resumable video retry does not match its bytes.")
+                    if written == content_length:
+                        self._verify_resumable_payload(
+                            stream,
+                            content_length=content_length,
+                            checksum_sha256=checksum_sha256,
+                        )
+                        if before_publish is not None:
+                            before_publish()
+                        with self._lock(".guard"):
+                            stream.seek(0)
+                            self._write_all(
+                                stream,
+                                json.dumps(asdict(expected), separators=(",", ":"))
+                                .encode()
+                                .ljust(_HEADER_BYTES - 1, b" ")
+                                + b"\n",
+                            )
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                            stream.close()
+                            os.link(partial, path)
+                            partial.unlink()
+                        return ResumableUploadResult(content_length, expected)
+                    return ResumableUploadResult(written)
+                stream.seek(_HEADER_BYTES + written)
+                self._write_all(stream, body)
+                written += len(body)
+                stream.seek(0)
+                self._write_all(
+                    stream,
+                    self._resumable_header(
+                        object_key=object_key,
+                        content_type=content_type,
+                        content_length=content_length,
+                        checksum_sha256=checksum_sha256,
+                        storage_version_id=version,
+                        uploaded_bytes=written,
+                    ),
+                )
+                stream.flush()
+                os.fsync(stream.fileno())
+                if written != content_length:
+                    return ResumableUploadResult(written)
+                self._verify_resumable_payload(
+                    stream,
+                    content_length=content_length,
+                    checksum_sha256=checksum_sha256,
+                )
+                if before_publish is not None:
+                    before_publish()
+                with self._lock(".guard"):
+                    stream.seek(0)
+                    self._write_all(
+                        stream,
+                        json.dumps(asdict(expected), separators=(",", ":"))
+                        .encode()
+                        .ljust(_HEADER_BYTES - 1, b" ")
+                        + b"\n",
+                    )
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                    stream.close()
+                    os.link(partial, path)
+                    partial.unlink()
+                return ResumableUploadResult(content_length, expected)
+
     def put(
         self,
         *,
@@ -746,10 +1066,27 @@ class VideoFileStorage:
         )
 
     def delete(self, object_key: str) -> None:
+        """Delete one immutable object and its exact resumable reservation.
+
+        Partial reservations are deliberately absent from ``list_prefix`` and
+        every read/head path.  Lifecycle deletion already has the admitted
+        object key, so it can retire a crashed or expired reservation without
+        exposing incomplete bytes as a media object.
+        """
         path = self._path(object_key)
+        partial = self._resumable_path(object_key)
         with self._lock(path.stem[:2] + ".lock"), self._lock(".guard"):
             if self._inspect(object_key) is not None:
                 path.unlink()
+            if partial.exists() or partial.is_symlink():
+                with self._open(partial) as stream:
+                    header = self._read_resumable_header(stream)
+                    if header.get("object_key") != object_key:
+                        raise MediaStorageUnavailable(
+                            "The resumable video reservation is out of scope."
+                        )
+                _check_path(partial)
+                partial.unlink()
 
     def list_prefix(self, prefix: str) -> tuple[str, ...]:
         if not isinstance(prefix, str) or not self.owns(prefix.rstrip("/")):

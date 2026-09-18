@@ -1,0 +1,19 @@
+schema: ac.vps.foundation.network-transition/1
+status: inactive_documentation_only
+current:
+  network: ac_edge
+  subnet: 172.18.0.0/16
+  gateway: 172.18.0.1
+  edge_router_ip: 172.18.0.2
+proposed_future:
+  network: ac_edge_v2
+  subnet: 172.31.0.0/24
+  gateway: 172.31.0.1
+  edge_router_ip: 172.31.0.2
+  purpose: keep dynamic application allocations away from the static edge address
+activation: forbidden_without_reviewed_migration
+migration_warning: >-
+  This declaration does not create, resize, or recreate any Docker network and
+  must not be applied by an installer. A reviewed release must quiesce both
+  environments, export and verify routes and trusted-proxy settings, rehearse
+  rollback, and obtain explicit owner approval before any future cutover.

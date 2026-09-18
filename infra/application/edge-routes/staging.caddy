@@ -54,6 +54,9 @@
 		header X-Authority-Closers-Route "api-staging"
 		header Cache-Control "no-store"
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		request_body {
+			max_size 2000000000
+		}
 		reverse_proxy ac-staging-api:8000
 	}
 	handle @staging_admin {
@@ -74,6 +77,9 @@
 		header X-Authority-Closers-Route "api-staging"
 		header Cache-Control "no-store"
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		request_body {
+			max_size 2000000000
+		}
 		reverse_proxy ac-staging-api:8000
 	}
 	handle @staging_coach {
@@ -91,4 +97,25 @@
 		header Cache-Control "no-store"
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		reverse_proxy ac-staging-api:8000
+	}
+
+	@staging_sales_xray_api {
+		host salesxray-staging.authorityclosers.com
+		path /v1 /v1/*
+	}
+	handle @staging_sales_xray_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-staging-api:8000
+	}
+	@staging_sales_xray host salesxray-staging.authorityclosers.com
+	handle @staging_sales_xray {
+		import base_security_headers
+		header X-Authority-Closers-Route "sales-xray-staging"
+		header Cache-Control "no-store"
+		header Referrer-Policy "no-referrer"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://challenges.cloudflare.com; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-staging-sales-xray-web:3016
 	}

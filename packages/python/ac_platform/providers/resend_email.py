@@ -268,6 +268,77 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "sales-xray-review-invitation":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError(
+                "review invitation template has the wrong communication class"
+            )
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        safe_expiry = html.escape(expires)
+        return RenderedEmail(
+            subject="You’re invited to review a saved call — Authority Closers",
+            text=(
+                f"Hi {first_name},\n\nYou have been invited to review a saved Authority "
+                "Closers call. Use this email address to sign in to the reviewer "
+                "workspace.\n\nOpen reviewer invitation:\n"
+                f"{link}\n\nThis invitation expires "
+                f"{expires}. The email link alone does not grant access; your verified "
+                "identity and exact review assignment are checked before the call opens."
+            ),
+            html=_email_layout(
+                preheader="A saved call is ready for your bounded reviewer feedback.",
+                eyebrow="Reviewer invitation",
+                heading="A saved call is ready for your review.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "You have been invited to add source-linked sales, technical, or UX feedback "
+                    "to one saved Authority Closers call.",
+                    f"Sign in to the reviewer workspace with this email address. This invitation "
+                    f"expires on <strong>{safe_expiry}</strong>.",
+                ),
+                action_label="Open reviewer invitation",
+                action_link=safe_link,
+                security_note=(
+                    "Verify your email in the reviewer workspace to continue. Access is limited "
+                    "to your assigned reviews. This invitation does not enroll you in a course."
+                ),
+            ),
+        )
+
+    if message.template == "reviewer-sign-in":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("reviewer sign-in has the wrong communication class")
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        safe_expiry = html.escape(expires)
+        return RenderedEmail(
+            subject="Sign in to your reviewer workspace — Authority Closers",
+            text=(
+                f"Hi {first_name},\n\nConfirm your email to open your assigned reviews.\n\n"
+                f"Open reviewer workspace:\n{link}\n\nThis one-time sign-in link expires "
+                f"{expires}. If you did not request it, ignore this email."
+            ),
+            html=_email_layout(
+                preheader="Confirm your email to open your assigned reviews.",
+                eyebrow="Reviewer sign-in",
+                heading="Your reviews are ready when you are.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "Confirm your email to sign in to the Authority Closers reviewer workspace.",
+                    f"This one-time link expires on <strong>{safe_expiry}</strong>.",
+                ),
+                action_label="Open reviewer workspace",
+                action_link=safe_link,
+                security_note=(
+                    "If you did not request this sign-in link, ignore this email. "
+                    "Access to each review is checked when you open it."
+                ),
+            ),
+        )
+
     raise PermanentProviderError("email template is not implemented by the Resend adapter")
 
 

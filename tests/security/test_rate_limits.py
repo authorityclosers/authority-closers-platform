@@ -23,7 +23,6 @@ def test_default_identity_rate_limits_cover_every_public_password_command() -> N
         for rule in DEFAULT_RATE_LIMIT_RULES
         if rule.name.startswith("password-")
     }
-
     assert covered == {
         ("POST", r"^/v1/auth/password/register$"),
         ("POST", r"^/v1/auth/password/login$"),
@@ -32,6 +31,34 @@ def test_default_identity_rate_limits_cover_every_public_password_command() -> N
         ("POST", r"^/v1/auth/password/verify$"),
         ("POST", r"^/v1/auth/password/reset$"),
     }
+
+
+async def test_reviewer_mailbox_and_verification_are_rate_limited_per_client() -> None:
+    app = FastAPI()
+
+    async def accepted() -> PlainTextResponse:
+        return PlainTextResponse("accepted")
+
+    for path in ("/v1/reviewer/auth/request", "/v1/reviewer/auth/verify"):
+        app.add_api_route(path, accepted, methods=["POST"])
+    limited = RateLimitMiddleware(
+        app,
+        rules=DEFAULT_RATE_LIMIT_RULES,
+        limiter=InMemoryTokenBucketLimiter(clock=lambda: 0.0),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=limited, client=("8.8.8.8", 1000)), base_url="http://test"
+    ) as client:
+        for path, limit in (("/v1/reviewer/auth/request", 5), ("/v1/reviewer/auth/verify", 20)):
+            for _ in range(limit):
+                assert (await client.post(path)).status_code == 200
+            rejected = await client.post(path)
+            assert rejected.status_code == 429
+            assert int(rejected.headers["retry-after"]) > 0
+    async with AsyncClient(
+        transport=ASGITransport(app=limited, client=("1.1.1.1", 1001)), base_url="http://test"
+    ) as second:
+        assert (await second.post("/v1/reviewer/auth/request")).status_code == 200
 
 
 def _rule() -> RateLimitRule:
@@ -62,6 +89,84 @@ def _app(
         limiter=limiter,
         trusted_proxy_addresses=trusted_proxy_addresses,
     )
+
+
+def _acquisition_app(
+    *,
+    clock: list[float],
+    trusted_proxy_addresses: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address],
+) -> RateLimitMiddleware:
+    application = FastAPI()
+
+    @application.post("/v1/conversation/acquisition/session")
+    async def start_session() -> PlainTextResponse:
+        return PlainTextResponse("session-issued")
+
+    @application.get("/v1/conversation/acquisition/session")
+    async def read_session() -> PlainTextResponse:
+        return PlainTextResponse("session-read")
+
+    return RateLimitMiddleware(
+        application,
+        limiter=InMemoryTokenBucketLimiter(clock=lambda: clock[0]),
+        trusted_proxy_addresses=trusted_proxy_addresses,
+    )
+
+
+async def test_acquisition_session_issuance_is_ip_limited_without_changing_session_reads() -> None:
+    clock = [0.0]
+    trusted_proxy = frozenset({ipaddress.ip_address("172.20.0.2")})
+    application = _acquisition_app(clock=clock, trusted_proxy_addresses=trusted_proxy)
+    proxy = ASGITransport(app=application, client=("172.20.0.2", 1000))
+    independent_proxy = ASGITransport(app=application, client=("172.20.0.2", 1001))
+
+    async with (
+        AsyncClient(transport=proxy, base_url="http://test") as first,
+        AsyncClient(transport=independent_proxy, base_url="http://test") as second,
+    ):
+        for _ in range(5):
+            response = await first.post(
+                "/v1/conversation/acquisition/session",
+                headers={"cf-connecting-ip": "8.8.8.8"},
+            )
+            assert response.status_code == 200
+            assert response.text == "session-issued"
+        rejected = await first.post(
+            "/v1/conversation/acquisition/session",
+            headers={"cf-connecting-ip": "8.8.8.8", "x-request-id": "acquisition-rate-test"},
+        )
+        independent = await second.post(
+            "/v1/conversation/acquisition/session",
+            headers={"cf-connecting-ip": "1.1.1.1"},
+        )
+        read = await first.get("/v1/conversation/acquisition/session")
+
+    assert rejected.status_code == 429
+    assert rejected.headers["retry-after"] == "180"
+    assert rejected.json()["request_id"] == "acquisition-rate-test"
+    assert independent.status_code == 200
+    assert independent.text == "session-issued"
+    assert read.status_code == 200
+    assert read.text == "session-read"
+
+
+async def test_acquisition_session_limiter_rejects_spoofed_or_duplicate_headers() -> None:
+    trusted_proxy = frozenset({ipaddress.ip_address("172.20.0.2")})
+
+    for headers in (
+        {"x-forwarded-for": "9.9.9.9"},
+        [("cf-connecting-ip", "8.8.8.8"), ("cf-connecting-ip", "1.1.1.1")],
+    ):
+        clock = [0.0]
+        application = _acquisition_app(clock=clock, trusted_proxy_addresses=trusted_proxy)
+        transport = ASGITransport(app=application, client=("172.20.0.2", 1000))
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            responses = [
+                await client.post("/v1/conversation/acquisition/session", headers=headers)
+                for _ in range(6)
+            ]
+
+        assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 429]
 
 
 async def test_token_bucket_limits_and_refills_without_cross_client_leakage() -> None:

@@ -1,0 +1,58 @@
+{
+  "id": "dipak_draft",
+  "revision": "candidate-0.3",
+  "approved": false,
+  "numeric_score_enabled": false,
+  "declared_total": 100,
+  "source_weights": [
+    15,
+    20,
+    15,
+    10,
+    10,
+    15,
+    5,
+    5
+  ],
+  "actual_source_total": 95,
+  "ethics": "hard_constraint_not_extra_5_points",
+  "source": "Version-1...Brain.txt, Documents 01–05; uploaded snapshot; not rewritten",
+  "criteria": [
+    {
+      "id": "AC.PRICE.DIAGNOSE",
+      "weight": 0,
+      "source": "Doc01 sections30–31; Doc04 sections4–7",
+      "when": {
+        "slot_equals": {
+          "slot": "price_objection",
+          "value": true
+        }
+      },
+      "instruction": "Assess whether the closer clarified the meaning of the concern or already had relevant context. Do not require an exact question. Cite response and preceding evidence. Assign a behavioral finding only if supported."
+    },
+    {
+      "id": "AC.EVIDENCE.RELEVANCE",
+      "weight": 0,
+      "source": "Doc01 section24; Doc04 section26",
+      "when": {
+        "slot_equals": {
+          "slot": "evidence_concern",
+          "value": true
+        }
+      },
+      "instruction": "Assess whether the response addressed the requested evidence. A feature list is not automatically bad; determine whether it answered the actual concern."
+    },
+    {
+      "id": "AC.STOP.RESPECT",
+      "weight": 0,
+      "source": "Doc04 stop conditions; platform hard constraint",
+      "when": {
+        "slot_equals": {
+          "slot": "consent_to_continue",
+          "value": false
+        }
+      },
+      "instruction": "Assess response to the explicit stop, keeping alternatives and contextual uncertainty visible. Do not invent motives."
+    }
+  ]
+}

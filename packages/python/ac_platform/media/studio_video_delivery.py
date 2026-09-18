@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
+from ac_platform.catalog.models import GLOBAL_CATALOG_OWNER_KEY
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.learning.catalog_activity import resolve_catalog_activity
 from ac_platform.learning.services import LearningAccessContext
@@ -37,7 +38,13 @@ from ac_platform.media.delivery import (
     PrivateMediaDeliveryHandler,
 )
 from ac_platform.media.errors import MediaConfigurationError, MediaForbidden
-from ac_platform.media.models import ActivityMediaBinding, MediaUploadIntent, StudioVideoUpload
+from ac_platform.media.models import (
+    ActivityMediaBinding,
+    MediaBindingState,
+    MediaUploadIntent,
+    MediaVersion,
+    StudioVideoUpload,
+)
 from ac_platform.media.policy import (
     MediaCorsPolicy,
     RangeMode,
@@ -100,16 +107,38 @@ def _owns_key(database: Session, actor: ActorContext, key: str) -> bool:
         tenant, asset, version = (UUID(parts[index]) for index in (1, 4, 5))
     except (ValueError, TypeError):
         return False
-    if (
-        tenant != actor.tenant_id
-        or parts[6] != "original"
-        or any(
-            str(value) != parts[index]
-            for value, index in zip((tenant, asset, version), (1, 4, 5), strict=True)
-        )
+    if tenant != actor.tenant_id or any(
+        str(value) != parts[index]
+        for value, index in zip((tenant, asset, version), (1, 4, 5), strict=True)
     ):
         return False
-    return _upload_program(database, tenant, asset, version) is not None
+    if parts[6] == "original" and _upload_program(database, tenant, asset, version) is not None:
+        return True
+    media_version = database.scalar(
+        select(MediaVersion).where(
+            MediaVersion.tenant_id == tenant,
+            MediaVersion.asset_id == asset,
+            MediaVersion.id == version,
+            MediaVersion.state == "ready",
+        )
+    )
+    if not isinstance(media_version, MediaVersion) or (
+        key != media_version.object_key and not key.startswith(media_version.object_key + "/")
+    ):
+        return False
+    return (
+        database.scalar(
+            select(ActivityMediaBinding.id).where(
+                ActivityMediaBinding.tenant_id == tenant,
+                ActivityMediaBinding.asset_id == asset,
+                ActivityMediaBinding.version_id == version,
+                ActivityMediaBinding.program_scope == "global",
+                ActivityMediaBinding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY,
+                ActivityMediaBinding.state == MediaBindingState.APPROVED.value,
+            )
+        )
+        is not None
+    )
 
 
 class _StudioHandler(PrivateMediaDeliveryHandler):
@@ -138,10 +167,21 @@ class _StudioHandler(PrivateMediaDeliveryHandler):
             return (
                 binding is not None
                 and binding.tenant_id == actor.tenant_id
-                and binding.program_scope == "tenant"
-                and binding.program_owner_key == actor.tenant_id
-                and _upload_program(database, actor.tenant_id, binding.asset_id, binding.version_id)
-                == binding.program_id
+                and binding.state == MediaBindingState.APPROVED.value
+                and (
+                    (
+                        binding.program_scope == "global"
+                        and binding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+                    )
+                    or (
+                        binding.program_scope == "tenant"
+                        and binding.program_owner_key == actor.tenant_id
+                        and _upload_program(
+                            database, actor.tenant_id, binding.asset_id, binding.version_id
+                        )
+                        == binding.program_id
+                    )
+                )
             )
 
         super().__init__(
@@ -201,11 +241,26 @@ class _StudioHandlerFactory:
         )
 
 
-def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) -> MediaRuntime:
-    """Connect an explicit local/test upload graph to normal learner delivery."""
+def _compose_studio_video_delivery(
+    settings: Settings,
+    base: MediaRuntime,
+    *,
+    filesystem_runtime: bool,
+) -> MediaRuntime:
+    """Connect one explicit filesystem upload graph to normal learner delivery."""
     studio = base.studio_video_runtime
+    allowed_environments = (
+        {"test", "staging", "production"}
+        if filesystem_runtime
+        else {
+            "local",
+            "test",
+        }
+    )
     if (
-        settings.environment not in {"local", "test"}
+        settings.environment not in allowed_environments
+        or (filesystem_runtime and not settings.media_filesystem_enabled)
+        or (not filesystem_runtime and settings.environment not in {"local", "test"})
         or base.environment != settings.environment
         or studio is None
         or studio.settings is not settings
@@ -214,7 +269,9 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
         or isinstance(base.authenticated_delivery_handler_factory, _StudioHandlerFactory)
     ):
         raise MediaConfigurationError(
-            "Studio delivery requires one exact local/test upload runtime."
+            "Studio delivery requires one exact filesystem upload runtime."
+            if filesystem_runtime
+            else "Studio delivery requires one exact local/test upload runtime."
         )
     studio.validate()
     origin = str(settings.public_app_url).rstrip("/")
@@ -233,6 +290,15 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
         or (
             settings.environment == "local"
             and parsed.hostname not in {"localhost", "127.0.0.1", "learner.localhost"}
+        )
+        or (
+            filesystem_runtime
+            and settings.environment in {"staging", "production"}
+            and origin
+            not in {
+                "https://learner-staging.authorityclosers.com",
+                "https://learner.authorityclosers.com",
+            }
         )
         or (base.media_delivery is not None and base.media_delivery.delivery_origin != origin)
         or (
@@ -267,6 +333,11 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
     def binding_resolver(database: Session, tenant: UUID, row: object, version: object) -> object:
         binding = resolve_activity_media_binding_for_learning(database, tenant, row, version)
         if binding is not None:
+            if (
+                binding.program_scope == "global"
+                and binding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+            ):
+                return binding
             admitted_program = _upload_program(
                 database, tenant, binding.asset_id, binding.version_id
             )
@@ -303,6 +374,13 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
             return await service.resolve_activity_media_descriptor_for_learner(
                 database, actor, access
             )
+        if (
+            getattr(access.activity, "program_scope", None) == "global"
+            and access.activity.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+        ):
+            return await service.resolve_activity_media_descriptor_for_learner(
+                database, actor, access
+            )
         prior = base.media_descriptor_resolver
         if prior:
             return await cast(DescriptorResolver, prior)(database, actor, access)
@@ -327,4 +405,21 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
     )
 
 
-__all__ = ["compose_local_studio_video_delivery"]
+def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) -> MediaRuntime:
+    """Connect an explicit local/test upload graph to normal learner delivery."""
+
+    return _compose_studio_video_delivery(settings, base, filesystem_runtime=False)
+
+
+def compose_filesystem_studio_video_delivery(
+    settings: Settings, base: MediaRuntime
+) -> MediaRuntime:
+    """Connect the deployment filesystem graph to authenticated delivery."""
+
+    return _compose_studio_video_delivery(settings, base, filesystem_runtime=True)
+
+
+__all__ = [
+    "compose_filesystem_studio_video_delivery",
+    "compose_local_studio_video_delivery",
+]

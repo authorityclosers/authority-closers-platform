@@ -33,7 +33,11 @@ from ac_platform.media.local_avatar_processing import (
     decode_avatar,
 )
 from ac_platform.media.local_avatar_runtime import LocalAvatarMediaService, LocalAvatarRuntime
-from ac_platform.media.local_avatar_storage import LOCAL_AVATAR_ORIGIN, LocalAvatarStorage
+from ac_platform.media.local_avatar_storage import (
+    LOCAL_AVATAR_ORIGIN,
+    FilesystemAvatarStorage,
+    LocalAvatarStorage,
+)
 from ac_platform.media.models import (
     MediaAsset,
     MediaLifecycle,
@@ -184,6 +188,92 @@ def test_real_variants_crop_pixels_metadata_and_persistence(harness):
     )
     assert reopened.read(result.object_key) == body
     assert runtime.service.get_profile_avatar(database, actor).avatar.delivery_url
+
+
+def test_avatar_copy_create_only_preserves_local_and_fallback_objects(tmp_path):
+    signer = MediaSigner(b"local-avatar-copy-tests-no-secrets-123456")
+    fallback = InMemoryPrivateObjectStorage(signer)
+    storage = LocalAvatarStorage(root=tmp_path / "avatar-objects", signer=signer, fallback=fallback)
+    prefix = "tenants/00000000-0000-0000-0000-000000000001/media/avatar"
+    person = "00000000-0000-0000-0000-000000000002"
+    source = f"{prefix}/{person}/00000000-0000-0000-0000-000000000003/original"
+    destination = f"{prefix}/{person}/00000000-0000-0000-0000-000000000004/original"
+    body = b"local-avatar-copy"
+    stored = storage.put(object_key=source, body=body, content_type="image/png")
+
+    copied = storage.copy(
+        source_key=source,
+        destination_key=destination,
+        content_type="image/png",
+    )
+    assert copied.object_key == destination
+    assert (
+        storage.copy(
+            source_key=source,
+            destination_key=destination,
+            content_type="image/png",
+        )
+        == copied
+    )
+    with pytest.raises(MediaConflict, match="destination already exists"):
+        storage.copy(
+            source_key=source,
+            destination_key=destination,
+            content_type="image/png",
+            create_only=True,
+        )
+    assert storage.read(destination) == body == storage.read(source)
+    assert stored.checksum_sha256 == copied.checksum_sha256
+
+    fallback_source, fallback_destination = "films/source", "films/destination"
+    fallback.put(object_key=fallback_source, body=body, content_type="video/mp4")
+    fallback.copy(
+        source_key=fallback_source,
+        destination_key=fallback_destination,
+        content_type="video/mp4",
+        create_only=True,
+    )
+    with pytest.raises(MediaStorageUnavailable):
+        storage.copy(
+            source_key=fallback_source,
+            destination_key=fallback_destination,
+            content_type="video/mp4",
+            create_only=True,
+        )
+    assert fallback.read(fallback_destination) == body
+
+
+def test_filesystem_avatar_store_uses_deployment_contract_and_marker(tmp_path):
+    signer = MediaSigner(b"filesystem-avatar-tests-no-secrets-123456")
+    fallback = InMemoryPrivateObjectStorage(signer)
+    storage = FilesystemAvatarStorage(
+        root=tmp_path / "avatar-objects",
+        signer=signer,
+        fallback=fallback,
+        origin="https://learner-staging.authorityclosers.com",
+    )
+    body = picture()
+    key = (
+        "tenants/00000000-0000-0000-0000-000000000001/media/avatar/"
+        "00000000-0000-0000-0000-000000000002/00000000-0000-0000-0000-000000000003/original"
+    )
+    upload = storage.create_upload_intent(
+        object_key=key,
+        content_type="image/png",
+        content_length=len(body),
+        checksum_sha256=hashlib.sha256(body).hexdigest(),
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+    assert upload.upload_url.startswith(
+        "https://learner-staging.authorityclosers.com/v1/media/filesystem-avatar-upload/"
+    )
+    assert (storage.root / ".filesystem-avatar-store").read_bytes() == (
+        b"AC private filesystem avatar objects v1\n"
+    )
+    assert storage.put(object_key=key, body=body, content_type="image/png").checksum_sha256 == (
+        hashlib.sha256(body).hexdigest()
+    )
+    assert storage.read(key) == body
 
 
 def test_signed_read_requires_current_own_session_and_replacement_supersedes(harness):
@@ -424,6 +514,38 @@ async def test_large_upload_body_limit_is_optin_and_route_specific(enabled, path
     middleware = RequestBodyLimitMiddleware(app, local_avatar_upload_enabled=enabled)
     await middleware({"type": "http", "method": "PUT", "path": path, "headers": []}, receive, send)
     assert sent[0]["status"] == expected
+
+
+@pytest.mark.asyncio
+async def test_filesystem_avatar_body_limit_is_optin_and_route_specific():
+    from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+
+    sent = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"x" * (5 * 1024 * 1024 + 1), "more_body": False}
+
+    async def send(message):
+        sent.append(message)
+
+    async def app(scope, replay, output):
+        del scope
+        received = await replay()
+        assert len(received["body"]) == 5 * 1024 * 1024 + 1
+        await output({"type": "http.response.start", "status": 204, "headers": []})
+
+    middleware = RequestBodyLimitMiddleware(app, filesystem_avatar_upload_enabled=True)
+    await middleware(
+        {
+            "type": "http",
+            "method": "PUT",
+            "path": "/v1/media/filesystem-avatar-upload/key",
+            "headers": [],
+        },
+        receive,
+        send,
+    )
+    assert sent[0]["status"] == 413
 
 
 def test_normal_settings_remain_unconfigured():

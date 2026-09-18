@@ -6,7 +6,10 @@ import * as api from "@ac/operations-web/api";
 import {
   ADMIN_SESSION_REFRESH_TIMEOUT_MS,
   AdminSessionProvider,
+  AdminSessionStatus,
+  type AdminSessionInvalidator,
   useAdminSession,
+  useInvalidateAdminSession,
 } from "@ac/operations-web/session";
 
 // Use the actual provider/context; only its session-loading I/O is controlled.
@@ -84,6 +87,16 @@ function PrivateModal({ onClose }: { onClose: () => void }) {
       <PrivateForm />
     </dialog>
   );
+}
+
+function InvalidationProbe({
+  capture,
+}: {
+  capture: (invalidate: AdminSessionInvalidator) => void;
+}) {
+  const invalidate = useInvalidateAdminSession();
+  useEffect(() => capture(invalidate), [capture, invalidate]);
+  return null;
 }
 
 async function render(
@@ -434,6 +447,100 @@ it("discards stale private children after definitive denial", async () => {
   expect(host.textContent).toBe("denied");
   await render("/studio/settings");
   expect(input().value).toBe("Initial value");
+});
+
+it("updates the shared session header and ignores invalidation from an old identity", async () => {
+  const invalidators: AdminSessionInvalidator[] = [];
+  const capture = (invalidate: AdminSessionInvalidator) => {
+    invalidators.push(invalidate);
+  };
+  await act(async () =>
+    root.render(
+      <AdminSessionProvider refreshKey="/people" revalidateOnFocus>
+        <AdminSessionStatus />
+        <PrivateForm />
+        <InvalidationProbe capture={capture} />
+      </AdminSessionProvider>,
+    ),
+  );
+  expect(
+    host.querySelector('[aria-label="Product admin session verified"]'),
+  ).not.toBeNull();
+  const oldInvalidator = invalidators[0]!;
+  expect(oldInvalidator).toBeTypeOf("function");
+
+  const refresh = deferred<api.AdminSession>();
+  vi.mocked(api.loadAdminSession).mockReturnValueOnce(refresh.promise);
+  await focus();
+  await act(async () =>
+    refresh.resolve({
+      ...account,
+      sessionId: otherId,
+      email: "new@example.test",
+    }),
+  );
+  expect(
+    host.querySelector('[aria-label="Product admin session verified"]'),
+  ).not.toBeNull();
+  expect(host.querySelector("[data-person]")?.textContent).toBe(
+    "new@example.test",
+  );
+
+  await act(async () => oldInvalidator(account));
+  expect(
+    host.querySelector('[aria-label="Product admin session verified"]'),
+  ).not.toBeNull();
+  expect(host.querySelector("[data-person]")?.textContent).toBe(
+    "new@example.test",
+  );
+
+  await act(async () =>
+    oldInvalidator({
+      ...account,
+      sessionId: otherId,
+      email: "new@example.test",
+    }),
+  );
+  expect(
+    host.querySelector('[aria-label="Product admin session denied"]'),
+  ).not.toBeNull();
+  expect(input()).toBeNull();
+});
+
+it("aborts a pending refresh when the current identity is invalidated", async () => {
+  const invalidators: AdminSessionInvalidator[] = [];
+  const capture = (invalidate: AdminSessionInvalidator) => {
+    invalidators.push(invalidate);
+  };
+  await act(async () =>
+    root.render(
+      <AdminSessionProvider refreshKey="/people" revalidateOnFocus>
+        <AdminSessionStatus />
+        <PrivateForm />
+        <InvalidationProbe capture={capture} />
+      </AdminSessionProvider>,
+    ),
+  );
+  const invalidateCurrent = invalidators[0]!;
+  const refresh = deferred<api.AdminSession>();
+  vi.mocked(api.loadAdminSession).mockReturnValueOnce(refresh.promise);
+  await focus();
+  const signal = sessionSignal(1);
+  expect(signal?.aborted).toBe(false);
+
+  await act(async () => invalidateCurrent(account));
+  expect(signal?.aborted).toBe(true);
+  expect(
+    host.querySelector('[aria-label="Product admin session denied"]'),
+  ).not.toBeNull();
+  expect(host.querySelector("[data-private-session-tree]")).toBeNull();
+  expect(input()).toBeNull();
+
+  await act(async () => refresh.resolve({ ...account, sessionId: otherId }));
+  expect(
+    host.querySelector('[aria-label="Product admin session denied"]'),
+  ).not.toBeNull();
+  expect(host.querySelector("[data-private-session-tree]")).toBeNull();
 });
 
 it("ignores late results and removes focus listeners after unmount", async () => {

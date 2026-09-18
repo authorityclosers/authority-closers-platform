@@ -50,14 +50,22 @@ const prompt = z.discriminatedUnion("kind", [
   }),
   z.object({ ...promptBase, kind: z.literal("branch"), node }),
 ]);
-const catalog = z.object({
-  mode: z.literal("editorial_preview"),
-  items: z.array(summary),
-  course_progress_affected: z.literal(false),
-  responses_stored: z.literal(false),
-});
+const catalog = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("editorial_preview"),
+    items: z.array(summary),
+    course_progress_affected: z.literal(false),
+    responses_stored: z.literal(false),
+  }),
+  z.object({
+    mode: z.literal("published"),
+    items: z.array(summary),
+    course_progress_affected: z.literal(false),
+    responses_stored: z.literal(true),
+  }),
+]);
 const set = summary.extend({
-  mode: z.literal("editorial_preview"),
+  mode: z.enum(["editorial_preview", "published"]),
   items: z.array(prompt).min(1),
 });
 // The persisted engine pins this same public content shape. Its stricter
@@ -78,6 +86,7 @@ const strictPrompt = z.discriminatedUnion("kind", [
 export const practiceSetSchema = set
   .strict()
   .extend({ items: z.array(strictPrompt).min(1) });
+export const practiceCatalogSchema = catalog;
 export const practiceNodeSchema = strictNode;
 const checked = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("continue"), node }),

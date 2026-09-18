@@ -1,0 +1,152 @@
+{
+  "transport": "Chromium real TCP HTTP -> AC cookie auth -> disposable PostgreSQL",
+  "data": "synthetic WAV and synthetic durable C2/C4/C5/C6 worker output",
+  "source": "synthetic durable C2/C4/C5/C6 worker via ReportingBroker",
+  "generatedViaDurableWorker": true,
+  "api_route_mocks_configured": false,
+  "provider_processing_configured": false,
+  "worker_kind": "ConversationInferenceWorker with synthetic ReportingBroker",
+  "expected_provider_calls": 0,
+  "provider_network_counter_installed": false,
+  "google_login_tested": false,
+  "production_runtime_tested": false,
+  "checks": [
+    "Unauthenticated onboarding shows AC sign-in and no private history.",
+    "Saved draft opens with bound transcript, authenticated WAV playback and timestamp seek.",
+    "Authenticated single-byte-range playback returns 206 and private no-store.",
+    "Report fits a 390px viewport without horizontal page overflow.",
+    "Refreshing and reopening a saved report requires no upload or provider rerun.",
+    "New WAV follows real quote, consent, upload, queued native worker and local completion.",
+    "A local measurements run does not fabricate a generated sales report.",
+    "Completed local runs stop polling, observed beyond the 15-second retry cap."
+  ],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/plan",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/source",
+      "status": 206
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/runs/5801658b-d11a-4d55-a04a-972f7b4ebe75/report",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/transcript",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/plan",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/source",
+      "status": 206
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/runs/5801658b-d11a-4d55-a04a-972f7b4ebe75/report",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/37823724-7054-41ff-b6d7-79005487ca56/transcript",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversation/intake/quote",
+      "status": 201
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversation/quotes/5aa02dd2-dc44-4f88-8fa2-7d18f4b12988/approve",
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/conversation/recordings/6ccade19-1076-47c9-94fb-b265a1507608/source",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversation/runs",
+      "status": 202
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/runs/d4487bd1-adb3-483b-8a7b-31d9467a9ed4/report",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversation/recordings/6ccade19-1076-47c9-94fb-b265a1507608/plan/quote",
+      "status": 405
+    }
+  ],
+  "external_requests": [],
+  "browser_errors": [],
+  "passed": true,
+  "initial_headings": [
+    "Turn a sales call intoa clear improvement plan.",
+    "Start with your sales call",
+    "A report you can act on.",
+    "The call in plain language",
+    "Good moments & missed opportunities",
+    "Your three most useful improvements",
+    "Saved calls"
+  ]
+}

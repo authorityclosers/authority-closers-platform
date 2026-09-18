@@ -1,0 +1,99 @@
+{
+  "as_of_ms": 1000,
+  "counterevidence_ids": [],
+  "critical_ids": [
+    "s1"
+  ],
+  "data_class": "synthetic_fixture",
+  "expected_applicability": {
+    "AC.EVIDENCE.RELEVANCE": "applicable",
+    "AC.PRICE.DIAGNOSE": "insufficient_context",
+    "AC.STOP.RESPECT": "insufficient_context"
+  },
+  "expected_outcome": "accepted",
+  "expected_rejection_stage": null,
+  "expected_slots": {
+    "affordability": {
+      "status": "supported",
+      "value": "available"
+    },
+    "consent_to_continue": {
+      "status": "unknown",
+      "value": null
+    },
+    "evidence_concern": {
+      "status": "supported",
+      "value": true
+    },
+    "price_objection": {
+      "status": "unknown",
+      "value": null
+    }
+  },
+  "observations": [
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 39,
+        "end_ms": 1000,
+        "quote": "माझ्याकडे बजेट आहे, पण आधी proof दाखवा.",
+        "recording_id": "fixture-1275ae02e3294c16",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "1275ae02e3294c166ea21d4fbfd9200d56bbcc219dddfaed10f18d72f3662493",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o1",
+      "polarity": "supports",
+      "slot": "affordability",
+      "value": "available"
+    },
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 39,
+        "end_ms": 1000,
+        "quote": "माझ्याकडे बजेट आहे, पण आधी proof दाखवा.",
+        "recording_id": "fixture-1275ae02e3294c16",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "1275ae02e3294c166ea21d4fbfd9200d56bbcc219dddfaed10f18d72f3662493",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o2",
+      "polarity": "supports",
+      "slot": "evidence_concern",
+      "value": true
+    }
+  ],
+  "transcript": {
+    "duration_ms": 1000,
+    "recording_id": "fixture-1275ae02e3294c16",
+    "revision": "fixture-transcript-v1",
+    "segments": [
+      {
+        "end_ms": 1000,
+        "id": "s1",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 0,
+        "text": "माझ्याकडे बजेट आहे, पण आधी proof दाखवा."
+      }
+    ],
+    "source_revision": "fixture-source-v1",
+    "source_sha256": "1275ae02e3294c166ea21d4fbfd9200d56bbcc219dddfaed10f18d72f3662493",
+    "tenant_id": "synthetic-benchmark-tenant",
+    "timebase_id": "fixture-source-ms"
+  }
+}

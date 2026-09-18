@@ -1,0 +1,95 @@
+{
+  "status": "passed",
+  "assignment_id": "2cf763b2-4c04-4eba-a4cc-5de251572e33",
+  "invitation_accept_status": 201,
+  "invitation_token_persisted": false,
+  "origin": "http://127.0.0.1:3188",
+  "source": "synthetic local WAV",
+  "save_status": 201,
+  "replay_same_id": true,
+  "cancelled_dirty_navigation": [
+    "sidebar dashboard link",
+    "G H keyboard shortcut"
+  ],
+  "dark_viewports": [
+    1440,
+    320
+  ],
+  "reload_history_count": 1,
+  "audio_range_status": 206,
+  "viewports": [
+    {
+      "width": 390,
+      "horizontal_overflow": false
+    },
+    {
+      "width": 320,
+      "horizontal_overflow": false
+    }
+  ],
+  "page_errors": [],
+  "review_requests": [
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33/submissions",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33/submissions",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33/source",
+      "status": 206
+    },
+    {
+      "method": "POST",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33/submissions",
+      "status": 201
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/review-assignments/2cf763b2-4c04-4eba-a4cc-5de251572e33/submissions",
+      "status": 200
+    }
+  ],
+  "database_submission_count": 1,
+  "backend_commit": "08d2d85-with-root-invitation-fixes",
+  "invitation_mode": true,
+  "authentication": "synthetic canonical actor fixture; session resolver not under test",
+  "api": "real installed review HTTP router and PostgreSQL service",
+  "frontend_source_sha256": {
+    "apps/learner-web/app/components/site-shell.tsx": "ec3e61360563275489287dfca84857d88d09513da674c3b3fa53268c8e5b8a64",
+    "apps/learner-web/app/sales-xray/review/[assignmentId]/page.tsx": "e4fbc81dde2121bf53584a9fbdef719c34aa1a887d6caf0fcbf1f5d3041a6edc",
+    "apps/learner-web/app/sales-xray/review/invite/page.tsx": "b7b9d624151cf6d48dc3a76f4b8b4648a93eceedbf4af22e6cc94dd49e8a5687",
+    "apps/learner-web/app/sales-xray/review/review-assignment-adapter.tsx": "5d201e491f08a5c2e8dc5965a1ba270fd17667d2fe53c0b47d1db7c8dfc0f1f1",
+    "apps/learner-web/app/sales-xray/review/review-assignment-api.ts": "8414b1bd276f01ec5cc0b937a9c788db36dbf62e52df4b44dbb5d2d0c51182ec",
+    "apps/learner-web/app/sales-xray/review/review-assignment-fixture.ts": "bff0832ecca98484076d470bf85a5f187cfe237cc2b9c461c0d500b7157f6eb3",
+    "apps/learner-web/app/sales-xray/review/review-assignment.module.css": "2ef14f84eca93dcdef787aef0970adc57726e585f88c3fdccb6c4d9c3aea64f2",
+    "apps/learner-web/app/sales-xray/review/review-invitation-acceptance.tsx": "b66c6260eaef77f5843c7773f0bfbce9db699a24476b095da6159424d5566cc6",
+    "apps/learner-web/app/sales-xray/review/review-invitation-api.ts": "6135d50ec6cad61750370eee2f72c6c86ec1f65511f9b501392805f281bd48e3",
+    "apps/learner-web/app/sales-xray/review/review-invitation.module.css": "cdc6a3817a86d646c257454574ff540eaaaadc68896a594e8f1c5b4a5d07f651",
+    "apps/learner-web/app/sales-xray/review/review-navigation.ts": "f389c3663d693b78eedb16af83ff7812052ca63b26bc0f13a0d3994da97adfde",
+    "packages/typescript/sales-xray-review-ui/src/assigned-review-form.module.css": "3f8f3bcde3ac4bac356dd5e058de0e5c55f76fa28c19be2212a14d71b20e260b",
+    "packages/typescript/sales-xray-review-ui/src/assigned-review-form.module.css.d.ts": "0890ba105f89eb3184d950e5fc60d84613d66628992a7ceedd856013f456f96b",
+    "packages/typescript/sales-xray-review-ui/src/assigned-review-form.tsx": "b1d1e80aa1d89b911b212a590c77ebb5f32ddbd1bcefc9c234c7b61388540f25"
+  },
+  "frontend_source_hash_encoding": "UTF-8 with LF line endings"
+}

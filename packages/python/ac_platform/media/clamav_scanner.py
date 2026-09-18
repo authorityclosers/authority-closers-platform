@@ -28,6 +28,7 @@ from pathlib import PurePosixPath
 from ac_platform.media.errors import MediaScannerUnavailable
 from ac_platform.media.scanner import ScanResult, SignatureContentScanner
 from ac_platform.media.storage import PrivateObjectStorage, StoredObjectMetadata
+from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
 
 _MIB = 1024 * 1024
 _SHA256 = re.compile(r"[0-9a-fA-F]{64}")
@@ -42,11 +43,12 @@ class ClamAVScannerConfig:
     unix_socket: str | None = None
     host: str | None = None
     port: int = 3310
-    max_content_bytes: int = 100 * _MIB
+    max_content_bytes: int = STUDIO_VIDEO_MAX_SOURCE_BYTES
     chunk_size: int = 64 * 1024
     max_response_bytes: int = 2048
     connect_timeout_seconds: float = 5.0
     io_timeout_seconds: float = 15.0
+    verdict_timeout_seconds: float = 1200.0
     total_timeout_seconds: float = 120.0
 
     def __post_init__(self) -> None:
@@ -87,6 +89,7 @@ class ClamAVScannerConfig:
         for timeout in (
             self.connect_timeout_seconds,
             self.io_timeout_seconds,
+            self.verdict_timeout_seconds,
             self.total_timeout_seconds,
         ):
             if (
@@ -244,8 +247,14 @@ class ClamAVContentScanner:
                     raise _Rejected("MIME_SNIFF_MISMATCH")
                 self._send(connection, b"\0\0\0\0", deadline, config)
                 response = bytearray()
+                # The daemon scans after INSTREAM finishes. Its verdict budget
+                # is independent of short per-chunk writes, but never extends
+                # the absolute scan deadline or resets on a partial reply.
+                verdict_deadline = min(deadline, time.monotonic() + config.verdict_timeout_seconds)
                 while True:
-                    connection.settimeout(_remaining(deadline, config.io_timeout_seconds))
+                    connection.settimeout(
+                        _remaining(verdict_deadline, config.verdict_timeout_seconds)
+                    )
                     part = connection.recv(min(4096, config.max_response_bytes + 1 - len(response)))
                     if not part:
                         break

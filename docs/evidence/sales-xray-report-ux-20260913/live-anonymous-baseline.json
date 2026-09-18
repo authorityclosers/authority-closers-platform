@@ -1,0 +1,67 @@
+{
+  "captured_at": "2026-09-13T18:02:51.048214+00:00",
+  "scope": "Read-only anonymous live baseline; no auth, uploads or providers",
+  "observations": [
+    {
+      "environment": "staging",
+      "capability": "standalone",
+      "url": "https://salesxray-staging.authorityclosers.com/health",
+      "error_type": "ConnectError"
+    },
+    {
+      "environment": "production",
+      "capability": "standalone",
+      "url": "https://salesxray.authorityclosers.com/health",
+      "error_type": "ConnectError"
+    },
+    {
+      "environment": "staging",
+      "capability": "learner",
+      "url": "https://learner-staging.authorityclosers.com/sales-xray",
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "s-maxage=31536000",
+      "redirect": ""
+    },
+    {
+      "environment": "production",
+      "capability": "learner",
+      "url": "https://learner.authorityclosers.com/sales-xray",
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "cache_control": "s-maxage=31536000",
+      "redirect": ""
+    },
+    {
+      "environment": "staging",
+      "capability": "anonymous-recordings",
+      "url": "https://api-staging.authorityclosers.com/v1/conversation/recordings",
+      "status": 401,
+      "content_type": "application/problem+json",
+      "cache_control": "no-store",
+      "redirect": ""
+    },
+    {
+      "environment": "production",
+      "capability": "anonymous-recordings",
+      "url": "https://api.authorityclosers.com/v1/conversation/recordings",
+      "status": 401,
+      "content_type": "application/problem+json",
+      "cache_control": "no-store",
+      "redirect": ""
+    }
+  ],
+  "dns_followup": {
+    "captured_at": "2026-09-13T18:05:07.714883+00:00",
+    "observations": [
+      {
+        "host": "salesxray-staging.authorityclosers.com",
+        "dns_error_code": 11001
+      },
+      {
+        "host": "salesxray.authorityclosers.com",
+        "dns_error_code": 11001
+      }
+    ]
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "candidates": [
+    {
+      "adapter": "context-profile-replay/1",
+      "candidate_id": "source-profile-full",
+      "packet_budget_bytes": 24000,
+      "profile": {
+        "actual_source_total": 95,
+        "approved": false,
+        "criteria": [
+          {
+            "id": "AC.PRICE.DIAGNOSE",
+            "instruction": "Assess whether the closer clarified the meaning of the concern or already had relevant context. Do not require an exact question. Cite response and preceding evidence. Assign a behavioral finding only if supported.",
+            "source": "Doc01 sections30–31; Doc04 sections4–7",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "price_objection",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "AC.EVIDENCE.RELEVANCE",
+            "instruction": "Assess whether the response addressed the requested evidence. A feature list is not automatically bad; determine whether it answered the actual concern.",
+            "source": "Doc01 section24; Doc04 section26",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "evidence_concern",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "AC.STOP.RESPECT",
+            "instruction": "Assess response to the explicit stop, keeping alternatives and contextual uncertainty visible. Do not invent motives.",
+            "source": "Doc04 stop conditions; platform hard constraint",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "consent_to_continue",
+                "value": false
+              }
+            }
+          }
+        ],
+        "declared_total": 100,
+        "ethics": "hard_constraint_not_extra_5_points",
+        "id": "dipak_draft",
+        "numeric_score_enabled": false,
+        "revision": "candidate-0.3",
+        "source": "Version-1...Brain.txt, Documents 01–05; uploaded snapshot; not rewritten",
+        "source_weights": [
+          15,
+          20,
+          15,
+          10,
+          10,
+          15,
+          5,
+          5
+        ]
+      },
+      "revision": "fixture-recipe-v1"
+    },
+    {
+      "adapter": "context-profile-replay/1",
+      "candidate_id": "wording-fixture-bounded",
+      "packet_budget_bytes": 12000,
+      "profile": {
+        "actual_source_total": 95,
+        "approved": false,
+        "criteria": [
+          {
+            "id": "AC.PRICE.DIAGNOSE",
+            "instruction": "Fixture-only wording: preserve the stated price concern and its preceding context; do not infer a motive.",
+            "source": "Doc01 sections30–31; Doc04 sections4–7",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "price_objection",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "AC.EVIDENCE.RELEVANCE",
+            "instruction": "Assess whether the response addressed the requested evidence. A feature list is not automatically bad; determine whether it answered the actual concern.",
+            "source": "Doc01 section24; Doc04 section26",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "evidence_concern",
+                "value": true
+              }
+            }
+          },
+          {
+            "id": "AC.STOP.RESPECT",
+            "instruction": "Assess response to the explicit stop, keeping alternatives and contextual uncertainty visible. Do not invent motives.",
+            "source": "Doc04 stop conditions; platform hard constraint",
+            "weight": 0,
+            "when": {
+              "slot_equals": {
+                "slot": "consent_to_continue",
+                "value": false
+              }
+            }
+          }
+        ],
+        "declared_total": 100,
+        "ethics": "hard_constraint_not_extra_5_points",
+        "id": "offline_wording_fixture",
+        "numeric_score_enabled": false,
+        "revision": "fixture-wording-v1",
+        "source": "Version-1...Brain.txt, Documents 01–05; uploaded snapshot; not rewritten",
+        "source_weights": [
+          15,
+          20,
+          15,
+          10,
+          10,
+          15,
+          5,
+          5
+        ]
+      },
+      "revision": "fixture-recipe-v2"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "price-without-context",
+      "input": {
+        "name": "price-without-context.json",
+        "sha256": "3397798f15297e93bcff3db12bbd1c04d274a654f1c8154841ab4b5e8595e13c"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "f987c640775e20199855e549f6d3d146298812a5a91014ac7821a8beacd401dd",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "f430568a4a04bf382adfa0ee526d6430b4a2d0d50dec63e9b67062ffbb9f2012",
+      "split": "development"
+    },
+    {
+      "case_id": "price-with-evidence-context",
+      "input": {
+        "name": "price-with-evidence-context.json",
+        "sha256": "7b7253a9415529b2298d5b9f4c936bdf584263484636469a769ad86807228784"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "38a1dc79248f340fcffab03839ff7f707c3e40cb96fccfee8cb08480a85081b3",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "cc1ca1141c00c134558f2039eaaff10369c232b7d30f2b80a794382735e06091",
+      "split": "development"
+    },
+    {
+      "case_id": "explicit-stop-mixed",
+      "input": {
+        "name": "explicit-stop-mixed.json",
+        "sha256": "3c9830e577b8f8cf9c30df7a2a468333287aa50e4c3b233103e3d6164f0967c7"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "88063b8901d8fc7bbb2c3e01b01c9fa765b34cd6f4235f310f2e8bd7721324c5",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "f788821ba3c5c9311e36fc644c6cea0fed5c313726072586ac3a102b0f66f230",
+      "split": "development"
+    },
+    {
+      "case_id": "marathi-evidence",
+      "input": {
+        "name": "marathi-evidence.json",
+        "sha256": "d3417c8ec55630abf9bc9877b1f9dbe6ea244490682149c35c7d26ca21b66e0e"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "686c9c166bfc205b979835d96f53e5733663145a610f2d48e314b66aba6663b1",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "1275ae02e3294c166ea21d4fbfd9200d56bbcc219dddfaed10f18d72f3662493",
+      "split": "calibration"
+    },
+    {
+      "case_id": "contradictory-budget",
+      "input": {
+        "name": "contradictory-budget.json",
+        "sha256": "b61addec883ffaca499757dd54381a99aef3ede99996d1476499e25458015046"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "38b9b92d71cdf89128ff03be234aadf129dedb36fad0a89239f09f30d504f222",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "8577d011027e09712681092c494be73d831fc9b5aa4dd1790e29d5da882b6644",
+      "split": "development"
+    },
+    {
+      "case_id": "future-stop-hidden",
+      "input": {
+        "name": "future-stop-hidden.json",
+        "sha256": "8583ebea75951fe2d19e0965613e1ece7125147de4ccfa8168044ff81a3cf970"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "5ccb41a23a7cd738b4566a4f4a594bdcd0640b5e42c9d105e950cbfe5ec277a8",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "54cc805367699c8648b820fb51db2f214d3c2abad6477f8b52f9e0a18fbff195",
+      "split": "development"
+    },
+    {
+      "case_id": "forged-evidence",
+      "input": {
+        "name": "forged-evidence.json",
+        "sha256": "f7b88d1dcce4388aa05155b8492693164fd684a53ca4281561959a65eb124459"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "f987c640775e20199855e549f6d3d146298812a5a91014ac7821a8beacd401dd",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "f430568a4a04bf382adfa0ee526d6430b4a2d0d50dec63e9b67062ffbb9f2012",
+      "split": "development"
+    },
+    {
+      "case_id": "future-critical-rejected",
+      "input": {
+        "name": "future-critical-rejected.json",
+        "sha256": "1757497c7aa55ba21bb6d00b4daf0950bdece60bdeb2922315577ff81d069880"
+      },
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "5ccb41a23a7cd738b4566a4f4a594bdcd0640b5e42c9d105e950cbfe5ec277a8",
+      "permission_ref": "fixture://sales-xray/offline-context-v1",
+      "source_sha256": "54cc805367699c8648b820fb51db2f214d3c2abad6477f8b52f9e0a18fbff195",
+      "split": "development"
+    },
+    {
+      "case_id": "sealed-metadata-only",
+      "input": null,
+      "manifest_revision": "synthetic-context-v1",
+      "participant_partition_sha256": "5e716674d77cce8cc322e42ba86e41b46d0889521fde8266bc9cbcad7f12979a",
+      "permission_ref": "fixture://metadata-only/no-content",
+      "source_sha256": "b64dfc75c2e3a5a7c06809d5ed40db4217347835af213d5ad9b6e1f1dc667ecd",
+      "split": "holdout"
+    }
+  ],
+  "data_class": "synthetic_fixture",
+  "manifest_revision": "synthetic-context-v1",
+  "schema_id": "ac.sales-xray.offline-benchmark/1",
+  "selected_case_ids": [
+    "price-without-context",
+    "price-with-evidence-context",
+    "explicit-stop-mixed",
+    "marathi-evidence",
+    "contradictory-budget",
+    "future-stop-hidden",
+    "forged-evidence",
+    "future-critical-rejected"
+  ]
+}

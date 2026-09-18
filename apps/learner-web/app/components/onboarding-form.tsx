@@ -15,11 +15,16 @@ import { useEffect, useRef, useState, type Ref } from "react";
 import { useAuthFlowProgress } from "./auth-flow-page";
 import type { CourseIntent } from "../lib/course-intent";
 import {
-  activityIntentHref,
   activityReturnHref,
   parseActivityIntent,
   type ActivityIntent,
 } from "../lib/activity-intent";
+import {
+  authIntentHref,
+  parseSalesAuthNext,
+  SALES_XRAY_PATH,
+  type SalesAuthNext,
+} from "../lib/sales-auth-return";
 import {
   ApiError,
   createLearnerApi,
@@ -373,6 +378,7 @@ export type OnboardingFormProps = {
   returnHref?: string;
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 };
 
 export type OnboardingCompletionStateProps = {
@@ -407,6 +413,7 @@ export function OnboardingCompletionState({
   const returningToActivity =
     returnHref.startsWith(activityPrefix) &&
     parseActivityIntent(returnHref.slice(activityPrefix.length)) !== null;
+  const returningToSales = returnHref === SALES_XRAY_PATH;
 
   return (
     <div
@@ -498,7 +505,9 @@ export function OnboardingCompletionState({
           ? "Return to settings"
           : returningToActivity
             ? "Resume activity"
-            : "Open learner home"}{" "}
+            : returningToSales
+              ? "Open Sales Xray"
+              : "Open learner home"}{" "}
         <ArrowRight size={17} aria-hidden="true" />
       </Link>
       <button
@@ -518,12 +527,18 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
     initialProfile,
     courseIntent = null,
     activityIntent = null,
-    returnHref = activityReturnHref(activityIntent, courseIntent),
+    salesNext = null,
+    returnHref = parseSalesAuthNext(salesNext) &&
+    !courseIntent &&
+    !activityIntent
+      ? SALES_XRAY_PATH
+      : activityReturnHref(activityIntent, courseIntent),
   } = props;
-  const recoveryHref = activityIntentHref(
+  const recoveryHref = authIntentHref(
     ROUTES.sessionExpired,
     returnHref === ROUTES.settings ? null : activityIntent,
     returnHref === ROUTES.settings ? null : courseIntent,
+    returnHref === ROUTES.settings ? null : salesNext,
   );
   const initialDraft = initialProfile ? draftFrom(initialProfile) : emptyDraft;
   const [profile, setProfile] = useState<OnboardingResponse | null>(

@@ -1,0 +1,7 @@
+COMMAND ['D:/Projects/authority-closers-xray-ci-lint/.venv/Scripts/ruff.exe', 'check', 'packages/python/ac_platform/conversation_intelligence/acquisition_library.py', 'packages/python/ac_platform/http/conversation_submissions.py', 'tests/database/test_conversation_account_library_postgresql.py', 'tests/e2e/test_sales_xray_acquisition_browser.py']
+EXIT 0
+All checks passed!
+
+COMMAND ['D:\\Projects\\authority-closers-v02-consolidation\\.venv\\Scripts\\python.exe', '-m', 'mypy', 'packages/python/ac_platform/conversation_intelligence/acquisition_library.py', 'packages/python/ac_platform/http/conversation_submissions.py', '--follow-imports=silent']
+EXIT 0
+Success: no issues found in 2 source files

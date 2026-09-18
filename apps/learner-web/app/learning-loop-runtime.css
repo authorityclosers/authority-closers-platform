@@ -76,6 +76,32 @@
   color: var(--clarity-ink);
 }
 
+.site-frame--learner .momentum-video-viewer__provenance {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--clarity-border);
+  border-radius: 10px;
+  background: var(--theme-surface-subtle);
+  color: var(--clarity-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.site-frame--learner .momentum-video-viewer__provenance strong {
+  color: var(--clarity-ink);
+  font-size: 0.82rem;
+}
+
+.site-frame--learner .momentum-video-viewer__provenance a {
+  width: fit-content;
+  color: var(--clarity-blue);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .site-frame--learner .momentum-video-viewer__heading,
 .site-frame--learner .momentum-video-viewer__status-row,
 .site-frame--learner .momentum-video-viewer__facts,

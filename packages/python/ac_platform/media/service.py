@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
@@ -25,6 +26,7 @@ from ac_platform.media.api_contracts import (
     ActivityMediaBindingRequest,
     ActivityMediaBindingResponse,
     ActivityMediaDescriptorResponse,
+    ActivityMediaProvenanceResponse,
     AvatarVariantResponse,
     CaptionCreateRequest,
     CaptionResponse,
@@ -100,6 +102,7 @@ from ac_platform.media.models import (
     MediaUploadIntent,
     MediaVersion,
     MediaWebhookInbox,
+    StudioVideoUpload,
 )
 from ac_platform.media.policy import PersistedMediaGrantScope, SignedMediaDeliveryPort
 from ac_platform.media.processing import (
@@ -108,6 +111,11 @@ from ac_platform.media.processing import (
     ProcessedCaption,
     ProcessingQuota,
     inspect_hls_playlist_inventory,
+)
+from ac_platform.media.public_film_manifest import (
+    BBB_SOURCE_BYTES,
+    BBB_SOURCE_SHA256,
+    technical_playback_provenance_for_checksum,
 )
 from ac_platform.media.scanner import ContentScanner, FailClosedScanner, ScanResult
 from ac_platform.media.signing import MediaSigner
@@ -119,6 +127,7 @@ from ac_platform.media.storage import (
 )
 
 if TYPE_CHECKING:
+    from ac_platform.catalog.free_course_media import FreeCourseMediaBindingAuthorization
     from ac_platform.learning.services import LearningAccessContext
     from ac_platform.media.public_film_import import PublicFilmImportAuthorization
     from ac_platform.media.public_film_manifest import (
@@ -566,6 +575,7 @@ class MediaService:
         idempotency_key: str,
         public_film_authorization: PublicFilmImportAuthorization | None = None,
         studio_authorization: StudioBindingAuthorization | None = None,
+        free_course_authorization: FreeCourseMediaBindingAuthorization | None = None,
     ) -> ActivityMediaBindingResponse:
         """Append a human-approved, tenant-scoped activity/media binding.
 
@@ -578,11 +588,22 @@ class MediaService:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for activity media bindings."
             )
+        if free_course_authorization is not None:
+            from ac_platform.catalog.free_course_media import FreeCourseMediaBindingAuthorization
+
+            if (
+                public_film_authorization is not None
+                or studio_authorization is not None
+                or type(free_course_authorization) is not FreeCourseMediaBindingAuthorization
+            ):
+                raise MediaForbidden("One exact Free Course media authorization is required.")
+            free_course_authorization.require(database, actor, service=self, request=request)
         if studio_authorization is not None:
             from ac_platform.media.studio_selection import StudioBindingAuthorization
 
             if (
                 public_film_authorization is not None
+                or free_course_authorization is not None
                 or type(studio_authorization) is not StudioBindingAuthorization
             ):
                 raise MediaForbidden("One exact Studio approval authorization is required.")
@@ -599,13 +620,19 @@ class MediaService:
                 request=request,
                 service=self,
             )
-        elif studio_authorization is None and not self._manager(actor):
+        elif (
+            studio_authorization is None
+            and free_course_authorization is None
+            and not self._manager(actor)
+        ):
             raise MediaForbidden("The actor is not authorized to approve activity media.")
         from ac_platform.media.public_film_manifest import is_public_film_media_identity
 
         tenant_id = self._tenant(actor)
-        if public_film_authorization is None and is_public_film_media_identity(
-            tenant_id, request.asset_id, request.version_id
+        if (
+            public_film_authorization is None
+            and free_course_authorization is None
+            and is_public_film_media_identity(tenant_id, request.asset_id, request.version_id)
         ):
             raise MediaForbidden(
                 "Public test films require their dedicated demonstration authorization."
@@ -655,7 +682,11 @@ class MediaService:
             raise MediaConflict("Only published catalog activities can receive approved media.")
 
         asset = self._asset(database, actor, request.asset_id, lock=True)
-        if public_film_authorization is None and studio_authorization is None:
+        if (
+            public_film_authorization is None
+            and studio_authorization is None
+            and free_course_authorization is None
+        ):
             self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
         if asset.purpose != MediaPurpose.VIDEO.value or asset.state == MediaLifecycle.RETIRED.value:
             raise MediaConflict("Only active video media can be approved for an activity.")
@@ -728,6 +759,7 @@ class MediaService:
         )
         if (
             public_film_authorization is None
+            and free_course_authorization is None
             and current is not None
             and is_public_film_media_identity(tenant_id, current.asset_id, current.version_id)
         ):
@@ -783,6 +815,8 @@ class MediaService:
             )
         if studio_authorization is not None:
             studio_authorization.require(database, actor, service=self, request=request)
+        if free_course_authorization is not None:
+            free_course_authorization.require(database, actor, service=self, request=request)
         binding = ActivityMediaBinding(
             tenant_id=tenant_id,
             activity_id=activity.id,
@@ -845,6 +879,145 @@ class MediaService:
                 now=issued.issued_at,
             )
         return descriptor
+
+    @staticmethod
+    def _technical_playback_provenance(
+        database: Session,
+        *,
+        activity_id: UUID,
+        version: MediaVersion,
+    ) -> ActivityMediaProvenanceResponse | None:
+        """Attest the reviewed BBB notice only after source admission is linked.
+
+        A target checksum alone is insufficient: the immutable promotion audit
+        receipt and the original Studio upload admission must point to the
+        same READY source version. This keeps learner disclosure server-owned
+        without adding catalog or media schema state.
+        """
+
+        provenance = technical_playback_provenance_for_checksum(version.checksum_sha256)
+        if (
+            provenance is None
+            or version.purpose != MediaPurpose.VIDEO.value
+            or version.state != MediaLifecycle.READY.value
+            or version.content_type.split(";", 1)[0].strip().lower() != "video/mp4"
+            or version.actual_bytes != BBB_SOURCE_BYTES
+        ):
+            return None
+
+        # The promotion receipt is the server-authored bridge between the
+        # public GLOBAL target and the operations-owned source admission.
+        events = database.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.action == "media.free_course_promoted.v1",
+                AuditEvent.resource_type == "global_program_activity",
+                AuditEvent.resource_id == str(activity_id),
+            )
+            .order_by(AuditEvent.sequence_no.desc(), AuditEvent.id.desc())
+        ).all()
+        matching_events = [
+            item
+            for item in events
+            if isinstance(item.payload, dict)
+            and item.payload.get("activity_id") == str(activity_id)
+            and item.payload.get("public_tenant_id") == str(version.tenant_id)
+            and item.payload.get("asset_id") == str(version.asset_id)
+            and item.payload.get("version_id") == str(version.id)
+        ]
+        if len(matching_events) != 1:
+            return None
+        event = matching_events[0]
+        payload = event.payload
+        if not isinstance(payload, dict):
+            return None
+        if (
+            event.tenant_id == version.tenant_id
+            or event.actor_person_id is None
+            or payload.get("activity_id") != str(activity_id)
+            or payload.get("public_tenant_id") != str(version.tenant_id)
+            or payload.get("asset_id") != str(version.asset_id)
+            or payload.get("version_id") != str(version.id)
+            or payload.get("media_status") != "ready_public_tenant_media_bound"
+        ):
+            return None
+        try:
+            source_asset_id = UUID(str(payload["source_asset_id"]))
+            source_version_id = UUID(str(payload["source_version_id"]))
+            owner_person_id = UUID(str(payload["media_owner_person_id"]))
+        except (KeyError, TypeError, ValueError):
+            return None
+        if event.actor_person_id != owner_person_id:
+            return None
+
+        source_asset = database.scalar(
+            select(MediaAsset).where(
+                MediaAsset.tenant_id == event.tenant_id,
+                MediaAsset.id == source_asset_id,
+                MediaAsset.owner_person_id == owner_person_id,
+                MediaAsset.purpose == MediaPurpose.VIDEO.value,
+                MediaAsset.state == MediaLifecycle.READY.value,
+                MediaAsset.current_version_id == source_version_id,
+            )
+        )
+        source_version = database.scalar(
+            select(MediaVersion).where(
+                MediaVersion.tenant_id == event.tenant_id,
+                MediaVersion.asset_id == source_asset_id,
+                MediaVersion.id == source_version_id,
+                MediaVersion.purpose == MediaPurpose.VIDEO.value,
+                MediaVersion.state == MediaLifecycle.READY.value,
+            )
+        )
+        if (
+            source_asset is None
+            or source_version is None
+            or source_version.actual_bytes != BBB_SOURCE_BYTES
+            or source_version.checksum_sha256 is None
+            or source_version.checksum_sha256.lower() != BBB_SOURCE_SHA256
+            or source_version.content_type.split(";", 1)[0].strip().lower() != "video/mp4"
+        ):
+            return None
+
+        admissions = database.execute(
+            select(StudioVideoUpload, MediaUploadIntent)
+            .join(
+                MediaUploadIntent,
+                (MediaUploadIntent.id == StudioVideoUpload.upload_id)
+                & (MediaUploadIntent.tenant_id == StudioVideoUpload.tenant_id),
+            )
+            .where(
+                StudioVideoUpload.tenant_id == event.tenant_id,
+                MediaUploadIntent.tenant_id == event.tenant_id,
+                MediaUploadIntent.asset_id == source_asset_id,
+                MediaUploadIntent.version_id == source_version_id,
+            )
+            .limit(2)
+        ).all()
+        if len(admissions) != 1:
+            return None
+        upload, intent = admissions[0]
+        if (
+            upload.program_id.int == 0
+            or intent.actor_person_id != owner_person_id
+            or intent.state != MediaLifecycle.READY.value
+            or intent.object_key != source_version.object_key
+            or intent.content_type.split(";", 1)[0].strip().lower()
+            != source_version.content_type.split(";", 1)[0].strip().lower()
+            or intent.declared_bytes != source_version.actual_bytes
+            or intent.checksum_sha256 is None
+            or intent.checksum_sha256.lower() != BBB_SOURCE_SHA256
+            or intent.completion_fingerprint is None
+        ):
+            return None
+
+        return ActivityMediaProvenanceResponse(
+            label="Technical playback test — not course instruction",
+            title=provenance.title,
+            attribution=provenance.attribution,
+            license=provenance.license,
+            license_url=provenance.license_url,
+        )
 
     def _resolve_activity_media_descriptor_for_learner(
         self,
@@ -924,6 +1097,11 @@ class MediaService:
             renditions=projected.renditions if projected is not None else [],
             captions=projected.captions if projected is not None else [],
             delivery=None,
+            provenance=self._technical_playback_provenance(
+                database,
+                activity_id=activity.id,
+                version=version,
+            ),
             playback_available=False,
         )
         if self.delivery_port is None or self.delivery_activity_resolver is None:

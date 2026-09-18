@@ -1,0 +1,2005 @@
+.app {
+  min-height: 0;
+  background: #fff;
+}
+.app[data-stage="upload"] {
+  --mint: #007d79;
+  --ink: #0e213d;
+  --muted: #60738f;
+  background: #fff;
+}
+.app[data-stage="upload"] :global(.studio-main) {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.5vh, 26px);
+  max-width: 1320px;
+  min-height: 0;
+  padding: clamp(16px, 3vh, 30px) clamp(20px, 3vw, 44px) 22px;
+}
+.app[data-stage="upload"] :global(.studio-steps),
+.app[data-stage="upload"] .stepHeader {
+  display: none;
+}
+.app[data-stage="upload"] :global(.studio-intro) {
+  flex: 0 0 auto;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+}
+.app[data-stage="upload"] :global(.studio-intro) :global(.eyebrow) {
+  display: none;
+}
+.app[data-stage="upload"] :global(.studio-intro) h1 {
+  margin: 0 0 8px;
+  color: #0e213d;
+  font-family: inherit;
+  font-size: clamp(30px, 3.3vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+}
+.app[data-stage="upload"] :global(.studio-intro) > p:last-child {
+  max-width: 76ch;
+  margin: 0;
+  color: #60738f;
+  font-size: clamp(14px, 1.3vw, 17px);
+  line-height: 1.5;
+}
+.app[data-stage="upload"] .layout {
+  order: 1;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+}
+.app[data-stage="upload"] .expect {
+  display: none;
+}
+.app[data-stage="upload"] .upload {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.app[data-stage="upload"] .dropZone {
+  position: relative;
+  display: grid;
+  min-height: clamp(215px, 32vh, 340px);
+  align-content: center;
+  justify-items: center;
+  padding: 24px;
+  border: 1px solid #c9dfe4;
+  border-radius: 18px;
+  background: #f5fbfb;
+  text-align: center;
+  transition:
+    background-color 180ms,
+    border-color 180ms,
+    box-shadow 180ms;
+}
+.app[data-stage="upload"] .dropZone::before {
+  position: absolute;
+  inset: 13px;
+  border: 1px dashed #8bc9c9;
+  border-radius: 11px;
+  content: "";
+  pointer-events: none;
+}
+.app[data-stage="upload"] .dropZone:hover,
+.app[data-stage="upload"] .dropZone:focus-within {
+  border-color: #399f9f;
+  background: #effaf7;
+  box-shadow: 0 0 0 4px #007d7910;
+}
+.app[data-stage="upload"] .dropZone :global(.studio-upload-icon) {
+  position: relative;
+  display: grid;
+  width: clamp(56px, 8vh, 82px);
+  height: clamp(56px, 8vh, 82px);
+  margin: 0 0 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: #def6ed;
+  color: #007d79;
+}
+.app[data-stage="upload"] .audioCue {
+  position: absolute;
+  animation: audioCuePulse 4.4s ease-in-out infinite;
+}
+.app[data-stage="upload"] .uploadCue {
+  position: absolute;
+  color: #007d79;
+  opacity: 0;
+  animation: uploadCuePulse 4.4s ease-in-out infinite;
+}
+.app[data-stage="upload"] .dropZone h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.app[data-stage="upload"] .dropTitle {
+  margin: 0;
+  color: #10243d;
+  font-size: clamp(16px, 1.7vw, 21px);
+  font-weight: 750;
+  line-height: 1.35;
+}
+.app[data-stage="upload"] .dropSelect {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 5px 12px;
+  color: #007d79;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+}
+.app[data-stage="upload"] .dropSelect:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.app[data-stage="upload"] .formatFacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  margin-top: 8px;
+  color: #60738f;
+  font-size: 12px;
+}
+.app[data-stage="upload"] .formatFacts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.app[data-stage="upload"] .formatFacts svg {
+  color: #3b64d9;
+}
+.app[data-stage="upload"] .allowance {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  color: #60738f;
+  font-size: 12px;
+}
+.uploadAtmosphere {
+  order: 2;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 84px;
+  display: grid;
+  align-items: center;
+  padding-block: 6px;
+}
+.signalOrbit,
+.signalWave {
+  display: none;
+}
+.uploadAtmosphereSignals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.signalChip {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: clamp(10px, 1.2vw, 20px);
+}
+.signalChip > svg {
+  box-sizing: content-box;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  padding: 17px;
+  border-radius: 50%;
+}
+.signalUpload > svg {
+  color: #007d79;
+  background: #def6ed;
+}
+.signalEvidence > svg {
+  color: #6739ed;
+  background: #efe8ff;
+}
+.signalCoaching > svg {
+  color: #ed770b;
+  background: #fff0df;
+}
+.signalCopy {
+  display: grid;
+  gap: 6px;
+}
+.signalCopy strong {
+  color: #10243d;
+  font-size: 16px;
+  font-weight: 750;
+}
+.signalCopy small {
+  color: #60738f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.signalConnector {
+  color: #93a2b7;
+  font-size: 22px;
+}
+.app[data-stage="upload"][data-selected="true"] .uploadAtmosphere,
+.app[data-stage="upload"][data-selected="true"] .previewHint,
+.app[data-stage="upload"][data-selected="true"] .allowance {
+  display: none;
+}
+.app[data-stage="upload"][data-selected="true"] :global(.studio-intro) {
+  margin: 0;
+}
+.app[data-stage="upload"][data-selected="true"] :global(.studio-intro) h1 {
+  font-size: clamp(24px, 3vw, 38px);
+}
+.app[data-stage="upload"][data-selected="true"] .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(230px, 0.9fr);
+  align-items: stretch;
+  gap: 20px;
+  flex: 1;
+}
+.app[data-stage="upload"][data-selected="true"] .upload {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: clamp(18px, 2vw, 28px);
+  border: 1px solid #dce4f0;
+  border-radius: 16px;
+  background: #fff;
+}
+.selectionHeading,
+.verifyHeading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  color: #10243d;
+  font-size: 16px;
+  font-weight: 750;
+}
+.selectionHeading > span,
+.verifyHeading > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid #dae2ff;
+  border-radius: 50%;
+  background: #f0f4ff;
+  color: #3157d5;
+  font-size: 13px;
+}
+.app[data-stage="upload"] :global(.studio-file) {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  padding: 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #fbfdff;
+}
+.app[data-stage="upload"] :global(.studio-file) :global(.studio-upload-icon) {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  margin: 0;
+  place-items: center;
+  border-radius: 13px;
+  background: #def6ed;
+  color: #008875;
+}
+.app[data-stage="upload"] :global(.studio-file) > div {
+  min-width: 0;
+}
+.app[data-stage="upload"] :global(.studio-file) h2 {
+  overflow: hidden;
+  margin: 0;
+  color: #10243d;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app[data-stage="upload"] :global(.studio-file) p {
+  margin: 4px 0 0;
+  color: #60738f;
+  font-size: 12px;
+}
+.app[data-stage="upload"] :global(.studio-file) > :global(.secondary-button) {
+  min-height: 44px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 0;
+  background: #eef2ff;
+  color: #007d79;
+  font-size: 12px;
+}
+.app[data-stage="upload"] .previewDetails {
+  margin: 0 0 14px;
+}
+.app[data-stage="upload"] .previewDetails summary {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  color: #60738f;
+  font-size: 12px;
+  cursor: pointer;
+}
+.app[data-stage="upload"] .previewDetails audio {
+  height: 36px;
+}
+.app[data-stage="upload"] :global(.studio-consent) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.app[data-stage="upload"] :global(.studio-consent) h3,
+.app[data-stage="upload"] :global(.studio-consent) .freeBadge {
+  display: none;
+}
+.app[data-stage="upload"] .privacyDetails {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.app[data-stage="upload"] .privacyDetails summary {
+  min-height: 26px;
+  color: #60738f;
+  font-size: 12px;
+}
+.app[data-stage="upload"] .privacyDetails[open] {
+  max-height: 120px;
+  overflow: auto;
+  padding: 8px;
+  background: #f8fafc;
+}
+.app[data-stage="upload"] :global(.studio-consent) .consentLabel {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: #60738f;
+  font-size: 13px;
+}
+.app[data-stage="upload"] .consentLabel input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  accent-color: #007d79;
+}
+.app[data-stage="upload"] .uploadActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+.app[data-stage="upload"] .uploadActions > :first-child {
+  max-width: 100%;
+}
+.app[data-stage="upload"] .uploadActions :global(.studio-wide) {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  border-radius: 12px;
+  background: #007d79;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 750;
+}
+.app[data-stage="upload"][data-selected="true"] .expect {
+  display: block;
+  min-height: 0;
+  padding: 22px;
+  overflow: auto;
+  border: 1px solid #dce4f0;
+  border-radius: 16px;
+  background: #f8faff;
+}
+.app[data-stage="upload"] .expect h2 {
+  font:
+    750 22px/1.25 var(--font-sans, "Segoe UI"),
+    sans-serif;
+}
+.app[data-stage="upload"] .expect li {
+  padding: 15px 0;
+  gap: 12px;
+  border: 0;
+}
+.app[data-stage="upload"] .expect li > svg {
+  box-sizing: content-box;
+  padding: 12px;
+  flex: 0 0 22px;
+  border-radius: 14px;
+  color: #6739ed;
+  background: #eee8ff;
+}
+.app[data-stage="upload"] .expect li:nth-child(2) > svg {
+  color: #007d79;
+  background: #def6ed;
+}
+.app[data-stage="upload"] .expect li:nth-child(3) > svg {
+  color: #3157d5;
+  background: #e8efff;
+}
+.app[data-stage="upload"] .expect li h3 {
+  font-size: 15px;
+}
+.app[data-stage="upload"] .expect li p,
+.app[data-stage="upload"] .draftNote {
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 1100px) {
+  .app[data-stage="upload"][data-selected="true"] .layout {
+    grid-template-columns: 1fr;
+  }
+  .app[data-stage="upload"][data-selected="true"] .expect {
+    display: none;
+  }
+}
+@media (max-width: 620px) {
+  .app[data-stage="upload"] :global(.studio-main) {
+    padding: 18px 16px 16px;
+    gap: 20px;
+  }
+  .app[data-stage="upload"] :global(.studio-intro) h1 {
+    font-size: 29px;
+  }
+  .app[data-stage="upload"] :global(.studio-intro) > p:last-child {
+    font-size: 14px;
+  }
+  .app[data-stage="upload"] .dropZone {
+    min-height: 260px;
+    padding: 24px 18px;
+  }
+  .app[data-stage="upload"] .formatFacts {
+    gap: 8px;
+    font-size: 11px;
+  }
+  .uploadAtmosphereSignals {
+    gap: 8px;
+  }
+  .signalChip {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+  .signalChip > svg {
+    width: 25px;
+    height: 25px;
+    flex-basis: 25px;
+    padding: 14px;
+  }
+  .signalCopy strong {
+    font-size: 12px;
+  }
+  .signalCopy small {
+    font-size: 11px;
+  }
+  .signalConnector {
+    display: none;
+  }
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 16px;
+  }
+  .app[data-stage="upload"] :global(.studio-file) {
+    gap: 8px;
+    padding: 10px;
+  }
+  .app[data-stage="upload"] :global(.studio-file) :global(.studio-upload-icon) {
+    width: 36px;
+    height: 40px;
+    flex-basis: 36px;
+  }
+  .app[data-stage="upload"] :global(.studio-file) h2 {
+    font-size: 13px;
+  }
+}
+@media (max-height: 700px) {
+  .app[data-stage="upload"] :global(.studio-main) {
+    gap: 12px;
+    padding-top: 12px;
+  }
+  .app[data-stage="upload"] :global(.studio-intro) h1 {
+    font-size: 28px;
+  }
+  .app[data-stage="upload"] .dropZone {
+    min-height: 210px;
+    padding-block: 18px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-intro)
+    > p:last-child {
+    display: none;
+  }
+  .selectionHeading,
+  .verifyHeading {
+    margin-bottom: 8px;
+  }
+  .signalChip > svg {
+    padding: 12px;
+  }
+}
+.app[data-variant="standalone"] {
+  min-height: auto;
+}
+.app[data-variant="standalone"] :global(.studio-main) {
+  padding: 24px 24px 16px;
+}
+.app[data-variant="standalone"] :global(.studio-steps) {
+  gap: 28px;
+  margin-bottom: 30px;
+}
+.app[data-variant="standalone"] :global(.studio-steps span) {
+  font-size: 13px;
+}
+.app[data-variant="standalone"] :global(.studio-intro) {
+  margin-bottom: 24px;
+}
+.app[data-variant="standalone"] :global(.studio-intro h1) {
+  font-size: clamp(34px, 4vw, 50px);
+}
+.header {
+  justify-content: space-between;
+  gap: 18px;
+}
+.header > :last-child {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: start;
+  gap: 24px;
+}
+.upload {
+  min-width: 0;
+  position: relative;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.upload.dragging {
+  border-color: var(--action);
+  background: color-mix(in srgb, var(--action) 5%, var(--surface));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--action) 13%, transparent);
+}
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.stepNumber {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: #edf2ff;
+  color: var(--action);
+  font:
+    700 11px/1 ui-monospace,
+    monospace;
+}
+.stepHeader > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+.stepHeader strong {
+  font-size: 15px;
+}
+.stepHeader small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dropHint {
+  margin: 11px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.freeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  color: var(--mint);
+  font-size: 12px;
+  font-weight: 700;
+}
+.freeBadge span {
+  display: inline-grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mint) 13%, var(--surface));
+  animation: badge-pop 520ms ease-out both;
+}
+.privacyDetails {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 55%, var(--surface));
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.privacyDetails summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.privacyDetails p,
+.privacyDetails ul {
+  margin: 9px 0 0;
+}
+.privacyDetails ul {
+  padding-left: 17px;
+}
+.upload h2 {
+  overflow-wrap: anywhere;
+}
+.upload audio {
+  width: 100%;
+}
+.expect {
+  padding: 36px;
+  background: var(--surface);
+}
+.expect h2 {
+  font-size: clamp(22px, 2.2vw, 29px);
+  line-height: 1.35;
+  letter-spacing: -0.6px;
+}
+.expect ol {
+  list-style: none;
+  padding: 10px 0;
+  margin: 0;
+}
+.expect li {
+  display: flex;
+  gap: 16px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border);
+}
+.expect li > b {
+  color: var(--mint);
+  font-size: 13px;
+  padding-top: 4px;
+}
+.expect h3 {
+  margin: 0 0 7px;
+  font-size: 16px;
+}
+.expect li p,
+.draftNote {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.draftNote {
+  padding-top: 18px;
+}
+.allowance {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--mint);
+  font-size: 12px;
+}
+.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.providers {
+  list-style: none;
+  padding: 0 !important;
+  display: grid;
+  gap: 14px;
+}
+.providers li {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  font-size: 12px;
+}
+.providers strong,
+.providers span {
+  display: block;
+  margin-bottom: 5px;
+}
+.providers p {
+  margin: 0;
+}
+.processingPanel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px 28px;
+  padding: 28px;
+  border: 1px solid #dbe5ed;
+  border-radius: 20px;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 12px 40px #16375808;
+}
+.processingPanel[data-paused="true"] {
+  border-color: #f0d3ae;
+  background: #fffdf8;
+}
+.withBusy {
+  grid-template-columns: minmax(0, 960px);
+  max-width: 960px;
+  margin-inline: auto;
+}
+.withBusy .expect {
+  display: none;
+}
+.withBusy .upload {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.uploadProgress {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+.progressCopy {
+  min-width: 0;
+}
+.progressKicker {
+  margin: 0 0 8px;
+  color: #007d79;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+.processingPanel[data-paused="true"] .progressKicker {
+  color: #b26a19;
+}
+.progressCopy h3 {
+  margin: 0 0 10px;
+  color: #10243d;
+  font-family: inherit;
+  font-size: clamp(22px, 2.5vw, 32px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.progressCopy > p:last-child {
+  max-width: 50ch;
+  margin: 0;
+  color: #60738f;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.progressUpdateMessage {
+  display: grid;
+}
+.progressUpdateMessage > span {
+  grid-area: 1 / 1;
+}
+.progressUpdateMessage > [data-visible="false"] {
+  visibility: hidden;
+}
+.progressRail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  gap: 12px;
+}
+.progressRail > div {
+  --stage-color: #315cdb;
+  --stage-soft: #e8efff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 84px;
+  padding: 14px 12px;
+  border: 1px solid #dfe6ee;
+  border-radius: 13px;
+  background: #fafbfd;
+  transition:
+    background-color 240ms,
+    border-color 240ms;
+}
+.progressRail > div:nth-child(2) {
+  --stage-color: #713ee9;
+  --stage-soft: #f0eaff;
+}
+.progressRail > div:nth-child(3) {
+  --stage-color: #dd7108;
+  --stage-soft: #fff0dc;
+}
+.progressRail > div[data-state="running"] {
+  border-color: var(--stage-color);
+  background: var(--stage-soft);
+}
+.progressRail > div[data-state="completed"] {
+  border-color: #b7e5d1;
+  background: #edf9f2;
+}
+.progressRail > div[data-state="uncertain"],
+.progressRail > div[data-state="failed"],
+.progressRail > div[data-state="held"] {
+  border-color: #e7b879;
+  background: #fff5e8;
+}
+.progressRail > div > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--stage-color);
+  background: var(--stage-soft);
+  font-size: 12px;
+  font-weight: 750;
+}
+.progressRail > div[data-state="running"] > span {
+  color: #fff;
+  background: var(--stage-color);
+}
+.progressRail > div[data-state="completed"] > span {
+  background: #008b69;
+  color: #fff;
+}
+.progressRail p {
+  margin: 0;
+  color: #183148;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.progressRail small {
+  display: block;
+  color: #60738f;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 400;
+}
+.progressGuidance {
+  grid-column: 1 / -1;
+  padding-top: 16px;
+  border-top: 1px solid #e3eaf2;
+}
+.progressGuidance :global(.eyebrow) {
+  display: none;
+}
+.progressGuidance ul {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  color: #60738f;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.progressGuidance :global(.secondary-button) {
+  min-height: 42px;
+  margin: 0 8px 0 0;
+  font-size: 12px;
+}
+.coachingCopy {
+  display: none;
+}
+@keyframes badge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.74);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes stage-scan {
+  to {
+    transform: translateX(100%);
+  }
+}
+.claim {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+  background: var(--canvas);
+  border-radius: 10px;
+}
+.claim div {
+  flex: 1;
+}
+.claim h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.claim p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.callActions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.callActions p {
+  font-size: 12px;
+}
+.callActions button {
+  margin-right: 10px;
+}
+.privacyActions {
+  color: var(--muted);
+  font-size: 11px;
+}
+.privacyActions summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 650;
+}
+.privacyActions > div {
+  max-width: 52ch;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 55%, var(--surface));
+}
+.privacyActions p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.privacyActions a {
+  color: var(--action);
+  font-weight: 650;
+}
+.consentLabel {
+  line-height: 1.5;
+}
+.consentLabel a {
+  color: var(--action);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.uploadActions {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(220px, 1.2fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+.app :global(.studio-file) {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--action) 16%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--action) 4%, var(--canvas));
+}
+.app :global(.studio-file) .icon-button {
+  flex: 0 0 auto;
+}
+.app :global(.studio-consent) {
+  margin-top: 18px;
+  padding: 18px 16px 2px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--canvas) 72%, var(--surface));
+}
+.app :global(.studio-consent) h3 {
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+.app :global(.studio-consent) .privacyDetails {
+  background: var(--surface);
+}
+.app :global(.studio-consent) .consentLabel {
+  margin: 16px 0 12px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--action) 18%, var(--border));
+  border-radius: 9px;
+  background: var(--surface);
+}
+.app :global(.studio-consent) .consentLabel input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  margin-top: 2px;
+}
+.app :global(.studio-consent) .uploadActions {
+  margin-top: 8px;
+}
+.uploadActions > :first-child {
+  min-width: 0;
+}
+.uploadActions .studio-wide {
+  margin-top: 0;
+}
+.withReport {
+  grid-template-columns: 1fr;
+}
+.withProcessing {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 960px;
+  margin-inline: auto;
+}
+.app[data-stage="processing"] :global(.studio-main),
+.app[data-stage="uploading"] :global(.studio-main) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  max-width: 1100px;
+  padding: 24px 32px;
+}
+.app[data-stage="processing"] .layout,
+.app[data-stage="uploading"] .layout {
+  width: 100%;
+}
+.app[data-stage="processing"] :global(.studio-steps),
+.app[data-stage="uploading"] :global(.studio-steps),
+.app[data-stage="processing"] .stepHeader,
+.app[data-stage="uploading"] .stepHeader,
+.app[data-stage="uploading"] :global(.studio-intro),
+.app[data-stage="uploading"] .uploadAtmosphere {
+  display: none;
+}
+.app[data-stage="processing"] .upload {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.app[data-stage="processing"] :global(.studio-file) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+}
+.app[data-stage="processing"]
+  :global(.studio-file)
+  :global(.studio-upload-icon) {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  margin: 0;
+  border-radius: 12px;
+  background: #def6ed;
+  color: #007d79;
+}
+.app[data-stage="processing"] :global(.studio-file) h2 {
+  margin: 0;
+  color: #173148;
+  font-size: 14px;
+  font-family: inherit;
+}
+.app[data-stage="processing"] :global(.studio-file) p,
+.app[data-stage="processing"] .savedPlayback,
+.app[data-stage="processing"] .allowance,
+.app[data-stage="uploading"] .allowance,
+.app[data-stage="uploading"] .callActions,
+.app[data-stage="processing"] :global(.studio-upload) > :global(.small-text) {
+  display: none;
+}
+.app[data-stage="processing"] .callActions {
+  margin-top: 12px;
+  padding-top: 0;
+  border: 0;
+}
+.app[data-stage="processing"] .privacyActions > div {
+  max-height: 150px;
+  overflow: auto;
+}
+.app[data-stage="processing"] :global(.studio-consent) {
+  margin-top: 0;
+  padding: 22px;
+  background: #f8faff;
+}
+.withReport .upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 4px 20px;
+  align-items: center;
+  padding: 18px 24px;
+  text-align: left;
+}
+.withReport .upload :global(.studio-file) {
+  grid-column: 1;
+}
+.withReport .upload audio {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin: 0;
+}
+.withReport .upload > :global(.small-text) {
+  grid-column: 1;
+  margin: 0;
+}
+.withReport .upload .allowance {
+  grid-column: 1;
+  justify-content: flex-start;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.withReport .upload .callActions {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.app[data-stage="report"] :global(.studio-steps),
+.app[data-stage="report"] .stepHeader,
+.app[data-stage="report"] .withReport .allowance {
+  display: none;
+}
+.app[data-stage="report"],
+.app[data-stage="report"] :global(.studio-main) {
+  background: #fff;
+}
+.app[data-stage="report"] :global(.studio-main) {
+  max-width: 1400px;
+  padding: 12px 24px 20px;
+}
+.app[data-stage="report"] .withReport .upload {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.85fr) auto;
+  gap: 0 18px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.app[data-stage="report"] .withReport .upload :global(.studio-file) {
+  min-height: 44px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.app[data-stage="report"]
+  .withReport
+  .upload
+  :global(.studio-file)
+  :global(.studio-upload-icon) {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  margin: 0;
+  border-radius: 8px;
+}
+.app[data-stage="report"] .withReport .upload :global(.studio-file) h2 {
+  margin-bottom: 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.app[data-stage="report"] .withReport .upload :global(.studio-file) p,
+.app[data-stage="report"] .withReport .upload > :global(.small-text) {
+  font-size: 13px;
+  line-height: 1.45;
+}
+.app[data-stage="report"] .withReport .upload audio {
+  grid-row: 1;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+}
+.app[data-stage="report"] .withReport .upload audio + :global(.small-text) {
+  display: none;
+}
+.app[data-stage="report"] .withReport .previewHint {
+  display: none;
+}
+.savedPlayback {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+}
+.playbackToggle {
+  display: none;
+}
+.app[data-stage="report"] .withReport .upload .callActions {
+  grid-column: 3;
+  grid-row: 1;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.app[data-stage="report"] .report {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.reportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  margin-bottom: 12px;
+}
+.reportHeader > div:first-child {
+  min-width: 0;
+}
+.app[data-stage="report"] .reportHeader h1 {
+  margin: 0;
+  color: #10243d;
+  font-family: inherit;
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+.reportHeading p {
+  margin: 6px 0 0;
+  color: #60738f;
+  font-size: 14px;
+  line-height: 1.4;
+}
+@media (max-width: 620px) {
+  .app[data-stage="report"] .reportHeader {
+    flex-wrap: nowrap;
+    margin-bottom: 4px;
+  }
+  .reportHeading p {
+    display: none;
+  }
+  .app[data-stage="report"] .reportHeader h1 {
+    font-size: 24px;
+  }
+}
+/* Report-ready state uses the fixed CallAudioDock; keep the upload entry
+   controls out of the report flow while keeping secondary actions compact. */
+.app[data-stage="report"] .withReport .upload {
+  display: none;
+}
+
+.reportMoreActions {
+  position: relative;
+}
+.app[data-stage="report"] .reportMoreActions {
+  margin: 0;
+}
+.app[data-stage="report"] :global(.studio-main) {
+  padding-bottom: 90px;
+}
+.reportMoreMenu > a {
+  padding: 10px 12px;
+  color: #007d79;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.reportMoreMenu .reportMetadata {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: #60738f;
+}
+@media (max-width: 620px) {
+  .app[data-stage="report"][data-variant="standalone"] :global(.studio-main) {
+    padding: 6px 16px 80px;
+  }
+}
+
+.reportMoreActions summary {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.reportMoreActions summary:hover,
+.reportMoreActions[open] summary {
+  border-color: #b8c9e4;
+  background: #f8fbfd;
+  color: var(--action);
+}
+
+.reportMoreActions summary:focus-visible,
+.reportMoreMenu button:focus-visible {
+  outline: 3px solid #aebff6;
+  outline-offset: 3px;
+}
+
+.reportMoreActions summary::-webkit-details-marker {
+  display: none;
+}
+
+.reportMoreMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  display: grid;
+  width: min(260px, calc(100vw - 2rem));
+  gap: 0.15rem;
+  padding: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.95rem;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 18px 44px rgb(16 35 58 / 15%);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+}
+
+.reportMoreMenu > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reportMoreMenu > button:hover:not(:disabled) {
+  border-color: #d3ebe5;
+  background: #ecf8f4;
+  color: var(--action);
+}
+
+.reportMoreMenu > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.reportPrivacyMenu {
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.6rem 0.35rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.reportPrivacyMenu > strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.reportPrivacyMenu p {
+  margin: 0 0 0.55rem;
+  line-height: 1.5;
+}
+
+.reportPrivacyMenu a {
+  color: var(--action);
+  text-underline-offset: 2px;
+}
+
+.reportPrivacyMenu button {
+  min-height: 2rem;
+  margin: 0 0.35rem 0.35rem 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--action);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reportPrivacyMenu button:hover:not(:disabled) {
+  border-color: var(--action);
+}
+
+.reportPrivacyMenu .reportMenuTextButton {
+  padding: 0.25rem 0;
+  border-color: transparent;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.error {
+  margin: 24px 0;
+}
+.errorActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.recoveryError {
+  align-items: center;
+  margin: 0 0 16px;
+}
+.recoveryNotice {
+  border-color: color-mix(in srgb, var(--mint) 34%, var(--border));
+  background: color-mix(in srgb, var(--mint-soft) 62%, var(--surface));
+  color: var(--text);
+}
+.recoveryError p {
+  flex: 1 1 280px;
+  margin: 0;
+}
+.recoveryError .errorActions {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .app[data-stage="report"] .withReport .upload {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .app[data-stage="report"] .withReport .upload .callActions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .app[data-stage="report"] .withReport .upload audio {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .app[data-stage="report"] .withReport .savedPlayback {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+  .app[data-stage="report"] .savedPlayback > div {
+    display: none;
+  }
+  .app[data-stage="report"] .savedPlayback[data-expanded="true"] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  .app[data-stage="report"] .savedPlayback[data-expanded="true"] > div {
+    display: block;
+  }
+  .app[data-stage="report"] .playbackToggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px;
+    border: 0;
+    border-radius: 8px;
+    background: #edf8f5;
+    color: #08776e;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .app[data-stage="report"] .playbackToggle:focus-visible {
+    outline: 3px solid #6d7ce0;
+    outline-offset: 2px;
+  }
+  .app[data-stage="report"] .reportTitle,
+  .app[data-stage="report"] .printLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app[data-variant="standalone"] :global(.studio-main) {
+    padding: 18px 16px 12px;
+  }
+  .app[data-variant="standalone"] :global(.studio-steps) {
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .app[data-variant="standalone"] :global(.studio-steps span) {
+    font-size: 11px;
+  }
+  .recoveryError {
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .recoveryError p {
+    flex-basis: 100%;
+    line-height: 1.45;
+  }
+  .recoveryError .errorActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .withProcessing .upload {
+    padding: 18px;
+  }
+  .withProcessing .progressRail {
+    grid-template-columns: 1fr;
+  }
+  .app[data-stage="processing"] .withProcessing .upload {
+    padding: 12px 12px 10px;
+  }
+  .app[data-stage="processing"] .processingPanel {
+    padding: 20px;
+  }
+  .app[data-stage="processing"] .progressCopy > p:last-child {
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .app[data-stage="processing"] .progressRail > div {
+    min-height: 42px;
+  }
+  .app[data-stage="uploading"] .withBusy .upload {
+    padding: 12px;
+  }
+  .app[data-stage="uploading"] .uploadProgress {
+    padding: 20px;
+  }
+  .withBusy {
+    grid-template-columns: 1fr;
+  }
+  .withBusy .upload {
+    padding: 22px 18px;
+  }
+  .uploadActions {
+    grid-template-columns: 1fr;
+  }
+  .app :global(.studio-file) {
+    padding: 12px;
+  }
+  .app :global(.studio-consent) {
+    padding: 16px 13px 1px;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .expect {
+    padding: 24px;
+  }
+  .header {
+    flex-wrap: wrap;
+  }
+  .claim {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 20px;
+  }
+  .claim > :last-child {
+    width: 100%;
+    justify-content: center;
+  }
+  .withReport .upload {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 18px;
+  }
+  .report {
+    padding: 0;
+  }
+  .reportHeader {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .report :global(.studio-report-actions) {
+    width: 100%;
+  }
+  .withReport .upload audio {
+    grid-column: auto;
+    grid-row: auto;
+    margin: 9px 0;
+  }
+  .withReport .upload > :global(.small-text),
+  .withReport .upload .allowance,
+  .withReport .upload .callActions {
+    grid-column: auto;
+  }
+  .withReport .upload .allowance {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  .processingPanel {
+    grid-template-columns: minmax(104px, 0.34fr) minmax(0, 1fr);
+    padding: 22px 18px;
+  }
+  .progressRail > div {
+    min-height: 44px;
+    padding: 7px 9px;
+  }
+}
+@keyframes atmosphereBreathe {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+@keyframes orbitDrift {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-2deg);
+  }
+  50% {
+    transform: translateX(-50%) rotate(3deg);
+  }
+}
+@keyframes waveDrift {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-3deg) scaleX(0.96);
+  }
+  50% {
+    transform: translateX(-50%) rotate(2deg) scaleX(1.02);
+  }
+}
+@keyframes signalFloat {
+  0%,
+  100% {
+    transform: translateY(var(--signal-y));
+  }
+  50% {
+    transform: translateY(calc(var(--signal-y) - 0.35rem));
+  }
+}
+@keyframes signalPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.16);
+  }
+}
+@keyframes audioCuePulse {
+  0%,
+  18%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  30%,
+  58% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  70%,
+  86% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+@keyframes uploadCuePulse {
+  0%,
+  24%,
+  100% {
+    opacity: 0;
+    transform: translateY(0.25rem) scale(0.72);
+  }
+  38%,
+  68% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 0;
+    transform: translateY(-0.2rem) scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upload,
+  .audioCue,
+  .uploadCue,
+  .signalChip,
+  .signalOrbit,
+  .signalWave,
+  .uploadAtmosphere::before,
+  .dropZone::after {
+    transition: none;
+    animation: none;
+  }
+  .progressRail > div[data-state="running"]::after {
+    animation: none;
+    transform: none;
+  }
+  .freeBadge span {
+    animation: none;
+  }
+}
+@media print {
+  .header,
+  .layout,
+  .claim,
+  .error,
+  .callActions {
+    display: none !important;
+  }
+  .report {
+    margin: 0;
+  }
+}
+
+/* One stable, viewport-aware composition for every automatic stage. */
+.app[data-stage="processing"],
+.app[data-stage="uploading"] {
+  background: #fff;
+}
+.app[data-stage="processing"] :global(.studio-main),
+.app[data-stage="uploading"] :global(.studio-main) {
+  background: #fff;
+}
+.app[data-stage="processing"] .withProcessing .upload,
+.app[data-stage="uploading"] .withBusy .upload {
+  padding: 0;
+}
+.app[data-stage="processing"] .processingPanel,
+.app[data-stage="uploading"] .processingPanel {
+  margin: 0;
+}
+.progressGuidance > div > p {
+  margin: 10px 0;
+  color: #60738f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.progressActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.progressActions :global(.secondary-button) {
+  margin: 0;
+}
+.progressActions > button:last-child:not(:first-child) {
+  border-color: #007d79;
+  color: #007d79;
+}
+.resumeNotice {
+  margin: 8px 0 0;
+  color: #60738f;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.progressGuidance li:empty {
+  display: none;
+}
+.progressGuidance a,
+.progressGuidance button {
+  white-space: normal;
+}
+.app[data-stage="processing"] :global(.studio-consent) h3 {
+  margin: 0 0 8px;
+}
+.app[data-stage="processing"] :global(.studio-consent) p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .app[data-stage="processing"] :global(.studio-main),
+  .app[data-stage="uploading"] :global(.studio-main) {
+    padding: 16px;
+  }
+  .app[data-stage="processing"] .processingPanel,
+  .app[data-stage="uploading"] .processingPanel {
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 18px 12px;
+    padding: 20px 16px;
+  }
+  .processingPanel > :first-child {
+    width: 80px;
+    height: 96px;
+  }
+  .progressCopy h3 {
+    margin-bottom: 8px;
+    font-size: 24px;
+  }
+  .app[data-stage="processing"] .progressCopy > p:last-child,
+  .app[data-stage="uploading"] .progressCopy > p:last-child {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .progressKicker {
+    font-size: 9px;
+    letter-spacing: 0.09em;
+  }
+  .app[data-stage="processing"] .progressRail,
+  .app[data-stage="uploading"] .progressRail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .app[data-stage="processing"] .progressRail > div,
+  .app[data-stage="uploading"] .progressRail > div {
+    min-height: 94px;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 10px 3px;
+    text-align: center;
+  }
+  .progressRail p {
+    font-size: 11px;
+  }
+  .progressRail small {
+    display: block;
+    margin: 4px 0 0;
+    font-size: 10px;
+  }
+  .progressGuidance {
+    padding-top: 12px;
+  }
+  .progressGuidance ul {
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .progressGuidance :global(.secondary-button) {
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 10px;
+  }
+  .progressActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .progressActions > :last-child:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-height: 720px) and (min-width: 621px) {
+  .app[data-stage="processing"] :global(.studio-main),
+  .app[data-stage="uploading"] :global(.studio-main) {
+    justify-content: flex-start;
+    padding: 12px 24px;
+  }
+  .app[data-stage="processing"] .processingPanel,
+  .app[data-stage="uploading"] .processingPanel {
+    padding: 20px;
+    gap: 14px 20px;
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+  .processingPanel > :first-child {
+    width: 112px;
+    height: 112px;
+  }
+  .progressRail > div {
+    min-height: 68px;
+    padding: 10px;
+  }
+}
+@media (max-width: 620px) and (max-height: 720px) {
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-main) {
+    padding: 10px 16px;
+    gap: 10px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-intro) {
+    margin: 0;
+  }
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) {
+    min-height: 64px;
+    margin-bottom: 4px;
+  }
+  .app[data-stage="upload"] .previewDetails {
+    margin-bottom: 6px;
+  }
+  .app[data-stage="upload"] .privacyDetails summary {
+    min-height: 24px;
+  }
+  .app[data-stage="processing"] :global(.studio-main),
+  .app[data-stage="uploading"] :global(.studio-main) {
+    justify-content: flex-start;
+    padding: 8px 16px;
+  }
+  .app[data-stage="processing"] .processingPanel,
+  .app[data-stage="uploading"] .processingPanel {
+    gap: 8px;
+    padding: 14px;
+  }
+  .app[data-stage="processing"] :global(.studio-file) {
+    margin-bottom: 6px;
+  }
+  .app[data-stage="processing"]
+    :global(.studio-file)
+    :global(.studio-upload-icon) {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+    border-radius: 7px;
+  }
+  .app[data-stage="processing"] :global(.studio-file) svg {
+    width: 17px;
+    height: 17px;
+  }
+  .app[data-stage="processing"] .callActions {
+    margin-top: 6px;
+  }
+  .app[data-stage="processing"] .progressGuidance {
+    padding-top: 8px;
+  }
+  .app[data-stage="processing"] .progressRail > div {
+    gap: 5px;
+    padding-block: 8px;
+  }
+  .progressCopy h3 {
+    font-size: 21px;
+  }
+  .processingPanel[data-paused="true"] {
+    grid-template-columns: 1fr !important;
+  }
+  .processingPanel[data-paused="true"] > :first-child {
+    display: none;
+  }
+  .progressGuidance ul {
+    margin-bottom: 4px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progressRail > div {
+    transition: none;
+  }
+}

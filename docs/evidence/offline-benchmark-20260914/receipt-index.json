@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "environment": "local",
+  "base_commit": "a67a0cf",
+  "normalization": "UTF-8 LF; raw external outputs preserved",
+  "receipts": [
+    {
+      "path": "tests.junit.xml",
+      "sha256": "8d0588e5b99efd011459cc01d87be4862193b34ae14e81a67bd43cb8b283ba63"
+    },
+    {
+      "path": "tests.log",
+      "sha256": "f232b90d01a546ccebcb17fe754aadf6e1563842c3ca70cb1028fb6862d190b3"
+    },
+    {
+      "path": "comparison.json",
+      "sha256": "f5eb15b44a512c4b736b88a211bfb245901bb50a6d33eacdc03f0ccb5be9315a"
+    },
+    {
+      "path": "comparison.md",
+      "sha256": "f541c98706065139b9bbc65a0835c3128941a307411ac68f5413c26694eb95f1"
+    }
+  ]
+}

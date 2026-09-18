@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import MetaData, Table, create_engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.schema import CreateSchema, DropSchema
@@ -29,8 +29,8 @@ from tests.integration.test_media_delivery_renewal_postgresql import (
 from tests.integration.test_studio_draft_authoring_postgresql import append, seed
 
 
-async def published_fixture(sessions):
-    state = await seed(sessions)
+async def published_fixture(sessions, *, historical_session_table: Table | None = None):
+    state = await seed(sessions, historical_session_table=historical_session_table)
     async with sessions() as database, database.begin():
         await AsyncCatalogApplication(database).publish_version(
             state.version_id,
@@ -257,10 +257,23 @@ def test_populated_0022_upgrade_preserves_receipts_and_admits_only_new_operation
             engine = create_async_engine(schema_url, hide_parameters=True)
             sessions = async_sessionmaker(engine, expire_on_commit=False)
             try:
-                old_state = await seed(sessions)
+                async with sessions() as database:
+                    assert await database.scalar(
+                        text("SELECT version_num FROM alembic_version")
+                    ) == ("20260908_0022")
+                    # Current Session has fields introduced after this exact migration.
+                    # Reflect the historical table without adding future columns or
+                    # changing the ORM used by current-head concurrency tests.
+                    session_table = await database.run_sync(
+                        lambda sync: Table("sessions", MetaData(), autoload_with=sync.connection())
+                    )
+                    assert "audience" not in session_table.c
+                old_state = await seed(sessions, historical_session_table=session_table)
                 async with sessions() as database, database.begin():
                     old_result = await append(database, old_state)
-                revision_state = await published_fixture(sessions)
+                revision_state = await published_fixture(
+                    sessions, historical_session_table=session_table
+                )
                 with pytest.raises(IntegrityError):
                     async with sessions() as database, database.begin():
                         await revise(database, revision_state)
@@ -291,6 +304,13 @@ def test_populated_0022_upgrade_preserves_receipts_and_admits_only_new_operation
             sessions = async_sessionmaker(engine, expire_on_commit=False)
             try:
                 async with sessions() as database, database.begin():
+                    assert await database.scalar(
+                        text("SELECT version_num FROM alembic_version")
+                    ) == ("20260909_0023")
+                    session_table = await database.run_sync(
+                        lambda sync: Table("sessions", MetaData(), autoload_with=sync.connection())
+                    )
+                    assert "audience" not in session_table.c
                     rows = tuple(
                         (await database.execute(select(CatalogAuthoringCommand.__table__))).all()
                     )

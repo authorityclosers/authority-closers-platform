@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import Table, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -37,7 +37,8 @@ from tests.integration.test_media_delivery_renewal_postgresql import (
 )
 
 
-async def seed(sessions):
+async def seed(sessions, *, historical_session_table: Table | None = None):
+    """Use the current ORM unless a migration proof supplies its exact old table."""
     now, tenant_id = datetime.now(UTC), uuid4()
     actors = tuple(ActorContext(uuid4(), uuid4(), tenant_id) for _ in range(2))
     async with sessions() as database, database.begin():
@@ -49,16 +50,18 @@ async def seed(sessions):
             database.add(Membership(tenant_id=tenant_id, person_id=actor.person_id, role="learner"))
         await database.flush()
         for actor in actors:
-            database.add(
-                IdentitySession(
-                    id=actor.session_id,
-                    person_id=actor.person_id,
-                    selected_tenant_id=tenant_id,
-                    token_hash=actor.session_id.bytes * 2,
-                    created_at=now,
-                    expires_at=now + timedelta(hours=1),
-                )
-            )
+            values = {
+                "id": actor.session_id,
+                "person_id": actor.person_id,
+                "selected_tenant_id": tenant_id,
+                "token_hash": actor.session_id.bytes * 2,
+                "created_at": now,
+                "expires_at": now + timedelta(hours=1),
+            }
+            if historical_session_table is None:
+                database.add(IdentitySession(**values))
+            else:
+                await database.execute(historical_session_table.insert().values(**values))
         await database.flush()
 
         def catalog_fixture(sync):

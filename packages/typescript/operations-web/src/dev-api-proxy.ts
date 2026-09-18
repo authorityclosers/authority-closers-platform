@@ -21,6 +21,12 @@ const LOCAL_SESSION_COOKIE_NAME = "__Host-ac_dev_admin_qa_session";
 const LEARNER_SESSION_COOKIE_NAME = "__Host-ac_dev_qa_session";
 const STAGING_SESSION_COOKIE_NAME = "__Host-ac_session";
 const ACCESS_COOKIE_NAME = "CF_Authorization";
+const REVIEWER_COOKIE_NAMES = [
+  "__Host-ac_reviewer_session",
+  "ac_reviewer_session",
+  "__Host-ac_reviewer_state",
+  "ac_reviewer_state",
+] as const;
 const PROXY_TIMEOUT_MS = 12_000;
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const SESSION_MAX_COUNT = 4;
@@ -311,6 +317,56 @@ function isUuid(value: string): boolean {
 
 /** Exact first-slice admin API surface; every other route stays unavailable. */
 export function isStagingAdminRequest(url: URL, method: string): boolean {
+  const reviewer = /^\/v1\/reviewer\/(.+)$/.exec(url.pathname);
+  if (reviewer) {
+    const normalizedMethod = method.toUpperCase();
+    const path = reviewer[1];
+    if (path === "review-assignments") {
+      const entries = [...url.searchParams.entries()];
+      return (
+        normalizedMethod === "GET" &&
+        (entries.length === 0 ||
+          (entries.length === 1 &&
+            entries[0][0] === "limit" &&
+            /^(?:[1-9]|[1-4][0-9]|50)$/.test(entries[0][1])))
+      );
+    }
+    if (url.search !== "") return false;
+    if (
+      [
+        "auth/request",
+        "auth/verify",
+        "auth/logout",
+        "review-invitations/accept",
+      ].includes(path)
+    )
+      return normalizedMethod === "POST";
+    if (path === "me") return normalizedMethod === "GET";
+    const assignment =
+      /^review-assignments\/([^/]+)(?:\/(source|submissions))?$/.exec(path);
+    if (!assignment || !isUuid(assignment[1])) return false;
+    if (!assignment[2]) return normalizedMethod === "GET";
+    return assignment[2] === "source"
+      ? normalizedMethod === "GET"
+      : ["GET", "POST"].includes(normalizedMethod);
+  }
+  const diagnosis = /^\/v1\/admin\/learners\/([^/]+)\/diagnosis$/.exec(
+    url.pathname,
+  );
+  if (diagnosis) {
+    const entries = [...url.searchParams.entries()];
+    return (
+      method.toUpperCase() === "GET" &&
+      isUuid(diagnosis[1]) &&
+      entries.length === 1 &&
+      entries[0][0] === "purpose" &&
+      [
+        "learner_support",
+        "safeguarding_review",
+        "accessibility_review",
+      ].includes(entries[0][1])
+    );
+  }
   const videoLibrary = /^\/v1\/admin\/studio\/programs\/([^/]+)\/videos$/.exec(
     url.pathname,
   );
@@ -371,6 +427,12 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
     return normalizedMethod === "POST";
   }
   if (pathname === "/v1/auth/logout") {
+    return normalizedMethod === "POST";
+  }
+  if (
+    pathname === "/v1/admin/learners/lookup" ||
+    pathname === "/v1/admin/people/directory"
+  ) {
     return normalizedMethod === "POST";
   }
   if (
@@ -464,6 +526,49 @@ function cookieValues(request: Request): Map<string, string[]> {
   return values;
 }
 
+function reviewerCookiesFrom(request: Request, production: boolean): string[] {
+  const values = cookieValues(request);
+  const names = production
+    ? ["__Host-ac_reviewer_session", "__Host-ac_reviewer_state"]
+    : ["ac_reviewer_session", "ac_reviewer_state"];
+  return names.flatMap((name) => {
+    const candidates = values.get(name) ?? [];
+    return candidates.length === 1 && SESSION_VALUE_PATTERN.test(candidates[0])
+      ? [`${name}=${candidates[0]}`]
+      : [];
+  });
+}
+
+function reviewerSetCookiesFrom(headers: string[]): string[] {
+  return headers.flatMap((raw) => {
+    const segments = raw.split(";");
+    const pair = segments.shift()?.trim() ?? "";
+    const separator = pair.indexOf("=");
+    if (
+      separator < 1 ||
+      !REVIEWER_COOKIE_NAMES.includes(
+        pair.slice(0, separator) as (typeof REVIEWER_COOKIE_NAMES)[number],
+      )
+    )
+      return [];
+    const name = pair.slice(0, separator);
+    const value = pair.slice(separator + 1);
+    const attributes = segments.map((item) => item.trim().toLowerCase());
+    const required = ["secure", "httponly", "samesite=lax", "path=/"].every(
+      (item) => attributes.includes(item),
+    );
+    if (!required || attributes.some((item) => item.startsWith("domain=")))
+      return [];
+    const clearing =
+      attributes.some((item) => item === "max-age=0") && value === "";
+    if (!clearing && !SESSION_VALUE_PATTERN.test(value)) return [];
+    const maxAge = name.endsWith("_state") ? "900" : "28800";
+    return [
+      `${name}=${value}; Max-Age=${clearing ? "0" : maxAge}; Path=/; HttpOnly; SameSite=Lax; Secure`,
+    ];
+  });
+}
+
 function stripDevelopmentBridgeCookies(headers: Headers): void {
   const raw = headers.get("cookie");
   if (!raw) return;
@@ -494,10 +599,13 @@ function localSessionFrom(request: Request): string | null {
   return values[0];
 }
 
-function hasForbiddenBrowserCredential(request: Request): boolean {
+function hasForbiddenBrowserCredential(
+  request: Request,
+  reviewerSurface = false,
+): boolean {
   const cookies = cookieValues(request);
   return (
-    cookies.has(STAGING_SESSION_COOKIE_NAME) ||
+    (!reviewerSurface && cookies.has(STAGING_SESSION_COOKIE_NAME)) ||
     cookies.has(ACCESS_COOKIE_NAME) ||
     request.headers.has("authorization") ||
     request.headers.has("x-api-key") ||
@@ -651,6 +759,7 @@ function upstreamHeaders(
   if (stagingSession) {
     cookies.push(`${STAGING_SESSION_COOKIE_NAME}=${stagingSession}`);
   }
+  cookies.push(...reviewerCookiesFrom(request, true));
   headers.set("cookie", cookies.join("; "));
   return headers;
 }
@@ -958,7 +1067,9 @@ async function proxyStagingAdmin(
       "The admin bridge accepts requests only from its exact configured localhost origin.",
     );
   }
-  if (hasForbiddenBrowserCredential(request)) {
+  const incoming = new URL(request.url);
+  const reviewerRequest = incoming.pathname.startsWith("/v1/reviewer/");
+  if (hasForbiddenBrowserCredential(request, reviewerRequest)) {
     return problem(
       403,
       "admin_bridge_browser_credential_denied",
@@ -966,7 +1077,6 @@ async function proxyStagingAdmin(
     );
   }
 
-  const incoming = new URL(request.url);
   if (!isStagingAdminRequest(incoming, request.method)) {
     return problem(
       403,
@@ -976,6 +1086,19 @@ async function proxyStagingAdmin(
   }
   if (incoming.pathname === "/v1/dev-bridge/health") {
     return probeAdminTransport(target, fetcher);
+  }
+
+  // Reviewer auth has an independent cookie audience and must never be
+  // translated through the Admin bridge's local ac_session mapping. The
+  // upstream Access credential protects the transport; this host-only cookie
+  // is forwarded unchanged and only a validated host-only Set-Cookie is
+  // returned to the browser.
+  if (incoming.pathname.startsWith("/v1/reviewer/")) {
+    const upstream = await proxyStagingRequest(request, target, fetcher, null);
+    for (const reviewerSetCookie of reviewerSetCookiesFrom(upstream.cookies)) {
+      upstream.response.headers.append("set-cookie", reviewerSetCookie);
+    }
+    return upstream.response;
   }
 
   let localSession: string | null;
@@ -1165,11 +1288,9 @@ async function proxyLocalAdmin(
       if (value !== null) headers.set(name, value);
     }
     const sessions = cookieValues(request).get("ac_session") ?? [];
-    if (sessions.length > 0)
-      headers.set(
-        "cookie",
-        sessions.map((value) => `ac_session=${value}`).join("; "),
-      );
+    const forwarded = sessions.map((value) => `ac_session=${value}`);
+    forwarded.push(...reviewerCookiesFrom(request, false));
+    if (forwarded.length > 0) headers.set("cookie", forwarded.join("; "));
   }
   for (const name of [
     "connection",

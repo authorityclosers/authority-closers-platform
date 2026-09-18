@@ -131,6 +131,33 @@ it("sends a File, not a buffered lecture, and verifies the exact 204 byte receip
     }),
   ).rejects.toThrow();
 });
+it("resumes from the server offset with a chunk identity and reports progress", async () => {
+  const file = new File(["abc"], body.filename, { type: body.content_type });
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(null, {
+      status: 204,
+      headers: {
+        "x-ac-upload-bytes": "3",
+        "x-ac-upload-sha256": body.checksum_sha256,
+      },
+    }),
+  );
+  const progress = vi.fn();
+  await putStudioVideoBytes(program, intent, file, body, {
+    fetcher,
+    startOffset: 1,
+    onProgress: progress,
+  });
+  const init = fetcher.mock.calls[0][1] as RequestInit;
+  expect(await new Response(init.body).text()).toBe("bc");
+  const headers = new Headers(init.headers);
+  expect(headers.get("x-ac-upload-total")).toBe("3");
+  expect(headers.get("x-ac-upload-offset")).toBe("1");
+  expect(headers.get("x-ac-upload-chunk-sha256")).toBe(
+    createHash("sha256").update("bc").digest("hex"),
+  );
+  expect(progress).toHaveBeenCalledWith(1);
+});
 it("completion is bodyless and bound to the same source identity", async () => {
   const fetcher = vi.fn().mockResolvedValue(
     Response.json(

@@ -1899,7 +1899,7 @@ html[data-theme="dark"]
     padding: 12px 16px;
   }
   .ac-public-home--editorial .ac-public-hero__actions > a:first-child {
-    flex: 1;
+    flex: 1 0 auto;
   }
   .ac-public-home--editorial .ac-public-hero__visual {
     height: 320px;

@@ -11,10 +11,12 @@ import { AuthFlowPage } from "../../components/auth-flow-page";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { ROUTES } from "../../lib/routes";
 import { parseCourseIntent } from "../../lib/course-intent";
+import { parseActivityIntent } from "../../lib/activity-intent";
 import {
-  activityIntentHref,
-  parseActivityIntent,
-} from "../../lib/activity-intent";
+  authIntentHref,
+  parseSalesAuthNext,
+  preferredSalesAuthNext,
+} from "../../lib/sales-auth-return";
 import {
   isContentVisible,
   parseSurfaceState,
@@ -27,6 +29,7 @@ type CallbackPageProps = {
     state?: QueryValue;
     course?: QueryValue;
     activity?: QueryValue;
+    next?: QueryValue;
   }>;
 };
 
@@ -61,10 +64,9 @@ const callbackResults: Record<
     eyebrow: "Account review required",
     title: "Your consent record needs an update.",
     detail:
-      "We kept your existing identity and learning data unchanged. Contact Authority Closers support so the reviewed consent update can be completed safely.",
-    actionHref:
-      "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20consent%20update",
-    actionLabel: "Contact support",
+      "We kept your existing identity and learning data unchanged. Sign in to review the current published consent document and return to your course.",
+    actionHref: ROUTES.consentRenewal,
+    actionLabel: "Review current consent",
     icon: CircleAlert,
   },
   provider_rejected: {
@@ -112,21 +114,38 @@ export default async function CallbackPage({
   const result = parseCallbackResult(query.result);
   const courseIntent = parseCourseIntent(query.course);
   const activityIntent = parseActivityIntent(query.activity);
-  const loginHref = activityIntentHref(
+  const salesNext = parseSalesAuthNext(query.next);
+  const effectiveSalesNext = preferredSalesAuthNext(
+    courseIntent,
+    activityIntent,
+    salesNext,
+  );
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
   const recovery = result ? callbackResults[result] : null;
   const recoveryHref =
     recovery?.actionHref === ROUTES.login ||
     recovery?.actionHref === ROUTES.register
-      ? activityIntentHref(recovery.actionHref, activityIntent, courseIntent)
-      : recovery?.actionHref;
+      ? authIntentHref(
+          recovery.actionHref,
+          activityIntent,
+          courseIntent,
+          salesNext,
+        )
+      : recovery?.actionHref === ROUTES.consentRenewal
+        ? courseIntent
+          ? `${ROUTES.consentRenewal}?course=${encodeURIComponent(courseIntent)}`
+          : ROUTES.consentRenewal
+        : recovery?.actionHref;
   const retryParameters = new URLSearchParams();
   if (result) retryParameters.set("result", result);
   if (courseIntent) retryParameters.set("course", courseIntent);
   if (activityIntent) retryParameters.set("activity", activityIntent);
+  if (effectiveSalesNext) retryParameters.set("next", effectiveSalesNext);
   const retryHref = `${ROUTES.callback}${retryParameters.size ? `?${retryParameters}` : ""}`;
   const RecoveryIcon = recovery?.icon ?? ShieldCheck;
 

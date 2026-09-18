@@ -8,12 +8,13 @@ membership, enrollment, consent-policy or runtime configuration activation.
 
 ## Intended gate
 
-The existing application `pnpm validate` command ends with production builds.
-Two required steps then install Chromium through the existing locked Python
-Playwright 1.58.0 package and run only the three registration browser cases.
-The test URL and required flag are scoped to the latter step. Earlier ordinary
-pytest invocations may still skip optional browser cases; those skips cannot
-stand in for the required gate.
+The validation job installs Chromium through the existing locked Python
+Playwright 1.58.0 package before running the application `pnpm validate`
+command. This ordering supplies the executable required by browser cases that
+run inside validation. The required registration step then runs only the three
+registration browser cases after validation. The test URL and required flag
+are scoped to the latter step. Earlier ordinary pytest invocations may still
+skip optional browser cases; those skips cannot stand in for the required gate.
 
 The controller uses the generated learner standalone server, adding only the
 normal `.next/static` and `public` assets as the existing Dockerfile does. It
@@ -89,6 +90,17 @@ have five-minute bounds, and no unmeasured timeout increase is proposed here.
 
 Deployment/image identity, migrations, backup/scanner readiness, real provider
 acceptance and authenticated staging acceptance remain separate release gates.
+
+## Browser prerequisite ordering correction
+
+The release workflow's locked Chromium install is intentionally ordered before
+`Validate application`, while the three-case registration browser proof remains
+after it. The workflow contract asserts the exact pinned command, five-minute
+timeout, no conditional execution, and this ordering. This closes the hosted
+runner failure where validation launched Playwright before its Chromium
+executable had been installed. The correction is CI/test infrastructure only;
+it changes no product, provider, schema, membership, enrollment or runtime
+configuration.
 
 ## Hosted runner codec prerequisite
 
