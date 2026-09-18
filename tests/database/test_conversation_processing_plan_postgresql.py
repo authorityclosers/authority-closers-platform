@@ -379,6 +379,59 @@ def test_duplicate_upload_reuses_retained_c2_without_a_second_asr_call(
     run(exercise())
 
 
+def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    """An incompatible retained candidate must not block a new authorised upload."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            source_run = await _source_c2(setup, "unsafe-retained-c2-source")
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == 1
+
+            # Simulate a retained C2 row whose cache key is no longer compatible
+            # with the current plan.  The duplicate must fall through to a fresh
+            # provider request instead of returning the retained-reuse conflict.
+            async with setup.sessions() as database, database.begin():
+                await database.execute(
+                    update(ConversationInferenceTask)
+                    .where(ConversationInferenceTask.run_id == UUID(source_run["id"]))
+                    .values(cache_key="stale-retained-cache-key")
+                )
+
+            target_recording_id = await _duplicate_recording(setup, "unsafe-retained-c2-target")
+            target_quote = await _quote(
+                setup,
+                "unsafe-retained-c2-target-quote",
+                storage=setup.prepared.storage,
+                recording_id=target_recording_id,
+            )
+            accepted = await _accept(
+                setup,
+                target_quote,
+                "unsafe-retained-c2-target-accept",
+                storage=setup.prepared.storage,
+                recording_id=target_recording_id,
+            )
+            assert accepted["state"] == "active"
+            assert setup.broker.calls == 1
+
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == 2
+            completed = await _drive_to_completion(
+                setup, UUID(target_quote["id"]), recording_id=target_recording_id
+            )
+            assert completed["state"] == "completed"
+            assert completed["report_ready"] is True
+            assert setup.broker.calls == 4
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_paused_plan_acceptance_preserves_quote_and_can_resume(
     postgres_harness: Any, tmp_path: Any
 ) -> None:

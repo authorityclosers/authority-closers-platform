@@ -261,43 +261,69 @@ class RetainedC2ReuseService:
             )
         ).all()
         for source in rows:
+            # A duplicate upload must remain usable even when an older retained
+            # transcription is no longer compatible with the current release.
+            # Treat each retained candidate as an optimisation: an unsafe or
+            # ambiguous candidate is skipped and the normal, newly-authorised C2
+            # path below performs a fresh transcription.  This preserves the
+            # ownership/receipt checks for reuse without turning an old result
+            # into a permanent admission block.
             source_processing_lease_id = None
             if isinstance(actor, ProcessingActor):
-                source_processing_lease_id = await self._require_same_guest_owner(
-                    actor, target, source
-                )
+                try:
+                    source_processing_lease_id = await self._require_same_guest_owner(
+                        actor, target, source
+                    )
+                except ConversationConflict:
+                    # The owner/linkage check is scoped to this historical
+                    # candidate.  A database or storage failure must still
+                    # escape and stop recovery rather than silently becoming
+                    # a fresh paid transcription.
+                    continue
             source_tasks = (
                 await self.database.scalars(
-                    select(ConversationInferenceTask)
-                    .where(
+                    select(ConversationInferenceTask).where(
                         ConversationInferenceTask.recording_id == source.id,
                         ConversationInferenceTask.tenant_id == target.tenant_id,
                         ConversationInferenceTask.person_id == target.person_id,
                         ConversationInferenceTask.generation == target.generation,
                         ConversationInferenceTask.stage == "C2",
                         ConversationInferenceTask.erased_at.is_(None),
-                    )
-                    .with_for_update()
+                    ).with_for_update()
                 )
             ).all()
             if not source_tasks:
                 continue
-            source_plan = await self.inference.plan_transcription(source)
+            try:
+                source_plan = await self.inference.plan_transcription(source)
+            except ConversationConflict:
+                # A malformed or stale candidate is not a reason to block the
+                # current upload.  The normal C2 path will run after all
+                # candidates have been rejected.
+                continue
             matching = tuple(
-                task for task in source_tasks if task.cache_key == source_plan.checkpoint.cache_key
+                task
+                for task in source_tasks
+                if task.cache_key == source_plan.checkpoint.cache_key
             )
             if len(matching) != 1:
-                raise _conflict()
-            return await self._verify_source(
-                source,
-                matching[0],
-                source_plan,
-                target_stage,
-                approval,
-                now,
-                authorization_ref=authorization_ref,
-                source_processing_lease_id=source_processing_lease_id,
-            )
+                continue
+            try:
+                return await self._verify_source(
+                    source,
+                    matching[0],
+                    source_plan,
+                    target_stage,
+                    approval,
+                    now,
+                    authorization_ref=authorization_ref,
+                    source_processing_lease_id=source_processing_lease_id,
+                )
+            except ConversationConflict:
+                # _verify_source validates only this retained candidate.  Do
+                # not widen this catch around query, materialization, or
+                # current-target authority checks.
+                continue
         return None
 
     async def _require_same_guest_owner(
