@@ -168,6 +168,13 @@ def test_native_coaching_rejects_empty_evidence_placeholders_in_arrays(field: st
         validate_coaching_result(result(task, envelope(draft)), task, transcript)
 
 
+def test_native_coaching_uses_repairable_code_for_scalar_findings() -> None:
+    transcript, task, draft = coaching_case()
+    draft["strengths"] = ["A scalar finding without evidence."]
+    with pytest.raises(InferenceTaskError, match="report_findings_invalid"):
+        validate_coaching_result(result(task, envelope(draft)), task, transcript)
+
+
 def test_native_coaching_does_not_repair_a_transliterated_quote() -> None:
     transcript = _transcript()
     transcript["segments"][0]["text"] = "Native line 1: पुढील कॉल कधी आहे?"

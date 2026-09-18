@@ -1209,7 +1209,11 @@ def _normalise_findings(value: Any, *, transcript: Mapping[str, Any]) -> list[di
     normalized: list[dict[str, Any]] = []
     for finding in value:
         if not isinstance(finding, Mapping):
-            raise ReportError("report_finding_invalid")
+            # Keep every invalid findings-array shape on the same stable
+            # failure code.  The C5 repair allowlist is intentionally keyed
+            # to this aggregate code so a provider response with a scalar
+            # finding can receive the one explicitly approved repair.
+            raise ReportError("report_findings_invalid")
         evidence = finding.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ReportError("report_finding_evidence_missing")
