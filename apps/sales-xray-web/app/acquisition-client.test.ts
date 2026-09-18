@@ -238,6 +238,11 @@ describe("acquisition source-bound presentation", () => {
       committed_seconds: 4000,
       available_seconds: 0,
     });
+
+  });
+  it("accepts the published sixty-minute upload policy", () => {
+    expect(parsePolicy({ ...policy, maximum_call_seconds: 60 * 60 }))
+      .toMatchObject({ maximum_call_seconds: 60 * 60 });
   });
   it("accepts the explicit unlimited internal tester allowance", () => {
     expect(

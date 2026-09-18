@@ -30,6 +30,7 @@ export type UploadPolicy = {
   retention_days: number;
 };
 export const MAX_ACQUISITION_FILE_BYTES = 32 * 1024 ** 2;
+export const MAX_ACQUISITION_CALL_SECONDS = 60 * 60;
 export type Submission = { id: string; recordingId: string; sha: string };
 export type LibrarySubmission = {
   id: string;
@@ -256,7 +257,10 @@ export function parsePolicy(value: unknown): UploadPolicy {
       item.maximum_file_bytes,
       MAX_ACQUISITION_FILE_BYTES,
     ),
-    maximum_call_seconds = integer(item.maximum_call_seconds, 1800),
+    maximum_call_seconds = integer(
+      item.maximum_call_seconds,
+      MAX_ACQUISITION_CALL_SECONDS,
+    ),
     retention_days = integer(item.retention_days, 7);
   const privacy_details =
     typeof item.privacy_details === "string"
