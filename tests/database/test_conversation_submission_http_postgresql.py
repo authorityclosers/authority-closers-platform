@@ -976,6 +976,12 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
                     assert target_quote.quote["max_cost_paise"] == 0
 
                 scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+                # The source plan schedules its next reconciliation a couple of
+                # seconds after the worker records the uncertain result. Make
+                # that due point explicit before driving the target plan so the
+                # assertion below proves the retained source is held rather
+                # than depending on wall-clock timing in the CI shard.
+                await _make_due(setup, UUID(source_plan["id"]))
                 for _ in range(8):
                     await worker.run_once()
                     await _make_due(setup, UUID(target_plan["id"]))
