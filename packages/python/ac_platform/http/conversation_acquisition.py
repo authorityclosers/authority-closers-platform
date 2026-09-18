@@ -82,7 +82,11 @@ def install_acquisition_http(
             raise fail(422, "Upload access comes from your current session.")
         if mutation:
             try:
-                require_safe_origin(request, settings)
+                require_safe_origin(
+                    request,
+                    settings,
+                    allow_missing_sales_xray_origin=True,
+                )
             except DomainError:
                 raise fail(403, "Use this Sales Xray page to continue.") from None
         return host
