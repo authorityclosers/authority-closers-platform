@@ -282,14 +282,16 @@ class RetainedC2ReuseService:
                     continue
             source_tasks = (
                 await self.database.scalars(
-                    select(ConversationInferenceTask).where(
+                    select(ConversationInferenceTask)
+                    .where(
                         ConversationInferenceTask.recording_id == source.id,
                         ConversationInferenceTask.tenant_id == target.tenant_id,
                         ConversationInferenceTask.person_id == target.person_id,
                         ConversationInferenceTask.generation == target.generation,
                         ConversationInferenceTask.stage == "C2",
                         ConversationInferenceTask.erased_at.is_(None),
-                    ).with_for_update()
+                    )
+                    .with_for_update()
                 )
             ).all()
             if not source_tasks:
@@ -302,9 +304,7 @@ class RetainedC2ReuseService:
                 # candidates have been rejected.
                 continue
             matching = tuple(
-                task
-                for task in source_tasks
-                if task.cache_key == source_plan.checkpoint.cache_key
+                task for task in source_tasks if task.cache_key == source_plan.checkpoint.cache_key
             )
             if len(matching) != 1:
                 continue
