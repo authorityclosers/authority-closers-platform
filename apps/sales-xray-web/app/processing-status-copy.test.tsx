@@ -188,13 +188,11 @@ it("uses recording-check cues before local validation completes", async () => {
 
 it("does not cycle informational cues when reduced motion is requested", async () => {
   const original = window.matchMedia;
-  window.matchMedia = vi
-    .fn()
-    .mockReturnValue({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    });
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
   try {
     await render();
     await advance(24_000);

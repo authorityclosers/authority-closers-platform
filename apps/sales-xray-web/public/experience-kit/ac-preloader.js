@@ -7,12 +7,75 @@
 (() => {
   "use strict";
   if (customElements.get("ac-preloader")) return;
-  const BRANDS = {"ac":{"name":"Authority Closers","product":"Sales Xray","color":"#152638","accent":"#19665C","status":"proposal","folder":"ac-v0.1","points":["32.0,432.0 192.0,48.0 280.0,48.0 120.0,432.0","308.0,112.0 440.0,432.0 144.0,432.0 184.0,328.0 296.0,328.0 260.0,224.0"]},"ca":{"name":"Closers Academy","product":"Learning workspace","color":"#173F43","accent":"#21695F","status":"starter-concept","folder":"closers-academy-v0.1","points":["48.0,104.0 232.0,176.0 232.0,408.0 48.0,336.0","272.0,176.0 456.0,104.0 456.0,336.0 272.0,408.0","112.0,432.0 392.0,432.0 392.0,480.0 112.0,480.0"]},"cohorva":{"name":"Cohorva","product":"Learning platform","color":"#3155C6","accent":"#3155C6","status":"provisional-name","folder":"cohorva-v0.1","points":["72.0,80.0 224.0,80.0 224.0,176.0 168.0,176.0 168.0,352.0 72.0,352.0","256.0,80.0 432.0,80.0 432.0,352.0 336.0,352.0 336.0,176.0 256.0,176.0","168.0,384.0 336.0,384.0 336.0,448.0 168.0,448.0"]}};
-  const PHASES = new Set(["session", "workspace", "view", "ready", "delayed", "error"]);
-  const escape = (v) => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const mark = (brand, cls = "") => `<svg class="${cls}" viewBox="0 0 512 512" aria-hidden="true" focusable="false" fill="${BRANDS[brand].color}">${BRANDS[brand].points.map(p => `<polygon points="${p}"/>`).join("")}</svg>`;
+  const BRANDS = {
+    ac: {
+      name: "Authority Closers",
+      product: "Sales Xray",
+      color: "#152638",
+      accent: "#19665C",
+      status: "proposal",
+      folder: "ac-v0.1",
+      points: [
+        "32.0,432.0 192.0,48.0 280.0,48.0 120.0,432.0",
+        "308.0,112.0 440.0,432.0 144.0,432.0 184.0,328.0 296.0,328.0 260.0,224.0",
+      ],
+    },
+    ca: {
+      name: "Closers Academy",
+      product: "Learning workspace",
+      color: "#173F43",
+      accent: "#21695F",
+      status: "starter-concept",
+      folder: "closers-academy-v0.1",
+      points: [
+        "48.0,104.0 232.0,176.0 232.0,408.0 48.0,336.0",
+        "272.0,176.0 456.0,104.0 456.0,336.0 272.0,408.0",
+        "112.0,432.0 392.0,432.0 392.0,480.0 112.0,480.0",
+      ],
+    },
+    cohorva: {
+      name: "Cohorva",
+      product: "Learning platform",
+      color: "#3155C6",
+      accent: "#3155C6",
+      status: "provisional-name",
+      folder: "cohorva-v0.1",
+      points: [
+        "72.0,80.0 224.0,80.0 224.0,176.0 168.0,176.0 168.0,352.0 72.0,352.0",
+        "256.0,80.0 432.0,80.0 432.0,352.0 336.0,352.0 336.0,176.0 256.0,176.0",
+        "168.0,384.0 336.0,384.0 336.0,448.0 168.0,448.0",
+      ],
+    },
+  };
+  const PHASES = new Set([
+    "session",
+    "workspace",
+    "view",
+    "ready",
+    "delayed",
+    "error",
+  ]);
+  const escape = (v) =>
+    String(v).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const mark = (brand, cls = "") =>
+    `<svg class="${cls}" viewBox="0 0 512 512" aria-hidden="true" focusable="false" fill="${BRANDS[brand].color}">${BRANDS[brand].points.map((p) => `<polygon points="${p}"/>`).join("")}</svg>`;
   const icon = (name) => {
-    const paths = {check:"m5 12 4 4L19 6",audio:"M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4",review:"M4 4h16v12h-7l-5 4v-4H4z M8 8h8 M8 12h5",retry:"M19 8a8 8 0 1 0 1 7 M19 3v5h-5"};
+    const paths = {
+      check: "m5 12 4 4L19 6",
+      audio: "M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4",
+      review: "M4 4h16v12h-7l-5 4v-4H4z M8 8h8 M8 12h5",
+      retry: "M19 8a8 8 0 1 0 1 7 M19 3v5h-5",
+    };
     return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${paths[name] || paths.check}"/></svg>`;
   };
   const STYLE = `
@@ -30,59 +93,148 @@
 @container(max-width:350px){.center{padding-left:15px;padding-right:15px}.card{padding-left:22px;padding-right:22px}.eyebrow{font-size:9px;letter-spacing:1px}.headline{font-size:29px}.status{font-size:13px;gap:8px}.environment{font-size:11px}.header{padding-left:17px}.recovery .headline{font-size:26px}}
 @media(max-height:700px){.scene{height:auto;min-height:100%}.center{min-height:480px;padding-top:32px}.footer{padding-top:18px;padding-bottom:24px}}
 `;
-  const bg = () => `<div class="ambient" aria-hidden="true"><svg class="desktop-bg" viewBox="0 0 1440 900" preserveAspectRatio="none"><defs><radialGradient id="halo"><stop stop-color="#e8f5ed" stop-opacity=".9"/><stop offset="1" stop-color="#fafcfb" stop-opacity="0"/></radialGradient><linearGradient id="wave" x2="0" y2="1"><stop stop-color="#dfeeE7" stop-opacity=".72"/><stop offset="1" stop-color="#f8fbf9" stop-opacity=".15"/></linearGradient></defs><ellipse cx="720" cy="414" rx="533" ry="369" fill="url(#halo)"/><path d="M0 603C245 594 389 846 720 846C1037 855 1195 684 1440 648V900H0Z" fill="url(#wave)"/><path d="M0 729C302 693 475 882 878 864S1253 756 1440 801V900H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 765C317 711 432 882 864 882S1282 783 1440 801" fill="none" stroke="#c9ded4" opacity=".65"/></svg><svg class="mobile-bg" viewBox="0 0 390 844" preserveAspectRatio="none"><path d="M0 564C67 556 106 793 195 793C281 801 324 641 390 608V844H0Z" fill="#e6f1eb" opacity=".65"/><path d="M0 684C82 650 129 827 238 810S339 709 390 751V844H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 717C86 666 117 827 234 827S347 734 390 751" fill="none" stroke="#c9ded4" opacity=".65"/></svg></div>`;
+  const bg = () =>
+    `<div class="ambient" aria-hidden="true"><svg class="desktop-bg" viewBox="0 0 1440 900" preserveAspectRatio="none"><defs><radialGradient id="halo"><stop stop-color="#e8f5ed" stop-opacity=".9"/><stop offset="1" stop-color="#fafcfb" stop-opacity="0"/></radialGradient><linearGradient id="wave" x2="0" y2="1"><stop stop-color="#dfeeE7" stop-opacity=".72"/><stop offset="1" stop-color="#f8fbf9" stop-opacity=".15"/></linearGradient></defs><ellipse cx="720" cy="414" rx="533" ry="369" fill="url(#halo)"/><path d="M0 603C245 594 389 846 720 846C1037 855 1195 684 1440 648V900H0Z" fill="url(#wave)"/><path d="M0 729C302 693 475 882 878 864S1253 756 1440 801V900H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 765C317 711 432 882 864 882S1282 783 1440 801" fill="none" stroke="#c9ded4" opacity=".65"/></svg><svg class="mobile-bg" viewBox="0 0 390 844" preserveAspectRatio="none"><path d="M0 564C67 556 106 793 195 793C281 801 324 641 390 608V844H0Z" fill="#e6f1eb" opacity=".65"/><path d="M0 684C82 650 129 827 238 810S339 709 390 751V844H0Z" fill="#e7f1ea" opacity=".46"/><path d="M0 717C86 666 117 827 234 827S347 734 390 751" fill="none" stroke="#c9ded4" opacity=".65"/></svg></div>`;
   class ACPreloader extends HTMLElement {
-    static observedAttributes = ["brand", "phase", "progress", "environment", "reduce-motion"];
-    constructor() { super(); this.attachShadow({mode:"open"}); this._batch = false; }
-    connectedCallback() { this.render(); }
-    attributeChangedCallback() { if (this.isConnected && !this._batch) this.render(); }
+    static observedAttributes = [
+      "brand",
+      "phase",
+      "progress",
+      "environment",
+      "reduce-motion",
+    ];
+    constructor() {
+      super();
+      this.attachShadow({ mode: "open" });
+      this._batch = false;
+    }
+    connectedCallback() {
+      this.render();
+    }
+    attributeChangedCallback() {
+      if (this.isConnected && !this._batch) this.render();
+    }
     /** Controlled host API; raises on invalid data rather than silently fabricating state. */
     setState(next = {}) {
-      if (typeof next !== "object" || next === null || Array.isArray(next)) throw new TypeError("Expected a state object");
-      if (next.brand !== undefined && !Object.hasOwn(BRANDS,next.brand)) throw new RangeError("Unknown brand");
-      if (next.phase !== undefined && !PHASES.has(next.phase)) throw new RangeError("Unknown phase");
-      if (next.environment !== undefined && !["preview","production","local-live"].includes(next.environment)) throw new RangeError("Unknown environment");
-      if (next.progress !== undefined && next.progress !== null && (!Number.isFinite(next.progress) || next.progress < 0 || next.progress > 100)) throw new RangeError("Progress must be null or a measured number from 0 to 100");
+      if (typeof next !== "object" || next === null || Array.isArray(next))
+        throw new TypeError("Expected a state object");
+      if (next.brand !== undefined && !Object.hasOwn(BRANDS, next.brand))
+        throw new RangeError("Unknown brand");
+      if (next.phase !== undefined && !PHASES.has(next.phase))
+        throw new RangeError("Unknown phase");
+      if (
+        next.environment !== undefined &&
+        !["preview", "production", "local-live"].includes(next.environment)
+      )
+        throw new RangeError("Unknown environment");
+      if (
+        next.progress !== undefined &&
+        next.progress !== null &&
+        (!Number.isFinite(next.progress) ||
+          next.progress < 0 ||
+          next.progress > 100)
+      )
+        throw new RangeError(
+          "Progress must be null or a measured number from 0 to 100",
+        );
       this._batch = true;
-      for (const key of ["brand","phase","environment"]) if (next[key] !== undefined) this.setAttribute(key,next[key]);
+      for (const key of ["brand", "phase", "environment"])
+        if (next[key] !== undefined) this.setAttribute(key, next[key]);
       if (next.progress === null) this.removeAttribute("progress");
-      else if (next.progress !== undefined) this.setAttribute("progress",String(next.progress));
-      if (next.reduceMotion !== undefined) this.toggleAttribute("reduce-motion",Boolean(next.reduceMotion));
+      else if (next.progress !== undefined)
+        this.setAttribute("progress", String(next.progress));
+      if (next.reduceMotion !== undefined)
+        this.toggleAttribute("reduce-motion", Boolean(next.reduceMotion));
       this._batch = false;
       if (this.isConnected) this.render();
     }
     render() {
       const requested = this.getAttribute("brand") || "ac";
-      const brand = Object.hasOwn(BRANDS,requested) ? requested : "ac";
+      const brand = Object.hasOwn(BRANDS, requested) ? requested : "ac";
       const b = BRANDS[brand];
-      const phase = PHASES.has(this.getAttribute("phase")) ? this.getAttribute("phase") : "session";
+      const phase = PHASES.has(this.getAttribute("phase"))
+        ? this.getAttribute("phase")
+        : "session";
       const environment = this.getAttribute("environment") || "preview";
       const pv = this.getAttribute("progress");
-      const numeric = pv !== null && pv.trim() !== "" && Number.isFinite(Number(pv)) && Number(pv) >= 0 && Number(pv) <= 100 ? Number(pv) : null;
+      const numeric =
+        pv !== null &&
+        pv.trim() !== "" &&
+        Number.isFinite(Number(pv)) &&
+        Number(pv) >= 0 &&
+        Number(pv) <= 100
+          ? Number(pv)
+          : null;
       const recovery = phase === "delayed" || phase === "error";
       const ready = phase === "ready";
-      const position = ["session","workspace","view","ready"].indexOf(phase);
-      const currentText = {session:"Checking your session",workspace:"Checking workspace access",view:"Preparing your view",ready:"Your workspace is ready",delayed:"Waiting for an access result",error:"Access check not completed"}[phase];
-      const title = recovery ? (phase === "delayed" ? "Still checking access." : "Workspace didn’t open.") : ready ? "Your workspace is ready." : {ac:"Getting Sales Xray ready.",ca:"Your next chapter starts here.",cohorva:"Opening your learning space."}[brand];
-      const description = recovery ? (phase === "delayed" ? "This is taking longer than expected. You can retry the access check." : "We couldn’t finish the access check. Try again or return to sign in.") : ready ? "You can continue to your workspace." : {session:"Confirming the session for this workspace.",workspace:"Checking the workspace assigned to your session.",view:"Preparing the view for your workspace."}[phase];
-      const eyebrow = brand === "ac" ? "AUTHORITY CLOSERS · SALES XRAY" : brand === "ca" ? "CLOSERS ACADEMY" : "COHORVA · LEARNING PLATFORM";
-      const environmentText = environment === "local-live" ? "Local development · Live production data. Saves, deletes and analysis actions affect real data." : "Design preview · No live data";
-      const steps = ["Session","Workspace","Your view"].map((label,i) => {
-        const state = i < position ? "done" : i === position ? "active" : "waiting";
-        return `<div class="step"><span class="step-icon ${state === "done" ? "done" : ""}">${state === "done" ? icon("check") : `<span class="${state === "active" ? "ring" : "waiting"}" style="display:block"></span>`}</span><div><div class="step-title">${label}</div><div class="step-sub">${state === "done" ? "Found" : state === "active" ? "Checking" : "Next"}</div></div></div>`;
-      }).join("");
+      const position = ["session", "workspace", "view", "ready"].indexOf(phase);
+      const currentText = {
+        session: "Checking your session",
+        workspace: "Checking workspace access",
+        view: "Preparing your view",
+        ready: "Your workspace is ready",
+        delayed: "Waiting for an access result",
+        error: "Access check not completed",
+      }[phase];
+      const title = recovery
+        ? phase === "delayed"
+          ? "Still checking access."
+          : "Workspace didn’t open."
+        : ready
+          ? "Your workspace is ready."
+          : {
+              ac: "Getting Sales Xray ready.",
+              ca: "Your next chapter starts here.",
+              cohorva: "Opening your learning space.",
+            }[brand];
+      const description = recovery
+        ? phase === "delayed"
+          ? "This is taking longer than expected. You can retry the access check."
+          : "We couldn’t finish the access check. Try again or return to sign in."
+        : ready
+          ? "You can continue to your workspace."
+          : {
+              session: "Confirming the session for this workspace.",
+              workspace: "Checking the workspace assigned to your session.",
+              view: "Preparing the view for your workspace.",
+            }[phase];
+      const eyebrow =
+        brand === "ac"
+          ? "AUTHORITY CLOSERS · SALES XRAY"
+          : brand === "ca"
+            ? "CLOSERS ACADEMY"
+            : "COHORVA · LEARNING PLATFORM";
+      const environmentText =
+        environment === "local-live"
+          ? "Local development · Live production data. Saves, deletes and analysis actions affect real data."
+          : "Design preview · No live data";
+      const steps = ["Session", "Workspace", "Your view"]
+        .map((label, i) => {
+          const state =
+            i < position ? "done" : i === position ? "active" : "waiting";
+          return `<div class="step"><span class="step-icon ${state === "done" ? "done" : ""}">${state === "done" ? icon("check") : `<span class="${state === "active" ? "ring" : "waiting"}" style="display:block"></span>`}</span><div><div class="step-title">${label}</div><div class="step-sub">${state === "done" ? "Found" : state === "active" ? "Checking" : "Next"}</div></div></div>`;
+        })
+        .join("");
       const activeStatus = recovery ? currentText : currentText;
       this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="scene" style="--sx-accent:${b.accent}">${bg()}
 <div class="environment" ${environment === "production" ? "hidden" : ""}><span class="flag">${environmentText}</span><span class="env-right">${environment === "local-live" ? "Production account context" : "Local SVG experience kit"}</span></div>
-<header class="header"><div class="brand-lockup">${mark(brand,"header-mark")}<div class="brand-copy"><strong>${b.name}</strong><small>${b.product}</small></div></div><span class="header-note">A LITTLE CLARITY. A BETTER NEXT STEP.</span></header>
+<header class="header"><div class="brand-lockup">${mark(brand, "header-mark")}<div class="brand-copy"><strong>${b.name}</strong><small>${b.product}</small></div></div><span class="header-note">A LITTLE CLARITY. A BETTER NEXT STEP.</span></header>
 <div class="center"><div class="stack"><div class="rear left" aria-hidden="true"><div class="module-icon">${icon("audio")}</div><span class="rear-name">${brand === "ac" ? "Recordings" : "Learning"}</span><i class="skeleton"></i><i class="skeleton short"></i></div><div class="rear right" aria-hidden="true"><div class="module-icon">${icon("review")}</div><span class="rear-name">${brand === "ac" ? "Review" : "Practice"}</span><i class="skeleton"></i><i class="skeleton short"></i></div>
-<section class="card ${recovery ? "recovery" : ready ? "ready" : ""}" aria-labelledby="headline"><div class="brand-orbit"><div class="orbit-line"></div>${mark(brand,"hero-mark")}</div>${!recovery ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h1 id="headline" class="headline">${title}</h1><p class="description">${description}</p>
+<section class="card ${recovery ? "recovery" : ready ? "ready" : ""}" aria-labelledby="headline"><div class="brand-orbit"><div class="orbit-line"></div>${mark(brand, "hero-mark")}</div>${!recovery ? `<p class="eyebrow">${eyebrow}</p>` : ""}<h1 id="headline" class="headline">${title}</h1><p class="description">${description}</p>
 ${recovery ? `<div class="recovery-actions"><button class="action primary" data-action="retry">Retry access check</button><button class="action secondary" data-action="sign-in">Return to sign in</button></div>` : ready ? `<div class="ready-badge">${icon("check")}<span>Ready to continue</span></div>` : `<div class="meter-wrap"><div class="meter ${numeric !== null ? "measured" : ""}" role="progressbar" aria-label="Workspace loading" aria-valuetext="${escape(currentText)}" ${numeric !== null ? `aria-valuenow="${numeric}" aria-valuemin="0" aria-valuemax="100"` : ""} style="--value:${numeric !== null ? numeric : 0}%"><i class="meter-line"></i></div><div class="value">${numeric !== null ? `${numeric}%` : ""}</div></div><div class="steps" aria-hidden="true">${steps}</div>`}
 <p class="status" role="${phase === "error" ? "alert" : "status"}" aria-live="${phase === "error" ? "assertive" : "polite"}" aria-atomic="true">${!recovery && !ready ? '<span class="ring" aria-hidden="true"></span>' : ""}<span>${activeStatus}</span></p>${!recovery && !ready ? `<p class="mobile-context">${phase === "workspace" ? "Session found · Your view is next" : phase === "view" ? "Access found · Preparing your view" : "Checking access before opening your view"}</p>` : ""}</section></div></div><footer class="footer">One clearer view. A better next step.</footer></div>`;
-      this.shadowRoot.querySelectorAll("[data-action]").forEach(button => button.addEventListener("click", () => {
-        this.dispatchEvent(new CustomEvent(`ac-${button.dataset.action}`, {bubbles:true,composed:true,detail:{brand,phase}}));
-      }));
+      this.shadowRoot.querySelectorAll("[data-action]").forEach((button) =>
+        button.addEventListener("click", () => {
+          this.dispatchEvent(
+            new CustomEvent(`ac-${button.dataset.action}`, {
+              bubbles: true,
+              composed: true,
+              detail: { brand, phase },
+            }),
+          );
+        }),
+      );
     }
   }
-  customElements.define("ac-preloader",ACPreloader);
+  customElements.define("ac-preloader", ACPreloader);
 })();
