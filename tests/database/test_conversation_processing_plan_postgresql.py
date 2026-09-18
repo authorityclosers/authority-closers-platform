@@ -419,6 +419,12 @@ def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
             stages = tuple(
                 stage.model_copy(
                     update={
+                        # A route change is a new immutable stage approval.  Keep
+                        # the prior Deepgram approval (and its reservation) intact;
+                        # the duplicate must be admitted against the new
+                        # ElevenLabs approval rather than consuming the old
+                        # approval's request allowance.
+                        "id": uuid4() if stage.stage == "C2" else stage.id,
                         "configuration_sha256": config_view["configuration_sha256"],
                         **(
                             {
