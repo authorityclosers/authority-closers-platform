@@ -1,6 +1,14 @@
 "use client";
 
-import { useId, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useId,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowUpRight,
   Gem,
@@ -16,15 +24,22 @@ import type {
   SalesReport,
 } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
+import { SourceWaveform } from "./source-waveform";
+import { ReviewDialog } from "./review-dialog";
+import { OverviewDashboard } from "./overview-dashboard";
+import { countReportMoments } from "./report-moments";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
+  durationMs?: number;
+  showHeading?: boolean;
 };
 
 type ChapterId = "start" | "read" | "practice" | "close";
+const FocusedReview = createContext<string | null>(null);
 
 const time = (ms: number) =>
   `${Math.floor(ms / 60000)
@@ -62,6 +77,7 @@ function ReviewBlock({
   tone?: "neutral" | "positive" | "priority";
   expanded?: boolean;
 }) {
+  const focused = useContext(FocusedReview);
   const header = (
     <>
       <span className={styles.number}>{number}</span>
@@ -71,7 +87,7 @@ function ReviewBlock({
       </div>
     </>
   );
-  if (!expanded && !["01", "02", "08", "11"].includes(number)) {
+  if (!expanded && !focused && !["01", "02", "08", "11"].includes(number)) {
     return (
       <details
         className={`${styles.block} ${styles.fold}`}
@@ -95,6 +111,7 @@ function ReviewBlock({
       className={styles.block}
       data-tone={tone}
       data-review-point={number}
+      hidden={focused !== null && focused !== number}
       tabIndex={-1}
     >
       <div className={styles.blockHeading}>{header}</div>
@@ -103,8 +120,109 @@ function ReviewBlock({
   );
 }
 
+function ImprovementDetailTabs({
+  whatHappened,
+  whyItMatters,
+  tryThis,
+  evidence,
+  impact,
+}: {
+  whatHappened: ReactNode;
+  whyItMatters: string;
+  tryThis: string;
+  evidence: ReactNode;
+  impact: ReactNode;
+}) {
+  const prefix = useId();
+  const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
+  const [tab, setTab] = useState<"happened" | "matters" | "try">("happened");
+  const tabs = [
+    ["happened", "What happened"],
+    ["matters", "Why it matters"],
+    ["try", "Try this"],
+  ] as const;
+  return (
+    <div className={styles.improvementTabs} data-improvement-tabs>
+      <div
+        className={styles.improvementTabList}
+        role="tablist"
+        aria-label="Improvement detail"
+      >
+        {tabs.map(([id, label], index) => (
+          <button
+            key={id}
+            ref={(button) => {
+              tabButtons.current[index] = button;
+            }}
+            id={`${prefix}-tab-${id}`}
+            aria-controls={`${prefix}-panel-${id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            tabIndex={tab === id ? 0 : -1}
+            onClick={() => setTab(id)}
+            onKeyDown={(event) => {
+              const next =
+                event.key === "ArrowRight"
+                  ? (index + 1) % tabs.length
+                  : event.key === "ArrowLeft"
+                    ? (index + tabs.length - 1) % tabs.length
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? tabs.length - 1
+                        : null;
+              if (next === null) return;
+              event.preventDefault();
+              setTab(tabs[next][0]);
+              tabButtons.current[next]?.focus();
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div
+        className={styles.improvementTabPanel}
+        role="tabpanel"
+        id={`${prefix}-panel-happened`}
+        aria-labelledby={`${prefix}-tab-happened`}
+        hidden={tab !== "happened"}
+      >
+        {whatHappened}
+      </div>
+      <div
+        className={styles.improvementTabPanel}
+        role="tabpanel"
+        id={`${prefix}-panel-matters`}
+        aria-labelledby={`${prefix}-tab-matters`}
+        hidden={tab !== "matters"}
+      >
+        <p>{whyItMatters}</p>
+      </div>
+      <div
+        className={styles.improvementTabPanel}
+        role="tabpanel"
+        id={`${prefix}-panel-try`}
+        aria-labelledby={`${prefix}-tab-try`}
+        hidden={tab !== "try"}
+      >
+        <p>{tryThis}</p>
+      </div>
+      {impact}
+      {evidence}
+    </div>
+  );
+}
+
 /** A source-preserving presentation of Dipak's template, not a second judge. */
-export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
+export function DipakOverview({
+  report,
+  onSelectEvidence,
+  onUnlock,
+  durationMs,
+  showHeading = true,
+}: Props) {
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -137,6 +255,10 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
   }, []);
   const prefix = useId();
   const [activeChapter, setActiveChapter] = useState<ChapterId | null>(null);
+  const [activeReviewNumber, setActiveReviewNumber] = useState<string | null>(
+    null,
+  );
+  const [activeTakeaway, setActiveTakeaway] = useState(0);
   const lastInsightButton = useRef<HTMLButtonElement | null>(null);
   const focusId = `${prefix}-focus`;
   const fixesId = `${prefix}-fixes`;
@@ -241,9 +363,17 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
     { number: "13", label: "Across-call pattern", chapter: "close" },
     { number: "14", label: "Final verdict", chapter: "close" },
   ];
+  const activeReviewIndex = Math.max(
+    0,
+    insightRailItems.findIndex((item) => item.number === activeReviewNumber),
+  );
+  const activeReview =
+    insightRailItems[activeReviewIndex] ?? insightRailItems[0];
 
   function focusInsight(number: string, chapter: ChapterId) {
+    setActiveReviewNumber(number);
     setActiveChapter(chapter);
+    if (!showHeading) return; // The focused dialog owns focus, never page scroll.
     window.setTimeout(() => {
       const item = overview.current?.querySelector<HTMLElement>(
         `[data-review-point="${number}"]`,
@@ -262,6 +392,7 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
   }
 
   function closeReader() {
+    setActiveReviewNumber(null);
     setActiveChapter(null);
     window.setTimeout(() => {
       const fallback = overview.current?.querySelector<HTMLButtonElement>(
@@ -276,16 +407,23 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
       <FindingEvidence count={finding.evidence.length}>
         {finding.evidence.map((item, index) => (
           <blockquote key={`${item.segment_id}-${index}`}>
-            <button
-              className={styles.timestamp}
-              type="button"
-              onClick={() => onSelectEvidence(item, finding.title)}
-              aria-label={`Play source moment, ${time(item.start_ms)} to ${time(item.end_ms)}: ${item.quote}`}
-            >
-              <Play size={12} aria-hidden="true" />
-              {time(item.start_ms)}–{time(item.end_ms)}
-            </button>{" "}
-            <span>{item.quote}</span>
+            <div className={styles.evidenceControls}>
+              <span className={styles.evidenceQuote}>{item.quote}</span>
+              <button
+                className={styles.timestamp}
+                type="button"
+                onClick={() => onSelectEvidence(item, finding.title)}
+                aria-label={`Play source moment, ${time(item.start_ms)} to ${time(item.end_ms)}: ${item.quote}`}
+              >
+                <Play size={12} aria-hidden="true" />
+                {time(item.start_ms)}–{time(item.end_ms)}
+              </button>
+              <SourceWaveform
+                className={styles.evidenceWaveform}
+                startMs={item.start_ms}
+                endMs={item.end_ms}
+              />
+            </div>
           </blockquote>
         ))}
       </FindingEvidence>
@@ -349,14 +487,58 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
       className={styles.overview}
       aria-label="Dipak’s call review"
       data-report-workspace
+      data-compact={!showHeading}
     >
+      {!showHeading && (
+        <OverviewDashboard
+          report={report}
+          durationMs={durationMs}
+          momentCount={countReportMoments(report)}
+          reviewPoints={insightRailItems}
+          onSelectEvidence={onSelectEvidence}
+          onOpenReview={(number) => {
+            const item = insightRailItems.find(
+              (point) => point.number === number,
+            );
+            if (item) {
+              lastInsightButton.current =
+                document.activeElement instanceof HTMLButtonElement
+                  ? document.activeElement
+                  : null;
+              focusInsight(item.number, item.chapter);
+            }
+          }}
+        />
+      )}
       <section
         className={styles.resultLead}
         aria-label="Report summary"
         data-summary-card="summary"
       >
-        <h2>{detail?.diagnosis?.text ?? report.verdict}</h2>
-        <p className={styles.heroSubcopy}>{report.summary}</p>
+        <div className={styles.resultLeadCopy} hidden={!showHeading}>
+          <p className={styles.eyebrow}>CALL REVIEW</p>
+          <h1>Your call, clearly.</h1>
+          <p className={styles.heroSubcopy}>{report.summary}</p>
+          <span className={styles.visuallyHidden}>{report.verdict}</span>
+        </div>
+        <div className={styles.reportMetrics} aria-label="Call metrics">
+          <div className={styles.metric}>
+            <span>Call duration</span>
+            <strong>{durationMs ? time(durationMs) : "Not supplied"}</strong>
+          </div>
+          <div className={styles.metric}>
+            <span>Source-linked moments</span>
+            <strong>{rewatch.length}</strong>
+          </div>
+          <div className={styles.metric}>
+            <span>Review points</span>
+            <strong>{insightRailItems.length}</strong>
+          </div>
+          <div className={`${styles.metric} ${styles.metricAction}`}>
+            <span>Suggested actions</span>
+            <strong>{report.improvements.length}</strong>
+          </div>
+        </div>
         <div className={styles.heroMeta} aria-label="Report status">
           <span className={styles.statusPill}>Draft report</span>
         </div>
@@ -375,62 +557,142 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         )}
       </section>
 
+      <section className={styles.takeawayGrid} aria-label="Call takeaways">
+        <article
+          className={`${styles.takeawayCard} ${styles.takeawayCardLead}`}
+          data-takeaway-index="0"
+          data-active={activeTakeaway === 0}
+        >
+          <p className={styles.eyebrow}>KEY TAKEAWAY</p>
+          <h2>{detail?.diagnosis?.text ?? report.verdict}</h2>
+          <p>{report.summary}</p>
+          <button
+            className={styles.takeawayAction}
+            type="button"
+            onClick={() => focusInsight("14", "close")}
+          >
+            Open review <ArrowUpRight size={16} aria-hidden="true" />
+          </button>
+        </article>
+        <article
+          className={`${styles.takeawayCard} ${styles.takeawayCardMint}`}
+          data-takeaway-index="1"
+          data-active={activeTakeaway === 1}
+        >
+          <p className={styles.eyebrow}>KEEP DOING THIS</p>
+          <h2>
+            {report.strengths[0]?.title ?? "No supported strength recorded"}
+          </h2>
+          <p>
+            {report.strengths[0]?.explanation ??
+              "The saved report does not include a supported strength yet."}
+          </p>
+        </article>
+        <article
+          className={`${styles.takeawayCard} ${styles.takeawayCardOrange}`}
+          data-takeaway-index="2"
+          data-active={activeTakeaway === 2}
+        >
+          <p className={styles.eyebrow}>FIRST CHANGE</p>
+          <h2>{primary?.title ?? "No supported improvement recorded"}</h2>
+          <p>
+            {primaryDetail?.replacement_behavior ??
+              primary?.explanation ??
+              "No first change was supplied."}
+          </p>
+          {primary && (
+            <button
+              className={styles.inlineAction}
+              type="button"
+              onClick={() => focusInsight("02", "start")}
+            >
+              Read the evidence <ArrowUpRight size={15} aria-hidden="true" />
+            </button>
+          )}
+        </article>
+        <article
+          className={`${styles.takeawayCard} ${styles.takeawayCardBlue}`}
+          data-takeaway-index="3"
+          data-active={activeTakeaway === 3}
+        >
+          <p className={styles.eyebrow}>OUTCOME</p>
+          <h2>
+            {detail?.outcome?.text ??
+              "Outcome stays grounded in the saved evidence."}
+          </h2>
+          <p>
+            {detail?.outcome
+              ? "Observed outcome from this call."
+              : "No separate outcome statement was supplied."}
+          </p>
+        </article>
+        <article
+          className={`${styles.takeawayCard} ${styles.takeawayCardViolet}`}
+          data-takeaway-index="4"
+          data-active={activeTakeaway === 4}
+        >
+          <p className={styles.eyebrow}>NEXT-CALL PLAN</p>
+          <h2>
+            {detail?.next_call_focus?.behavior ??
+              primary?.title ??
+              "Choose one supported practice move."}
+          </h2>
+          <p>
+            {detail?.practice?.instructions ??
+              "Open the review points to connect the next move to its source."}
+          </p>
+          <button
+            className={styles.inlineAction}
+            type="button"
+            onClick={() => focusInsight("11", "practice")}
+          >
+            Open plan <ArrowUpRight size={15} aria-hidden="true" />
+          </button>
+        </article>
+        <div className={styles.takeawayControls} aria-label="Takeaway cards">
+          <button
+            type="button"
+            aria-label="Previous takeaway"
+            onClick={() => setActiveTakeaway((index) => (index + 4) % 5)}
+          >
+            ←
+          </button>
+          <div className={styles.takeawayDots} aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((index) => (
+              <span key={index} data-active={activeTakeaway === index} />
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-label="Next takeaway"
+            onClick={() => setActiveTakeaway((index) => (index + 1) % 5)}
+          >
+            →
+          </button>
+        </div>
+        <div
+          className={styles.takeawayPills}
+          role="tablist"
+          aria-label="Takeaway categories"
+        >
+          {["Takeaway", "Keep", "Change", "Outcome", "Practice"].map(
+            (label, index) => (
+              <button
+                key={label}
+                type="button"
+                role="tab"
+                aria-selected={activeTakeaway === index}
+                onClick={() => setActiveTakeaway(index)}
+              >
+                {label}
+              </button>
+            ),
+          )}
+        </div>
+      </section>
+
       <div className={styles.workspaceLayout}>
         <div className={styles.aboveFold}>
-          <section
-            className={styles.focusGrid}
-            aria-label="What to carry into the next call"
-          >
-            <article
-              className={`${styles.summaryCard} ${styles.keepCard}`}
-              data-summary-card="keep"
-            >
-              <p className={styles.eyebrow}>WHAT TO KEEP</p>
-              {report.strengths.length ? (
-                <ul className={styles.summaryList}>
-                  {report.strengths.slice(0, 3).map((finding, index) => (
-                    <li key={`${finding.title}-${index}`}>
-                      <span aria-hidden="true">✓</span>
-                      <strong>{finding.title}</strong>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={styles.summaryEmpty}>
-                  No supported strength recorded.
-                </p>
-              )}
-            </article>
-            <article
-              className={`${styles.summaryCard} ${styles.changeCard}`}
-              data-summary-card="change"
-            >
-              <p className={styles.eyebrow}>FIRST CHANGE</p>
-              {primary ? (
-                <>
-                  <strong className={styles.summaryPriority}>
-                    {primary.title}
-                  </strong>
-                  <p className={styles.changeCopy}>
-                    {primaryDetail?.replacement_behavior ?? primary.explanation}
-                  </p>
-                  <button
-                    className={styles.primaryAction}
-                    type="button"
-                    onClick={() => focusInsight("02", "start")}
-                  >
-                    Open this change{" "}
-                    <ArrowUpRight size={16} aria-hidden="true" />
-                  </button>
-                </>
-              ) : (
-                <p className={styles.summaryEmpty}>
-                  No supported improvement recorded.
-                </p>
-              )}
-            </article>
-          </section>
-
           <section className={styles.sourceMoment} aria-label="Source moment">
             <span className={styles.sourcePlay} aria-hidden="true">
               <Play size={18} />
@@ -484,7 +746,7 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
                   data-insight-number={item.number}
                   aria-controls={`${prefix}-chapter-panel-${item.chapter}`}
                   aria-current={
-                    activeChapter === item.chapter ? "true" : undefined
+                    activeReviewNumber === item.number ? "true" : undefined
                   }
                   onClick={(event) => {
                     lastInsightButton.current = event.currentTarget;
@@ -501,535 +763,625 @@ export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
         </aside>
 
         <div className={styles.detailArea}>
-          {activeChapter && (
-            <button
-              className={styles.backToOverview}
-              type="button"
-              data-back-to-overview
-              onClick={closeReader}
-            >
-              <ArrowUpRight size={15} aria-hidden="true" />
-              Back to review points
-            </button>
-          )}
-          <div className={styles.chapterStack} hidden={!activeChapter}>
-            <section
-              className={styles.chapter}
-              data-chapter="start"
-              id={`${prefix}-chapter-panel-start`}
-              role="region"
-              aria-label="Start here"
-              tabIndex={0}
-              hidden={activeChapter !== "start"}
-            >
-              <div className={styles.chapterHeading}>
-                <span className={styles.chapterRange}>01—04</span>
-                <div>
-                  <p className={styles.eyebrow}>START HERE</p>
-                  <h3>Keep the useful. Pick one change.</h3>
-                </div>
-                <span className={styles.chapterNote}>
-                  The shortest path through this report
-                </span>
-              </div>
-
-              <ReviewBlock
-                number="01"
-                title="What you’re already good at"
-                description="Keep these useful behaviours in your next call."
-                tone="positive"
+          <ReviewDialog
+            open={Boolean(activeChapter)}
+            icon={<Target />}
+            tone={
+              ["02", "03", "04"].includes(activeReviewNumber ?? "")
+                ? "orange"
+                : "mint"
+            }
+            eyebrow="Draft coaching · grounded in this call"
+            title={activeReview?.label ?? "Review point"}
+            position={`Review point ${activeReviewIndex + 1} of ${insightRailItems.length}`}
+            onClose={closeReader}
+            onPrevious={() => {
+              const previous = insightRailItems[activeReviewIndex - 1];
+              if (previous) focusInsight(previous.number, previous.chapter);
+            }}
+            onNext={() => {
+              const next = insightRailItems[activeReviewIndex + 1];
+              if (next) focusInsight(next.number, next.chapter);
+            }}
+            previousDisabled={activeReviewIndex === 0}
+            nextDisabled={activeReviewIndex === insightRailItems.length - 1}
+          >
+            {activeChapter && (
+              <button
+                className={styles.backToOverview}
+                type="button"
+                data-back-to-overview
+                onClick={closeReader}
               >
-                {report.strengths.length ? (
-                  <div className={styles.strengths}>
-                    {report.strengths.map((finding, index) => (
-                      <div key={index}>
-                        {findingCard(finding, index)}
-                        {detail?.strength_details.find(
-                          (item) => item.finding_index === index,
-                        ) && (
-                          <p className={styles.why}>
-                            <strong>Why it matters:</strong>{" "}
-                            {
-                              detail.strength_details.find(
-                                (item) => item.finding_index === index,
-                              )!.why_it_matters
-                            }
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                <ArrowUpRight size={15} aria-hidden="true" />
+                Back to review points
+              </button>
+            )}
+            <FocusedReview.Provider
+              value={!showHeading ? activeReviewNumber : null}
+            >
+              <div
+                className={styles.chapterStack}
+                data-focused={!showHeading && !!activeChapter}
+                hidden={!activeChapter}
+              >
+                <section
+                  className={styles.chapter}
+                  data-chapter="start"
+                  id={`${prefix}-chapter-panel-start`}
+                  role="region"
+                  aria-label="Start here"
+                  tabIndex={0}
+                  hidden={activeChapter !== "start"}
+                >
+                  <div className={styles.chapterHeading}>
+                    <span className={styles.chapterRange}>01—04</span>
+                    <div>
+                      <p className={styles.eyebrow}>START HERE</p>
+                      <h3>Keep the useful. Pick one change.</h3>
+                    </div>
+                    <span className={styles.chapterNote}>
+                      The shortest path through this report
+                    </span>
                   </div>
-                ) : (
-                  <p className={styles.empty}>
-                    This report did not identify a supported strength.
-                  </p>
-                )}
-                {unlock("strengths")}
-              </ReviewBlock>
 
-              <div id={fixesId} className={styles.anchor}>
-                <div className={styles.groupHeading}>
-                  <Target size={19} aria-hidden="true" />
-                  <h3>Your priority fixes</h3>
-                  <span>Start with the first</span>
-                </div>
-                {priorities.length ? (
-                  priorities.map((finding, index) => (
+                  <ReviewBlock
+                    number="01"
+                    title="What you’re already good at"
+                    description="Keep these useful behaviours in your next call."
+                    tone="positive"
+                  >
+                    {report.strengths.length ? (
+                      <div className={styles.strengths}>
+                        {report.strengths.map((finding, index) => (
+                          <div key={index}>
+                            {findingCard(finding, index)}
+                            {detail?.strength_details.find(
+                              (item) => item.finding_index === index,
+                            ) && (
+                              <p className={styles.why}>
+                                <strong>Why it matters:</strong>{" "}
+                                {
+                                  detail.strength_details.find(
+                                    (item) => item.finding_index === index,
+                                  )!.why_it_matters
+                                }
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={styles.empty}>
+                        This report did not identify a supported strength.
+                      </p>
+                    )}
+                    {unlock("strengths")}
+                  </ReviewBlock>
+
+                  <div id={fixesId} className={styles.anchor}>
+                    <div className={styles.groupHeading}>
+                      <Target size={19} aria-hidden="true" />
+                      <h3>Your priority fixes</h3>
+                      <span>Start with the first</span>
+                    </div>
+                    {priorities.length ? (
+                      priorities.map((finding, index) => (
+                        <ReviewBlock
+                          key={index}
+                          number={`0${index + 2}`}
+                          title={finding.title}
+                          tone="priority"
+                        >
+                          {(() => {
+                            const fix = detail?.improvement_details.find(
+                              (item) => item.finding_index === index,
+                            );
+                            return fix ? (
+                              <ImprovementDetailTabs
+                                whatHappened={sourceNote(
+                                  fix.what_happened,
+                                  "What happened",
+                                )}
+                                whyItMatters={fix.why_it_matters}
+                                tryThis={fix.replacement_behavior}
+                                evidence={evidence(finding)}
+                                impact={
+                                  <div className={styles.impact}>
+                                    <TrendingUp size={16} aria-hidden="true" />
+                                    <div>
+                                      <strong>Business impact</strong>
+                                      <p>
+                                        Insufficient data for a reliable
+                                        estimate.
+                                      </p>
+                                      <small>
+                                        {fix.business_impact.missing_inputs.join(
+                                          " · ",
+                                        ) ||
+                                          "Lead volume, conversion history and time or revenue data are needed to calculate this."}
+                                      </small>
+                                    </div>
+                                  </div>
+                                }
+                              />
+                            ) : (
+                              <>
+                                <p className={styles.label}>
+                                  What to do differently
+                                </p>
+                                <p>{finding.explanation}</p>
+                                {evidence(finding)}
+                                <div className={styles.impact}>
+                                  <TrendingUp size={16} aria-hidden="true" />
+                                  <div>
+                                    <strong>Business impact</strong>
+                                    <p>
+                                      Insufficient data for a reliable estimate.
+                                    </p>
+                                    <small>
+                                      Lead volume, conversion history and time
+                                      or revenue data are needed to calculate
+                                      this.
+                                    </small>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </ReviewBlock>
+                      ))
+                    ) : (
+                      <p className={styles.empty}>
+                        This report has no supported improvement to prioritise
+                        yet.
+                      </p>
+                    )}
+                    {unlock("improvements")}
+                  </div>
+                </section>
+
+                <section
+                  className={styles.chapter}
+                  data-chapter="read"
+                  id={`${prefix}-chapter-panel-read`}
+                  role="region"
+                  aria-label="Read the conversation"
+                  tabIndex={0}
+                  hidden={activeChapter !== "read"}
+                >
+                  <div className={styles.chapterHeading}>
+                    <span className={styles.chapterRange}>05—09</span>
+                    <div>
+                      <p className={styles.eyebrow}>READ THE CONVERSATION</p>
+                      <h3>See where the call opened up or narrowed.</h3>
+                    </div>
+                    <span className={styles.chapterNote}>
+                      Moments stay linked to the source
+                    </span>
+                  </div>
+
+                  <ReviewBlock
+                    number="05"
+                    title="Golden moments"
+                    description={
+                      detail
+                        ? "Selected moments worth repeating."
+                        : "From your saved strengths; no separate golden-moment assessment yet."
+                    }
+                    tone="positive"
+                  >
+                    {golden.length ? (
+                      <div className={styles.golden}>
+                        {golden.map((finding, index) => (
+                          <div key={index}>
+                            <Gem size={17} aria-hidden="true" />
+                            <div>
+                              <h4>{finding.title}</h4>
+                              {detail && <p>{finding.explanation}</p>}
+                              {evidence(finding)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className={styles.empty}>
+                        {report.preview?.sections.golden_moments.hidden_count
+                          ? "More selected moments are available in your full report."
+                          : "No source-linked strength is available to replay yet."}
+                      </p>
+                    )}
+                    {unlock("golden_moments")}
+                  </ReviewBlock>
+
+                  <ReviewBlock
+                    number="06"
+                    title="Missed opportunities"
+                    description="Places where the conversation could have gone further."
+                  >
+                    {report.missed_opportunities.length ? (
+                      report.missed_opportunities.map((finding, index) => {
+                        const missed = detail?.missed_details.find(
+                          (item) => item.finding_index === index,
+                        );
+                        return missed ? (
+                          <article className={styles.finding} key={index}>
+                            <h4>{finding.title}</h4>
+                            {sourceNote(
+                              missed.prospect_signal,
+                              "What the prospect said",
+                            )}
+                            {sourceNote(
+                              missed.closer_response,
+                              "How you responded",
+                            )}
+                            <p>
+                              <strong>Explore next:</strong> {missed.follow_up}
+                            </p>
+                            <p>
+                              <strong>Possible value:</strong>{" "}
+                              {missed.potential_impact}
+                            </p>
+                          </article>
+                        ) : (
+                          findingCard(finding, index)
+                        );
+                      })
+                    ) : (
+                      <p className={styles.empty}>
+                        No missed opportunity was identified in this report.
+                      </p>
+                    )}
+                    {unlock("missed_opportunities")}
+                  </ReviewBlock>
+
+                  <ReviewBlock
+                    number="07"
+                    title="What the prospect may have meant"
+                  >
+                    {detail?.prospect_interpretations.length ? (
+                      <>
+                        <p className={styles.empty}>
+                          Possible interpretations to check, not facts about the
+                          person.
+                        </p>
+                        {detail.prospect_interpretations.map((item, index) => (
+                          <div className={styles.interpretation} key={index}>
+                            {sourceNote(item.source, "What was said")}
+                            <div>
+                              <p className={styles.label}>
+                                Possible concern · inference
+                              </p>
+                              <p>{item.possible_concern}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p className={styles.empty}>
+                        No separate interpretation is recorded in this report.
+                        The transcript preserves what was said; an underlying
+                        concern needs supporting evidence.
+                      </p>
+                    )}
+                    {unlock("prospect_interpretations")}
+                  </ReviewBlock>
+
+                  <div id={rewatchId} className={styles.anchor}>
                     <ReviewBlock
-                      key={index}
-                      number={`0${index + 2}`}
-                      title={finding.title}
+                      number="08"
+                      title="Your rewatch list"
+                      description="Start with these moments instead of replaying the whole call."
+                    >
+                      {rewatch.length ? (
+                        <div className={styles.rewatch}>
+                          {rewatch.map(
+                            ({ finding, evidence: item, label, kind }) => (
+                              <button
+                                type="button"
+                                key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
+                                data-kind={kind}
+                                onClick={() =>
+                                  onSelectEvidence(item, finding.title)
+                                }
+                              >
+                                <span className={styles.play}>
+                                  <Play size={17} aria-hidden="true" />
+                                </span>
+                                <span className={styles.clipCopy}>
+                                  <small>{label}</small>
+                                  <strong>{finding.title}</strong>
+                                </span>
+                                <span className={styles.clipTime}>
+                                  {time(item.start_ms)}–{time(item.end_ms)}
+                                </span>
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <p className={styles.empty}>
+                          No source-linked moments were produced for this
+                          report.
+                        </p>
+                      )}
+                      {unlock("rewatch")}
+                    </ReviewBlock>
+                  </div>
+
+                  <ReviewBlock
+                    number="09"
+                    title="Where the conversation changed"
+                  >
+                    {detail?.conversation_change ? (
+                      <>
+                        <div className={styles.sequence}>
+                          {sourceNote(
+                            detail.conversation_change.before,
+                            "Before",
+                          )}
+                          {sourceNote(
+                            detail.conversation_change.change,
+                            "The change",
+                          )}
+                          {sourceNote(
+                            detail.conversation_change.after,
+                            "After",
+                          )}
+                        </div>
+                        <p className={styles.why}>
+                          <strong>Possible effect · inference:</strong>{" "}
+                          {detail.conversation_change.possible_effect}
+                        </p>
+                      </>
+                    ) : (
+                      <p className={styles.empty}>
+                        A first breakpoint and its cause-and-effect sequence
+                        have not been established in this report.
+                      </p>
+                    )}
+                  </ReviewBlock>
+                </section>
+
+                <section
+                  className={styles.chapter}
+                  data-chapter="practice"
+                  id={`${prefix}-chapter-panel-practice`}
+                  role="region"
+                  aria-label="Practice and reflect"
+                  tabIndex={0}
+                  hidden={activeChapter !== "practice"}
+                >
+                  <div className={styles.chapterHeading}>
+                    <span className={styles.chapterRange}>10—12</span>
+                    <div>
+                      <p className={styles.eyebrow}>PRACTICE AND REFLECT</p>
+                      <h3>Turn the observation into a next-call move.</h3>
+                    </div>
+                    <span className={styles.chapterNote}>
+                      Based on this call
+                    </span>
+                  </div>
+
+                  <ReviewBlock
+                    number="10"
+                    title="Your sales skills"
+                    description="What this call shows, based on the evidence."
+                    tone="positive"
+                    expanded
+                  >
+                    {supportedDimensions.length > 0 ? (
+                      <div className={styles.skillLead} data-skill-summary>
+                        <div className={styles.skillLeadIntro}>
+                          <span
+                            className={styles.skillMarkWrap}
+                            aria-hidden="true"
+                          >
+                            <SkillMark />
+                          </span>
+                          <div>
+                            <p className={styles.eyebrow}>
+                              WHAT THIS CALL SHOWED
+                            </p>
+                            <p>
+                              A small set of supported observations to carry
+                              into your next conversation. Use them as a
+                              starting point for practice.
+                            </p>
+                          </div>
+                        </div>
+                        <div className={styles.skillGrid}>
+                          {supportedDimensions.map((dimension) => (
+                            <article key={dimension.dimension_id}>
+                              <strong>{dimension.label}</strong>
+                              <p>{dimension.observation}</p>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className={styles.empty}>
+                        No clear skill takeaway was recorded for this call.
+                      </p>
+                    )}
+                  </ReviewBlock>
+
+                  {detail?.ethics_notes.length ? (
+                    <section
+                      className={styles.ethicsBlock}
+                      aria-label="Ethics observations"
+                      hidden={!showHeading && activeReviewNumber !== "10"}
+                    >
+                      <div className={styles.ethicsHeading}>
+                        <p className={styles.eyebrow}>HUMAN REVIEW NOTE</p>
+                        <h3>Ethics observations</h3>
+                        <p>
+                          Source-linked notes for a human reviewer; no verdict
+                          is assigned.
+                        </p>
+                      </div>
+                      {detail.ethics_notes.map((note, index) => (
+                        <div key={index}>
+                          {sourceNote(
+                            note,
+                            "Ethics observation · for human review",
+                          )}
+                        </div>
+                      ))}
+                      {unlock("ethics_notes")}
+                    </section>
+                  ) : null}
+
+                  <div id={focusId} className={styles.anchor}>
+                    <ReviewBlock
+                      number="11"
+                      title="Your next-call focus"
+                      description="One behaviour to take into your next conversation."
                       tone="priority"
                     >
-                      {(() => {
-                        const fix = detail?.improvement_details.find(
-                          (item) => item.finding_index === index,
-                        );
-                        return fix ? (
-                          <>
-                            {sourceNote(fix.what_happened, "What happened")}
-                            <p className={styles.label}>Why it matters</p>
-                            <p>{fix.why_it_matters}</p>
-                            <p className={styles.label}>Do this instead</p>
-                            <p>{fix.replacement_behavior}</p>
-                          </>
-                        ) : (
-                          <>
-                            <p className={styles.label}>
-                              What to do differently
+                      {primary ? (
+                        <div className={styles.focus}>
+                          <Target size={24} aria-hidden="true" />
+                          <div>
+                            <h4>{primary.title}</h4>
+                            <p>
+                              {detail?.next_call_focus?.behavior ??
+                                primary.explanation}
                             </p>
-                            <p>{finding.explanation}</p>
-                            {evidence(finding)}
-                          </>
-                        );
-                      })()}
-                      <div className={styles.impact}>
-                        <TrendingUp size={16} aria-hidden="true" />
-                        <div>
-                          <strong>Business impact</strong>
-                          <p>Insufficient data for a reliable estimate.</p>
-                          <small>
-                            {detail?.improvement_details
-                              .find((item) => item.finding_index === index)
-                              ?.business_impact.missing_inputs.join(" · ") ??
-                              "Lead volume, conversion history and time or revenue data are needed to calculate this."}
-                          </small>
+                            {detail?.next_call_focus && (
+                              <p className={styles.target}>
+                                <strong>Your target:</strong>{" "}
+                                {detail.next_call_focus.target}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <p className={styles.empty}>
+                          A next-call focus has not been identified yet.
+                        </p>
+                      )}
                     </ReviewBlock>
-                  ))
-                ) : (
-                  <p className={styles.empty}>
-                    This report has no supported improvement to prioritise yet.
-                  </p>
-                )}
-                {unlock("improvements")}
-              </div>
-            </section>
-
-            <section
-              className={styles.chapter}
-              data-chapter="read"
-              id={`${prefix}-chapter-panel-read`}
-              role="region"
-              aria-label="Read the conversation"
-              tabIndex={0}
-              hidden={activeChapter !== "read"}
-            >
-              <div className={styles.chapterHeading}>
-                <span className={styles.chapterRange}>05—09</span>
-                <div>
-                  <p className={styles.eyebrow}>READ THE CONVERSATION</p>
-                  <h3>See where the call opened up or narrowed.</h3>
-                </div>
-                <span className={styles.chapterNote}>
-                  Moments stay linked to the source
-                </span>
-              </div>
-
-              <ReviewBlock
-                number="05"
-                title="Golden moments"
-                description={
-                  detail
-                    ? "Selected moments worth repeating."
-                    : "From your saved strengths; no separate golden-moment assessment yet."
-                }
-                tone="positive"
-              >
-                {golden.length ? (
-                  <div className={styles.golden}>
-                    {golden.map((finding, index) => (
-                      <div key={index}>
-                        <Gem size={17} aria-hidden="true" />
-                        <div>
-                          <h4>{finding.title}</h4>
-                          {detail && <p>{finding.explanation}</p>}
-                          {evidence(finding)}
-                        </div>
-                      </div>
-                    ))}
                   </div>
-                ) : (
-                  <p className={styles.empty}>
-                    {report.preview?.sections.golden_moments.hidden_count
-                      ? "More selected moments are available in your full report."
-                      : "No source-linked strength is available to replay yet."}
-                  </p>
-                )}
-                {unlock("golden_moments")}
-              </ReviewBlock>
 
-              <ReviewBlock
-                number="06"
-                title="Missed opportunities"
-                description="Places where the conversation could have gone further."
-              >
-                {report.missed_opportunities.length ? (
-                  report.missed_opportunities.map((finding, index) => {
-                    const missed = detail?.missed_details.find(
-                      (item) => item.finding_index === index,
-                    );
-                    return missed ? (
-                      <article className={styles.finding} key={index}>
-                        <h4>{finding.title}</h4>
-                        {sourceNote(
-                          missed.prospect_signal,
-                          "What the prospect said",
-                        )}
-                        {sourceNote(
-                          missed.closer_response,
-                          "How you responded",
-                        )}
-                        <p>
-                          <strong>Explore next:</strong> {missed.follow_up}
-                        </p>
-                        <p>
-                          <strong>Possible value:</strong>{" "}
-                          {missed.potential_impact}
-                        </p>
-                      </article>
-                    ) : (
-                      findingCard(finding, index)
-                    );
-                  })
-                ) : (
-                  <p className={styles.empty}>
-                    No missed opportunity was identified in this report.
-                  </p>
-                )}
-                {unlock("missed_opportunities")}
-              </ReviewBlock>
-
-              <ReviewBlock number="07" title="What the prospect may have meant">
-                {detail?.prospect_interpretations.length ? (
-                  <>
-                    <p className={styles.empty}>
-                      Possible interpretations to check, not facts about the
-                      person.
-                    </p>
-                    {detail.prospect_interpretations.map((item, index) => (
-                      <div className={styles.interpretation} key={index}>
-                        {sourceNote(item.source, "What was said")}
-                        <div>
-                          <p className={styles.label}>
-                            Possible concern · inference
-                          </p>
-                          <p>{item.possible_concern}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  <p className={styles.empty}>
-                    No separate interpretation is recorded in this report. The
-                    transcript preserves what was said; an underlying concern
-                    needs supporting evidence.
-                  </p>
-                )}
-                {unlock("prospect_interpretations")}
-              </ReviewBlock>
-
-              <div id={rewatchId} className={styles.anchor}>
-                <ReviewBlock
-                  number="08"
-                  title="Your rewatch list"
-                  description="Start with these moments instead of replaying the whole call."
-                >
-                  {rewatch.length ? (
-                    <div className={styles.rewatch}>
-                      {rewatch.map(
-                        ({ finding, evidence: item, label, kind }) => (
-                          <button
-                            type="button"
-                            key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
-                            data-kind={kind}
-                            onClick={() =>
-                              onSelectEvidence(item, finding.title)
-                            }
-                          >
-                            <span className={styles.play}>
-                              <Play size={17} aria-hidden="true" />
-                            </span>
-                            <span className={styles.clipCopy}>
-                              <small>{label}</small>
-                              <strong>{finding.title}</strong>
-                            </span>
-                            <span className={styles.clipTime}>
-                              {time(item.start_ms)}–{time(item.end_ms)}
-                            </span>
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  ) : (
-                    <p className={styles.empty}>
-                      No source-linked moments were produced for this report.
-                    </p>
-                  )}
-                  {unlock("rewatch")}
-                </ReviewBlock>
-              </div>
-
-              <ReviewBlock number="09" title="Where the conversation changed">
-                {detail?.conversation_change ? (
-                  <>
-                    <div className={styles.sequence}>
-                      {sourceNote(detail.conversation_change.before, "Before")}
-                      {sourceNote(
-                        detail.conversation_change.change,
-                        "The change",
-                      )}
-                      {sourceNote(detail.conversation_change.after, "After")}
-                    </div>
-                    <p className={styles.why}>
-                      <strong>Possible effect · inference:</strong>{" "}
-                      {detail.conversation_change.possible_effect}
-                    </p>
-                  </>
-                ) : (
-                  <p className={styles.empty}>
-                    A first breakpoint and its cause-and-effect sequence have
-                    not been established in this report.
-                  </p>
-                )}
-              </ReviewBlock>
-            </section>
-
-            <section
-              className={styles.chapter}
-              data-chapter="practice"
-              id={`${prefix}-chapter-panel-practice`}
-              role="region"
-              aria-label="Practice and reflect"
-              tabIndex={0}
-              hidden={activeChapter !== "practice"}
-            >
-              <div className={styles.chapterHeading}>
-                <span className={styles.chapterRange}>10—12</span>
-                <div>
-                  <p className={styles.eyebrow}>PRACTICE AND REFLECT</p>
-                  <h3>Turn the observation into a next-call move.</h3>
-                </div>
-                <span className={styles.chapterNote}>Based on this call</span>
-              </div>
-
-              <ReviewBlock
-                number="10"
-                title="Your sales skills"
-                description="What this call shows, based on the evidence."
-                tone="positive"
-                expanded
-              >
-                {supportedDimensions.length > 0 ? (
-                  <div className={styles.skillLead} data-skill-summary>
-                    <div className={styles.skillLeadIntro}>
-                      <span className={styles.skillMarkWrap} aria-hidden="true">
-                        <SkillMark />
-                      </span>
-                      <div>
-                        <p className={styles.eyebrow}>WHAT THIS CALL SHOWED</p>
-                        <p>
-                          A small set of supported observations to carry into
-                          your next conversation. Use them as a starting point
-                          for practice.
-                        </p>
-                      </div>
-                    </div>
-                    <div className={styles.skillGrid}>
-                      {supportedDimensions.map((dimension) => (
-                        <article key={dimension.dimension_id}>
-                          <strong>{dimension.label}</strong>
-                          <p>{dimension.observation}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className={styles.empty}>
-                    No clear skill takeaway was recorded for this call.
-                  </p>
-                )}
-              </ReviewBlock>
-
-              {detail?.ethics_notes.length ? (
-                <section
-                  className={styles.ethicsBlock}
-                  aria-label="Ethics observations"
-                >
-                  <div className={styles.ethicsHeading}>
-                    <p className={styles.eyebrow}>HUMAN REVIEW NOTE</p>
-                    <h3>Ethics observations</h3>
-                    <p>
-                      Source-linked notes for a human reviewer; no verdict is
-                      assigned.
-                    </p>
-                  </div>
-                  {detail.ethics_notes.map((note, index) => (
-                    <div key={index}>
-                      {sourceNote(
-                        note,
-                        "Ethics observation · for human review",
-                      )}
-                    </div>
-                  ))}
-                  {unlock("ethics_notes")}
-                </section>
-              ) : null}
-
-              <div id={focusId} className={styles.anchor}>
-                <ReviewBlock
-                  number="11"
-                  title="Your next-call focus"
-                  description="One behaviour to take into your next conversation."
-                  tone="priority"
-                >
-                  {primary ? (
-                    <div className={styles.focus}>
-                      <Target size={24} aria-hidden="true" />
-                      <div>
+                  <ReviewBlock
+                    number="12"
+                    title="Personalized practice"
+                    description="Rehearse the first improvement before your next call."
+                  >
+                    {detail?.practice && primary ? (
+                      <div className={styles.practice}>
                         <h4>{primary.title}</h4>
+                        <p>{detail.practice.instructions}</p>
                         <p>
-                          {detail?.next_call_focus?.behavior ??
-                            primary.explanation}
+                          <strong>You’ve done it when:</strong>{" "}
+                          {detail.practice.success_condition}
                         </p>
-                        {detail?.next_call_focus && (
-                          <p className={styles.target}>
-                            <strong>Your target:</strong>{" "}
-                            {detail.next_call_focus.target}
-                          </p>
-                        )}
+                        {evidence(primary)}
                       </div>
+                    ) : (
+                      <p className={styles.empty}>
+                        This saved report has no separately assessed drill or
+                        success target yet.
+                      </p>
+                    )}
+                  </ReviewBlock>
+                </section>
+
+                <section
+                  className={styles.chapter}
+                  data-chapter="close"
+                  id={`${prefix}-chapter-panel-close`}
+                  role="region"
+                  aria-label="Close the loop"
+                  tabIndex={0}
+                  hidden={activeChapter !== "close"}
+                >
+                  <div className={styles.chapterHeading}>
+                    <span className={styles.chapterRange}>13—14</span>
+                    <div>
+                      <p className={styles.eyebrow}>CLOSE THE LOOP</p>
+                      <h3>Leave with a grounded takeaway.</h3>
                     </div>
-                  ) : (
+                    <span className={styles.chapterNote}>
+                      A single call cannot show a trend
+                    </span>
+                  </div>
+
+                  <ReviewBlock number="13" title="Across-call pattern">
                     <p className={styles.empty}>
-                      A next-call focus has not been identified yet.
+                      Comparable multi-call history is not supplied for this
+                      report, so no trend or improvement claim is inferred.
                     </p>
-                  )}
-                </ReviewBlock>
-              </div>
+                  </ReviewBlock>
 
-              <ReviewBlock
-                number="12"
-                title="Personalized practice"
-                description="Rehearse the first improvement before your next call."
-              >
-                {detail?.practice && primary ? (
-                  <div className={styles.practice}>
-                    <h4>{primary.title}</h4>
-                    <p>{detail.practice.instructions}</p>
-                    <p>
-                      <strong>You’ve done it when:</strong>{" "}
-                      {detail.practice.success_condition}
-                    </p>
-                    {evidence(primary)}
-                  </div>
-                ) : (
-                  <p className={styles.empty}>
-                    This saved report has no separately assessed drill or
-                    success target yet.
-                  </p>
-                )}
-              </ReviewBlock>
-            </section>
-
-            <section
-              className={styles.chapter}
-              data-chapter="close"
-              id={`${prefix}-chapter-panel-close`}
-              role="region"
-              aria-label="Close the loop"
-              tabIndex={0}
-              hidden={activeChapter !== "close"}
-            >
-              <div className={styles.chapterHeading}>
-                <span className={styles.chapterRange}>13—14</span>
-                <div>
-                  <p className={styles.eyebrow}>CLOSE THE LOOP</p>
-                  <h3>Leave with a grounded takeaway.</h3>
-                </div>
-                <span className={styles.chapterNote}>
-                  A single call cannot show a trend
-                </span>
-              </div>
-
-              <ReviewBlock number="13" title="Across-call pattern">
-                <p className={styles.empty}>
-                  Comparable multi-call history is not supplied for this report,
-                  so no trend or improvement claim is inferred.
-                </p>
-              </ReviewBlock>
-
-              <ReviewBlock number="14" title="Final verdict">
-                <p className={styles.verdict}>
-                  {detail?.final_assessment.assessment ?? report.verdict}
-                </p>
-                {detail ? (
-                  <div className={styles.sequence}>
-                    <p>
-                      <strong>Keep doing:</strong>{" "}
-                      {detail.final_assessment.repeat}
-                    </p>
-                    <p>
-                      <strong>Fix first:</strong>{" "}
-                      {detail.final_assessment.fix_first}
-                    </p>
-                    <p>
-                      <strong>One focus:</strong>{" "}
-                      {detail.final_assessment.next_focus}
-                    </p>
-                  </div>
-                ) : (
-                  primary && (
-                    <p className={styles.finalFocus}>
-                      <strong>Fix first:</strong> {primary.title}
-                    </p>
-                  )
-                )}
-              </ReviewBlock>
-              {(
-                [
-                  ["objection_analysis", "Objections in your call"],
-                  ["closing_analysis", "Closing and next steps"],
-                ] as const
-              ).map(
-                ([section, title]) =>
-                  report[section].length > 0 && (
-                    <section
-                      key={section}
-                      className={styles.block}
-                      aria-label={title}
-                    >
-                      <div className={styles.blockHeading}>
-                        <h3>{title}</h3>
+                  <ReviewBlock number="14" title="Final verdict">
+                    {!showHeading && (
+                      <div className={styles.compactSourceContext}>
+                        <h4>Call summary</h4>
+                        <p>{report.summary}</p>
+                        <p>{report.verdict}</p>
+                        {detail?.diagnosis &&
+                          sourceNote(detail.diagnosis, "Diagnosis")}
+                        {detail?.outcome &&
+                          sourceNote(
+                            detail.outcome,
+                            "Observed outcome · draft",
+                          )}
                       </div>
-                      {report[section].map(findingCard)}
-                      {unlock(section)}
-                    </section>
-                  ),
-              )}
-            </section>
-          </div>
+                    )}
+                    <p className={styles.verdict}>
+                      {detail?.final_assessment.assessment ?? report.verdict}
+                    </p>
+                    {detail ? (
+                      <div className={styles.sequence}>
+                        <p>
+                          <strong>Keep doing:</strong>{" "}
+                          {detail.final_assessment.repeat}
+                        </p>
+                        <p>
+                          <strong>Fix first:</strong>{" "}
+                          {detail.final_assessment.fix_first}
+                        </p>
+                        <p>
+                          <strong>One focus:</strong>{" "}
+                          {detail.final_assessment.next_focus}
+                        </p>
+                      </div>
+                    ) : (
+                      primary && (
+                        <p className={styles.finalFocus}>
+                          <strong>Fix first:</strong> {primary.title}
+                        </p>
+                      )
+                    )}
+                  </ReviewBlock>
+                  {(
+                    [
+                      ["objection_analysis", "Objections in your call"],
+                      ["closing_analysis", "Closing and next steps"],
+                    ] as const
+                  ).map(
+                    ([section, title]) =>
+                      report[section].length > 0 && (
+                        <section
+                          key={section}
+                          className={styles.block}
+                          aria-label={title}
+                          hidden={!showHeading && activeReviewNumber !== "14"}
+                        >
+                          <div className={styles.blockHeading}>
+                            <h3>{title}</h3>
+                          </div>
+                          {report[section].map(findingCard)}
+                          {unlock(section)}
+                        </section>
+                      ),
+                  )}
+                </section>
+              </div>
+            </FocusedReview.Provider>
+          </ReviewDialog>
         </div>
       </div>
     </div>

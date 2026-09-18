@@ -1,6 +1,12 @@
 "use client";
 
-import { AudioLines, ArrowRight, LoaderCircle, RefreshCw } from "lucide-react";
+import {
+  ArrowRight,
+  AudioLines,
+  FolderOpen,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -234,8 +240,14 @@ export function CallsLibrary({
             className="panel calls-library-state"
             aria-labelledby="calls-library-sign-in"
           >
+            <span className="calls-library-state-icon" aria-hidden="true">
+              <FolderOpen size={28} />
+            </span>
             <h2 id="calls-library-sign-in">Sign in to see saved calls.</h2>
-            <p>Your account keeps calls and reports together.</p>
+            <p>
+              Keep your calls and reports together, then come back whenever you
+              are ready to review the next step.
+            </p>
             <Link href="/login" className="primary-button">
               Sign in <ArrowRight size={16} aria-hidden="true" />
             </Link>
@@ -353,6 +365,7 @@ export function CallsLibrary({
       authenticated={access?.authenticated === true}
       homeHref={studioHref}
       active="calls"
+      mobileFit={!embedded}
     >
       {content}
     </AcquisitionShell>

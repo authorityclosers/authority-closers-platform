@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-09-16T06:21:11.680Z",
+  "origin": "http://127.0.0.1:3124",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": true,
+  "results": [
+    {
+      "state": "C4",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    }
+  ]
+}

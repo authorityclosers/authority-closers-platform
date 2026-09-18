@@ -2,20 +2,18 @@
 
 import {
   AudioLines,
-  BookOpen,
-  ChevronRight,
   CircleUserRound,
   FolderOpen,
   LogIn,
   PanelLeftClose,
   PanelLeftOpen,
-  ShieldCheck,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { AccountNavigation } from "./account-navigation";
+import { LocalSettingsButton } from "./live-data-banner";
+import { ProfileMenu } from "./profile-menu";
 import styles from "./acquisition-shell.module.css";
 
 export function AcquisitionShell({
@@ -24,12 +22,14 @@ export function AcquisitionShell({
   homeHref = "/",
   active = "analyse",
   compactBusy = false,
+  mobileFit = false,
 }: {
   children: ReactNode;
   authenticated: boolean;
   homeHref?: string;
   active?: "analyse" | "calls";
   compactBusy?: boolean;
+  mobileFit?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -38,7 +38,6 @@ export function AcquisitionShell({
   const accountLabel = authenticated
     ? "Account & saved calls"
     : "Profile & account";
-  const breadcrumbLabel = active === "calls" ? "Saved calls" : "Analyse a call";
 
   useEffect(() => {
     if (!hasToggled.current) return;
@@ -51,6 +50,7 @@ export function AcquisitionShell({
       data-authenticated={authenticated}
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
+      data-mobile-fit={mobileFit}
     >
       <a className={styles.skip} href="#main-content">
         Skip to workspace
@@ -129,23 +129,8 @@ export function AcquisitionShell({
             <CircleUserRound size={18} aria-hidden="true" />
             <span>{accountLabel}</span>
           </Link>
+          <LocalSettingsButton className={styles.navLink} />
         </nav>
-        <div className={styles.sidebarNote}>
-          <Image
-            className={styles.dipakArt}
-            src="/media/dipak-learning-hero-v1.webp"
-            alt=""
-            width={640}
-            height={360}
-            sizes="208px"
-            loading="lazy"
-          />
-          <span className={styles.noteIcon} aria-hidden="true">
-            <BookOpen size={18} />
-          </span>
-          <strong>Better calls start with a closer look.</strong>
-          <p>Evidence first. A thoughtful second opinion.</p>
-        </div>
         <div className={styles.sidebarAccount}>
           <span className={styles.avatar} aria-hidden="true">
             {authenticated ? "AC" : "G"}
@@ -154,22 +139,16 @@ export function AcquisitionShell({
             <strong>{authenticated ? "AC account" : "Guest workspace"}</strong>
             <small>
               {authenticated
-                ? "Account and saved calls"
-                : "Private browser session"}
+                ? "Private calls and reports"
+                : "Free analysis in this browser"}
             </small>
           </span>
-          {authenticated ? (
-            <AccountNavigation compact />
-          ) : (
+          {!authenticated && (
             <Link className={styles.signIn} href="/login">
               <LogIn size={15} aria-hidden="true" />
-              Sign in
+              Sign in to save calls
             </Link>
           )}
-        </div>
-        <div className={styles.sidebarFooter}>
-          <ShieldCheck size={15} aria-hidden="true" />
-          Private by default
         </div>
       </aside>
       <div className={styles.content}>
@@ -193,12 +172,17 @@ export function AcquisitionShell({
               <small>AUTHORITY CLOSERS</small>
             </span>
           </Link>
-          <AccountNavigation compact />
+          <ProfileMenu
+            authenticated={authenticated}
+            accountHref={accountHref}
+          />
         </header>
-        <div className={styles.breadcrumb} aria-label="Current location">
-          Sales Xray <ChevronRight size={13} aria-hidden="true" />{" "}
-          <span>{breadcrumbLabel}</span>
-        </div>
+        <header className={styles.workspaceHeader}>
+          <ProfileMenu
+            authenticated={authenticated}
+            accountHref={accountHref}
+          />
+        </header>
         <main id="main-content" className={styles.main}>
           {children}
         </main>
@@ -227,6 +211,7 @@ export function AcquisitionShell({
           <CircleUserRound size={20} aria-hidden="true" />
           <span>{authenticated ? "Account" : "Profile"}</span>
         </Link>
+        <LocalSettingsButton className={styles.bottomLink} />
       </nav>
     </div>
   );

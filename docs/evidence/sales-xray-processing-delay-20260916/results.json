@@ -1,0 +1,1097 @@
+{
+  "capturedAt": "2026-09-16T06:25:22.548Z",
+  "origin": "http://127.0.0.1:3125",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": true,
+  "results": [
+    {
+      "state": "C2",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "delayed-C2-stable-layout",
+      "width": 1440,
+      "height": 900,
+      "before": [
+        {
+          "x": 392,
+          "y": 303.09375,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 463.09375,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 567.09375,
+          "width": 902,
+          "height": 89.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 392,
+          "y": 303.09375,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 463.09375,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 567.09375,
+          "width": 902,
+          "height": 89.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C2",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C2-to-held",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "delayed-C4-stable-layout",
+      "width": 1440,
+      "height": 900,
+      "before": [
+        {
+          "x": 392,
+          "y": 303.09375,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 463.09375,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 567.09375,
+          "width": 902,
+          "height": 89.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 392,
+          "y": 303.09375,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 463.09375,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 567.09375,
+          "width": 902,
+          "height": 89.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C4",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C4-to-held",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "delayed-C5-stable-layout",
+      "width": 1440,
+      "height": 900,
+      "before": [
+        {
+          "x": 392,
+          "y": 293.796875,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 305.453125,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 453.796875,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 557.796875,
+          "width": 902,
+          "height": 108.1875
+        }
+      ],
+      "after": [
+        {
+          "x": 392,
+          "y": 293.796875,
+          "width": 140,
+          "height": 140
+        },
+        {
+          "x": 560,
+          "y": 305.453125,
+          "width": 734,
+          "height": 116.671875
+        },
+        {
+          "x": 392,
+          "y": 453.796875,
+          "width": 902,
+          "height": 84
+        },
+        {
+          "x": 392,
+          "y": 557.796875,
+          "width": 902,
+          "height": 108.1875
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C5",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C5-to-held",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C2",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "delayed-C2-stable-layout",
+      "width": 1024,
+      "height": 626,
+      "before": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 89.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 89.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C2",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C2-to-held",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "delayed-C4-stable-layout",
+      "width": 1024,
+      "height": 626,
+      "before": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 89.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 89.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C4",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C4-to-held",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "delayed-C5-stable-layout",
+      "width": 1024,
+      "height": 626,
+      "before": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 108.1875
+        }
+      ],
+      "after": [
+        {
+          "x": 291,
+          "y": 147.390625,
+          "width": 112,
+          "height": 112
+        },
+        {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        {
+          "x": 291,
+          "y": 273.390625,
+          "width": 688,
+          "height": 68
+        },
+        {
+          "x": 291,
+          "y": 355.390625,
+          "width": 688,
+          "height": 108.1875
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C5",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C5-to-held",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C2",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "delayed-C2-stable-layout",
+      "width": 390,
+      "height": 844,
+      "before": [
+        {
+          "x": 33,
+          "y": 262.703125,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 391.96875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 503.96875,
+          "width": 324,
+          "height": 83.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 33,
+          "y": 262.703125,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 391.96875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 503.96875,
+          "width": 324,
+          "height": 83.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C2",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C2-to-held",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "delayed-C4-stable-layout",
+      "width": 390,
+      "height": 844,
+      "before": [
+        {
+          "x": 33,
+          "y": 262.703125,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 391.96875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 503.96875,
+          "width": 324,
+          "height": 83.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 33,
+          "y": 262.703125,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 391.96875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 503.96875,
+          "width": 324,
+          "height": 83.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C4",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C4-to-held",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "delayed-C5-stable-layout",
+      "width": 390,
+      "height": 844,
+      "before": [
+        {
+          "x": 33,
+          "y": 253.40625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 238.140625,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 382.671875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 494.671875,
+          "width": 324,
+          "height": 102.1875
+        }
+      ],
+      "after": [
+        {
+          "x": 33,
+          "y": 253.40625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 125,
+          "y": 238.140625,
+          "width": 232,
+          "height": 126.53125
+        },
+        {
+          "x": 33,
+          "y": 382.671875,
+          "width": 324,
+          "height": 94
+        },
+        {
+          "x": 33,
+          "y": 494.671875,
+          "width": 324,
+          "height": 102.1875
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C5",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C5-to-held",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C2",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "delayed-C2-stable-layout",
+      "width": 375,
+      "height": 667,
+      "before": [
+        {
+          "x": 31,
+          "y": 121,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121.9375,
+          "width": 225,
+          "height": 94.125
+        },
+        {
+          "x": 31,
+          "y": 225,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 327,
+          "width": 313,
+          "height": 75.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 31,
+          "y": 121,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121.9375,
+          "width": 225,
+          "height": 94.125
+        },
+        {
+          "x": 31,
+          "y": 225,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 327,
+          "width": 313,
+          "height": 75.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C2",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C2-to-held",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "delayed-C4-stable-layout",
+      "width": 375,
+      "height": 667,
+      "before": [
+        {
+          "x": 31,
+          "y": 132.65625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        {
+          "x": 31,
+          "y": 248.3125,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 350.3125,
+          "width": 313,
+          "height": 75.59375
+        }
+      ],
+      "after": [
+        {
+          "x": 31,
+          "y": 132.65625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        {
+          "x": 31,
+          "y": 248.3125,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 350.3125,
+          "width": 313,
+          "height": 75.59375
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C4",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C4-to-held",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "delayed-C5-stable-layout",
+      "width": 375,
+      "height": 667,
+      "before": [
+        {
+          "x": 31,
+          "y": 132.65625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        {
+          "x": 31,
+          "y": 248.3125,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 350.3125,
+          "width": 313,
+          "height": 94.1875
+        }
+      ],
+      "after": [
+        {
+          "x": 31,
+          "y": 132.65625,
+          "width": 80,
+          "height": 96
+        },
+        {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        {
+          "x": 31,
+          "y": 248.3125,
+          "width": 313,
+          "height": 94
+        },
+        {
+          "x": 31,
+          "y": 350.3125,
+          "width": 313,
+          "height": 94.1875
+        }
+      ],
+      "mutations": [],
+      "verified": true
+    },
+    {
+      "state": "delayed-C5",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 10
+    },
+    {
+      "state": "delayed-C5-to-held",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    }
+  ]
+}

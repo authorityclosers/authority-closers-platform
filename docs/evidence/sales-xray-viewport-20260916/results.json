@@ -1,0 +1,449 @@
+{
+  "capturedAt": "2026-09-16T03:38:20.655Z",
+  "origin": "http://127.0.0.1:3119",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": true,
+  "results": [
+    {
+      "state": "entry",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "shell-keyboard",
+      "width": 1440,
+      "verified": true
+    },
+    {
+      "state": "selected",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "primaryBottom": 616.625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "verification",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "primaryBottom": 693.625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "uploading",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 1440,
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "calls",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "apiRequests": 1
+    },
+    {
+      "state": "entry",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "shell-keyboard",
+      "width": 1024,
+      "verified": true
+    },
+    {
+      "state": "selected",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "primaryBottom": 533.4375,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "verification",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "primaryBottom": 610.4375,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "uploading",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 1024,
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "calls",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "apiRequests": 1
+    },
+    {
+      "state": "entry",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "shell-keyboard",
+      "width": 390,
+      "verified": true
+    },
+    {
+      "state": "selected",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "primaryBottom": 577.0625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "verification",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "primaryBottom": 654.0625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "uploading",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 390,
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "calls",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "apiRequests": 1
+    },
+    {
+      "state": "entry",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "shell-keyboard",
+      "width": 375,
+      "verified": true
+    },
+    {
+      "state": "selected",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "primaryBottom": 483.0625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "verification",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "primaryBottom": 560.0625,
+      "stage": "upload",
+      "apiRequests": 5
+    },
+    {
+      "state": "uploading",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 375,
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C4",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "C5",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "held",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "calls",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "apiRequests": 1
+    }
+  ]
+}

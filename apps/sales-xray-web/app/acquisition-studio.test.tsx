@@ -1,11 +1,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const { navigateToAccount } = vi.hoisted(() => ({
+const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
   navigateToAccount: vi.fn(),
+  replaceToLogin: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: navigateToAccount }),
+  useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin }),
 }));
 import Page from "./page";
 import { remainingAllowanceLabel, savedCallsHref } from "./acquisition-studio";
@@ -38,6 +39,7 @@ let existing: boolean,
   claimed: boolean,
   failedUpload: boolean,
   sessionUnauthorized: boolean,
+  savedSubmissionUnauthorized: boolean,
   processingMode: "running" | "held" | null,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
@@ -47,6 +49,7 @@ let planFailure: { status: number; body: unknown } | null;
 let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
+let savedLookupDelayed: boolean;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -96,6 +99,7 @@ async function consent() {
 
 beforeEach(() => {
   navigateToAccount.mockReset();
+  replaceToLogin.mockReset();
   vi.useFakeTimers();
   calls = [];
   existing = false;
@@ -103,6 +107,7 @@ beforeEach(() => {
   claimed = false;
   failedUpload = false;
   sessionUnauthorized = false;
+  savedSubmissionUnauthorized = false;
   processingMode = null;
   lookupUnavailable = false;
   deletionDenied = false;
@@ -112,6 +117,7 @@ beforeEach(() => {
   planFailureOnce = false;
   quoteFailure = null;
   analysisPaused = false;
+  savedLookupDelayed = false;
   localStorage.clear();
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
@@ -127,6 +133,15 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (path: string, init: RequestInit = {}) => {
       calls.push({ path, init });
+      if (savedLookupDelayed && path.endsWith(`/submissions/${submissionId}`)) {
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      }
       if (path === "/v1/me/workspaces")
         return response({
           person_id: "person-1",
@@ -198,6 +213,12 @@ beforeEach(() => {
         progressOverride
       )
         return response(progressOverride);
+      if (
+        path.endsWith(`/submissions/${submissionId}`) &&
+        init.method !== "DELETE" &&
+        savedSubmissionUnauthorized
+      )
+        return response({}, 401);
       if (path.endsWith(`/submissions/${submissionId}`))
         return init.method === "DELETE"
           ? deletionDenied
@@ -317,25 +338,32 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
   expect(container.textContent).not.toContain("Call length");
   expect(container.textContent).toContain(
-    "Review status: draft; Dipak has not adjudicated this report.",
+    "Draft coaching; not adjudicated by Dipak.",
   );
   expect(container.textContent).toContain(`Source: ${envelope.source_label}.`);
   const details = container.querySelector<HTMLDetailsElement>(
-    ".studio-report-details",
+    ".studio-report details",
   );
   expect(details).not.toBeNull();
   expect(details?.open).toBe(false);
+  await act(async () => details?.querySelector("summary")?.click());
+  expect(details?.open).toBe(true);
+  expect(details?.textContent).toContain("Source:");
+  expect(details?.textContent).toContain("Speaker labels");
+  expect(details?.querySelector('a[role="menuitem"]')?.textContent).toContain(
+    "Sign in to save this call",
+  );
   expect(
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(3);
+  ).toHaveLength(4);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await click("Transcript & moments");
+  await click("Moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 
@@ -350,7 +378,11 @@ it.each([
     { detail: "private-provider-context" },
     "Analysis approval is unavailable",
   ],
-  [401, { detail: "private-provider-context" }, "Sign in again"],
+  [
+    401,
+    { detail: "private-provider-context" },
+    "guest session is no longer active",
+  ],
 ])(
   "preserves the uploaded call after plan denial %s %# and offers the right recovery",
   async (status, body, expected) => {
@@ -488,6 +520,88 @@ it("does not treat the advertised trial allowance as confirmed for a saved selec
   expect(container.textContent).not.toContain("Up to 100m trial allowance");
 });
 
+it("keeps a saved selector opaque when its creating session is unavailable", async () => {
+  savedSubmissionUnauthorized = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+
+  expect(container.textContent).toContain(
+    "That saved call belongs to another browser session",
+  );
+  expect(replaceToLogin).not.toHaveBeenCalled();
+  expect(calls.some((call) => call.path.endsWith("/report"))).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/transcript"))).toBe(false);
+  expect(
+    calls.some(
+      (call) => call.path.endsWith("/source") && call.init.method === "GET",
+    ),
+  ).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
+});
+
+it("opens a normally saved call when its session remains valid", async () => {
+  existing = true;
+  accepted = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(calls.some((call) => call.path.endsWith("/report"))).toBe(true);
+  expect(container.textContent).not.toContain("Start a new call");
+});
+
+it("offers a retry after a saved-call timeout without losing its opaque selector", async () => {
+  existing = true;
+  savedLookupDelayed = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(12_000));
+  await flush();
+  expect(container.textContent).toContain(
+    "Sales Xray is taking longer than expected",
+  );
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    calls.filter(
+      ({ init }) => init.method === "PUT" || init.method === "DELETE",
+    ),
+  ).toHaveLength(0);
+  savedLookupDelayed = false;
+  accepted = true;
+  await click("Check again");
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+});
+
+it("lets a guest start a new upload without clearing a stale opaque selector", async () => {
+  savedSubmissionUnauthorized = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+
+  await click("Start a new call");
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+});
+
 it.each([
   [0, "Remaining analysis time · 0m 00s · exhausted"],
   [45, "Remaining analysis time · 0m 45s"],
@@ -534,7 +648,8 @@ it("shows the live processing stages without inventing a percentage", async () =
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
   expect(container.querySelector('[data-phase="C2"]')).not.toBeNull();
-  expect(container.querySelector('[data-compact-busy="true"]')).not.toBeNull();
+  expect(container.querySelector('[data-mobile-fit="true"]')).not.toBeNull();
+  expect(container.querySelector('[data-compact-busy="true"]')).toBeNull();
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "In progress",
   );
@@ -548,14 +663,84 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
 });
 
+it("shows delayed-update guidance without changing progress, identity or submitting more work", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(60_001));
+  await flush();
+  expect(
+    container.querySelector('[data-update-delayed="true"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Transcribing your call",
+  );
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "Queued",
+  );
+  expect(container.querySelector('[data-paused="true"]')).toBeNull();
+  expect(container.querySelector('a[href="/calls"]')?.textContent).toBeTruthy();
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "completed",
+    automatic_progression: true,
+    has_report: false,
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "running" },
+    ],
+  };
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(
+    container.querySelector('[data-update-delayed="false"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Checking the conversation",
+  );
+
+  progressOverride = { ...progress, has_report: true };
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.querySelector("[data-update-delayed]")).toBeNull();
+  expect(container.querySelector('[role="tab"]')?.textContent).toBe("Overview");
+});
+
+it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(60_001));
+  processingMode = "held";
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.querySelector("[data-update-delayed]")).toBeNull();
+  expect(container.textContent).toContain("Analysis paused");
+  expect(container.textContent).toContain(
+    "The completed transcript stays attached",
+  );
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
 it("shows saved completed work when an uncertain stage pauses processing", async () => {
   existing = true;
   processingMode = "held";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  expect(container.textContent).toContain(
-    "We paused while checking the conversation",
-  );
+  expect(container.textContent).toContain("Analysis paused");
   expect(container.textContent).not.toContain("YOUR NEXT CALL CAN BE BETTER");
   expect(container.textContent).not.toContain("WHAT YOU’LL GET");
   expect(container.textContent).toContain(
@@ -743,7 +928,9 @@ it.each(["failed", "cancelled"])(
     expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
       "Your call needs attention",
     );
-    expect(container.querySelector('svg[data-paused="true"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-phase][data-paused="true"]'),
+    ).not.toBeNull();
     expect(container.textContent).toContain(
       "A completed transcript has not been confirmed yet",
     );
@@ -937,21 +1124,24 @@ it("opens an explicitly selected account call despite an unrelated guest claim",
   expect(container.querySelector('input[type="file"]')).not.toBeNull();
 });
 
-it("expands playback controls without replacing the saved source or restarting analysis", async () => {
+it("keeps report audio in the fixed dock without remounting the saved source", async () => {
   existing = true;
   claimed = true;
   accepted = true;
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
-  const savedAudio = container.querySelector("#acquisition-saved-audio audio");
+  const savedAudio = container.querySelector(
+    '[aria-label="Call audio player"] audio',
+  );
   const source = savedAudio?.getAttribute("src");
   expect(source).toContain(`/submissions/${submissionId}/source`);
-  expect(button("Playback").getAttribute("aria-expanded")).toBe("false");
-  await click("Playback");
-  expect(button("Hide player").getAttribute("aria-expanded")).toBe("true");
-  await click("Hide player");
-  expect(container.querySelector("#acquisition-saved-audio audio")).toBe(
-    savedAudio,
+  expect(container.querySelector("#acquisition-saved-audio audio")).toBeNull();
+  expect(container.querySelectorAll("audio")).toHaveLength(1);
+  expect(
+    container.querySelector('[aria-label="Seek recording"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[aria-label="Call audio player"]')).toBe(
+    savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);

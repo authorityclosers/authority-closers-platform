@@ -19,6 +19,70 @@
 .overview :where(p, h2, h3, h4) {
   margin-top: 0;
 }
+/* The acquisition route uses the compact dashboard; retain the full source
+   body for review sheets, the legacy reader and unabridged print. */
+@media screen {
+  .overview[data-compact="true"] > .resultLead,
+  .overview[data-compact="true"] > .takeawayGrid,
+  .overview[data-compact="true"] > .workspaceLayout > .aboveFold,
+  .overview[data-compact="true"] > .workspaceLayout > .insightRail {
+    display: none;
+  }
+  .overview[data-compact="true"] > .workspaceLayout {
+    display: block;
+  }
+  .chapterStack[data-focused="true"] .chapterHeading,
+  .chapterStack[data-focused="true"] .groupHeading,
+  .overview[data-compact="true"] .backToOverview {
+    display: none;
+  }
+  .chapterStack[data-focused="true"]
+    [data-review-point]
+    > .blockHeading
+    .number,
+  .chapterStack[data-focused="true"] [data-review-point] > .blockHeading h3 {
+    display: none;
+  }
+  .chapterStack[data-focused="true"] [data-review-point] > .blockHeading {
+    margin-bottom: 10px;
+  }
+  .chapterStack[data-focused="true"] .chapter {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .chapterStack[data-focused="true"] .block {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .chapterStack[data-focused="true"] .block[hidden],
+  .chapterStack[data-focused="true"] .ethicsBlock[hidden] {
+    display: none;
+  }
+  .chapterStack[data-focused="true"] .anchor {
+    scroll-margin-top: 0;
+  }
+  .chapterStack[data-focused="true"] .verdict {
+    font-family: inherit;
+    font-weight: 750;
+    font-size: 20px !important;
+  }
+}
+@media print {
+  .compactSourceContext {
+    display: none;
+  }
+  .block[hidden],
+  .ethicsBlock[hidden] {
+    display: block !important;
+  }
+  .improvementTabPanel[hidden] {
+    display: block !important;
+  }
+}
 
 .intro {
   display: grid;
@@ -1215,6 +1279,28 @@
   cursor: pointer;
 }
 
+.evidenceControls {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 220px);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.evidenceQuote {
+  grid-column: 1 / -1;
+  order: 2;
+}
+
+.evidenceControls .timestamp,
+.evidenceControls .evidenceWaveform {
+  order: 1;
+}
+
+.evidenceWaveform {
+  height: 28px;
+}
+
 .overview :global(.studio-finding-evidence) {
   margin-top: 15px;
   padding-top: 12px;
@@ -1241,6 +1327,17 @@
   color: var(--ink-soft);
   font-size: 14px;
   line-height: 1.65;
+}
+
+@media (max-width: 560px) {
+  .evidenceControls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .evidenceWaveform {
+    width: min(100%, 220px);
+  }
 }
 
 .overview :global(.studio-finding-evidence) blockquote + blockquote {
@@ -1553,5 +1650,396 @@
 
   .chapter[data-chapter="start"] {
     page-break-before: auto;
+  }
+}
+
+/* Report overview presentation: compact metrics and source-backed bento cards. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.overview .resultLead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  margin: 0 0 18px;
+  padding: 4px 0 0;
+  border: 0;
+}
+
+.overview .resultLead .sourceDetails,
+.overview .resultLead .sourceDetails[open] {
+  grid-area: auto;
+  grid-column: 1 / -1;
+  grid-row: auto;
+}
+
+.resultLeadCopy {
+  min-width: 0;
+}
+
+.resultLead h1 {
+  max-width: 18ch;
+  margin: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 1.02;
+}
+
+.resultLead .heroSubcopy {
+  max-width: 68ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.resultLead .heroMeta {
+  grid-column: auto;
+  margin-top: 0;
+}
+
+.reportMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric {
+  display: grid;
+  min-width: 0;
+  min-height: 92px;
+  align-content: center;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid #dce6eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.metric span {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.metric strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.metricAction {
+  border-color: #f0c8aa;
+  background: #fff8f1;
+}
+
+.takeawayGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.takeawayCard {
+  display: grid;
+  min-width: 0;
+  min-height: 184px;
+  align-content: start;
+  gap: 8px;
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.takeawayCardLead {
+  grid-column: span 4;
+  border-color: #b3ded5;
+  background: linear-gradient(145deg, #effaf7, #fff);
+}
+
+.takeawayCardMint,
+.takeawayCardOrange,
+.takeawayCardBlue,
+.takeawayCardViolet {
+  grid-column: span 2;
+}
+
+.takeawayCardMint {
+  border-color: #b3ded5;
+  background: #f2fbf8;
+}
+
+.takeawayCardOrange {
+  border-color: #f0c8aa;
+  background: #fff7ef;
+}
+
+.takeawayCardBlue {
+  border-color: #c8d8f1;
+  background: #f5f8ff;
+}
+
+.takeawayCardViolet {
+  border-color: #d8d0f4;
+  background: #faf8ff;
+}
+
+.takeawayCard .eyebrow {
+  margin-bottom: 2px;
+}
+
+.takeawayCard h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.takeawayCard p:not(.eyebrow) {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.takeawayCardLead h2 {
+  font-size: clamp(22px, 2.6vw, 30px);
+}
+
+.takeawayAction,
+.inlineAction {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  align-self: end;
+  gap: 8px;
+  width: fit-content;
+  margin-top: auto;
+  padding: 9px 13px;
+  border: 1px solid #0f766e;
+  border-radius: 9px;
+  background: #0f766e;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.inlineAction {
+  border-color: currentColor;
+  background: transparent;
+  color: var(--positive);
+}
+
+.takeawayCardOrange .inlineAction {
+  color: var(--priority);
+}
+
+.takeawayCardViolet .inlineAction {
+  color: #5541a9;
+}
+
+.takeawayAction:focus-visible,
+.inlineAction:focus-visible,
+.takeawayControls button:focus-visible,
+.takeawayPills button:focus-visible,
+.improvementTabList button:focus-visible {
+  outline: 3px solid #6d7ce0;
+  outline-offset: 3px;
+}
+
+.takeawayControls,
+.takeawayPills {
+  display: none;
+}
+
+.improvementTabs {
+  margin-top: 15px;
+}
+
+.improvementTabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.improvementTabList button {
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.improvementTabList button[aria-selected="true"] {
+  border-bottom-color: var(--positive);
+  color: var(--positive);
+}
+
+.improvementTabPanel {
+  min-height: 66px;
+  padding-top: 2px;
+}
+
+.improvementTabPanel[hidden] {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .resultLead {
+    gap: 14px;
+  }
+
+  .resultLead .sourceDetails,
+  .resultLead .sourceDetails[open] {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .resultLead h1 {
+    font-size: clamp(32px, 10vw, 42px);
+  }
+
+  .reportMetrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .metric {
+    min-height: 82px;
+    padding: 10px 8px;
+  }
+
+  .metric span {
+    font-size: 10px;
+  }
+
+  .metric strong {
+    font-size: 18px;
+  }
+
+  .takeawayGrid {
+    display: block;
+    margin-bottom: 9px;
+  }
+
+  .takeawayCard {
+    min-height: 300px;
+    padding: 22px;
+  }
+
+  .takeawayCard:not([data-active="true"]) {
+    display: none;
+  }
+
+  .takeawayCard h2,
+  .takeawayCardLead h2 {
+    font-size: 26px;
+  }
+
+  .takeawayCard p:not(.eyebrow) {
+    font-size: 16px;
+    line-height: 1.62;
+  }
+
+  .takeawayAction,
+  .inlineAction {
+    min-height: 48px;
+    padding-inline: 17px;
+    font-size: 14px;
+  }
+
+  .takeawayControls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 8px 0 10px;
+  }
+
+  .takeawayControls button {
+    display: inline-grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 24px;
+    cursor: pointer;
+  }
+
+  .takeawayDots {
+    display: flex;
+    gap: 8px;
+  }
+
+  .takeawayDots span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #dce5ed;
+  }
+
+  .takeawayDots span[data-active="true"] {
+    background: var(--positive);
+  }
+
+  .takeawayPills {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scrollbar-width: none;
+  }
+
+  .takeawayPills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .takeawayPills button {
+    min-height: 44px;
+    flex: 0 0 auto;
+    padding: 8px 15px;
+    border: 0;
+    border-radius: 999px;
+    background: #eff3f6;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .takeawayPills button[aria-selected="true"] {
+    background: var(--positive);
+    color: #fff;
   }
 }

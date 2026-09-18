@@ -75,6 +75,199 @@ async function render(value = report()) {
   );
 }
 
+it("keeps compact cards tied to the full source reader without showing an entire chapter", async () => {
+  const value = report();
+  value.summary = "पूर्ण सारांश " + "Long source-backed summary. ".repeat(60);
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+  const dashboard = container.querySelector(
+    'section[aria-label="Call overview"]',
+  )!;
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(6);
+  const opener = dashboard.querySelector<HTMLButtonElement>(
+    '[aria-label="Open review: Key takeaway"]',
+  )!;
+  opener.focus();
+  await act(async () => opener.click());
+  const dialog = container.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain(value.summary);
+  expect(
+    dialog.querySelectorAll("[data-review-point]:not([hidden])"),
+  ).toHaveLength(1);
+  expect(
+    dialog
+      .querySelector("[data-review-point]:not([hidden])")
+      ?.getAttribute("data-review-point"),
+  ).toBe("14");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Close review point"]')!
+      .click(),
+  );
+  expect(document.activeElement).toBe(opener);
+});
+
+it("keeps all actual review points reachable through compact pagination and next/previous", async () => {
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={report()}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+  const dashboard = container.querySelector(
+    'section[aria-label="Call overview"]',
+  )!;
+  const nextPage = dashboard.querySelector<HTMLButtonElement>(
+    '[aria-label="Next review points"]',
+  )!;
+  const seen: string[] = [];
+  do {
+    for (const item of dashboard.querySelectorAll(
+      "li:not([hidden]) [data-insight-number]",
+    ))
+      seen.push(item.getAttribute("data-insight-number")!);
+    if (nextPage.disabled) break;
+    await act(async () => nextPage.click());
+  } while (true);
+  expect(seen).toEqual([
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+  ]);
+  await act(async () =>
+    dashboard
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Open review: Keep doing this"]',
+      )!
+      .click(),
+  );
+  for (let index = 0; index < seen.length; index++) {
+    expect(
+      container
+        .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
+        ?.getAttribute("data-review-point"),
+    ).toBe(seen[index]);
+    if (index < seen.length - 1)
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>("[data-review-next]")!
+          .click(),
+      );
+  }
+  expect(
+    container.querySelector<HTMLButtonElement>("[data-review-next]")!.disabled,
+  ).toBe(true);
+});
+
+it("plays only the exact supported strength from the compact Keep card", async () => {
+  const value = report();
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+  const keep = container.querySelector('[data-overview-card="1"]')!;
+  const listen = [...keep.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.trim() === "Listen",
+  )!;
+  await act(async () => listen.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.strengths[0].evidence[0],
+    value.strengths[0].title,
+  );
+  value.strengths = [];
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+  expect(
+    container.querySelector('[data-overview-card="1"]')?.textContent,
+  ).not.toContain("Listen");
+});
+
+it("links improvement tabs and supports arrow-key navigation without modifying evidence", async () => {
+  const value = parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: fixture.report,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Open review: First thing to change"]',
+      )!
+      .click(),
+  );
+  const tabs = container.querySelector(
+    '[role="dialog"] [aria-label="Improvement detail"]',
+  )!;
+  const first = tabs.querySelector<HTMLButtonElement>('[role="tab"]')!;
+  first.focus();
+  await act(async () =>
+    first.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  const selected = tabs.querySelector('[aria-selected="true"]')!;
+  expect(selected.textContent).toBe("Why it matters");
+  expect(document.activeElement).toBe(selected);
+  const panel = document.getElementById(
+    selected.getAttribute("aria-controls")!,
+  )!;
+  expect(panel.hidden).toBe(false);
+  expect(panel.textContent).toBe(
+    value.overview!.improvement_details[0].why_it_matters,
+  );
+  expect(select).not.toHaveBeenCalled();
+});
+
 it("presents the supplied priorities and one focus without generating scores, estimates or history", async () => {
   const value = report();
   await render(value);
@@ -301,6 +494,34 @@ it("keeps every chapter mounted while the review map opens one section", async (
   expect(document.activeElement).toBe(
     container.querySelector('[data-insight-number="05"]'),
   );
+});
+
+it("opens a bounded review dialog with point navigation and Escape recovery", async () => {
+  await render();
+  const point = container.querySelector<HTMLButtonElement>(
+    '[data-insight-number="05"]',
+  )!;
+  await act(async () => point.click());
+  expect(
+    container.querySelector('[role="dialog"][aria-modal="true"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Close review point"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[data-review-point="05"]')).not.toBeNull();
+  expect(container.textContent).toContain("Previous point");
+  expect(container.textContent).toContain("Next point");
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>("[data-review-next]")!.click(),
+  );
+  expect(
+    container.querySelector('[aria-current="true"]')?.textContent,
+  ).toContain("06");
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(point);
 });
 
 it("shows the impact limitations for the third detailed priority too", async () => {

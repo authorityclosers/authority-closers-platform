@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="asset-title asset-description">
+  <title id="asset-title">Waves Desktop Transparent</title>
+  <desc id="asset-description">Pure-vector ambient backdrop. No raster, no embedded fonts, no motion. Decorative; set aria-hidden when placed behind content.</desc>
+  <defs>
+    <filter id="sx-shadow" x="-40%" y="-40%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#163E35" flood-opacity=".095"/>
+    </filter>
+    <filter id="sx-small-shadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163E35" flood-opacity=".06"/>
+    </filter>
+    <linearGradient id="sx-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFCFB"/>
+    </linearGradient>
+    <linearGradient id="sx-wave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#DFEEE7" stop-opacity=".72"/>
+      <stop offset="100%" stop-color="#F8FBF9" stop-opacity=".15"/>
+    </linearGradient>
+    <radialGradient id="sx-halo">
+      <stop offset="0%" stop-color="#E8F5ED" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#F9FBFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="720.0" cy="414.0" rx="532.8" ry="369.0" fill="url(#sx-halo)"/>
+  <g id="lower-waves">
+    <path d="M0 603.0 C244.8 594.0 388.8 846.0 720.0 846.0 C1036.8 855.0 1195.2 684.0 1440 648.0 L1440 900 H0 Z" fill="url(#sx-wave)"/>
+    <path d="M0 729.0 C302.4 693.0 475.20000000000005 882.0 878.4 864.0 S1252.8 756.0 1440 801.0 V900 H0Z" fill="#E7F1EA" opacity=".46"/>
+    <path d="M0 765.0 C316.8 711.0 432.0 882.0 864.0 882.0 S1281.6 783.0 1440 801.0" fill="none" stroke="#C9DED4" stroke-width=".8" opacity=".65"/>
+  </g>
+</svg>

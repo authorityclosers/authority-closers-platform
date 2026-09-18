@@ -103,6 +103,22 @@ it("passes through unauthenticated sessions and selected sessions without contex
   expect(fetchMock).toHaveBeenCalledOnce();
 });
 
+it("does not announce a confirmed session while access is still pending", async () => {
+  const pending = deferred<Response>();
+  fetchMock.mockReturnValueOnce(pending.promise);
+  await mount();
+  expect(container.querySelector("ac-preloader")?.getAttribute("phase")).toBe(
+    "session",
+  );
+  expect(container.textContent).not.toContain("Session found");
+  expect(
+    container.querySelector("ac-preloader")?.getAttribute("environment"),
+  ).toBe("production");
+  pending.resolve(response({}, 401));
+  await flush();
+  expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
+});
+
 it("never auto-selects a sole workspace and posts only a listed tenant on explicit choice", async () => {
   const choices = {
     ...workspaceChoices(),

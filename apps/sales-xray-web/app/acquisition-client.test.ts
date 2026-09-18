@@ -41,7 +41,7 @@ describe("acquisition permission recovery", () => {
     );
     await expect(acquisition(path)).rejects.toMatchObject({
       status: 401,
-      message: expect.stringContaining("Sign in again"),
+      message: expect.stringContaining("guest session is no longer active"),
     });
   });
 
