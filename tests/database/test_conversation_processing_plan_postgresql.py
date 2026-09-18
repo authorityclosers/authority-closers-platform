@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 
+from ac_platform.conversation_intelligence.activation_contract import AcquisitionStagePolicy
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
     ConversationApplication,
@@ -412,27 +413,48 @@ def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
                     key="hosted-config-v2",
                 )
             current = parse_registry_config(config_view["configuration"])
-            setup.bundle_box["bundle"] = setup.bundle.model_copy(
-                update={
-                    "stages": tuple(
-                        stage.model_copy(
-                            update={
-                                "configuration_sha256": config_view["configuration_sha256"],
-                                **(
-                                    {
-                                        "provider_id": "elevenlabs",
-                                        "model_id": "scribe_v2",
-                                        "recipe_revision": TRANSCRIPT_RECIPE,
-                                    }
-                                    if stage.stage == "C2"
-                                    else {}
-                                ),
+            stages = tuple(
+                stage.model_copy(
+                    update={
+                        "configuration_sha256": config_view["configuration_sha256"],
+                        **(
+                            {
+                                "provider_id": "elevenlabs",
+                                "model_id": "scribe_v2",
+                                "recipe_revision": TRANSCRIPT_RECIPE,
                             }
-                        )
-                        for stage in setup.bundle.stages
-                    )
+                            if stage.stage == "C2"
+                            else {}
+                        ),
+                    }
+                )
+                for stage in setup.bundle.stages
+            )
+            policy = setup.bundle.acquisition_policy
+            assert policy is not None
+            policy_stages = tuple(
+                AcquisitionStagePolicy.model_validate(
+                    stage.model_dump(exclude={"id", "tenant_id", "person_id", "source_sha256"})
+                )
+                for stage in stages
+            )
+            new_bundle = setup.bundle.model_copy(
+                update={
+                    "stages": stages,
+                    "acquisition_policy": policy.model_copy(update={"stages": policy_stages}),
                 }
             )
+            setup.bundle_box["bundle"] = new_bundle
+            async with setup.sessions() as database, database.begin():
+                await ConversationProviderAdmin(
+                    ConversationApplication(database, clock=lambda: setup.prepared.state.now)
+                ).activate(
+                    setup.actor,
+                    target_revision=2,
+                    expected_revision=2,
+                    key="hosted-config-activation-v2",
+                    bundle=new_bundle,
+                )
             assert current.digest == config_view["configuration_sha256"]
 
             async with setup.sessions() as database, database.begin():
