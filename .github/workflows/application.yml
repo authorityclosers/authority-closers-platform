@@ -592,7 +592,7 @@ jobs:
             if docker manifest inspect "$image" >/dev/null 2>&1; then
               docker pull "$image"
               published_id="$(docker image inspect --format '{{.Id}}' "$image")"
-              published_revision="$(docker image inspect --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}' "$image")"
+              published_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
               if [ "$published_revision" != "$GITHUB_SHA" ]; then
                 printf 'Refusing to overwrite immutable release tag %s: revision %s (expected %s)\n' "$image" "$published_revision" "$GITHUB_SHA" >&2
                 exit 1
