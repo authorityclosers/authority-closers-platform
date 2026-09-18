@@ -64,6 +64,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
     _application,
+    _refs,
     _registry_config,
     _setup,
 )
@@ -413,6 +414,8 @@ def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
                     key="hosted-config-v2",
                 )
             current = parse_registry_config(config_view["configuration"])
+            elevenlabs_refs = _refs("elevenlabs")
+            elevenlabs_refs.pop("endpoint_approval_ref")
             stages = tuple(
                 stage.model_copy(
                     update={
@@ -422,6 +425,7 @@ def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
                                 "provider_id": "elevenlabs",
                                 "model_id": "scribe_v2",
                                 "recipe_revision": TRANSCRIPT_RECIPE,
+                                **elevenlabs_refs,
                             }
                             if stage.stage == "C2"
                             else {}
