@@ -167,16 +167,14 @@ describe("acquisition permission recovery", () => {
   it("translates an exhausted trial allowance on source upload", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              detail: "Your current free call allowance has been used.",
-            }),
-            { status: 409 },
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail: "Your current free call allowance has been used.",
+          }),
+          { status: 409 },
         ),
+      ),
     );
     await expect(
       acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
@@ -253,7 +251,9 @@ describe("acquisition source-bound presentation", () => {
     expect(() =>
       parsePolicy({ ...policy, maximum_file_bytes: 32 * 1024 ** 2 + 1 }),
     ).toThrow();
-    expect(() => parsePolicy({ ...policy, maximum_call_seconds: 3601 })).toThrow();
+    expect(() =>
+      parsePolicy({ ...policy, maximum_call_seconds: 3601 }),
+    ).toThrow();
     expect(parseEntry(entry).site_key).toBe(entry.site_key);
     expect(() =>
       parseAllowance({ ...allowance, available_seconds: 5999 }),
@@ -267,9 +267,10 @@ describe("acquisition source-bound presentation", () => {
     ).toThrow();
   });
   it.each([3599, 3600])("accepts a call policy at %s seconds", (seconds) => {
-    expect(parsePolicy({ ...policy, maximum_call_seconds: seconds }).maximum_call_seconds).toBe(
-      seconds,
-    );
+    expect(
+      parsePolicy({ ...policy, maximum_call_seconds: seconds })
+        .maximum_call_seconds,
+    ).toBe(seconds);
   });
   it("remembers only a UUID and rejects injected paths", () => {
     rememberSubmission(submissionId);

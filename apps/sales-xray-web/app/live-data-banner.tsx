@@ -46,7 +46,13 @@ export function LocalSettingsButton({ className }: { className?: string }) {
   const openSettings = useContext(SettingsContext);
   if (!openSettings) return null;
   return (
-    <button type="button" className={className} onClick={openSettings} title="Settings" aria-haspopup="dialog">
+    <button
+      type="button"
+      className={className}
+      onClick={openSettings}
+      title="Settings"
+      aria-haspopup="dialog"
+    >
       <Settings size={18} aria-hidden="true" />
       <span>Settings</span>
     </button>
@@ -80,12 +86,19 @@ export function LiveDataBanner({ children }: { children?: ReactNode }) {
     const shortcut = (event: KeyboardEvent) => {
       const target = event.target;
       if (
-        event.defaultPrevented || event.repeat || event.isComposing ||
-        !event.ctrlKey || !event.altKey || event.shiftKey || event.metaKey ||
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        !event.ctrlKey ||
+        !event.altKey ||
+        event.shiftKey ||
+        event.metaKey ||
         event.key.toLowerCase() !== "b" ||
         (target instanceof HTMLElement &&
-          (target.closest("input, textarea, select") || target.isContentEditable))
-      ) return;
+          (target.closest("input, textarea, select") ||
+            target.isContentEditable))
+      )
+        return;
       event.preventDefault();
       setPreference(!readPreference());
     };
@@ -98,27 +111,53 @@ export function LiveDataBanner({ children }: { children?: ReactNode }) {
       {visible ? (
         <aside className="sales-xray-live-data-banner" role="note">
           <LiveDataDetails />
-          <button type="button" onClick={() => setPreference(false)} aria-label="Hide live data banner" title="Hide banner (Ctrl+Alt+B)">
+          <button
+            type="button"
+            onClick={() => setPreference(false)}
+            aria-label="Hide live data banner"
+            title="Hide banner (Ctrl+Alt+B)"
+          >
             <X size={16} aria-hidden="true" />
           </button>
         </aside>
       ) : null}
       {children}
-      <dialog ref={dialog} className="sales-xray-local-settings" aria-labelledby="local-settings-title">
+      <dialog
+        ref={dialog}
+        className="sales-xray-local-settings"
+        aria-labelledby="local-settings-title"
+      >
         <header>
           <h2 id="local-settings-title">Settings</h2>
-          <button type="button" aria-label="Close settings" onClick={() => dialog.current?.close()}>
+          <button
+            type="button"
+            aria-label="Close settings"
+            onClick={() => dialog.current?.close()}
+          >
             <X size={20} aria-hidden="true" />
           </button>
         </header>
-        <section aria-label="Development environment" className="sales-xray-local-settings-details">
+        <section
+          aria-label="Development environment"
+          className="sales-xray-local-settings-details"
+        >
           <LiveDataDetails />
         </section>
         <label className="sales-xray-local-settings-toggle">
-          <span>Show development banner<small>Remembered in this browser.</small></span>
-          <input type="checkbox" checked={visible} onChange={(event) => setPreference(event.target.checked)} aria-keyshortcuts="Control+Alt+B" />
+          <span>
+            Show development banner<small>Remembered in this browser.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={visible}
+            onChange={(event) => setPreference(event.target.checked)}
+            aria-keyshortcuts="Control+Alt+B"
+          />
         </label>
-        <p className="sales-xray-local-settings-shortcut">Toggle the banner with <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>B</kbd>.</p>
+        <p className="sales-xray-local-settings-shortcut">
+          Toggle the banner with <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>B</kbd>
+          .
+        </p>
       </dialog>
     </SettingsContext.Provider>
   );

@@ -65,23 +65,27 @@ export function parseDetailedOverview(
   findings: Findings,
   parseEvidence: EvidenceParser,
 ) {
-  const item = object(value, [
-    "version",
-    "diagnosis",
-    "outcome",
-    "strength_details",
-    "improvement_details",
-    "golden_moments",
-    "missed_details",
-    "prospect_interpretations",
-    "rewatch",
-    "conversation_change",
-    "ethics_notes",
-    "next_call_focus",
-    "practice",
-    "progress",
-    "final_assessment",
-  ], ["business_impact"]);
+  const item = object(
+    value,
+    [
+      "version",
+      "diagnosis",
+      "outcome",
+      "strength_details",
+      "improvement_details",
+      "golden_moments",
+      "missed_details",
+      "prospect_interpretations",
+      "rewatch",
+      "conversation_change",
+      "ethics_notes",
+      "next_call_focus",
+      "practice",
+      "progress",
+      "final_assessment",
+    ],
+    ["business_impact"],
+  );
   function source(value: unknown, max = 1200): SourceNote {
     const note = object(value, ["text", "evidence"]);
     return {
