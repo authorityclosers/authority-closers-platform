@@ -9,7 +9,10 @@ import {
 } from "react";
 import { PlatformMark } from "@ac/ui";
 import { loadAdminSession } from "./admin-api";
-import { loadPlatformIdentity } from "./platform-identity";
+import {
+  loadPlatformIdentity,
+  type PlatformIdentity,
+} from "./platform-identity";
 import { loginLocalAdmin } from "./local-admin-login";
 import {
   loadOperationsWorkspaces,
@@ -27,6 +30,20 @@ const safeError = (error: unknown) =>
   error instanceof OperationsWorkspaceError
     ? error.message
     : "Your workspace could not be verified. Please try again.";
+
+function hasMatchingPlatformAccess(
+  platform: PlatformIdentity | null,
+  choices: OperationsWorkspaces,
+): boolean {
+  if (!platform) return false;
+  if (
+    platform.personId !== choices.person_id ||
+    platform.sessionId !== choices.session_id ||
+    platform.selectedTenantId !== choices.selected_tenant_id
+  )
+    throw new OperationsWorkspaceError();
+  return true;
+}
 
 export function OperationsLogin({
   surface,
@@ -54,6 +71,7 @@ function OperationsLoginForm({
   const [pending, setPending] = useState(!local);
   const [error, setError] = useState("");
   const [choices, setChoices] = useState<OperationsWorkspaces | null>(null);
+  const [platformAvailable, setPlatformAvailable] = useState(false);
   const [tenantId, setTenantId] = useState("");
   const inFlight = useRef(false);
   const current = useRef<AbortController | null>(null);
@@ -73,20 +91,19 @@ function OperationsLoginForm({
         .then(async (next) => {
           if (controller.signal.aborted || current.current !== controller)
             return;
-          if (surface === "admin") {
-            const platform = await loadPlatformIdentity({
-              signal: controller.signal,
-            });
-            if (
-              !controller.signal.aborted &&
-              current.current === controller &&
-              platform
-            ) {
-              window.location.assign("/platform");
-              return;
-            }
-          }
-          if (next?.selected_tenant_id) {
+          const platform =
+            surface === "admin" && next
+              ? await loadPlatformIdentity({ signal: controller.signal })
+              : null;
+          if (controller.signal.aborted || current.current !== controller)
+            return;
+          const canOpenPlatform = next
+            ? hasMatchingPlatformAccess(platform, next)
+            : false;
+          setPlatformAvailable(canOpenPlatform);
+          // A platform grant is an additional destination, not a reason to
+          // bypass the academy selector. Never select a tenant on mount.
+          if (!canOpenPlatform && next?.selected_tenant_id) {
             try {
               const session = await loadAdminSession((input, init) =>
                 fetch(input, { ...init, signal: controller.signal }),
@@ -195,15 +212,6 @@ function OperationsLoginForm({
       const password = form.elements.namedItem("password");
       if (password instanceof HTMLInputElement) password.value = "";
       if (!response.ok) throw new OperationsWorkspaceError(signInError);
-      if (surface === "admin") {
-        const platform = await loadPlatformIdentity({
-          signal: controller.signal,
-        });
-        if (active() && platform) {
-          window.location.assign("/platform");
-          return;
-        }
-      }
       const next = await loadOperationsWorkspaces({
         signal: controller.signal,
       });
@@ -212,7 +220,14 @@ function OperationsLoginForm({
         throw new OperationsWorkspaceError(
           "Your sign-in session expired. Please sign in again.",
         );
-      if (next.selected_tenant_id) {
+      const platform =
+        surface === "admin"
+          ? await loadPlatformIdentity({ signal: controller.signal })
+          : null;
+      if (!active()) return;
+      const canOpenPlatform = hasMatchingPlatformAccess(platform, next);
+      setPlatformAvailable(canOpenPlatform);
+      if (!canOpenPlatform && next.selected_tenant_id) {
         try {
           const session = await loadAdminSession((input, init) =>
             fetch(input, { ...init, signal: controller.signal }),
@@ -266,6 +281,7 @@ function OperationsLoginForm({
       if (!response.ok) throw new Error();
       if (!controller.signal.aborted && current.current === controller) {
         setChoices(null);
+        setPlatformAvailable(false);
         setTenantId("");
       }
     } catch {
@@ -303,11 +319,13 @@ function OperationsLoginForm({
             <p>
               {choices.workspaces.length
                 ? "Open a workspace assigned to your account. Your permissions are checked before you enter."
-                : "No active workspace is assigned to this account. Contact your administrator or use another account."}
+                : platformAvailable
+                  ? "Your account has platform access. Open Platform Admin to manage the platform."
+                  : "No active workspace is assigned to this account. Contact your administrator or use another account."}
             </p>
             {choices.workspaces.length > 0 && (
-              <label className="field" htmlFor="operations-workspace">
-                Workspace
+              <div className="field">
+                <label htmlFor="operations-workspace">Workspace</label>
                 <select
                   id="operations-workspace"
                   value={tenantId}
@@ -322,7 +340,7 @@ function OperationsLoginForm({
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
             )}
           </>
         ) : (
@@ -393,16 +411,34 @@ function OperationsLoginForm({
           </button>
         )}
         {choices && (
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => {
-              void changeAccount();
-            }}
-            disabled={pending || !hydrated}
-          >
-            Use another account
-          </button>
+          <>
+            {platformAvailable && (
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  if (!pending && !inFlight.current && hydrated)
+                    // Re-enter through server admission with a fresh document,
+                    // as academy selection does above; discard cached context.
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                    window.location.assign("/platform");
+                }}
+                disabled={pending || !hydrated}
+              >
+                Open Platform Admin
+              </button>
+            )}
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => {
+                void changeAccount();
+              }}
+              disabled={pending || !hydrated}
+            >
+              Use another account
+            </button>
+          </>
         )}
       </form>
     </main>

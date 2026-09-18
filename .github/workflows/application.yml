@@ -26,7 +26,176 @@ jobs:
         shell: pwsh
         run: ./scripts/Test-AcademyCapacitySimulation.ps1
 
-  validate:
+  validate-python-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.7
+      - name: Install locked Python dependencies
+        run: uv sync --frozen
+      - name: Check Python formatting
+        run: uv run ruff format --check packages/python tests
+      - name: Check Python lint
+        run: uv run ruff check packages/python tests
+      - name: Check Python types
+        run: uv run mypy packages/python
+
+  validate-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - name: Install locked Node dependencies
+        run: pnpm install --frozen-lockfile
+      - name: "PRE-VALIDATION: Build Sales Xray static preview"
+        env:
+          AC_SALES_XRAY_STATIC_PREVIEW: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Check frontend formatting
+        run: pnpm exec prettier --check apps packages/typescript package.json pnpm-workspace.yaml .github/workflows/application.yml
+      - name: Check frontend lint
+        run: pnpm -r --if-present lint
+      - name: Check frontend types
+        run: pnpm -r --if-present typecheck
+      - name: Check frontend tests
+        run: pnpm -r --if-present test
+      - name: Build frontend packages
+        run: pnpm -r --if-present build
+
+  validate-python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3]
+    services:
+      postgres:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_platform
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_platform"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+      postgres-recovery-tests:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_local_sandbox
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_local_sandbox"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AC_ENVIRONMENT: test
+      AC_RELEASE_ID: ci-${{ github.sha }}
+      AC_DATABASE_URL: postgresql+psycopg://ac_runtime:local-runtime-only@localhost:5432/ac_platform
+      AC_DATABASE_MIGRATOR_URL: postgresql+psycopg://ac_migrator:local-migrator-only@localhost:5432/ac_platform
+      AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
+      AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+      AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.7
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: "PRE-VALIDATION: Build Sales Xray static preview"
+        env:
+          AC_SALES_XRAY_STATIC_PREVIEW: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Require codec and filesystem tools for media regressions
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg e2fsprogs util-linux
+          command -v ffmpeg
+          command -v ffprobe
+          ffmpeg -version
+          ffprobe -version
+      - name: Build verified AudioAtlas for conversation regressions
+        run: |
+          set -euo pipefail
+          command -v g++
+          g++ --version
+          uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Provision least-privilege database roles
+        env:
+          PGPASSWORD: local-owner-only
+        run: >-
+          psql --set ON_ERROR_STOP=1
+          --host localhost
+          --username ac_owner
+          --dbname ac_platform
+          --file infra/local/postgres/init/001-roles.sql
+      - name: Apply and verify PostgreSQL migration chain
+        run: uv run alembic upgrade head && uv run alembic check
+      - name: Install locked Python browser runtime
+        timeout-minutes: 5
+        run: uv run --frozen python -m playwright install --with-deps chromium
+      - name: Run deterministic Python test shard
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/python-test-shard-${{ matrix.shard }}"
+          uv run python scripts/ci/python_test_shard.py run \
+            --root "${GITHUB_WORKSPACE}" \
+            --shard-index "${{ matrix.shard }}" \
+            --shard-count 4 \
+            --exclude-file scripts/ci/python-test-exclusions.txt \
+            --manifest "${RUNNER_TEMP}/python-test-shard-${{ matrix.shard }}/manifest.json" \
+            --junitxml "${RUNNER_TEMP}/python-test-shard-${{ matrix.shard }}/junit.xml" \
+            --basetemp "${RUNNER_TEMP}/python-test-basetemp-${{ matrix.shard }}"
+      - name: Retain Python shard evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-test-shard-${{ github.sha }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 14
+
+  validate-python-gates:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -61,12 +230,7 @@ jobs:
       AC_RELEASE_ID: ci-${{ github.sha }}
       AC_DATABASE_URL: postgresql+psycopg://ac_runtime:local-runtime-only@localhost:5432/ac_platform
       AC_DATABASE_MIGRATOR_URL: postgresql+psycopg://ac_migrator:local-migrator-only@localhost:5432/ac_platform
-      # Fresh-schema PostgreSQL acceptance suites require a disposable database
-      # owner so they can create and drop their isolated search paths. The CI
-      # service itself is ephemeral; production never exposes this credential.
       AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
-      # Media/Studio and worker-isolation schemas use their dedicated owner
-      # target; canonical runtime/migrator privilege proofs stay on port 5432.
       AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
       AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
       AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
@@ -90,15 +254,53 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
-      - name: Require codec tools for media regressions
+      - name: Prove root-owned hosted activation and rollback inputs
+        run: >-
+          sudo env AC_REQUIRE_HOSTED_ACTIVATION_ROOT_TEST=1
+          "$PWD/.venv/bin/python" -m pytest
+          tests/infra/test_sales_xray_hosted_lifecycle.py
+          tests/infra/test_sales_xray_database_provision.py
+          -o cache_dir=/run/ac-hosted-activation-pytest-cache
+          --junitxml="${{ runner.temp }}/hosted-activation-root.xml"
+      - name: Retain hosted activation test receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-activation-root-${{ github.sha }}
+          path: ${{ runner.temp }}/hosted-activation-root.xml
+          if-no-files-found: error
+          retention-days: 14
+      - name: Require codec and filesystem tools for media regressions
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          sudo apt-get install --yes --no-install-recommends ffmpeg e2fsprogs util-linux
           command -v ffmpeg
           command -v ffprobe
           ffmpeg -version
           ffprobe -version
+      - name: Build verified AudioAtlas for conversation regressions
+        run: |
+          set -euo pipefail
+          command -v g++
+          g++ --version
+          uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Prove the scanner filesystem capacity boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/scanner-loopback.xml"
+          sudo env AC_SCANNER_LOOPBACK_TEST=1 "${GITHUB_WORKSPACE}/.venv/bin/python" \
+            -m pytest tests/infra/test_media_safety_temp_filesystem.py -q -r s \
+            -p no:cacheprovider --basetemp="${RUNNER_TEMP}/scanner-loopback-tests" \
+            --junitxml="${receipt}"
+          python - "${receipt}" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          assert len(list(root.iter("testcase"))) == 1, "scanner proof did not run"
+          assert not list(root.iter("skipped")), "scanner proof was skipped"
+          PY
       - name: Create the dedicated migration regression database
         env:
           PGPASSWORD: local-owner-only
@@ -227,13 +429,13 @@ jobs:
           AC_MIGRATION_REHEARSAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_migration_rehearsal_ci
           AC_REQUIRE_MIGRATION_REHEARSAL_POSTGRES_TEST: "1"
         run: uv run pytest tests/integration/test_migration_rehearsal_postgresql.py
-      - name: Validate application
-        env:
-          AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
-        run: pnpm validate
       - name: Install locked registration browser
         timeout-minutes: 5
         run: uv run --frozen python -m playwright install --with-deps chromium
+      - name: Build learner standalone for registration proof
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/learner-web build
       - name: Prove registration consent and server-rendered readiness
         timeout-minutes: 5
         env:
@@ -243,6 +445,56 @@ jobs:
           uv run --frozen python scripts/verify-registration-browser.py
           --evidence-dir "${{ runner.temp }}/registration-browser-${{ github.sha }}"
 
+  validate:
+    if: always()
+    needs:
+      - academy-capacity-simulation
+      - validate-python-static
+      - validate-frontend
+      - validate-python-tests
+      - validate-python-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Download Python shard evidence
+        if: always()
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: python-test-shard-${{ github.sha }}-*
+          path: ${{ runner.temp }}/python-test-shards
+          merge-multiple: false
+      - name: Verify complete Python shard coverage
+        if: always()
+        run: >-
+          python3 scripts/ci/python_test_shard.py verify
+          --root "${GITHUB_WORKSPACE}"
+          --shard-count 4
+          --exclude-file scripts/ci/python-test-exclusions.txt
+          --manifest-dir "${{ runner.temp }}/python-test-shards"
+      - name: Require every validation component to pass
+        if: always()
+        env:
+          ACADEMY_RESULT: ${{ needs.academy-capacity-simulation.result }}
+          PYTHON_STATIC_RESULT: ${{ needs.validate-python-static.result }}
+          FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
+          PYTHON_TESTS_RESULT: ${{ needs.validate-python-tests.result }}
+          PYTHON_GATES_RESULT: ${{ needs.validate-python-gates.result }}
+        run: |
+          set -euo pipefail
+          for result in \
+            "$ACADEMY_RESULT" \
+            "$PYTHON_STATIC_RESULT" \
+            "$FRONTEND_RESULT" \
+            "$PYTHON_TESTS_RESULT" \
+            "$PYTHON_GATES_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "validation component result was $result" >&2
+              exit 1
+            fi
+          done
   package-release-images:
     if: github.event_name == 'workflow_dispatch'
     needs: validate
@@ -260,6 +512,7 @@ jobs:
       LEARNER_IMAGE: ghcr.io/authorityclosers/authority-closers-learner-web:${{ github.sha }}
       ADMIN_IMAGE: ghcr.io/authorityclosers/authority-closers-admin-web:${{ github.sha }}
       COACH_IMAGE: ghcr.io/authorityclosers/authority-closers-coach-web:${{ github.sha }}
+      AC_RELEASE_ARTIFACT_POOL_BYTES: ${{ vars.AC_RELEASE_ARTIFACT_POOL_BYTES || '1000000000' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -292,6 +545,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.LEARNER_IMAGE }}
+          build-args: |
+            AC_RELEASE_ID=${{ github.sha }}
           cache-from: type=gha,scope=application-web
           cache-to: type=gha,mode=max,scope=application-web
       - name: Build admin release image
@@ -337,10 +592,12 @@ jobs:
             if docker manifest inspect "$image" >/dev/null 2>&1; then
               docker pull "$image"
               published_id="$(docker image inspect --format '{{.Id}}' "$image")"
-              if [ "$published_id" != "$built_id" ]; then
-                printf 'Refusing to overwrite immutable release tag %s\n' "$image" >&2
+              published_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+              if [ "$published_revision" != "$GITHUB_SHA" ]; then
+                printf 'Refusing to overwrite immutable release tag %s: revision %s (expected %s)\n' "$image" "$published_revision" "$GITHUB_SHA" >&2
                 exit 1
               fi
+              printf 'Reusing immutable release tag %s (image id %s; rebuilt id %s)\n' "$image" "$published_id" "$built_id"
             else
               docker push "$image"
               docker pull "$image"
@@ -432,7 +689,14 @@ jobs:
           verify_transport_config "$learner_transport_digest" "$learner_id"
           verify_transport_config "$admin_transport_digest" "$admin_id"
           verify_transport_config "$coach_transport_digest" "$coach_id"
-          gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
+          # Ubuntu runners commonly provide pigz through the hosted image's
+          # vendor toolchain. Keep gzip as a compatible fallback so compression
+          # availability never weakens the release proof.
+          if command -v pigz >/dev/null 2>&1; then
+            pigz -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
+          else
+            gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
+          fi
           {
             printf 'AC_RELEASE_ID=%s\n' "$GITHUB_SHA"
             # The foundation uses Docker's containerd image store, where an
@@ -466,7 +730,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/ac-application-${GITHUB_SHA}"
           candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
           max_artifact_bytes=450000000
-          max_artifact_pool_bytes=450000000
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
             printf 'Release artifact is %s bytes; refusing upload above %s bytes.\n' \
               "$candidate_bytes" "$max_artifact_bytes" >&2
@@ -488,7 +752,18 @@ jobs:
             printf 'Repository artifact usage could not be proven.\n' >&2
             exit 1
           }
-          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          # The verified upload step below removes every superseded
+          # ac-application bundle. Exclude those exact, reviewable bundles
+          # from admission so stale release history cannot block a new
+          # immutable candidate while unrelated artifacts remain counted.
+          superseded_release_bytes="$(jq '[.[]
+            | select((.name // "") | test("^ac-application-[0-9a-f]{40}$"))
+            | .size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$superseded_release_bytes" =~ ^[0-9]+$ && "$superseded_release_bytes" -le "$retained_bytes" ]] || {
+            printf 'Superseded release artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes - superseded_release_bytes + candidate_bytes))
           if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
             printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
               "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
@@ -512,7 +787,7 @@ jobs:
           UPLOADED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
         run: |
           set -euo pipefail
-          max_artifact_pool_bytes=450000000
+          max_artifact_pool_bytes="$(python infra/release/validate-artifact-pool.py)"
           current_name="ac-application-${GITHUB_SHA}"
           current_artifact_id="$UPLOADED_ARTIFACT_ID"
           [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {

@@ -1,0 +1,30 @@
+{
+  "base_commit": "ae289965110bbf1dcf39191b23929eed507cdb87",
+  "hash_representation": "UTF-8 LF source bytes",
+  "files": [
+    {
+      "path": "tests/e2e/test_sales_xray_standalone_browser.py",
+      "sha256": "096b2a2de94f626899c24709a61f62cdd8e7ff04377c96fcb0f498b59218b67a"
+    },
+    {
+      "path": "docs/evidence/20260914_SALES_XRAY_NAVIGATION_PROBE.md",
+      "sha256": "615b71f6bd94a5fdedf45fa9b14f122a01a0281dd29723732e54b18e8028d3ee"
+    },
+    {
+      "path": "docs/evidence/navigation-probe-20260914/browser.json",
+      "sha256": "36ef6c725bb77cb861ef76a9cc0c453c4e9a751a2de44f7628de83b43d6cf563"
+    },
+    {
+      "path": "docs/evidence/navigation-probe-20260914/browser.junit.xml",
+      "sha256": "a416250aef42354528250c2afe39562fc65885622ec4c92ad1a36e761da954a3"
+    },
+    {
+      "path": "docs/evidence/navigation-probe-20260914/browser.log",
+      "sha256": "8829dd049e65abe3663ee07de337924a02b65ebae072c27e879bb9a904f6c7cf"
+    },
+    {
+      "path": "docs/evidence/navigation-probe-20260914/static-build.log",
+      "sha256": "6f6d9077149d366d34ed7a8a81dffe8beafee2e41e2a24830ec8d399f0bf84d1"
+    }
+  ]
+}

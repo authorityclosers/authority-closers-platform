@@ -367,3 +367,191 @@ Iteration 1: the approved board and live implementation were compared after the 
 Automated verification passed under the repository Node 24 runtime: 31 learner test files and 469 tests, TypeScript, zero-warning ESLint, production build across 25 routes, focused learner/admin proxy suites, seven local-bridge infrastructure tests, and `git diff --check`.
 
 final result: passed
+
+---
+
+# Sales Xray Skills / Next-call plan — design QA
+
+Date: 2026-09-16. Scope: this bounded report slice, not the complete report
+redesign. Upload/processing retains the separately released `4c8cfe9` behavior.
+
+## Source and rendered comparison
+
+User visual truth: the ten supplied Sep16 00:13 report mockups. Selected
+contract-faithful derivatives: `docs/design/sales-xray-20260916/skills-{desktop,mobile}-v1.png`
+and `plan-{desktop,mobile}-v1.png`. They are genuine image-model outputs, not
+implementation screenshots. They preserve the selected palette while retaining
+all eight actual dimensions and excluding unsupported scores/checklists.
+
+Compiled Next build, loopback3124, isolated Chromium, synthetic report, light
+theme, reduced motion, deviceScaleFactor1. All API calls intercepted; no actual
+call processing. Implementation captures: `.tmp/sales-xray-ui-qa/`.
+Durable comparisons and details: `docs/evidence/sales-xray-skills-plan-20260916/`.
+
+| Comparison evidence | Source pixels | Render pixels / CSS viewport | Normalization |
+| --- | --- | --- | --- |
+| comparison-skills-desktop.png | 1586×992 | 1440×900 | Source contained in1440×900; both displayed side by side |
+| comparison-plan-desktop.png | 1586×992 | 1440×900 | Same |
+| comparison-skills-mobile.png | 940×1672 | 375×667 | Source contained in375×667; both displayed side by side |
+| comparison-plan-mobile.png | 940×1672 | 375×667 | Same |
+
+The 36px comparison caption is outside both viewports. No device chrome was
+introduced. The generated sources include illustrative copy, missing-audio
+states and simplified shell; implementation uses the actual synthetic server
+projection, shared guest shell, and a real unavailable-audio error. These data
+and existing-shell differences are intentional, not a pixel-identical claim.
+Focused checks used the full1024×626 captures and375×667 note sheets; text,
+icons, card boundaries and fixed footers are readable at these capture sizes.
+
+## Findings and fixes
+
+- P2, fixed: compact desktop cards and short-phone plan evidence were covered
+  by the fixed player. Earlier main scroll heights were689/663px inside564px
+  at1024×626 and537/590px inside521px at375×667. Four skills now occupy one
+  compact desktop row; short-phone cards reduce secondary preview copy, keep
+  the full reader, and remove redundant spacing. Post-fix metrics below.
+- P2, fixed: report metadata/sign-in content and an empty header consumed
+  vertical space. A single navy report heading is shared across tabs; secondary
+  actions and metadata are in More actions, preserving guest save access.
+- P2, fixed: playback failures floated over report content. They now occupy the
+  player's identity/status area; no report content is covered by a toast.
+- P2, fixed in independent review: reaching a disabled Next button could leave
+  focus outside the trap. Navigation now focuses the changed heading; Shift+Tab
+  wraps to the last enabled control, including both boundaries.
+- P2, fixed in independent review: compact screen clamps could survive print.
+  Print now includes all eight skills, all three plan sections, and full notes.
+
+## Required fidelity surfaces
+
+- Typography: existing local sans-serif stack, bold navy heading, clear topic
+  labels and moderate body hierarchy. Compact summaries may clamp; exact full
+  text remains in the reader and print. No type reduced merely to fit a long
+  report. Short mobile drops the optional main tagline.
+- Spacing/layout:4×2 skills on roomy desktop, paginated four-card groups on
+  compact screens, three plan columns or one selectable mobile panel. Thin
+  borders,14–15px radii and consistent gaps. All tested controls fit above the
+  real fixed player; no page or main-pane scrolling in these two sections.
+- Colors/tokens: white/navy, blue banner, mint/teal, violet, orange, rose and
+  cyan surfaces; bold line icons and colored actions. Status stays neutral;
+  color conveys topic, never invented assessment severity.
+- Image/icon fidelity: approved existing logo retained; installed Lucide icon
+  family supplies real library icons. No new bitmap art is required inside
+  these report panels, no CSS imitation of a reference image, fake waveform
+  or generated report screenshot mounted as UI. Existing guest sidebar is
+  unchanged; its missing promotional photo is outside this bounded slice.
+- Copy/content: “Your call, clearly.”, “Build your sales skills”, “Your next-call
+  plan”, Keep/Change/Practise and Open notes match the requested plain-English
+  direction. Eight server labels/statuses/observations and citations remain
+  exact. Contract-absent grades, saved checklist and practice recorder are not
+  added just because they appeared in a mock.
+
+## Post-fix checks
+
+| Viewport | Main visible / scroll height, both tabs | Lowest skills / plan content | Player top |
+| --- | --- | --- | --- |
+| 1440×900 | 838 / 838 | 742.98 / 692 | 819.22 |
+| 1024×626 | 564 / 564 | 512.06 / 524.52 | 545.22 |
+| 390×844 | 698 / 698 | 555 / 557.97 | 683.48 |
+| 375×667 | 521 / 521 | 505 / 496.08 | 506.48 |
+
+Both skills pages, all mobile plan panels, all eight reader positions,
+Next-disabled boundary, Shift+Tab/Tab containment, Escape/focus restoration and
+unclamped print were exercised. No page errors in the synthetic browser run.
+Unit suite212/212; independent focused rerun69/69; lint/build passed.
+
+## Known outside-slice gaps
+
+Overview still needs its compact carousel/layout pass; current synthetic
+Overview main content scrolls. Moments remains a transcript-based view, not the
+approved semantic-moment master/detail design. Do not interpret this document
+as all-report or all-app completion. Native devices, real-call provider output,
+screen-reader certification, browser zoom and integrated learner screenshots
+are not proved by desktop viewport emulation.
+
+## Implementation checklist
+
+- [x] Compare normalized source + render for desktop and mobile.
+- [x] Fix measured player overlap and retest every compact panel.
+- [x] Preserve actual contract fields and complete reader/print access.
+- [x] Complete independent review and executable checks.
+- [x] Record remaining report-wide work separately.
+
+Follow-up P3: increase short-phone separation between the skills pager and
+player when additional vertical space is available; current hit areas do not
+overlap. No actionable P0/P1/P2 remains in this bounded slice.
+
+final result: passed
+
+---
+
+## 2026-09-16 — Delayed processing update (bounded follow-up)
+
+Selected source: the existing generated processing desktop/mobile references
+under `docs/design/sales-xray-20260916`, visually inspected with the compiled
+candidate. Reuses the approved white/navy and coloured stage-card composition.
+No brand reset, invented server state or new raster asset.
+
+After one minute with an unchanged progress projection, local copy changes
+inside its reserved text area. The actual stage remains visible. Identical
+polls do not reset the timer; new progress does. Paused/error/report states
+take precedence. Hidden copy is excluded from the accessibility tree.
+
+Compiled candidate loopback3125, Chromium, synthetic API fixtures, reduced
+motion: 28 state/viewport checks passed across1440×900,1024×626,390×844,375×667.
+All document/main scroll heights equal their available viewport heights.
+Twelve timed transitions measured identical panel child rectangles before and
+after; twelve delayed-to-held transitions fit and made zero mutations.
+Baseline and candidate screenshots/data:
+`docs/evidence/sales-xray-processing-delay-20260916/`.
+
+Full frontend221/221; independent focused50/50; lint/TypeScript/build passed.
+No open P0/P1/P2 in this bounded change. General offline/poll-error recovery,
+Overview/Moments/Admin and real-provider evidence remain separate open work.
+Detailed scope: `docs/evidence/20260916_SALES_XRAY_PROCESSING_DELAY.md`.
+
+final result: passed
+
+---
+
+## 2026-09-16 — Overview, Moments and focused review
+
+Selected user Sep16 generated Overview/Moments/modal references were implemented
+as real source-backed components: white/navy hierarchy, mint/violet/orange/blue
+cards, library line icons, desktop grid and mobile card navigation. Existing
+server labels, quotes, provenance and missing-data states remain authoritative.
+No fake waveform, scores or semantic categorisation to fill the mockup.
+
+Fixed measured Moments/player overlap and a long-Plan short-phone overlap.
+Independent P2 qualifier-hiding finding fixed; full source caveats preserved.
+Inherited open-dialog print clipping and hidden detail-tab printing corrected.
+
+Compiled loopback3130 Chromium: standard and long fixtures each passed70 result
+records across1440×900,1024×626,390×844,375×667. Four report tabs, all mobile
+Overview cards, compact desktop pages, all12 fixture review points, modal focus
+restoration, transcript access and full print verified. Workspace/document fit;
+long detailed readers intentionally have internal bounded scrolling.
+Frontend238/238; independent37/37; lint/build/TypeScript passed. No open P0–P2
+in this bounded report slice. Real-provider/audio E2E, native devices, zoom,
+screen-reader certification, Admin and prospect feature remain separate work.
+
+Evidence and exact measurements:
+`docs/evidence/20260916_SALES_XRAY_REPORT_OVERVIEW_MOMENTS.md` and
+`docs/evidence/sales-xray-report-20260916/`.
+
+final result: passed
+
+---
+
+## 2026-09-16 — Actual-shell dialog correction
+
+Production20:53 report confirmed identity-transform/scroll containment clipping
+the shared fixed dialog. Reduced-motion QA had masked the root cause. Native
+top-layer dialog preserves styles and escapes this containing block. Normal-motion
+compiled checks now include1536×674 and force400px shell scroll:20 sheet-position
+invariance checks passed across5viewports,105total report result records.
+Full238tests (2workers), independent27tests and build/TypeScript passed.
+Actual candidate private-call verification remains release-coordinator owned:
+normal local Google login requested a passkey and was not bypassed.
+Evidence: `docs/evidence/20260916_SALES_XRAY_TOP_LAYER_DIALOG.md`.
+
+Local correction result: passed. Production verification: pending.

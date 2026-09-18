@@ -186,6 +186,59 @@ describe("separate Platform Admin admission", () => {
     );
     expect(people.headers.get("x-middleware-next")).toBeNull();
   });
+  it("honors the selected academy at home while keeping Platform Admin an explicit destination", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.spyOn(serverAuth, "resolveAdminServerContext").mockResolvedValue({
+      source: "verified-server-session",
+      authenticated: true,
+      adminSurfaceAuthorized: true,
+      actorId: person,
+      tenantId: "33333333-3333-4333-8333-333333333333",
+      permissions: ["admin_surface"],
+      studioCapabilities: [],
+    });
+    const platformRead = vi
+      .spyOn(serverAuth, "resolvePlatformServerContext")
+      .mockResolvedValue(identity);
+    for (const path of ["/", "/sales-xray"]) {
+      const response = await proxy(
+        new NextRequest("https://admin.authorityclosers.com" + path),
+      );
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("location")).toBeNull();
+    }
+    expect(platformRead).not.toHaveBeenCalled();
+    const explicitPlatform = await proxy(
+      new NextRequest("https://admin.authorityclosers.com/platform"),
+    );
+    expect(explicitPlatform.headers.get("x-middleware-next")).toBe("1");
+    expect(platformRead).toHaveBeenCalledOnce();
+  });
+  it("does not use academy access as a substitute for a platform grant", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const academyRead = vi
+      .spyOn(serverAuth, "resolveAdminServerContext")
+      .mockResolvedValue({
+        source: "verified-server-session",
+        authenticated: true,
+        adminSurfaceAuthorized: true,
+        actorId: person,
+        tenantId: "33333333-3333-4333-8333-333333333333",
+        permissions: ["admin_surface"],
+        studioCapabilities: [],
+      });
+    vi.spyOn(serverAuth, "resolvePlatformServerContext").mockResolvedValue(
+      null,
+    );
+    const response = await proxy(
+      new NextRequest("https://admin.authorityclosers.com/platform"),
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/login",
+    );
+    expect(response.headers.get("x-middleware-next")).toBeNull();
+    expect(academyRead).not.toHaveBeenCalled();
+  });
   it("ignores stale dev flags on production Platform page", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("AC_DEV_LOCAL_SANDBOX_ENABLED", "true");

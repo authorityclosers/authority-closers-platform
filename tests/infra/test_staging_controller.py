@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -23,7 +24,10 @@ def test_staging_controller_is_exact_sha_and_idempotent() -> None:
     )
     assert "running read-only proof only" in CONTROLLER
     assert "Re-running the exact release to load reviewed secret references" in CONTROLLER
-    assert "workflow_run.head_sha -eq $ReleaseSha" in CONTROLLER
+    assert "RecoveryWorkflowSha" in CONTROLLER
+    assert "reviewed recovery workflow run" in CONTROLLER
+    assert '".github/workflows/application-recovery.yml"' in CONTROLLER
+    assert '".github/workflows/application.yml"' in CONTROLLER
     assert '"sha256:$artifactDigest" -ne $artifact.digest' in CONTROLLER
     assert '$run.conclusion -ne "success"' in CONTROLLER
     assert "verify-release-archive.py" in CONTROLLER
@@ -57,6 +61,7 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     required_urls = (
         "https://$learnerHost/",
         "https://$learnerHost/$asset",
+        "https://$learnerHost/sales-xray",
         "https://$coachHost/",
         "https://$coachHost/login",
         "https://$apiHost/health/live",
@@ -91,6 +96,56 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     assert "162.210.70.199" in CONTROLLER
     assert "ac-application-$TargetEnvironment-coach-web-1" in CONTROLLER
     assert "AC_COACH_IMAGE" in CONTROLLER
+
+
+@pytest.mark.parametrize("target", ["staging", "production"])
+@pytest.mark.parametrize("matching_callback", [True, False])
+def test_google_probe_checks_selected_environment(target: str, matching_callback: bool) -> None:
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is required for the controller behavior test")
+    host = f"learner{'-staging' if target == 'staging' else ''}.authorityclosers.com"
+    other = f"learner{'-staging' if target == 'production' else ''}.authorityclosers.com"
+    callback = quote(
+        f"https://{host if matching_callback else other}/v1/auth/google/callback", safe=""
+    )
+    function = (
+        "function Assert-GoogleOAuthStart"
+        + CONTROLLER.split("function Assert-GoogleOAuthStart", 1)[1].split(
+            "function Test-Deployment", 1
+        )[0]
+    )
+    value = "synthetic." + "A" * 43
+    script = f'''$ErrorActionPreference = "Stop"
+$learnerHost = "{host}"
+function Get-HttpResult {{
+    param([string]$Url)
+    $expected = "https://{host}/v1/auth/google/start" +
+        "?action=authenticate&surface=learner&return_path=%2Fhome"
+    if ($Url -cne $expected) {{
+        throw "probe requested the wrong environment"
+    }}
+    return [pscustomobject]@{{
+        Status=303
+        Location=[Uri]"https://accounts.google.com/o/oauth2/v2/auth?redirect_uri={callback}&state=synthetic"
+        CacheControl="no-store"
+        SetCookies=@(
+            "__Host-ac_oauth_transaction={value}; Secure; HttpOnly; SameSite=Lax; Path=/",
+            "__Host-ac_oauth_transaction.{"A" * 22}={value}; Secure; HttpOnly; SameSite=Lax; Path=/"
+        )
+    }}
+}}
+{function}
+Assert-GoogleOAuthStart
+'''
+    result = subprocess.run(  # noqa: S603 - extracted probe with a no-network fixture
+        [pwsh, "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert (result.returncode == 0) is matching_callback, result.stderr
 
 
 @pytest.mark.parametrize(

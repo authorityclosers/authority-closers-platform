@@ -1,0 +1,1134 @@
+{
+  "capturedAt": "2026-09-16T08:14:37.210Z",
+  "origin": "http://127.0.0.1:3117",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": false,
+  "results": [
+    {
+      "state": "uploading-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "verified": true
+    },
+    {
+      "state": "uploading",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 1536,
+      "verified": true
+    },
+    {
+      "state": "checking-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Checking the recording’s format and duration before analysis starts.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "Longer recordings can take a little longer to check.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "checking",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C2-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Turning your recording into a transcript.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "The transcript keeps your analysis linked to the recording.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C4-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Reviewing the conversation against its transcript.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "after": {
+        "text": "This step connects observations with source moments.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C4",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C5-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Bringing your takeaways and next-call plan together.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "after": {
+        "text": "The report will open when its result is ready.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 564,
+          "y": 147.390625,
+          "width": 786,
+          "height": 116.671875
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "verified": true
+    },
+    {
+      "state": "C5",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "held-activity",
+      "width": 1536,
+      "height": 674,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 0
+      },
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 1536,
+      "height": 674,
+      "docWidth": 1536,
+      "docHeight": 674,
+      "mainHeight": 612,
+      "mainScroll": 612,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "uploading-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "verified": true
+    },
+    {
+      "state": "uploading",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 1440,
+      "verified": true
+    },
+    {
+      "state": "checking-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Checking the recording’s format and duration before analysis starts.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "Longer recordings can take a little longer to check.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "checking",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C2-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Turning your recording into a transcript.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "The transcript keeps your analysis linked to the recording.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C4-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Reviewing the conversation against its transcript.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "after": {
+        "text": "This step connects observations with source moments.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 560,
+          "y": 314.75,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C4",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C5-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Bringing your takeaways and next-call plan together.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 560,
+          "y": 305.453125,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "after": {
+        "text": "The report will open when its result is ready.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 560,
+          "y": 305.453125,
+          "width": 734,
+          "height": 116.671875
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "verified": true
+    },
+    {
+      "state": "C5",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "held-activity",
+      "width": 1440,
+      "height": 900,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 0
+      },
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "uploading-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "verified": true
+    },
+    {
+      "state": "uploading",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 1024,
+      "verified": true
+    },
+    {
+      "state": "checking-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Checking the recording’s format and duration before analysis starts.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "Longer recordings can take a little longer to check.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "checking",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C2-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Turning your recording into a transcript.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "The transcript keeps your analysis linked to the recording.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C4-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Reviewing the conversation against its transcript.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "after": {
+        "text": "This step connects observations with source moments.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C4",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C5-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Bringing your takeaways and next-call plan together.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "after": {
+        "text": "The report will open when its result is ready.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 423,
+          "y": 148.890625,
+          "width": 556,
+          "height": 108.984375
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "verified": true
+    },
+    {
+      "state": "C5",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "held-activity",
+      "width": 1024,
+      "height": 626,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 0
+      },
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "uploading-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "verified": true
+    },
+    {
+      "state": "uploading",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 390,
+      "verified": true
+    },
+    {
+      "state": "checking-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Checking the recording’s format and duration before analysis starts.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "Longer recordings can take a little longer to check.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "checking",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C2-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Turning your recording into a transcript.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "The transcript keeps your analysis linked to the recording.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C4-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Reviewing the conversation against its transcript.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "after": {
+        "text": "This step connects observations with source moments.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 125,
+          "y": 247.4375,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C4",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C5-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Bringing your takeaways and next-call plan together.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 125,
+          "y": 238.140625,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "after": {
+        "text": "The report will open when its result is ready.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 125,
+          "y": 238.140625,
+          "width": 232,
+          "height": 126.53125
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "verified": true
+    },
+    {
+      "state": "C5",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "held-activity",
+      "width": 390,
+      "height": 844,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 0
+      },
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "stage": "processing",
+      "apiRequests": 8
+    },
+    {
+      "state": "uploading-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "verified": true
+    },
+    {
+      "state": "uploading",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "uploading",
+      "apiRequests": 6
+    },
+    {
+      "state": "upload-to-report",
+      "width": 375,
+      "verified": true
+    },
+    {
+      "state": "checking-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Checking the recording’s format and duration before analysis starts.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "Longer recordings can take a little longer to check.",
+        "title": "Checking your recording",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "1TranscriptQueued2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "checking",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C2-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Turning your recording into a transcript.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 119,
+          "y": 121.9375,
+          "width": 225,
+          "height": 94.125
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "after": {
+        "text": "The transcript keeps your analysis linked to the recording.",
+        "title": "Transcribing your call",
+        "rect": {
+          "x": 119,
+          "y": 121.9375,
+          "width": 225,
+          "height": 94.125
+        },
+        "stages": "1TranscriptIn progress2ConversationQueued3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C2",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C4-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Reviewing the conversation against its transcript.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "after": {
+        "text": "This step connects observations with source moments.",
+        "title": "Checking the conversation",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "TranscriptComplete2ConversationIn progress3ReportQueued"
+      },
+      "verified": true
+    },
+    {
+      "state": "C4",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "C5-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 7
+      },
+      "before": {
+        "text": "Bringing your takeaways and next-call plan together.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "after": {
+        "text": "The report will open when its result is ready.",
+        "title": "Writing your coaching report",
+        "rect": {
+          "x": 119,
+          "y": 121,
+          "width": 225,
+          "height": 119.3125
+        },
+        "stages": "TranscriptCompleteConversationComplete3ReportIn progress"
+      },
+      "verified": true
+    },
+    {
+      "state": "C5",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 9
+    },
+    {
+      "state": "held-activity",
+      "width": 375,
+      "height": 667,
+      "normalMotion": true,
+      "activity": {
+        "present": true,
+        "running": 0
+      },
+      "verified": true
+    },
+    {
+      "state": "held",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "stage": "processing",
+      "apiRequests": 8
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "source_base": "278456864d6c7bc3be4d85ce389cb963f571902d",
+  "app_source_files_compared": 140,
+  "app_source_comparison": "identical",
+  "compiled_build_id": "x5hb_5QbrL1TMz4a7t7ud",
+  "reused_prior_build": true,
+  "routes": [
+    {
+      "environment": "staging",
+      "only_expected_policy_delta": true,
+      "sha256": "d96920e99a5f8a85567906f10b48305974bcbfe443e25e86f69fa60a98e05302"
+    },
+    {
+      "environment": "production",
+      "only_expected_policy_delta": true,
+      "sha256": "92fd7f13e9eff85bdc41502f080e90e09a1030d2f2825b1830827a3bcd275153"
+    }
+  ],
+  "next_runtime_status": 200,
+  "next_runtime_headers": {
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cache-Control": "no-store",
+    "Vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+    "x-nextjs-cache": "HIT",
+    "x-nextjs-prerender": "1",
+    "x-nextjs-stale-time": "300",
+    "ETag": "\"b3qqxs6lgi67g\"",
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Length": "8053",
+    "Date": "Mon, 14 Sep 2026 02:10:55 GMT",
+    "Connection": "close"
+  },
+  "next_csp_header_count": 0,
+  "routes_manifest_csp_count": 0,
+  "provider_calls": 0,
+  "hosted_mutations": 0
+}

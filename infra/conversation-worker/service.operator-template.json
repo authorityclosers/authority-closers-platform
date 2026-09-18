@@ -1,0 +1,53 @@
+{
+  "schema_version": "ac.sales_xray.worker_service/1",
+  "environment": "staging",
+  "release_id": "REPLACE_WITH_FROZEN_INTEGRATED_RELEASE_SHA40",
+  "operations_tenant_id": "REPLACE_WITH_CANONICAL_CONFIGURED_OPERATIONS_TENANT_UUID",
+  "sales_xray_enabled": true,
+  "bootstrap_only": false,
+  "sales_xray_approval_path": "/run/ac-sales-xray/approval.json",
+  "sales_xray_approval_sha256": "REPLACE_WITH_EXACT_APPROVAL_FILE_SHA256",
+  "sales_xray_storage_root": "/srv/authority-closers/sales-xray/staging/storage",
+  "sales_xray_scratch_root": "/srv/authority-closers/sales-xray/staging/scratch",
+  "database_url_file": "/run/ac-sales-xray/database-url",
+  "native_socket_path": "/run/ac-sales-xray/staging/native.sock",
+  "native_image_ref": "sha256:REPLACE_WITH_VERIFIED_OCI_TRANSPORT_MANIFEST_DIGEST",
+  "providers": [
+    {
+      "credential_ref": "REPLACE_WITH_APPROVED_ELEVENLABS_CREDENTIAL_REF",
+      "provider_id": "elevenlabs",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/elevenlabs",
+      "token_file_ref": "/run/ac-sales-xray/identities/elevenlabs/token"
+    },
+    {
+      "credential_ref": "REPLACE_WITH_APPROVED_DEEPGRAM_CREDENTIAL_REF",
+      "provider_id": "deepgram",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/deepgram",
+      "token_file_ref": "/run/ac-sales-xray/identities/deepgram/token"
+    },
+    {
+      "credential_ref": "REPLACE_WITH_APPROVED_GROQ_CREDENTIAL_REF",
+      "provider_id": "groq",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/groq",
+      "token_file_ref": "/run/ac-sales-xray/identities/groq/token"
+    },
+    {
+      "credential_ref": "REPLACE_WITH_APPROVED_GEMINI_CREDENTIAL_REF",
+      "provider_id": "gemini",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/gemini",
+      "token_file_ref": "/run/ac-sales-xray/identities/gemini/token"
+    }
+  ]
+}

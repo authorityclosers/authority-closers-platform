@@ -1,12 +1,24 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.identity.models import PersonStatus
+from ac_platform.identity.models import PersonStatus, ReviewerAuthChallenge, SessionAudience
+from ac_platform.identity.reviewer_auth import (
+    InvalidReviewerChallenge,
+    ReviewerAuthenticationService,
+    decrypt_reviewer_challenge_token,
+    encrypt_reviewer_challenge_token,
+    hash_reviewer_browser_nonce,
+    hash_reviewer_challenge_token,
+    validate_reviewer_browser_nonce,
+)
 from ac_platform.identity.services import (
     AccountUnavailableError,
     AmbiguousProviderIdentityError,
@@ -18,6 +30,7 @@ from ac_platform.identity.services import (
     IdentityLinkService,
     InMemoryIdentityStore,
     InvalidProviderAssertionError,
+    InvalidSessionTokenError,
     IssuedProviderAuthorization,
     PersonSelfService,
     PersonSnapshot,
@@ -394,6 +407,81 @@ def test_session_rechecks_account_status_and_tenant_scope_on_authentication() ->
     store.save_person(replace(store.people[person_id], status=PersonStatus.SUSPENDED.value))
     with pytest.raises(AccountUnavailableError):
         sessions.authenticate(issued.token, now=NOW + timedelta(seconds=1))
+
+
+def test_reviewer_session_audience_isolated_and_cannot_select_tenant() -> None:
+    person_id = uuid4()
+    tenant_id = uuid4()
+    store = InMemoryIdentityStore([_verified_person(person_id)])
+    sessions = SessionService(store, token_pepper=PEPPER)
+
+    issued = sessions.issue(person_id, audience=SessionAudience.REVIEWER, now=NOW)
+    assert issued.metadata.audience == SessionAudience.REVIEWER.value
+    assert issued.metadata.selected_tenant_id is None
+    with pytest.raises(InvalidSessionTokenError):
+        sessions.authenticate(issued.token, now=NOW)
+    assert (
+        sessions.authenticate(
+            issued.token,
+            expected_audience=SessionAudience.REVIEWER,
+            now=NOW,
+        ).audience
+        == SessionAudience.REVIEWER.value
+    )
+    with pytest.raises(TenantScopeDeniedError):
+        sessions.set_selected_tenant(person_id, issued.metadata.id, tenant_id, now=NOW)
+
+
+def test_reviewer_challenge_token_is_hashed_and_delivery_encryption_is_bound() -> None:
+    challenge_id = uuid4()
+    token = "t" * 64
+    encrypted = encrypt_reviewer_challenge_token(PEPPER, token, challenge_id)
+
+    assert decrypt_reviewer_challenge_token(PEPPER, encrypted, challenge_id) == token
+    assert hash_reviewer_challenge_token(PEPPER, token) != token.encode("ascii")
+    with pytest.raises(InvalidReviewerChallenge):
+        decrypt_reviewer_challenge_token(PEPPER, encrypted, uuid4())
+
+
+def test_reviewer_browser_nonce_requires_a_canonical_32_byte_binding() -> None:
+    browser_nonce = secrets.token_urlsafe(32)
+
+    assert validate_reviewer_browser_nonce(browser_nonce) == browser_nonce
+    assert len(hash_reviewer_browser_nonce(PEPPER, browser_nonce)) == 32
+    with pytest.raises(InvalidReviewerChallenge):
+        validate_reviewer_browser_nonce(secrets.token_urlsafe(31))
+    with pytest.raises(InvalidReviewerChallenge):
+        validate_reviewer_browser_nonce(browser_nonce + "=")
+
+
+async def test_reviewer_challenge_rejects_a_different_browser_before_consumption() -> None:
+    token = "t" * 64
+    browser_nonce = secrets.token_urlsafe(32)
+    challenge = ReviewerAuthChallenge(
+        id=uuid4(),
+        email="reviewer@example.test",
+        token_hash=hash_reviewer_challenge_token(PEPPER, token),
+        browser_nonce_hash=hash_reviewer_browser_nonce(PEPPER, browser_nonce),
+        encrypted_token="delivery-only",  # noqa: S106 - synthetic challenge payload
+        issued_at=NOW,
+        expires_at=NOW + timedelta(minutes=15),
+    )
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = challenge
+    service = ReviewerAuthenticationService(
+        session,
+        challenge_secret=PEPPER,
+        token_pepper=PEPPER,
+    )
+
+    with pytest.raises(InvalidReviewerChallenge):
+        await service.consume_challenge(
+            token,
+            browser_nonce=secrets.token_urlsafe(32),
+            now=NOW,
+        )
+    assert challenge.consumed_at is None
+    session.flush.assert_not_awaited()
 
 
 def test_expired_session_and_self_deletion_request_are_explicit() -> None:

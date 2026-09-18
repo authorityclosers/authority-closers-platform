@@ -27,12 +27,22 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path("/srv/authority-closers/media-safety")
 DATABASE = Path("/srv/authority-closers/volumes/media-safety-signatures")
+SOCKET_ROOT = Path("/srv/authority-closers/volumes/media-safety-socket")
+TEMP_ROOT = Path("/srv/authority-closers/volumes/media-safety-tmp")
+TEMP_IMAGE = ROOT / "scanner-temp-v1.ext4"
+TEMP_CAPACITY_BYTES = 8 * 1024**3
+TEMP_HOST_HEADROOM_BYTES = 2 * 1024**3
+TEMP_MAX_CONCURRENT_SCANS = 2
+TEMP_MAX_QUEUE = 4  # ClamAV 1.5.4 raises lower values to twice MaxThreads on Linux.
+TEMP_POLICY_MARKER = "# ac-scanner-temp-filesystem-v1"
 CONTAINER = "ac-media-safety-scanner"
 DOCKER_HOST = "unix:///var/run/docker.sock"
 DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
 IMAGE = f"clamav/clamav@{DIGEST}"
 PREFIX = "infra/media-safety/"
-FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf"}
+ENTRYPOINT_FILE = "entrypoint.sh"
+ENTRYPOINT_DESTINATION = "/usr/local/bin/ac-media-safety-entrypoint"
+FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf", ENTRYPOINT_FILE}
 MIB = 1024 * 1024
 HEALTH_COMMAND = "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"
 HEALTH_TEST = ["CMD-SHELL", HEALTH_COMMAND]
@@ -41,13 +51,27 @@ LEGACY_HEALTH_TEST = ["CMD", "clamdcheck.sh"]
 # It may be validated only as a named transition source or emergency rollback
 # target; it can never mint a new readiness proof under this controller.
 LEGACY_HEALTH_RELEASES = frozenset({"3eb24da05caced66f15dcfe58ffc086014da8b0d"})
+# This deployed release has the current IPv4 health and shared socket/temp
+# policy, but predates the image-socket bridge. It is a valid transition source
+# and must not be treated as the older legacy-health release.
+PRE_WRAPPER_RELEASES = frozenset({"5c8b39249176b8030e7cca1d678c20ea7cb956ea"})
+LEGACY_FILES = FILES - {ENTRYPOINT_FILE}
 HEALTH_TIMEOUT_SECONDS = 7 * 60
 HEALTH_POLL_SECONDS = 2
 EXPECTED_BIND_DESTINATIONS = {
     "/etc/clamav/clamd.conf",
     "/etc/clamav/freshclam.conf",
+    ENTRYPOINT_DESTINATION,
     "/var/lib/clamav",
+    "/run/ac-media-safety",
+    "/var/lib/ac-media-safety-tmp",
 }
+LEGACY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {
+    ENTRYPOINT_DESTINATION,
+    "/run/ac-media-safety",
+    "/var/lib/ac-media-safety-tmp",
+}
+SOCKET_ONLY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {"/var/lib/ac-media-safety-tmp"}
 EXPECTED_TMPFS_DESTINATION = "/tmp"  # noqa: S108 - fixed container tmpfs mount
 EXPECTED_TMPFS_OPTIONS = frozenset(
     {"rw", "noexec", "nosuid", "nodev", "size=268435456", "uid=100", "gid=100", "mode=0700"}
@@ -75,6 +99,12 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def release_files(release: str) -> set[str]:
+    """Return the exact archive shape for a current or named legacy release."""
+
+    return LEGACY_FILES if release in (LEGACY_HEALTH_RELEASES | PRE_WRAPPER_RELEASES) else FILES
+
+
 def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
     require(bool(re.fullmatch(r"[0-9a-f]{40}", release)), "Invalid release identity")
     require(bool(re.fullmatch(r"[0-9a-f]{64}", checksum)), "Invalid archive checksum")
@@ -91,13 +121,16 @@ def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
                 continue
             require(member.isfile() and member.name.startswith(PREFIX), "Unsafe archive member")
             name = member.name.removeprefix(PREFIX)
-            require(name in FILES and name not in result, "Unexpected or duplicate archive file")
+            require(
+                name in release_files(release) and name not in result,
+                "Unexpected or duplicate archive file",
+            )
             require(0 < member.size <= MIB, "Archive member size")
             stream = archive.extractfile(member)
             assert stream is not None
             result[name] = stream.read(MIB + 1)
         require(archive.pax_headers.get("comment") == release, "Not the named Git archive")
-    require(set(result) == FILES, "Incomplete scanner release")
+    require(set(result) == release_files(release), "Incomplete scanner release")
     return result
 
 
@@ -169,8 +202,16 @@ def validate_container(
     verify_running_mounts: bool = True,
 ) -> None:
     require(value["Config"]["Image"] == IMAGE, "Unexpected scanner image")
+    legacy_entrypoint = allow_legacy_health and release in LEGACY_HEALTH_RELEASES
+    image_entrypoint = legacy_entrypoint or release in PRE_WRAPPER_RELEASES
     require(
-        value["Config"]["Entrypoint"] == ["/init-unprivileged"] and not value["Config"]["Cmd"],
+        value["Config"]["Entrypoint"]
+        == (
+            ["/init-unprivileged"]
+            if image_entrypoint
+            else ["/bin/sh", ENTRYPOINT_DESTINATION]
+        )
+        and not value["Config"]["Cmd"],
         "Scanner command drift",
     )
     environment = dict(item.split("=", 1) for item in value["Config"]["Env"])
@@ -238,8 +279,24 @@ def validate_container(
             "Unexpected or duplicate scanner mount",
         )
         mounts[destination] = item
+    compose_text = (installed / "compose.yaml").read_text(encoding="utf-8")
+    socket_required = "/run/ac-media-safety:rw" in compose_text
+    temp_required = "/var/lib/ac-media-safety-tmp:rw" in compose_text
     require(
-        set(mounts) == EXPECTED_BIND_DESTINATIONS,
+        not temp_required or socket_required,
+        "Scanner temporary storage lacks its socket boundary",
+    )
+    expected_mounts = (
+        EXPECTED_BIND_DESTINATIONS
+        if temp_required
+        else SOCKET_ONLY_BIND_DESTINATIONS
+        if socket_required
+        else LEGACY_BIND_DESTINATIONS
+    )
+    if image_entrypoint:
+        expected_mounts = expected_mounts - {ENTRYPOINT_DESTINATION}
+    require(
+        set(mounts) == expected_mounts,
         "Unexpected scanner mounts",
     )
     # Docker represents Compose tmpfs mounts in HostConfig.Tmpfs, separately
@@ -269,6 +326,20 @@ def validate_container(
                 == sha((installed / name).read_bytes()),
                 "Running config mismatch",
             )
+    if not image_entrypoint:
+        entrypoint_mount = mounts[ENTRYPOINT_DESTINATION]
+        require(
+            entrypoint_mount.get("Type") == "bind"
+            and entrypoint_mount.get("Source") == str(installed / ENTRYPOINT_FILE)
+            and entrypoint_mount.get("RW") is False,
+            "Scanner entrypoint mount drift",
+        )
+        if verify_running_mounts:
+            require(
+                run("docker", "exec", CONTAINER, "sha256sum", ENTRYPOINT_DESTINATION).split()[0]
+                == sha((installed / ENTRYPOINT_FILE).read_bytes()),
+                "Running entrypoint mismatch",
+            )
     database_mount = mounts["/var/lib/clamav"]
     require(
         database_mount.get("Type") == "bind"
@@ -276,6 +347,211 @@ def validate_container(
         and database_mount.get("RW") is True,
         "Signature storage is not writable or drifted",
     )
+    if socket_required:
+        socket_mount = mounts["/run/ac-media-safety"]
+        require(
+            socket_mount.get("Type") == "bind"
+            and socket_mount.get("Source") == str(SOCKET_ROOT)
+            and socket_mount.get("RW") is True,
+            "Scanner socket storage is not writable or drifted",
+        )
+    if temp_required:
+        clamd = (installed / "clamd.conf").read_text(encoding="utf-8")
+        queue = TEMP_MAX_QUEUE if TEMP_POLICY_MARKER in compose_text else 2
+        require(
+            f"MaxThreads {TEMP_MAX_CONCURRENT_SCANS}" in clamd
+            and f"MaxQueue {queue}" in clamd
+            and "MaxScanSize 4000000000" in clamd
+            and "TemporaryDirectory /var/lib/ac-media-safety-tmp" in clamd,
+            "Scanner temporary storage policy is not bounded",
+        )
+        temp_mount = mounts["/var/lib/ac-media-safety-tmp"]
+        require(
+            temp_mount.get("Type") == "bind"
+            and temp_mount.get("Source") == str(TEMP_ROOT)
+            and temp_mount.get("RW") is True,
+            "Scanner temporary storage is not writable or drifted",
+        )
+
+
+def ensure_socket_root() -> None:
+    """Create the fixed scanner socket directory before a release transition."""
+
+    if not SOCKET_ROOT.exists():
+        SOCKET_ROOT.mkdir(mode=0o755)
+        os.chown(SOCKET_ROOT, 100, 100)
+    info = SOCKET_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == 100
+        and info.st_gid == 100
+        and not info.st_mode & 0o022,
+        "Untrusted scanner socket directory",
+    )
+    mode = stat.S_IMODE(info.st_mode)
+    require(
+        mode == 0o755 or mode & 0o777 == 0o755,
+        "Untrusted scanner socket directory",
+    )
+    if mode != 0o755:
+        # A parent setgid bit can survive directory creation and makes the
+        # application installer reject an otherwise safe fixed root. Clear
+        # only special bits after the type/owner/non-writable checks above.
+        os.chmod(SOCKET_ROOT, 0o755, follow_symlinks=False)  # noqa: S103 - fixed socket root mode
+    info = SOCKET_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == 100
+        and info.st_gid == 100
+        and stat.S_IMODE(info.st_mode) == 0o755,
+        "Untrusted scanner socket directory",
+    )
+
+
+def validate_temp_image(info: os.stat_result) -> None:
+    """A full allocation is required; sparse lengths do not reserve host disk."""
+
+    require(
+        stat.S_ISREG(info.st_mode)
+        and info.st_uid == 0
+        and stat.S_IMODE(info.st_mode) == 0o600
+        and info.st_nlink == 1
+        and info.st_size == TEMP_CAPACITY_BYTES
+        and info.st_blocks * 512 >= TEMP_CAPACITY_BYTES,
+        "Scanner temporary backing file is untrusted, sparse, or incorrectly sized",
+    )
+
+
+def validate_temp_mount(mount: dict, loop: dict) -> None:
+    """Reject directory binds, other devices, offsets and unbounded backing files."""
+
+    require(
+        mount.get("target") == str(TEMP_ROOT)
+        and mount.get("fstype") == "ext4"
+        and re.fullmatch(r"/dev/loop[0-9]+", str(mount.get("source", ""))) is not None
+        and {"rw", "nodev", "nosuid", "noexec"} <= set(str(mount.get("options", "")).split(",")),
+        "Scanner temporary filesystem is not the fixed private ext4 mount",
+    )
+    require(
+        loop.get("name") == mount["source"]
+        and loop.get("back-file") == str(TEMP_IMAGE)
+        and loop.get("offset") == 0
+        and loop.get("sizelimit") == 0
+        and loop.get("ro") is False,
+        "Scanner temporary loop device differs from its exact backing file",
+    )
+
+
+def validate_temp_root(*, running: bool = False) -> None:
+    validate_temp_image(TEMP_IMAGE.lstat())
+    mounted = json.loads(
+        run(
+            "findmnt",
+            "--json",
+            "--mountpoint",
+            str(TEMP_ROOT),
+            "--output",
+            "TARGET,SOURCE,FSTYPE,OPTIONS",
+        )
+    )["filesystems"]
+    require(len(mounted) == 1, "Scanner temporary mount is ambiguous")
+    device = str(mounted[0].get("source", ""))
+    require(re.fullmatch(r"/dev/loop[0-9]+", device) is not None, "Unexpected temporary device")
+    loops = json.loads(
+        run("losetup", "--json", "--list", "--output", "NAME,BACK-FILE,OFFSET,SIZELIMIT,RO", device)
+    )["loopdevices"]
+    require(len(loops) == 1, "Scanner temporary loop device is ambiguous")
+    validate_temp_mount(mounted[0], loops[0])
+    require(
+        run("blockdev", "--getsize64", device) == str(TEMP_CAPACITY_BYTES),
+        "Scanner temporary device capacity drift",
+    )
+    info = TEMP_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == info.st_gid == 100
+        and stat.S_IMODE(info.st_mode) == 0o750,
+        "Untrusted scanner temporary filesystem root",
+    )
+    if running:
+        require(
+            run("docker", "exec", CONTAINER, "stat", "-c", "%d:%i", "/var/lib/ac-media-safety-tmp")
+            == f"{info.st_dev}:{info.st_ino}",
+            "Scanner container does not hold the validated temporary filesystem",
+        )
+
+
+def ensure_temp_root() -> None:
+    """Prepare one retained 8 GiB disk filesystem, never grow or erase scratch data.
+
+    The unmounted root is root-owned mode 000: a reboot or missing mount cannot
+    turn Docker's bind into a writable directory on the host filesystem. Run
+    the exact controller after reboot to remount and recreate the scanner.
+    """
+
+    trusted(TEMP_ROOT.parent)
+    if not TEMP_ROOT.exists():
+        TEMP_ROOT.mkdir(mode=0o000)
+    info = TEMP_ROOT.lstat()
+    require(stat.S_ISDIR(info.st_mode), "Untrusted scanner temporary directory")
+    if os.path.ismount(TEMP_ROOT):
+        validate_temp_root()
+        return
+    require(not tuple(TEMP_ROOT.iterdir()), "Unmounted scanner temporary directory is not empty")
+    require(
+        (info.st_uid == 0 and not info.st_mode & 0o022)
+        or (info.st_uid == info.st_gid == 100 and stat.S_IMODE(info.st_mode) == 0o750),
+        "Untrusted scanner temporary mountpoint",
+    )
+    os.chown(TEMP_ROOT, 0, 0)
+    TEMP_ROOT.chmod(0o000)
+    preparing = TEMP_IMAGE.with_suffix(".preparing")
+    # An interrupted allocation is retained and blocks further allocation.
+    require(
+        not preparing.exists() and not preparing.is_symlink(),
+        "Incomplete scanner temporary allocation requires review",
+    )
+    if not TEMP_IMAGE.exists() and not TEMP_IMAGE.is_symlink():
+        filesystem = os.statvfs(ROOT)
+        require(
+            filesystem.f_bavail * filesystem.f_frsize
+            >= TEMP_CAPACITY_BYTES + TEMP_HOST_HEADROOM_BYTES,
+            "Insufficient host space for the fixed scanner allocation and headroom",
+        )
+        descriptor = os.open(preparing, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            os.posix_fallocate(stream.fileno(), 0, TEMP_CAPACITY_BYTES)
+            os.fsync(stream.fileno())
+        run(
+            "mkfs.ext4",
+            "-q",
+            "-F",
+            "-m",
+            "0",
+            "-E",
+            "nodiscard,lazy_itable_init=0,lazy_journal_init=0",
+            str(preparing),
+            timeout=300,
+        )
+        validate_temp_image(preparing.lstat())
+        # The installer lock and root-only managed parent exclude other writers.
+        preparing.rename(TEMP_IMAGE)
+        descriptor = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    validate_temp_image(TEMP_IMAGE.lstat())
+    run("mount", "-t", "ext4", "-o", "loop,nodev,nosuid,noexec", str(TEMP_IMAGE), str(TEMP_ROOT))
+    info = TEMP_ROOT.lstat()
+    if info.st_uid == 0:
+        require(
+            {entry.name for entry in TEMP_ROOT.iterdir()} <= {"lost+found"},
+            "Uninitialized scanner temporary filesystem contains unexpected data",
+        )
+        os.chown(TEMP_ROOT, 100, 100)
+        TEMP_ROOT.chmod(0o750)
+    validate_temp_root()
 
 
 def command(payload: bytes) -> bytes:
@@ -317,8 +593,8 @@ def definitions() -> dict:
     return result
 
 
-def validate_policy(installed: Path) -> None:
-    """Validate the immutable scanning/updater policy for one release."""
+def validate_policy(installed: Path) -> tuple[int, int]:
+    """Validate one exact historical/current policy and return its byte limits."""
 
     policy = {}
     for line in (installed / "clamd.conf").read_text().splitlines():
@@ -326,13 +602,15 @@ def validate_policy(installed: Path) -> None:
             key, setting = line.split(maxsplit=1)
             require(key not in policy, "Duplicate scanner setting")
             policy[key] = setting
+    limits = {
+        ("100M", "100M", "200M"): (100 * MIB, 200 * MIB),
+        ("2000000000", "2000000000", "4000000000"): (2_000_000_000, 4_000_000_000),
+    }.get(tuple(policy.get(key) for key in ("StreamMaxLength", "MaxFileSize", "MaxScanSize")))
+    require(limits is not None, "Scanner limits differ from admitted policy")
     require(
         all(
             policy.get(key) == setting
             for key, setting in {
-                "StreamMaxLength": "100M",
-                "MaxFileSize": "100M",
-                "MaxScanSize": "200M",
                 "AlertExceedsMax": "yes",
                 "BytecodeSecurity": "TrustSigned",
             }.items()
@@ -361,6 +639,8 @@ def validate_policy(installed: Path) -> None:
         ),
         "Signature updater differs from managed policy",
     )
+    assert limits is not None
+    return limits
 
 
 def live_probe() -> tuple[bytes, dict]:
@@ -400,7 +680,14 @@ def prove(release: str, installed: Path) -> dict:
         "Scanner health is not accepted",
     )
     validate_container(value, release, installed)
-    validate_policy(installed)
+    source_bytes, scan_bytes = validate_policy(installed)
+    fixed_temp = TEMP_POLICY_MARKER in (installed / "compose.yaml").read_text(encoding="utf-8")
+    require(
+        source_bytes <= 100 * MIB or fixed_temp,
+        "Large scanner readiness requires the fixed temporary filesystem policy",
+    )
+    if fixed_temp:
+        validate_temp_root(running=True)
     _, evidence = live_probe()
     final = inspect()
     require(
@@ -411,6 +698,8 @@ def prove(release: str, installed: Path) -> dict:
         "Scanner identity or health changed during proof",
     )
     validate_container(final, release, installed)
+    if fixed_temp:
+        validate_temp_root(running=True)
     now = dt.datetime.now(dt.UTC)
     config_hash = sha(
         (installed / "clamd.conf").read_bytes() + (installed / "freshclam.conf").read_bytes()
@@ -429,10 +718,10 @@ def prove(release: str, installed: Path) -> dict:
         "environment": "local",
         "host": "127.0.0.1",
         "port": 13310,
-        "max_source_bytes": 100 * MIB,
-        "stream_max_length": 100 * MIB,
-        "max_file_size": 100 * MIB,
-        "max_scan_size": 200 * MIB,
+        "max_source_bytes": source_bytes,
+        "stream_max_length": source_bytes,
+        "max_file_size": source_bytes,
+        "max_scan_size": scan_bytes,
         "alert_exceeds_max": True,
         "verified_at": now.isoformat(),
         "expires_at": (now + dt.timedelta(hours=12)).isoformat(),
@@ -453,7 +742,10 @@ def validate_installed_release(release: str, checksum: str) -> tuple[Path, dict[
     files = archive_files(raw, release, checksum)
     installed = ROOT / "releases" / release
     trusted(installed, immutable=True)
-    require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+    require(
+        {path.name for path in installed.iterdir()} == release_files(release),
+        "Release file drift",
+    )
     for name, body in files.items():
         target = installed / name
         trusted(target, directory=False, immutable=True)
@@ -464,6 +756,11 @@ def validate_installed_release(release: str, checksum: str) -> tuple[Path, dict[
 def compose_up(release: str, installed: Path) -> None:
     """Reconcile only the exact named scanner service for one release."""
 
+    disk_temp = "/var/lib/ac-media-safety-tmp:rw" in (installed / "compose.yaml").read_text(
+        encoding="utf-8"
+    )
+    if disk_temp:
+        ensure_temp_root()
     env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "AC_MEDIA_SAFETY_RELEASE": release}
     run(
         "docker",
@@ -475,6 +772,7 @@ def compose_up(release: str, installed: Path) -> None:
         "up",
         "--detach",
         "--no-build",
+        *(("--force-recreate",) if disk_temp else ()),
         "scanner",
         timeout=120,
         env=env,
@@ -628,6 +926,8 @@ def main() -> None:
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if args.action != "prove":
+            ensure_socket_root()
         archives = ROOT / "archives"
         archives.mkdir(mode=0o755, exist_ok=True)
         trusted(archives)
@@ -655,7 +955,10 @@ def main() -> None:
                 target.chmod(0o444)
             installed.chmod(0o555)
         trusted(installed, immutable=True)
-        require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+        require(
+            {path.name for path in installed.iterdir()} == release_files(args.release),
+            "Release file drift",
+        )
         for name, body in files.items():
             target = installed / name
             trusted(target, directory=False, immutable=True)
@@ -683,6 +986,7 @@ def main() -> None:
                     stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o077,
                     "Untrusted signature directory",
                 )
+                ensure_socket_root()
                 run("docker", "pull", IMAGE, timeout=300)
             compose_up(args.release, installed)
             print(

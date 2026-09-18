@@ -1,0 +1,50 @@
+{
+  "schema": "ac-historical-session-fixture-proof-v1",
+  "base_sha": "ebe1b0bb6c57d6bba432e96b81882fb283573228",
+  "date": "2026-09-14",
+  "source_sha256": {
+    "tests/database/test_capability_grants_postgresql.py": "a16ed5d682c7218c554900289cf10e9c3dc7064589a2fc63c9d5d658f7e0736c",
+    "tests/integration/test_migration_rehearsal_postgresql.py": "78a994fc80a7b38fe32f42bb6b3db9c6522bb5d3daede5d7607b52e8ae9e60cb",
+    "tests/integration/test_studio_draft_authoring_postgresql.py": "74b4397f6f8bcc2fe2028f371a6ebbec78b19c3bd9e5be1a78ecd9847fa8d9b7",
+    "tests/integration/test_studio_revision_postgresql.py": "52288c686a04c711caf4d194c9d08e1dfe4f9af5f4176b0e78cb3ec63421ca33"
+  },
+  "receipts": [
+    {
+      "phase": "before",
+      "tests": 3,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 42.843
+    },
+    {
+      "phase": "capability-before",
+      "tests": 10,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 11.63
+    },
+    {
+      "phase": "after",
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 162.798
+    }
+  ],
+  "historical_boundaries_preserved": [
+    "0018-to-0019 separate DDL/history schema",
+    "0022-to-0023 catalog operation admission and immutable receipts",
+    "0032-to-0033 and0033-to-0035 full-row preservation"
+  ],
+  "current_application_tests": "Separate fully migrated schema; actual Identity and Capability applications, no auth mocks",
+  "production_code_changed": false,
+  "providers_called": false,
+  "paid_spend_inr": 0,
+  "hosted_runtime_tested_by_this_receipt": false,
+  "disposable_database_cleanup": "confirmed by runner for all three executions",
+  "external_receipt_directory": "D:/AC-authority-closers-release-audit/historical-session-fixtures-20260914",
+  "runner_sha256": "0eacd93fd14f8d73f87eb3cd0ba56a78b8eca14e969d75f17ce7ab3bb319d917"
+}

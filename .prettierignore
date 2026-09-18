@@ -2,3 +2,4 @@
 **/node_modules/
 **/coverage/
 **/playwright-report/
+apps/sales-xray-web/out/

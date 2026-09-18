@@ -39,6 +39,61 @@ function offlineCache(
 }
 
 describe("learner API adapter", () => {
+  it("loads server-selected consent and binds renewal to that version", async () => {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input);
+        if (path === "/v1/me/consent") {
+          expect(init?.method).toBeUndefined();
+          return response({
+            status: "renewal_required",
+            current_version: "server-current-v2",
+            recorded_version: "old-v1",
+            consented_at: "2026-09-13T10:00:00Z",
+            document: {
+              version: "server-current-v2",
+              acknowledgement: "I accept the current notice.",
+              terms_path: "/terms",
+              privacy_path: "/privacy",
+            },
+            replayed: false,
+          });
+        }
+        expect(path).toBe("/v1/me/consent/renew");
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          accepted: true,
+          expected_version: "server-current-v2",
+        });
+        return response({
+          status: "current",
+          current_version: "server-current-v2",
+          recorded_version: "server-current-v2",
+          consented_at: "2026-09-14T10:00:00Z",
+          document: {
+            version: "server-current-v2",
+            acknowledgement: "I accept the current notice.",
+            terms_path: "/terms",
+            privacy_path: "/privacy",
+          },
+          replayed: false,
+        });
+      },
+    );
+    const api = createLearnerApi(fetcher, {
+      idempotencyKey: () => "consent-renewal-test",
+    });
+
+    await expect(api.consent()).resolves.toMatchObject({
+      current_version: "server-current-v2",
+      recorded_version: "old-v1",
+    });
+    await expect(api.renewConsent("server-current-v2")).resolves.toMatchObject({
+      status: "current",
+      current_version: "server-current-v2",
+    });
+  });
+
   it("matches the profile-avatar checksum upload-intent and completion schema", async () => {
     const checksum =
       "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a";

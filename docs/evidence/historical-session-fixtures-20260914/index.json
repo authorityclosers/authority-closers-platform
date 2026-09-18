@@ -1,0 +1,20 @@
+{
+  "schema": "ac-source-evidence-hash-index-v1",
+  "base_sha": "ebe1b0bb6c57d6bba432e96b81882fb283573228",
+  "canonicalization": "UTF-8 files, CRLF normalized to LF as Git commits them",
+  "sha256": {
+    "docs/evidence/20260914_HISTORICAL_SESSION_FIXTURE_CORRECTION.md": "749804760bc2b61e25b6e78b968a5b1a5d7b1f0c99e8efd8474773d4725f226c",
+    "docs/evidence/historical-session-fixtures-20260914/after.junit.xml": "1421507223d7a08b40845cede435416f99f7b549c202ed6c1808d779c4685b45",
+    "docs/evidence/historical-session-fixtures-20260914/after.log": "589da557f4978f6ce7fb38fa78fb153aaefeb4aea8b8dc6c8fc5657749354934",
+    "docs/evidence/historical-session-fixtures-20260914/before.junit.xml": "b6d7a24148a09e96fbbbec448ae3ff8d049ef9b32696add644f8bcf50c61ba9f",
+    "docs/evidence/historical-session-fixtures-20260914/before.log": "744a32f6d53fee01cbc4d816ae39ef0da40d9dc2cdbff8fad246663a18c4fb72",
+    "docs/evidence/historical-session-fixtures-20260914/capability-before.junit.xml": "d820ef624feb8af7baf45a3270ce6e6cbe038d216136ada038f03f134b06f772",
+    "docs/evidence/historical-session-fixtures-20260914/capability-before.log": "463320d46f7abd1efe12deec202b4e5a9157a42028bc428bbb5ea9ff51883946",
+    "docs/evidence/historical-session-fixtures-20260914/review.json": "dd985c10408326a0db7a9113a71b009ebff3797d6c741a0d947f22959c635518",
+    "docs/evidence/historical-session-fixtures-20260914/summary.json": "bf250a1e9a49f588cbe50ff059dcc0a679147545881b1fd1f954cde7deb52ea4",
+    "tests/database/test_capability_grants_postgresql.py": "a16ed5d682c7218c554900289cf10e9c3dc7064589a2fc63c9d5d658f7e0736c",
+    "tests/integration/test_migration_rehearsal_postgresql.py": "78a994fc80a7b38fe32f42bb6b3db9c6522bb5d3daede5d7607b52e8ae9e60cb",
+    "tests/integration/test_studio_draft_authoring_postgresql.py": "74b4397f6f8bcc2fe2028f371a6ebbec78b19c3bd9e5be1a78ecd9847fa8d9b7",
+    "tests/integration/test_studio_revision_postgresql.py": "52288c686a04c711caf4d194c9d08e1dfe4f9af5f4176b0e78cb3ec63421ca33"
+  }
+}

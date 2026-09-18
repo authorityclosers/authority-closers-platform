@@ -98,8 +98,41 @@ class AppReleaseCatalogue:
 
 
 CURRENT_ARTIFACT_RELEASES = AppReleaseCatalogue(
-    version="app-updates-v0-2-alpha-catalogue-1",
+    version="app-updates-v0-2-alpha-catalogue-3",
     releases=(
+        AppRelease(
+            id="sales-xray-focused-report-20260915",
+            title="A clearer view of your next call",
+            message=(
+                "Your Sales Xray report puts the main takeaway first, "
+                "with a clearer path to the moments and practice that matter."
+            ),
+            version="Sales Xray",
+            highlights=(
+                "See what to keep doing and what to work on next.",
+                "Explore the report by section and return to the supporting audio.",
+                "Follow your call’s progress in a simpler processing view.",
+            ),
+            target_href="/sales-xray",
+            created_at=datetime(2026, 9, 15, 5, 30, tzinfo=UTC),
+            state="shipped",
+        ),
+        AppRelease(
+            id="app-updates-v0-2-read-recovery",
+            title="A quieter notification bell",
+            message=(
+                "Read an update once and carry on. "
+                "Switching tabs no longer interrupts saving it as read."
+            ),
+            version="v0.2 Alpha",
+            highlights=(
+                "Marking an update as read can finish when you return to the app.",
+                "Your notification list refreshes after the save finishes.",
+                "Saved read status follows your academy account when you sign in again.",
+            ),
+            target_href="/notifications",
+            created_at=datetime(2026, 9, 13, 17, 30, tzinfo=UTC),
+        ),
         AppRelease(
             id="app-updates-v0-2-alpha",
             title="A home for app updates",

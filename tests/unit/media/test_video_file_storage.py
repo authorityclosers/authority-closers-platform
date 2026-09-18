@@ -616,9 +616,18 @@ def test_read_detects_midstream_mutation(tmp_path):
     write(adapter)
     chunks = adapter.iter_range(KEY, chunk_size=16)
     assert next(chunks) == DATA[:16]
-    with next(adapter.root.glob("*.object")).open("r+b") as stream:
+    path = next(adapter.root.glob("*.object"))
+    before = path.stat()
+    with path.open("r+b") as stream:
         stream.seek(4096 + 32)
         stream.write(b"changed")
+    # Exercise the live identity guard without relying on a rapid write landing
+    # in a different filesystem clock tick. Same-stat corruption at admission
+    # is covered separately by test_same_stat_identity_cannot_hide_changed_bytes.
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000))
+    after = path.stat()
+    assert after.st_size == before.st_size
+    assert after.st_mtime_ns != before.st_mtime_ns
     with pytest.raises(MediaStorageUnavailable, match="changed"):
         next(chunks)
 

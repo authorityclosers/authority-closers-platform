@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ac/sales-xray-review-ui": "workspace:*",
     "@ac/ui": "workspace:*",
     "hls.js": "1.7.2",
     "lucide-react": "1.37.0",

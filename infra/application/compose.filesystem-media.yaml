@@ -1,0 +1,52 @@
+# Explicit companion profile for the source-owned Studio video pipeline.
+# It is selected only by install-application-release.sh when the target
+# release's reviewed environment profile sets AC_MEDIA_FILESYSTEM_ENABLED=true.
+# It is never included by the foundation/default application profile.
+services:
+  api:
+    environment:
+      AC_MEDIA_FILESYSTEM_ENABLED: "true"
+      AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects
+      AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
+      AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+    volumes:
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?AC_MEDIA_FILESYSTEM_HOST_ROOT is required}
+        target: /var/lib/ac-media
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_MEDIA_SCANNER_HOST_ROOT:?AC_MEDIA_SCANNER_HOST_ROOT is required}
+        target: /run/ac-media-safety
+        read_only: true
+        bind:
+          create_host_path: false
+
+  worker:
+    # The Studio path transcodes the source to HLS and a progressive fallback.
+    # A 4K frame alone is ~12 MiB before libx264 lookahead and FFmpeg buffers;
+    # keep this bounded at 2 GiB so the reviewed 4K source cap does not run
+    # inside the generic 512 MiB worker limit.
+    mem_limit: 2g
+    environment:
+      AC_MEDIA_FILESYSTEM_ENABLED: "true"
+      AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects
+      AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
+      AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+      TMPDIR: /var/lib/ac-media/tmp
+    volumes:
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?AC_MEDIA_FILESYSTEM_HOST_ROOT is required}
+        target: /var/lib/ac-media
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_MEDIA_SCANNER_HOST_ROOT:?AC_MEDIA_SCANNER_HOST_ROOT is required}
+        target: /run/ac-media-safety
+        read_only: true
+        bind:
+          create_host_path: false

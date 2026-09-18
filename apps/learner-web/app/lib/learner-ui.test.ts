@@ -689,8 +689,8 @@ describe("honest preview controls", () => {
     expect(consent).not.toContain("callback payload");
     expect(registration).toContain("This Google account is not linked yet.");
     expect(registration).toContain("will not create an account silently");
-    expect(consentUpdate).toContain("Contact support");
-    expect(consentUpdate).toContain("mailto:admin@authorityclosers.com");
+    expect(consentUpdate).toContain("Review current consent");
+    expect(consentUpdate).toContain("/consent/renewal");
     expect(consentUpdate).not.toContain('href="/register"');
     expect(consentUpdate).toContain('class="boundary-card"');
     expect(consentUpdate).not.toContain("boundary-card--dark");
@@ -700,7 +700,7 @@ describe("honest preview controls", () => {
 
   it("applies the Clarity Grid auth and onboarding compositions without changing capability", async () => {
     const registration = renderToStaticMarkup(await RegisterPage());
-    const verification = renderToStaticMarkup(createElement(VerifyEmailPage));
+    const verification = renderToStaticMarkup(await VerifyEmailPage());
     const onboarding = renderToStaticMarkup(
       await OnboardingPage({ searchParams: Promise.resolve({}) }),
     );

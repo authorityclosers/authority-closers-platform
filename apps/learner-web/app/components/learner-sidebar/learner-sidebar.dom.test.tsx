@@ -100,6 +100,22 @@ function PaletteHarness() {
 }
 
 describe("learner shell modal interactions", () => {
+  it("opens Sales Xray from More and closes the menu without adding a sixth tab", async () => {
+    await act(async () => root.render(<MoreHarness current="sales-xray" />));
+    const nav = container.querySelector(".learner-bottom-nav")!;
+    expect(nav.children).toHaveLength(5);
+    const more = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="More navigation options"]',
+    )!;
+    await act(async () => more.click());
+    const link = container.querySelector<HTMLAnchorElement>(
+      '.mobile-drawer-nav a[href="/sales-xray"]',
+    )!;
+    expect(link.textContent).toContain("Sales Xray");
+    expect(link.getAttribute("aria-current")).toBe("page");
+    await act(async () => link.click());
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
   it("gives admitted Arcade a primary tab without crowding out the five-slot layout", async () => {
     await act(async () =>
       root.render(<MoreHarness current="practice" practiceAvailable />),

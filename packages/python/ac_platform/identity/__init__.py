@@ -18,7 +18,9 @@ from ac_platform.identity.models import (
     ProviderAuthorizationTransaction,
     ProviderAuthorizationTransactionStatus,
     ProviderIdentity,
+    ReviewerAuthChallenge,
     Session,
+    SessionAudience,
 )
 
 _LAZY_PUBLIC_IMPORTS = {
@@ -33,6 +35,35 @@ _LAZY_PUBLIC_IMPORTS = {
     ),
     "RegisteredIdentity": ("ac_platform.identity.application", "RegisteredIdentity"),
     "ResolvedActorContext": ("ac_platform.identity.application", "ResolvedActorContext"),
+    "IssuedReviewerChallenge": (
+        "ac_platform.identity.reviewer_auth",
+        "IssuedReviewerChallenge",
+    ),
+    "InvalidReviewerChallenge": (
+        "ac_platform.identity.reviewer_auth",
+        "InvalidReviewerChallenge",
+    ),
+    "ReviewerAuthentication": (
+        "ac_platform.identity.reviewer_auth",
+        "ReviewerAuthentication",
+    ),
+    "ReviewerAuthenticationService": (
+        "ac_platform.identity.reviewer_auth",
+        "ReviewerAuthenticationService",
+    ),
+    "ReviewerAccountUnavailable": (
+        "ac_platform.identity.reviewer_auth",
+        "ReviewerAccountUnavailable",
+    ),
+    "ReviewerSession": ("ac_platform.identity.reviewer_auth", "ReviewerSession"),
+    "hash_reviewer_browser_nonce": (
+        "ac_platform.identity.reviewer_auth",
+        "hash_reviewer_browser_nonce",
+    ),
+    "validate_reviewer_browser_nonce": (
+        "ac_platform.identity.reviewer_auth",
+        "validate_reviewer_browser_nonce",
+    ),
     "IdentityServices": ("ac_platform.identity.factories", "IdentityServices"),
     "build_production_identity_services": (
         "ac_platform.identity.factories",
@@ -175,6 +206,8 @@ __all__ = [
     "ProviderIdentityRaceError",
     "ProviderIdentitySnapshot",
     "Session",
+    "SessionAudience",
+    "ReviewerAuthChallenge",
     "SessionExpiredError",
     "SessionRevisionConflictError",
     "SessionMetadata",
@@ -189,6 +222,14 @@ __all__ = [
     "ProductionTransactionRequiredError",
     "RegisteredIdentity",
     "ResolvedActorContext",
+    "IssuedReviewerChallenge",
+    "InvalidReviewerChallenge",
+    "ReviewerAuthentication",
+    "ReviewerAuthenticationService",
+    "ReviewerAccountUnavailable",
+    "ReviewerSession",
+    "hash_reviewer_browser_nonce",
+    "validate_reviewer_browser_nonce",
     "IdentityServices",
     "build_production_identity_services",
     "create_identity_repository",

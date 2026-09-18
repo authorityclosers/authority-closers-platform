@@ -35,6 +35,7 @@ if digest.hexdigest() != expected_sha256:
 
 required_files = {
     "infra/application/compose.yaml",
+    "infra/application/compose.filesystem-media.yaml",
     "infra/application/compose.staging-public-films.yaml",
     "infra/application/capabilities/staging-public-films.json",
     "infra/application/data/alpha_public_films_12s_v1.json",
@@ -46,10 +47,13 @@ required_files = {
     "infra/application/edge-routes/staging-hold.caddy",
     "infra/application/edge-routes/staging.caddy",
     "infra/application/scripts/public-films.py",
+    "infra/application/scripts/studio-video-upload.py",
     "infra/application/environments/staging.env",
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/recover-sales-xray-startup.py",
+    "infra/application/scripts/install-sales-xray-startup-recovery.py",
     "infra/application/scripts/restore-drill.py",
     "infra/application/scripts/staging-public-films.py",
     "infra/application/scripts/validate-google-oauth-secrets.py",

@@ -1,0 +1,16 @@
+# These pytest files are run once by the required, environment-specific gates
+# in .github/workflows/application.yml and must not be assigned to a shard.
+tests/infra/test_media_safety_temp_filesystem.py
+tests/infra/test_sales_xray_database_provision.py
+tests/infra/test_sales_xray_hosted_lifecycle.py
+tests/integration/test_catalog_publication_concurrency_postgresql.py
+tests/integration/test_catalog_publication_migration_postgresql.py
+tests/integration/test_database_runtime_privileges_postgresql.py
+tests/integration/test_job_kind_isolation_postgresql.py
+tests/integration/test_learning_http_postgresql.py
+tests/integration/test_migration_rehearsal_postgresql.py
+tests/integration/test_operations_bootstrap_postgresql.py
+tests/integration/test_staging_seed_postgresql.py
+tests/integration/test_studio_draft_authoring_postgresql.py
+tests/integration/test_studio_revision_postgresql.py
+tests/integration/test_studio_video_worker_fence_postgresql.py

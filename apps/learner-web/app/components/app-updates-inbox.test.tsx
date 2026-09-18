@@ -121,6 +121,40 @@ it("preserves unread after save failure and offers retry", async () => {
   await act(async () => button("Mark as read").click());
   expect(container.textContent).toContain("0 unread");
 });
+it("does not cancel an in-flight read receipt when focus returns or reload stale unread data ahead of its commit", async () => {
+  const save = deferred<AppUpdateFeed>();
+  let signal: AbortSignal | undefined;
+  let committed = false;
+  api.markRead = vi.fn((_id, requestSignal) => {
+    signal = requestSignal;
+    return save.promise;
+  });
+  api.list = vi.fn(async () => (committed ? readFeed : feed));
+  await render();
+  await act(async () => button("Mark as read").click());
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(signal?.aborted).toBe(false);
+  expect(api.list).toHaveBeenCalledTimes(1);
+  expect(container.textContent).not.toContain("A home for app updates");
+  await act(async () => {
+    committed = true;
+    save.resolve(readFeed);
+  });
+  expect(api.list).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("0 unread");
+  expect(container.querySelector('[data-read="true"]')).not.toBeNull();
+});
+it("loads persisted read status on a fresh login mount without relying on browser storage", async () => {
+  await render();
+  await act(async () => button("Mark as read").click());
+  await act(async () => root.unmount());
+  api.list = vi.fn(async () => readFeed);
+  root = createRoot(container);
+  await render();
+  expect(container.textContent).toContain("0 unread");
+  expect(container.querySelector('[data-read="true"]')).not.toBeNull();
+});
 it("clears the private feed on session denial instead of retaining an old count", async () => {
   await render();
   api.list = vi.fn(async () => {

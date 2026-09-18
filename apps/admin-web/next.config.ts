@@ -7,7 +7,11 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
   devIndicators: false,
-  transpilePackages: ["@ac/ui", "@ac/operations-web"],
+  transpilePackages: [
+    "@ac/ui",
+    "@ac/operations-web",
+    "@ac/sales-xray-review-ui",
+  ],
   poweredByHeader: false,
 };
 

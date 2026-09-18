@@ -1,3 +1,4 @@
+import { hashBlobSha256 } from "@ac/ui/blob-sha256";
 import { z } from "zod";
 import { AdminApiProblem } from "../admin-api";
 
@@ -110,7 +111,13 @@ export type StudioUploadRequest = z.infer<typeof studioUploadRequestSchema>;
 export type StudioUploadCapability = z.infer<typeof capabilitySchema>;
 export type StudioUploadIntent = z.infer<typeof intentSchema>;
 export type StudioUploadStatus = z.infer<typeof statusSchema>;
-type Options = { signal?: AbortSignal; fetcher?: typeof fetch };
+export const STUDIO_UPLOAD_CHUNK_BYTES = 16 * 1024 * 1024;
+type Options = {
+  signal?: AbortSignal;
+  fetcher?: typeof fetch;
+  startOffset?: number;
+  onProgress?: (fraction: number) => void;
+};
 function programPath(programId: string) {
   return `/v1/admin/studio/programs/${uuid.parse(programId)}`;
 }
@@ -209,32 +216,48 @@ export async function putStudioVideoBytes(
   const signal = options.signal
     ? AbortSignal.any([options.signal, AbortSignal.timeout(30 * 60_000)])
     : AbortSignal.timeout(30 * 60_000);
-  // Sending the File directly lets the browser stream it. Do not buffer a lecture,
-  // set forbidden Content-Length manually, or follow a redirect with private bytes.
-  const response = await (options.fetcher ?? fetch)(path, {
-    method: "PUT",
-    body: source,
-    signal,
-    credentials: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    headers: {
-      "content-type": body.content_type,
-      "x-content-sha256": body.checksum_sha256,
-    },
-  });
-  if (
-    response.status !== 204 ||
-    response.headers.get("x-ac-upload-bytes") !== String(source.size) ||
-    response.headers.get("x-ac-upload-sha256") !== body.checksum_sha256
-  ) {
-    throw new AdminApiProblem({
-      status: response.ok ? 502 : response.status,
-      code: "upload_unconfirmed",
-      title: "Upload not confirmed",
-      detail: "Retry the same upload to confirm its bytes.",
-      requestId: null,
+  let offset = options.startOffset ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > source.size)
+    throw new TypeError("The upload offset changed.");
+  while (offset < source.size) {
+    const chunk = source.slice(
+      offset,
+      Math.min(source.size, offset + STUDIO_UPLOAD_CHUNK_BYTES),
+    );
+    const chunkChecksum = await hashBlobSha256(chunk, { signal });
+    const response = await (options.fetcher ?? fetch)(path, {
+      method: "PUT",
+      body: chunk,
+      signal,
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      headers: {
+        "content-type": body.content_type,
+        "x-content-sha256": body.checksum_sha256,
+        "x-ac-upload-total": String(source.size),
+        "x-ac-upload-offset": String(offset),
+        "x-ac-upload-chunk-sha256": chunkChecksum,
+      },
     });
+    const next = Number(response.headers.get("x-ac-upload-bytes"));
+    if (
+      response.status !== 204 ||
+      !Number.isSafeInteger(next) ||
+      next < offset + chunk.size ||
+      next > source.size ||
+      response.headers.get("x-ac-upload-sha256") !== body.checksum_sha256
+    ) {
+      throw new AdminApiProblem({
+        status: response.ok ? 502 : response.status,
+        code: "upload_unconfirmed",
+        title: "Upload not confirmed",
+        detail: "Retry the same upload to confirm its bytes.",
+        requestId: null,
+      });
+    }
+    offset = next;
+    options.onProgress?.(offset / source.size);
   }
 }
 

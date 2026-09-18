@@ -1,0 +1,165 @@
+{
+  "route": "/",
+  "compiled_build_id": "gnMRJ4xfCU_P-m9Hh3p7i",
+  "api_interceptions": 0,
+  "synthetic_provider_calls": 3,
+  "provider_network_calls": 0,
+  "native_socket_simulated": true,
+  "challenge_simulated": true,
+  "http_receipts": [
+    {
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/upload-policy",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/session",
+      "status": 401
+    },
+    {
+      "path": "/v1/conversation/acquisition/session",
+      "status": 201
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/source",
+      "status": 202
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/source",
+      "status": 206
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/plan/quote",
+      "status": 201
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/plan",
+      "status": 202
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/transcript",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/report",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/upload-policy",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/session",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/source",
+      "status": 206
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/transcript",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/report",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/upload-policy",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/session",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/claim",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/upload-policy",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/session",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/source",
+      "status": 206
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/transcript",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df/report",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/acquisition/submissions/359d763b-25cd-4db5-854b-797909a0d6df",
+      "status": 202
+    }
+  ],
+  "page_errors": [],
+  "passed": [
+    "inline upload consent",
+    "native C1",
+    "explicit provider plan",
+    "C6 overview",
+    "private range playback",
+    "reload without retranscription",
+    "390px reflow",
+    "print",
+    "explicit account claim",
+    "stranger denied",
+    "deletion accepted"
+  ]
+}

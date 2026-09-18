@@ -47,6 +47,13 @@ class SelfAttestedEligibilityDenied(AuthorizationDenied):
     title = "Free-course eligibility could not be confirmed"
 
 
+class LearnerConsentUpdateRequired(SelfAttestedEligibilityDenied):
+    """The learner must explicitly renew the server-published consent document."""
+
+    code = "learner_consent_update_required"
+    title = "Current learner consent is required"
+
+
 class SelfAttestedEligibilityTransactionRequired(SelfAttestedEligibilityDenied):
     """The eligibility fact must be created in the enrollment transaction."""
 
@@ -207,6 +214,10 @@ class AsyncSelfAttestedEligibilityApplication:
                 "the reviewed learner consent version is not configured"
             )
         if person.consent_version != consent_version or person.consented_at is None:
+            if person.consent_version is not None and person.consent_version != consent_version:
+                raise LearnerConsentUpdateRequired(
+                    "Review and accept the current learner consent document before enrolling."
+                )
             raise SelfAttestedEligibilityDenied(
                 "the exact required 18+ learner consent has not been recorded"
             )
@@ -325,6 +336,7 @@ class AsyncSelfAttestedEligibilityApplication:
 
 __all__ = [
     "AUTHORITY_CLOSERS_FREE_PROGRAM_SLUG",
+    "LearnerConsentUpdateRequired",
     "SELF_ATTESTED_ELIGIBILITY_POLICY_VERSION",
     "AsyncSelfAttestedEligibilityApplication",
     "SelfAttestedEligibilityDenied",

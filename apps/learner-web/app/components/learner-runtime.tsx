@@ -660,6 +660,15 @@ export function PublicProgramDetail({
                 >
                   Create learner account →
                 </Link>
+                {program.slug === FREE_COURSE_SLUG ? (
+                  <Link
+                    className="text-link"
+                    href={ROUTES.salesXray}
+                    prefetch={false}
+                  >
+                    Explore Sales Xray
+                  </Link>
+                ) : null}
               </div>
             </div>
           </section>

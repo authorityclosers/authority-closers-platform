@@ -5,12 +5,13 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from pydantic.networks import AnyHttpUrl
 
 import ac_platform.http.app as app_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.app import create_app
 from ac_platform.http.identity_provider import DisabledIdentityProvider, OAuthIdentityProvider
-from ac_platform.media.runtime import create_media_runtime
+from ac_platform.media.runtime import create_default_media_runtime, create_media_runtime
 
 
 def _deployment_settings(environment: str) -> Settings:
@@ -66,6 +67,8 @@ def test_shipped_application_mounts_g1_command_and_query_routes() -> None:
     assert "/v1/admin/enrollment-grants" in paths
     assert "/v1/admin/jobs/{job_id}/retry" in paths
     assert "/v1/admin/recovery/reconcile" in paths
+    assert "/v1/admin/learners/lookup" in paths
+    assert "/v1/admin/learners/{person_id}/diagnosis" in paths
     assert "/v1/media/uploads" in paths
     assert "/v1/profile/avatar" in paths
     assert "/v1/media/{asset_id}/playback-token" in paths
@@ -94,6 +97,51 @@ def test_deployment_composition_omits_unconfigured_playback_routes(
     assert "/v1/activities/{activity_id}/playback/start" not in paths
     assert "/v1/activities/{activity_id}/playback/heartbeat" not in paths
     assert "/v1/activities/{activity_id}/playback/finish" not in paths
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_deployment_composes_explicit_filesystem_video_profile(
+    environment: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    settings = _deployment_settings(environment).model_copy(
+        update={
+            "media_filesystem_enabled": True,
+            "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_filesystem_avatar_root": str(tmp_path / "avatar-objects"),
+            "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
+            "media_max_upload_bytes": 2_000_000_000,
+            "public_app_url": (
+                AnyHttpUrl("https://learner-staging.authorityclosers.com")
+                if environment == "staging"
+                else AnyHttpUrl("https://learner.authorityclosers.com")
+            ),
+        }
+    )
+    monkeypatch.setattr(app_module, "settings", settings)
+
+    application = create_app()
+
+    assert application.state.studio_video_worker is not None
+    assert application.state.studio_video_worker.pipeline.service.storage.max_object_bytes == (
+        2_000_000_000
+    )
+    assert application.state.studio_video_worker.pipeline.service.storage.max_store_bytes == (
+        8 * 1024**3
+    )
+
+    runtime = create_default_media_runtime(settings)
+    assert runtime.studio_video_runtime is not None
+    assert runtime.filesystem_avatar_runtime is not None
+    # Profile-photo composition must leave the Studio admission/completion
+    # service authoritative for VIDEO while routing AVATAR commands to its
+    # separate filesystem service.
+    assert runtime.service is not runtime.filesystem_avatar_runtime.service
+    assert runtime.filesystem_avatar_runtime.service is not runtime.service
+    from ac_platform.http.media import _avatar_service
+
+    assert _avatar_service(runtime) is runtime.filesystem_avatar_runtime.service
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
@@ -227,6 +275,21 @@ def test_deployment_composition_does_not_enable_cross_surface_browser_cors(
     assert all(
         middleware.cls.__name__ != "CORSMiddleware" for middleware in application.user_middleware
     )
+
+
+def test_local_cors_allows_exact_quote_header_for_intake(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_module, "settings", Settings(environment="local"))
+    with TestClient(create_app(identity_provider=DisabledIdentityProvider())) as client:
+        response = client.options(
+            "/v1/conversation/recordings/00000000-0000-4000-8000-000000000001/source",
+            headers={
+                "Origin": app_module.settings.allowed_origins[0],
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "Content-Type,X-Analysis-Quote",
+            },
+        )
+    assert response.status_code == 200
+    assert "x-analysis-quote" in response.headers["access-control-allow-headers"].lower()
 
 
 def test_deployment_coach_host_is_trusted_but_restricted_before_identity_resolution(

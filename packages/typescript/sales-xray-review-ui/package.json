@@ -1,0 +1,24 @@
+{
+  "name": "@ac/sales-xray-review-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/assigned-review-form.tsx"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit --jsx react-jsx --module preserve --moduleResolution bundler --target es2022 --strict --skipLibCheck src/assigned-review-form.tsx"
+  },
+  "peerDependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "happy-dom": "20.14.0",
+    "vitest": "4.1.11",
+    "typescript": "5.9.3"
+  }
+}

@@ -22,6 +22,7 @@ from ac_platform.identity.models import (
     DeletionRequestStatus,
     PersonStatus,
     ProviderAuthorizationTransactionStatus,
+    SessionAudience,
 )
 
 if TYPE_CHECKING:
@@ -38,6 +39,16 @@ def _as_utc(value: datetime) -> datetime:
 
 def _now(value: datetime | None) -> datetime:
     return _as_utc(value or datetime.now(UTC))
+
+
+def _session_audience(value: SessionAudience | str) -> str:
+    """Normalize a session audience at the identity boundary."""
+
+    try:
+        normalized = value.value if isinstance(value, SessionAudience) else value.strip()
+        return SessionAudience(normalized).value
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ValueError("session audience is unsupported") from exc
 
 
 def _required_text(value: str, field_name: str, maximum: int | None = None) -> str:
@@ -267,6 +278,7 @@ class StoredSession:
     revocation_reason: str | None = None
     user_agent: str | None = None
     ip_address: str | None = None
+    audience: str = SessionAudience.ACCOUNT.value
     selected_tenant_id: UUID | None = None
     revision: int = 0
 
@@ -288,6 +300,7 @@ class SessionMetadata:
     user_agent: str | None
     ip_address: str | None
     selected_tenant_id: UUID | None
+    audience: str = SessionAudience.ACCOUNT.value
     revision: int = 0
 
     @property
@@ -843,6 +856,7 @@ class SessionService:
             revocation_reason=session.revocation_reason,
             user_agent=session.user_agent,
             ip_address=session.ip_address,
+            audience=session.audience,
             selected_tenant_id=session.selected_tenant_id,
             revision=session.revision,
         )
@@ -914,6 +928,7 @@ class SessionService:
         user_agent: str | None = None,
         ip_address: str | None = None,
         selected_tenant_id: UUID | None = None,
+        audience: SessionAudience | str = SessionAudience.ACCOUNT,
         tenant_context: TenantContext | None = None,
         now: datetime | None = None,
     ) -> IssuedSession:
@@ -925,6 +940,9 @@ class SessionService:
         require_verified_person(person)
         if expires_in <= timedelta(0):
             raise ValueError("expires_in must be positive")
+        audience_value = _session_audience(audience)
+        if audience_value == SessionAudience.REVIEWER.value and selected_tenant_id is not None:
+            raise TenantScopeDeniedError("reviewer sessions cannot select a tenant")
         self._validate_selected_tenant(
             person_id,
             selected_tenant_id,
@@ -941,6 +959,7 @@ class SessionService:
             expires_at=created_at + expires_in,
             user_agent=_optional_text(user_agent, "user_agent", 512),
             ip_address=_optional_text(ip_address, "ip_address", 64),
+            audience=audience_value,
             selected_tenant_id=selected_tenant_id,
         )
         self._store.save_session(session)
@@ -950,6 +969,7 @@ class SessionService:
         self,
         token: str,
         *,
+        expected_audience: SessionAudience | str = SessionAudience.ACCOUNT,
         tenant_context: TenantContext | None = None,
         now: datetime | None = None,
     ) -> SessionMetadata:
@@ -957,6 +977,12 @@ class SessionService:
             raise InvalidSessionTokenError("session token is invalid")
         session = self._store.find_session_by_token_hash(self._token_hash(token))
         if session is None:
+            raise InvalidSessionTokenError("session token is invalid")
+        expected_audience_value = _session_audience(expected_audience)
+        if session.audience != expected_audience_value or (
+            expected_audience_value == SessionAudience.REVIEWER.value
+            and session.selected_tenant_id is not None
+        ):
             raise InvalidSessionTokenError("session token is invalid")
         current_time = _now(now)
         if session.revoked_at is not None:
@@ -987,6 +1013,11 @@ class SessionService:
                 raise SessionRevokedError("session has been revoked") from None
             if latest.expires_at <= current_time:
                 raise SessionExpiredError("session has expired") from None
+            if latest.audience != expected_audience_value or (
+                expected_audience_value == SessionAudience.REVIEWER.value
+                and latest.selected_tenant_id is not None
+            ):
+                raise InvalidSessionTokenError("session token is invalid") from None
             latest_person = self._store.get_person(latest.person_id)
             if latest_person is None or latest_person.status != PersonStatus.ACTIVE.value:
                 raise AccountUnavailableError(
@@ -1047,6 +1078,8 @@ class SessionService:
         """Persist an explicit tenant selection after rechecking session scope."""
 
         session = self._get_self_session(actor_person_id, session_id)
+        if session.audience != SessionAudience.ACCOUNT.value:
+            raise TenantScopeDeniedError("reviewer sessions cannot select a tenant")
         current_time = _now(now)
         if session.revoked_at is not None:
             raise SessionRevokedError("session has been revoked")
@@ -1058,6 +1091,8 @@ class SessionService:
         require_verified_person(person)
         for _ in range(3):
             session = self._get_self_session(actor_person_id, session_id)
+            if session.audience != SessionAudience.ACCOUNT.value:
+                raise TenantScopeDeniedError("reviewer sessions cannot select a tenant")
             if session.revoked_at is not None:
                 raise SessionRevokedError("session has been revoked")
             if session.expires_at <= current_time:

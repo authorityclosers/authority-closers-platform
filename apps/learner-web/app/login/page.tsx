@@ -9,16 +9,15 @@ import {
 } from "../lib/surface-state";
 import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 import { parseCourseIntent } from "../lib/course-intent";
-import {
-  activityIntentHref,
-  parseActivityIntent,
-} from "../lib/activity-intent";
+import { parseActivityIntent } from "../lib/activity-intent";
+import { authIntentHref, parseSalesAuthNext } from "../lib/sales-auth-return";
 
 type LoginPageProps = {
   searchParams: Promise<{
     state?: QueryValue;
     course?: QueryValue;
     activity?: QueryValue;
+    next?: QueryValue;
   }>;
 };
 
@@ -27,6 +26,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const state = parseSurfaceState(query.state);
   const courseIntent = parseCourseIntent(query.course);
   const activityIntent = parseActivityIntent(query.activity);
+  const salesNext = parseSalesAuthNext(query.next);
   const stagingBridge = isStagingAuthenticatedBridge(
     process.env,
     process.env.NODE_ENV,
@@ -48,15 +48,17 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       {state !== "DEFAULT" ? (
         <SurfaceStatePanel
           state={state}
-          retryHref={activityIntentHref(
+          retryHref={authIntentHref(
             ROUTES.login,
             activityIntent,
             courseIntent,
+            salesNext,
           )}
-          signInHref={activityIntentHref(
+          signInHref={authIntentHref(
             ROUTES.login,
             activityIntent,
             courseIntent,
+            salesNext,
           )}
           backHref={ROUTES.home}
           pageHeadingPresent
@@ -67,6 +69,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           stagingBridge={stagingBridge}
           courseIntent={courseIntent}
           activityIntent={activityIntent}
+          salesNext={salesNext}
         />
       ) : null}
     </AuthFlowPage>

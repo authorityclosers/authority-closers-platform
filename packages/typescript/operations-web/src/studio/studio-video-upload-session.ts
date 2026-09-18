@@ -423,7 +423,11 @@ export class StudioUploadSession {
           this.intent,
           this.source,
           this.body,
-          { signal },
+          {
+            signal,
+            startOffset: status.uploaded_bytes ?? 0,
+            onProgress: (fraction) => this.update({ fraction }),
+          },
         );
         this.requireCurrent(signal);
         this.completionRequested = true;

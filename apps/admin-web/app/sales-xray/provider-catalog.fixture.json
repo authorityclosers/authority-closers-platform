@@ -1,0 +1,310 @@
+{
+  "catalog": [
+    {
+      "provider_id": "local",
+      "display_name": "AC local deterministic tools",
+      "protocol": "local_process",
+      "status": "implemented",
+      "readiness": "transport_available",
+      "deployment": "deterministic_tool",
+      "models": [
+        {
+          "model_id": "audioatlas",
+          "endpoint": null,
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": []
+        }
+      ],
+      "note": "AudioAtlas C1 is implemented outside the external task adapter catalog."
+    },
+    {
+      "provider_id": "gemini",
+      "display_name": "Google Gemini",
+      "protocol": "gemini_https",
+      "status": "implemented",
+      "readiness": "transport_available",
+      "deployment": "hosted",
+      "models": [
+        {
+          "model_id": "gemini-2.5-flash",
+          "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "contract_only"
+            },
+            {
+              "task": "coaching",
+              "status": "contract_only"
+            }
+          ]
+        },
+        {
+          "model_id": "gemini-2.5-pro",
+          "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "contract_only"
+            },
+            {
+              "task": "coaching",
+              "status": "contract_only"
+            }
+          ]
+        },
+        {
+          "model_id": "gemini-3.8-flash",
+          "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "contract_only"
+            },
+            {
+              "task": "coaching",
+              "status": "contract_only"
+            }
+          ]
+        },
+        {
+          "model_id": "gemini-3.1-pro-preview",
+          "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "contract_only"
+            },
+            {
+              "task": "coaching",
+              "status": "contract_only"
+            }
+          ]
+        }
+      ],
+      "note": "Bounded structured generation transport exists; task adapters remain contract-only here."
+    },
+    {
+      "provider_id": "groq",
+      "display_name": "Groq",
+      "protocol": "groq_openai_compatible_https",
+      "status": "implemented",
+      "readiness": "transport_available",
+      "deployment": "hosted",
+      "models": [
+        {
+          "model_id": "openai/gpt-oss-120b",
+          "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "implemented"
+            },
+            {
+              "task": "coaching",
+              "status": "implemented"
+            }
+          ]
+        },
+        {
+          "model_id": "llama-3.3-70b-versatile",
+          "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "facts",
+              "status": "implemented"
+            },
+            {
+              "task": "coaching",
+              "status": "implemented"
+            }
+          ]
+        }
+      ],
+      "note": "Source-bound fact and qualitative coaching adapters are implemented. Provider/model quality and hosted activation require separate evidence."
+    },
+    {
+      "provider_id": "elevenlabs",
+      "display_name": "ElevenLabs Scribe",
+      "protocol": "elevenlabs_https",
+      "status": "implemented",
+      "readiness": "transport_available",
+      "deployment": "hosted",
+      "models": [
+        {
+          "model_id": "scribe_v2",
+          "endpoint": "https://api.elevenlabs.io/v1/speech-to-text",
+          "transport_status": "implemented",
+          "readiness": "transport_available",
+          "task_support": [
+            {
+              "task": "asr",
+              "status": "implemented"
+            }
+          ]
+        }
+      ],
+      "note": "Scribe native transcript normalization is implemented; speaker identity remains unverified."
+    },
+    {
+      "provider_id": "openai",
+      "display_name": "OpenAI",
+      "protocol": "openai_https",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "hosted",
+      "models": [],
+      "note": "Provider option cataloged for a future approved adapter; model and terms are not asserted."
+    },
+    {
+      "provider_id": "deepseek",
+      "display_name": "DeepSeek",
+      "protocol": "deepseek_https",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "hosted",
+      "models": [],
+      "note": "Provider option cataloged for a future approved adapter; model and terms are not asserted."
+    },
+    {
+      "provider_id": "anthropic",
+      "display_name": "Anthropic",
+      "protocol": "anthropic_https",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "hosted",
+      "models": [],
+      "note": "Provider option cataloged for a future approved adapter; model and terms are not asserted."
+    },
+    {
+      "provider_id": "openai_compatible_gateway",
+      "display_name": "Approved OpenAI-compatible gateway",
+      "protocol": "openai_compatible_https",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "gateway",
+      "models": [],
+      "note": "Gateway-specific endpoint, model, privacy and budget evidence are required before configuration."
+    },
+    {
+      "provider_id": "ollama",
+      "display_name": "Local Ollama",
+      "protocol": "ollama_http",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "local",
+      "models": [],
+      "note": "Local endpoint requires explicit operator approval; no arbitrary browser endpoint is accepted."
+    },
+    {
+      "provider_id": "vllm",
+      "display_name": "Self-hosted vLLM",
+      "protocol": "vllm_http",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "local",
+      "models": [],
+      "note": "Self-hosted endpoint, model digest, retention and operator approval are not yet configured."
+    },
+    {
+      "provider_id": "llama_cpp",
+      "display_name": "Self-hosted llama.cpp",
+      "protocol": "llama_cpp_http",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "local",
+      "models": [],
+      "note": "Self-hosted endpoint, model digest, retention and operator approval are not yet configured."
+    },
+    {
+      "provider_id": "sarvam",
+      "display_name": "Sarvam",
+      "protocol": "sarvam_https",
+      "status": "planned",
+      "readiness": "planned_no_transport",
+      "deployment": "hosted",
+      "models": [],
+      "note": "Provider option cataloged for a future approved adapter; model, privacy and terms are not asserted."
+    }
+  ],
+  "tasks": [
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "asr",
+      "input_stage": "C0",
+      "reuse_stage": null,
+      "profile_required": false
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "facts",
+      "input_stage": "C2",
+      "reuse_stage": "C2",
+      "profile_required": false
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "embeddings",
+      "input_stage": "C2",
+      "reuse_stage": "C2",
+      "profile_required": false
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "retrieval",
+      "input_stage": "C2",
+      "reuse_stage": "C2",
+      "profile_required": false
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "rerank",
+      "input_stage": "C2",
+      "reuse_stage": "C2",
+      "profile_required": false
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "coaching",
+      "input_stage": "C4",
+      "reuse_stage": "C2",
+      "profile_required": true
+    },
+    {
+      "schema": "ac.sales_xray.task_contract/1",
+      "task": "presentation",
+      "input_stage": "C5",
+      "reuse_stage": "C5",
+      "profile_required": true
+    }
+  ],
+  "configuration_template": {
+    "schema": "ac.sales_xray.provider_registry_config/1",
+    "revision": "admin-draft-v1",
+    "policy": {
+      "schema": "ac.sales_xray.registry_policy/1",
+      "allow_paid": false,
+      "auto_purchase": false,
+      "paid_approval_ref": null
+    },
+    "providers": [],
+    "routes": []
+  },
+  "current": null,
+  "max_paid_paise": 0,
+  "execution_activated": false,
+  "message": "Settings are saved as revisions. Provider tests and activation are separate."
+}

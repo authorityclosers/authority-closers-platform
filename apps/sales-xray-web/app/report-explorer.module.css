@@ -1,0 +1,126 @@
+.explorer {
+  min-width: 0;
+  margin-block: 0;
+}
+
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 24px;
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid #dbe6e7;
+  background: #fff;
+  scrollbar-width: thin;
+}
+
+.tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 12px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #5d7080;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.tabs button::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 0;
+  background: #0f766e;
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.35);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.tabs button:hover {
+  color: #172b3a;
+}
+
+.tabs button[aria-selected="true"] {
+  color: #172b3a;
+}
+
+.tabs button[aria-selected="true"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.tabs button:focus-visible,
+.panel:focus-visible {
+  outline: 3px solid #6d7ce0;
+  outline-offset: 2px;
+}
+
+.panel {
+  min-width: 0;
+  padding-block-start: 12px;
+}
+
+.panel > section + section {
+  margin-block-start: 24px;
+  padding-block-start: 24px;
+  border-top: 1px solid #dbe2ef;
+}
+
+.panel > aside + section {
+  margin-block-start: 24px;
+}
+
+@media (max-width: 640px) {
+  .tabs {
+    top: 0;
+    gap: 0;
+    justify-content: space-between;
+  }
+
+  .tabs button {
+    min-height: 40px;
+    padding-inline: 1px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs button,
+  .tabs button::after {
+    transition: none;
+    transform: none;
+  }
+}
+
+@media print {
+  .tabs {
+    position: static;
+    display: none !important;
+    box-shadow: none;
+  }
+
+  .panel,
+  .panel[hidden] {
+    display: block !important;
+    padding-block-start: 0;
+  }
+}

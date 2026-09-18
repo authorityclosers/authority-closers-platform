@@ -377,6 +377,7 @@ def test_studio_upload_publication_binding_and_revocable_learner_playback(
                     "renditions": [],
                     "captions": [],
                     "delivery": None,
+                    "provenance": None,
                     "playback_available": False,
                 }
 

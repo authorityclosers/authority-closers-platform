@@ -52,6 +52,8 @@ export function AppUpdatesProvider({
   const [saveError, setSaveError] = useState<string | null>(null);
   const generation = useRef(0);
   const active = useRef<AbortController | null>(null);
+  const activeWrite = useRef<AbortController | null>(null);
+  const writeSettled = useRef<Promise<void> | null>(null);
   const saving = useRef(false);
   const cancelActive = useCallback(() => {
     generation.current += 1;
@@ -60,9 +62,13 @@ export function AppUpdatesProvider({
   const load = useCallback(async () => {
     const epoch = ++generation.current;
     active.current?.abort();
+    setState({ status: "loading" });
+    // Returning to the tab must hide stale account data immediately, but must
+    // not abort a read receipt or fetch the old count before it commits.
+    if (writeSettled.current) await writeSettled.current;
+    if (epoch !== generation.current) return;
     const controller = new AbortController();
     active.current = controller;
-    saving.current = false;
     setPendingId(null);
     setSaveError(null);
     setState({ status: "loading" });
@@ -98,6 +104,7 @@ export function AppUpdatesProvider({
       clearTimeout(start);
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       cancelActive();
+      activeWrite.current?.abort();
       window.removeEventListener("focus", onReturn);
       document.removeEventListener("visibilitychange", onReturn);
     };
@@ -117,7 +124,12 @@ export function AppUpdatesProvider({
     const epoch = ++generation.current;
     active.current?.abort();
     const controller = new AbortController();
-    active.current = controller;
+    activeWrite.current = controller;
+    let settleWrite!: () => void;
+    const settlement = new Promise<void>((resolve) => {
+      settleWrite = resolve;
+    });
+    writeSettled.current = settlement;
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
     try {
       const feed = await api.markRead(id, controller.signal);
@@ -145,8 +157,11 @@ export function AppUpdatesProvider({
         );
     } finally {
       clearTimeout(timer);
+      saving.current = false;
+      if (writeSettled.current === settlement) writeSettled.current = null;
+      if (activeWrite.current === controller) activeWrite.current = null;
+      settleWrite();
       if (epoch === generation.current) {
-        saving.current = false;
         setPendingId(null);
       }
     }

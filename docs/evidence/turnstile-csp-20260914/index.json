@@ -1,0 +1,48 @@
+{
+  "base_commit": "278456864d6c7bc3be4d85ce389cb963f571902d",
+  "hash_representation": "UTF-8 LF source bytes",
+  "files": [
+    {
+      "path": "infra/application/edge-routes/staging.caddy",
+      "sha256": "d96920e99a5f8a85567906f10b48305974bcbfe443e25e86f69fa60a98e05302"
+    },
+    {
+      "path": "infra/application/edge-routes/production.caddy",
+      "sha256": "92fd7f13e9eff85bdc41502f080e90e09a1030d2f2825b1830827a3bcd275153"
+    },
+    {
+      "path": "tests/e2e/test_sales_xray_turnstile_csp_browser.py",
+      "sha256": "1190aaf726874bd3f37a89310ca5e28ced41f9ee6e552adeeda23ec2daebdecd"
+    },
+    {
+      "path": "docs/evidence/20260914_SALES_XRAY_TURNSTILE_CSP.md",
+      "sha256": "72cec339d5005ead8f090aaddb6bc0ffb615a1db9977be59b96af4df9981b2df"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/after.junit.xml",
+      "sha256": "b007a3b3708b47368a08ab04c405ca61869e93813bfb43ea03cc72aacc541b7f"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/before.junit.xml",
+      "sha256": "a5bddfab3411452b2beaa6c7141efdefa6bb7aedb95d987410aab684c2e2f7f6"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/infra.junit.xml",
+      "sha256": "ace2f4a144b11504f1e45459f7fed40f1884f98e7482d7bec4adc384ca1762fd"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/next-runtime-and-scope.json",
+      "sha256": "1e3b963dda46ae6cddd8e470eca71f7030d205a1c1da2a35a01b1a6849f4bf49"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/production.json",
+      "sha256": "9b43bf19105a39a06b7fb2919c29ec24978f0b4bb9e3955c3a435357064eba34"
+    },
+    {
+      "path": "docs/evidence/turnstile-csp-20260914/staging.json",
+      "sha256": "08760d959d9012f16d6543a605bc7d5c02e3b99fda944a8ea5b66c798f3fc2e4"
+    }
+  ],
+  "formatting_supersedes_commit": "f476429",
+  "formatting_semantic_equivalence_verified": true
+}

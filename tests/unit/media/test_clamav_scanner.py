@@ -162,7 +162,7 @@ def test_accepts_normalized_mime_case_checksum_and_existing_revision_lengths(
     assert scan(scanner(), storage, metadata).clean
 
 
-@pytest.mark.parametrize("length", [0, -1, True, 1.2, 101 * 1024 * 1024])
+@pytest.mark.parametrize("length", [0, -1, True, 1.2, module.STUDIO_VIDEO_MAX_SOURCE_BYTES + 1])
 def test_invalid_and_oversize_lengths_never_start_storage_or_transport(
     connection: FakeSocket, length: int
 ) -> None:
@@ -240,6 +240,7 @@ def test_rechecks_immutable_source_metadata_after_daemon_verdict(
         b"stream: OK\0stream: Evil FOUND\0",
         b"stream: OK\0stream: OK\0",
         b"stream: ERROR\0",
+        b"INSTREAM: Can't write to temporary file. ERROR\0",
         b"INSTREAM size limit exceeded. ERROR\0",
         b"stream: \xff FOUND\0",
         b"1: stream: OK\0",
@@ -402,6 +403,8 @@ def test_total_deadline_cannot_be_extended_by_dribbling_responses(
         {"max_response_bytes": 0},
         {"total_timeout_seconds": float("inf")},
         {"io_timeout_seconds": float("nan")},
+        {"verdict_timeout_seconds": float("inf")},
+        {"verdict_timeout_seconds": 0},
         {"connect_timeout_seconds": 0},
     ],
 )
@@ -493,7 +496,8 @@ def test_failed_connection_closes_socket(monkeypatch: pytest.MonkeyPatch) -> Non
     connection.close.assert_called_once()
 
 
-def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
+@pytest.mark.parametrize("verdict_delay", [0.0, 0.15])
+def test_real_loopback_socket_streams_and_reads_fragmented_reply(verdict_delay: float) -> None:
     """A bounded protocol peer, not a daemon/antivirus acceptance test."""
     storage, metadata = storage_fixture(MP4 + b"x" * 200_000)
     received: list[str] = []
@@ -523,6 +527,8 @@ def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
                         assert size <= 64 * 1024
                         digest.update(exact(size))
                     received.append(digest.hexdigest())
+                    # Scanning can outlast the short stream I/O timeout.
+                    time.sleep(verdict_delay)
                     peer.sendall(b"stream:")
                     peer.sendall(b" OK\0")
             except Exception as error:
@@ -531,7 +537,16 @@ def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
         worker = Thread(target=serve)
         worker.start()
         try:
-            result = scan(scanner(port=listener.getsockname()[1]), storage, metadata)
+            result = scan(
+                scanner(
+                    port=listener.getsockname()[1],
+                    io_timeout_seconds=0.05,
+                    verdict_timeout_seconds=1,
+                    total_timeout_seconds=2,
+                ),
+                storage,
+                metadata,
+            )
         finally:
             worker.join(timeout=4)
         assert not worker.is_alive()

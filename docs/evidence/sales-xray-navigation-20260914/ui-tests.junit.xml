@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="70" failures="0" errors="0" time="3.132046">
+    <testsuite name="app/call-studio.test.tsx" timestamp="2026-09-13T18:36:45.293Z" hostname="RSuyash" tests="22" failures="0" errors="0" skipped="0" time="1.7799478">
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; uses the embedded variant for the LMS mount without its standalone header" time="0.0827153">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; keeps developer testing labels out of the standalone learner surface" time="0.042287">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; keeps source selection local and clears a quote when the source changes" time="0.11455">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; requires the quote and permission before sending exact source bytes" time="0.1119264">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; polls for the report, renders evidence, and seeks the local audio" time="0.2582015">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; shows source-derived report measurements and keeps display language scoped to UI labels" time="0.1967788">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; polls report status before transcript and continues when the report arrives later" time="0.0964306">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; stops polling after a completed plan has no report" time="0.0538255">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; rejects a report bound to a different source and keeps it hidden" time="0.0495826">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; rejects a report status bound to a different run or recording" time="0.1219953">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; shows held plans honestly and requires a fresh quote to resume" time="0.1389908">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; rejects a nonzero-cost plan response before showing a report" time="0.1437446">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; keeps a deferred report read alive while the plan view updates" time="0.1411949">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; restores an active plan for a saved call and polls its current stage" time="0.02229">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; prepares the report plan for a completed hosted 16 kHz measurement" time="0.0203023">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; shows upload failures, allows retry, and never invents a report" time="0.0491365">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; does not send source bytes when the server rejects quote approval" time="0.0252079">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; opens a saved audioatlas-48000-v1 recording, binds its report, and returns to the saved draft" time="0.0250097">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; opens a saved audioatlas-16000-v1 recording, binds its report, and returns to the saved draft" time="0.0253839">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; plays a pending saved call without requiring a transcript" time="0.0141123">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; clears old playback before a saved-call selection that fails" time="0.0210977">
+        </testcase>
+        <testcase classname="app/call-studio.test.tsx" name="CallStudio &gt; never persists selected source data in browser storage" time="0.0222792">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/measurement-contract.test.ts" timestamp="2026-09-13T18:36:45.304Z" hostname="RSuyash" tests="16" failures="0" errors="0" skipped="0" time="0.0243426">
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; preserves saved precision, coverage and missing gaps without inventing a score" time="0.0063282">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; keeps unavailable values distinct from measured zero" time="0.0007843">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects recording mismatches" time="0.0019982">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects source hash mismatches" time="0.0006348">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects clock mismatches" time="0.0006964">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects window mismatches" time="0.0008054">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects duration mismatches" time="0.0007341">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects infinite value mismatches" time="0.000892">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects negative pitch mismatches" time="0.0012191">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects invalid coverage mismatches" time="0.0010931">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects wrong unit mismatches" time="0.0009516">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects duplicate time mismatches" time="0.0008295">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects past track end mismatches" time="0.0004551">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects oversized plot mismatches" time="0.0013328">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects duplicate series mismatches" time="0.0005148">
+        </testcase>
+        <testcase classname="app/measurement-contract.test.ts" name="saved measurement binding &gt; rejects unknown presented as measured mismatches" time="0.0004749">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/recording-measurements.test.tsx" timestamp="2026-09-13T18:36:45.308Z" hostname="RSuyash" tests="3" failures="0" errors="0" skipped="0" time="0.1799319">
+        <testcase classname="app/recording-measurements.test.tsx" name="saved recording sound view &gt; loads only on expansion, renders saved figures and switches plots" time="0.1278658">
+        </testcase>
+        <testcase classname="app/recording-measurements.test.tsx" name="saved recording sound view &gt; shows unavailable for missing or mismatched data and retries only a read" time="0.0255884">
+        </testcase>
+        <testcase classname="app/recording-measurements.test.tsx" name="saved recording sound view &gt; does not render the last call&apos;s values after selecting a different recording" time="0.022336">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/report-contract.test.ts" timestamp="2026-09-13T18:36:45.311Z" hostname="RSuyash" tests="6" failures="0" errors="0" skipped="0" time="0.0199227">
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; normalizes a strict report without practice or model review text" time="0.0062369">
+        </testcase>
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; rejects a report whose source hash differs from the selected file" time="0.0016448">
+        </testcase>
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; rejects evidence outside the selected recording duration" time="0.0023625">
+        </testcase>
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; rejects unknown fields and a provider supplied review status" time="0.0014619">
+        </testcase>
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; binds report evidence to the native transcript span and revision" time="0.0024993">
+        </testcase>
+        <testcase classname="app/report-contract.test.ts" name="CallStudio report contract &gt; parses bounded saved recordings and rejects unsafe path IDs" time="0.0016565">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/report-explorer.test.tsx" timestamp="2026-09-13T18:36:45.314Z" hostname="RSuyash" tests="3" failures="0" errors="0" skipped="0" time="0.1327187">
+        <testcase classname="app/report-explorer.test.tsx" name="preserves search state and selection through section and language changes" time="0.0867968">
+        </testcase>
+        <testcase classname="app/report-explorer.test.tsx" name="supports roving keyboard focus, wraparound and labelled panels" time="0.0300528">
+        </testcase>
+        <testcase classname="app/report-explorer.test.tsx" name="falls back to a permitted panel if the selected section is removed" time="0.0128207">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/report-transcript.test.tsx" timestamp="2026-09-13T18:36:45.315Z" hostname="RSuyash" tests="4" failures="0" errors="0" skipped="0" time="0.2525793">
+        <testcase classname="app/report-transcript.test.tsx" name="ReportTranscript &gt; expands, searches, filters by unverified speaker label, and returns the source segment" time="0.1123892">
+        </testcase>
+        <testcase classname="app/report-transcript.test.tsx" name="ReportTranscript &gt; shows at most 50 source rows and loads the next bounded page" time="0.098201">
+        </testcase>
+        <testcase classname="app/report-transcript.test.tsx" name="ReportTranscript &gt; localizes report controls while preserving source text, speaker IDs, and observations" time="0.0342146">
+        </testcase>
+        <testcase classname="app/report-transcript.test.tsx" name="ReportTranscript &gt; hides the interactive transcript from print output" time="0.004447">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/standalone-studio.test.tsx" timestamp="2026-09-13T18:36:45.317Z" hostname="RSuyash" tests="4" failures="0" errors="0" skipped="0" time="0.1404221">
+        <testcase classname="app/standalone-studio.test.tsx" name="passes through unauthenticated sessions and selected sessions without context activation" time="0.0712352">
+        </testcase>
+        <testcase classname="app/standalone-studio.test.tsx" name="never auto-selects a sole workspace and posts only a listed tenant on explicit choice" time="0.0242853">
+        </testcase>
+        <testcase classname="app/standalone-studio.test.tsx" name="dismisses a late context response after unmount" time="0.0227767">
+        </testcase>
+        <testcase classname="app/standalone-studio.test.tsx" name="keeps the studio closed after a forbidden context selection" time="0.0202211">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/styles.integration.test.ts" timestamp="2026-09-13T18:36:45.318Z" hostname="RSuyash" tests="2" failures="0" errors="0" skipped="0" time="0.009312">
+        <testcase classname="app/styles.integration.test.ts" name="integrated Sales Xray boundary &gt; keeps generic Sales Xray rules inside the component scope" time="0.0053099">
+        </testcase>
+        <testcase classname="app/styles.integration.test.ts" name="integrated Sales Xray boundary &gt; uses the real learner route without query supplied scope" time="0.0006332">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/workbench.test.tsx" timestamp="2026-09-13T18:36:45.319Z" hostname="RSuyash" tests="5" failures="0" errors="0" skipped="0" time="0.3911868">
+        <testcase classname="app/workbench.test.tsx" name="renders literal Unicode evidence, with no HTML execution or numeric score" time="0.1330863">
+        </testcase>
+        <testcase classname="app/workbench.test.tsx" name="offers retry on a real service failure without silently replacing it with fabricated analysis" time="0.0440933">
+        </testcase>
+        <testcase classname="app/workbench.test.tsx" name="keeps unsubmitted review lanes distinct and requires evidence before preparing a proposal" time="0.0896352">
+        </testcase>
+        <testcase classname="app/workbench.test.tsx" name="keeps the original profile discrepancy visible in evidence" time="0.0642249">
+        </testcase>
+        <testcase classname="app/workbench.test.tsx" name="changes appearance without persisting conversation data" time="0.0578774">
+        </testcase>
+    </testsuite>
+    <testsuite name="app/login/login-form.test.tsx" timestamp="2026-09-13T18:36:45.320Z" hostname="RSuyash" tests="5" failures="0" errors="0" skipped="0" time="0.2016821">
+        <testcase classname="app/login/login-form.test.tsx" name="keeps canonical learner links bound to the two owned source hosts" time="0.0157977">
+        </testcase>
+        <testcase classname="app/login/login-form.test.tsx" name="posts only email and password with same-origin credentials, then opens home" time="0.0955958">
+        </testcase>
+        <testcase classname="app/login/login-form.test.tsx" name="shows a friendly existence-neutral error and clears the password after rejection" time="0.0309537">
+        </testcase>
+        <testcase classname="app/login/login-form.test.tsx" name="disables and deduplicates the submit while login is pending" time="0.0336588">
+        </testcase>
+        <testcase classname="app/login/login-form.test.tsx" name="submits successfully after React StrictMode replays the lifecycle effect" time="0.0235543">
+        </testcase>
+    </testsuite>
+</testsuites>

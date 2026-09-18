@@ -1,0 +1,32 @@
+[
+  {
+    "file": "artifact-index.json",
+    "sha256": "490c129e5a7e83b3d94758aa0aed032d5908a90f15100e74cb41831139d36a61",
+    "bytes": 697
+  },
+  {
+    "file": "browser-network.json",
+    "sha256": "ab1f42e73e2e776cbd5ef63be4656132d6917340f880cb4321ed6686a7af2e68",
+    "bytes": 4742
+  },
+  {
+    "file": "postgres-browser.junit.xml",
+    "sha256": "41905940c26d3bf33f809be9d51b72d908e41c6fc2111bbe970d1568934d656a",
+    "bytes": 1273
+  },
+  {
+    "file": "postgres-browser.log",
+    "sha256": "c744d82869c1bee44b272baa6c796de1c69b4b2d1bb45aa734a8d12e970dab44",
+    "bytes": 113
+  },
+  {
+    "file": "static-checks.log",
+    "sha256": "225cb8dd41c436ddcd07c20b5069c0219066818a0cbf3eeb96074a54dbde41da",
+    "bytes": 109
+  },
+  {
+    "file": "ui.junit.xml",
+    "sha256": "5f2907f2655f4a13392ed650867bc37204b41f84ac5ff8fde41dc765a75bdc37",
+    "bytes": 22358
+  }
+]

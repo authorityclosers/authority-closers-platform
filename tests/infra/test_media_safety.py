@@ -4,12 +4,14 @@ import datetime as dt
 import hashlib
 import importlib.util
 import io
+import os
+import stat
 import struct
 import sys
 import tarfile
 from collections.abc import Iterable
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -68,7 +70,7 @@ def _archive(
 def _installed(tmp_path: Path, name: str = "release") -> Path:
     installed = tmp_path / name
     installed.mkdir()
-    for name in ("clamd.conf", "compose.yaml", "freshclam.conf"):
+    for name in ("clamd.conf", "compose.yaml", "freshclam.conf", "entrypoint.sh"):
         (installed / name).write_bytes((SAFETY / name).read_bytes())
     return installed
 
@@ -78,7 +80,7 @@ def _container(module: ModuleType, installed: Path) -> dict:
         "Id": "container-id",
         "Config": {
             "Image": module.IMAGE,
-            "Entrypoint": ["/init-unprivileged"],
+            "Entrypoint": ["/bin/sh", module.ENTRYPOINT_DESTINATION],
             "Cmd": [],
             "Env": [
                 "CLAMAV_NO_MILTERD=true",
@@ -128,8 +130,26 @@ def _container(module: ModuleType, installed: Path) -> dict:
             },
             {
                 "Type": "bind",
+                "Source": str(installed / "entrypoint.sh"),
+                "Destination": module.ENTRYPOINT_DESTINATION,
+                "RW": False,
+            },
+            {
+                "Type": "bind",
                 "Source": str(module.DATABASE),
                 "Destination": "/var/lib/clamav",
+                "RW": True,
+            },
+            {
+                "Type": "bind",
+                "Source": str(module.SOCKET_ROOT),
+                "Destination": "/run/ac-media-safety",
+                "RW": True,
+            },
+            {
+                "Type": "bind",
+                "Source": str(module.TEMP_ROOT),
+                "Destination": "/var/lib/ac-media-safety-tmp",
                 "RW": True,
             },
         ],
@@ -141,6 +161,8 @@ def _hash_command(module: ModuleType, installed: Path):
     def fake_run(*command: str, **_: object) -> str:
         assert command[:3] == ("docker", "exec", module.CONTAINER)
         name = Path(command[-1]).name
+        if command[-1] == module.ENTRYPOINT_DESTINATION:
+            name = module.ENTRYPOINT_FILE
         return f"{hashlib.sha256((installed / name).read_bytes()).hexdigest()}  {command[-1]}"
 
     return fake_run
@@ -152,6 +174,36 @@ def test_archive_accepts_exact_release_and_file_set(safety_module: ModuleType) -
     assert safety_module.archive_files(raw, RELEASE, hashlib.sha256(raw).hexdigest()) == {
         name: (SAFETY / name).read_bytes() for name in safety_module.FILES
     }
+
+
+def test_archive_accepts_named_legacy_release_without_socket_bridge(
+    safety_module: ModuleType,
+) -> None:
+    legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    entries = [
+        (f"{PREFIX}{name}", (SAFETY / name).read_bytes(), "file")
+        for name in sorted(safety_module.LEGACY_FILES)
+    ]
+    raw = _archive(safety_module, entries, comment=legacy)
+
+    assert set(safety_module.archive_files(raw, legacy, hashlib.sha256(raw).hexdigest())) == (
+        safety_module.LEGACY_FILES
+    )
+
+
+def test_archive_accepts_deployed_pre_wrapper_release_with_current_policy(
+    safety_module: ModuleType,
+) -> None:
+    release = next(iter(safety_module.PRE_WRAPPER_RELEASES))
+    entries = [
+        (f"{PREFIX}{name}", (SAFETY / name).read_bytes(), "file")
+        for name in sorted(safety_module.LEGACY_FILES)
+    ]
+    raw = _archive(safety_module, entries, comment=release)
+
+    assert set(safety_module.archive_files(raw, release, hashlib.sha256(raw).hexdigest())) == (
+        safety_module.LEGACY_FILES
+    )
 
 
 @pytest.mark.parametrize(
@@ -254,6 +306,75 @@ def test_compose_healthcheck_targets_exact_ipv4_scanner(safety_module: ModuleTyp
     assert safety_module.expected_health_test(SAFETY) == safety_module.HEALTH_TEST
 
 
+def test_entrypoint_bridges_image_socket_wait_to_shared_socket(
+    safety_module: ModuleType,
+) -> None:
+    wrapper = (SAFETY / safety_module.ENTRYPOINT_FILE).read_text(encoding="utf-8")
+    compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
+
+    assert "rm -f /run/ac-media-safety/clamd.sock" in wrapper
+    assert "rm -f /tmp/clamd.sock" in wrapper
+    assert "ln -s /run/ac-media-safety/clamd.sock /tmp/clamd.sock" in wrapper
+    assert 'exec /init-unprivileged "$@"' in wrapper
+    assert 'entrypoint: ["/bin/sh", "/usr/local/bin/ac-media-safety-entrypoint"]' in compose
+    assert "./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro" in compose
+    assert "LocalSocket /run/ac-media-safety/clamd.sock" in (SAFETY / "clamd.conf").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_socket_root_clears_parent_setgid_and_keeps_exact_fixed_contract(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    socket_root = tmp_path / "media-safety-socket"
+    socket_root.mkdir(mode=0o755)
+    monkeypatch.setattr(safety_module, "SOCKET_ROOT", socket_root)
+    monkeypatch.setattr(safety_module.os, "chown", lambda *_args: None, raising=False)
+    real_lstat = Path.lstat
+    mode = 0o2755
+    chmod_calls: list[tuple[Path, int, bool]] = []
+
+    def owned_lstat(path: Path, **kwargs: object) -> object:
+        if path == socket_root:
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR | mode,
+                st_uid=100,
+                st_gid=100,
+            )
+        return real_lstat(path, **kwargs)
+
+    def safe_chmod(path: Path, requested: int, *, follow_symlinks: bool = True) -> None:
+        nonlocal mode
+        chmod_calls.append((path, requested, follow_symlinks))
+        mode = requested
+
+    monkeypatch.setattr(Path, "lstat", owned_lstat)
+    monkeypatch.setattr(safety_module.os, "chmod", safe_chmod)
+
+    safety_module.ensure_socket_root()
+
+    assert chmod_calls == [(socket_root, 0o755, False)]
+    assert mode == 0o755
+
+
+def test_scanner_stream_temp_is_a_private_disk_mount(safety_module: ModuleType) -> None:
+    compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
+    clamd = (SAFETY / "clamd.conf").read_text(encoding="utf-8")
+
+    assert (
+        "/srv/authority-closers/volumes/media-safety-tmp:/var/lib/ac-media-safety-tmp:rw"
+    ) in compose
+    assert "TemporaryDirectory /var/lib/ac-media-safety-tmp" in clamd
+    assert "/var/lib/ac-media-safety-tmp" in safety_module.EXPECTED_BIND_DESTINATIONS
+    assert f"MaxThreads {safety_module.TEMP_MAX_CONCURRENT_SCANS}" in clamd
+    assert f"MaxQueue {safety_module.TEMP_MAX_QUEUE}" in clamd
+    assert "MaxScanSize 4000000000" in clamd
+    assert safety_module.TEMP_MAX_QUEUE >= 2 * safety_module.TEMP_MAX_CONCURRENT_SCANS
+    assert safety_module.TEMP_POLICY_MARKER in compose
+
+
 def test_docker_commands_are_pinned_to_local_unix_socket(
     safety_module: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -312,6 +433,7 @@ def test_docker_commands_reject_endpoint_or_context_override(
 def test_compose_reconciliation_targets_only_exact_scanner_service(
     safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(safety_module, "ensure_temp_root", lambda: None)
     installed = _installed(tmp_path)
     calls: list[tuple[tuple[str, ...], dict[str, object]]] = []
 
@@ -333,6 +455,7 @@ def test_compose_reconciliation_targets_only_exact_scanner_service(
         "up",
         "--detach",
         "--no-build",
+        "--force-recreate",
         "scanner",
     )
     assert options["timeout"] == 120
@@ -348,14 +471,35 @@ def test_only_named_legacy_release_can_be_a_transition_source(
     installed = _installed(tmp_path)
     compose = installed / "compose.yaml"
     compose.write_text(
-        compose.read_text(encoding="utf-8").replace(
+        compose.read_text(encoding="utf-8")
+        .replace(
             'test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"]',
             "test: [CMD, clamdcheck.sh]",
+        )
+        .replace(
+            "      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:rw\n",
+            "",
+        )
+        .replace(
+            "      - /srv/authority-closers/volumes/media-safety-tmp:"
+            "/var/lib/ac-media-safety-tmp:rw\n",
+            "",
         ),
         encoding="utf-8",
     )
     container = _container(safety_module, installed)
     legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"]
+        not in {
+            safety_module.ENTRYPOINT_DESTINATION,
+            "/run/ac-media-safety",
+            "/var/lib/ac-media-safety-tmp",
+        }
+    ]
+    container["Config"]["Entrypoint"] = ["/init-unprivileged"]
     container["Config"]["Labels"]["ac.release"] = legacy
     container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
     monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
@@ -366,16 +510,70 @@ def test_only_named_legacy_release_can_be_a_transition_source(
         installed,
         allow_legacy_health=True,
     )
-    with pytest.raises(ValueError, match="health"):
+    with pytest.raises(ValueError, match="command|health"):
         safety_module.validate_container(container, legacy, installed)
     container["Config"]["Labels"]["ac.release"] = RELEASE
-    with pytest.raises(ValueError, match="health"):
+    with pytest.raises(ValueError, match="command|health"):
         safety_module.validate_container(
             container,
             RELEASE,
             installed,
             allow_legacy_health=True,
         )
+
+
+def test_deployed_pre_wrapper_release_keeps_current_health_contract(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(
+            "      - ./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro\n", ""
+        ),
+        encoding="utf-8",
+    )
+    container = _container(safety_module, installed)
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"] != safety_module.ENTRYPOINT_DESTINATION
+    ]
+    container["Config"]["Entrypoint"] = ["/init-unprivileged"]
+    release = next(iter(safety_module.PRE_WRAPPER_RELEASES))
+    container["Config"]["Labels"]["ac.release"] = release
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+
+    safety_module.validate_container(container, release, installed)
+    container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
+    with pytest.raises(ValueError, match="health"):
+        safety_module.validate_container(container, release, installed)
+
+
+def test_socket_only_scanner_release_remains_rollback_compatible(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(
+            "      - /srv/authority-closers/volumes/media-safety-tmp:"
+            "/var/lib/ac-media-safety-tmp:rw\n",
+            "",
+        ),
+        encoding="utf-8",
+    )
+    container = _container(safety_module, installed)
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"] != "/var/lib/ac-media-safety-tmp"
+    ]
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+
+    safety_module.validate_container(container, RELEASE, installed)
 
 
 @pytest.mark.parametrize(
@@ -604,7 +802,8 @@ def _patch_proof_dependencies(module: ModuleType, monkeypatch: pytest.MonkeyPatc
             "State": {"Running": True, "Health": {"Status": "healthy"}},
         },
     )
-    monkeypatch.setattr(module, "validate_container", lambda *_: None)
+    monkeypatch.setattr(module, "validate_container", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "validate_temp_root", lambda **_: None)
     version = b"ClamAV 1.5.4/123/fixture\0"
 
     def command(payload: bytes) -> bytes:
@@ -690,7 +889,7 @@ def test_prove_rechecks_exact_container_health_after_functional_probe(
 @pytest.mark.parametrize(
     ("name", "needle", "replacement"),
     (
-        ("clamd.conf", "StreamMaxLength 100M", "StreamMaxLength 1M"),
+        ("clamd.conf", "StreamMaxLength 2000000000", "StreamMaxLength 1M"),
         ("clamd.conf", "BytecodeSecurity TrustSigned", "BytecodeSecurity Permissive"),
         ("freshclam.conf", "Checks 12", "Checks 0"),
         ("freshclam.conf", "DatabaseDirectory /var/lib/clamav", "DatabaseDirectory /tmp"),
@@ -965,3 +1164,445 @@ def test_rollback_requires_controller_from_exact_running_source_release(
         )
 
     assert composed == []
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        {"st_mode": stat.S_IFLNK | 0o600},
+        {"st_mode": stat.S_IFREG | 0o644},
+        {"st_uid": 100},
+        {"st_nlink": 2},
+        {"st_size": 1},
+        {"st_blocks": 1},
+    ],
+)
+def test_temporary_backing_image_requires_owned_allocated_fixed_capacity(
+    safety_module: ModuleType,
+    change: dict | None,
+) -> None:
+    info = {
+        "st_mode": stat.S_IFREG | 0o600,
+        "st_uid": 0,
+        "st_nlink": 1,
+        "st_size": safety_module.TEMP_CAPACITY_BYTES,
+        "st_blocks": safety_module.TEMP_CAPACITY_BYTES // 512,
+    }
+    if change is not None:
+        info.update(change)
+        with pytest.raises(ValueError, match="backing file"):
+            safety_module.validate_temp_image(SimpleNamespace(**info))
+    else:
+        safety_module.validate_temp_image(SimpleNamespace(**info))
+
+
+@pytest.mark.parametrize(
+    "change_mount,change_loop",
+    [
+        (None, None),
+        ({"fstype": "tmpfs"}, None),
+        ({"target": "/other"}, None),
+        ({"source": "/dev/sda"}, None),
+        ({"options": "rw,nodev,nosuid"}, None),
+        ({"options": "ro,nodev,nosuid,noexec"}, None),
+        (None, {"name": "/dev/loop8"}),
+        (None, {"back-file": "/unbounded"}),
+        (None, {"offset": 512}),
+        (None, {"sizelimit": 512}),
+        (None, {"ro": True}),
+    ],
+)
+def test_temporary_mount_requires_exact_private_loop_filesystem(
+    safety_module: ModuleType,
+    change_mount: dict | None,
+    change_loop: dict | None,
+) -> None:
+    mount = {
+        "target": str(safety_module.TEMP_ROOT),
+        "source": "/dev/loop7",
+        "fstype": "ext4",
+        "options": "rw,nosuid,nodev,noexec,relatime",
+    }
+    loop = {
+        "name": "/dev/loop7",
+        "back-file": str(safety_module.TEMP_IMAGE),
+        "offset": 0,
+        "sizelimit": 0,
+        "ro": False,
+    }
+    mount.update(change_mount or {})
+    loop.update(change_loop or {})
+    if change_mount is not None or change_loop is not None:
+        with pytest.raises(ValueError, match="temporary"):
+            safety_module.validate_temp_mount(mount, loop)
+    else:
+        safety_module.validate_temp_mount(mount, loop)
+
+
+def test_old_scanner_rollback_does_not_prepare_or_require_temporary_disk(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        "\n".join(
+            line
+            for line in compose.read_text().splitlines()
+            if "media-safety-tmp" not in line and safety_module.TEMP_POLICY_MARKER not in line
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        safety_module, "ensure_temp_root", lambda: pytest.fail("old target needs no new disk")
+    )
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(safety_module, "run", lambda *args, **_kwargs: calls.append(args))
+    safety_module.compose_up(RELEASE, installed)
+    assert len(calls) == 1
+    assert calls[0][0] == "docker"
+    assert "--force-recreate" not in calls[0]
+
+
+def _temp_setup_fixture(
+    module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[list, list[tuple[str, int]]]:
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    temp = tmp_path / "scanner-temp"
+    # The controller runs as root and can inspect its mode-000 mountpoint.
+    # This allocation harness mocks privileged ownership/mount operations; keep
+    # its private directory traversable for an unprivileged POSIX pytest runner,
+    # while recording the exact restrictive modes requested by the controller.
+    permission_calls: list[tuple[str, int]] = []
+    real_mkdir, real_chmod = Path.mkdir, Path.chmod
+
+    def privileged_mkdir(path, mode=0o777, parents=False, exist_ok=False):
+        if path == temp and mode == 0:
+            permission_calls.append(("mkdir", mode))
+            mode = 0o700
+        return real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    def privileged_chmod(path, mode, **kwargs):
+        if path == temp:
+            permission_calls.append(("chmod", mode))
+            mode |= 0o700
+        return real_chmod(path, mode, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", privileged_mkdir)
+    monkeypatch.setattr(Path, "chmod", privileged_chmod)
+    monkeypatch.setattr(module, "ROOT", managed)
+    monkeypatch.setattr(module, "TEMP_ROOT", temp)
+    monkeypatch.setattr(module, "TEMP_IMAGE", managed / "scanner-temp-v1.ext4")
+    monkeypatch.setattr(module, "TEMP_CAPACITY_BYTES", 4096)
+    monkeypatch.setattr(module, "TEMP_HOST_HEADROOM_BYTES", 4096)
+    monkeypatch.setattr(module, "trusted", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module.os.path, "ismount", lambda _path: False)
+    monkeypatch.setattr(
+        module.os,
+        "statvfs",
+        lambda _path: SimpleNamespace(f_bavail=100, f_frsize=4096),
+        raising=False,
+    )
+    monkeypatch.setattr(module.os, "chown", lambda *_args: None, raising=False)
+    real_lstat = Path.lstat
+    monkeypatch.setattr(
+        Path,
+        "lstat",
+        lambda path, **kwargs: (
+            SimpleNamespace(st_mode=stat.S_IFDIR, st_uid=0, st_gid=0)
+            if path == temp
+            else real_lstat(path, **kwargs)
+        ),
+    )
+    calls: list = []
+    monkeypatch.setattr(module, "run", lambda *args, **_kwargs: calls.append(args))
+    monkeypatch.setattr(
+        module, "validate_temp_image", lambda _info: calls.append(("validate-image",))
+    )
+    monkeypatch.setattr(
+        module, "validate_temp_root", lambda **_kwargs: calls.append(("validate-mount",))
+    )
+    monkeypatch.setattr(
+        module.os,
+        "posix_fallocate",
+        lambda fd, _offset, size: os.write(fd, b"x" * size),
+        raising=False,
+    )
+    # Windows cannot fsync a directory; file allocation and rename still run.
+    monkeypatch.setattr(module.os, "O_DIRECTORY", 0, raising=False)
+    real_open = module.os.open
+    monkeypatch.setattr(
+        module.os,
+        "open",
+        lambda path, flags, *args: real_open(
+            module.TEMP_IMAGE if path == managed else path,
+            os.O_RDWR if path == managed else flags,
+            *args,
+        ),
+    )
+    monkeypatch.setattr(module.os, "O_NOFOLLOW", getattr(os, "O_NOFOLLOW", 0), raising=False)
+    return calls, permission_calls
+
+
+def test_temporary_disk_creation_allocates_once_and_preserves_fixed_image(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+    safety_module.ensure_temp_root()
+    first_bytes = safety_module.TEMP_IMAGE.read_bytes()
+    assert len(first_bytes) == 4096
+    assert [command[0] for command in calls].count("mkfs.ext4") == 1
+    assert "nodiscard,lazy_itable_init=0,lazy_journal_init=0" in next(
+        command for command in calls if command[0] == "mkfs.ext4"
+    )
+    assert (
+        next(command for command in calls if command[0] == "mount")[4] == "loop,nodev,nosuid,noexec"
+    )
+    # Restart does not require fresh space, allocate again, reformat, or delete debris.
+    monkeypatch.setattr(
+        safety_module.os, "statvfs", lambda _path: pytest.fail("must reuse fixed allocation")
+    )
+    safety_module.ensure_temp_root()
+    assert safety_module.TEMP_IMAGE.read_bytes() == first_bytes
+    assert [command[0] for command in calls].count("mkfs.ext4") == 1
+    assert permissions == [
+        ("mkdir", 0o000),
+        ("chmod", 0o000),
+        ("chmod", 0o750),
+        ("chmod", 0o000),
+        ("chmod", 0o750),
+    ]
+
+
+def test_interrupted_allocation_is_retained_and_blocks_reallocation(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+
+    def exhausted(*_args: object) -> None:
+        raise OSError("synthetic disk full")
+
+    monkeypatch.setattr(safety_module.os, "posix_fallocate", exhausted)
+    with pytest.raises(OSError, match="disk full"):
+        safety_module.ensure_temp_root()
+    assert safety_module.TEMP_IMAGE.with_suffix(".preparing").exists()
+    with pytest.raises(ValueError, match="Incomplete"):
+        safety_module.ensure_temp_root()
+    assert calls == []
+    assert permissions == [("mkdir", 0o000), ("chmod", 0o000), ("chmod", 0o000)]
+
+
+def test_temporary_mountpoint_with_old_debris_is_never_overlaid_or_erased(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+    safety_module.TEMP_ROOT.mkdir()
+    debris = safety_module.TEMP_ROOT / "retained"
+    debris.write_bytes(b"owned old stream")
+    with pytest.raises(ValueError, match="not empty"):
+        safety_module.ensure_temp_root()
+    assert debris.read_bytes() == b"owned old stream"
+    assert calls == []
+    assert permissions == []
+
+
+@pytest.mark.parametrize("container_identity", ["3:4", "3:5"])
+def test_live_temporary_filesystem_proof_checks_container_mount_identity(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    container_identity: str,
+) -> None:
+    root = tmp_path / "temp"
+    image = tmp_path / "temp.ext4"
+    monkeypatch.setattr(safety_module, "TEMP_ROOT", root)
+    monkeypatch.setattr(safety_module, "TEMP_IMAGE", image)
+    real_lstat = Path.lstat
+
+    def info(path: Path, **kwargs: object) -> object:
+        if path == image:
+            return SimpleNamespace(
+                st_mode=stat.S_IFREG | 0o600,
+                st_uid=0,
+                st_nlink=1,
+                st_size=safety_module.TEMP_CAPACITY_BYTES,
+                st_blocks=safety_module.TEMP_CAPACITY_BYTES // 512,
+            )
+        if path == root:
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR | 0o750, st_uid=100, st_gid=100, st_dev=3, st_ino=4
+            )
+        return real_lstat(path, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", info)
+
+    def run(*args: str, **_kwargs: object) -> str:
+        if args[0] == "findmnt":
+            return safety_module.json.dumps(
+                {
+                    "filesystems": [
+                        {
+                            "target": str(root),
+                            "source": "/dev/loop7",
+                            "fstype": "ext4",
+                            "options": "rw,nodev,nosuid,noexec,relatime",
+                        }
+                    ]
+                }
+            )
+        if args[0] == "losetup":
+            return safety_module.json.dumps(
+                {
+                    "loopdevices": [
+                        {
+                            "name": "/dev/loop7",
+                            "back-file": str(image),
+                            "offset": 0,
+                            "sizelimit": 0,
+                            "ro": False,
+                        }
+                    ]
+                }
+            )
+        if args[0] == "blockdev":
+            return str(safety_module.TEMP_CAPACITY_BYTES)
+        assert args[:3] == ("docker", "exec", safety_module.CONTAINER)
+        return container_identity
+
+    monkeypatch.setattr(safety_module, "run", run)
+    if container_identity == "3:4":
+        safety_module.validate_temp_root(running=True)
+    else:
+        with pytest.raises(ValueError, match="does not hold"):
+            safety_module.validate_temp_root(running=True)
+
+
+def test_disk_full_scanner_error_cannot_mint_readiness(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    monkeypatch.setattr(
+        safety_module, "scan", lambda _body: b"INSTREAM: Can't write to temporary file. ERROR\0"
+    )
+    with pytest.raises(ValueError, match="Clean scanner probe failed"):
+        safety_module.prove(RELEASE, installed)
+
+
+def _set_historical_policy(installed: Path) -> None:
+    clamd = installed / "clamd.conf"
+    clamd.write_text(
+        clamd.read_text(encoding="utf-8")
+        .replace("StreamMaxLength 2000000000", "StreamMaxLength 100M")
+        .replace("MaxFileSize 2000000000", "MaxFileSize 100M")
+        .replace("MaxScanSize 4000000000", "MaxScanSize 200M")
+        .replace("TemporaryDirectory /var/lib/ac-media-safety-tmp\n", "")
+        .replace("LocalSocket /run/ac-media-safety/clamd.sock", "LocalSocket /tmp/clamd.sock")
+        .replace("LocalSocketMode 666", "LocalSocketMode 600")
+        .replace("MaxScanTime 900000", "MaxScanTime 60000"),
+        encoding="utf-8",
+    )
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        "\n".join(
+            line
+            for line in compose.read_text(encoding="utf-8").splitlines()
+            if not any(
+                marker in line
+                for marker in (
+                    "# ac-scanner-temp-filesystem-v1",
+                    "media-safety-tmp",
+                    "media-safety-socket",
+                )
+            )
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("mode", ["upgrade", "rollback"])
+def test_historical_policy_transition_reports_only_target_capacity(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    validator = safety_module.validate_policy
+    prover = safety_module.prove
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    _set_historical_policy(source if mode == "upgrade" else target)
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    monkeypatch.setattr(safety_module, "validate_policy", validator)
+    monkeypatch.setattr(safety_module, "prove", prover)
+    result = safety_module.transition_release(
+        mode=mode,
+        source_release=RELEASE,
+        source_checksum="c" * 64,
+        target_release="b" * 40,
+        target_installed=target,
+    )
+    assert composed == [("b" * 40, target)]
+    expected_source = 2_000_000_000 if mode == "upgrade" else 100 * safety_module.MIB
+    expected_scan = 4_000_000_000 if mode == "upgrade" else 200 * safety_module.MIB
+    assert result["readiness"]["max_source_bytes"] == expected_source
+    assert result["readiness"]["stream_max_length"] == expected_source
+    assert result["readiness"]["max_file_size"] == expected_source
+    assert result["readiness"]["max_scan_size"] == expected_scan
+    assert result["scanner_readiness"] == "verified"
+
+
+@pytest.mark.parametrize("changed_limit", ["StreamMaxLength", "MaxFileSize", "MaxScanSize"])
+def test_historical_policy_rejects_mixed_or_invented_limits_before_transition(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed_limit: str,
+) -> None:
+    validator = safety_module.validate_policy
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    _set_historical_policy(source)
+    clamd = source / "clamd.conf"
+    clamd.write_text(
+        "\n".join(
+            f"{changed_limit} 2000000000" if line.startswith(changed_limit + " ") else line
+            for line in clamd.read_text(encoding="utf-8").splitlines()
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(safety_module, "validate_policy", validator)
+    with pytest.raises(ValueError, match="limits"):
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+    assert composed == []
+
+
+def test_intermediate_large_scanner_without_fixed_disk_cannot_mint_large_readiness(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(safety_module.TEMP_POLICY_MARKER, ""),
+        encoding="utf-8",
+    )
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    with pytest.raises(ValueError, match="Large scanner readiness"):
+        safety_module.prove(RELEASE, installed)

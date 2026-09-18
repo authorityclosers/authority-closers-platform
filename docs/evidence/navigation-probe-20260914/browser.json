@@ -1,0 +1,203 @@
+{
+  "transport": "Chromium real TCP HTTP -> AC password cookie -> disposable PostgreSQL",
+  "static_export": "apps/sales-xray-web/out",
+  "api_route_mocks_configured": false,
+  "provider_requests_configured": false,
+  "google_login_tested": false,
+  "credentials": "synthetic verified account; password excluded from evidence",
+  "checks": [
+    "Anonymous home shows AC sign-in and no private history request.",
+    "Correct password login navigates the standalone host to /.",
+    "Workspace choices came from GET /v1/me/workspaces.",
+    "Selecting the assigned workspace opens CallStudio and private history.",
+    "Opening the saved call loads its source-bound report.",
+    "The saved report plays synthetic source audio over authenticated HTTP and seeks it.",
+    "The report displays saved C1 level and pitch from the private API response.",
+    "The saved measurement chart switches from sound level to pitch estimate.",
+    "The report exposes all eight saved sales factors with bounded observations.",
+    "The report exposes the one source-bound synthetic transcript segment.",
+    "Password login issued a same-origin host-only session cookie.",
+    "Selecting a tenant without membership is denied by the server.",
+    "After logout, saved measurements and source playback return 401; the authorized read was private/no-store.",
+    "Logout clears the session and anonymous reload cannot read history."
+  ],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 401,
+      "cache_control": "",
+      "content_type": "application/problem+json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/password/login",
+      "status": 200,
+      "cache_control": "no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 200,
+      "cache_control": "no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context",
+      "status": 200,
+      "cache_control": "",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/plan",
+      "status": 404,
+      "cache_control": "",
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/source",
+      "status": 206,
+      "cache_control": "private, no-store",
+      "content_type": "audio/wav"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/runs/b7604556-a84c-4b95-af45-23d05d852f3a/report",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/transcript",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/measurements",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/context",
+      "status": 403,
+      "cache_control": "",
+      "content_type": "application/problem+json"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "status": 204,
+      "cache_control": "",
+      "content_type": ""
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/measurements",
+      "status": 401,
+      "cache_control": "",
+      "content_type": "application/problem+json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/source",
+      "status": 401,
+      "cache_control": "",
+      "content_type": "application/problem+json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces",
+      "status": 401,
+      "cache_control": "",
+      "content_type": "application/problem+json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/acquisition/entry",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/conversation/workspace",
+      "status": 200,
+      "cache_control": "private, no-store",
+      "content_type": "application/json"
+    }
+  ],
+  "external_requests": [],
+  "browser_errors": [],
+  "request_failures": [
+    "HEAD /: net::ERR_ABORTED",
+    "HEAD /login/: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "POST /v1/auth/password/login: net::ERR_ABORTED",
+    "HEAD /calls/: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "POST /v1/auth/logout: net::ERR_ABORTED",
+    "GET /v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/source: net::ERR_ABORTED",
+    "GET /v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/measurements: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "HEAD /login/: net::ERR_ABORTED"
+  ],
+  "passed": true,
+  "navigation_cancellations": [
+    "HEAD /: net::ERR_ABORTED",
+    "HEAD /login/: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "POST /v1/auth/password/login: net::ERR_ABORTED",
+    "HEAD /calls/: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "POST /v1/auth/logout: net::ERR_ABORTED",
+    "GET /v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/source: net::ERR_ABORTED",
+    "GET /v1/conversation/recordings/63abcfd7-2f52-4aa4-baec-ca2809f216e8/measurements: net::ERR_ABORTED",
+    "HEAD /: net::ERR_ABORTED",
+    "HEAD /login/: net::ERR_ABORTED"
+  ],
+  "unexpected_request_failures": []
+}

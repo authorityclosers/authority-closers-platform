@@ -1,0 +1,4 @@
+$ tsc --noEmit
+$ eslint . --max-warnings 0
+Success: no issues found in 2 source files
+All checks passed!

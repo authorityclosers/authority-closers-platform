@@ -24,6 +24,7 @@ from ac_platform.media.contracts import (
 )
 from ac_platform.media.delivery import PrivateMediaDeliveryHandler
 from ac_platform.media.errors import MediaConfigurationError, MediaForbidden
+from ac_platform.media.models import MediaVersion
 from ac_platform.media.policy import MediaCorsPolicy, RangeMode, SignedMediaDeliveryPort
 from ac_platform.media.runtime import create_media_runtime
 from ac_platform.media.scanner import SignatureContentScanner
@@ -172,6 +173,22 @@ def test_route_uses_immutable_upload_provenance_not_readiness(key):
     assert "state" not in query
     database.execute.return_value.scalar_one_or_none.return_value = None
     assert not _owns_key(database, ACTOR, key)
+
+
+def test_global_free_course_key_uses_approved_binding_and_ready_version():
+    database = Mock()
+    database.execute.return_value.scalar_one_or_none.return_value = None
+    database.scalar.side_effect = [
+        MediaVersion(
+            tenant_id=TENANT,
+            asset_id=ASSET,
+            id=VERSION,
+            state="ready",
+            object_key=ROOT,
+        ),
+        UUID(int=99),
+    ]
+    assert _owns_key(database, ACTOR, ROOT + "/renditions/progressive.mp4")
 
 
 @pytest.mark.parametrize(

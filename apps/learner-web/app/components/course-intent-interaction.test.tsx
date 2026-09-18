@@ -284,6 +284,9 @@ describe("mounted course and activity navigation recovery", () => {
       ),
     ];
     expect(links).toHaveLength(5);
+    expect(
+      container.querySelector('a[href="/sales-xray"]')?.textContent,
+    ).toContain("Explore Sales Xray");
     for (const link of links)
       expect(new URL(link.href).searchParams.getAll("course")).toEqual([
         course,

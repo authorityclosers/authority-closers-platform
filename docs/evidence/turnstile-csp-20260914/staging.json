@@ -1,0 +1,24 @@
+{
+  "environment": "staging",
+  "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://challenges.cloudflare.com; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests",
+  "script_loaded": true,
+  "frame_loaded": true,
+  "synthetic_resource_bodies": ["script", "frame"],
+  "blocked_unapproved_resources": [
+    {
+      "directive": "script-src-elem",
+      "blocked": "https://unapproved.example.test/payload.js"
+    },
+    {
+      "directive": "connect-src",
+      "blocked": "https://unapproved.example.test/data"
+    },
+    {
+      "directive": "frame-src",
+      "blocked": "https://unapproved.example.test"
+    }
+  ],
+  "unexpected_network_requests": [],
+  "external_network_requests": 0,
+  "live_challenge_or_siteverify": false
+}

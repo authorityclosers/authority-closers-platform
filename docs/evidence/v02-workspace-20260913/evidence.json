@@ -1,0 +1,131 @@
+{
+  "status": "passed",
+  "scope": "Supported local development preview with synthetic API responses; builds validated separately; not hosted authentication, performance, or video proof",
+  "captured_at": "2026-09-13T17:18:52.685613+00:00",
+  "assertions": [
+    "Admin actual course counts",
+    "Reviewer workspace direct navigation",
+    "Admin collapse persists across reload",
+    "Admin 320/390 drawer, focus confinement, Escape return, reflow",
+    "Video upload lives beneath selected video lesson details",
+    "Multiple-file drop has visible validation",
+    "Reflection lessons omit video upload",
+    "Dirty lesson blocks logout until decision; cancel preserves edit",
+    "Coach 320/390 navigation, Escape return, reflow and dark appearance"
+  ],
+  "api_requests": [
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs"
+    },
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs"
+    },
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "me"
+    },
+    {
+      "method": "GET",
+      "path": "context"
+    },
+    {
+      "method": "GET",
+      "path": "me/studio-access"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    },
+    {
+      "method": "GET",
+      "path": "admin/studio/programs/22222222-2222-4222-8222-222222222222/video-upload-capability"
+    }
+  ],
+  "page_errors": []
+}

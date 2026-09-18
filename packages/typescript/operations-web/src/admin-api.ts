@@ -182,17 +182,16 @@ export async function loadAdminSession(
   let context: AdminContext;
   let studioAccess: unknown;
   try {
-    me = meSchema.parse(
-      await requestSessionJson<unknown>("/v1/me", fetcher, signal),
-    );
-    context = contextSchema.parse(
-      await requestSessionJson<unknown>("/v1/context", fetcher, signal),
-    );
-    studioAccess = await requestSessionJson<unknown>(
-      "/v1/me/studio-access",
-      fetcher,
-      signal,
-    );
+    // Read-only projections are independent. Reconcile their person, session,
+    // tenant and authority together before exposing any private workspace.
+    const [meValue, contextValue, studioValue] = await Promise.all([
+      requestSessionJson<unknown>("/v1/me", fetcher, signal),
+      requestSessionJson<unknown>("/v1/context", fetcher, signal),
+      requestSessionJson<unknown>("/v1/me/studio-access", fetcher, signal),
+    ]);
+    me = meSchema.parse(meValue);
+    context = contextSchema.parse(contextValue);
+    studioAccess = studioValue;
   } catch (error) {
     if (error instanceof AdminApiProblem && [401, 403].includes(error.status)) {
       throw new AdminSessionDenied(
@@ -535,6 +534,287 @@ export function newIdempotencyKey(): string {
     return crypto.randomUUID();
   }
   throw new Error("Secure idempotency key generation is unavailable.");
+}
+
+export const adminDiagnosisPurposeSchema = z.enum([
+  "learner_support",
+  "safeguarding_review",
+  "accessibility_review",
+]);
+export type AdminDiagnosisPurpose = z.infer<typeof adminDiagnosisPurposeSchema>;
+
+const adminLearnerCandidateSchema = z
+  .object({
+    person_id: z.uuid(),
+    display_name: z.string().min(1).max(240),
+    username: z.string().min(3).max(30).nullable(),
+    masked_email: z.string().min(1).max(320),
+    membership_status: z.literal("active"),
+    membership_role: z.literal("learner"),
+  })
+  .strict();
+
+const adminLearnerLookupSchema = z
+  .object({
+    tenant_id: z.uuid(),
+    redaction_version: z.literal("admin-learner-v1"),
+    candidates: z.array(adminLearnerCandidateSchema).max(25),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+const adminActivityMetadataSchema = z
+  .object({
+    activity_id: z.uuid(),
+    title: z.string().min(1).max(500),
+    kind: z.string().min(1).max(64),
+    state: z.string().min(1).max(64),
+    required: z.boolean(),
+    reason: z.string().min(1).max(500),
+    missing_activity_ids: z.array(z.uuid()).max(500),
+    missing_module_ids: z.array(z.uuid()).max(500),
+  })
+  .strict();
+
+const adminProgressMetadataSchema = z
+  .object({
+    projection_version: z.string().min(1).max(128),
+    denominator: z.number().int().nonnegative(),
+    completed_count: z.number().int().nonnegative(),
+    percentage: z.number().min(0).max(100),
+    next_activity_id: z.uuid().nullable(),
+    activity_states: z.array(adminActivityMetadataSchema).max(500),
+    activity_states_truncated: z.boolean(),
+  })
+  .strict()
+  .refine((value) => value.completed_count <= value.denominator);
+
+const adminDraftMetadataSchema = z
+  .object({
+    activity_id: z.uuid(),
+    present: z.literal(true),
+    revision: z.number().int().nonnegative(),
+    saved_at: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+const adminEvidenceMetadataSchema = z
+  .object({
+    activity_id: z.uuid(),
+    evidence_type: z.string().min(1).max(128),
+    submission_status: z.string().min(1).max(64).nullable(),
+    captured_at: z.iso.datetime({ offset: true }),
+    submitted_at: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
+const adminEnrollmentMetadataSchema = z
+  .object({
+    enrollment_id: z.uuid(),
+    program_id: z.uuid(),
+    program_title: z.string().min(1).max(500),
+    program_version_id: z.uuid(),
+    version_number: z.number().int().positive(),
+    enrollment_status: z.string().min(1).max(64),
+    entitlement_status: z.string().min(1).max(64),
+    progress: adminProgressMetadataSchema.nullable(),
+    drafts: z.array(adminDraftMetadataSchema).max(500),
+    drafts_truncated: z.boolean(),
+    evidence: z.array(adminEvidenceMetadataSchema).max(500),
+    evidence_truncated: z.boolean(),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+const adminLearnerDiagnosisSchema = adminLearnerCandidateSchema
+  .extend({
+    tenant_id: z.uuid(),
+    purpose: adminDiagnosisPurposeSchema,
+    redaction_version: z.literal("admin-learner-v1"),
+    as_of: z.iso.datetime({ offset: true }),
+    enrollments: z.array(adminEnrollmentMetadataSchema).max(25),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+export type AdminLearnerCandidate = z.infer<typeof adminLearnerCandidateSchema>;
+export type AdminLearnerLookup = z.infer<typeof adminLearnerLookupSchema>;
+export type AdminLearnerDiagnosis = z.infer<typeof adminLearnerDiagnosisSchema>;
+
+const directoryRoleSchema = z.enum([
+  "all",
+  "learner",
+  "support",
+  "admin",
+  "owner",
+]);
+const directoryStatusSchema = z.enum([
+  "all",
+  "active",
+  "inactive",
+  "suspended",
+  "unverified",
+]);
+const directoryFiltersSchema = z
+  .object({
+    query: z.string().trim().max(320).default(""),
+    role: directoryRoleSchema.default("all"),
+    status: directoryStatusSchema.default("all"),
+    page: z.number().int().min(1).max(10000).default(1),
+    page_size: z.number().int().min(1).max(50).default(25),
+  })
+  .strict();
+const directoryMemberSchema = z
+  .object({
+    person_id: z.uuid(),
+    display_name: z.string().min(1).max(240),
+    username: z.string().min(3).max(30).nullable(),
+    masked_email: z.string().min(1).max(320),
+    membership_role: z.enum(["learner", "support", "admin", "owner"]),
+    membership_status: z.enum(["active", "inactive"]),
+    account_status: z.enum(["active", "suspended"]),
+    email_verified: z.boolean(),
+    joined_at: z.iso.datetime({ offset: true }),
+    active_enrollments: z.number().int().nonnegative(),
+  })
+  .strict();
+const memberDirectorySchema = z
+  .object({
+    tenant_id: z.uuid(),
+    tenant_name: z.string().min(1).max(200),
+    members: z.array(directoryMemberSchema).max(50),
+    summary: z
+      .object({
+        total: z.number().int().nonnegative(),
+        active_learners: z.number().int().nonnegative(),
+        team: z.number().int().nonnegative(),
+        unverified: z.number().int().nonnegative(),
+      })
+      .strict(),
+    matching_count: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    page_size: z.number().int().min(1).max(50),
+  })
+  .strict();
+export type DirectoryFilters = z.infer<typeof directoryFiltersSchema>;
+export type DirectoryMember = z.infer<typeof directoryMemberSchema>;
+export type MemberDirectory = z.infer<typeof memberDirectorySchema>;
+
+export function loadMemberDirectory({
+  tenantId,
+  filters = {},
+  fetcher = fetch,
+  origin = currentOrigin(),
+  signal,
+}: {
+  tenantId: string;
+  filters?: Partial<DirectoryFilters>;
+  fetcher?: Fetcher;
+  origin?: string;
+  signal?: AbortSignal;
+}) {
+  const expectedTenant = z.uuid().parse(tenantId);
+  const parsedFilters = directoryFiltersSchema.parse(filters);
+  return requestJson(
+    "/v1/admin/people/directory",
+    {
+      method: "POST",
+      headers: mutationHeaders({ origin, hasBody: true }),
+      body: body(parsedFilters),
+      signal,
+    },
+    memberDirectorySchema.refine(
+      (value) =>
+        value.tenant_id === expectedTenant &&
+        value.page === parsedFilters.page &&
+        value.page_size === parsedFilters.page_size &&
+        value.members.length <= value.page_size &&
+        value.matching_count <= value.summary.total &&
+        new Set(value.members.map((member) => member.person_id)).size ===
+          value.members.length,
+    ),
+    fetcher,
+  );
+}
+
+const adminLearnerQuerySchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(320)
+  .refine(
+    (value) =>
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+    "Enter a learner email or username.",
+  );
+
+type AdminLearnerReadOptions = {
+  tenantId: string;
+  purpose: AdminDiagnosisPurpose;
+  fetcher?: Fetcher;
+  origin?: string;
+  signal?: AbortSignal;
+};
+
+export function lookupAdminLearners({
+  query,
+  tenantId,
+  purpose,
+  fetcher = fetch,
+  origin = currentOrigin(),
+  signal,
+}: AdminLearnerReadOptions & { query: string }) {
+  const expectedTenant = z.uuid().parse(tenantId);
+  const parsedPurpose = adminDiagnosisPurposeSchema.parse(purpose);
+  return requestJson(
+    "/v1/admin/learners/lookup",
+    {
+      method: "POST",
+      headers: mutationHeaders({ origin, hasBody: true }),
+      body: body({
+        query: adminLearnerQuerySchema.parse(query),
+        purpose: parsedPurpose,
+      }),
+      signal,
+    },
+    adminLearnerLookupSchema.refine(
+      (value) => value.tenant_id === expectedTenant,
+    ),
+    fetcher,
+  );
+}
+
+export function loadAdminLearnerDiagnosis({
+  personId,
+  tenantId,
+  purpose,
+  fetcher = fetch,
+  origin = currentOrigin(),
+  signal,
+}: AdminLearnerReadOptions & { personId: string }) {
+  const expectedPerson = z.uuid().parse(personId);
+  const expectedTenant = z.uuid().parse(tenantId);
+  const parsedPurpose = adminDiagnosisPurposeSchema.parse(purpose);
+  return requestJson(
+    "/v1/admin/learners/" +
+      uuidPath(expectedPerson, "personId") +
+      "/diagnosis?" +
+      new URLSearchParams({ purpose: parsedPurpose }),
+    {
+      method: "GET",
+      headers: mutationHeaders({ origin, hasBody: false }),
+      signal,
+    },
+    adminLearnerDiagnosisSchema.refine(
+      (value) =>
+        value.tenant_id === expectedTenant &&
+        value.person_id === expectedPerson &&
+        value.purpose === parsedPurpose,
+    ),
+    fetcher,
+  );
 }
 
 export function publishProgramVersion({

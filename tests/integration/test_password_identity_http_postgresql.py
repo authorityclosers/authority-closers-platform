@@ -171,6 +171,107 @@ def postgres_harness() -> Iterator[_Harness]:
         admin_engine.dispose()
 
 
+@pytest.mark.parametrize(
+    ("account_state", "has_password", "verified", "expected_kind"),
+    [
+        (None, False, False, None),
+        ("active", False, True, "password_reset"),
+        ("active", False, False, None),
+        ("suspended", True, False, None),
+        ("suspended", True, True, None),
+        ("deleted", True, False, None),
+    ],
+)
+def test_recovery_preserves_account_eligibility_without_authentication(
+    postgres_harness: _Harness,
+    account_state: str | None,
+    has_password: bool,
+    verified: bool,
+    expected_kind: str | None,
+) -> None:
+    async def scenario() -> None:
+        person_id = uuid4()
+        email = f"recovery-{person_id}@example.test"
+        if account_state is not None:
+            with Session(postgres_harness.engine) as database, database.begin():
+                database.add(
+                    Person(
+                        id=person_id,
+                        email=email,
+                        status=account_state,
+                        email_verified_at=datetime.now(UTC) if verified else None,
+                    )
+                )
+                database.flush()
+                if has_password:
+                    database.add(
+                        PasswordCredential(
+                            person_id=person_id,
+                            password_hash=hash_password("synthetic recovery test password"),
+                        )
+                    )
+        engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="test-recovery-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="test-recovery-oauth-secret-long-enough",  # noqa: S106
+            email_challenge_secret="test-recovery-challenge-secret-long-enough",  # noqa: S106
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        app = FastAPI()
+        register_problem_handlers(app)
+        install_identity_http(
+            app, settings=settings, sessions=async_sessionmaker(engine, expire_on_commit=False)
+        )
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                response = await client.post(
+                    "/v1/auth/password/recovery",
+                    headers={"Origin": "https://app.authorityclosers.test"},
+                    json={"email": email},
+                )
+                assert response.status_code == 200
+                assert response.json() == {"accepted": True}
+                assert response.headers["cache-control"] == "no-store"
+                assert "set-cookie" not in response.headers
+            with Session(postgres_harness.engine) as database:
+                challenges = list(
+                    database.scalars(
+                        select(EmailChallenge).where(EmailChallenge.person_id == person_id)
+                    )
+                )
+                assert [challenge.kind for challenge in challenges] == (
+                    [expected_kind] if expected_kind else []
+                )
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(OutboxEvent)
+                    .where(OutboxEvent.aggregate_id == person_id)
+                ) == int(expected_kind is not None)
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(PasswordCredential)
+                    .where(PasswordCredential.person_id == person_id)
+                ) == int(has_password)
+                person = database.get(Person, person_id)
+                if account_state is None:
+                    assert person is None
+                else:
+                    assert person is not None
+                    assert person.status == account_state
+                    assert (person.email_verified_at is not None) is verified
+        finally:
+            await engine.dispose()
+
+    _run_async(scenario())
+
+
 def test_password_identity_recovery_and_onboarding_on_fresh_postgresql(
     postgres_harness: _Harness,
 ) -> None:
@@ -271,16 +372,32 @@ def test_password_identity_recovery_and_onboarding_on_fresh_postgresql(
                         )
                     )
 
+                # An unverified learner can recover from a missed signup email
+                # through the normal recovery route, without receiving a reset
+                # token or becoming verified before proving mailbox control.
                 resend = await client.post(
-                    "/v1/auth/password/resend-verification",
+                    "/v1/auth/password/recovery",
                     headers=headers,
                     json={"email": "learner@example.com"},
                 )
                 assert resend.status_code == 200
                 assert resend.headers["cache-control"] == "no-store"
                 assert resend.json() == {"accepted": True}
+                assert "set-cookie" not in resend.headers
 
                 with Session(postgres_harness.engine) as database:
+                    assert database.get(Person, person.id).email_verified_at is None
+                    assert (
+                        database.scalar(
+                            select(func.count())
+                            .select_from(EmailChallenge)
+                            .where(
+                                EmailChallenge.person_id == person.id,
+                                EmailChallenge.kind == EmailChallengeKind.PASSWORD_RESET.value,
+                            )
+                        )
+                        == 0
+                    )
                     replacement_challenge = database.scalar(
                         select(EmailChallenge)
                         .where(

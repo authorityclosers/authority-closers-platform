@@ -48,7 +48,11 @@ from ac_platform.tenancy.models import Tenant
 
 ROOT = Path(__file__).parents[2]
 TOKEN_SECRET = b"postgres-verification-email-test-secret-32-bytes"
-NOW = datetime(2026, 9, 13, 12, tzinfo=UTC)
+# Keep the issued challenge inside its 24-hour validity window when the suite
+# runs across calendar days. The application deliberately checks wall-clock
+# expiry during bootstrap, so a historical fixed date makes this integration
+# proof fail for the wrong reason.
+NOW = datetime.now(UTC).replace(microsecond=0)
 
 
 def _run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:

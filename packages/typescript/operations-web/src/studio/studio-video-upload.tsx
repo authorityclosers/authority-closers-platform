@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -59,9 +60,9 @@ const titles: Record<UploadStage, string> = {
   rejected: "Choose another video",
 };
 export function videoFileSize(bytes: number) {
-  return bytes >= 1024 ** 3
-    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
-    : `${Math.max(0.1, bytes / 1024 ** 2).toFixed(1)} MB`;
+  return bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(1)} GB`
+    : `${Math.max(0.1, bytes / 1_000_000).toFixed(1)} MB`;
 }
 const noopSubscribe = () => () => {};
 const emptySnapshot = () => emptyUpload;
@@ -86,6 +87,8 @@ function UploadSessionView({
   const id = useId();
   const [session, setSession] = useState<StudioUploadSession | null>(null);
   const [sessionError, setSessionError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
   const [capability, setCapability] = useState<StudioUploadCapability | null>(
     null,
   );
@@ -130,6 +133,7 @@ function UploadSessionView({
       };
     }
   }, [recoveryContext, programId]);
+  const revokeSource = useEffectEvent(() => session?.revokeSource());
   useEffect(() => {
     const controller = new AbortController();
     void loadStudioUploadCapability(programId, { signal: controller.signal })
@@ -142,7 +146,7 @@ function UploadSessionView({
           error instanceof AdminApiProblem &&
           [401, 403, 404, 410].includes(error.status)
         )
-          session?.revokeSource();
+          revokeSource();
         if (!controller.signal.aborted)
           setCapabilityError(
             "Upload availability couldn’t be checked. Reopen the course or try again.",
@@ -152,7 +156,7 @@ function UploadSessionView({
         if (!controller.signal.aborted) setChecking(false);
       });
     return () => controller.abort();
-  }, [programId, check, session]);
+  }, [programId, check]);
   useEffect(() => {
     callbacks.current.onPendingChange?.(snapshot.pending || snapshot.busy);
     if (!snapshot.pending && !snapshot.busy) return;
@@ -200,12 +204,24 @@ function UploadSessionView({
   );
   async function choose(file: File | undefined) {
     if (!file || !canChoose || !capability?.max_source_bytes) return;
+    setSelectionError("");
     await session?.start(file, capability.max_source_bytes);
   }
   return (
     <section
       className={`${panel.panel} ${styles.upload}`}
+      data-stage={snapshot.stage}
       aria-labelledby={`${id}-title`}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        if (!canChoose)
+          setSelectionError(
+            "Finish or resume your current upload before choosing another video.",
+          );
+      }}
     >
       <div className={styles.heading}>
         <span className={styles.mark} aria-hidden="true">
@@ -216,20 +232,14 @@ function UploadSessionView({
           )}
         </span>
         <div>
-          <span className={panel.eyebrow}>Course video library</span>
+          <span className={panel.eyebrow}>Media for lessons</span>
           <h3 id={`${id}-title`}>
             {hidden ? "Add a course video" : titles[snapshot.stage]}
           </h3>
+          <p className={styles.subheading}>
+            Upload once, then connect the ready video to a lesson.
+          </p>
         </div>
-        {canChoose ? (
-          <ActionButton
-            variant="secondary"
-            onClick={() => input.current?.click()}
-          >
-            <CloudUpload size={17} aria-hidden="true" />{" "}
-            {snapshot.needsFile ? "Select the same video" : "Choose video"}
-          </ActionButton>
-        ) : null}
       </div>
       {checking ? (
         <p role="status" className={panel.loading}>
@@ -277,6 +287,57 @@ function UploadSessionView({
               void choose(file);
             }}
           />
+          {canChoose ? (
+            <div
+              className={styles.dropzone}
+              data-dragging={dragging}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setDragging(true);
+              }}
+              onDragLeave={(event) => {
+                if (
+                  !event.currentTarget.contains(
+                    event.relatedTarget as Node | null,
+                  )
+                )
+                  setDragging(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                const files = event.dataTransfer.files;
+                if (files.length !== 1) {
+                  setSelectionError("Drop one video at a time.");
+                  return;
+                }
+                void choose(files[0]);
+              }}
+            >
+              <CloudUpload size={30} aria-hidden="true" />
+              <strong>
+                {snapshot.needsFile
+                  ? "Drop the same video to resume"
+                  : "Drag your lesson video here"}
+              </strong>
+              <span>
+                MP4 or WebM, up to {videoFileSize(capability.max_source_bytes!)}
+                .
+              </span>
+              <ActionButton
+                variant="secondary"
+                onClick={() => input.current?.click()}
+              >
+                {snapshot.needsFile ? "Select the same video" : "Choose video"}
+              </ActionButton>
+            </div>
+          ) : null}
+          {selectionError ? (
+            <p role="alert" className={panel.error}>
+              {selectionError}
+            </p>
+          ) : null}
           {sessionError ? (
             <p role="alert" className={panel.error}>
               {sessionError}
@@ -290,12 +351,6 @@ function UploadSessionView({
               label={snapshot.status.label}
               recoveryContext={recoveryContext}
             />
-          ) : null}
-          {snapshot.stage === "idle" || snapshot.stage === "rejected" ? (
-            <p className={panel.muted}>
-              MP4 or WebM, up to {videoFileSize(capability.max_source_bytes!)}.
-              Upload once, then choose the video for a lesson.
-            </p>
           ) : null}
           {!hidden && snapshot.filename ? (
             <div className={styles.file}>

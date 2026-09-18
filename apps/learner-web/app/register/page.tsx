@@ -6,15 +6,22 @@ import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 import { parseCourseIntent } from "../lib/course-intent";
 import { parseActivityIntent } from "../lib/activity-intent";
 import type { QueryValue } from "../lib/surface-state";
+import { parseSalesAuthNext } from "../lib/sales-auth-return";
 
 export default async function RegisterPage({
   searchParams = Promise.resolve({}),
 }: {
-  searchParams?: Promise<{ course?: QueryValue; activity?: QueryValue }>;
+  searchParams?: Promise<{
+    course?: QueryValue;
+    activity?: QueryValue;
+    next?: QueryValue;
+  }>;
 } = {}) {
   const query = await searchParams;
   const courseIntent = parseCourseIntent(query.course);
   const activityIntent = parseActivityIntent(query.activity);
+  const salesNext = parseSalesAuthNext(query.next);
+  const salesOnly = Boolean(salesNext && !courseIntent && !activityIntent);
   const stagingBridge = isStagingAuthenticatedBridge(
     process.env,
     process.env.NODE_ENV,
@@ -23,7 +30,11 @@ export default async function RegisterPage({
     <AuthFlowPage
       eyebrow="Create account"
       heading="Create your account."
-      copy="Set up a verified learner identity for the free course."
+      copy={
+        salesOnly
+          ? "Create your account to continue to Sales Xray."
+          : "Set up a verified learner identity for the free course."
+      }
       backHref={ROUTES.home}
       backLabel="Back to published programs"
       steps={[
@@ -38,11 +49,13 @@ export default async function RegisterPage({
           action="Account creation"
           courseIntent={courseIntent}
           activityIntent={activityIntent}
+          salesNext={salesNext}
         />
       ) : (
         <RegistrationForm
           courseIntent={courseIntent}
           activityIntent={activityIntent}
+          salesNext={salesNext}
         />
       )}
     </AuthFlowPage>

@@ -1,0 +1,12 @@
+{
+  "environment": "Supported local dev preview with synthetic directory responses; PostgreSQL HTTP proof separate",
+  "checks": [
+    "Actual People route lists canonical-shaped synthetic members on first load",
+    "Member open and close restore keyboard focus",
+    "Role filter and partial name search",
+    "Empty filters and transient error recover",
+    "390px viewport, contained table scroll and member focus",
+    "320px viewport, contained table scroll and member focus"
+  ],
+  "page_errors": []
+}

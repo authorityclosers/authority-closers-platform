@@ -1,0 +1,147 @@
+{
+  "id": "dipak_report_v1",
+  "revision": "candidate-2026-09-13",
+  "approved": false,
+  "numeric_score_enabled": false,
+  "numeric_publication": false,
+  "declared_total": 100,
+  "source_weights": [15, 20, 15, 10, 10, 15, 5, 5],
+  "actual_source_total": 95,
+  "ethics": {
+    "mode": "hard_constraint",
+    "extra_weight": false,
+    "rule": "Ethics is assessed across the call and is not converted into an extra five points."
+  },
+  "source": {
+    "file": "Version-1...Brain.txt",
+    "sha256": "cc7387c2c26320aaa012115663db6a2cbc0216a00756cf83af654fccb6a70733",
+    "bytes": 165928,
+    "documents": [
+      {"doc": "Doc-1", "title": "Authority Closers Sales Constitution V1.0", "sections": "§1–§56"},
+      {"doc": "Doc-2", "title": "Authority Closers Communication DNA V1.0", "sections": "§1–§55"},
+      {"doc": "Doc-3", "title": "Authority Closers Sales Framework V1.0", "sections": "§1–§52"},
+      {"doc": "Doc-4", "title": "Authority Closers Objection & Decision Intelligence V1.0", "sections": "§1–§70"},
+      {"doc": "Doc-5", "title": "Authority Closers Evaluation Engine V1.0", "sections": "§1–§75"}
+    ]
+  },
+  "evaluation_prompt": "Use only supplied source-linked transcript, timing, verified context and permitted signals. For each finding cite exact evidence and state behavior, significance and uncertainty. Judge the achieved objective, not literal wording, question count or order. Use unknown, insufficient_evidence, not_applicable or conflicted when no legitimate opportunity exists. Ethics is a cross-call hard constraint. Never infer fixed personality, character, motive, speaker identity or stable tonality; speaker labels are uncertain without adjudication. Return a nonnumeric research draft with no official grade or endorsement.",
+  "dimensions": [
+    {
+      "id": "human_connection_trust",
+      "label": "Human Connection & Trust",
+      "weight": 15,
+      "citations": [{"doc": "Doc-1", "sections": ["§8–§10", "§52", "§54–§56"]}, {"doc": "Doc-5", "sections": ["§6"]}],
+      "look_for": ["interest/listening/reflection", "respect/safety", "natural adaptation"],
+      "avoid": ["forced rapport", "mechanical questions", "fake empathy", "pressure/robotic delivery"]
+    },
+    {
+      "id": "discovery_deep_understanding",
+      "label": "Discovery & Deep Understanding",
+      "weight": 20,
+      "citations": [{"doc": "Doc-1", "sections": ["§4–§7", "§11–§16"]}, {"doc": "Doc-3", "sections": ["§5–§11", "§16", "§45–§52"]}, {"doc": "Doc-5", "sections": ["§7–§10"]}],
+      "look_for": ["current→root→history→impact→desire", "hypothesis→test→update"],
+      "avoid": ["surface discovery", "assumptions", "question-count scoring"]
+    },
+    {
+      "id": "qualification",
+      "label": "Qualification",
+      "weight": 15,
+      "citations": [{"doc": "Doc-3", "sections": ["§17–§18", "§44"]}, {"doc": "Doc-5", "sections": ["§11–§13"]}],
+      "look_for": ["need/desire/urgency", "money/decision-maker"],
+      "avoid": ["late interrogation", "friendliness mistaken for qualification", "selling before fit"]
+    },
+    {
+      "id": "problem_impact_desire",
+      "label": "Problem, Impact & Desire Clarity",
+      "weight": 10,
+      "citations": [{"doc": "Doc-3", "sections": ["§7–§15", "§19"]}, {"doc": "Doc-5", "sections": ["§14–§17"]}],
+      "look_for": ["current→gap→desired state", "relevant impact", "specific prospect-sourced outcomes/numbers"],
+      "avoid": ["manufactured pain", "exaggeration", "vague desire as diagnosis"]
+    },
+    {
+      "id": "solution_relevance_presentation",
+      "label": "Solution Relevance & Presentation",
+      "weight": 10,
+      "citations": [{"doc": "Doc-3", "sections": ["§20–§26"]}, {"doc": "Doc-5", "sections": ["§18–§21"]}],
+      "look_for": ["diagnosis earns pitch", "solution→relevance→benefit→outcome", "specific process/deliverables/aftercare"],
+      "avoid": ["premature pitch", "feature dump", "unsupported promise", "generic presentation"]
+    },
+    {
+      "id": "certainty_objection_intelligence",
+      "label": "Certainty & Objection Intelligence",
+      "weight": 15,
+      "citations": [{"doc": "Doc-4", "sections": ["§3–§6", "§8–§18", "§40–§70"]}, {"doc": "Doc-5", "sections": ["§22–§28"]}],
+      "look_for": ["clarity/relevance/evidence/trust/realism", "listen→pause→acknowledge→clarify→isolate→diagnose→resolve→confirm", "calm price; separate barrier types"],
+      "avoid": ["rebuttal", "price defense before diagnosis", "automatic discount", "guarantees", "bypassing legitimate risk"]
+    },
+    {
+      "id": "closing_decision_management",
+      "label": "Closing & Decision Management",
+      "weight": 5,
+      "citations": [{"doc": "Doc-3", "sections": ["§34–§42", "§48–§52"]}, {"doc": "Doc-5", "sections": ["§29–§32", "§39–§42"]}],
+      "look_for": ["natural ask after fit/certainty", "clear next step", "legitimate future date", "respect for genuine no", "value-first follow-up"],
+      "avoid": ["missing ask", "forced closes", "fake deadlines", "refusing no", "payment as only success"]
+    },
+    {
+      "id": "communication_tonality",
+      "label": "Communication & Tonality",
+      "weight": 5,
+      "citations": [{"doc": "Doc-2", "sections": ["§1–§5", "§9–§16", "§31–§55"]}, {"doc": "Doc-5", "sections": ["§33–§37", "§63–§66"]}],
+      "look_for": ["natural/calm/curious/clear conversation", "appropriate pace", "space after key moments", "respectful direction-restoring interruption"],
+      "avoid": ["rapid-fire questions", "nervous monologue", "defensive price shift", "impatient interruption", "filling silence"]
+    }
+  ],
+  "context_exceptions": [
+    {
+      "id": "price_objection",
+      "rule": "Treat price as a hypothesis. State it clearly, allow reaction, then diagnose whether the barrier is budget, value, comparison, trust, certainty or timing before responding.",
+      "citations": [{"doc": "Doc-3", "sections": ["§28–§31"]}, {"doc": "Doc-4", "sections": ["§8–§14"]}, {"doc": "Doc-5", "sections": ["§22–§25"]}]
+    },
+    {
+      "id": "genuine_decision_maker",
+      "rule": "Do not assume a partner or decision-maker statement is evasive. Establish whether involvement is genuine, invite the decision-maker when appropriate, and diagnose a different barrier if one appears.",
+      "citations": [{"doc": "Doc-3", "sections": ["§32"]}, {"doc": "Doc-4", "sections": ["§17–§20"]}, {"doc": "Doc-5", "sections": ["§27"]}]
+    },
+    {
+      "id": "future_date",
+      "rule": "A specific future date with a genuine reason, clear desire, fit and certainty may be successful decision management. Do not manufacture a deadline or offer constraint.",
+      "citations": [{"doc": "Doc-1", "sections": ["§47–§49"]}, {"doc": "Doc-3", "sections": ["§36"]}, {"doc": "Doc-5", "sections": ["§32", "§40"]}]
+    },
+    {
+      "id": "push_or_back_off",
+      "rule": "Push only when the prospect is qualified, fit is genuine, uncertainty is addressable and the barrier is not a genuine rejection. Back off when fit, affordability, timing or willingness make continued pressure inappropriate.",
+      "citations": [{"doc": "Doc-1", "sections": ["§37", "§40", "§48–§49"]}, {"doc": "Doc-4", "sections": ["§38–§40", "§50", "§56"]}]
+    },
+    {
+      "id": "silence_and_interruption",
+      "rule": "Silence after an important question, price, emotional disclosure, objection or decision question is not automatically a defect. An interruption may be useful when a talkative or off-topic prospect needs respectful guidance; impatience is a defect.",
+      "citations": [{"doc": "Doc-2", "sections": ["§9–§12", "§31"]}, {"doc": "Doc-5", "sections": ["§33–§37"]}]
+    },
+    {
+      "id": "effectiveness_over_literal_questions",
+      "rule": "Do not require exact questions, exact words, a fixed order or every framework step when the underlying objective was achieved through natural conversation. Do not reward script completion without understanding.",
+      "citations": [{"doc": "Doc-1", "sections": ["§17", "§54–§56"]}, {"doc": "Doc-3", "sections": ["§1", "§43–§49"]}, {"doc": "Doc-5", "sections": ["§2", "§41–§43"]}]
+    }
+  ],
+  "evidence_policy": {
+    "behavioral_evidence_bound": true,
+    "speaker_identity": "Use speaker labels only as uncertain attribution unless independently adjudicated; never infer identity from voice.",
+    "fixed_trait_inference": false,
+    "tonality_inference": "Describe observed pacing, pauses, overlap or composure only when the permitted audio or timing evidence supports it; do not infer a fixed trait or personality.",
+    "missingness": ["unknown", "insufficient_evidence", "not_applicable", "conflicted"],
+    "feedback_fields": ["behavior", "evidence", "why_it_matters", "correction", "practice"],
+    "max_primary_improvements": 3
+  },
+  "report_sections": [
+    {"number": 1, "title": "EXECUTIVE SUMMARY", "required": "Evidence-bound summary; no score."},
+    {"number": 2, "title": "SCORECARD", "required": "Eight withheld dimensions; Ethics PASS/CONCERN/FAIL hard constraint."},
+    {"number": 3, "title": "WHAT YOU DID WELL", "required": "Up to three evidence-backed strengths."},
+    {"number": 4, "title": "BIGGEST MISSED OPPORTUNITIES", "required": "Specific moments with missingness."},
+    {"number": 5, "title": "TOP 3 IMPROVEMENTS", "required": "At most three behavioral changes with evidence."},
+    {"number": 6, "title": "OBJECTION ANALYSIS", "required": "Stated/likely objection, uncertainty, evidence, handling and next move."},
+    {"number": 7, "title": "CLOSING ANALYSIS", "required": "Readiness, ask, confidence and next step; future date/no when relevant."},
+    {"number": 8, "title": "COACHING INSTRUCTION", "required": "Short evidence-linked practice plan."},
+    {"number": 9, "title": "FINAL VERDICT", "required": "Nonnumeric conclusion with evidence gaps and ethics state."}
+  ],
+  "criteria": []
+}

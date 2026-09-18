@@ -16,6 +16,7 @@ from urllib.parse import quote
 from ac_platform.media.errors import MediaConflict, MediaStorageUnavailable
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import (
+    _FILESYSTEM_AVATAR_UPLOAD_CONTRACT,
     _LOCAL_AVATAR_UPLOAD_CONTRACT,
     PrivateObjectStorage,
     StorageUploadIntent,
@@ -51,21 +52,52 @@ class LocalAvatarStorage:
     local development store, not a general object provider or malware scanner.
     """
 
-    def __init__(self, *, root: Path, signer: MediaSigner, fallback: PrivateObjectStorage) -> None:
+    def __init__(
+        self,
+        *,
+        root: Path,
+        signer: MediaSigner,
+        fallback: PrivateObjectStorage,
+        origin: str = LOCAL_AVATAR_ORIGIN,
+        upload_prefix: str = UPLOAD_PREFIX,
+        token_type: str = "local-avatar-upload",  # noqa: S107 - bounded token kind, not a secret
+        contract: object = _LOCAL_AVATAR_UPLOAD_CONTRACT,
+        marker_name: str = ".local-avatar-store",
+        marker: bytes = _MARKER,
+        max_store_bytes: int = MAX_LOCAL_STORE_BYTES,
+    ) -> None:
         if not root.is_absolute() or root.name != "avatar-objects":
             raise MediaStorageUnavailable("Local avatar storage requires its named isolated root.")
+        if (
+            not origin
+            or origin != origin.rstrip("/")
+            or not upload_prefix.startswith("/v1/media/")
+            or not upload_prefix.endswith("/")
+            or not token_type
+            or not re.fullmatch(r"(?:\.)?[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", marker_name)
+            or not marker
+            or type(max_store_bytes) is not int
+            or max_store_bytes < MAX_AVATAR_BYTES + 4096
+        ):
+            raise MediaStorageUnavailable("The avatar storage configuration is invalid.")
         require_plain_path(root)
         root.mkdir(parents=True, exist_ok=True)
-        marker = root / ".local-avatar-store"
-        require_plain_path(marker)
-        if not marker.exists():
+        marker_path = root / marker_name
+        require_plain_path(marker_path)
+        if not marker_path.exists():
             if tuple(root.iterdir()):
                 raise MediaStorageUnavailable("Local avatar storage refuses an unmarked directory.")
-            with marker.open("xb") as stream:
-                stream.write(_MARKER)
-        if marker.read_bytes() != _MARKER:
+            with marker_path.open("xb") as stream:
+                stream.write(marker)
+        if marker_path.read_bytes() != marker:
             raise MediaStorageUnavailable("Local avatar storage marker is invalid.")
         self.root, self.signer, self.fallback = root, signer, fallback
+        self.origin = origin
+        self.upload_prefix = upload_prefix
+        self.token_type = token_type
+        self.contract = contract
+        self.max_store_bytes = max_store_bytes
+        self.max_avatar_bytes = MAX_AVATAR_BYTES
 
     @staticmethod
     def owns(key: str) -> bool:
@@ -83,7 +115,7 @@ class LocalAvatarStorage:
         with _LOCK:
             if not path.exists():
                 return None
-            if not path.is_file() or not 0 < path.stat().st_size <= MAX_AVATAR_BYTES + 4096:
+            if not path.is_file() or not 0 < path.stat().st_size <= self.max_avatar_bytes + 4096:
                 raise MediaStorageUnavailable("The local avatar envelope is invalid.")
             try:
                 with path.open("rb") as stream:
@@ -91,11 +123,11 @@ class LocalAvatarStorage:
                     if len(header) > 4096 or not header.endswith(b"\n"):
                         raise ValueError
                     metadata = StoredObjectMetadata(**json.loads(header))
-                    body = stream.read(MAX_AVATAR_BYTES + 1)
+                    body = stream.read(self.max_avatar_bytes + 1)
                 if (
                     metadata.object_key != key
                     or metadata.content_type not in {"image/jpeg", "image/png", "image/webp"}
-                    or not 0 < len(body) <= MAX_AVATAR_BYTES
+                    or not 0 < len(body) <= self.max_avatar_bytes
                     or metadata.content_length != len(body)
                     or metadata.checksum_sha256 != hashlib.sha256(body).hexdigest()
                     or metadata.storage_version_id != metadata.checksum_sha256
@@ -120,7 +152,7 @@ class LocalAvatarStorage:
         if (
             not object_key.endswith("/original")
             or content_type not in {"image/jpeg", "image/png", "image/webp"}
-            or not 0 < content_length <= MAX_AVATAR_BYTES
+            or not 0 < content_length <= self.max_avatar_bytes
             or not checksum_sha256
             or not re.fullmatch(r"[0-9a-f]{64}", checksum_sha256)
         ):
@@ -136,10 +168,10 @@ class LocalAvatarStorage:
             },
             now=now,
             lifetime=expiry - now,
-            token_type="local-avatar-upload",  # noqa: S106 - token kind
+            token_type=self.token_type,  # noqa: S106 - bounded token kind, not a secret
         )
         return StorageUploadIntent(
-            f"{LOCAL_AVATAR_ORIGIN}{UPLOAD_PREFIX}{quote(object_key, safe='')}?token={token}",
+            f"{self.origin}{self.upload_prefix}{quote(object_key, safe='')}?token={token}",
             object_key,
             expiry,
             {
@@ -147,7 +179,7 @@ class LocalAvatarStorage:
                 "Content-Length": str(content_length),
                 "x-content-sha256": checksum_sha256,
             },
-            _contract=_LOCAL_AVATAR_UPLOAD_CONTRACT,
+            _contract=self.contract,
         )
 
     def head(self, object_key: str) -> StoredObjectMetadata | None:
@@ -184,7 +216,11 @@ class LocalAvatarStorage:
                 object_key, start=start, end=end, chunk_size=chunk_size
             )
             return
-        if start < 0 or (end is not None and end < start) or not 0 < chunk_size <= MAX_AVATAR_BYTES:
+        if (
+            start < 0
+            or (end is not None and end < start)
+            or not 0 < chunk_size <= self.max_avatar_bytes
+        ):
             raise MediaStorageUnavailable("The local avatar range is invalid.")
         body = self.read(object_key)
         stop = len(body) if end is None else min(end + 1, len(body))
@@ -201,7 +237,7 @@ class LocalAvatarStorage:
     ) -> StoredObjectMetadata:
         del storage_version_id
         path = self._path(object_key)
-        if not 0 < len(body) <= MAX_AVATAR_BYTES or content_type not in {
+        if not 0 < len(body) <= self.max_avatar_bytes or content_type not in {
             "image/jpeg",
             "image/png",
             "image/webp",
@@ -224,7 +260,7 @@ class LocalAvatarStorage:
                 if not entry.is_file():
                     raise MediaStorageUnavailable("Unexpected local avatar storage entry.")
                 total += entry.stat().st_size
-            if total + len(encoded) > MAX_LOCAL_STORE_BYTES:
+            if total + len(encoded) > self.max_store_bytes:
                 raise MediaStorageUnavailable(
                     "Local avatar storage is full; existing photos are preserved."
                 )
@@ -233,11 +269,28 @@ class LocalAvatarStorage:
             return metadata
 
     def copy(
-        self, *, source_key: str, destination_key: str, content_type: str
+        self,
+        *,
+        source_key: str,
+        destination_key: str,
+        content_type: str,
+        create_only: bool = False,
     ) -> StoredObjectMetadata:
-        return self.put(
-            object_key=destination_key, body=self.read(source_key), content_type=content_type
-        )
+        if type(create_only) is not bool:
+            raise MediaStorageUnavailable("The local avatar copy contract is invalid.")
+        if not self.owns(destination_key):
+            return self.fallback.copy(
+                source_key=source_key,
+                destination_key=destination_key,
+                content_type=content_type,
+                create_only=create_only,
+            )
+        with _LOCK:
+            if create_only and self._load(destination_key) is not None:
+                raise MediaConflict("The local avatar destination already exists.")
+            return self.put(
+                object_key=destination_key, body=self.read(source_key), content_type=content_type
+            )
 
     def delete(self, object_key: str) -> None:
         with _LOCK:
@@ -249,3 +302,40 @@ class LocalAvatarStorage:
         # No prefix scans are needed by the narrowly scoped avatar processor.
         del prefix
         return ()
+
+
+class FilesystemAvatarStorage(LocalAvatarStorage):
+    """Durable deployment avatar store kept separate from Studio video bytes."""
+
+    def __init__(
+        self,
+        *,
+        root: Path,
+        signer: MediaSigner,
+        fallback: PrivateObjectStorage,
+        origin: str,
+        max_store_bytes: int = 512 * 1024 * 1024,
+    ) -> None:
+        super().__init__(
+            root=root,
+            signer=signer,
+            fallback=fallback,
+            origin=origin,
+            upload_prefix="/v1/media/filesystem-avatar-upload/",
+            token_type="filesystem-avatar-upload",  # noqa: S106 - bounded token kind, not a secret
+            contract=_FILESYSTEM_AVATAR_UPLOAD_CONTRACT,
+            marker_name=".filesystem-avatar-store",
+            marker=b"AC private filesystem avatar objects v1\n",
+            max_store_bytes=max_store_bytes,
+        )
+
+
+__all__ = [
+    "FilesystemAvatarStorage",
+    "LOCAL_AVATAR_ORIGIN",
+    "LocalAvatarStorage",
+    "MAX_AVATAR_BYTES",
+    "MAX_LOCAL_STORE_BYTES",
+    "UPLOAD_PREFIX",
+    "require_plain_path",
+]

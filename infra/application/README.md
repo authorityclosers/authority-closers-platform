@@ -342,3 +342,29 @@ verification remain mandatory after mount composition. See
 `docs/evidence/20260907_ALPHA_STAGING_FILM_DEPLOYMENT_BOUNDARY.md` in the source
 repository. Mounting licensed samples does not make them Dipak instruction,
 grant official Watch completion, or activate production media.
+
+# Bounded Studio video filesystem profile
+
+The reviewed application release contains the
+`compose.filesystem-media.yaml` companion. It is the only deployment seam for
+the source-owned Studio video profile. This activation candidate sets
+`AC_MEDIA_FILESYSTEM_ENABLED=true` in both checked-in environment profiles;
+the canonical application installer selects this companion only after the
+private ClamAV controller has proved its exact release and the target roots
+pass validation. The companion mounts the target's private
+root (`/srv/authority-closers/volumes/media-video/staging` or
+`/srv/authority-closers/volumes/media-video/production`) into API and worker at
+`/var/lib/ac-media`, and the scanner socket directory at
+`/run/ac-media-safety`. The application uses
+`/var/lib/ac-media/video-objects` as its marked private Studio store and
+`/var/lib/ac-media/avatar-objects` as a separate marked profile-photo store;
+the two roots are never shared. The installer requires the environment-owned
+host `avatar-objects` directory alongside `video-objects`. Rollback resolves
+the target release's own selector, so it cannot inherit the candidate setting.
+
+The profile admits exactly 2,000,000,000 source bytes, streams uploads into
+bounded private storage, scans the stored object through ClamAV INSTREAM, and
+uses the existing processing worker and authenticated catalog delivery. It
+does not enable an external provider, learner quota, public fixture, or real
+call processing. The exact activation command and limits are recorded in
+`docs/evidence/20260913_FILESYSTEM_MEDIA_CAPABILITY.md`.

@@ -1,0 +1,359 @@
+{
+  "capturedAt": "2026-09-16T05:05:12.004Z",
+  "origin": "http://127.0.0.1:3124",
+  "data": "synthetic-only",
+  "browser": "Chromium",
+  "reducedMotion": true,
+  "results": [
+    {
+      "state": "report",
+      "width": 1440,
+      "height": 900,
+      "docWidth": 1440,
+      "docHeight": 900,
+      "mainHeight": 838,
+      "mainScroll": 1528,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Moments",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 295.0625,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Sales skills",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 742.984375,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 742.984375,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 692,
+      "playerTop": 819.21875
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 1440,
+      "height": 900,
+      "mainHeight": 838,
+      "mainScroll": 838,
+      "contentBottom": 692,
+      "playerTop": 819.21875,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 1440,
+      "height": 900,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 1024,
+      "height": 626,
+      "docWidth": 1024,
+      "docHeight": 626,
+      "mainHeight": 564,
+      "mainScroll": 1303,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Moments",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 288.984375,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Sales skills",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 512.0625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 524.515625,
+      "playerTop": 545.21875
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 1024,
+      "height": 626,
+      "mainHeight": 564,
+      "mainScroll": 564,
+      "contentBottom": 524.515625,
+      "playerTop": 545.21875,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 1024,
+      "height": 626,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 390,
+      "height": 844,
+      "docWidth": 390,
+      "docHeight": 844,
+      "mainHeight": 698,
+      "mainScroll": 1639,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Moments",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 251.6875,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Sales skills",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 555,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Change",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Practise",
+      "width": 390,
+      "height": 844,
+      "mainHeight": 698,
+      "mainScroll": 698,
+      "contentBottom": 557.96875,
+      "playerTop": 683.484375,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 390,
+      "height": 844,
+      "verified": true
+    },
+    {
+      "state": "report",
+      "width": 375,
+      "height": 667,
+      "docWidth": 375,
+      "docHeight": 667,
+      "mainHeight": 521,
+      "mainScroll": 1639,
+      "stage": "report",
+      "apiRequests": 12
+    },
+    {
+      "state": "Moments",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 251.6875,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Sales skills",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Sales skills fit",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills page 2",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 505,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Sales skills complete print",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    },
+    {
+      "state": "Next-call plan",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375
+    },
+    {
+      "state": "Next-call plan fit",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Change",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 496.078125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Plan Practise",
+      "width": 375,
+      "height": 667,
+      "mainHeight": 521,
+      "mainScroll": 521,
+      "contentBottom": 469.78125,
+      "playerTop": 506.484375,
+      "fits": true
+    },
+    {
+      "state": "Next-call plan complete print",
+      "width": 375,
+      "height": 667,
+      "verified": true
+    }
+  ]
+}

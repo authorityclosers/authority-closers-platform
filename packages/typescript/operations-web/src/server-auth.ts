@@ -140,12 +140,11 @@ export async function resolveAdminServerContext({
   }
 
   const meUrl = new URL("/v1/me", contextUrl);
-  const me = await read(meUrl, meSchema);
-  const parsed = await read(contextUrl, contextSchema);
-  const access = await read(
-    new URL("/v1/me/studio-access", contextUrl),
-    adminAccessSchema,
-  );
+  const [me, parsed, access] = await Promise.all([
+    read(meUrl, meSchema),
+    read(contextUrl, contextSchema),
+    read(new URL("/v1/me/studio-access", contextUrl), adminAccessSchema),
+  ]);
   const identity = verifyAdminIdentity(me, parsed, access);
   if (!identity) return null;
 

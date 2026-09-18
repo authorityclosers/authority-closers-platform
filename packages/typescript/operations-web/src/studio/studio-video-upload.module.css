@@ -14,6 +14,12 @@
 .heading h3 {
   margin: 4px 0 0;
 }
+.subheading {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
 .mark {
   display: grid;
   place-items: center;
@@ -84,6 +90,15 @@
   line-height: 1.5;
   max-width: 66ch;
 }
+.upload[data-stage="ready"] {
+  border-color: color-mix(in srgb, var(--info) 35%, var(--line));
+}
+.upload[data-stage="failed"],
+.upload[data-stage="error"],
+.upload[data-stage="denied"],
+.upload[data-stage="rejected"] {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+}
 @media (max-width: 480px) {
   .heading > button {
     width: 100%;
@@ -96,4 +111,34 @@
   .upload progress:indeterminate {
     animation: none;
   }
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 28px 16px;
+  border: 1px dashed var(--line-strong, var(--line));
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.75rem;
+}
+.dropzone > svg {
+  color: var(--signal);
+}
+.dropzone strong {
+  color: var(--text);
+  font-size: 0.875rem;
+}
+.dropzone[data-dragging="true"],
+.dropzone:focus-within {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, var(--panel));
+}
+.dropzone button {
+  margin-top: 4px;
 }

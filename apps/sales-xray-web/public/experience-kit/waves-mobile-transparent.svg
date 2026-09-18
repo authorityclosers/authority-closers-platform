@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" role="img" aria-labelledby="asset-title asset-description">
+  <title id="asset-title">Waves Mobile Transparent</title>
+  <desc id="asset-description">Pure-vector ambient backdrop. No raster, no embedded fonts, no motion. Decorative; set aria-hidden when placed behind content.</desc>
+  <defs>
+    <filter id="sx-shadow" x="-40%" y="-40%" width="180%" height="210%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#163E35" flood-opacity=".095"/>
+    </filter>
+    <filter id="sx-small-shadow" x="-40%" y="-40%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#163E35" flood-opacity=".06"/>
+    </filter>
+    <linearGradient id="sx-surface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFCFB"/>
+    </linearGradient>
+    <linearGradient id="sx-wave" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#DFEEE7" stop-opacity=".72"/>
+      <stop offset="100%" stop-color="#F8FBF9" stop-opacity=".15"/>
+    </linearGradient>
+    <radialGradient id="sx-halo">
+      <stop offset="0%" stop-color="#E8F5ED" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#F9FBFA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="195.0" cy="388.24" rx="144.3" ry="346.03999999999996" fill="url(#sx-halo)"/>
+  <g id="lower-waves">
+    <path d="M0 565.48 C66.30000000000001 557.0400000000001 105.30000000000001 793.3599999999999 195.0 793.3599999999999 C280.8 801.8 323.7 641.44 390 607.68 L390 844 H0 Z" fill="url(#sx-wave)"/>
+    <path d="M0 683.6400000000001 C81.89999999999999 649.88 128.70000000000002 827.12 237.9 810.24 S339.3 708.9599999999999 390 751.16 V844 H0Z" fill="#E7F1EA" opacity=".46"/>
+    <path d="M0 717.4 C85.8 666.76 117.0 827.12 234.0 827.12 S347.1 734.28 390 751.16" fill="none" stroke="#C9DED4" stroke-width=".8" opacity=".65"/>
+  </g>
+</svg>

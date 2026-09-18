@@ -1,0 +1,112 @@
+{
+  "schema": "ac.sales-xray.dipak-overview-browser/1",
+  "passed": true,
+  "fixture_api": true,
+  "real_media_playback": true,
+  "provider_calls": 0,
+  "source_files": {
+    "app/dipak-overview.tsx": "8059258ec6493e5eeb7aae9c3afda40bbd3111b1bbeb1b0bed3289c926052468",
+    "app/dipak-overview.module.css": "2c4e2ec0222c5ca74fff8da59f19e616e9f8e8865f8568298a1062c7db3b5f19",
+    "app/overview-contract.ts": "3a3a2786856cbdc32ab10bc78c3901796f27cd3a9bed70fcf0244a5b7be7eaf3",
+    "app/report-contract.ts": "fe61e2b65284a49b6d93d4c2281725fea13aea7e562462b5982a51b3bc3babb7",
+    "tests/fixtures/dipak-overview.json": "d7191195eab5bf6b8db0a524b0efd6699fbb63c2aa1190c40db046dfb0a7a091"
+  },
+  "viewports": [
+    1280,
+    390,
+    320
+  ],
+  "checks": [
+    "structured source-linked fields",
+    "mixed-script literal evidence",
+    "keyboard disclosures",
+    "real audio seek/play",
+    "print expands all evidence",
+    "no invented history",
+    "no horizontal overflow"
+  ],
+  "browser_errors": [],
+  "external_requests": [],
+  "network": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/13a6ko7xplbdr.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/2vyaqptirb3sl.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/00c0eqxd_lpms.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/20us4-xajkcfq.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/turbopack-27xsnqgocxyys.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/3eblmi2y6trx3.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/3mfpz2l400-4n.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/3_kire07nho20.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/37ooocazog43y.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/1nbjqa-avk3yb.js",
+      "status": 200
+    },
+    {
+      "path": "/v1/me/workspaces",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/workspace",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/recordings",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/recordings/recording-1/plan",
+      "status": 404
+    },
+    {
+      "path": "/v1/conversation/recordings/recording-1/source",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/runs/run-1/report",
+      "status": 200
+    },
+    {
+      "path": "/v1/conversation/recordings/recording-1/transcript",
+      "status": 200
+    }
+  ]
+}

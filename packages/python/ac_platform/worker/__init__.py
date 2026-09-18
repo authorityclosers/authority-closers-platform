@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Any, Protocol
+from urllib.parse import urlencode
 from uuid import UUID
 
 import structlog
@@ -19,14 +20,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.settings import get_settings
+from ac_platform.conversation_intelligence.models import (
+    ConversationReviewInvitation,
+    ConversationReviewInvitationAcceptance,
+    ConversationReviewInvitationRevocation,
+)
+from ac_platform.conversation_intelligence.review_invitations import (
+    REVIEW_INVITATION_EVENT,
+    REVIEW_INVITATION_JOB,
+    REVIEW_INVITATION_PATH,
+    decrypt_invitation_token,
+)
 from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_RESET_JOB,
+    PASSWORD_EMAIL_RESET_JOB_V2,
+    PASSWORD_EMAIL_RESET_JOB_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_JOB,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     decrypt_challenge_token,
 )
+from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
@@ -47,6 +68,7 @@ from ac_platform.providers import (
     create_email_provider_from_settings,
 )
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryCategory, TelemetryRecorder
+from ac_platform.worker.reviewer_email import resolve_reviewer_auth_message
 
 ENROLLMENT_WELCOME_EVENT = "enrollment.welcome.requested.v1"
 ENROLLMENT_WELCOME_JOB = "email.enrollment_welcome.v1"
@@ -76,6 +98,16 @@ ENROLLMENT_WELCOME_ROUTE = OutboxJobRoute(
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
+        REVIEWER_AUTH_EVENT: OutboxJobRoute(
+            job_kind=REVIEWER_AUTH_JOB,
+            required_payload_keys=frozenset({"challenge_id"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+        ),
+        REVIEW_INVITATION_EVENT: OutboxJobRoute(
+            job_kind=REVIEW_INVITATION_JOB,
+            required_payload_keys=frozenset({"invitation_id"}),
+            uuid_payload_keys=frozenset({"invitation_id"}),
+        ),
         PASSWORD_EMAIL_VERIFICATION_EVENT: OutboxJobRoute(
             job_kind=PASSWORD_EMAIL_VERIFICATION_JOB,
             required_payload_keys=frozenset({"challenge_id", "kind"}),
@@ -88,6 +120,56 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
             uuid_payload_keys=frozenset({"challenge_id"}),
             allowed_payload_values={"kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value})},
         ),
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V2: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+            required_payload_keys=frozenset({"challenge_id", "kind", "course"}),
+            optional_payload_keys=frozenset({"activity"}),
+            uuid_payload_keys=frozenset({"challenge_id", "activity"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.VERIFICATION.value}),
+                "course": frozenset({"authority-closers-free-course"}),
+            },
+        ),
+        PASSWORD_EMAIL_RESET_EVENT_V2: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_RESET_JOB_V2,
+            required_payload_keys=frozenset({"challenge_id", "kind", "course"}),
+            optional_payload_keys=frozenset({"activity"}),
+            uuid_payload_keys=frozenset({"challenge_id", "activity"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value}),
+                "course": frozenset({"authority-closers-free-course"}),
+            },
+        ),
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V3: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            required_payload_keys=frozenset({"challenge_id", "kind", "next"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.VERIFICATION.value}),
+                "next": frozenset({"/sales-xray"}),
+            },
+        ),
+        PASSWORD_EMAIL_RESET_EVENT_V3: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_RESET_JOB_V3,
+            required_payload_keys=frozenset({"challenge_id", "kind", "next"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value}),
+                "next": frozenset({"/sales-xray"}),
+            },
+        ),
+    }
+)
+
+# The v2/v3 jobs change only the durable navigation hint payload.  Keep the
+# existing low-cardinality telemetry taxonomy on the logical communication
+# route so delivery telemetry remains accepted without adding a shared schema.
+_PASSWORD_EMAIL_TELEMETRY_JOB_KINDS = MappingProxyType(
+    {
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2: PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB_V2: PASSWORD_EMAIL_RESET_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3: PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB_V3: PASSWORD_EMAIL_RESET_JOB,
     }
 )
 
@@ -101,7 +183,14 @@ async def resolve_password_message(
 ) -> EmailMessage:
     """Resolve the canonical password challenge email for one durable job."""
 
-    if job.kind not in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
+    if job.kind not in {
+        PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+        PASSWORD_EMAIL_RESET_JOB_V2,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+        PASSWORD_EMAIL_RESET_JOB_V3,
+    }:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     route = next(
         (candidate for candidate in OUTBOX_JOB_ROUTES.values() if candidate.job_kind == job.kind),
@@ -145,7 +234,15 @@ async def resolve_password_message(
     # Keep one-time credentials out of HTTP request targets and edge access
     # logs. The browser reads the fragment and submits the token in a JSON
     # body to the same-origin API.
-    action_link = f"{str(settings.public_app_url).rstrip('/')}{path}#token={token}"
+    context_query = ""
+    if job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB_V2, PASSWORD_EMAIL_RESET_JOB_V2}:
+        context = {"course": payload["course"]}
+        if "activity" in payload:
+            context["activity"] = payload["activity"]
+        context_query = "?" + urlencode(context)
+    elif job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB_V3, PASSWORD_EMAIL_RESET_JOB_V3}:
+        context_query = "?" + urlencode({"next": payload["next"]})
+    action_link = f"{str(settings.public_app_url).rstrip('/')}{path}{context_query}#token={token}"
     template = (
         "identity-email-verification"
         if kind is EmailChallengeKind.VERIFICATION
@@ -160,6 +257,56 @@ async def resolve_password_message(
             "first_name": person.first_name or person.display_name or "there",
             "action_link": action_link,
             "expires_at": challenge.expires_at.isoformat(),
+        },
+        communication_class="verification_security",
+    )
+
+
+async def resolve_review_invitation_message(
+    session: AsyncSession,
+    settings: Any,
+    job: Job,
+    *,
+    provider_key: str,
+) -> EmailMessage:
+    """Resolve one invitation email from its canonical row and encrypted token."""
+
+    if job.kind != REVIEW_INVITATION_JOB:
+        raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
+    payload = OUTBOX_JOB_ROUTES[REVIEW_INVITATION_EVENT].normalize_payload(job.payload)
+    invitation_id = UUID(payload["invitation_id"])
+    invitation = await session.scalar(
+        select(ConversationReviewInvitation)
+        .where(
+            ConversationReviewInvitation.id == invitation_id,
+            ConversationReviewInvitation.expires_at > func.now(),
+        )
+        .with_for_update(read=True)
+    )
+    if (
+        invitation is None
+        or await session.get(ConversationReviewInvitationRevocation, invitation.id) is not None
+        or await session.get(ConversationReviewInvitationAcceptance, invitation.id) is not None
+    ):
+        raise PermanentProviderError("review invitation is unavailable")
+    try:
+        token = decrypt_invitation_token(
+            settings.email_challenge_secret.get_secret_value(),
+            invitation.encrypted_token,
+            invitation.id,
+        )
+    except (InvalidTag, ValueError, TypeError):
+        raise PermanentProviderError("review invitation payload is unavailable") from None
+    action_link = f"{str(settings.admin_app_url).rstrip('/')}{REVIEW_INVITATION_PATH}#token={token}"
+    return EmailMessage(
+        to=invitation.invited_email,
+        template="sales-xray-review-invitation",
+        template_version=1,
+        idempotency_key=provider_key,
+        variables={
+            "first_name": "there",
+            "action_link": action_link,
+            "expires_at": invitation.expires_at.isoformat(),
         },
         communication_class="verification_security",
     )
@@ -296,8 +443,14 @@ def build_default_dispatcher(
     return AllowlistedDispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
+            REVIEWER_AUTH_JOB: handler,
+            REVIEW_INVITATION_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB: handler,
             PASSWORD_EMAIL_RESET_JOB: handler,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V2: handler,
+            PASSWORD_EMAIL_RESET_JOB_V2: handler,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3: handler,
+            PASSWORD_EMAIL_RESET_JOB_V3: handler,
         }
     )
 
@@ -454,8 +607,14 @@ class DurableWorker:
                 raise LeaseLostError("job no longer exists")
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
+                REVIEWER_AUTH_JOB,
+                REVIEW_INVITATION_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB,
                 PASSWORD_EMAIL_RESET_JOB,
+                PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+                PASSWORD_EMAIL_RESET_JOB_V2,
+                PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+                PASSWORD_EMAIL_RESET_JOB_V3,
             }:
                 raise UnknownJobKindError(f"job kind is not allowlisted: {job.kind}")
             state = await RecoveryStateRepository(session).require_ready(
@@ -536,9 +695,30 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
-        if job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
+        if job.kind in {
+            PASSWORD_EMAIL_VERIFICATION_JOB,
+            PASSWORD_EMAIL_RESET_JOB,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+            PASSWORD_EMAIL_RESET_JOB_V2,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            PASSWORD_EMAIL_RESET_JOB_V3,
+        }:
             return await self._resolve_password_message(
                 session,
+                job,
+                provider_key=provider_key,
+            )
+        if job.kind == REVIEW_INVITATION_JOB:
+            return await resolve_review_invitation_message(
+                session,
+                self._settings,
+                job,
+                provider_key=provider_key,
+            )
+        if job.kind == REVIEWER_AUTH_JOB:
+            return await resolve_reviewer_auth_message(
+                session,
+                self._settings,
                 job,
                 provider_key=provider_key,
             )
@@ -855,7 +1035,7 @@ class DurableWorker:
         error: BaseException | None = None,
     ) -> None:
         attributes: dict[str, Any] = {
-            "job_kind": job.kind,
+            "job_kind": _PASSWORD_EMAIL_TELEMETRY_JOB_KINDS.get(job.kind, job.kind),
             "attempt": job.attempt_count,
             "outcome": outcome,
         }
@@ -884,7 +1064,41 @@ def _error_code(error: BaseException) -> str:
 
 
 async def run() -> None:
-    await DurableWorker().run()
+    settings = get_settings()
+    durable = DurableWorker(settings=settings)
+    if not settings.media_filesystem_enabled:
+        await durable.run()
+        return
+
+    # The source-owned media job has its own lease/fence protocol and must
+    # never be routed through the email dispatcher. Both loops share the same
+    # process only to keep the reviewed application worker deployment small;
+    # each retains its own bounded poll and recovery gate.
+    from ac_platform.media.runtime import create_default_media_runtime
+    from ac_platform.media.studio_video_runner import StudioVideoRunner
+
+    runtime = create_default_media_runtime(settings)
+    studio = runtime.studio_video_runtime
+    if studio is None:
+        raise RuntimeError("filesystem media worker composition is incomplete")
+    stop = asyncio.Event()
+    durable_task = asyncio.create_task(durable.run(stop_event=stop), name="durable-worker")
+    media_task = asyncio.create_task(
+        StudioVideoRunner(studio.worker).run(stop),
+        name="studio-video-worker",
+    )
+    try:
+        done, _ = await asyncio.wait(
+            (durable_task, media_task), return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in done:
+            error = task.exception()
+            if error is not None:
+                raise error
+        await asyncio.gather(durable_task, media_task)
+    finally:
+        stop.set()
+        await asyncio.gather(durable_task, media_task, return_exceptions=True)
 
 
 def main() -> None:
@@ -897,14 +1111,25 @@ __all__ = [
     "DurableWorker",
     "ENROLLMENT_WELCOME_EVENT",
     "ENROLLMENT_WELCOME_JOB",
+    "REVIEW_INVITATION_EVENT",
+    "REVIEW_INVITATION_JOB",
     "ENROLLMENT_WELCOME_ROUTE",
     "PASSWORD_EMAIL_RESET_EVENT",
     "PASSWORD_EMAIL_RESET_JOB",
+    "PASSWORD_EMAIL_RESET_EVENT_V2",
+    "PASSWORD_EMAIL_RESET_JOB_V2",
+    "PASSWORD_EMAIL_RESET_EVENT_V3",
+    "PASSWORD_EMAIL_RESET_JOB_V3",
     "PASSWORD_EMAIL_VERIFICATION_EVENT",
     "PASSWORD_EMAIL_VERIFICATION_JOB",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V2",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V2",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V3",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V3",
     "OUTBOX_JOB_ROUTES",
     "PreparedDispatch",
     "resolve_password_message",
+    "resolve_review_invitation_message",
     "SessionFactory",
     "UnknownJobKindError",
     "WorkerNotReadyError",

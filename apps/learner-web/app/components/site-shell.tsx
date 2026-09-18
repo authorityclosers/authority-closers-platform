@@ -6,6 +6,7 @@
 import {
   ArrowLeft,
   ArrowUpRight,
+  AudioLines,
   BarChart2,
   Bell,
   BookOpen,
@@ -44,6 +45,7 @@ import { SignOutControl } from "./sign-out-control";
 import { usePracticeNavigationAvailability } from "./practice-availability";
 import {
   CommandPalette,
+  getDefaultCommandPaletteItems,
   MobileBottomNav,
   MobileMoreSheet,
   SidebarBadge,
@@ -96,10 +98,12 @@ export type LearnerCurrent =
   | "discover"
   | "progress"
   | "practice"
+  | "sales-xray"
   | "calendar"
   | "notifications"
   | "profile"
   | "settings"
+  | "sales-xray"
   | "course"
   | "certificate"
   | "none";
@@ -189,6 +193,9 @@ export function PublicShell({
             {FIRST_ACADEMY_BRAND.name} · Powered by {PLATFORM_BRAND.name}
           </p>
           <nav className="site-footer__links" aria-label="Legal and access">
+            <Link href={ROUTES.salesXray} prefetch={false}>
+              Sales Xray
+            </Link>
             <Link href={ROUTES.privacy}>Privacy</Link>
             <Link href={ROUTES.terms}>Terms</Link>
             <Link href={ROUTES.login}>
@@ -422,17 +429,31 @@ function LearnerShellContent({
     // Graceful fallback for non-Router execution
   }
 
+  function navigateTo(destination: string): void {
+    const currentRouter = router;
+    if (currentRouter) currentRouter.push(destination);
+    else window.location.assign(destination);
+  }
+
+  const commandPaletteItems: CommandPaletteItem[] =
+    getDefaultCommandPaletteItems(learningHref).map((item) => {
+      if (!item.href) return item;
+      const destination = item.href;
+      return {
+        ...item,
+        onSelect: () => navigateTo(destination),
+      };
+    });
+
   useCommandPaletteShortcuts({
     onOpenPalette: () => {
       openCommandPalette();
     },
     onNavigateHome: () => {
-      if (router) router.push(ROUTES.dashboard);
-      else window.location.href = ROUTES.dashboard;
+      navigateTo(ROUTES.dashboard);
     },
     onNavigateLearning: () => {
-      if (router) router.push(learningHref);
-      else window.location.href = learningHref;
+      navigateTo(learningHref);
     },
   });
 
@@ -635,6 +656,7 @@ function LearnerShellContent({
   const isNotifications = current === "notifications";
   const isProfile = current === "profile";
   const isSettings = current === "settings";
+  const isSalesXray = current === "sales-xray";
 
   const effectiveDisplayName = identity.displayName;
   const effectiveTenantIdentity = tenantIdentity ?? DEFAULT_TENANT_IDENTITY;
@@ -684,6 +706,14 @@ function LearnerShellContent({
               },
             ]
           : []),
+        {
+          id: "sales-xray",
+          label: "Sales Xray",
+          href: ROUTES.salesXray,
+          current: isSalesXray,
+          icon: <AudioLines size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Sales Xray",
+        },
         {
           id: "progress",
           label: "Progress",
@@ -1100,6 +1130,7 @@ function LearnerShellContent({
           setCommandPaletteOpen(false);
           setCommandPaletteInvoker(null);
         }}
+        items={commandPaletteItems}
         learningHref={learningHref}
         triggerRef={searchTriggerRef}
         invokingElement={commandPaletteInvoker}

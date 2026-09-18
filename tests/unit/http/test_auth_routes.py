@@ -1352,6 +1352,51 @@ def test_staging_cookie_mutations_require_the_request_surface_origin() -> None:
         )
 
 
+def test_sales_xray_same_origin_put_without_origin_is_allowed() -> None:
+    settings = _staging_settings().model_copy(
+        update={"sales_xray_app_url": AnyHttpUrl("https://salesxray-staging.authorityclosers.com")}
+    )
+    submission_path = (
+        "/v1/conversation/acquisition/submissions/00000000-0000-4000-8000-000000000000/source"
+    )
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "PUT",
+            "scheme": "https",
+            "path": submission_path,
+            "headers": [(b"host", b"salesxray-staging.authorityclosers.com")],
+            "query_string": b"",
+            "server": ("salesxray-staging.authorityclosers.com", 443),
+            "client": ("127.0.0.1", 1),
+        }
+    )
+
+    require_safe_origin(request, settings, allow_missing_sales_xray_origin=True)
+
+    with pytest.raises(auth_module.RequestOriginDenied):
+        require_safe_origin(request, settings)
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "PUT",
+            "scheme": "https",
+            "path": submission_path,
+            "headers": [
+                (b"host", b"salesxray-staging.authorityclosers.com"),
+                (b"origin", b"https://attacker.example"),
+            ],
+            "query_string": b"",
+            "server": ("salesxray-staging.authorityclosers.com", 443),
+            "client": ("127.0.0.1", 1),
+        }
+    )
+    with pytest.raises(auth_module.RequestOriginDenied):
+        require_safe_origin(request, settings)
+
+
 def test_external_return_url_is_rejected_without_contacting_provider() -> None:
     response = _client().get(
         "/v1/auth/google/start",

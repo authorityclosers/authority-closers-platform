@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Coroutine, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -45,8 +46,8 @@ def _test_token(scope: Scope) -> str:
     return f"capability-test-session-{scope.actor.hex}-" + "t" * 43
 
 
-@pytest.fixture(scope="module")
-def postgres_harness() -> Iterator[Engine]:
+@contextmanager
+def _postgres_schema(*, current_application: bool) -> Iterator[Engine]:
     raw = os.getenv("AC_CAPABILITY_POSTGRES_TEST_URL") or os.getenv("AC_TEST_DATABASE_URL")
     if not raw:
         pytest.skip("disposable capability PostgreSQL URL is not configured")
@@ -103,6 +104,16 @@ def postgres_harness() -> Iterator[Engine]:
             member = session.get(Membership, (original.tenant, original.subject))
             assert member is not None and member.role == "learner" and member.revision == 0
             assert session.scalars(select(CapabilityGrant)).all() == []
+            assert session.scalar(text("SELECT version_num FROM alembic_version")) == (
+                "20260907_0019"
+            )
+        assert "audience" not in {
+            column["name"] for column in inspect(schema_engine).get_columns("sessions")
+        }
+        if current_application:
+            # Modern identity/service tests require the complete current schema.
+            # They get their own schema; the separate0019 fixture stays historical.
+            migrate("head")
         yield schema_engine
     finally:
         if schema_engine is not None:
@@ -112,6 +123,20 @@ def postgres_harness() -> Iterator[Engine]:
             with admin_engine.begin() as connection:
                 connection.execute(DropSchema(schema, cascade=True))
         admin_engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def postgres_harness() -> Iterator[Engine]:
+    """Keep the actual0018→0019 DDL, metadata and immutable-history proof."""
+    with _postgres_schema(current_application=False) as engine:
+        yield engine
+
+
+@pytest.fixture(scope="module")
+def current_postgres_harness() -> Iterator[Engine]:
+    """Exercise real current identity and capability services in a separate schema."""
+    with _postgres_schema(current_application=True) as engine:
+        yield engine
 
 
 def _history(engine: Engine) -> tuple[UUID, UUID]:
@@ -168,13 +193,13 @@ def test_postgresql_program_grant_rejects_cross_tenant_relationship(
 
 
 def test_postgresql_real_service_replay_revocation_and_atomic_audit(
-    postgres_harness: Engine,
+    current_postgres_harness: Engine,
 ) -> None:
-    with Session(postgres_harness) as db:
+    with Session(current_postgres_harness) as db:
         scope = seed_scope(db)
 
     async def exercise() -> None:
-        engine = create_async_engine(postgres_harness.url)
+        engine = create_async_engine(current_postgres_harness.url)
         try:
             actor = await _manager_fixture(engine, scope)
             command_id, revoke_id = uuid4(), uuid4()
@@ -312,13 +337,13 @@ async def _manager_fixture(engine: AsyncEngine, scope: Scope) -> ActorContext:
 
 
 def test_postgresql_normal_identity_does_not_deadlock_with_management_fence(
-    postgres_harness: Engine,
+    current_postgres_harness: Engine,
 ) -> None:
-    with Session(postgres_harness) as db:
+    with Session(current_postgres_harness) as db:
         scope = seed_scope(db)
 
     async def exercise() -> None:
-        engine = create_async_engine(postgres_harness.url)
+        engine = create_async_engine(current_postgres_harness.url)
         try:
             actor = await _manager_fixture(engine, scope)
             person_locked, governance_locked = asyncio.Event(), asyncio.Event()
@@ -359,14 +384,14 @@ def test_postgresql_normal_identity_does_not_deadlock_with_management_fence(
 
 @pytest.mark.parametrize("lifecycle", ["tenant", "membership"])
 def test_postgresql_resource_lifecycle_waits_for_authorized_action(
-    postgres_harness: Engine,
+    current_postgres_harness: Engine,
     lifecycle: str,
 ) -> None:
-    with Session(postgres_harness) as db:
+    with Session(current_postgres_harness) as db:
         scope = seed_scope(db)
 
     async def exercise() -> None:
-        engine = create_async_engine(postgres_harness.url)
+        engine = create_async_engine(current_postgres_harness.url)
         writer: asyncio.Task[None] | None = None
         try:
             actor = await _manager_fixture(engine, scope)
