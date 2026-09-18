@@ -35,7 +35,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
     settle,
 )
-from ac_platform.conversation_intelligence.inference import ConversationInference
+from ac_platform.conversation_intelligence.inference import TRANSCRIPT_RECIPE, ConversationInference
 from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
     ConversationAnalysisSettings,
@@ -56,11 +56,14 @@ from ac_platform.conversation_intelligence.processing_plan import (
     PlanAcceptance,
     ProcessingPlanScheduler,
 )
+from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
     _application,
+    _registry_config,
     _setup,
 )
 from tests.database.test_conversation_postgresql import run, seed
@@ -385,21 +388,57 @@ def test_duplicate_upload_skips_unsafe_retained_c2_and_runs_fresh_asr(
     """An incompatible retained candidate must not block a new authorised upload."""
 
     async def exercise() -> None:
-        setup = await _setup(postgres_harness, tmp_path)
+        setup = await _setup(postgres_harness, tmp_path, asr_provider="deepgram")
         try:
             source_run = await _source_c2(setup, "unsafe-retained-c2-source")
             assert await setup.worker.run_once()
             assert setup.broker.calls == 1
 
-            # Simulate a retained C2 row whose cache key is no longer compatible
-            # with the current plan.  The duplicate must fall through to a fresh
-            # provider request instead of returning the retained-reuse conflict.
+            # Move the active approved ASR route forward through the provider
+            # configuration contract.  The retained source was completed under
+            # Deepgram; the duplicate now requests the current ElevenLabs
+            # route.  Its immutable task remains intact, but its checkpoint
+            # cache key is incompatible with the current plan.  The duplicate
+            # must fall through to a fresh provider request rather than relying
+            # on an illegal mutation of immutable inference history.
+            current = _registry_config("hosted-test-config-v2", asr_provider="elevenlabs")
             async with setup.sessions() as database, database.begin():
-                await database.execute(
-                    update(ConversationInferenceTask)
-                    .where(ConversationInferenceTask.run_id == UUID(source_run["id"]))
-                    .values(cache_key="stale-retained-cache-key")
+                config_view = await ConversationProviderAdmin(
+                    ConversationApplication(database, clock=lambda: setup.prepared.state.now)
+                ).save(
+                    setup.actor,
+                    current.as_dict(),
+                    expected_revision=1,
+                    key="hosted-config-v2",
                 )
+            current = parse_registry_config(config_view["configuration"])
+            setup.bundle_box["bundle"] = setup.bundle.model_copy(
+                update={
+                    "stages": tuple(
+                        stage.model_copy(
+                            update={
+                                "configuration_sha256": config_view["configuration_sha256"],
+                                **(
+                                    {
+                                        "provider_id": "elevenlabs",
+                                        "model_id": "scribe_v2",
+                                        "recipe_revision": TRANSCRIPT_RECIPE,
+                                    }
+                                    if stage.stage == "C2"
+                                    else {}
+                                ),
+                            }
+                        )
+                        for stage in setup.bundle.stages
+                    )
+                }
+            )
+            assert current.digest == config_view["configuration_sha256"]
+
+            async with setup.sessions() as database, database.begin():
+                source_task = await database.get(ConversationInferenceTask, UUID(source_run["id"]))
+                assert source_task is not None
+                assert source_task.state == "completed"
 
             target_recording_id = await _duplicate_recording(setup, "unsafe-retained-c2-target")
             target_quote = await _quote(
