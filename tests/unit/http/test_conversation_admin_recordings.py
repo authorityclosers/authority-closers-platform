@@ -68,17 +68,22 @@ def _public_page_responses(
     second_quote_id, third_quote_id = uuid4(), uuid4()
     first_job_id, second_job_id, third_job_id = uuid4(), uuid4(), uuid4()
     plan_created_at = recording.created_at + timedelta(seconds=10)
+    submission_id = uuid4()
+    usage_id = uuid4()
     guest = SimpleNamespace(
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
-        usage_id=uuid4(),
+        usage_id=usage_id,
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
     )
     usage = SimpleNamespace(
-        id=guest.usage_id,
+        id=usage_id,
         tenant_id=PUBLIC_TENANT,
         person_id=None,
         visitor_id=uuid4(),
-        submission_id=uuid4(),
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
         reserved_seconds=37,
     )
     run = SimpleNamespace(
@@ -159,6 +164,7 @@ def _public_page_responses(
         quote={"max_cost_paise": 720},
     )
     stage_authorizations = [
+        SimpleNamespace(plan_id=plan.id, quote_id=quote_id, tenant_id=PUBLIC_TENANT),
         SimpleNamespace(plan_id=plan.id, quote_id=second_quote_id, tenant_id=PUBLIC_TENANT),
         SimpleNamespace(plan_id=plan.id, quote_id=third_quote_id, tenant_id=PUBLIC_TENANT),
     ]
@@ -166,6 +172,8 @@ def _public_page_responses(
         SimpleNamespace(
             id=job_id,
             tenant_id=PUBLIC_TENANT,
+            status="completed",
+            dispatch_started_at=created_at,
             provider_receipt={
                 "provider": "gemini",
                 "model": "gemini-3.8-flash",
@@ -329,9 +337,19 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     assert item["latest_run"]["provider_stages"][0]["provider"] == "gemini"
     assert item["latest_run"]["provider_stages"][0]["usage"] == {"promptTokenCount": 101}
     assert item["processing_plan"]["state"] == "held"
+    assert item["runtime_trace"]["binding_state"] == "verified"
+    assert item["runtime_trace"]["scope_complete"] is True
+    assert item["runtime_trace"]["plans"][0]["accepted_at"] is None
+    assert all(
+        task["plan_id"] == item["processing_plan"]["id"]
+        for task in item["runtime_trace"]["tasks"]
+    )
+    assert all(
+        task["job_status"] == "completed" for task in item["runtime_trace"]["tasks"]
+    )
     assert item["cost"] == {
         "currency": "INR",
-        "scope": "recording_total",
+        "scope": "current_plan",
         "reservation_paise": 2160,
         "estimate_paise": 2160,
         "actual_paise": 1230,

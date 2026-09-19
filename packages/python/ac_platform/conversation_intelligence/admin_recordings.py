@@ -35,6 +35,7 @@ from ac_platform.conversation_intelligence.guest_models import ConversationGuest
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
+    ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationPlanStageAuthorization,
@@ -194,6 +195,136 @@ def _provider_stage_view(
         "usage_estimate_state": usage_estimate["state"],
         "usage_estimate_basis": usage_estimate["basis"],
         "pricing_snapshot": usage_estimate["pricing_snapshot"],
+    }
+
+
+def _iso_or_none(value: Any) -> str | None:
+    return None if value is None else utc(value).isoformat()
+
+
+def _runtime_binding_state(
+    recording: ConversationRecording,
+    guest: ConversationGuestSubmission | None,
+    usage: ConversationAcquisitionUsage | None,
+) -> str:
+    """Classify the saved-source join without guessing at missing rows."""
+
+    if guest is None or usage is None:
+        return "absent"
+    checks = (
+        getattr(guest, "recording_id", None) == recording.id,
+        getattr(guest, "usage_id", None) == usage.id,
+        getattr(guest, "submission_id", None) == getattr(usage, "submission_id", None),
+        getattr(guest, "source_sha256", None) == recording.source_sha256,
+        getattr(usage, "source_sha256", None) == recording.source_sha256,
+    )
+    return "verified" if all(checks) else "inconsistent"
+
+
+def _receipt_validation_state(job: Job | None) -> str:
+    receipt = None if job is None else job.provider_receipt
+    if not isinstance(receipt, Mapping):
+        return "not_checked"
+    value = receipt.get("validation_state")
+    return value if value in {"not_checked", "validated", "invalid"} else "not_checked"
+
+
+def _runtime_trace(
+    recording: ConversationRecording,
+    guest: ConversationGuestSubmission | None,
+    usage: ConversationAcquisitionUsage | None,
+    *,
+    plans: Iterable[ConversationProcessingPlan],
+    plan_quote_ids: Mapping[UUID, set[UUID]],
+    commands: Mapping[UUID, ConversationCommand],
+    tasks: Iterable[ConversationInferenceTask],
+    jobs: Mapping[UUID, Job],
+    c6_checkpoint: ConversationCheckpoint | None,
+    has_report: bool,
+    recovered_report: bool,
+    report_id: UUID | None,
+    report_run_id: UUID | None,
+) -> dict[str, Any]:
+    """Expose read-only evidence for the boundary where a report can stop.
+
+    This deliberately reports unknown/incomplete joins instead of deriving a
+    provider state from a plan label or a missing receipt.
+    """
+
+    binding_state = _runtime_binding_state(recording, guest, usage)
+    plan_rows = sorted(plans, key=lambda row: (utc(row.created_at), row.id))
+    plan_views: list[dict[str, Any]] = []
+    quote_to_plan: dict[UUID, UUID] = {}
+    for plan in plan_rows:
+        acceptance_id = getattr(plan, "acceptance_command_id", None)
+        command = commands.get(acceptance_id) if acceptance_id is not None else None
+        accepted = (
+            command is not None
+            and command.action == "processing_plan_accepted"
+            and command.result_id == plan.id
+        )
+        plan_views.append(
+            {
+                "id": str(plan.id),
+                "state": plan.state,
+                "acceptance_command_id": None if acceptance_id is None else str(acceptance_id),
+                "accepted_at": (
+                    _iso_or_none(command.created_at) if accepted and command is not None else None
+                ),
+            }
+        )
+        for quote_id in plan_quote_ids.get(plan.id, set()):
+            quote_to_plan.setdefault(quote_id, plan.id)
+
+    task_views: list[dict[str, Any]] = []
+    relationships_complete = True
+    for task in sorted(tasks, key=lambda row: (utc(row.created_at), row.run_id)):
+        plan_id = quote_to_plan.get(task.quote_id)
+        job = jobs.get(task.job_id) if getattr(task, "job_id", None) is not None else None
+        if plan_id is None or (getattr(task, "job_id", None) is not None and job is None):
+            relationships_complete = False
+        task_views.append(
+            {
+                "run_id": str(task.run_id),
+                "job_id": None if getattr(task, "job_id", None) is None else str(task.job_id),
+                "plan_id": None if plan_id is None else str(plan_id),
+                "stage": task.stage,
+                "state": task.state,
+                "job_status": None if job is None else getattr(job, "status", None),
+                "dispatch_started_at": _iso_or_none(
+                    None if job is None else getattr(job, "dispatch_started_at", None)
+                ),
+                "receipt_validation_state": _receipt_validation_state(job),
+            }
+        )
+
+    if recovered_report:
+        publication_kind = "recovered_draft"
+        publication_validation = "not_checked"
+    elif has_report:
+        publication_kind = "canonical_draft"
+        publication_validation = "validated"
+    else:
+        publication_kind = "none"
+        publication_validation = "not_checked"
+    submission_id = None if usage is None else getattr(usage, "submission_id", None)
+    return {
+        "submission_id": None if submission_id is None else str(submission_id),
+        "binding_state": binding_state,
+        "source_revision": getattr(recording, "source_revision", None),
+        "generation": getattr(recording, "generation", None),
+        "scope_complete": binding_state == "verified" and relationships_complete,
+        "plans": plan_views,
+        "tasks": task_views,
+        "publication": {
+            "kind": publication_kind,
+            "report_id": None if report_id is None else str(report_id),
+            "run_id": None if report_run_id is None else str(report_run_id),
+            "c6_checkpoint_id": None
+            if c6_checkpoint is None
+            else str(c6_checkpoint.id),
+            "validation_state": publication_validation,
+        },
     }
 
 
@@ -640,7 +771,10 @@ class AdminConversationRecordings:
             else []
         )
         jobs_by_id = {job.id: job for job in jobs}
-        plan_ids = {row.id for row in latest_plans.values()}
+        # Keep every non-erased plan in the bounded page so an old task can be
+        # tied to the exact plan that authorized it.  The display/cost view
+        # still uses latest_plans below.
+        plan_ids = {row.id for row in plans}
         plan_stage_rows = (
             (
                 await self.database.scalars(
@@ -656,6 +790,24 @@ class AdminConversationRecordings:
         plan_quote_ids: dict[UUID, set[UUID]] = {}
         for stage_row in plan_stage_rows:
             plan_quote_ids.setdefault(stage_row.plan_id, set()).add(stage_row.quote_id)
+        acceptance_command_ids = {
+            row.acceptance_command_id
+            for row in plans
+            if getattr(row, "acceptance_command_id", None) is not None
+        }
+        command_rows = (
+            (
+                await self.database.scalars(
+                    select(ConversationCommand).where(
+                        ConversationCommand.tenant_id.in_(self.recording_tenant_ids),
+                        ConversationCommand.id.in_(acceptance_command_ids),
+                    )
+                )
+            ).all()
+            if acceptance_command_ids
+            else []
+        )
+        commands = {row.id: row for row in command_rows}
         quote_ids = [row.quote_id for row in tasks]
         for stage_quote_ids in plan_quote_ids.values():
             quote_ids.extend(stage_quote_ids)
@@ -702,12 +854,17 @@ class AdminConversationRecordings:
                 select(ConversationCheckpoint).where(
                     ConversationCheckpoint.tenant_id.in_(self.recording_tenant_ids),
                     ConversationCheckpoint.recording_id.in_(recording_ids),
-                    ConversationCheckpoint.stage == "C1",
+                    ConversationCheckpoint.stage.in_(("C1", "C6")),
                     ConversationCheckpoint.erased_at.is_(None),
                 )
             )
         ).all()
-        latest_checkpoints = _latest(checkpoints, lambda row: row.recording_id)
+        latest_checkpoints = _latest(
+            (row for row in checkpoints if row.stage == "C1"), lambda row: row.recording_id
+        )
+        latest_c6_checkpoints = _latest(
+            (row for row in checkpoints if row.stage == "C6"), lambda row: row.recording_id
+        )
         drafts = (
             await self.database.scalars(
                 select(ConversationReportDraft).where(
@@ -802,6 +959,7 @@ class AdminConversationRecordings:
                 else {candidate.quote_id for candidate in recording_tasks}
             )
             checkpoint = latest_checkpoints.get(recording.id)
+            c6_checkpoint = latest_c6_checkpoints.get(recording.id)
             duration_ms = _safe_duration(None if checkpoint is None else checkpoint.payload)
             duration_source = "native_measurement" if duration_ms is not None else None
             if duration_ms is None and usage_row is not None:
@@ -882,6 +1040,29 @@ class AdminConversationRecordings:
                     "processing_plan": None
                     if plan is None
                     else {"id": str(plan.id), "state": plan.state},
+                    "runtime_trace": _runtime_trace(
+                        recording,
+                        guest_row,
+                        usage_row,
+                        plans=(
+                            candidate
+                            for candidate in plans
+                            if candidate.recording_id == recording.id
+                        ),
+                        plan_quote_ids={
+                            candidate.id: plan_quote_ids.get(candidate.id, set())
+                            for candidate in plans
+                            if candidate.recording_id == recording.id
+                        },
+                        commands=commands,
+                        tasks=recording_tasks,
+                        jobs=jobs_by_id,
+                        c6_checkpoint=c6_checkpoint,
+                        has_report=has_report,
+                        recovered_report=recovered_report,
+                        report_id=report_id,
+                        report_run_id=report_run_id,
+                    ),
                     "report": {
                         "available": has_report,
                         "id": None if report_id is None else str(report_id),

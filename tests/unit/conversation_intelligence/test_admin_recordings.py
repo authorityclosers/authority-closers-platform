@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.admin_recordings import (
     _decode_cursor,
     _owner_view,
     _provider_stage_view,
+    _runtime_trace,
     _safe_duration,
     _safe_provider_usage,
     _status,
@@ -297,3 +298,146 @@ def test_duration_only_accepts_bounded_native_measurement() -> None:
     assert _safe_duration({"media_duration_ms": 0}) is None
     assert _safe_duration({"media_duration_ms": "12345"}) is None
     assert _safe_duration({"duration_ms": 12_345}) is None
+
+
+def test_runtime_trace_distinguishes_unresolved_binding_from_awaiting_approval() -> None:
+    recording_id = uuid4()
+    recording = SimpleNamespace(
+        id=recording_id,
+        source_sha256="a" * 64,
+        source_revision=1,
+        generation=1,
+    )
+    plan_id = uuid4()
+    plan = SimpleNamespace(
+        id=plan_id,
+        state="quoted",
+        created_at=datetime(2026, 9, 19, tzinfo=UTC),
+        acceptance_command_id=uuid4(),
+    )
+
+    unresolved = _runtime_trace(
+        recording,
+        None,
+        None,
+        plans=[plan],
+        plan_quote_ids={plan_id: set()},
+        commands={},
+        tasks=[],
+        jobs={},
+        c6_checkpoint=None,
+        has_report=False,
+        recovered_report=False,
+        report_id=None,
+        report_run_id=None,
+    )
+    assert unresolved["binding_state"] == "absent"
+    assert unresolved["scope_complete"] is False
+
+    submission_id, usage_id = uuid4(), uuid4()
+    guest = SimpleNamespace(
+        recording_id=recording_id,
+        usage_id=usage_id,
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
+    )
+    usage = SimpleNamespace(
+        id=usage_id,
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
+    )
+    awaiting = _runtime_trace(
+        recording,
+        guest,
+        usage,
+        plans=[plan],
+        plan_quote_ids={plan_id: set()},
+        commands={},
+        tasks=[],
+        jobs={},
+        c6_checkpoint=None,
+        has_report=False,
+        recovered_report=False,
+        report_id=None,
+        report_run_id=None,
+    )
+    assert awaiting["binding_state"] == "verified"
+    assert awaiting["scope_complete"] is True
+    assert awaiting["plans"][0]["accepted_at"] is None
+
+
+def test_runtime_trace_requires_acceptance_and_durable_job_evidence() -> None:
+    recording_id, plan_id, quote_id, run_id, job_id = (uuid4() for _ in range(5))
+    submission_id, usage_id = uuid4(), uuid4()
+    recording = SimpleNamespace(
+        id=recording_id,
+        source_sha256="b" * 64,
+        source_revision=2,
+        generation=3,
+    )
+    guest = SimpleNamespace(
+        recording_id=recording_id,
+        usage_id=usage_id,
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
+    )
+    usage = SimpleNamespace(
+        id=usage_id,
+        submission_id=submission_id,
+        source_sha256=recording.source_sha256,
+    )
+    command_id = uuid4()
+    plan = SimpleNamespace(
+        id=plan_id,
+        state="active",
+        created_at=datetime(2026, 9, 19, tzinfo=UTC),
+        acceptance_command_id=command_id,
+    )
+    command = SimpleNamespace(
+        id=command_id,
+        action="processing_plan_accepted",
+        result_id=plan_id,
+        created_at=datetime(2026, 9, 19, 0, 1, tzinfo=UTC),
+    )
+    task = SimpleNamespace(
+        run_id=run_id,
+        job_id=job_id,
+        quote_id=quote_id,
+        stage="C2",
+        state="queued",
+        created_at=datetime(2026, 9, 19, 0, 2, tzinfo=UTC),
+    )
+    job = SimpleNamespace(
+        id=job_id,
+        status="queued",
+        dispatch_started_at=None,
+        provider_receipt=None,
+    )
+    trace = _runtime_trace(
+        recording,
+        guest,
+        usage,
+        plans=[plan],
+        plan_quote_ids={plan_id: {quote_id}},
+        commands={command_id: command},
+        tasks=[task],
+        jobs={job_id: job},
+        c6_checkpoint=None,
+        has_report=False,
+        recovered_report=False,
+        report_id=None,
+        report_run_id=None,
+    )
+    assert trace["plans"][0]["accepted_at"] == "2026-09-19T00:01:00+00:00"
+    assert trace["tasks"] == [
+        {
+            "run_id": str(run_id),
+            "job_id": str(job_id),
+            "plan_id": str(plan_id),
+            "stage": "C2",
+            "state": "queued",
+            "job_status": "queued",
+            "dispatch_started_at": None,
+            "receipt_validation_state": "not_checked",
+        }
+    ]
