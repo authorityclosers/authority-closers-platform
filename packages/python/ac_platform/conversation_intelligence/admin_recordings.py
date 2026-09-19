@@ -829,6 +829,12 @@ class AdminConversationRecordings:
             items.append(
                 {
                     "id": str(recording.id),
+                    # Acquisition owns a distinct submission namespace. Keep
+                    # the join visible to Admin so operators never have to
+                    # probe recording/run UUIDs against owner-facing routes.
+                    "submission_id": (
+                        None if usage_row is None else str(usage_row.submission_id)
+                    ),
                     "owner": _owner_view(recording, guest_row, usage_row, claim_row, people),
                     "uploaded_at": utc(recording.created_at).isoformat(),
                     "recording_state": recording.state,

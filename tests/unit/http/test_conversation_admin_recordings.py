@@ -78,6 +78,7 @@ def _public_page_responses(
         tenant_id=PUBLIC_TENANT,
         person_id=None,
         visitor_id=uuid4(),
+        submission_id=uuid4(),
         reserved_seconds=37,
     )
     run = SimpleNamespace(
@@ -314,6 +315,7 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     assert len(body["items"]) == 1
     item = body["items"][0]
     assert item["id"] == str(public_recording.id)
+    assert UUID(item["submission_id"]) != public_recording.id
     assert item["owner"] == {
         "kind": "guest",
         "label": "Guest upload",
