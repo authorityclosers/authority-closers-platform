@@ -462,7 +462,17 @@ export function AcquisitionStudio({
           requestedPlan.current !== bound.id
         ) {
           requestedPlan.current = bound.id;
-          const approved = await getPlan(bound, abort.signal);
+          let approved: ProcessingPlan;
+          try {
+            approved = await getPlan(bound, abort.signal);
+          } catch (error) {
+            // A lost/failed quote must remain recoverable. The latch only
+            // suppresses duplicate in-flight requests; it must not turn one
+            // transient failure into a permanent "report pending" state.
+            if (requestedPlan.current === bound.id)
+              requestedPlan.current = "";
+            throw error;
+          }
           if (!abort.signal.aborted) {
             setPlan(approved);
             setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());

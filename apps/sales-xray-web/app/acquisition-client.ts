@@ -56,11 +56,21 @@ export class AcquisitionError extends Error {
       | "provider_allowance_used"
       | "plan_permission"
       | "plan_stale"
-      | "execution_paused",
+      | "execution_paused"
+      | "source_invalid"
+      | "source_incomplete"
+      | "source_storage",
+    readonly requestId?: string,
   ) {
-    super(
+    const message =
       reason === "execution_paused"
         ? ACQUISITION_PAUSED_MESSAGE
+        : reason === "source_invalid"
+          ? "Choose one bounded audio file and accept the current upload terms."
+          : reason === "source_incomplete"
+            ? "The complete recording was not received. Check your connection and upload again."
+            : reason === "source_storage"
+              ? "The recording could not be verified in private storage. Check your connection and upload again."
         : status === 401
           ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
           : status === 403
@@ -77,8 +87,8 @@ export class AcquisitionError extends Error {
                 ? "Another call is uploading. Please try again shortly."
                 : status === 409
                   ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                  : "This request did not finish. Check your connection and try again.",
-    );
+                  : "This request did not finish. Check your connection and try again.";
+    super(requestId ? `${message} Request reference: ${requestId}.` : message);
   }
 }
 export async function acquisition(
@@ -93,6 +103,7 @@ export async function acquisition(
     headers: { accept: "application/json", ...init.headers },
   });
   if (!response.ok) {
+    const requestId = response.headers.get("x-request-id") || undefined;
     if (response.status === 503) {
       const body: unknown = await response.json().catch(() => null);
       if (
@@ -101,7 +112,7 @@ export async function acquisition(
         "detail" in body &&
         body.detail === ACQUISITION_PAUSED_MESSAGE
       )
-        throw new AcquisitionError(503, "execution_paused");
+        throw new AcquisitionError(503, "execution_paused", requestId);
     }
     if (
       response.status === 403 &&
@@ -129,9 +140,27 @@ export async function acquisition(
           : planStale
             ? "plan_stale"
             : "plan_permission",
+        requestId,
       );
     }
-    throw new AcquisitionError(response.status);
+    if (response.status === 422) {
+      const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body && typeof body === "object" && !Array.isArray(body) && "detail" in body
+          ? body.detail
+          : undefined;
+      const sourceReason =
+        detail ===
+        "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
+          ? "source_invalid"
+          : detail === "The complete recording was not received."
+            ? "source_incomplete"
+            : detail === "The recording could not be verified in private storage."
+              ? "source_storage"
+              : undefined;
+      throw new AcquisitionError(response.status, sourceReason, requestId);
+    }
+    throw new AcquisitionError(response.status, undefined, requestId);
   }
   return response.json();
 }
