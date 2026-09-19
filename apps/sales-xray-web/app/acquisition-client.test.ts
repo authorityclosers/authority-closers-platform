@@ -117,10 +117,13 @@ describe("acquisition permission recovery", () => {
       "fetch",
       vi.fn().mockImplementation(() =>
         Promise.resolve(
-          new Response(JSON.stringify({ detail: "private infrastructure detail" }), {
-            status: 403,
-            headers: { "x-request-id": "req-safe-123" },
-          }),
+          new Response(
+            JSON.stringify({ detail: "private infrastructure detail" }),
+            {
+              status: 403,
+              headers: { "x-request-id": "req-safe-123" },
+            },
+          ),
         ),
       ),
     );
@@ -153,23 +156,28 @@ describe("acquisition permission recovery", () => {
       "source_storage",
       "The recording could not be verified in private storage.",
     ],
-  ] as const)("translates a controlled source denial (%s)", async (detail, reason, copy) => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ detail }), {
-          status: 422,
-          headers: { "x-request-id": "req-source-123" },
-        }),
-      ),
-    );
-    await expect(acquisition(`/submissions/${submissionId}/source`)).rejects.toMatchObject({
-      status: 422,
-      reason,
-      requestId: "req-source-123",
-      message: expect.stringContaining(copy),
-    });
-  });
+  ] as const)(
+    "translates a controlled source denial (%s)",
+    async (detail, reason, copy) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ detail }), {
+            status: 422,
+            headers: { "x-request-id": "req-source-123" },
+          }),
+        ),
+      );
+      await expect(
+        acquisition(`/submissions/${submissionId}/source`),
+      ).rejects.toMatchObject({
+        status: 422,
+        reason,
+        requestId: "req-source-123",
+        message: expect.stringContaining(copy),
+      });
+    },
+  );
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {

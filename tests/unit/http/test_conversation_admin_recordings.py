@@ -341,12 +341,9 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     assert item["runtime_trace"]["scope_complete"] is True
     assert item["runtime_trace"]["plans"][0]["accepted_at"] is None
     assert all(
-        task["plan_id"] == item["processing_plan"]["id"]
-        for task in item["runtime_trace"]["tasks"]
+        task["plan_id"] == item["processing_plan"]["id"] for task in item["runtime_trace"]["tasks"]
     )
-    assert all(
-        task["job_status"] == "completed" for task in item["runtime_trace"]["tasks"]
-    )
+    assert all(task["job_status"] == "completed" for task in item["runtime_trace"]["tasks"])
     assert item["cost"] == {
         "currency": "INR",
         "scope": "current_plan",

@@ -469,8 +469,7 @@ export function AcquisitionStudio({
             // A lost/failed quote must remain recoverable. The latch only
             // suppresses duplicate in-flight requests; it must not turn one
             // transient failure into a permanent "report pending" state.
-            if (requestedPlan.current === bound.id)
-              requestedPlan.current = "";
+            if (requestedPlan.current === bound.id) requestedPlan.current = "";
             throw error;
           }
           if (!abort.signal.aborted) {

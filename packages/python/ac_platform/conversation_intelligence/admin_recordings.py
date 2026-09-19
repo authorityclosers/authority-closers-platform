@@ -320,9 +320,7 @@ def _runtime_trace(
             "kind": publication_kind,
             "report_id": None if report_id is None else str(report_id),
             "run_id": None if report_run_id is None else str(report_run_id),
-            "c6_checkpoint_id": None
-            if c6_checkpoint is None
-            else str(c6_checkpoint.id),
+            "c6_checkpoint_id": None if c6_checkpoint is None else str(c6_checkpoint.id),
             "validation_state": publication_validation,
         },
     }
@@ -990,9 +988,7 @@ class AdminConversationRecordings:
                     # Acquisition owns a distinct submission namespace. Keep
                     # the join visible to Admin so operators never have to
                     # probe recording/run UUIDs against owner-facing routes.
-                    "submission_id": (
-                        None if usage_row is None else str(usage_row.submission_id)
-                    ),
+                    "submission_id": (None if usage_row is None else str(usage_row.submission_id)),
                     "owner": _owner_view(recording, guest_row, usage_row, claim_row, people),
                     "uploaded_at": utc(recording.created_at).isoformat(),
                     "recording_state": recording.state,
