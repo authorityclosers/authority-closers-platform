@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016
 set -euo pipefail
 
 target_environment="${AC_TARGET_ENVIRONMENT:-}"
@@ -607,6 +608,11 @@ validate_filesystem_media_activation() {
 validate_filesystem_media_activation
 
 with_release_secrets() {
+  # A user-scoped Infisical secret with the same name as a managed shared
+  # secret must never shadow the release configuration.  The VPS machine
+  # identity cannot read personal secrets, so the default CLI precedence can
+  # silently omit a required shared value.  Resolve the shared release path
+  # explicitly while retaining the existing short-lived machine token.
   env \
     -u AC_GOOGLE_OAUTH_CLIENT_ID \
     -u AC_GOOGLE_OAUTH_CLIENT_SECRET \
@@ -616,7 +622,15 @@ with_release_secrets() {
     -u AC_PRACTICE_PILOT_TENANT_ID \
     AC_INFISICAL_ENVIRONMENT="$secret_environment" \
     AC_INFISICAL_PATH="$secret_path" \
-    /usr/local/sbin/ac-infisical-run -- "$@"
+    /usr/local/sbin/ac-infisical-run -- \
+      sh -euc '
+        exec infisical run \
+          --projectId="${INFISICAL_PROJECT_ID:?}" \
+          --env="${AC_INFISICAL_ENVIRONMENT:?}" \
+          --path="${AC_INFISICAL_PATH:?}" \
+          --secret-overriding=false \
+          -- "$@"
+      ' sh "$@"
 }
 
 with_practice_pilot_scope() {
