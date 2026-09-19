@@ -1,7 +1,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallStudio, type CallStudioProps } from "./call-studio";
+import {
+  CallStudio,
+  parseProcessingPlan,
+  type CallStudioProps,
+} from "./call-studio";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -68,6 +72,14 @@ const processingPlan = {
   automatic_progression: true,
   failure_code: null,
 };
+
+it("accepts the backend repair-cost field in a processing plan", () => {
+  const parsed = parseProcessingPlan(
+    { ...processingPlan, automatic_c5_repair_cost_paise: 149 },
+    "recording-1",
+  );
+  expect(parsed.automatic_c5_repair_cost_paise).toBe(149);
+});
 const citation = { doc: "Doc-1", sections: ["source section"] };
 const dimensions = Array.from({ length: 8 }, (_, index) => ({
   dimension_id: `dimension-${index + 1}`,

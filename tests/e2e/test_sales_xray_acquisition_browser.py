@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
+from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.identity.models import PasswordCredential, Person
@@ -212,9 +213,12 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     page = await context.new_page()
                     network = []
                     errors = []
+                    plan_posts = []
 
                     def record_response(response):
                         if response.url.startswith(ORIGIN + "/v1/"):
+                            if response.url.endswith("/plan") and response.request.method == "POST":
+                                plan_posts.append(response)
                             network.append(
                                 {
                                     "path": response.url.split(ORIGIN)[-1],
@@ -245,15 +249,15 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         {"name": "Synthetic test call.wav", "mimeType": "audio/wav", "buffer": data}
                     )
                     await expect(
-                        page.get_by_role("button", name="Upload my call", exact=True)
+                        page.get_by_role("button", name="Analyse my call", exact=True)
                     ).to_be_disabled()
-                    await page.get_by_role("checkbox", name="I have permission").check()
+                    await page.get_by_role("checkbox").first.check()
                     async with page.expect_response(
                         lambda response: (
                             response.url.endswith("/source") and response.request.method == "PUT"
                         )
                     ) as upload_response:
-                        await page.get_by_role("button", name="Upload my call", exact=True).click()
+                        await page.get_by_role("button", name="Analyse my call", exact=True).click()
                     uploaded_response = await upload_response.value
                     assert uploaded_response.status == 202
                     uploaded = await uploaded_response.json()
@@ -266,33 +270,49 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         environment="test",
                     )
                     assert await db(local.run_once())
-                    await expect(
-                        page.get_by_role("button", name="Analyse my call", exact=True)
-                    ).to_be_visible(timeout=20000)
-                    assert broker.calls == 0
-                    await expect(
-                        page.get_by_role("button", name="Analyse my call", exact=True)
-                    ).to_be_disabled()
-                    await page.get_by_role(
-                        "checkbox", name="I approve this exact provider plan"
-                    ).check()
-                    async with page.expect_response(
-                        lambda response: (
-                            response.url.endswith("/plan") and response.request.method == "POST"
-                        )
-                    ) as plan_response:
-                        await page.get_by_role("button", name="Analyse my call", exact=True).click()
-                    plan_result = await (await plan_response.value).json()
-                    for _ in range(8):
+                    # Depending on poll timing, the freshly consented upload may
+                    # already be auto-approved, or may still expose the explicit
+                    # Continue action. Give the automatic path time to settle and
+                    # only click when no acceptance request has completed.
+                    await page.wait_for_timeout(5000)
+                    continue_button = page.get_by_role(
+                        "button", name="Continue analysis", exact=True
+                    )
+                    if not plan_posts and await continue_button.is_visible():
+                        assert broker.calls == 0
+                        await expect(continue_button).to_be_enabled()
+                        async with page.expect_response(
+                            lambda response: (
+                                response.url.endswith("/plan") and response.request.method == "POST"
+                            )
+                        ):
+                            await continue_button.click()
+
+                    async def latest_plan_id():
+                        async with setup.sessions() as diagnostic_db:
+                            row = await diagnostic_db.scalar(
+                                select(ConversationProcessingPlan)
+                                .where(
+                                    ConversationProcessingPlan.recording_id
+                                    == UUID(uploaded["recording_id"])
+                                )
+                                .order_by(ConversationProcessingPlan.created_at.desc())
+                                .limit(1)
+                            )
+                            return None if row is None else row.id
+
+                    for _ in range(16):
                         await db(worker.run_once())
-                        await db(_make_due(setup, UUID(plan_result["id"])))
+                        plan_id = await db(latest_plan_id())
+                        if plan_id is not None:
+                            await db(_make_due(setup, plan_id))
                         await db(scheduler.step())
                     await expect(
                         page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=30000)
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
-                    await page.get_by_role("tab", name="Transcript & moments").click()
+                    await page.get_by_role("tab", name="Moments", exact=True).click()
                     assert (
                         await page.locator("audio").get_attribute("src")
                         == PREFIX + f"/submissions/{submission_id}/source"
@@ -377,9 +397,13 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     await expect(
                         library_page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
-                    await library_page.get_by_role("tab", name="Transcript & moments").click()
+                    await library_page.get_by_role("tab", name="Moments", exact=True).click()
                     player = library_page.locator("audio")
-                    await expect(player).to_be_visible()
+                    await expect(player).to_have_count(1)
+                    assert (
+                        await player.get_attribute("src")
+                        == PREFIX + f"/submissions/{submission_id}/source"
+                    )
                     await library_page.wait_for_function(
                         "document.querySelector('audio')?.readyState >= 1"
                     )
@@ -394,6 +418,19 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         path=str(receipt / "account-library-report-playback.png"), full_page=True
                     )
                     assert broker.calls == 3
+                    await library_page.locator('summary[aria-label="More report actions"]').click()
+                    await library_page.get_by_role(
+                        "button", name="Request deletion", exact=True
+                    ).click()
+                    await library_page.get_by_role(
+                        "button", name="Request recording deletion", exact=True
+                    ).click()
+                    await expect(
+                        library_page.get_by_text("Deletion requested.", exact=False)
+                    ).to_be_visible()
+                    await library_page.get_by_role(
+                        "button", name="Open AC account menu", exact=True
+                    ).click()
                     async with library_page.expect_response(
                         lambda response: (
                             response.url.endswith("/v1/auth/logout")
@@ -425,13 +462,6 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     )
                     assert denied.status in (401, 404)
                     await stranger.close()
-                    await page.get_by_role("button", name="Delete this call", exact=True).click()
-                    await page.get_by_role(
-                        "button", name="Delete recording and report", exact=True
-                    ).click()
-                    await expect(
-                        page.get_by_text("Deletion requested.", exact=False)
-                    ).to_be_visible()
                     assert not errors
                     (receipt / "browser-network.json").write_text(
                         json.dumps(
