@@ -151,6 +151,18 @@ jobs:
             sudo -n test -S "$socket_path"
           }
 
+          # The checkout path is runner-owned and intentionally not traversable
+          # by the numeric worker identity. Copy only the smoke harness and its
+          # application package into the worker-owned workspace before dropping
+          # privileges; the helper itself still runs from the reviewed checkout
+          # as root and the smoke keeps the real peer UID/GID contract.
+          smoke_python_root="$workspace_root/python"
+          sudo -n mkdir "$smoke_python_root"
+          sudo -n cp "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" \
+            "$workspace_root/test_hosted_native_linux.py"
+          sudo -n cp -a "$GITHUB_WORKSPACE/packages/python/ac_platform" "$smoke_python_root/"
+          sudo -n chown -R 10001:10001 "$workspace_root/test_hosted_native_linux.py" "$smoke_python_root"
+
           sudo -n env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
             HOME=/nonexistent \
@@ -194,8 +206,8 @@ jobs:
             HOME=/nonexistent \
             PYTHONDONTWRITEBYTECODE=1 \
             PYTHONUNBUFFERED=1 \
-            PYTHONPATH="$GITHUB_WORKSPACE/packages/python" \
-            python3 "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" \
+            PYTHONPATH="$smoke_python_root" \
+            python3 "$workspace_root/test_hosted_native_linux.py" \
               --socket "$socket_path" \
               --workspace-root "$workspace_root" \
               --image-ref "$image_id" \
