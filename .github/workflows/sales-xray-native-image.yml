@@ -167,10 +167,12 @@ jobs:
           sudo -n cp -a "$GITHUB_WORKSPACE/packages/python/ac_platform" "$smoke_python_root/"
           sudo -n chown -R 10001:10001 "$smoke_python_root"
           sudo -n stat -c '%A %u:%g %F %n' "$smoke_python_root" "$smoke_python_root/ac_platform" >&2
-          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
-            PATH=/usr/local/bin:/usr/bin:/bin \
-            PYTHONPATH="$smoke_python_root" \
-            python3 -c 'import ac_platform; print("native_smoke_import_ok")'
+          (
+            cd "$smoke_python_root"
+            sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
+              PATH=/usr/local/bin:/usr/bin:/bin \
+              python3 -c 'import ac_platform; print("native_smoke_import_ok")'
+          )
 
           sudo -n env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
@@ -210,17 +212,19 @@ jobs:
             exit 1
           }
 
-          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
-            PATH=/usr/local/bin:/usr/bin:/bin \
-            HOME=/nonexistent \
-            PYTHONDONTWRITEBYTECODE=1 \
-            PYTHONUNBUFFERED=1 \
-            PYTHONPATH="$smoke_python_root" \
-            python3 - < "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" \
-              --socket "$socket_path" \
-              --workspace-root "$workspace_root" \
-              --image-ref "$image_id" \
-              --receipt "$receipt"
+          (
+            cd "$smoke_python_root"
+            sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
+              PATH=/usr/local/bin:/usr/bin:/bin \
+              HOME=/nonexistent \
+              PYTHONDONTWRITEBYTECODE=1 \
+              PYTHONUNBUFFERED=1 \
+              python3 - < "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" \
+                --socket "$socket_path" \
+                --workspace-root "$workspace_root" \
+                --image-ref "$image_id" \
+                --receipt "$receipt"
+          )
           jq -e '
             .status == "passed" and
             .validated == true and
