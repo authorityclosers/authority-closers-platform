@@ -22,7 +22,7 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 try:
     import fcntl
@@ -64,6 +64,19 @@ FORBIDDEN_PAYLOAD_MARKERS = (
     "api_key",
     "api-key",
 )
+
+
+class NativeBinding(NamedTuple):
+    helper_source_sha: str = HELPER_SOURCE_SHA
+    image_ref: str = NATIVE_IMAGE_REF
+    image_config_id: str = NATIVE_IMAGE_CONFIG_ID
+
+    @property
+    def identities(self) -> frozenset[str]:
+        return frozenset({self.image_ref, self.image_config_id})
+
+
+LEGACY_BINDING = NativeBinding()
 
 
 class InstallerError(RuntimeError):
@@ -224,9 +237,10 @@ def _supervisor_source() -> str:
     )
 
 
-def _helper_root() -> str:
+def _helper_root(binding: NativeBinding = LEGACY_BINDING) -> str:
     return (
-        f"/srv/authority-closers/application/artifacts/sales-xray-native-{HELPER_SOURCE_SHA}/helper"
+        "/srv/authority-closers/application/artifacts/"
+        f"sales-xray-native-{binding.helper_source_sha}/helper"
     )
 
 
@@ -337,6 +351,7 @@ def _validate_descriptor(
     *,
     environment: str,
     supplied_sha256: str,
+    binding: NativeBinding = LEGACY_BINDING,
 ) -> None:
     if not SHA256_RE.fullmatch(supplied_sha256):
         raise _fail("native_units_sha256_invalid")
@@ -359,11 +374,11 @@ def _validate_descriptor(
         raise _fail("native_units_schema_invalid")
     if descriptor.get("environment") != environment:
         raise _fail("native_units_environment_mismatch")
-    if descriptor.get("helper_source_sha") != HELPER_SOURCE_SHA:
+    if descriptor.get("helper_source_sha") != binding.helper_source_sha:
         raise _fail("native_units_helper_mismatch")
-    if descriptor.get("helper_root") != _helper_root():
+    if descriptor.get("helper_root") != _helper_root(binding):
         raise _fail("native_units_helper_root_mismatch")
-    if descriptor.get("native_image_ref") != NATIVE_IMAGE_REF:
+    if descriptor.get("native_image_ref") != binding.image_ref:
         raise _fail("native_units_image_mismatch")
     if descriptor.get("supervisor_source") != _supervisor_source():
         raise _fail("native_units_release_mismatch")
@@ -383,9 +398,9 @@ def _validate_descriptor(
     service = units[_service_unit(environment)]
     required_service_fragments = (
         f"--prepare-socket {environment}",
-        f"PYTHONPATH={_helper_root()}/packages/python",
-        f"{_helper_root()}/scripts/native_runtime_helper.py",
-        f"--image-ref {NATIVE_IMAGE_REF}",
+        f"PYTHONPATH={_helper_root(binding)}/packages/python",
+        f"{_helper_root(binding)}/scripts/native_runtime_helper.py",
+        f"--image-ref {binding.image_ref}",
         f"--socket /run/ac-sales-xray/{environment}/native.sock",
         f"--workspace-root /srv/authority-closers/sales-xray/{environment}/scratch",
         "--output-root "
@@ -410,6 +425,7 @@ def _rendered_descriptor(
     renderer_python: Path,
     environment: str,
     canonical_paths: bool,
+    binding: NativeBinding = LEGACY_BINDING,
 ) -> dict[str, Any]:
     _ensure_absolute(renderer, "renderer_path_not_absolute")
     _ensure_existing_parents(renderer, "renderer_parent_invalid")
@@ -434,13 +450,13 @@ def _rendered_descriptor(
         "--environment",
         environment,
         "--helper-source-sha",
-        HELPER_SOURCE_SHA,
+        binding.helper_source_sha,
         "--helper-root",
-        _helper_root(),
+        _helper_root(binding),
         "--python-executable",
         "/usr/bin/python3",
         "--native-image-ref",
-        NATIVE_IMAGE_REF,
+        binding.image_ref,
         "--supervisor-source",
         _supervisor_source(),
     ]
@@ -473,6 +489,7 @@ def _validate_renderer_binding(
     renderer_python: Path,
     environment: str,
     canonical_paths: bool,
+    binding: NativeBinding = LEGACY_BINDING,
 ) -> None:
     if canonical_paths and renderer != Path(_supervisor_source()):
         raise _fail("renderer_path_not_release_bound")
@@ -484,6 +501,7 @@ def _validate_renderer_binding(
         renderer_python=renderer_python,
         environment=environment,
         canonical_paths=canonical_paths,
+        binding=binding,
     )
     if rendered != dict(descriptor):
         raise _fail("native_units_renderer_drift")
@@ -734,6 +752,9 @@ class SubprocessSystemd:
 
 
 class SubprocessDocker:
+    def __init__(self, binding: NativeBinding = LEGACY_BINDING) -> None:
+        self.binding = binding
+
     def inspect_identity(self) -> str:
         try:
             completed = subprocess.run(  # noqa: S603 - argv is fixed by this class.
@@ -743,7 +764,7 @@ class SubprocessDocker:
                     "inspect",
                     "--format",
                     "{{.Id}}",
-                    NATIVE_IMAGE_REF,
+                    self.binding.image_ref,
                 ],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
@@ -757,7 +778,7 @@ class SubprocessDocker:
         if completed.returncode != 0:
             raise _fail("docker_identity_check_failed")
         identity = completed.stdout.strip()
-        if identity not in NATIVE_IMAGE_BINDING:
+        if identity not in self.binding.identities:
             raise _fail("docker_identity_mismatch")
         return identity
 
@@ -822,11 +843,15 @@ def _reject_existing_drift(
     unit_root: Path,
     units: Mapping[str, str],
     require_root: bool,
+    previous_units: Mapping[str, str] | None = None,
 ) -> None:
     for name, text in units.items():
         current = _safe_existing_unit(_unit_path(unit_root, name), require_root=require_root)
-        if current is not None and current != text.encode("utf-8"):
+        previous = None if previous_units is None else previous_units[name].encode("utf-8")
+        if current is not None and current not in (text.encode("utf-8"), previous):
             raise _fail("native_unit_existing_drift")
+        if previous is not None and current is None:
+            raise _fail("native_previous_unit_missing")
 
 
 def _stage_units(
@@ -998,6 +1023,88 @@ def _write_receipt(path: Path, receipt: Mapping[str, Any], *, require_root: bool
     _write_exact(path, raw, mode=0o640, require_root=require_root, owner_group="acops")
 
 
+def _artifact_binding(
+    path: Path,
+    digest: str,
+    *,
+    require_root: bool,
+    canonical_paths: bool,
+) -> NativeBinding:
+    """Use the independently reviewed CI artifact digest, never a mutable image tag."""
+    metadata, raw = _safe_json(path)
+    if not SHA256_RE.fullmatch(digest) or _sha256_bytes(raw) != digest:
+        raise _fail("native_artifact_sha256_mismatch")
+    try:
+        source = metadata["source_commit"]
+        image = metadata["image"]
+        transport = metadata["transport"]
+        helper = metadata["helper_source"]
+        binding = NativeBinding(source, image["expected_runtime_ref"], image["image_id"])
+        if (
+            metadata["schema"] != "ac.sales-xray.native-image/1"
+            or not SHA40_RE.fullmatch(source)
+            or metadata["dockerfile"] != "infra/conversation-worker/Dockerfile"
+            or metadata["target"] != "runtime"
+            or metadata["platform"] != {"os": "linux", "architecture": "amd64"}
+            or metadata["doctor"] != {"ffmpeg": True, "ffprobe": True, "provider_calls": False}
+            or image["identity_type"] != "oci_transport_manifest"
+            or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in binding.identities)
+            or transport["manifest_digest"] != binding.image_ref
+            or transport["config_digest"] != binding.image_config_id
+            or helper["entrypoint"] != "scripts/native_runtime_helper.py"
+            or helper["pythonpath"] != "packages/python"
+        ):
+            raise _fail("native_artifact_binding_invalid")
+    except (KeyError, TypeError, ValueError):
+        raise _fail("native_artifact_binding_invalid") from None
+    if not isinstance(helper, Mapping) or not isinstance(helper.get("files"), list):
+        raise _fail("native_artifact_binding_invalid")
+    expected_files = {
+        "packages/python/ac_platform/__init__.py",
+        "packages/python/ac_platform/conversation_intelligence/__init__.py",
+        "packages/python/ac_platform/conversation_intelligence/native_runtime.py",
+        "packages/python/ac_platform/conversation_intelligence/signals.py",
+        "scripts/native_runtime_helper.py",
+        "scripts/test_hosted_native_linux.py",
+    }
+    if set(helper.get("files", [])) != expected_files:
+        raise _fail("native_artifact_helper_files_invalid")
+    if canonical_paths and path != Path(_helper_root(binding)).parent / "native-image.json":
+        raise _fail("native_artifact_path_not_canonical")
+    _ensure_existing_parents(path, "native_artifact_parent_invalid", require_root=require_root)
+    if require_root:
+        _ensure_owner(path, group="acops", code="native_artifact_owner_invalid")
+    # Verify the helper archive identity, then each extracted file against the
+    # checksum receipt inside that same CI artifact. No imported helper code runs.
+    import tarfile
+
+    archive = path.parent / "native-helper.tar.gz"
+    _ensure_regular(archive, "native_helper_archive_invalid")
+    if _sha256_file(archive) != helper.get("sha256"):
+        raise _fail("native_helper_archive_digest_mismatch")
+    try:
+        with tarfile.open(archive, "r:gz") as bundle:
+            members = bundle.getmembers()
+            if len(members) != len(expected_files) or {m.name for m in members} != expected_files:
+                raise _fail("native_helper_archive_layout_invalid")
+            for member in members:
+                if not member.isfile() or member.size > 2_000_000:
+                    raise _fail("native_helper_archive_entry_invalid")
+                installed = path.parent / "helper" / member.name
+                _ensure_existing_parents(
+                    installed, "native_helper_parent_invalid", require_root=require_root
+                )
+                _ensure_regular(installed, "native_helper_file_invalid")
+                if require_root:
+                    _ensure_owner(installed, group="acops", code="native_helper_owner_invalid")
+                stream = bundle.extractfile(member)
+                if stream is None or _sha256_bytes(stream.read()) != _sha256_file(installed):
+                    raise _fail("native_helper_file_digest_mismatch")
+    except (OSError, tarfile.TarError):
+        raise _fail("native_helper_archive_invalid") from None
+    return binding
+
+
 def install(
     *,
     environment: str,
@@ -1016,10 +1123,24 @@ def install(
     systemd: Any | None = None,
     docker: Any | None = None,
     group: Any | None = None,
+    native_artifact_manifest: Path | None = None,
+    native_artifact_sha256: str | None = None,
+    previous_native_units: Path | None = None,
+    previous_native_units_sha256: str | None = None,
 ) -> dict[str, Any]:
     if environment not in ENVIRONMENTS:
         raise _fail("environment_invalid")
-    if native_image_config_id != NATIVE_IMAGE_CONFIG_ID:
+    if (native_artifact_manifest is None) != (native_artifact_sha256 is None):
+        raise _fail("native_artifact_arguments_incomplete")
+    binding = LEGACY_BINDING
+    if native_artifact_manifest is not None and native_artifact_sha256 is not None:
+        binding = _artifact_binding(
+            native_artifact_manifest,
+            native_artifact_sha256,
+            require_root=require_root,
+            canonical_paths=canonical_paths,
+        )
+    if native_image_config_id != binding.image_config_id:
         raise _fail("native_image_config_mismatch")
     _ensure_absolute(receipt, "receipt_not_absolute")
     _ensure_not_symlink(receipt, "receipt_symlink")
@@ -1058,6 +1179,7 @@ def install(
         raw,
         environment=environment,
         supplied_sha256=native_units_sha256,
+        binding=binding,
     )
     _validate_renderer_binding(
         descriptor,
@@ -1065,13 +1187,51 @@ def install(
         renderer_python=renderer_python,
         environment=environment,
         canonical_paths=canonical_paths,
+        binding=binding,
     )
+    if (previous_native_units is None) != (previous_native_units_sha256 is None):
+        raise _fail("native_previous_arguments_incomplete")
+    previous_units = None
+    if previous_native_units is not None and previous_native_units_sha256 is not None:
+        if canonical_paths and previous_native_units.parent != native_units.parent:
+            raise _fail("native_previous_path_not_trusted")
+        _ensure_existing_parents(
+            previous_native_units, "native_previous_parent_invalid", require_root=require_root
+        )
+        if require_root:
+            _ensure_owner(
+                previous_native_units, group="acops", code="native_previous_owner_invalid"
+            )
+        previous, previous_raw = _safe_json(previous_native_units)
+        helper_sha = previous.get("helper_source_sha")
+        image_ref = previous.get("native_image_ref")
+        if not isinstance(helper_sha, str) or not SHA40_RE.fullmatch(helper_sha):
+            raise _fail("native_previous_binding_invalid")
+        if not isinstance(image_ref, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_ref):
+            raise _fail("native_previous_binding_invalid")
+        previous_binding = NativeBinding(helper_sha, image_ref, image_ref)
+        _validate_descriptor(
+            previous,
+            previous_raw,
+            environment=environment,
+            supplied_sha256=previous_native_units_sha256,
+            binding=previous_binding,
+        )
+        _validate_renderer_binding(
+            previous,
+            renderer=renderer,
+            renderer_python=renderer_python,
+            environment=environment,
+            canonical_paths=canonical_paths,
+            binding=previous_binding,
+        )
+        previous_units = previous["units"]
     units = descriptor["units"]
     assert isinstance(units, dict)
     if systemd is None:
         systemd = SubprocessSystemd()
     if docker is None:
-        docker = SubprocessDocker()
+        docker = SubprocessDocker(binding)
     if group is None:
         group = SubprocessGroup()
     lock_path = application_root / ".deployment.lock"
@@ -1083,9 +1243,11 @@ def install(
         "environment": environment,
         "release": NATIVE_RELEASE,
         "native_units_sha256": native_units_sha256,
-        "native_image_ref": NATIVE_IMAGE_REF,
-        "native_image_config_id": NATIVE_IMAGE_CONFIG_ID,
-        "helper_source_sha": HELPER_SOURCE_SHA,
+        "native_image_ref": binding.image_ref,
+        "native_image_config_id": binding.image_config_id,
+        "helper_source_sha": binding.helper_source_sha,
+        "native_artifact_sha256": native_artifact_sha256,
+        "previous_native_units_sha256": previous_native_units_sha256,
         "renderer_sha256": RENDERER_SHA256,
         "start_requested": start,
         "provider_calls": 0,
@@ -1097,11 +1259,11 @@ def install(
         "native_group_created": False,
     }
     docker_identity = docker.inspect_identity()
-    if docker_identity not in NATIVE_IMAGE_BINDING:
+    if docker_identity not in binding.identities:
         raise _fail("docker_identity_mismatch")
     result["docker_identity"] = docker_identity
     result["docker_identity_binding"] = (
-        "verified_manifest" if docker_identity == NATIVE_IMAGE_REF else "verified_config"
+        "verified_manifest" if docker_identity == binding.image_ref else "verified_config"
     )
     with DeploymentLock(lock_path, require_root=require_root):
         # The preflight check above validates the path shape before any work.
@@ -1113,6 +1275,7 @@ def install(
             unit_root=unit_root,
             units=units,
             require_root=require_root,
+            previous_units=previous_units,
         )
         if dry_run:
             group_state = group.ensure(dry_run=True)
@@ -1163,6 +1326,19 @@ def install(
             if group_state["created"]:
                 result["runtime_mutation"] = True
             systemd.verify(tuple(staged[name] for name in names))
+            # Drain the old helper before replacing its command. enable --now
+            # does not restart an already-running service with changed bytes.
+            service = _service_unit(environment)
+            if previous[service] != units[service].encode("utf-8") and systemd.is_active(service):
+                result["runtime_mutation"] = True
+                systemd.stop(service)
+                # `systemctl stop` is intentionally best-effort in the adapter
+                # so a failed stop can be reported without leaking command
+                # output. Never publish a new helper while the old process is
+                # still serving the socket: enable --now does not restart an
+                # already-active unit after its bytes change.
+                if systemd.is_active(service):
+                    raise _fail("native_service_stop_failed")
             # A failure during either replace, reload, start, or readback must
             # report that the runtime may have been mutated and rollback ran.
             result["runtime_mutation"] = True
@@ -1231,6 +1407,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--renderer-python", type=Path, default=Path("/usr/bin/python3"))
     parser.add_argument("--native-image-config-id", required=True)
+    parser.add_argument("--native-artifact-manifest", type=Path)
+    parser.add_argument("--native-artifact-sha256")
+    parser.add_argument("--previous-native-units", type=Path)
+    parser.add_argument("--previous-native-units-sha256")
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--start", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -1250,6 +1430,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
             receipt=args.receipt,
             start=args.start,
             dry_run=args.dry_run,
+            native_artifact_manifest=args.native_artifact_manifest,
+            native_artifact_sha256=args.native_artifact_sha256,
+            previous_native_units=args.previous_native_units,
+            previous_native_units_sha256=args.previous_native_units_sha256,
         )
     except InstallerError as exc:
         print(f"FAIL {exc}", file=sys.stderr)

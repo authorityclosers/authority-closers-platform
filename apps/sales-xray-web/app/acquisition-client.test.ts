@@ -142,6 +142,11 @@ describe("acquisition permission recovery", () => {
 
   it.each([
     [
+      "The audio length could not be verified. Try another file.",
+      "source_verification",
+      "We couldn’t verify this recording’s audio.",
+    ],
+    [
       "Choose one bounded audio file up to 32 MiB and accept the current upload terms.",
       "source_invalid",
       "Choose one bounded audio file and accept the current upload terms.",

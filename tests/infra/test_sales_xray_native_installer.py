@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 from typing import Any
 
@@ -55,11 +57,13 @@ class FakeSystemd:
         unit_root: Path,
         *,
         fail_service_start: bool = False,
+        fail_service_stop: bool = False,
         socket_failures: int = 0,
         socket_always_missing: bool = False,
     ) -> None:
         self.unit_root = unit_root
         self.fail_service_start = fail_service_start
+        self.fail_service_stop = fail_service_stop
         self.socket_failures = socket_failures
         self.socket_always_missing = socket_always_missing
         self.active: dict[str, bool] = {}
@@ -89,7 +93,8 @@ class FakeSystemd:
 
     def stop(self, unit: str) -> None:
         self.events.append(("stop", unit))
-        self.active[unit] = False
+        if not self.fail_service_stop:
+            self.active[unit] = False
 
     def is_active(self, unit: str) -> bool:
         return self.active.get(unit, False)
@@ -174,6 +179,191 @@ def _install_args(tmp_path: Path, descriptor: Path, digest: str) -> dict[str, An
         "docker": FakeDocker(),
         "group": FakeGroup(),
     }
+
+
+def _new_artifact(tmp_path: Path) -> tuple[Path, str, Any]:
+    binding = installer.NativeBinding("a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64)
+    root = tmp_path / "artifact"
+    root.mkdir()
+    files = [
+        "packages/python/ac_platform/__init__.py",
+        "packages/python/ac_platform/conversation_intelligence/__init__.py",
+        "packages/python/ac_platform/conversation_intelligence/native_runtime.py",
+        "packages/python/ac_platform/conversation_intelligence/signals.py",
+        "scripts/native_runtime_helper.py",
+        "scripts/test_hosted_native_linux.py",
+    ]
+    archive = root / "native-helper.tar.gz"
+    with tarfile.open(archive, "w:gz") as bundle:
+        for name in files:
+            raw = b"# verified helper fixture\n"
+            member = tarfile.TarInfo(name)
+            member.size = len(raw)
+            bundle.addfile(member, io.BytesIO(raw))
+            target = root / "helper" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+    metadata = {
+        "schema": "ac.sales-xray.native-image/1",
+        "source_commit": binding.helper_source_sha,
+        "dockerfile": "infra/conversation-worker/Dockerfile",
+        "target": "runtime",
+        "platform": {"os": "linux", "architecture": "amd64"},
+        "doctor": {"ffmpeg": True, "ffprobe": True, "provider_calls": False},
+        "image": {
+            "expected_runtime_ref": binding.image_ref,
+            "image_id": binding.image_config_id,
+            "identity_type": "oci_transport_manifest",
+        },
+        "transport": {
+            "manifest_digest": binding.image_ref,
+            "config_digest": binding.image_config_id,
+        },
+        "helper_source": {
+            "entrypoint": "scripts/native_runtime_helper.py",
+            "pythonpath": "packages/python",
+            "files": files,
+            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        },
+    }
+    path = root / "native-image.json"
+    path.write_text(json.dumps(metadata))
+    return path, hashlib.sha256(path.read_bytes()).hexdigest(), binding
+
+
+def _upgrade_args(tmp_path: Path) -> tuple[dict[str, Any], Any, dict[str, str]]:
+    old, old_digest = _render_descriptor(tmp_path / "previous-units.json")
+    manifest, manifest_digest, binding = _new_artifact(tmp_path)
+    payload = installer._rendered_descriptor(
+        renderer=RENDERER,
+        renderer_python=Path(sys.executable),
+        environment="staging",
+        canonical_paths=False,
+        binding=binding,
+    )
+    descriptor = tmp_path / "new-units.json"
+    descriptor.write_text(json.dumps(payload))
+    args = _install_args(tmp_path, descriptor, hashlib.sha256(descriptor.read_bytes()).hexdigest())
+    args.update(
+        native_artifact_manifest=manifest,
+        native_artifact_sha256=manifest_digest,
+        native_image_config_id=binding.image_config_id,
+        previous_native_units=old,
+        previous_native_units_sha256=old_digest,
+    )
+    args["docker"] = type("NewDocker", (), {"inspect_identity": lambda self: binding.image_ref})()
+    old_units = json.loads(old.read_text())["units"]
+    for name, content in old_units.items():
+        installer._unit_path(args["unit_root"], name).write_bytes(content.encode())
+    return args, binding, old_units
+
+
+def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(tmp_path: Path) -> None:
+    args, binding, old_units = _upgrade_args(tmp_path)
+    fake = FakeSystemd(args["unit_root"])
+    fake.active = dict.fromkeys(old_units, True)
+    result = installer.install(**args, systemd=fake)
+    service = installer._service_unit("staging")
+    assert result["helper_source_sha"] == binding.helper_source_sha
+    assert result["native_image_ref"] == binding.image_ref
+    assert fake.events.index(("stop", service)) < fake.events.index(("daemon_reload", None))
+    assert fake.events.index(("stop", service)) < fake.events.index(("enable_now", service))
+    backup = Path(result["rollback_backup"])
+    assert installer._unit_path(backup, service).read_bytes() == old_units[service].encode()
+    assert binding.helper_source_sha in installer._unit_path(args["unit_root"], service).read_text()
+
+
+@pytest.mark.parametrize(
+    "defect",
+    ["manifest_hash", "helper_bytes", "archive_bytes", "wrong_image", "prior_drift", "prior_hash"],
+)
+def test_upgrade_rejects_unverified_bindings_before_mutation(tmp_path: Path, defect: str) -> None:
+    args, _, old_units = _upgrade_args(tmp_path)
+    if defect == "manifest_hash":
+        args["native_artifact_sha256"] = "0" * 64
+    elif defect == "helper_bytes":
+        (
+            args["native_artifact_manifest"].parent / "helper/scripts/native_runtime_helper.py"
+        ).write_text("changed")
+    elif defect == "archive_bytes":
+        (args["native_artifact_manifest"].parent / "native-helper.tar.gz").write_bytes(b"changed")
+    elif defect == "wrong_image":
+        args["docker"] = WrongDocker()
+    elif defect == "prior_drift":
+        installer._unit_path(args["unit_root"], installer._service_unit("staging")).write_text(
+            "foreign"
+        )
+    else:
+        args["previous_native_units_sha256"] = "0" * 64
+    before = {
+        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
+    }
+    fake = FakeSystemd(args["unit_root"])
+    with pytest.raises(installer.InstallerError):
+        installer.install(**args, systemd=fake)
+    assert not fake.events
+    assert not args["receipt"].exists()
+    assert {
+        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
+    } == before
+
+
+def test_upgrade_failure_restores_the_previous_helper(tmp_path: Path) -> None:
+    args, _, old_units = _upgrade_args(tmp_path)
+    service = installer._service_unit("staging")
+
+    class FailNewHelperOnce(FakeSystemd):
+        failed = False
+
+        def enable_now(self, unit: str) -> None:
+            if unit == service and not self.failed:
+                self.failed = True
+                raise installer.InstallerError("new_helper_failed")
+            super().enable_now(unit)
+
+    fake = FailNewHelperOnce(args["unit_root"])
+    fake.active = dict.fromkeys(old_units, True)
+    fake.enabled = dict.fromkeys(old_units, True)
+    with pytest.raises(installer.InstallerError, match="new_helper_failed"):
+        installer.install(**args, systemd=fake)
+    assert {
+        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
+    } == {name: raw.encode() for name, raw in old_units.items()}
+    assert fake.active[service]
+    assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
+
+
+def test_upgrade_rejects_a_helper_that_did_not_stop_before_publish(tmp_path: Path) -> None:
+    args, _, old_units = _upgrade_args(tmp_path)
+    service = installer._service_unit("staging")
+    fake = FakeSystemd(args["unit_root"], fail_service_stop=True)
+    fake.active = dict.fromkeys(old_units, True)
+    fake.enabled = dict.fromkeys(old_units, True)
+
+    with pytest.raises(installer.InstallerError, match="native_service_stop_failed"):
+        installer.install(**args, systemd=fake)
+
+    assert ("stop", service) in fake.events
+    # The only service start is rollback's restoration; the candidate was
+    # never published or started while the old helper remained active.
+    assert fake.events.count(("enable_now", service)) == 1
+    assert {
+        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
+    } == {name: raw.encode() for name, raw in old_units.items()}
+    assert fake.active[service]
+    assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
+
+
+def test_artifact_manifest_rejects_malformed_nested_helper_shape(tmp_path: Path) -> None:
+    args, _, _ = _upgrade_args(tmp_path)
+    manifest = args["native_artifact_manifest"]
+    payload = json.loads(manifest.read_text())
+    payload["helper_source"] = ["not-a-mapping"]
+    manifest.write_text(json.dumps(payload))
+    args["native_artifact_sha256"] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+
+    with pytest.raises(installer.InstallerError, match="native_artifact_binding_invalid"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
 
 
 def test_descriptor_must_match_source_renderer_and_image_identity(tmp_path: Path) -> None:

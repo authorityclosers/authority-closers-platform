@@ -59,35 +59,38 @@ export class AcquisitionError extends Error {
       | "execution_paused"
       | "source_invalid"
       | "source_incomplete"
+      | "source_verification"
       | "source_storage",
     readonly requestId?: string,
   ) {
     const message =
-      reason === "execution_paused"
-        ? ACQUISITION_PAUSED_MESSAGE
-        : reason === "source_invalid"
-          ? "Choose one bounded audio file and accept the current upload terms."
-          : reason === "source_incomplete"
-            ? "The complete recording was not received. Check your connection and upload again."
-            : reason === "source_storage"
-              ? "The recording could not be verified in private storage. Check your connection and upload again."
-              : status === 401
-                ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
-                : status === 403
-                  ? reason === "provider_allowance_used"
-                    ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-                    : reason === "plan_stale"
-                      ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                      : reason === "plan_permission"
-                        ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                        : "This action is not available with your current access. Ask the AC team to check your permission."
-                  : status === 404
-                    ? "This call is unavailable in your current session. It may have expired or been deleted."
-                    : status === 429
-                      ? "Another call is uploading. Please try again shortly."
-                      : status === 409
-                        ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                        : "This request did not finish. Check your connection and try again.";
+      reason === "source_verification"
+        ? "We couldn’t verify this recording’s audio. Try again; if this continues, share the request reference with the AC team."
+        : reason === "execution_paused"
+          ? ACQUISITION_PAUSED_MESSAGE
+          : reason === "source_invalid"
+            ? "Choose one bounded audio file and accept the current upload terms."
+            : reason === "source_incomplete"
+              ? "The complete recording was not received. Check your connection and upload again."
+              : reason === "source_storage"
+                ? "The recording could not be verified in private storage. Check your connection and upload again."
+                : status === 401
+                  ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
+                  : status === 403
+                    ? reason === "provider_allowance_used"
+                      ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                      : reason === "plan_stale"
+                        ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                        : reason === "plan_permission"
+                          ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                          : "This action is not available with your current access. Ask the AC team to check your permission."
+                    : status === 404
+                      ? "This call is unavailable in your current session. It may have expired or been deleted."
+                      : status === 429
+                        ? "Another call is uploading. Please try again shortly."
+                        : status === 409
+                          ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                          : "This request did not finish. Check your connection and try again.";
     super(requestId ? `${message} Request reference: ${requestId}.` : message);
   }
 }
@@ -153,15 +156,17 @@ export async function acquisition(
           ? body.detail
           : undefined;
       const sourceReason =
-        detail ===
-        "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
-          ? "source_invalid"
-          : detail === "The complete recording was not received."
-            ? "source_incomplete"
-            : detail ===
-                "The recording could not be verified in private storage."
-              ? "source_storage"
-              : undefined;
+        detail === "The audio length could not be verified. Try another file."
+          ? "source_verification"
+          : detail ===
+              "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
+            ? "source_invalid"
+            : detail === "The complete recording was not received."
+              ? "source_incomplete"
+              : detail ===
+                  "The recording could not be verified in private storage."
+                ? "source_storage"
+                : undefined;
       throw new AcquisitionError(response.status, sourceReason, requestId);
     }
     throw new AcquisitionError(response.status, undefined, requestId);
