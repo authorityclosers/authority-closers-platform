@@ -1,0 +1,66 @@
+{
+  "schema": "ac.sales-xray.agility-decision/1",
+  "decision": "PROCEED_WITH_REVISIONED_PRODUCT_CONFIG",
+  "authority": "chatgpt-pro-astra-compatible-codex-task-handoff",
+  "confidence": 0.93,
+  "source_revision": "2a0c64aa53d2dd5aae6dff1bbc9c386da15cef3a",
+  "evidence": [
+    "docs/evidence/20260921_SALES_XRAY_AGILITY_INVENTORY.md",
+    "packages/python/ac_platform/conversation_intelligence/analysis_settings.py",
+    "packages/python/ac_platform/conversation_intelligence/processing_plan.py",
+    "packages/python/ac_platform/conversation_intelligence/reports.py",
+    "packages/python/ac_platform/conversation_intelligence/provider_registry.py",
+    "packages/python/ac_platform/conversation_intelligence/activation_contract.py",
+    "packages/python/ac_platform/conversation_intelligence/admin_pricing.py"
+  ],
+  "product_knobs": [
+    "c5_auto_repair_attempts",
+    "max_input_chars",
+    "route_completion_limits",
+    "gemini_generation_profile",
+    "provider_pricing_fx_snapshot",
+    "report_profile_revision",
+    "report_field_mapping_revision"
+  ],
+  "safety_invariants": [
+    "native byte/time/uid/gid/sample-rate bounds",
+    "parser response byte/depth/size caps",
+    "consent provenance retention and idempotency",
+    "canonical evidence must resolve to native transcript spans",
+    "approved provider/model route and release identity",
+    "budget and payment safety",
+    "append-only accepted history"
+  ],
+  "required_implementation": [
+    "append-only tenant-scoped AnalysisPolicy aggregate",
+    "append-only versioned ReportProfileRegistry and field mappings",
+    "plan-time policy/profile/pricing freeze",
+    "draft approval and audited activation for new plans only",
+    "read-only effective policy and provenance diagnostics",
+    "bounded extras plus recoverable repair state for provider drift"
+  ],
+  "acceptance": [
+    "schema and property tests for bounds and unknown keys",
+    "tenant isolation and append-only audit tests",
+    "plan freeze retry replay and rollback tests",
+    "provider shape evidence and report mapping tests",
+    "guest and authenticated synthetic upload-to-report receipt"
+  ],
+  "fallback": {
+    "route": "extra-high-or-local",
+    "bounded_attempts": 1,
+    "invalid_output": "retain transcript and raw receipt, mark needs-repair, never fabricate or charge a second unapproved run"
+  },
+  "stop_condition": "Do not activate a policy/profile revision until validation, audit, shadow comparison, plan freeze, and rollback proof pass.",
+  "rejected_alternatives": [
+    "editing constants or live database rows as runtime authority",
+    "changing an in-flight plan",
+    "unbounded admin JSON or arbitrary provider selection",
+    "dropping unknown provider fields",
+    "unbounded retries"
+  ],
+  "skill_evolution": {
+    "improvement": "Require an agility inventory that classifies each constant as safety invariant or product knob before adding an Admin/CLI setting.",
+    "evidence": "Current report compatibility change passed focused tests, ruff, mypy, and GitHub Actions run 35528361611."
+  }
+}
