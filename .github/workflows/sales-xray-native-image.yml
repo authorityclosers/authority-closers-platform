@@ -147,6 +147,10 @@ jobs:
             printf '%s\n' '--- end native helper startup diagnostics ---' >&2
           }
 
+          socket_ready() {
+            sudo -n test -S "$socket_path"
+          }
+
           sudo -n env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
             HOME=/nonexistent \
@@ -165,7 +169,7 @@ jobs:
           helper_pid=$!
 
           for _ in $(seq 1 100); do
-            [[ -S "$socket_path" ]] && break
+            socket_ready && break
             if ! kill -0 "$helper_pid" 2>/dev/null; then
               cat "$helper_log"
               diagnose_helper_startup
@@ -173,7 +177,7 @@ jobs:
             fi
             sleep 0.1
           done
-          [[ -S "$socket_path" ]] || {
+          socket_ready || {
             cat "$helper_log"
             diagnose_helper_startup
             if kill -0 "$helper_pid" 2>/dev/null; then
