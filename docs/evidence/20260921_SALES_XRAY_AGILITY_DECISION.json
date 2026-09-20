@@ -3,7 +3,7 @@
   "decision": "PROCEED_WITH_REVISIONED_PRODUCT_CONFIG",
   "authority": "chatgpt-pro-astra-compatible-codex-task-handoff",
   "confidence": 0.93,
-  "source_revision": "2a0c64aa53d2dd5aae6dff1bbc9c386da15cef3a",
+  "source_revision": "d9de421627b89cb133344cc9a96633813f171005",
   "evidence": [
     "docs/evidence/20260921_SALES_XRAY_AGILITY_INVENTORY.md",
     "packages/python/ac_platform/conversation_intelligence/analysis_settings.py",
@@ -20,7 +20,11 @@
     "gemini_generation_profile",
     "provider_pricing_fx_snapshot",
     "report_profile_revision",
-    "report_field_mapping_revision"
+    "report_field_mapping_revision",
+    "report_prompt_envelope_revision",
+    "retry_and_recovery_policy_revision",
+    "effective_acquisition_policy_revision",
+    "progress_projection_page_size"
   ],
   "safety_invariants": [
     "native byte/time/uid/gid/sample-rate bounds",

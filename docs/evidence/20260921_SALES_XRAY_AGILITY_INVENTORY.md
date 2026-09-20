@@ -1,7 +1,7 @@
 # Sales Xray agility inventory
 
 Date: 2026-09-21  
-Source revision: `2a0c64aa53d2dd5aae6dff1bbc9c386da15cef3a`  
+Source revision: `d9de421627b89cb133344cc9a96633813f171005`  
 Scope: upload admission → C2 transcription → C4 facts → C5 coaching report → C6 presentation/recovery.
 
 This is an implementation inventory, not permission to edit production state. Values below are classified so a future Admin/CLI surface can expose product decisions without weakening consent, provenance, evidence, billing, or release identity.
@@ -87,3 +87,19 @@ Unknown provider fields can be retained for review, but they cannot become canon
 5. Prove a synthetic guest and authenticated upload through report-ready C6 with zero duplicate provider effects before promoting the feature.
 
 The key design rule is: **make product decisions data-driven, but make safety and evidence rules release-bound.** That gives us fast Admin/CLI changes without repeating the release mismatch and without making a bad report look successful.
+
+## Additional fixed contracts found in the report and recovery layers
+
+These are easy to miss because they are schema or adapter constants rather than Admin settings. They still need an explicit classification in the future policy registry.
+
+| Decision | Current location | Classification and migration rule |
+| --- | --- | --- |
+| Report request token/prompt envelopes | `reports.py:36-46,203,592-727`, `gemini_tasks.py:19-21,31-65` | Product quality/cost knobs intersected with provider and release ceilings. Version the envelope per route; freeze its digest in the plan. |
+| Evidence quote length, provider extras bytes/depth | `reports.py:40,45-46,132,800-814` | Safety/parser bounds. Keep release-bound; allow profile copy/mapping changes without changing evidence admission. |
+| Exact dimensions/sections and finding cardinality | `reports.py:252,307-323`, `report_overview.py:59,73,87,133`, `profiles/dipak_report_v1.json` | Current report schema/profile, not a generic limit. Move to an append-only profile registry with schema version, required fields, aliases, ordering, cardinality and migration renderer. |
+| Outbox lease, retry attempts, jitter and delay | `outbox/repository.py:46-47,165-212,674-698` | Recovery policy with release hard ceilings. Expose route-specific values only through approved policy revisions; never let Admin create unbounded retries or retry an uncertain provider effect. |
+| Acquisition/session and native deadlines | `acquisition_sessions.py:70`, `acquisition_usage.py:23`, `conversation_submissions.py:76`, `signals.py:33`, `limits.py:3` | Product capacity values are duplicated across admission, native measurement and browser contracts. Make one effective server policy; retain separate release safety maxima and prove all callers consume the same resolved snapshot. |
+| Library/progress page sizes and task cardinality | `acquisition_library.py:24`, progress/report contracts and client parsers | UX/pagination knobs can be revisioned independently. They must not be confused with completeness limits; a page boundary must never drop a task or report section. |
+| Provider model/task allowlists and thinking mode | `gemini_tasks.py:17-21` and provider catalog | Approved capability catalog. Admin may select only a catalog entry with an adapter, pricing, budget and active approval; arbitrary model strings remain invalid. |
+
+The practical failure pattern is therefore a **distributed contract**, not one bad magic number: changing a value in one layer can still leave a browser parser, Pydantic bound, native decoder, report schema, outbox policy or release approval rejecting the same work. The migration must start by emitting an effective-policy manifest and comparing every consumer against it before any value is changed.
