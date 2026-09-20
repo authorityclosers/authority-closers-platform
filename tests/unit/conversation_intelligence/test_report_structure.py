@@ -138,6 +138,51 @@ def test_native_coaching_accepts_empty_collections_without_inventing_findings() 
     assert output.data()["verdict"] == draft["verdict"]
 
 
+def test_native_coaching_adapts_gemini_nested_missed_opportunities() -> None:
+    """A richer Gemini finding shape still becomes one source-bound draft."""
+
+    transcript, task, draft = coaching_case()
+    overview = deepcopy(draft.pop("overview"))
+    overview["business_impact"] = {
+        "status": "insufficient_data",
+        "missing_inputs": ["A bounded business input is unavailable."],
+    }
+    overview["missed_details"] = [
+        {
+            "finding_index": 0,
+            "prospect_signal": {
+                "text": "The buyer asked about the stated barrier.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "closer_response": {
+                "text": "The response moved on before clarifying it.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "follow_up": "Ask one bounded follow-up question.",
+            "potential_impact": "The question could clarify the next useful step.",
+        }
+    ]
+    draft.update({key: value for key, value in overview.items()})
+    draft["missed_opportunities"] = deepcopy(overview["missed_details"])
+    draft["dimensions"] = [
+        {
+            "dimension_id": dimension["id"],
+            "status": "observed",
+            "observation": "A source-bound observation.",
+            "citations": [{"segment_id": "s1"}],
+        }
+        for dimension in reports.load_report_profile()["dimensions"]
+    ]
+
+    output = validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    findings = output.data()["missed_opportunities"]
+    assert len(findings) == len(overview["missed_details"])
+    assert findings[0]["title"].startswith("Missed opportunity:")
+    assert findings[0]["evidence"][0]["segment_id"] == "s1"
+    assert output.data()["overview"]["missed_details"][0]["finding_index"] == 0
+    assert output.data()["dimensions"][0]["citations"]
+
+
 @pytest.mark.parametrize(
     "field",
     [

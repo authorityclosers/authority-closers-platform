@@ -26,6 +26,7 @@ from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
     OVERVIEW_INSTRUCTION,
     OVERVIEW_MARKER,
+    OVERVIEW_VERSION,
     DetailedOverview,
     normalize_overview,
 )
@@ -1028,10 +1029,26 @@ def _normalise_dimensions(
                 if isinstance(citation, Mapping)
             ]
         elif isinstance(supplied_citations, list):
-            parsed = _validate_citations(
-                supplied_citations, profile=profile, expected=expected_citations
-            )
-            citations = [citation.model_dump(mode="json") for citation in parsed]
+            # Some Gemini responses use compact transcript segment selectors
+            # for dimension citations.  Validate those selectors against the
+            # native transcript, then retain the server-owned profile
+            # citations required by the public dimension contract.
+            if supplied_citations and all(
+                isinstance(citation, Mapping) and frozenset(citation) == _C5_COMPACT_EVIDENCE_KEYS
+                for citation in supplied_citations
+            ):
+                for citation in supplied_citations:
+                    _normalise_c5_evidence(citation, transcript)
+                citations = [
+                    citation
+                    for citation in expected.get("citations", [])
+                    if isinstance(citation, Mapping)
+                ]
+            else:
+                parsed = _validate_citations(
+                    supplied_citations, profile=profile, expected=expected_citations
+                )
+                citations = [citation.model_dump(mode="json") for citation in parsed]
         else:
             raise ReportError("report_citations_invalid")
         # Preserve unknown keys so the strict model rejects them instead of silently
@@ -1199,7 +1216,77 @@ def _normalise_c5_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[st
     }
 
 
-def _normalise_findings(value: Any, *, transcript: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _normalise_nested_missed_opportunity(
+    finding: Mapping[str, Any], *, transcript: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Adapt the source-bound missed-opportunity shape emitted by Gemini.
+
+    Gemini has returned missed opportunities as a richer object with separate
+    ``prospect_signal`` and ``closer_response`` evidence.  The persisted report
+    contract intentionally has one common finding shape.  This adapter keeps
+    the provider's wording, binds every nested span to the native transcript,
+    and derives the common title/explanation without inventing a claim.
+    """
+
+    expected = {
+        "finding_index",
+        "prospect_signal",
+        "closer_response",
+        "follow_up",
+        "potential_impact",
+    }
+    if frozenset(finding) != expected:
+        raise ReportError("report_findings_invalid")
+    prospect = finding["prospect_signal"]
+    response = finding["closer_response"]
+    if not isinstance(prospect, Mapping) or not isinstance(response, Mapping):
+        raise ReportError("report_findings_invalid")
+    if frozenset(prospect) != {"text", "evidence"} or frozenset(response) != {
+        "text",
+        "evidence",
+    }:
+        raise ReportError("report_findings_invalid")
+    if not isinstance(prospect["text"], str) or not prospect["text"].strip():
+        raise ReportError("report_findings_invalid")
+    if not isinstance(response["text"], str) or not response["text"].strip():
+        raise ReportError("report_findings_invalid")
+    follow_up = finding["follow_up"]
+    potential_impact = finding["potential_impact"]
+    if (
+        not isinstance(follow_up, str)
+        or not follow_up.strip()
+        or not isinstance(potential_impact, str)
+        or not potential_impact.strip()
+    ):
+        raise ReportError("report_findings_invalid")
+    evidence: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in (prospect["evidence"], response["evidence"]):
+        if not isinstance(raw, list) or not raw:
+            raise ReportError("report_finding_evidence_missing")
+        for item in raw:
+            normalized = _normalise_c5_evidence(item, transcript)
+            if normalized["segment_id"] in seen:
+                continue
+            seen.add(normalized["segment_id"])
+            evidence.append(normalized)
+            if len(evidence) > 8:
+                raise ReportError("report_evidence_invalid")
+    title = f"Missed opportunity: {prospect['text'].strip()}"[:240]
+    explanation = (
+        f"Prospect signal: {prospect['text'].strip()}\n"
+        f"Closer response: {response['text'].strip()}\n"
+        f"Follow-up: {follow_up.strip()}\n"
+        f"Potential impact: {potential_impact.strip()}"
+    )
+    if len(explanation) > 4_000:
+        raise ReportError("report_finding_invalid")
+    return {"title": title, "explanation": explanation, "evidence": evidence}
+
+
+def _normalise_findings(
+    value: Any, *, transcript: Mapping[str, Any], field_name: str | None = None
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReportError("report_findings_invalid")
     if any(
@@ -1207,17 +1294,24 @@ def _normalise_findings(value: Any, *, transcript: Mapping[str, Any]) -> list[di
     ):
         return _normalise_legacy_findings(value, transcript=transcript)
     normalized: list[dict[str, Any]] = []
-    for finding in value:
+    for position, finding in enumerate(value):
         if not isinstance(finding, Mapping):
             # Keep every invalid findings-array shape on the same stable
             # failure code.  The C5 repair allowlist is intentionally keyed
             # to this aggregate code so a provider response with a scalar
             # finding can receive the one explicitly approved repair.
             raise ReportError("report_findings_invalid")
+        if field_name == "missed_opportunities" and "evidence" not in finding:
+            normalized.append(_normalise_nested_missed_opportunity(finding, transcript=transcript))
+            continue
         evidence = finding.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ReportError("report_finding_evidence_missing")
         item = dict(finding)
+        if "finding_index" in item:
+            if item["finding_index"] != position:
+                raise ReportError("report_findings_invalid")
+            item.pop("finding_index")
         item["evidence"] = [_normalise_c5_evidence(span, transcript) for span in evidence]
         normalized.append(item)
     return normalized
@@ -1572,11 +1666,43 @@ def parse_report_draft(
         "objection_analysis",
         "closing_analysis",
     ):
-        normalized[field] = _normalise_findings(payload[field], transcript=validated_transcript)
-    if payload.get("overview") is not None:
+        normalized[field] = _normalise_findings(
+            payload[field], transcript=validated_transcript, field_name=field
+        )
+    overview_payload = payload.get("overview")
+    # Older Gemini responses emitted the detailed overview keys beside the
+    # report findings instead of under ``overview``.  Keep that response
+    # usable by moving only the exact versioned overview fields into the
+    # current envelope; all nested evidence still goes through the same strict
+    # source binding below.
+    if overview_payload is None and payload.get("version") == OVERVIEW_VERSION:
+        overview_keys = (
+            "version",
+            "diagnosis",
+            "outcome",
+            "business_impact",
+            "strength_details",
+            "improvement_details",
+            "golden_moments",
+            "missed_details",
+            "prospect_interpretations",
+            "rewatch",
+            "conversation_change",
+            "ethics_notes",
+            "next_call_focus",
+            "practice",
+            "progress",
+            "final_assessment",
+        )
+        flattened = {key: payload[key] for key in overview_keys if key in payload}
+        if len(flattened) == len(overview_keys):
+            overview_payload = flattened
+            for key in overview_keys:
+                normalized.pop(key, None)
+    if overview_payload is not None:
         try:
             normalized["overview"] = normalize_overview(
-                payload["overview"],
+                overview_payload,
                 findings=normalized,
                 normalize_evidence=lambda item: _normalise_c5_evidence(item, validated_transcript),
             ).model_dump(mode="json")
