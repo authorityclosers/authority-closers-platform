@@ -129,6 +129,24 @@ jobs:
             tmpfs "$output_root"
 
           image_id="$(docker image inspect --format '{{.Id}}' "$NATIVE_TAG")"
+
+          diagnose_helper_startup() {
+            printf '%s\n' '--- native helper startup diagnostics ---' >&2
+            printf 'helper_pid=%s\n' "$helper_pid" >&2
+            ps -o pid=,ppid=,stat=,comm= -p "$helper_pid" >&2 || true
+            ps -eo pid=,ppid=,stat=,comm= | awk '$4 == "sudo" || $4 == "python3" || $4 == "python" { print }' >&2 || true
+            printf 'socket_root=' >&2
+            stat -c '%A %u:%g %F' "$socket_root" >&2 || true
+            printf 'workspace_root=' >&2
+            stat -c '%A %u:%g %F' "$workspace_root" >&2 || true
+            printf 'output_root=' >&2
+            stat -c '%A %u:%g %F' "$output_root" >&2 || true
+            findmnt --json --target "$output_root" >&2 || true
+            printf 'helper_log_bytes=' >&2
+            stat -c '%s' "$helper_log" >&2 || true
+            printf '%s\n' '--- end native helper startup diagnostics ---' >&2
+          }
+
           sudo -n env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
             HOME=/nonexistent \
@@ -149,12 +167,14 @@ jobs:
             [[ -S "$socket_path" ]] && break
             if ! kill -0 "$helper_pid" 2>/dev/null; then
               cat "$helper_log"
+              diagnose_helper_startup
               exit 1
             fi
             sleep 0.1
           done
           [[ -S "$socket_path" ]] || {
             cat "$helper_log"
+            diagnose_helper_startup
             if kill -0 "$helper_pid" 2>/dev/null; then
               sudo -n kill -TERM "$helper_pid" >/dev/null 2>&1 || true
               wait "$helper_pid" >/dev/null 2>&1 || true
