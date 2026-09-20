@@ -223,7 +223,8 @@ jobs:
                 --workspace-root "$workspace_root" \
                 --image-ref "$image_id" \
                 --receipt "$receipt"
-          jq -e '
+          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups \
+            /usr/bin/cat -- "$receipt" | jq -e '
             .status == "passed" and
             .validated == true and
             .inspected == true and
@@ -232,7 +233,7 @@ jobs:
             .helper_usable_after_rejection == true and
             .provider_calls == 0 and
             .database_connections == 0
-          ' "$receipt" >/dev/null
+          ' >/dev/null
 
       - name: Create and reload the minimal offline transport artifact
         shell: bash
