@@ -14,6 +14,7 @@ import signal
 import socket
 import stat
 import struct
+import sys
 import threading
 import time
 from contextlib import suppress
@@ -247,9 +248,13 @@ def main() -> int:
             except FileNotFoundError:
                 pass
         return 0
-    except NativeRuntimeError:
+    except NativeRuntimeError as error:
+        # Keep startup failures observable to the release smoke and supervisor
+        # without exposing paths, command output, credentials, or audio data.
+        print(f"native_helper_start_failed:{error.code}", file=sys.stderr)
         return 78
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as error:
+        print(f"native_helper_start_failed:{type(error).__name__}", file=sys.stderr)
         return 78
 
 

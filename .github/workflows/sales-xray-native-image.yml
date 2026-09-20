@@ -155,6 +155,11 @@ jobs:
           done
           [[ -S "$socket_path" ]] || {
             cat "$helper_log"
+            if kill -0 "$helper_pid" 2>/dev/null; then
+              sudo -n kill -TERM "$helper_pid" >/dev/null 2>&1 || true
+              wait "$helper_pid" >/dev/null 2>&1 || true
+              cat "$helper_log"
+            fi
             printf 'Native helper socket did not become ready.\n' >&2
             exit 1
           }
