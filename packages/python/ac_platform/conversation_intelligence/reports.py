@@ -42,6 +42,8 @@ _C5_COMPACT_EVIDENCE_KEYS = frozenset({"segment_id"})
 _C5_OFFSET_EVIDENCE_KEYS = frozenset({"segment_id", "quote_start", "quote_end"})
 _C5_FULL_EVIDENCE_KEYS = frozenset({"segment_id", "quote", "start_ms", "end_ms"})
 REVIEW_STATUS = "draft_not_dipak_adjudicated"
+_PROVIDER_EXTRAS_MAX_BYTES = 32 * 1024
+_PROVIDER_EXTRAS_MAX_DEPTH = 6
 COACHING_VOICE_INSTRUCTION = (
     "REPORT_VOICE: direct-coaching-v1. Coach using you/your; avoid impersonal seller/closer "
     "labels. "
@@ -99,6 +101,19 @@ _CONTENT_FIELDS = (
     "objection_analysis",
     "closing_analysis",
     "verdict",
+)
+_CANONICAL_REPORT_ROOT_FIELDS = frozenset(
+    {
+        *_CONTENT_FIELDS,
+        "review_status",
+        "source_label",
+        "source_sha256",
+        "transcript_revision",
+        "dimensions",
+        "dimension_assessments",
+        "report_sections",
+        "overview",
+    }
 )
 
 
@@ -236,6 +251,12 @@ class ReportDraft(_StrictModel):
     dimensions: list[ReportDimension] = Field(min_length=8, max_length=8)
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
     overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Provider-specific, non-canonical sections are retained for review and
+    # future adapters. They never participate in the canonical report contract
+    # or evidence validation, and the parser applies strict size/depth bounds.
+    provider_extras: dict[str, Any] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def qualitative_prose(self) -> Self:
@@ -756,6 +777,43 @@ def _reject_numeric_fields(value: Any, path: str = "payload") -> None:
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_numeric_fields(child, f"{path}[{index}]")
+
+
+def _provider_extras(
+    payload: Mapping[str, Any], *, consumed_keys: Sequence[str] = ()
+) -> dict[str, Any]:
+    """Keep bounded provider additions without expanding the canonical schema.
+
+    Provider responses evolve faster than the server-owned report contract. An
+    unknown root section is useful for diagnostics and a future adapter, but it
+    must not make report validation permissive or allow an unbounded object to
+    enter the persisted draft. The canonical fields are removed before this
+    function is called, so only provider-owned additions are retained.
+    """
+
+    known_fields = _CANONICAL_REPORT_ROOT_FIELDS.union(consumed_keys)
+    extras = {key: value for key, value in payload.items() if key not in known_fields}
+    if not extras:
+        return {}
+
+    def check_depth(value: Any, depth: int = 1) -> None:
+        if depth > _PROVIDER_EXTRAS_MAX_DEPTH:
+            raise ReportError("report_provider_extras_too_deep")
+        if isinstance(value, Mapping):
+            for child in value.values():
+                check_depth(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value:
+                check_depth(child, depth + 1)
+
+    check_depth(extras)
+    try:
+        encoded = json.dumps(extras, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError) as exc:
+        raise ReportError("report_provider_extras_invalid") from exc
+    if len(encoded.encode("utf-8")) > _PROVIDER_EXTRAS_MAX_BYTES:
+        raise ReportError("report_provider_extras_too_large")
+    return extras
 
 
 def _profile_citation_keys(profile: Mapping[str, Any]) -> set[tuple[str, str]]:
@@ -1659,6 +1717,7 @@ def parse_report_draft(
         if field not in payload:
             raise ReportError("report_payload_missing_field")
     normalized = dict(payload)
+    consumed_provider_keys: set[str] = set()
     for field in (
         "strengths",
         "missed_opportunities",
@@ -1699,6 +1758,7 @@ def parse_report_draft(
             overview_payload = flattened
             for key in overview_keys:
                 normalized.pop(key, None)
+            consumed_provider_keys.update(overview_keys)
     if overview_payload is not None:
         try:
             normalized["overview"] = normalize_overview(
@@ -1724,6 +1784,15 @@ def parse_report_draft(
     normalized["report_sections"] = _normalise_sections(
         payload.get("report_sections"), profile=resolved_profile
     )
+    provider_extras = _provider_extras(payload, consumed_keys=consumed_provider_keys)
+    # The provider object starts as a convenient working copy above. Strip
+    # every non-canonical root key before strict model validation; those keys
+    # are available under the bounded, explicitly named extras field instead.
+    for key in tuple(normalized):
+        if key not in _CANONICAL_REPORT_ROOT_FIELDS:
+            normalized.pop(key, None)
+    if provider_extras:
+        normalized["provider_extras"] = provider_extras
     supplied_status = payload.get("review_status", REVIEW_STATUS)
     if supplied_status != REVIEW_STATUS:
         raise ReportError("report_review_status_invalid")

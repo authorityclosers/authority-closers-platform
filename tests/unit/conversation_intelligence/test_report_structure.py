@@ -173,6 +173,11 @@ def test_native_coaching_adapts_gemini_nested_missed_opportunities() -> None:
         }
         for dimension in reports.load_report_profile()["dimensions"]
     ]
+    draft["provider_specific_sections"] = {
+        "provider": "gemini",
+        "schema": "gemini-coaching-v4",
+        "sections": ["buyer_context", "risk_flags"],
+    }
 
     output = validate_coaching_result(result(task, envelope(draft)), task, transcript)
     findings = output.data()["missed_opportunities"]
@@ -181,6 +186,21 @@ def test_native_coaching_adapts_gemini_nested_missed_opportunities() -> None:
     assert findings[0]["evidence"][0]["segment_id"] == "s1"
     assert output.data()["overview"]["missed_details"][0]["finding_index"] == 0
     assert output.data()["dimensions"][0]["citations"]
+    assert output.data()["provider_extras"]["provider_specific_sections"]["provider"] == "gemini"
+
+
+def test_native_coaching_bounds_provider_extras_depth_and_size() -> None:
+    transcript, task, draft = coaching_case()
+    draft["provider_notes"] = {
+        "level": {"one": {"two": {"three": {"four": {"five": {"six": {}}}}}}}
+    }
+    with pytest.raises(InferenceTaskError, match="report_provider_extras_too_deep"):
+        validate_coaching_result(result(task, envelope(draft)), task, transcript)
+
+    transcript, task, draft = coaching_case()
+    draft["provider_notes"] = "x" * (32 * 1024)
+    with pytest.raises(InferenceTaskError, match="report_provider_extras_too_large"):
+        validate_coaching_result(result(task, envelope(draft)), task, transcript)
 
 
 @pytest.mark.parametrize(
