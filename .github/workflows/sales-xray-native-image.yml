@@ -105,6 +105,12 @@ jobs:
           helper_log="$smoke_root/helper.log"
           helper_pid=""
 
+          # Keep the smoke root private while allowing the numeric worker to
+          # traverse it. The runner remains the owner for cleanup/log capture;
+          # the worker group receives execute-only access to the directory.
+          sudo -n chown "$(id -u)":10001 "$smoke_root"
+          sudo -n chmod 0710 "$smoke_root"
+
           cleanup() {
             set +e
             if [[ -n "$helper_pid" ]]; then
