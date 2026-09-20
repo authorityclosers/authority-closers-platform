@@ -103,3 +103,7 @@ These are easy to miss because they are schema or adapter constants rather than 
 | Provider model/task allowlists and thinking mode | `gemini_tasks.py:17-21` and provider catalog | Approved capability catalog. Admin may select only a catalog entry with an adapter, pricing, budget and active approval; arbitrary model strings remain invalid. |
 
 The practical failure pattern is therefore a **distributed contract**, not one bad magic number: changing a value in one layer can still leave a browser parser, Pydantic bound, native decoder, report schema, outbox policy or release approval rejecting the same work. The migration must start by emitting an effective-policy manifest and comparing every consumer against it before any value is changed.
+
+## Runtime proof discovered after the inventory
+
+The staging worker was restarting before it could open its database or dispatch a provider. Its bind-mounted service manifest was `root:root` mode `0440`, while the dedicated container runs as UID/GID `10001:10001`; the worker therefore failed its private-file read with `worker_file_unavailable` and emitted only the old generic `worker_service_failed` marker. The canonical release controller now repairs only this metadata (root owner, group `10001`, mode `0440`) without changing manifest bytes or its digest, and the worker retains a stable sanitized failure code in logs. This is a release/install contract and belongs in deployment verification, not in an Admin setting.

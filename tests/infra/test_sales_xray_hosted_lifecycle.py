@@ -293,6 +293,11 @@ def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() ->
         }
 
 
+def test_installer_repairs_worker_manifest_metadata_before_compose() -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    assert "--repair-worker-metadata" in installer
+
+
 def test_hosted_validator_projects_only_target_release_inputs(activation_root: Path) -> None:
     release, paths = _make_release(activation_root)
 
@@ -304,6 +309,38 @@ def test_hosted_validator_projects_only_target_release_inputs(activation_root: P
         str(paths["env"]),
         "sales-xray-hosted",
     ]
+
+
+def test_hosted_projection_repairs_worker_manifest_readability(
+    activation_root: Path,
+) -> None:
+    if os.name != "posix" or os.geteuid() != 0:
+        pytest.skip("worker manifest ownership is a POSIX root projection")
+    release, paths = _make_release(activation_root)
+    os.chown(paths["service"], 0, 0)
+    paths["service"].chmod(0o440)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "compose-inputs",
+            str(release),
+            "staging",
+            "--operations-tenant-id",
+            OPERATIONS_TENANT,
+            "--repair-worker-metadata",
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    metadata = paths["service"].stat()
+    assert metadata.st_uid == 0
+    assert metadata.st_gid == 10001
+    assert stat.S_IMODE(metadata.st_mode) == 0o440
 
 
 def test_hosted_validator_supports_the_production_policy_shape(activation_root: Path) -> None:

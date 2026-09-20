@@ -756,7 +756,8 @@ load_sales_xray_hosted_inputs() {
     with_release_secrets \
       sh -euc '
         exec python3 "$1" compose-inputs "$2" "$3" \
-          --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}"
+          --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}" \
+          --repair-worker-metadata
       ' sh "$validator" "$target_release" "$target_environment"
   )"; then
     printf 'Hosted Sales Xray activation policy is invalid or disabled.\n' >&2
