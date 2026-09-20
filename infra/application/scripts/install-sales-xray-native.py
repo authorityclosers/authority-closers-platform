@@ -515,8 +515,19 @@ def _validate_renderer_binding(
     environment: str,
     canonical_paths: bool,
     binding: NativeBinding = LEGACY_BINDING,
+    enforce_path_binding: bool = True,
 ) -> None:
-    if canonical_paths and renderer != Path(_supervisor_source_for_binding(binding)):
+    # The candidate descriptor must use the renderer path bound to its artifact.
+    # During an upgrade, however, the previous descriptor is intentionally
+    # checked with the current release's renderer executable.  Its own
+    # ``supervisor_source`` is still bound by ``_rendered_descriptor`` to the
+    # previous helper identity; requiring the executable path itself to equal
+    # that retired path would make every cross-release upgrade impossible.
+    if (
+        canonical_paths
+        and enforce_path_binding
+        and renderer != Path(_supervisor_source_for_binding(binding))
+    ):
         raise _fail("renderer_path_not_release_bound")
     if canonical_paths:
         _ensure_existing_parents(renderer, "renderer_parent_invalid", require_root=True)
@@ -1249,6 +1260,7 @@ def install(
             environment=environment,
             canonical_paths=canonical_paths,
             binding=previous_binding,
+            enforce_path_binding=False,
         )
         previous_units = previous["units"]
     units = descriptor["units"]

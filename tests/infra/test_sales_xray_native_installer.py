@@ -273,6 +273,48 @@ def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(tmp_path: 
     assert binding.helper_source_sha in installer._unit_path(args["unit_root"], service).read_text()
 
 
+def test_previous_release_renderer_path_is_not_rechecked_as_candidate_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A prior descriptor may be verified with the candidate renderer executable.
+
+    The renderer output still binds its supervisor source to the prior helper
+    identity. Requiring the executable path itself to equal that retired path
+    would make every canonical upgrade fail before any unit mutation.
+    """
+
+    binding = installer.NativeBinding(
+        "b" * 40,
+        "sha256:" + "c" * 64,
+        "sha256:" + "d" * 64,
+    )
+    renderer = Path("/candidate/release/scripts/render-sales-xray-native.py")
+    descriptor: dict[str, Any] = {}
+    monkeypatch.setattr(installer, "_rendered_descriptor", lambda **_: descriptor)
+    monkeypatch.setattr(installer, "_ensure_existing_parents", lambda *_, **__: None)
+    monkeypatch.setattr(installer, "_ensure_owner", lambda *_, **__: None)
+
+    installer._validate_renderer_binding(
+        descriptor,
+        renderer=renderer,
+        renderer_python=Path("/usr/bin/python3"),
+        environment="staging",
+        canonical_paths=True,
+        binding=binding,
+        enforce_path_binding=False,
+    )
+
+    with pytest.raises(installer.InstallerError, match="renderer_path_not_release_bound"):
+        installer._validate_renderer_binding(
+            descriptor,
+            renderer=renderer,
+            renderer_python=Path("/usr/bin/python3"),
+            environment="staging",
+            canonical_paths=True,
+            binding=binding,
+        )
+
+
 @pytest.mark.parametrize(
     "defect",
     ["manifest_hash", "helper_bytes", "archive_bytes", "wrong_image", "prior_drift", "prior_hash"],
