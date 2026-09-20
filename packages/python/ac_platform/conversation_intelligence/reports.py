@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Self
@@ -780,7 +780,7 @@ def _reject_numeric_fields(value: Any, path: str = "payload") -> None:
 
 
 def _provider_extras(
-    payload: Mapping[str, Any], *, consumed_keys: Sequence[str] = ()
+    payload: Mapping[str, Any], *, consumed_keys: Iterable[str] = ()
 ) -> dict[str, Any]:
     """Keep bounded provider additions without expanding the canonical schema.
 
