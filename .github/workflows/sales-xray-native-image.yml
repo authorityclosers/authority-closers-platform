@@ -96,7 +96,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          smoke_root="$(mktemp -d "$RUNNER_TEMP/ac-sales-xray-native-smoke.XXXXXX")"
+          smoke_root="$(mktemp -d /tmp/ac-sales-xray-native-smoke.XXXXXX)"
           workspace_root="$smoke_root/workspace"
           socket_root="$smoke_root/socket"
           output_root="$workspace_root/native-output-tmpfs"
