@@ -107,3 +107,20 @@ The practical failure pattern is therefore a **distributed contract**, not one b
 ## Runtime proof discovered after the inventory
 
 The staging worker was restarting before it could open its database or dispatch a provider. Its bind-mounted service manifest was `root:root` mode `0440`, while the dedicated container runs as UID/GID `10001:10001`; the worker therefore failed its private-file read with `worker_file_unavailable` and emitted only the old generic `worker_service_failed` marker. The canonical release controller now repairs only this metadata (root owner, group `10001`, mode `0440`) without changing manifest bytes or its digest, and the worker retains a stable sanitized failure code in logs. This is a release/install contract and belongs in deployment verification, not in an Admin setting.
+
+## Contract-drift proof from the live Admin surface
+
+The staging Admin recordings endpoint emits two additive diagnostic fields that
+older Admin builds did not model: `submission_id` (the acquisition join key)
+and `runtime_trace` (read-only plan/task/publication joins). A strict client
+parser rejected these fields before an operator could inspect the held
+recording. The Admin client now accepts the optional acquisition join and a
+bounded, forward-compatible diagnostic object while keeping canonical identity,
+ownership, status, cost, report eligibility and provider receipts strict. The
+regression test also proves that a future diagnostic key survives parsing.
+
+This is the migration rule for future fields: classify each field as either a
+canonical decision/evidence contract (version and validate it strictly) or an
+additive diagnostic/provider extension (bound its size and preserve unknown
+keys). Never make a new optional diagnostic field capable of invalidating the
+entire review page.

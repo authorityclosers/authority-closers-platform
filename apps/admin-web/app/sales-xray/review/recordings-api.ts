@@ -72,9 +72,30 @@ const providerStageSchema = z
   })
   .strict();
 
+// Runtime diagnostics are an additive observability surface. The API may add
+// trace details as the worker learns more about a run; treating those details
+// as a closed report contract makes the Admin review page fail before an
+// operator can recover the recording. Canonical identity, status, cost and
+// report fields below remain strict.
+const runtimeTraceSchema = z
+  .object({
+    submission_id: uuidSchema.nullable().optional(),
+    binding_state: z.string().min(1).optional(),
+    source_revision: z.number().int().positive().nullable().optional(),
+    generation: z.number().int().positive().nullable().optional(),
+    scope_complete: z.boolean().optional(),
+    plans: z.array(z.unknown()).max(64).optional(),
+    tasks: z.array(z.unknown()).max(128).optional(),
+    publication: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
 const recordingSchema = z
   .object({
     id: uuidSchema,
+    // Acquisition and Admin use distinct identifiers. Keep the join visible
+    // when present, while remaining compatible with older API releases.
+    submission_id: uuidSchema.nullable().optional(),
     owner: ownerSchema,
     uploaded_at: z.string().datetime({ offset: true }),
     recording_state: z.enum(["awaiting_upload", "ready", "deleting"]),
@@ -127,6 +148,7 @@ const recordingSchema = z
       })
       .strict()
       .nullable(),
+    runtime_trace: runtimeTraceSchema.optional(),
     processing_plan: z
       .object({
         id: uuidSchema,

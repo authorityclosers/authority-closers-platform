@@ -12,6 +12,7 @@ const payload = {
   items: [
     {
       id: ids.recording,
+      submission_id: ids.person,
       owner: {
         kind: "learner",
         label: "Alex Seller",
@@ -76,6 +77,17 @@ const payload = {
           },
         ],
       },
+      runtime_trace: {
+        submission_id: ids.person,
+        binding_state: "verified",
+        source_revision: 1,
+        generation: 1,
+        scope_complete: true,
+        plans: [],
+        tasks: [],
+        publication: { validation_state: "not_checked" },
+        future_worker_detail: { stage: "C6", retryable: true },
+      },
       processing_plan: null,
       report: {
         available: true,
@@ -124,6 +136,11 @@ describe("admin recordings API", () => {
     });
 
     expect(result.items[0]?.cost.actual_paise).toBeNull();
+    expect(result.items[0]?.submission_id).toBe(ids.person);
+    expect(result.items[0]?.runtime_trace?.future_worker_detail).toEqual({
+      stage: "C6",
+      retryable: true,
+    });
     expect(fetcher).toHaveBeenCalledWith(
       "/v1/admin/conversation/recordings?limit=25&cursor=cursor-1&q=Alex+Seller",
       expect.objectContaining({
