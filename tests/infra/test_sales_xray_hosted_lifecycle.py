@@ -296,6 +296,10 @@ def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() ->
 def test_installer_repairs_worker_manifest_metadata_before_compose() -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
     assert "--repair-worker-metadata" in installer
+    # A mixed-version upgrade also invokes the validator from the previous
+    # release during drain/rollback. The optional flag must be capability-
+    # detected so an older validator cannot abort an otherwise valid upgrade.
+    assert 'if python3 "$1" --help' in installer
 
 
 def test_hosted_validator_projects_only_target_release_inputs(activation_root: Path) -> None:
