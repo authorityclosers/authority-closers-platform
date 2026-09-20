@@ -189,7 +189,7 @@ jobs:
             exit 1
           }
 
-          sudo -n -u '#10001' -g '#10001' env -i \
+          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
             HOME=/nonexistent \
             PYTHONDONTWRITEBYTECODE=1 \
