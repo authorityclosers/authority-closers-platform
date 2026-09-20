@@ -167,12 +167,10 @@ jobs:
           sudo -n cp -a "$GITHUB_WORKSPACE/packages/python/ac_platform" "$smoke_python_root/"
           sudo -n chown -R 10001:10001 "$smoke_python_root"
           sudo -n stat -c '%A %u:%g %F %n' "$smoke_python_root" "$smoke_python_root/ac_platform" >&2
-          (
-            cd "$smoke_python_root"
-            sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
-              PATH=/usr/local/bin:/usr/bin:/bin \
-              python3 -c 'import ac_platform; print("native_smoke_import_ok")'
-          )
+          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
+            PATH=/usr/local/bin:/usr/bin:/bin \
+            sh -c 'cd "$1" && exec python3 -c '\''import ac_platform; print("native_smoke_import_ok")'\''' \
+            native-smoke "$smoke_python_root"
 
           sudo -n env -i \
             PATH=/usr/local/bin:/usr/bin:/bin \
@@ -212,19 +210,18 @@ jobs:
             exit 1
           }
 
-          (
-            cd "$smoke_python_root"
+          cat "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" | \
             sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
               PATH=/usr/local/bin:/usr/bin:/bin \
               HOME=/nonexistent \
               PYTHONDONTWRITEBYTECODE=1 \
               PYTHONUNBUFFERED=1 \
-              python3 - < "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" \
+              sh -c 'cd "$1" && shift && exec python3 - "$@"' \
+              hosted-native-smoke "$smoke_python_root" \
                 --socket "$socket_path" \
                 --workspace-root "$workspace_root" \
                 --image-ref "$image_id" \
                 --receipt "$receipt"
-          )
           jq -e '
             .status == "passed" and
             .validated == true and
