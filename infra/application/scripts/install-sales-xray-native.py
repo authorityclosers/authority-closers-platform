@@ -230,11 +230,36 @@ def _unit_path(unit_root: Path, name: str) -> Path:
     return unit_root / name
 
 
-def _supervisor_source() -> str:
+def _supervisor_source(release: str = NATIVE_RELEASE) -> str:
+    """Return the renderer path bound to the native helper release.
+
+    The native artifact carries the source commit that produced its helper and
+    image.  Binding the supervisor path to that identity keeps upgrades
+    atomic; a process must not install a descriptor rendered for a different
+    release just because this operator script itself was copied forward.
+    ``NATIVE_RELEASE`` remains the default for legacy callers and fixtures.
+    """
     return (
-        f"/srv/authority-closers/application/releases/{NATIVE_RELEASE}/"
+        f"/srv/authority-closers/application/releases/{release}/"
         "scripts/render-sales-xray-native.py"
     )
+
+
+def _supervisor_source_for_binding(binding: NativeBinding) -> str:
+    """Return the release renderer bound to a helper/image identity.
+
+    The legacy binding predates the source-commit identity in the native
+    artifact.  Its helper was published from ``NATIVE_RELEASE`` even though
+    the helper archive has its own source checksum, so preserve that mapping
+    for rollback descriptors.  New artifacts carry their source commit and
+    bind directly to that release renderer.
+    """
+    release = (
+        NATIVE_RELEASE
+        if binding.helper_source_sha == HELPER_SOURCE_SHA
+        else binding.helper_source_sha
+    )
+    return _supervisor_source(release)
 
 
 def _helper_root(binding: NativeBinding = LEGACY_BINDING) -> str:
@@ -380,7 +405,7 @@ def _validate_descriptor(
         raise _fail("native_units_helper_root_mismatch")
     if descriptor.get("native_image_ref") != binding.image_ref:
         raise _fail("native_units_image_mismatch")
-    if descriptor.get("supervisor_source") != _supervisor_source():
+    if descriptor.get("supervisor_source") != _supervisor_source_for_binding(binding):
         raise _fail("native_units_release_mismatch")
     if descriptor.get("installed") is not False:
         raise _fail("native_units_already_installed")
@@ -458,7 +483,7 @@ def _rendered_descriptor(
         "--native-image-ref",
         binding.image_ref,
         "--supervisor-source",
-        _supervisor_source(),
+        _supervisor_source_for_binding(binding),
     ]
     try:
         completed = subprocess.run(  # noqa: S603 - argv is fixed below.
@@ -491,7 +516,7 @@ def _validate_renderer_binding(
     canonical_paths: bool,
     binding: NativeBinding = LEGACY_BINDING,
 ) -> None:
-    if canonical_paths and renderer != Path(_supervisor_source()):
+    if canonical_paths and renderer != Path(_supervisor_source_for_binding(binding)):
         raise _fail("renderer_path_not_release_bound")
     if canonical_paths:
         _ensure_existing_parents(renderer, "renderer_parent_invalid", require_root=True)
@@ -1241,7 +1266,7 @@ def install(
     result: dict[str, Any] = {
         "schema": "ac.sales-xray.native-unit-install/1",
         "environment": environment,
-        "release": NATIVE_RELEASE,
+        "release": binding.helper_source_sha,
         "native_units_sha256": native_units_sha256,
         "native_image_ref": binding.image_ref,
         "native_image_config_id": binding.image_config_id,

@@ -378,6 +378,8 @@ def prepare(
     _source_commit, image_ref, config_id = _load_native_manifest(
         native_artifact_manifest, native_artifact_sha256
     )
+    if _source_commit != target_release:
+        raise _fail("native artifact source commit differs from target release")
     _fresh_output_dir(output_dir)
     environment = descriptor["environment"]
     artifact_prefix = native_artifact_sha256[:16]
