@@ -152,6 +152,7 @@ jobs:
             HOME=/nonexistent \
             PYTHONDONTWRITEBYTECODE=1 \
             PYTHONUNBUFFERED=1 \
+            AC_NATIVE_STARTUP_DIAGNOSTICS=1 \
             PYTHONPATH="$GITHUB_WORKSPACE/packages/python" \
             python3 "$GITHUB_WORKSPACE/scripts/native_runtime_helper.py" \
               --socket "$socket_path" \

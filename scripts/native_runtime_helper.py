@@ -8,6 +8,7 @@ worker connects through SocketNativeRuntime and never receives Docker access.
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import os
 import signal
@@ -187,6 +188,12 @@ def _parse() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse()
+    startup_trace = os.environ.get("AC_NATIVE_STARTUP_DIAGNOSTICS") == "1"
+    if startup_trace:
+        # CI-only bounded diagnosis for a helper that remains alive without
+        # publishing its socket. The trace contains code frames only; it is
+        # never enabled by the production supervisor.
+        faulthandler.dump_traceback_later(5.0, repeat=True, file=sys.stderr)
     try:
         workspace = args.workspace_root
         if not _path_is_safe(workspace, None):
@@ -256,6 +263,9 @@ def main() -> int:
     except (OSError, ValueError, TypeError) as error:
         print(f"native_helper_start_failed:{type(error).__name__}", file=sys.stderr)
         return 78
+    finally:
+        if startup_trace:
+            faulthandler.cancel_dump_traceback_later()
 
 
 if __name__ == "__main__":
