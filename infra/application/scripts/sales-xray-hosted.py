@@ -430,17 +430,20 @@ def _load_activation(
         or value["previous_release_policy"] != "exact_target_release"
     ):
         raise _fail("activation descriptor identity or policy is invalid")
-    if not isinstance(value["native_image_ref"], str) or IMAGE_REF.fullmatch(
-        value["native_image_ref"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_ref"], str)
+        or IMAGE_REF.fullmatch(value["native_image_ref"]) is None
+    ):
         raise _fail("native_image_ref must be immutable")
-    if not isinstance(value["native_image_config_id"], str) or IMAGE_REF.fullmatch(
-        value["native_image_config_id"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_config_id"], str)
+        or IMAGE_REF.fullmatch(value["native_image_config_id"]) is None
+    ):
         raise _fail("native_image_config_id must be immutable")
-    if not isinstance(value["helper_unit"], str) or UNIT_NAME.fullmatch(
-        value["helper_unit"]
-    ) is None:
+    if (
+        not isinstance(value["helper_unit"], str)
+        or UNIT_NAME.fullmatch(value["helper_unit"]) is None
+    ):
         raise _fail("helper_unit must be a fixed systemd service name")
 
     overlay = release / OVERLAY_RELATIVE
@@ -503,10 +506,13 @@ def _load_activation(
         or approval.get("environment") != environment
     ):
         raise _fail("approval is not bound to the selected environment")
-    if _checked_uuid(
-        approval.get("provider_control_tenant_id"),
-        "approval.provider_control_tenant_id",
-    ) != operations_tenant:
+    if (
+        _checked_uuid(
+            approval.get("provider_control_tenant_id"),
+            "approval.provider_control_tenant_id",
+        )
+        != operations_tenant
+    ):
         raise _fail("approval control tenant differs from service operations tenant")
     _validate_service_mode(service, env, approval)
     return overlay, env_path, service_path

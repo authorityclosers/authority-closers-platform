@@ -320,7 +320,7 @@ def test_hosted_projection_repairs_worker_manifest_readability(
     os.chown(paths["service"], 0, 0)
     paths["service"].chmod(0o440)
 
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - fixed validator and synthetic test inputs
         [
             sys.executable,
             str(VALIDATOR),
