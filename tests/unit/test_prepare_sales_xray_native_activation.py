@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 _SCRIPT = (
     Path(__file__).parents[2]
     / "infra"
