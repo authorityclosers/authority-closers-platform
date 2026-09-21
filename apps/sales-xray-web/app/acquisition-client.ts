@@ -44,6 +44,7 @@ export type SubmissionLibraryPage = {
 export type Progress = {
   state: string;
   local_state: string | null;
+  failure_code: string | null;
   has_report: boolean;
   automatic_progression: boolean;
   stages: { stage: string; state: string }[];
@@ -400,6 +401,10 @@ export function parseProgress(
     typeof item.state !== "string" ||
     typeof item.has_report !== "boolean" ||
     typeof item.automatic_progression !== "boolean" ||
+    (item.failure_code !== undefined &&
+      item.failure_code !== null &&
+      (typeof item.failure_code !== "string" ||
+        item.failure_code.length > 128)) ||
     ![null, "queued", "running", "completed", "failed", "cancelled"].includes(
       item.local_state as string | null,
     ) ||
@@ -420,6 +425,7 @@ export function parseProgress(
   return {
     state: item.state,
     local_state: item.local_state as string | null,
+    failure_code: (item.failure_code as string | null | undefined) ?? null,
     has_report: item.has_report,
     automatic_progression: item.automatic_progression,
     stages,

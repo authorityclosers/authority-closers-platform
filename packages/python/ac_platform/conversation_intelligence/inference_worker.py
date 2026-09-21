@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
 )
+from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     validate_coaching_result,
@@ -202,6 +203,12 @@ _VALIDATION_FAILURES = frozenset(
 
 def provider_failure_code(error: BaseException) -> str:
     """Map failures to content-free codes without changing recovery policy."""
+    if isinstance(error, InferenceBrokerError):
+        # Broker and provider transport failures are already validated against
+        # the broker's stable, content-free error-code allowlist. Preserve that
+        # code so operators can distinguish credential, transport and provider
+        # failures without retaining response bodies or secrets.
+        return f"conversation_{error.code}"
     if isinstance(error, InferenceTaskError):
         if len(error.args) == 1 and type(error.args[0]) is str:
             code = error.args[0]

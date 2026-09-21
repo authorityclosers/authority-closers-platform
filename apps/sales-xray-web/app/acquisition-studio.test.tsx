@@ -895,6 +895,30 @@ it("shows saved completed work when an uncertain stage pauses processing", async
   expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
 });
 
+it("explains provider credential pauses without exposing the raw failure", async () => {
+  existing = true;
+  progressOverride = {
+    ...progress,
+    state: "held",
+    local_state: "failed",
+    current_stage: "C2",
+    failure_code: "conversation_broker_service_identity_unavailable",
+    stages: [
+      { stage: "C2", state: "uncertain" },
+      { stage: "C4", state: "not_started" },
+      { stage: "C5", state: "not_started" },
+    ],
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain(
+    "The approved provider credentials are unavailable.",
+  );
+  expect(container.textContent).not.toContain(
+    "conversation_broker_service_identity_unavailable",
+  );
+});
+
 function reloadHeldCall() {
   existing = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);

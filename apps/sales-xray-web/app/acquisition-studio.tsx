@@ -100,6 +100,20 @@ function stageStatusLabel(status: string | null) {
   return status === null ? "Not started" : "Status needs checking";
 }
 
+function pausedFailureMessage(failureCode: string | null): string {
+  if (
+    failureCode === "conversation_broker_service_identity_unavailable" ||
+    failureCode === "conversation_broker_service_identity_file_invalid" ||
+    failureCode === "conversation_broker_service_identity_required"
+  ) {
+    return "The approved provider credentials are unavailable. Your recording is saved; ask the AC team to refresh the provider connection before continuing.";
+  }
+  if (failureCode?.startsWith("conversation_provider_http_")) {
+    return "The approved provider returned an error. Your recording is saved; ask the AC team to check the provider connection before continuing.";
+  }
+  return "";
+}
+
 const message = (error: unknown) =>
   error instanceof AcquisitionError
     ? error
@@ -449,7 +463,7 @@ export function AcquisitionStudio({
           const paused =
             next.state === "held" ||
             next.stages.some((stage) => stage.state === "uncertain");
-          if (paused) setError("");
+          if (paused) setError(pausedFailureMessage(next.failure_code));
           else
             setError(
               "This analysis needs attention. Your call is saved; completed work remains available.",
