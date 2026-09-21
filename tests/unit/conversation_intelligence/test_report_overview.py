@@ -39,6 +39,45 @@ def test_new_overview_preserves_source_and_old_reports_keep_their_serialized_sha
     assert result.model_dump(mode="json", exclude={"overview"}) == legacy
 
 
+def test_provider_scalar_findings_keep_source_bound_report_usable() -> None:
+    """Gemini prose-only findings must not discard an otherwise valid report."""
+
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["missed_details"] = [
+        {
+            "finding_index": 0,
+            "prospect_signal": {
+                "text": "The buyer stated a timing concern.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "closer_response": {
+                "text": "The closer accepted it.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "follow_up": "Clarify the timeframe.",
+            "potential_impact": "A clearer next step may be possible.",
+        }
+    ]
+    payload["strengths"] = ["Polite and respectful opening."]
+    payload["missed_opportunities"] = ["The timeline was not clarified before closing."]
+    payload["improvements"] = ["Ask one gentle timeline question before ending."]
+
+    result = parse_report_draft(payload, transcript)
+
+    # The scalar strength has no source span, so it remains reviewable in
+    # provider_extras and is excluded from the canonical evidence contract.
+    assert result.strengths == []
+    assert len(result.missed_opportunities) == 1
+    assert len(result.improvements) == 1
+    assert result.overview is not None
+    assert result.overview.strength_details == []
+    assert result.overview.golden_moments == []
+    extras = result.provider_extras["compatibility"]["unbound_findings"]
+    assert extras["strengths"] == ["Polite and respectful opening."]
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

@@ -124,3 +124,25 @@ canonical decision/evidence contract (version and validate it strictly) or an
 additive diagnostic/provider extension (bound its size and preserve unknown
 keys). Never make a new optional diagnostic field capable of invalidating the
 entire review page.
+
+## C5 provider-shape proof from a real staging response
+
+The retained staging C5 response for run `dfec5a4a-5a7a-437e-96df-a27a206ddaad`
+was valid Gemini JSON and contained source-bound overview spans, but its
+`strengths`, `missed_opportunities`, and `improvements` arrays used prose
+strings instead of the canonical `{title, explanation, evidence[]}` shape.
+The old parser rejected the complete report with
+`conversation_report_findings_invalid`, leaving the provider receipt in
+`reconciliation_required` and the plan held. The parser now applies a bounded
+compatibility adapter: overview evidence can derive the canonical improvement
+and missed-opportunity finding; a prose-only claim is retained under bounded
+`provider_extras.compatibility.unbound_findings` and omitted from canonical
+evidence. No evidence is invented and no recording re-upload is required.
+
+Local reproduction against the saved provider bytes and the native transcript
+produced a normalized draft with one evidence-bound improvement, one
+evidence-bound missed opportunity, zero fabricated strengths, and the original
+unbound strength preserved as provider extras. Focused report/overview/inference
+tests pass (`92` tests), Ruff and mypy pass for the changed module. This is a
+code candidate only; staging and production still require the approved
+release/install path and a fresh durable-report proof.

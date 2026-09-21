@@ -1375,6 +1375,141 @@ def _normalise_findings(
     return normalized
 
 
+def _adapt_unbound_provider_findings(
+    payload: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Keep a report usable when a provider omits finding evidence.
+
+    Some Gemini responses returned a prose string in a finding array while
+    putting the source-bound span in the matching detailed-overview object.
+    A string is never promoted to a canonical finding without evidence.  When
+    the overview carries an exact source-backed replacement (improvements and
+    missed opportunities), derive the normal finding from that replacement;
+    otherwise retain the prose in bounded provider extras and omit it from the
+    canonical report.  This keeps the user's report available while preserving
+    the evidence boundary.
+    """
+
+    adapted = dict(payload)
+    raw_overview = payload.get("overview")
+    overview = dict(raw_overview) if isinstance(raw_overview, Mapping) else None
+    dropped: dict[str, list[str]] = {}
+    index_maps: dict[str, dict[int, int]] = {}
+
+    for field in (
+        "strengths",
+        "missed_opportunities",
+        "improvements",
+        "objection_analysis",
+        "closing_analysis",
+    ):
+        value = payload.get(field)
+        if not isinstance(value, list) or not any(isinstance(item, str) for item in value):
+            continue
+        kept: list[Any] = []
+        index_map: dict[int, int] = {}
+        for old_index, item in enumerate(value):
+            replacement: Any = item
+            if isinstance(item, str):
+                if overview is not None and field == "improvements":
+                    details = overview.get("improvement_details")
+                    if isinstance(details, list) and old_index < len(details):
+                        candidate = details[old_index]
+                        if isinstance(candidate, Mapping):
+                            happened = candidate.get("what_happened")
+                            evidence = (
+                                happened.get("evidence") if isinstance(happened, Mapping) else None
+                            )
+                            if isinstance(evidence, list) and evidence:
+                                replacement = {
+                                    "title": item.strip()[:240] or "Source-backed improvement",
+                                    "explanation": item.strip()[:4_000],
+                                    "evidence": evidence,
+                                }
+                elif overview is not None and field == "missed_opportunities":
+                    details = overview.get("missed_details")
+                    if isinstance(details, list) and old_index < len(details):
+                        candidate = details[old_index]
+                        if isinstance(candidate, Mapping):
+                            replacement = dict(candidate)
+                if isinstance(replacement, str):
+                    dropped.setdefault(field, []).append(item[:1_000])
+                    continue
+            if isinstance(replacement, Mapping) or not isinstance(item, str):
+                index_map[old_index] = len(kept)
+                kept.append(replacement)
+        adapted[field] = kept
+        index_maps[field] = index_map
+
+    if overview is not None:
+        changed = False
+
+        def remap_details(field: str, detail_key: str) -> None:
+            nonlocal changed
+            details = overview.get(detail_key)
+            mapping = index_maps.get(field)
+            if not isinstance(details, list) or mapping is None:
+                return
+            remapped: list[Any] = []
+            for detail in details:
+                if not isinstance(detail, Mapping) or not isinstance(
+                    detail.get("finding_index"), int
+                ):
+                    continue
+                new_index = mapping.get(detail["finding_index"])
+                if new_index is None:
+                    continue
+                item = dict(detail)
+                item["finding_index"] = new_index
+                remapped.append(item)
+            if remapped != details:
+                overview[detail_key] = remapped
+                changed = True
+
+        remap_details("strengths", "strength_details")
+        remap_details("improvements", "improvement_details")
+        remap_details("missed_opportunities", "missed_details")
+
+        strength_map = index_maps.get("strengths")
+        golden = overview.get("golden_moments")
+        if isinstance(golden, list) and strength_map is not None:
+            remapped_golden: list[Any] = []
+            for item in golden:
+                if not isinstance(item, Mapping) or not isinstance(item.get("strength_index"), int):
+                    continue
+                new_index = strength_map.get(item["strength_index"])
+                if new_index is None:
+                    continue
+                replacement = dict(item)
+                replacement["strength_index"] = new_index
+                remapped_golden.append(replacement)
+            if remapped_golden != golden:
+                overview["golden_moments"] = remapped_golden
+                changed = True
+
+        improvement_map = index_maps.get("improvements")
+        if improvement_map is not None:
+            for key in ("next_call_focus", "practice"):
+                value = overview.get(key)
+                if value is None or not isinstance(value, Mapping):
+                    continue
+                raw_index: Any = value.get("improvement_index")
+                new_index = improvement_map.get(raw_index) if isinstance(raw_index, int) else None
+                if new_index is None:
+                    overview[key] = None
+                    changed = True
+                elif new_index != raw_index:
+                    replacement = dict(value)
+                    replacement["improvement_index"] = new_index
+                    overview[key] = replacement
+                    changed = True
+
+        if changed:
+            adapted["overview"] = overview
+
+    return adapted, {"unbound_findings": dropped} if dropped else {}
+
+
 def _normalise_fact_observation(value: Any, transcript: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ReportError("fact_observation_invalid")
@@ -1716,6 +1851,7 @@ def parse_report_draft(
     for field in _CONTENT_FIELDS:
         if field not in payload:
             raise ReportError("report_payload_missing_field")
+    payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
     normalized = dict(payload)
     consumed_provider_keys: set[str] = set()
     for field in (
@@ -1785,6 +1921,8 @@ def parse_report_draft(
         payload.get("report_sections"), profile=resolved_profile
     )
     provider_extras = _provider_extras(payload, consumed_keys=consumed_provider_keys)
+    if compatibility_extras:
+        provider_extras = {**provider_extras, "compatibility": compatibility_extras}
     # The provider object starts as a convenient working copy above. Strip
     # every non-canonical root key before strict model validation; those keys
     # are available under the bounded, explicitly named extras field instead.

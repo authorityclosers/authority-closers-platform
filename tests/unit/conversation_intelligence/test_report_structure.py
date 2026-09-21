@@ -233,11 +233,15 @@ def test_native_coaching_rejects_empty_evidence_placeholders_in_arrays(field: st
         validate_coaching_result(result(task, envelope(draft)), task, transcript)
 
 
-def test_native_coaching_uses_repairable_code_for_scalar_findings() -> None:
+def test_native_coaching_preserves_scalar_findings_without_promoting_them_to_evidence() -> None:
     transcript, task, draft = coaching_case()
     draft["strengths"] = ["A scalar finding without evidence."]
-    with pytest.raises(InferenceTaskError, match="report_findings_invalid"):
-        validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    output = validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    data = output.data()
+    assert data["strengths"] == []
+    assert data["provider_extras"]["compatibility"]["unbound_findings"]["strengths"] == [
+        "A scalar finding without evidence."
+    ]
 
 
 def test_native_coaching_does_not_repair_a_transliterated_quote() -> None:
