@@ -12,7 +12,7 @@ This is an implementation inventory, not permission to edit production state. Va
 | --- | --- | --- |
 | Provider configuration and activation | `packages/python/ac_platform/conversation_intelligence/provider_registry.py`, `provider_admin.py` | Append-only configuration and activation revisions; accepted plans retain the selected route. |
 | Analysis limits | `analysis_settings.py`, `analysis_settings_admin.py`, `analysis_settings_cli.py` | Tenant-scoped revisions for C4 request/token limits, C5 completion limit, and output profile. New plans read the latest revision; accepted plans remain frozen. |
-| Shared budget | `budget_admin.py`, `budget_cap_cli.py`, activation bundle | Revisioned and approval-bound; a persisted cap cannot silently exceed the release approval. |
+| Shared budget | `budget_admin.py`, `budget_cap_cli.py`, activation bundle | Revisioned and approval-bound; an audited Admin cap carries across release refreshes, while each release still bounds new quotes by its own ceiling. |
 | Acquisition policy | `activation_contract.py` | Source size, storage, stage routes, expiry, and processing principal are bound to a signed approval bundle. |
 | Provider response compatibility | `reports.py` | Recognized flattened/nested provider shapes are normalized; bounded provider-only sections are retained in `provider_extras`. |
 

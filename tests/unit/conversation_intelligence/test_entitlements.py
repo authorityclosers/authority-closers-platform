@@ -86,8 +86,7 @@ def permission(value, **changes):
 
 def test_effective_budget_cap_is_bounded_by_release_approval():
     assert effective_budget_cap_paise(100_000, 75_000) == 75_000
-    with pytest.raises(ValueError, match="exceeds release approval"):
-        effective_budget_cap_paise(75_000, 100_000)
+    assert effective_budget_cap_paise(75_000, 100_000) == 75_000
 
 
 def reserved(*, seconds=600, cap=150_000, **changes):

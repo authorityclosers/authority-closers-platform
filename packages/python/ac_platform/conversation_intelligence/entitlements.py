@@ -24,13 +24,16 @@ def _integer(value: Any, field: str, minimum: int = 0) -> int:
 
 
 def effective_budget_cap_paise(release_cap_paise: int, persisted_cap_paise: int) -> int:
-    """Return the persisted Admin limit after checking the release upper bound."""
+    """Return the cap available to this release.
+
+    Historical Admin reservations may exceed a newer release ceiling. New
+    quotes remain bounded by the current release while the shared ledger keeps
+    its larger approved cap for reconciliation.
+    """
 
     _integer(release_cap_paise, "release cap paise")
     _integer(persisted_cap_paise, "persisted cap paise")
-    if persisted_cap_paise > release_cap_paise:
-        raise ValueError("persisted budget cap exceeds release approval")
-    return persisted_cap_paise
+    return min(release_cap_paise, persisted_cap_paise)
 
 
 def _strings(instance: Any, names: tuple[str, ...]) -> None:

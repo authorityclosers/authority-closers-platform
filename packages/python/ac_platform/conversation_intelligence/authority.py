@@ -25,7 +25,11 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
-from ac_platform.conversation_intelligence.budget_admin import is_admin_budget_approval_ref
+from ac_platform.conversation_intelligence.budget_admin import (
+    ADMIN_BUDGET_CEILING_PAISE,
+    is_admin_budget_approval_ref,
+    is_any_admin_budget_approval_ref,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
@@ -83,12 +87,28 @@ def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundl
         previous.cap_approval.approval_ref == bundle.budget_authorization_ref
         and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     )
-    admin_approval = is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
+    admin_approval = (
+        is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
+        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
+    )
+    carried_admin_approval = (
+        is_any_admin_budget_approval_ref(previous.cap_approval.approval_ref)
+        and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
+        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
+    )
     try:
         effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
     except ValueError:
         return False
-    return previous.scope_id == str(bundle.budget_scope_id) and (release_approval or admin_approval)
+    # A release-bound budget may only continue when the persisted amount is
+    # within the current release ceiling. Historical Admin approvals are
+    # handled separately above and may carry a larger reserved snapshot; new
+    # work is still bounded by ``effective_budget_cap_paise``.
+    if release_approval and previous.cap_paise > bundle.budget_cap_paise:
+        return False
+    return previous.scope_id == str(bundle.budget_scope_id) and (
+        release_approval or admin_approval or carried_admin_approval
+    )
 
 
 class ConversationAuthority:
