@@ -117,6 +117,15 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked browser-gate dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Install FFmpeg prerequisites for acquisition browser
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          command -v ffmpeg
+          command -v ffprobe
+          ffmpeg -version
+          ffprobe -version
       - name: Install locked acquisition browser
         timeout-minutes: 5
         run: uv run --frozen python -m playwright install --with-deps chromium

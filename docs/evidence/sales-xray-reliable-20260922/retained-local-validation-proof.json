@@ -1,0 +1,17 @@
+{
+  "database_writes": 0,
+  "finding_counts": {
+    "closing_analysis": 1,
+    "improvements": 2,
+    "missed_opportunities": 1,
+    "objection_analysis": 1,
+    "strengths": 2
+  },
+  "overview_present": true,
+  "provider_calls": 0,
+  "report_sha256": "7928e22cee854cb5b5e17568dd7c582517f75383e8273853555bb16480442fb1",
+  "response_sha256": "af44e5517ff3e373a69ed3a8e6af52cb139c58d6ef20eff741fe6139e142cd2f",
+  "source_release": "dd6ee8816b1fe53d407115e8b27d3e46fb7d85be",
+  "status": "passed",
+  "validator_revision": "ac.sales-xray.report-validator/2"
+}

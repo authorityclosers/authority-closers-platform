@@ -259,7 +259,22 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     ) as upload_response:
                         await page.get_by_role("button", name="Analyse my call", exact=True).click()
                     uploaded_response = await upload_response.value
-                    assert uploaded_response.status == 202
+                    if uploaded_response.status != 202:
+                        try:
+                            problem = await uploaded_response.json()
+                        except (ValueError, TypeError):
+                            problem = {}
+                        if not isinstance(problem, dict):
+                            problem = {}
+                        detail = problem.get("detail")
+                        detail = " ".join(detail.split())[:240] if isinstance(detail, str) else None
+                        pytest.fail(
+                            "source upload failed: "
+                            f"status={uploaded_response.status}, "
+                            f"code={problem.get('code')!r}, "
+                            f"title={problem.get('title')!r}, "
+                            f"detail={detail!r}"
+                        )
                     uploaded = await uploaded_response.json()
                     submission_id = uploaded["submission_id"]
                     await db(_reconcile(setup.sessions, setup.state))

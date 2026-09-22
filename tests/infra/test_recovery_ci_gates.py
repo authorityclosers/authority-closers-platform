@@ -214,6 +214,7 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
 
     names = [step.get("name") for step in gate["steps"]]
     install = _required_step(gate, "Install locked browser-gate dependencies")
+    codecs = _required_step(gate, "Install FFmpeg prerequisites for acquisition browser")
     browser = _required_step(gate, "Install locked acquisition browser")
     native = _required_step(gate, "Build verified AudioAtlas for acquisition browser")
     build = _required_step(gate, "Build Sales Xray production standalone")
@@ -228,7 +229,24 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
     assert receipt["with"]["if-no-files-found"] == "error"
     assert "sales-xray-acquisition-browser-receipt.json" in receipt["with"]["path"]
     assert "proof.json" in receipt["with"]["path"]
-    assert names.index(install["name"]) < names.index(browser["name"]) < names.index(native["name"])
+    assert names.index(install["name"]) < names.index(codecs["name"]) < names.index(browser["name"])
+    assert [shlex.split(line) for line in codecs["run"].splitlines()] == [
+        ["set", "-euo", "pipefail"],
+        ["sudo", "apt-get", "update"],
+        [
+            "sudo",
+            "apt-get",
+            "install",
+            "--yes",
+            "--no-install-recommends",
+            "ffmpeg",
+        ],
+        ["command", "-v", "ffmpeg"],
+        ["command", "-v", "ffprobe"],
+        ["ffmpeg", "-version"],
+        ["ffprobe", "-version"],
+    ]
+    assert names.index(browser["name"]) < names.index(native["name"])
     assert names.index(native["name"]) < names.index(build["name"])
     assert [shlex.split(line) for line in native["run"].splitlines()] == [
         ["set", "-euo", "pipefail"],
@@ -264,6 +282,9 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
     assert required["timeout-minutes"] == 20
     wrapper = (ROOT / "scripts/ci/verify_sales_xray_acquisition_browser.py").read_text("utf-8")
     assert '"--basetemp"' in wrapper
+    browser_test = (ROOT / "tests/e2e/test_sales_xray_acquisition_browser.py").read_text("utf-8")
+    assert "source upload failed:" in browser_test
+    assert '" ".join(detail.split())[:240]' in browser_test
 
     validation = workflow["jobs"]["validate"]
     assert gate_id in validation["needs"]
