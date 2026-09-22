@@ -817,6 +817,14 @@ class ConversationProcessingPlans:
         if existing is not None:
             if existing.erased_at is not None or existing.generation != row.generation:
                 raise ConversationConflict("The saved stage is no longer reusable.")
+            if existing.state not in {"queued", "running", "completed"}:
+                # A failed or uncertain stage has an immutable cache key. Do
+                # not make a fresh accepted plan appear to have started a new
+                # run by returning that terminal task; recovery must first
+                # establish a safe generation or explicit reconciliation.
+                raise ConversationConflict(
+                    "The saved stage requires explicit recovery before it can run again."
+                )
             if existing.state == "completed":
                 if existing.checkpoint_id is None:
                     raise ConversationConflict("The saved stage checkpoint is unavailable.")

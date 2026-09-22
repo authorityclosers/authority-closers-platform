@@ -549,6 +549,15 @@ class ConversationInference:
         if existing is not None:
             if existing.erased_at is not None or existing.generation != recording.generation:
                 raise ConversationConflict("The previous request is no longer reusable.")
+            if existing.state not in {"queued", "running", "completed"}:
+                # A terminal failed/uncertain task may have crossed provider
+                # dispatch, or may only be known to have failed before it. In
+                # either case the same cache key cannot silently become a new
+                # run; an explicit recovery path must establish a safe next
+                # generation or leave the request blocked for reconciliation.
+                raise ConversationConflict(
+                    "The previous stage requires explicit recovery before it can run again."
+                )
             # Another click, quote, or coaching profile cannot create a second ASR effect.
             await self.application._receipt(actor, key, action, command, existing.run_id, now)
             return await self.application._run_view(actor, existing.run_id)

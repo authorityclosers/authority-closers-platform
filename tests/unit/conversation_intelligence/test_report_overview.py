@@ -95,6 +95,149 @@ def test_legacy_scalar_diagnosis_is_omitted_without_blocking_report() -> None:
     )
 
 
+@pytest.mark.parametrize("flattened", [False, True])
+@pytest.mark.parametrize("scalar_diagnosis", [False, True])
+@pytest.mark.parametrize("single_evidence", [False, True])
+@pytest.mark.parametrize("business_impact", [False, True])
+def test_scalar_findings_compose_with_overview_envelopes(
+    flattened: bool, scalar_diagnosis: bool, single_evidence: bool, business_impact: bool
+) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    if business_impact:
+        overview["business_impact"] = {
+            "status": "insufficient_data",
+            "missing_inputs": ["Comparable conversion history"],
+        }
+    if single_evidence:
+        happened = overview["improvement_details"][0]["what_happened"]
+        happened["evidence"] = happened["evidence"][0]
+    if scalar_diagnosis:
+        overview["diagnosis"] = "An unbound diagnosis remains diagnostic only."
+    payload["improvements"] = ["Clarify the buyer's timing concern."]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+
+    report = parse_report_draft(payload, transcript)
+
+    assert len(report.improvements) == 1
+    assert report.overview is not None
+    assert [item.model_dump() for item in report.improvements[0].evidence] == [
+        item.model_dump() for item in report.overview.improvement_details[0].what_happened.evidence
+    ]
+    assert report.overview.diagnosis is None
+
+
+@pytest.mark.parametrize("flattened", [False, True])
+def test_scalar_improvement_evidence_follows_explicit_index(flattened: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    first = deepcopy(overview["improvement_details"][0])
+    second = deepcopy(first)
+    first["what_happened"]["evidence"] = [{"segment_id": "s1"}]
+    second["finding_index"] = 1
+    second["what_happened"]["evidence"] = [{"segment_id": "s2"}]
+    overview["improvement_details"] = [second, first]
+    overview["business_impact"] = {
+        "status": "insufficient_data",
+        "missing_inputs": ["Comparable conversion history"],
+    }
+    payload["improvements"] = ["First source improvement.", "Second source improvement."]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+
+    report = parse_report_draft(payload, transcript)
+
+    assert report.overview is not None
+    assert [item.evidence[0].segment_id for item in report.improvements] == ["s1", "s2"]
+    for index, finding in enumerate(report.improvements):
+        detail = next(
+            item for item in report.overview.improvement_details if item.finding_index == index
+        )
+        assert [item.model_dump() for item in finding.evidence] == [
+            item.model_dump() for item in detail.what_happened.evidence
+        ]
+
+
+@pytest.mark.parametrize("bad_index", [False, -1, 2, "0"])
+def test_scalar_adaptation_rejects_invalid_detail_identity(bad_index: Any) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = ["A scalar improvement."]
+    payload["overview"]["improvement_details"][0]["finding_index"] = bad_index
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+def test_scalar_adaptation_rejects_duplicate_detail_identity() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = ["First scalar improvement.", "Second scalar improvement."]
+    payload["overview"]["improvement_details"] *= 2
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+@pytest.mark.parametrize("single_evidence", [False, True])
+def test_scalar_missed_opportunities_use_explicit_indices(single_evidence: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    details = [
+        {
+            "finding_index": index,
+            "prospect_signal": {"text": "A stated concern.", "evidence": [{"segment_id": segment}]},
+            "closer_response": {"text": "A response.", "evidence": [{"segment_id": segment}]},
+            "follow_up": "Clarify this concern.",
+            "potential_impact": "A clearer next step may be possible.",
+        }
+        for index, segment in enumerate(("s1", "s2"))
+    ]
+    overview["missed_details"] = list(reversed(details))
+    if single_evidence:
+        for detail in details:
+            for field in ("prospect_signal", "closer_response"):
+                detail[field]["evidence"] = detail[field]["evidence"][0]
+    payload["overview"] = overview
+    payload["missed_opportunities"] = ["First missed opportunity.", "Second missed opportunity."]
+    report = parse_report_draft(payload, transcript)
+    assert [item.evidence[0].segment_id for item in report.missed_opportunities] == ["s1", "s2"]
+
+
+def test_flattened_overview_cannot_hide_missing_required_fields() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    overview.pop("final_assessment")
+    payload.update(overview)
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+@pytest.mark.parametrize("flattened", [False, True])
+def test_scalar_singular_evidence_still_rejects_fabricated_quote(flattened: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    happened = overview["improvement_details"][0]["what_happened"]
+    happened["evidence"] = {**happened["evidence"][0], "quote": "Not in the transcript"}
+    payload["improvements"] = ["A scalar improvement"]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+    with pytest.raises(ReportError):
+        parse_report_draft(payload, transcript)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

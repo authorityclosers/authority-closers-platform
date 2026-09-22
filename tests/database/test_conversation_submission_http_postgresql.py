@@ -300,7 +300,9 @@ def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
                 progress = await client.get(path)
                 assert progress.status_code == 200, progress.text
                 assert calls == 2
-                assert progress.json()["submission_id"] == path.rsplit("/", 1)[-1]
+                body = progress.json()
+                assert body["submission_id"] == path.rsplit("/", 1)[-1]
+                assert body["failure_code"] is None
         finally:
             await setup.engine.dispose()
 

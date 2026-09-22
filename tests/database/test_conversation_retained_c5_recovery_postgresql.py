@@ -139,7 +139,9 @@ def _provider_raw(*, quote: str) -> bytes:
     return canonical(envelope)
 
 
-async def _seed_retained_case(postgres_harness: Any, scratch_root: Path) -> dict[str, Any]:
+async def _seed_retained_case(
+    postgres_harness: Any, scratch_root: Path, *, source_quote: str = "Wrong quote"
+) -> dict[str, Any]:
     prepared = await _prepare(postgres_harness, scratch_root)
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -305,7 +307,7 @@ async def _seed_retained_case(postgres_harness: Any, scratch_root: Path) -> dict
                 )
             )
             raw_blob_id = uuid4()
-            raw = _provider_raw(quote="Wrong quote")
+            raw = _provider_raw(quote=source_quote)
             raw_sha256 = hashlib.sha256(raw).hexdigest()
             prepared.storage.put(
                 ObjectKey(

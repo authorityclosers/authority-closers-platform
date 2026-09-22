@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
 from ac_platform.conversation_intelligence.reports import (
+    REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
 )
@@ -713,6 +714,7 @@ class RetainedC5RecoveryService:
     ) -> dict[str, Any]:
         return {
             "schema_id": _RECOVERY_SCHEMA,
+            "validator_revision": REPORT_VALIDATOR_REVISION,
             "recovery_version_id": str(version_id),
             "validation_mode": "retained_c5_response_revalidation",
             "provider_calls": 0,
@@ -841,10 +843,18 @@ class RetainedC5RecoveryService:
                 bound.recording,
                 message="The retained recovery version was already created.",
             )
+        # The request identity stays stable so an old command key replays its
+        # original receipt, even after an upgrade. A fresh command revalidates
+        # under the current admission contract instead of caching an earlier
+        # validator's negative result forever. _load_bound holds the run lock,
+        # serializing version allocation and same-revision deduplication.
+        fingerprint = content_hash(
+            {**command_intent, "validator_revision": REPORT_VALIDATOR_REVISION}
+        )
         existing = await self.database.scalar(
             select(ConversationRetainedC5Version).where(
                 ConversationRetainedC5Version.run_id == run_id,
-                ConversationRetainedC5Version.fingerprint == content_hash(command_intent),
+                ConversationRetainedC5Version.fingerprint == fingerprint,
             )
         )
         if existing is not None:
@@ -939,7 +949,6 @@ class RetainedC5RecoveryService:
         )
         version_number = int(next_version or 1)
         version_id = uuid4()
-        fingerprint = content_hash(command_intent)
         report_sha256 = "0" * 64 if normalized is None else content_hash(normalized)
         proof = self._proof(
             bound,

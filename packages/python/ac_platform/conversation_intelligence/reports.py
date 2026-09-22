@@ -1320,6 +1320,12 @@ def _normalise_nested_missed_opportunity(
     evidence: list[dict[str, Any]] = []
     seen: set[str] = set()
     for raw in (prospect["evidence"], response["evidence"]):
+        if isinstance(raw, Mapping) and frozenset(raw) in (
+            _C5_COMPACT_EVIDENCE_KEYS,
+            _C5_OFFSET_EVIDENCE_KEYS,
+            frozenset({"segment_id", "quote", "start_ms", "end_ms"}),
+        ):
+            raw = [raw]
         if not isinstance(raw, list) or not raw:
             raise ReportError("report_finding_evidence_missing")
         for item in raw:
@@ -1375,6 +1381,11 @@ def _normalise_findings(
     return normalized
 
 
+# Bump when report admission/adaptation semantics change. Retained recovery
+# freezes this source-owned identity separately from the caller's command key.
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/2"
+
+
 def _adapt_unbound_provider_findings(
     payload: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1396,6 +1407,21 @@ def _adapt_unbound_provider_findings(
     dropped: dict[str, list[str]] = {}
     index_maps: dict[str, dict[int, int]] = {}
 
+    def indexed_details(key: str, count: int) -> dict[int, Mapping[str, Any]]:
+        """Join evidence by its declared finding identity, never list position."""
+        details = None if overview is None else overview.get(key)
+        if not isinstance(details, list):
+            return {}
+        indexed: dict[int, Mapping[str, Any]] = {}
+        for detail in details:
+            if not isinstance(detail, Mapping):
+                raise ReportError("report_overview_invalid")
+            index = detail.get("finding_index")
+            if type(index) is not int or not 0 <= index < count or index in indexed:
+                raise ReportError("report_overview_invalid")
+            indexed[index] = detail
+        return indexed
+
     for field in (
         "strengths",
         "missed_opportunities",
@@ -1406,32 +1432,40 @@ def _adapt_unbound_provider_findings(
         value = payload.get(field)
         if not isinstance(value, list) or not any(isinstance(item, str) for item in value):
             continue
+        detail_key = {
+            "strengths": "strength_details",
+            "improvements": "improvement_details",
+            "missed_opportunities": "missed_details",
+        }.get(field)
+        details_by_index = {} if detail_key is None else indexed_details(detail_key, len(value))
         kept: list[Any] = []
         index_map: dict[int, int] = {}
         for old_index, item in enumerate(value):
             replacement: Any = item
             if isinstance(item, str):
                 if overview is not None and field == "improvements":
-                    details = overview.get("improvement_details")
-                    if isinstance(details, list) and old_index < len(details):
-                        candidate = details[old_index]
-                        if isinstance(candidate, Mapping):
-                            happened = candidate.get("what_happened")
-                            evidence = (
-                                happened.get("evidence") if isinstance(happened, Mapping) else None
-                            )
-                            if isinstance(evidence, list) and evidence:
-                                replacement = {
-                                    "title": item.strip()[:240] or "Source-backed improvement",
-                                    "explanation": item.strip()[:4_000],
-                                    "evidence": evidence,
-                                }
+                    candidate = details_by_index.get(old_index)
+                    if candidate is not None:
+                        happened = candidate.get("what_happened")
+                        evidence = (
+                            happened.get("evidence") if isinstance(happened, Mapping) else None
+                        )
+                        if isinstance(evidence, Mapping) and frozenset(evidence) in (
+                            _C5_COMPACT_EVIDENCE_KEYS,
+                            _C5_OFFSET_EVIDENCE_KEYS,
+                            frozenset({"segment_id", "quote", "start_ms", "end_ms"}),
+                        ):
+                            evidence = [evidence]
+                        if isinstance(evidence, list) and evidence:
+                            replacement = {
+                                "title": item.strip()[:240] or "Source-backed improvement",
+                                "explanation": item.strip()[:4_000],
+                                "evidence": evidence,
+                            }
                 elif overview is not None and field == "missed_opportunities":
-                    details = overview.get("missed_details")
-                    if isinstance(details, list) and old_index < len(details):
-                        candidate = details[old_index]
-                        if isinstance(candidate, Mapping):
-                            replacement = dict(candidate)
+                    candidate = details_by_index.get(old_index)
+                    if candidate is not None:
+                        replacement = dict(candidate)
                 if isinstance(replacement, str):
                     dropped.setdefault(field, []).append(item[:1_000])
                     continue
@@ -1851,21 +1885,8 @@ def parse_report_draft(
     for field in _CONTENT_FIELDS:
         if field not in payload:
             raise ReportError("report_payload_missing_field")
-    payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
-    normalized = dict(payload)
     consumed_provider_keys: set[str] = set()
-    for field in (
-        "strengths",
-        "missed_opportunities",
-        "improvements",
-        "objection_analysis",
-        "closing_analysis",
-    ):
-        normalized[field] = _normalise_findings(
-            payload[field], transcript=validated_transcript, field_name=field
-        )
     overview_payload = payload.get("overview")
-    overview_compatibility: dict[str, Any] = {}
     # Older Gemini responses emitted the detailed overview keys beside the
     # report findings instead of under ``overview``.  Keep that response
     # usable by moving only the exact versioned overview fields into the
@@ -1891,11 +1912,30 @@ def parse_report_draft(
             "final_assessment",
         )
         flattened = {key: payload[key] for key in overview_keys if key in payload}
-        if len(flattened) == len(overview_keys):
-            overview_payload = flattened
-            for key in overview_keys:
-                normalized.pop(key, None)
-            consumed_provider_keys.update(overview_keys)
+        # The declared version selects this envelope. Required fields remain
+        # the strict overview model's responsibility; business_impact is optional.
+        # Never silently downgrade a malformed detailed report to a legacy one.
+        payload = dict(payload)
+        for key in overview_keys:
+            payload.pop(key, None)
+        payload["overview"] = flattened
+        consumed_provider_keys.update(overview_keys)
+    # Scalar adapters need the same canonical envelope regardless of where
+    # the provider put overview fields. Normalize it before joining evidence.
+    payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
+    normalized = dict(payload)
+    for field in (
+        "strengths",
+        "missed_opportunities",
+        "improvements",
+        "objection_analysis",
+        "closing_analysis",
+    ):
+        normalized[field] = _normalise_findings(
+            payload[field], transcript=validated_transcript, field_name=field
+        )
+    overview_payload = payload.get("overview")
+    overview_compatibility: dict[str, Any] = {}
     if overview_payload is not None:
         if isinstance(overview_payload, Mapping):
             # Older Gemini coaching responses used a plain diagnosis string.

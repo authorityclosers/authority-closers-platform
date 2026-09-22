@@ -13,6 +13,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from ac_platform.audit.models import AuditEvent
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
+    ConversationConflict,
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.checkpoints import SourceBinding, canonical
@@ -367,6 +369,73 @@ def test_duplicate_provider_requests_reuse_one_job_and_reservation(
                     if reservation.quote.quote_id == str(quote_id)
                 ]
                 assert len(provider_reservations) == 1
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_fresh_provider_request_does_not_reuse_terminal_pre_dispatch_task(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A failed no-dispatch task needs explicit recovery before reuse."""
+
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+            )
+            async with sessions() as database, database.begin():
+                service = ConversationInference(ConversationApplication(database))
+                await service.accept(
+                    prepared.state,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                first = await service.request_transcription(
+                    prepared.state,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-pre-dispatch-failure",
+                )
+
+            worker = ConversationInferenceWorker(
+                sessions, prepared.storage, FakeBroker(prepared.data)
+            )
+            worker._dispatch = AsyncMock(  # type: ignore[method-assign]
+                side_effect=RuntimeError("synthetic pre-dispatch failure")
+            )
+            assert await worker.run_once()
+
+            async with sessions() as database, database.begin():
+                task = await database.get(ConversationInferenceTask, UUID(first["id"]))
+                assert task is not None
+                job = await database.get(Job, task.job_id)
+                assert job is not None
+                assert job.dispatch_started_at is None
+                assert job.provider_receipt is None
+                assert task.state == "failed"
+                service = ConversationInference(ConversationApplication(database))
+                with pytest.raises(ConversationConflict, match="explicit recovery"):
+                    await service.request_transcription(
+                        prepared.state,
+                        prepared.recording_id,
+                        quote_id,
+                        key="provider-fresh-after-pre-dispatch-failure",
+                    )
         finally:
             await engine.dispose()
 
