@@ -2,13 +2,13 @@
 
 Base: `1a16a4b8defe0f4c36cc4bda5b72ada02c005b17`.
 Candidate branch: `codex/sales-xray-reliable-20260922`.
-Current checkpoint: [df825e0f staging acceptance](staging-df825e0f-acceptance.md) records the recovered live short report, approved staging tester exemption, and the first long-call storage failure. A bounded provider-response storage fix and trial-allowance message correction follow. Full long-call and production acceptance remain pending. The sections below preserve earlier implementation history.
+Current checkpoint: [cc88313f hour-long staging acceptance](staging-cc88313f-long-call.md) records exact passing CI, deployed storage repair, and a successful retained 2.2 MB transcription response. [Compact C4 recovery](compact-c4-recovery.md) records the versioned repair for the subsequent bounded-output truncation. Long-call report and production acceptance remain pending. The sections below preserve earlier implementation history.
 
 ## Authority and scope
 
 The founder authorized implementation of the September 22 recovery audit and repeated verification through the deployed guest/account journey. Required controlled Drive documents were retrieved by exact manifest IDs before edits. Additional context: Software Intelligence Control Register, spreadsheet `1S6Bq2Kppq0Wzisq9tgKwiISU7U4RUVLRd7Fg6VOy5WY`, bounded BUGS_RISKS/START/TEST_MATRIX/RELEASES reads and exact linked evidence for RISK-11/12/13/15. These findings were checked against source; the sheet does not replace controlled policy.
 
-No official numerical scoring, provider allowance expansion, direct operational SQL repair, or privacy/retention bypass is part of this change. Report output remains an evidence-bound advisory draft.
+No official numerical scoring, direct operational SQL repair, or privacy/retention bypass is part of this change. Provider limits change only through separately owner-approved release controls, recorded in the staging checkpoints. Report output remains an evidence-bound advisory draft.
 
 ## Report and retained-response changes
 

@@ -28,7 +28,12 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 from ac_platform.conversation_intelligence.provider_registry import resolve_dispatch
 from ac_platform.conversation_intelligence.providers import BoundedProviders, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
-from ac_platform.conversation_intelligence.reports import FactPacket, parse_report_draft
+from ac_platform.conversation_intelligence.reports import (
+    FACT_PROMPT_COMPACT,
+    FACT_PROMPT_COMPACT_MARKER,
+    FactPacket,
+    parse_report_draft,
+)
 from tests.conversation_overview_fixtures import overview_for
 from tests.unit.conversation_intelligence.test_provider_registry import (
     _config,
@@ -123,6 +128,20 @@ def test_native_fact_body_reconstruction_model_budget_and_mixed_script(model: st
         assert body["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "LOW"
         assert "Profile:" not in body["systemInstruction"]["parts"][0]["text"]
     assert "मला" in tasks[0].payload.decode()
+
+
+def test_compact_gemini_fact_marker_and_short_response_validate() -> None:
+    transcript = _transcript(count=2)
+    task = prepare_fact_inputs(
+        transcript,
+        provider="gemini",
+        model="gemini-3.8-flash",
+        prompt_revision=FACT_PROMPT_COMPACT,
+    )[0]
+    body = task.as_provider_body()
+    assert FACT_PROMPT_COMPACT_MARKER in body["systemInstruction"]["parts"][0]["text"]
+    assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
+    assert validate_fact_result(result(task, envelope(facts(transcript))), task, transcript).data()
 
 
 @pytest.mark.parametrize(

@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import (
+    FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
     load_report_profile,
@@ -104,6 +105,10 @@ class StageRequest(BaseModel):
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
     max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=8_000)
+    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = Field(
+        default=FACT_PROMPT_LEGACY,
+        exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
+    )
     output_profile: Literal["standard", "detailed"] = Field(
         default="detailed", exclude_if=lambda value: value == "detailed"
     )
@@ -120,6 +125,8 @@ class StageRequest(BaseModel):
             raise ValueError("Facts cannot select a coaching output profile.")
         if self.stage == "C4" and self.repair is not None:
             raise ValueError("Facts cannot use coaching repair.")
+        if self.stage == "C5" and self.fact_prompt_revision != FACT_PROMPT_LEGACY:
+            raise ValueError("Coaching cannot select a fact prompt revision.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):
             raise ValueError("Coaching requires complete fact checkpoints.")
         if len(set(self.fact_checkpoint_ids)) != len(self.fact_checkpoint_ids):
@@ -408,6 +415,7 @@ class ReportingPipeline:
                 model=request.model,
                 max_input_chars=request.max_input_chars,
                 max_completion_tokens=request.max_completion_tokens,
+                prompt_revision=request.fact_prompt_revision,
             )
             if len(inputs) > 64 or request.chunk_index > len(inputs):
                 raise ConversationConflict("The selected fact chunk is unavailable.")

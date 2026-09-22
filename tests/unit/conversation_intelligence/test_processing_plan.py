@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
     plan_cost_label,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
+from ac_platform.conversation_intelligence.reports import FACT_PROMPT_COMPACT
 from tests.unit.conversation_intelligence.test_activation_contract import (
     PERSON_ID,
     TENANT_ID,
@@ -109,6 +110,19 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
     assert value.max_entitlement_seconds == 0
+
+
+def test_saved_legacy_plan_omits_compact_prompt_revision_and_new_plan_roundtrips_it() -> None:
+    legacy = manifest_for(saved_plan())
+    assert legacy.fact_prompt_revision != FACT_PROMPT_COMPACT
+    assert "fact_prompt_revision" not in legacy.as_dict()
+
+    compact = legacy.model_copy(update={"fact_prompt_revision": FACT_PROMPT_COMPACT})
+    data = compact.as_dict()
+    assert data["fact_prompt_revision"] == FACT_PROMPT_COMPACT
+    assert PlanManifest.model_validate_json(canonical(data)).fact_prompt_revision == (
+        FACT_PROMPT_COMPACT
+    )
 
 
 def test_saved_plan_accepts_the_explicit_deepgram_c2_route() -> None:
