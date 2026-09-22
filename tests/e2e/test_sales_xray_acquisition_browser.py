@@ -287,7 +287,9 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         page.get_by_role("heading", name="Start with your sales call")
                     ).to_be_visible()
                     await page.screenshot(path=str(receipt / "upload-desktop.png"), full_page=True)
-                    await page.get_by_label("Choose sales call audio").set_input_files(
+                    file_input = page.get_by_label("Choose sales call audio")
+                    await expect(file_input).to_be_enabled(timeout=15_000)
+                    await file_input.set_input_files(
                         {"name": "Synthetic test call.wav", "mimeType": "audio/wav", "buffer": data}
                     )
                     await expect(
