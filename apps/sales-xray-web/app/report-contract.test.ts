@@ -257,6 +257,19 @@ function previewEnvelope() {
     },
   };
 }
+
+function recoveredPreviewEnvelope() {
+  return {
+    ...previewEnvelope(),
+    recovery: {
+      version: 1,
+      validation_state: "revalidated" as const,
+      provider_calls: 0 as const,
+      human_approved: false as const,
+      official_score: false as const,
+    },
+  };
+}
 const expectedSubmission = {
   submissionId: "submission-1",
   recordingId: "recording-1",
@@ -276,6 +289,74 @@ describe("server-withheld guest report preview", () => {
       transcript.segments[0].text,
     );
     expect(value.report.report_sections).toEqual([]);
+  });
+
+  it("accepts the exact server recovery metadata at the envelope boundary", () => {
+    const value = parseAcquisitionReport(
+      recoveredPreviewEnvelope(),
+      expectedSubmission,
+      transcript,
+    );
+    expect(value.recovery).toEqual({
+      version: 1,
+      validation_state: "revalidated",
+      provider_calls: 0,
+      human_approved: false,
+      official_score: false,
+    });
+  });
+
+  it.each([
+    [
+      "unknown field",
+      (recovery: Record<string, unknown>) => {
+        recovery.extra = "not allowed";
+      },
+    ],
+    [
+      "unsupported state",
+      (recovery: Record<string, unknown>) => {
+        recovery.validation_state = "approved";
+      },
+    ],
+    [
+      "provider calls",
+      (recovery: Record<string, unknown>) => {
+        recovery.provider_calls = 1;
+      },
+    ],
+    [
+      "human approval",
+      (recovery: Record<string, unknown>) => {
+        recovery.human_approved = true;
+      },
+    ],
+    [
+      "official score",
+      (recovery: Record<string, unknown>) => {
+        recovery.official_score = true;
+      },
+    ],
+  ] as const)("rejects recovery metadata with %s", (_, mutate) => {
+    const envelope = recoveredPreviewEnvelope();
+    mutate(envelope.recovery as unknown as Record<string, unknown>);
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_recovery");
+  });
+
+  it("keeps source and evidence binding active when recovery metadata is present", () => {
+    const envelope = recoveredPreviewEnvelope();
+    envelope.report.content.strengths[0].evidence[0].quote = "Invented words";
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("quote_mismatch");
+    envelope.report.content.strengths[0].evidence[0].quote =
+      transcript.segments[0].text;
+    envelope.source_sha256 = "ff".repeat(32);
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_envelope_binding");
   });
 
   it.each([

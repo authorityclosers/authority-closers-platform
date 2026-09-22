@@ -11,11 +11,16 @@ type Findings = Pick<
 function fail(): never {
   throw new Error("report_overview_invalid");
 }
-function object(value: unknown, keys: string[]): ObjectValue {
+function object(
+  value: unknown,
+  keys: string[],
+  optionalKeys: readonly string[] = [],
+): ObjectValue {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail();
   const item = value as ObjectValue;
+  const allowed = new Set([...keys, ...optionalKeys]);
   if (
-    Object.keys(item).length !== keys.length ||
+    Object.keys(item).some((key) => !allowed.has(key)) ||
     keys.some((key) => !Object.hasOwn(item, key))
   )
     fail();
@@ -54,29 +59,34 @@ function nullable<T>(value: unknown, parse: (item: unknown) => T): T | null {
   return value === null ? null : parse(value);
 }
 
-/** Every new field is required in v1; historical reports may omit the whole overview. */
+/** Versioned overview fields are strict; historical reports may omit the whole
+ * overview and the backend's optional business-impact projection. */
 export function parseDetailedOverview(
   value: unknown,
   findings: Findings,
   parseEvidence: EvidenceParser,
 ) {
-  const item = object(value, [
-    "version",
-    "diagnosis",
-    "outcome",
-    "strength_details",
-    "improvement_details",
-    "golden_moments",
-    "missed_details",
-    "prospect_interpretations",
-    "rewatch",
-    "conversation_change",
-    "ethics_notes",
-    "next_call_focus",
-    "practice",
-    "progress",
-    "final_assessment",
-  ]);
+  const item = object(
+    value,
+    [
+      "version",
+      "diagnosis",
+      "outcome",
+      "strength_details",
+      "improvement_details",
+      "golden_moments",
+      "missed_details",
+      "prospect_interpretations",
+      "rewatch",
+      "conversation_change",
+      "ethics_notes",
+      "next_call_focus",
+      "practice",
+      "progress",
+      "final_assessment",
+    ],
+    ["business_impact"],
+  );
   function source(value: unknown, max = 1200): SourceNote {
     const note = object(value, ["text", "evidence"]);
     return {
@@ -108,6 +118,11 @@ export function parseDetailedOverview(
         ...source({ text: data.text, evidence: data.evidence }),
       };
     }),
+    ...(item.business_impact === undefined
+      ? {}
+      : {
+          business_impact: nullable(item.business_impact, impact),
+        }),
     strength_details: list(item.strength_details, 3, (v) => {
       const data = object(v, ["finding_index", "why_it_matters"]);
       return {

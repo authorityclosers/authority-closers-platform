@@ -26,6 +26,7 @@ from sqlalchemy import select
 
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
+from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
@@ -127,6 +128,47 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
 
             monkeypatch.setattr(SocketNativeRuntime, "validate_source", native)
             monkeypatch.setattr(UploadChallenge, "verify", challenge)
+
+            # Exercise the compiled UI against the exact retained-C5 response
+            # shape while keeping the report and detailed overview produced by
+            # the real synthetic pipeline. This is a test-only server adapter,
+            # not an API response interception or provider/customer fixture.
+            original_report = AcquisitionReports.report
+
+            async def recovered_report(
+                self: AcquisitionReports,
+                submission_id: UUID,
+                *,
+                token: str | None = None,
+                actor: Any = None,
+            ) -> dict[str, Any]:
+                result = await original_report(self, submission_id, token=token, actor=actor)
+                report = result.get("report")
+                if not isinstance(report, dict):
+                    raise AssertionError("synthetic report projection is missing")
+                content = report.get("content")
+                if not isinstance(content, dict):
+                    raise AssertionError("synthetic report content is missing")
+                overview = content.get("overview")
+                if not isinstance(overview, dict):
+                    raise AssertionError("synthetic canonical overview is missing")
+                overview["business_impact"] = {
+                    "status": "insufficient_data",
+                    "missing_inputs": [
+                        "Comparable conversion history",
+                        "Lead volume",
+                    ],
+                }
+                result["recovery"] = {
+                    "version": 1,
+                    "validation_state": "revalidated",
+                    "provider_calls": 0,
+                    "human_approved": False,
+                    "official_score": False,
+                }
+                return result
+
+            monkeypatch.setattr(AcquisitionReports, "report", recovered_report)
             application = app_module.create_app(conversation_intake_runtime=setup.runtime)
             assert application.state.sales_xray_acquisition_configured
             server = uvicorn.Server(
@@ -325,6 +367,27 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     await expect(
                         page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=30000)
+                    recovered_response = await context.request.get(
+                        ORIGIN + PREFIX + f"/submissions/{submission_id}/report"
+                    )
+                    assert recovered_response.status == 200
+                    recovered_payload = await recovered_response.json()
+                    assert recovered_payload["recovery"] == {
+                        "version": 1,
+                        "validation_state": "revalidated",
+                        "provider_calls": 0,
+                        "human_approved": False,
+                        "official_score": False,
+                    }
+                    assert recovered_payload["report"]["content"]["overview"][
+                        "business_impact"
+                    ] == {
+                        "status": "insufficient_data",
+                        "missing_inputs": [
+                            "Comparable conversion history",
+                            "Lead volume",
+                        ],
+                    }
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     await page.get_by_role("tab", name="Moments", exact=True).click()
