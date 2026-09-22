@@ -185,6 +185,26 @@ def test_transport_exception_is_stable_and_not_retried():
     assert "fake-never-real" not in repr(caught.value)
 
 
+@pytest.mark.parametrize(
+    ("message", "diagnostic"),
+    [
+        ("schema has too many states for serving", "structured_schema_complexity"),
+        ("maximum nesting depth exceeded", "structured_schema_depth"),
+        ("null is not supported in schema", "structured_schema_null"),
+        ("invalid responseJsonSchema", "structured_schema_rejected"),
+    ],
+)
+def test_schema_errors_classify_without_disclosing_provider_text(message, diagnostic):
+    def handler(_):
+        return httpx.Response(400, json={"error": message + " secret-private-call"})
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(grant(canonical(body())), body())
+    assert str(caught.value) == "provider_http_400"
+    assert caught.value.diagnostic == diagnostic
+    assert "secret-private-call" not in repr(caught.value)
+
+
 def test_changed_input_and_stale_grant_never_dispatch():
     def handler(_):
         pytest.fail("unauthorized network dispatch")

@@ -1055,6 +1055,21 @@ def _child_response_error(code: str) -> bytes:
     )
 
 
+def _provider_error_code_or_dispatch_failed(error: ProviderError) -> str:
+    """Carry only a stable provider code across the child process boundary."""
+
+    # ProviderError deliberately has no public code attribute.  Its first
+    # argument is a code for the in-tree provider implementation, but an
+    # adapter may still raise it with remote/free-form text.  Never serialize
+    # that text: accept exactly one string that is already in the broker's
+    # stable allowlist and collapse everything else to the old generic code.
+    args = tuple(error.args)
+    candidate: object = next(iter(args), None) if len(args) == 1 else None
+    if isinstance(candidate, str) and _is_stable_error_code(candidate):
+        return candidate
+    return "provider_dispatch_failed"
+
+
 def _child_execute(frame: bytes) -> bytes:
     """Handle one frame inside the fixed child module; private for CLI/tests."""
 
@@ -1154,7 +1169,9 @@ def _child_execute(frame: bytes) -> bytes:
         )
     except InferenceBrokerError as error:
         return _child_response_error(error.code)
-    except (ProviderError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except ProviderError as error:
+        return _child_response_error(_provider_error_code_or_dispatch_failed(error))
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return _child_response_error("provider_dispatch_failed")
     except Exception:
         return _child_response_error("broker_child_failed")

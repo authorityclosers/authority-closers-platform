@@ -11,6 +11,7 @@ from typing import Any, cast, get_args
 import pytest
 
 from ac_platform.conversation_intelligence.coaching_schema import (
+    coaching_generation_json_schema,
     coaching_response_json_schema,
 )
 from ac_platform.conversation_intelligence.report_overview import (
@@ -317,3 +318,26 @@ def test_schema_uses_only_supported_keywords_and_closes_every_object() -> None:
                 visit(child)
 
     visit(schema)
+
+
+def test_generation_shape_keeps_closed_types_and_required_fields_without_vendor_bounds():
+    original = coaching_response_json_schema()
+    generated = coaching_generation_json_schema()
+
+    def compare(before, after):
+        if isinstance(before, dict):
+            for key, value in before.items():
+                if key in {"minItems", "maxItems", "minimum", "maximum"}:
+                    assert key not in after
+                else:
+                    assert key in after
+                    compare(value, after[key])
+        elif isinstance(before, list):
+            assert len(before) == len(after)
+            for a, b in zip(before, after, strict=True):
+                compare(a, b)
+        else:
+            assert before == after
+
+    compare(original, generated)
+    assert original["properties"]["dimensions"]["minItems"] == 8

@@ -221,7 +221,7 @@ def test_gemini_report_keeps_all_sixty_four_facts_and_full_overview() -> None:
     legacy["generationConfig"].pop("responseJsonSchema")
     legacy["generationConfig"]["maxOutputTokens"] = 1800
     instruction = legacy["systemInstruction"]["parts"][0]
-    instruction["text"] = instruction["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    instruction["text"] = instruction["text"].replace("gemini-json-v3", "gemini-json-v1", 1)
     legacy_raw = canonical(legacy)
     restored = replace(
         task,

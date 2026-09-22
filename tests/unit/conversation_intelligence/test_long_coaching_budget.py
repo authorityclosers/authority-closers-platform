@@ -84,7 +84,7 @@ def test_extended_schema_keeps_every_source_turn_and_fact_without_legacy_cap_dri
     legacy = deepcopy(body)
     legacy["generationConfig"].pop("responseJsonSchema")
     part = legacy["systemInstruction"]["parts"][0]
-    part["text"] = part["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    part["text"] = part["text"].replace("gemini-json-v3", "gemini-json-v1", 1)
     with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
         gemini_prompt_view(legacy, model=prepared.model, maximum=8000, task="coaching")
     assert (transcript, packet.model_dump(mode="json")) == before

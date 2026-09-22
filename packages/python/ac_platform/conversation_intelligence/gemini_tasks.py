@@ -16,13 +16,17 @@ from ac_platform.conversation_intelligence.admin_pricing import (
     estimate_provider_usage,
 )
 from ac_platform.conversation_intelligence.checkpoints import canonical
-from ac_platform.conversation_intelligence.coaching_schema import coaching_response_json_schema
+from ac_platform.conversation_intelligence.coaching_schema import (
+    coaching_generation_json_schema,
+    coaching_response_json_schema,
+)
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
-_STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
+_STRUCTURED_MARKER_V2 = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
+_STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v3\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
@@ -39,6 +43,7 @@ def _config(
     model: str = "",
     task: str = "facts",
     structured_coaching: bool = False,
+    structured_schema_version: int = 3,
 ) -> dict[str, Any]:
     ceiling = completion_ceiling("gemini", model, "C5" if task == "coaching" else "C4")
     if type(maximum) is not int or not 256 <= maximum <= ceiling:
@@ -54,7 +59,13 @@ def _config(
     if structured_coaching:
         if task != "coaching":
             raise GeminiTaskError("task_prompt_invalid")
-        config["responseJsonSchema"] = coaching_response_json_schema()
+        if structured_schema_version not in {2, 3}:
+            raise GeminiTaskError("task_prompt_invalid")
+        config["responseJsonSchema"] = (
+            coaching_response_json_schema()
+            if structured_schema_version == 2
+            else coaching_generation_json_schema()
+        )
     return config
 
 
@@ -168,12 +179,14 @@ def gemini_prompt_view(
             if not isinstance(value, str) or not value.strip():
                 raise ValueError
             texts.append(value)
-        structured_coaching = texts[0].startswith(_STRUCTURED_MARKER)
+        legacy_structured = texts[0].startswith(_STRUCTURED_MARKER_V2)
+        structured_coaching = legacy_structured or texts[0].startswith(_STRUCTURED_MARKER)
         if structured_coaching and (
             model != "gemini-3.8-flash" or task != "coaching" or OVERVIEW_MARKER not in texts[0]
         ):
             raise ValueError
-        prefix = (_STRUCTURED_MARKER if structured_coaching else _MARKER) + model + "\n"
+        marker = _STRUCTURED_MARKER_V2 if legacy_structured else _STRUCTURED_MARKER
+        prefix = (marker if structured_coaching else _MARKER) + model + "\n"
         if not texts[0].startswith(prefix):
             raise ValueError
         config = _config(
@@ -181,6 +194,7 @@ def gemini_prompt_view(
             model=model,
             task=task,
             structured_coaching=structured_coaching,
+            structured_schema_version=2 if legacy_structured else 3,
         )
         if canonical(body["generationConfig"]) != canonical(config):
             raise ValueError

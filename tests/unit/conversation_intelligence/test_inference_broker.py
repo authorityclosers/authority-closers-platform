@@ -33,7 +33,7 @@ from ac_platform.conversation_intelligence.inference_broker import (
     _request_header,
     _run_subprocess,
 )
-from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.providers import ProviderError, ProviderResult
 
 
 def _reservation(payload: bytes, *, provider: str = "gemini") -> Reservation:
@@ -286,6 +286,68 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
     assert observed["body"] == {"input": "synthetic"}
     assert observed["environment"] == {}
     assert "must-not-be-read" not in repr(output)
+
+
+@pytest.mark.parametrize("code", ["provider_http_400", "provider_http_429", "provider_http_503"])
+def test_child_preserves_allowlisted_provider_http_error_code(
+    monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    frame = _encode_frame(_request_header(reservation, body), body)
+
+    class FailingProviders:
+        def __init__(self, *, credentials, authorize):
+            del credentials, authorize
+
+        def generate(self, current, request_body):
+            del current, request_body
+            raise ProviderError(code)
+
+    with monkeypatch.context() as child_scope:
+        child_scope.setattr(
+            "ac_platform.conversation_intelligence.inference_broker.BoundedProviders",
+            FailingProviders,
+        )
+        child_scope.setattr(os, "environ", {"GEMINI_API_KEY": "synthetic-child-key"})
+        output = _child_execute(frame)
+
+    header, payload = _decode_frame(output, maximum_payload=4 * 1024 * 1024)
+    assert payload == b""
+    assert header["status"] == "error"
+    assert header["error_code"] == code
+
+
+def test_child_collapses_unallowlisted_provider_error_without_echoing_remote_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    frame = _encode_frame(_request_header(reservation, body), body)
+    malicious = "provider_http_429 raw provider body bearer sk_live_child_secret"
+
+    class FailingProviders:
+        def __init__(self, *, credentials, authorize):
+            del credentials, authorize
+
+        def generate(self, current, request_body):
+            del current, request_body
+            raise ProviderError(malicious)
+
+    with monkeypatch.context() as child_scope:
+        child_scope.setattr(
+            "ac_platform.conversation_intelligence.inference_broker.BoundedProviders",
+            FailingProviders,
+        )
+        child_scope.setattr(os, "environ", {"GEMINI_API_KEY": "synthetic-child-key"})
+        output = _child_execute(frame)
+
+    header, payload = _decode_frame(output, maximum_payload=4 * 1024 * 1024)
+    assert payload == b""
+    assert header["status"] == "error"
+    assert header["error_code"] == "provider_dispatch_failed"
+    assert malicious.encode() not in output
+    assert b"sk_live_child_secret" not in output
 
 
 @pytest.mark.asyncio

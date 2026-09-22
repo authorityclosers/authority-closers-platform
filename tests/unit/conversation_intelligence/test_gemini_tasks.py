@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.coaching_schema import coaching_response_json_schema
 from ac_platform.conversation_intelligence.gemini_tasks import (
     GEMINI_TASK_MODELS,
     GeminiTaskError,
@@ -179,7 +180,7 @@ def test_detailed_coaching_requires_all_report_sections_in_provider_schema() -> 
     assert {"objection_analysis", "closing_analysis", "overview"} <= set(schema["required"])
     assert schema["additionalProperties"] is False
     assert body["systemInstruction"]["parts"][0]["text"].startswith(
-        "AC_TASK_ADAPTER: gemini-json-v2\n"
+        "AC_TASK_ADAPTER: gemini-json-v3\n"
     )
     assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
 
@@ -197,7 +198,7 @@ def test_structured_coaching_reconstruction_rejects_changed_contract(mutation: s
         config.pop("responseJsonSchema")
     else:
         part = body["systemInstruction"]["parts"][0]
-        part["text"] = part["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+        part["text"] = part["text"].replace("gemini-json-v3", "gemini-json-v1", 1)
     raw = canonical(body)
     with pytest.raises(InferenceTaskError, match="task_payload_metadata_mismatch"):
         replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
@@ -208,7 +209,7 @@ def test_retained_legacy_gemini_request_validates_without_rewriting_its_bytes() 
     legacy = task.as_provider_body()
     legacy["generationConfig"].pop("responseJsonSchema")
     part = legacy["systemInstruction"]["parts"][0]
-    part["text"] = part["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    part["text"] = part["text"].replace("gemini-json-v3", "gemini-json-v1", 1)
     raw = canonical(legacy)
     historical = replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
     restored = type(task).from_dict(historical.as_dict(), payload=raw)
@@ -218,12 +219,48 @@ def test_retained_legacy_gemini_request_validates_without_rewriting_its_bytes() 
     assert validate_coaching_result(result(restored, envelope(draft)), restored, transcript).data()
 
 
+def test_retained_v2_schema_is_frozen_and_requires_its_original_marker() -> None:
+    transcript, task, draft = coaching_case()
+    legacy = task.as_provider_body()
+    schema = coaching_response_json_schema()
+    assert hashlib.sha256(canonical(schema)).hexdigest() == (
+        "cf738359daf55c908b5e0ab664761fd0339f2043583d3a3e17ac85fd07b81cf1"
+    )
+    legacy["generationConfig"]["responseJsonSchema"] = schema
+    with pytest.raises(InferenceTaskError, match="task_payload_metadata_mismatch"):
+        raw = canonical(legacy)
+        replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
+    part = legacy["systemInstruction"]["parts"][0]
+    part["text"] = part["text"].replace("gemini-json-v3", "gemini-json-v2", 1)
+    raw = canonical(legacy)
+    historical = replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
+    restored = type(task).from_dict(historical.as_dict(), payload=raw)
+    assert restored.payload == raw
+    assert validate_coaching_result(result(restored, envelope(draft)), restored, transcript).data()
+
+
+@pytest.mark.parametrize("mutation", ["too_many_strengths", "too_many_rewatch", "bad_index"])
+def test_v3_still_rejects_invalid_semantic_cardinality_and_indices(mutation: str) -> None:
+    transcript, task, draft = coaching_case()
+    if mutation == "too_many_strengths":
+        draft["strengths"] *= 4
+    elif mutation == "too_many_rewatch":
+        draft["overview"]["rewatch"] = [
+            {"text": "Watch this", "purpose": "watch", "evidence": [{"segment_id": "s1"}]}
+            for _ in range(4)
+        ]
+    else:
+        draft["overview"]["improvement_details"][0]["finding_index"] = 999
+    with pytest.raises(InferenceTaskError):
+        validate_coaching_result(result(task, envelope(draft)), task, transcript)
+
+
 def test_schema_context_consumes_the_existing_coaching_input_budget() -> None:
     _, task, _ = coaching_case()
     native = task.as_provider_body()
     view = gemini_prompt_view(native, model=task.model, maximum=3200, task="coaching")
     schema_bytes = len(canonical(native["generationConfig"]["responseJsonSchema"]))
-    prefix = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: " + task.model + "\n"
+    prefix = "AC_TASK_ADAPTER: gemini-json-v3\nMODEL: " + task.model + "\n"
     system = view["messages"][0]["content"]
     # At the old text-only boundary, the extra schema would exceed the same
     # approved 48k total envelope. Both creation and replay must reject it.

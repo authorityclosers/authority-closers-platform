@@ -313,4 +313,18 @@ def coaching_response_json_schema() -> dict[str, Any]:
     }
 
 
-__all__ = ["coaching_response_json_schema"]
+def coaching_generation_json_schema() -> dict[str, Any]:
+    """Describe wire shape while leaving numeric/cardinality validation local."""
+    local_bounds = {"minItems", "maxItems", "minimum", "maximum"}
+
+    def shape(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: shape(item) for key, item in value.items() if key not in local_bounds}
+        if isinstance(value, list):
+            return [shape(item) for item in value]
+        return value
+
+    return shape(coaching_response_json_schema())  # type: ignore[no-any-return]
+
+
+__all__ = ["coaching_response_json_schema", "coaching_generation_json_schema"]

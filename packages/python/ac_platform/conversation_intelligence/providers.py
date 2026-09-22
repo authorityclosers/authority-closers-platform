@@ -28,6 +28,7 @@ class ProviderError(ValueError):
     """Stable failure code only: remote errors may contain source text or secrets."""
 
     diagnostic: str | None = None
+    diagnostic_markers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,61 @@ class BoundedProviders:
                         if len(raw_error) > 16384:
                             break
                     lowered = bytes(raw_error[:16384]).lower()
+                    # Emit only fixed vocabulary, never remote text. This keeps
+                    # otherwise generic schema rejections diagnosable without
+                    # retaining a provider message that could echo a secret.
+                    failure.diagnostic_markers = tuple(
+                        marker
+                        for marker in (
+                            "invalid_argument",
+                            "bad_request",
+                            "invalid",
+                            "unknown",
+                            "field",
+                            "name",
+                            "required",
+                            "type",
+                            "null",
+                            "object",
+                            "array",
+                            "property",
+                            "properties",
+                            "anyof",
+                            "reference",
+                            "unsupported",
+                            "not supported",
+                            "must",
+                            "empty",
+                            "value",
+                            "constraint",
+                            "complexity",
+                            "too many",
+                            "states",
+                            "nesting",
+                            "schema",
+                            "responsejsonschema",
+                            "responseformat",
+                            "maxoutputtokens",
+                            "thinking",
+                            "tokens",
+                            "minimum",
+                            "maximum",
+                            "model",
+                            "parameter",
+                            "format",
+                            "json",
+                            "payload",
+                            "size",
+                            "limit",
+                            "api key",
+                            "expired",
+                            "permission",
+                            "resource",
+                            "quota",
+                            "billing",
+                        )
+                        if marker.encode("ascii") in lowered
+                    )
                     for needle, category in (
                         (b"api_key_service_blocked", "key_service_restriction"),
                         (b"api_key_invalid", "key_invalid"),
@@ -142,6 +198,10 @@ class BoundedProviders:
                         (b"leaked", "credential_reported_exposed"),
                         (b"permission_denied", "permission_denied"),
                         (b"not_found", "model_or_endpoint_unavailable"),
+                        (b"too many states", "structured_schema_complexity"),
+                        (b"nesting depth", "structured_schema_depth"),
+                        (b"null is not supported", "structured_schema_null"),
+                        (b"schema", "structured_schema_rejected"),
                     ):
                         if needle in lowered:
                             failure.diagnostic = category
