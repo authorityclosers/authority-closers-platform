@@ -33,6 +33,7 @@ from ac_platform.conversation_intelligence.providers import (
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.conversation_intelligence.reports import (
     COACHING_CONTEXT_MARKER,
+    COACHING_PROMPT_LEGACY,
     FACT_PROMPT_COMPACT_MARKER,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
@@ -964,6 +965,7 @@ def prepare_coaching_input(
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
     output_profile: Literal["standard", "detailed"] = "detailed",
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY,
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -983,6 +985,7 @@ def prepare_coaching_input(
             model=model,
             provider=provider,
             detailed_overview=output_profile == "detailed",
+            coaching_prompt_revision=coaching_prompt_revision,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None

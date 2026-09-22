@@ -63,6 +63,16 @@ FACT_LANGUAGE_INSTRUCTION = (
 FACT_PROMPT_LEGACY: Literal["facts-v1"] = "facts-v1"
 FACT_PROMPT_COMPACT: Literal["facts-v2"] = "facts-v2"
 FACT_PROMPT_COMPACT_MARKER = "FACT_OUTPUT: compact-facts-v2."
+COACHING_PROMPT_LEGACY: Literal["coaching-v1"] = "coaching-v1"
+COACHING_PROMPT_REFINED: Literal["coaching-v2"] = "coaching-v2"
+COACHING_PROMPT_REFINED_MARKER = "COACHING_STATE: commercial-state-v2."
+COACHING_PROMPT_REFINED_INSTRUCTION = (
+    "Preserve commercial state exactly. Say declined or refused only for an explicit source-"
+    "recorded rejection. A discussed possibility is not an offer; unconfirmed acceptance, "
+    "authorization or booking is not rejection. Say not established in this call where the "
+    "evidence does not establish a decision. Do not infer an offered pilot, demo, order or "
+    "follow-up from a floated possibility."
+)
 
 
 def compact_fact_limits(max_completion_tokens: int) -> tuple[int, int, int, int, int]:
@@ -1832,6 +1842,7 @@ def build_report_groq_prompt(
     model: str = GROQ_MODEL,
     detailed_overview: bool = True,
     provider: str = "groq",
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY,
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -1843,6 +1854,8 @@ def build_report_groq_prompt(
         raise ReportError("report_model_invalid")
     if provider not in {"groq", "gemini"}:
         raise ReportError("report_provider_invalid")
+    if coaching_prompt_revision not in {COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED}:
+        raise ReportError("report_prompt_revision_invalid")
     validated = _validated_transcript(transcript)
     merged = merge_fact_packets(fact_packets, validated)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
@@ -1858,6 +1871,11 @@ def build_report_groq_prompt(
         + COACHING_VOICE_INSTRUCTION
         + COACHING_CONTEXT_INSTRUCTION
         + REPORT_STRUCTURE_INSTRUCTION
+        + (
+            COACHING_PROMPT_REFINED_MARKER + " " + COACHING_PROMPT_REFINED_INSTRUCTION + " "
+            if coaching_prompt_revision == COACHING_PROMPT_REFINED
+            else ""
+        )
         + "Set review_status to "
         f"{REVIEW_STATUS!r}. Do not score, grade, rank or publish official results. "
         "Max three strengths/improvements. Credit questions do not prove inability to pay; price "

@@ -12,7 +12,7 @@ import io
 import zipfile
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
@@ -54,6 +54,8 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_REFINED,
     GROQ_MODEL,
     FactPacket,
     load_report_profile,
@@ -81,6 +83,7 @@ from tests.database.test_conversation_submission_http_postgresql import (
 from tests.database.test_conversation_worker_postgresql import _prepare, _wav_one_second_48k
 
 pytest_plugins = ("tests.database.test_conversation_postgresql",)
+C5PromptRevision = Literal["coaching-v1", "coaching-v2"]
 
 
 def _transcript(source_sha256: str) -> dict[str, Any]:
@@ -140,7 +143,11 @@ def _provider_raw(*, quote: str) -> bytes:
 
 
 async def _seed_retained_case(
-    postgres_harness: Any, scratch_root: Path, *, source_quote: str = "Wrong quote"
+    postgres_harness: Any,
+    scratch_root: Path,
+    *,
+    source_quote: str = "Wrong quote",
+    coaching_prompt_revision: C5PromptRevision = COACHING_PROMPT_LEGACY,
 ) -> dict[str, Any]:
     prepared = await _prepare(postgres_harness, scratch_root)
     engine = create_async_engine(postgres_harness.url)
@@ -153,7 +160,11 @@ async def _seed_retained_case(
                 (prepared.state.tenant_id, prepared.state.person_id),
             )
             assert person is not None and membership is not None
-            person.email = "admin@authorityclosers.com"
+            person.email = (
+                "admin@authorityclosers.com"
+                if coaching_prompt_revision == COACHING_PROMPT_LEGACY
+                else "suyash@authorityclosers.com"
+            )
             person.email_verified_at = prepared.state.now
             membership.role = "admin"
             recording = await database.get(ConversationRecording, prepared.recording_id)
@@ -192,6 +203,7 @@ async def _seed_retained_case(
                 profile=profile,
                 max_completion_tokens=1_800,
                 output_profile="standard",
+                coaching_prompt_revision=coaching_prompt_revision,
             )
             c2 = build_checkpoint(
                 binding,
@@ -370,6 +382,8 @@ async def _seed_retained_case(
                 "output_profile": "standard",
                 "profile": profile,
             }
+            if coaching_prompt_revision != COACHING_PROMPT_LEGACY:
+                request["coaching_prompt_revision"] = coaching_prompt_revision
             intent = {
                 "schema": "ac.sales-xray.text-intent/1",
                 "request": request,
@@ -424,6 +438,7 @@ async def _seed_retained_case(
             "raw_sha256": raw_sha256,
             "historical_input": prepared_input.payload,
             "recording_id": prepared.recording_id,
+            "coaching_prompt_revision": coaching_prompt_revision,
         }
     except BaseException:
         await engine.dispose()
@@ -705,9 +720,19 @@ async def _seed_guest_retained_case(postgres_harness: Any, scratch_root: Path) -
         raise
 
 
-def test_retained_c5_recovery_real_postgres(postgres_harness: Any, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "coaching_prompt_revision",
+    [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED],
+)
+def test_retained_c5_recovery_real_postgres(
+    postgres_harness: Any, tmp_path: Path, coaching_prompt_revision: C5PromptRevision
+) -> None:
     async def exercise() -> None:
-        case = await _seed_retained_case(postgres_harness, tmp_path)
+        case = await _seed_retained_case(
+            postgres_harness,
+            tmp_path,
+            coaching_prompt_revision=coaching_prompt_revision,
+        )
         engine = case["engine"]
         sessions: async_sessionmaker[AsyncSession] = case["sessions"]
         prepared = case["prepared"]

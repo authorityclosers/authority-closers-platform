@@ -71,6 +71,8 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_REFINED,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -162,6 +164,7 @@ class PlanManifest(BaseModel):
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -226,6 +229,8 @@ class PlanManifest(BaseModel):
             value.pop("output_profile", None)
         if self.fact_prompt_revision == FACT_PROMPT_LEGACY:
             value.pop("fact_prompt_revision", None)
+        if self.coaching_prompt_revision == COACHING_PROMPT_LEGACY:
+            value.pop("coaching_prompt_revision", None)
         return value
 
 
@@ -427,6 +432,10 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         or (
             plan.checkpoint.stage == "C5"
             and content_hash(plan.profile) != content_hash(value.profile)
+        )
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.coaching_prompt_revision != value.coaching_prompt_revision
         )
         or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
@@ -707,6 +716,7 @@ class ConversationProcessingPlans:
                 stages=(c2, c4, c5),
                 profile=profile,
                 fact_prompt_revision=FACT_PROMPT_COMPACT,
+                coaching_prompt_revision=COACHING_PROMPT_REFINED,
                 created_at_epoch=int(now.timestamp()),
                 expires_at_epoch=min(
                     int(now.timestamp()) + 3600,
@@ -957,6 +967,7 @@ class ConversationProcessingPlans:
                     ),
                     output_profile=value.output_profile,
                     profile=value.profile,
+                    coaching_prompt_revision=value.coaching_prompt_revision,
                 )
                 judge = await self._enqueue(
                     actor,

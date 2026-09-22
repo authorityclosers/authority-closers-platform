@@ -2,7 +2,24 @@
 
 Base: `1a16a4b8defe0f4c36cc4bda5b72ada02c005b17`.
 Candidate branch: `codex/sales-xray-reliable-20260922`.
-Current checkpoint: [cc88313f hour-long staging acceptance](staging-cc88313f-long-call.md) records exact passing CI, deployed storage repair, and a successful retained 2.2 MB transcription response. [Compact C4 recovery](compact-c4-recovery.md) records the versioned repair for the subsequent bounded-output truncation. Long-call report and production acceptance remain pending. The sections below preserve earlier implementation history.
+Current checkpoint: [06952d76 hour-long report completion](staging-06952d76-long-report.md) records exact passing CI, five successful compact C4 chunks, completed C5, cited playback through the final minute, saved-library reopening, and full reload. Follow-up fixes address the [stereo waveform bound](long-call-waveform-bound.md) and [versioned commercial-state wording](c5-prompt-revision.md). Their deployed acceptance and production acceptance remain pending. [Compact C4 recovery](compact-c4-recovery.md) preserves the versioned repair and [cc88313f](staging-cc88313f-long-call.md) preserves the earlier storage checkpoint. The sections below preserve earlier implementation history.
+
+The combined follow-up passed 1,158 conversation unit tests (one POSIX ownership
+test skipped on Windows), whole-source/test Ruff, and Mypy for 302 source files.
+An offline reconstruction of the actual paid, completed long-call C5 request
+preserved its serialized request and input SHA-256
+`a3f3061cf3c26332cf5c7574c071835b323e31fdcdd8f7287ec514c89279f219`
+after adding the optional prompt revision. It made no provider calls or database
+writes. A read-only source/SELECT review confirmed that the existing completed
+C2 and five `facts-v2` C4 tasks can be reused by a new plan, subject to current
+authority and receipt validation; a revised C5 remains subject to a fresh quote,
+consent, request limit and budget. This is not evidence of a new provider run.
+The seven-suite PostgreSQL run passed 27 cases and exposed one synthetic Admin
+identity collision. After separating the test identities, all three retained
+recovery cases passed together in their shared disposable schema. The other
+passing plan, Gemini, pipeline, fact-upgrade, measurement and validator cases
+were unaffected. The final focused unit run passed 22 tests; final Ruff for 688
+files and Mypy for 302 source files also passed.
 
 ## Authority and scope
 

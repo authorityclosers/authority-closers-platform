@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
@@ -109,6 +110,10 @@ class StageRequest(BaseModel):
         default=FACT_PROMPT_LEGACY,
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = Field(
+        default=COACHING_PROMPT_LEGACY,
+        exclude_if=lambda value: value == COACHING_PROMPT_LEGACY,
+    )
     output_profile: Literal["standard", "detailed"] = Field(
         default="detailed", exclude_if=lambda value: value == "detailed"
     )
@@ -127,6 +132,8 @@ class StageRequest(BaseModel):
             raise ValueError("Facts cannot use coaching repair.")
         if self.stage == "C5" and self.fact_prompt_revision != FACT_PROMPT_LEGACY:
             raise ValueError("Coaching cannot select a fact prompt revision.")
+        if self.stage == "C4" and self.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
+            raise ValueError("Facts cannot select a coaching prompt revision.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):
             raise ValueError("Coaching requires complete fact checkpoints.")
         if len(set(self.fact_checkpoint_ids)) != len(self.fact_checkpoint_ids):
@@ -489,6 +496,7 @@ class ReportingPipeline:
             model=request.model,
             max_completion_tokens=request.max_completion_tokens,
             output_profile=request.output_profile,
+            coaching_prompt_revision=request.coaching_prompt_revision,
         )
         if request.repair is not None:
             prepared = repair_coaching_input(prepared, request.repair)
@@ -498,6 +506,8 @@ class ReportingPipeline:
             "model": prepared.model,
             "profile_sha256": content_hash(profile),
         }
+        if request.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
+            c5_config["coaching_prompt_revision"] = request.coaching_prompt_revision
         if request.repair is not None:
             c5_config["repair"] = request.repair.model_dump(mode="json")
         template = build_checkpoint(
