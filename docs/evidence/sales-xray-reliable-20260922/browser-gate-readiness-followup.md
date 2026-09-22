@@ -23,6 +23,9 @@ Verification after the bounded wait:
   PostgreSQL, Node `v24.19.0`, zero API interceptions, zero provider network
   calls, and no page errors. The sanitized receipt is outside Git at
   `D:\ac-xray-reliable-browser-evidence-20260922-readiness\browser-network.json`
-  (SHA256 `fca6645a28a9042d9bcb88cc49a7b24b34b1d6f68cfa03c7ec1e0c9eb0d132f`).
+  (SHA256 `fca6645a28a9042d9bcb88cc49a7b24b34b1d6f68cfa03c7ec1e0c9eb0d132f7`).
 
 All evidence uses synthetic inputs and remains outside production data paths.
+
+This follow-up changes only the test harness and evidence. The verified product
+artifacts remain pinned to release `819a3b1016b833908d25cf2a0c58a6e52d54fd74`.
