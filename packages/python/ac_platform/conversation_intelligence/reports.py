@@ -1865,6 +1865,7 @@ def parse_report_draft(
             payload[field], transcript=validated_transcript, field_name=field
         )
     overview_payload = payload.get("overview")
+    overview_compatibility: dict[str, Any] = {}
     # Older Gemini responses emitted the detailed overview keys beside the
     # report findings instead of under ``overview``.  Keep that response
     # usable by moving only the exact versioned overview fields into the
@@ -1896,6 +1897,16 @@ def parse_report_draft(
                 normalized.pop(key, None)
             consumed_provider_keys.update(overview_keys)
     if overview_payload is not None:
+        if isinstance(overview_payload, Mapping):
+            # Older Gemini coaching responses used a plain diagnosis string.
+            # A scalar has no source binding, so do not invent evidence for it;
+            # omit it from the canonical overview while retaining the bounded
+            # provider value for later review and adapter improvements.
+            overview_payload = dict(overview_payload)
+            scalar_diagnosis = overview_payload.get("diagnosis")
+            if isinstance(scalar_diagnosis, str):
+                overview_compatibility["diagnosis"] = scalar_diagnosis[:320]
+                overview_payload["diagnosis"] = None
         try:
             normalized["overview"] = normalize_overview(
                 overview_payload,
@@ -1921,6 +1932,11 @@ def parse_report_draft(
         payload.get("report_sections"), profile=resolved_profile
     )
     provider_extras = _provider_extras(payload, consumed_keys=consumed_provider_keys)
+    if overview_compatibility:
+        compatibility_extras = {
+            **compatibility_extras,
+            "overview_scalars": overview_compatibility,
+        }
     if compatibility_extras:
         provider_extras = {**provider_extras, "compatibility": compatibility_extras}
     # The provider object starts as a convenient working copy above. Strip

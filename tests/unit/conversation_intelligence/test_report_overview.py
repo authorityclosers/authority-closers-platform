@@ -78,6 +78,23 @@ def test_provider_scalar_findings_keep_source_bound_report_usable() -> None:
     assert extras["strengths"] == ["Polite and respectful opening."]
 
 
+def test_legacy_scalar_diagnosis_is_omitted_without_blocking_report() -> None:
+    """A legacy provider diagnosis cannot be promoted without source evidence."""
+
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["diagnosis"] = "A useful but unbound provider diagnosis."
+
+    result = parse_report_draft(payload, transcript)
+
+    assert result.overview is not None
+    assert result.overview.diagnosis is None
+    assert result.provider_extras["compatibility"]["overview_scalars"]["diagnosis"] == (
+        "A useful but unbound provider diagnosis."
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
