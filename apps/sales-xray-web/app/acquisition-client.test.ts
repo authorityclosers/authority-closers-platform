@@ -76,6 +76,25 @@ describe("acquisition permission recovery", () => {
   );
 
   it.each([
+    JSON.stringify({
+      detail:
+        "Your remaining trial minutes are not enough for this recording. Contact AC for more access.",
+    }),
+  ])("explains an insufficient remaining trial allowance", async (body) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(body, { status: 403 })),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
+    ).rejects.toMatchObject({
+      status: 403,
+      reason: "trial_allowance_insufficient",
+      message: expect.stringContaining("remaining trial allowance"),
+    });
+  });
+
+  it.each([
     JSON.stringify({ detail: "private-provider-context" }),
     JSON.stringify({ detail: `${allowanceDetail} private-provider-context` }),
     JSON.stringify([{ detail: allowanceDetail }]),

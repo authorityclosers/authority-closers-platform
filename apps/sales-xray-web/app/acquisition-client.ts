@@ -55,6 +55,7 @@ export class AcquisitionError extends Error {
     readonly status: number,
     readonly reason?:
       | "provider_allowance_used"
+      | "trial_allowance_insufficient"
       | "plan_permission"
       | "plan_stale"
       | "execution_paused"
@@ -78,13 +79,15 @@ export class AcquisitionError extends Error {
                 : status === 401
                   ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
                   : status === 403
-                    ? reason === "provider_allowance_used"
-                      ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-                      : reason === "plan_stale"
-                        ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                        : reason === "plan_permission"
-                          ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                          : "This action is not available with your current access. Ask the AC team to check your permission."
+                    ? reason === "trial_allowance_insufficient"
+                      ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
+                      : reason === "provider_allowance_used"
+                        ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                        : reason === "plan_stale"
+                          ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                          : reason === "plan_permission"
+                            ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                            : "This action is not available with your current access. Ask the AC team to check your permission."
                     : status === 404
                       ? "This call is unavailable in your current session. It may have expired or been deleted."
                       : status === 429
@@ -118,25 +121,34 @@ export async function acquisition(
       )
         throw new AcquisitionError(503, "execution_paused", requestId);
     }
-    if (
-      response.status === 403 &&
-      /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)
-    ) {
+    if (response.status === 403) {
       // Translate only an exact, known denial. Never display server/provider
       // bodies, which can contain private context or infrastructure details.
       const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body !== null &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body &&
+        typeof body.detail === "string"
+          ? body.detail
+          : undefined;
+      if (
+        detail ===
+        "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
+      ) {
+        throw new AcquisitionError(
+          response.status,
+          "trial_allowance_insufficient",
+          requestId,
+        );
+      }
+      if (!/^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path))
+        throw new AcquisitionError(response.status, undefined, requestId);
       const allowanceUsed =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "This recording's approved provider allowance is used.";
+        detail === "This recording's approved provider allowance is used.";
       const planStale =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "Approve the current displayed processing plan.";
+        detail === "Approve the current displayed processing plan.";
       throw new AcquisitionError(
         response.status,
         allowanceUsed

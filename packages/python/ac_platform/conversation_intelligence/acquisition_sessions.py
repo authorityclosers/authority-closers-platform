@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
+    TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
     existing_account_seconds,
 )
@@ -303,7 +304,7 @@ class AcquisitionSessions:
             tester is None
             and await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS
         ):
-            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
+            raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         self.database.add(
             ConversationAcquisitionUsage(

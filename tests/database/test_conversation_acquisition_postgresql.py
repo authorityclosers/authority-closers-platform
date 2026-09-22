@@ -92,7 +92,10 @@ def test_existing_run_usage_is_preserved_when_guest_claims_account(postgres_harn
                 await app.reserve(source(3400), token=guest.token)
                 await app.claim(guest.token, state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 80
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(81), actor=state.actor)
                 last = await app.reserve(source(80), actor=state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
@@ -120,7 +123,10 @@ def test_existing_upload_cannot_bypass_claimed_guest_minutes(postgres_harness):
             async with AsyncSession(engine) as db, db.begin():
                 # The existing fixture has 180 untouched seconds and would
                 # accept this 120-second job without the combined allowance.
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await application(db, state).request_run(
                         state.actor, intent, key="must-not-enqueue"
                     )
@@ -225,7 +231,10 @@ def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
                 await app.claim(guest.token, state.actor)
                 assert await app.reserve(original_source, actor=state.actor) == original_usage
                 assert (await app.allowance(actor=state.actor))["committed_seconds"] == 4000
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(1), actor=state.actor)
                 await app.settle(original_usage, charged_seconds=4000, receipt_sha256="d" * 64)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
@@ -255,7 +264,10 @@ def test_claim_preserves_guest_and_account_usage_and_replay(postgres_harness):
                 assert await app.allowance(token=guest.token, actor=state.actor) == allowance
                 with pytest.raises(ConversationDenied):
                     await app.allowance(token=guest.token)
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(601), actor=state.actor)
             # A different browser and a policy revision never grant another 60 minutes.
             second = await issue(engine, state)

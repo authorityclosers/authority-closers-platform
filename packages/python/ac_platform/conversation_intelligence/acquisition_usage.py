@@ -21,6 +21,9 @@ from ac_platform.conversation_intelligence.entitlements import MinuteAccount
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 
 ALLOWANCE_SECONDS = 3600
+TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
+    "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
+)
 
 
 async def acquisition_seconds(

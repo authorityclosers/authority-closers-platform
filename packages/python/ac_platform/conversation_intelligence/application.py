@@ -17,6 +17,7 @@ from sqlalchemy.orm import SessionTransactionOrigin
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
+    TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
@@ -600,7 +601,7 @@ class ConversationApplication:
                 > ALLOWANCE_SECONDS
             )
         ):
-            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
+            raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         try:
             transition = reserve(

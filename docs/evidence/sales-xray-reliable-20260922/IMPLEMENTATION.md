@@ -2,9 +2,7 @@
 
 Base: `1a16a4b8defe0f4c36cc4bda5b72ada02c005b17`.
 Candidate branch: `codex/sales-xray-reliable-20260922`.
-Status: candidate `9986cf2e` passed exact-source CI and is deployed to staging;
-live testing found a frontend contract mismatch corrected by this follow-up.
-Production and final browser acceptance remain pending.
+Current checkpoint: [df825e0f staging acceptance](staging-df825e0f-acceptance.md) records the recovered live short report, approved staging tester exemption, and the first long-call storage failure. A bounded provider-response storage fix and trial-allowance message correction follow. Full long-call and production acceptance remain pending. The sections below preserve earlier implementation history.
 
 ## Authority and scope
 
