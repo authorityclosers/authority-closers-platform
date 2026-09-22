@@ -63,6 +63,7 @@ def test_durable_plan_output_allocation_fits_supported_routes_without_losing_inp
         system = body["systemInstruction"]["parts"][0]["text"]
         user = body["contents"][0]["parts"][0]["text"]
         assert body["generationConfig"]["maxOutputTokens"] == 3_200
+        assert ("responseJsonSchema" in body["generationConfig"]) == (model == "gemini-3.8-flash")
     else:
         system, user = [message["content"] for message in body["messages"]]
         assert body["max_completion_tokens"] == 3_200

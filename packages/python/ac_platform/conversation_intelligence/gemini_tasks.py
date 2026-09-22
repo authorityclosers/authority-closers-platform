@@ -12,10 +12,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.coaching_schema import coaching_response_json_schema
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
+_STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
@@ -25,24 +28,47 @@ class GeminiTaskError(ValueError):
     """Content-free adapter failure."""
 
 
-def _config(maximum: int, *, model: str = "", task: str = "facts") -> dict[str, Any]:
+def _config(
+    maximum: int,
+    *,
+    model: str = "",
+    task: str = "facts",
+    structured_coaching: bool = False,
+) -> dict[str, Any]:
     ceiling = completion_ceiling("gemini", model, "C5" if task == "coaching" else "C4")
     if type(maximum) is not int or not 256 <= maximum <= ceiling:
         raise GeminiTaskError("invalid_max_completion_tokens")
     # A total output cap also bounds thinking. LOW leaves room for the report;
     # exhaustion is rejected, never retried with a larger automatic allowance.
-    return {
+    config: dict[str, Any] = {
         "candidateCount": 1,
         "maxOutputTokens": maximum,
         "responseMimeType": "application/json",
         "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": False},
     }
+    if structured_coaching:
+        if task != "coaching":
+            raise GeminiTaskError("task_prompt_invalid")
+        config["responseJsonSchema"] = coaching_response_json_schema()
+    return config
 
 
-def _require_prompt_budget(system: str, user: str, *, model: str, task: str, maximum: int) -> None:
+def _require_prompt_budget(
+    system: str,
+    user: str,
+    *,
+    model: str,
+    task: str,
+    maximum: int,
+    response_schema: Mapping[str, Any] | None = None,
+) -> None:
     if task not in {"facts", "coaching"}:
         raise GeminiTaskError("task_prompt_invalid")
     input_bytes = len((system + user).encode("utf-8"))
+    if response_schema is not None:
+        # Structured generation instructions consume input too. Preserve the
+        # existing approval envelope instead of silently adding free context.
+        input_bytes += len(canonical(dict(response_schema)))
     if model == "gemini-3.8-flash" and task == "coaching":
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
@@ -80,10 +106,30 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         or not all(isinstance(item.get("content"), str) for item in messages)
     ):
         raise GeminiTaskError("task_prompt_invalid")
-    config = _config(prompt["max_completion_tokens"], model=model, task=task)
-    system = _MARKER + model + "\n" + messages[0]["content"]
+    # The larger Flash input envelope has reviewed schema headroom. Preserve
+    # the existing smaller Pro route until its own allowance is reviewed.
+    structured_coaching = (
+        model == "gemini-3.8-flash"
+        and task == "coaching"
+        and OVERVIEW_MARKER in messages[0]["content"]
+    )
+    config = _config(
+        prompt["max_completion_tokens"],
+        model=model,
+        task=task,
+        structured_coaching=structured_coaching,
+    )
+    marker = _STRUCTURED_MARKER if structured_coaching else _MARKER
+    system = marker + model + "\n" + messages[0]["content"]
     user = messages[1]["content"]
-    _require_prompt_budget(system, user, model=model, task=task, maximum=config["maxOutputTokens"])
+    _require_prompt_budget(
+        system,
+        user,
+        model=model,
+        task=task,
+        maximum=config["maxOutputTokens"],
+        response_schema=config.get("responseJsonSchema"),
+    )
     return {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -100,10 +146,6 @@ def gemini_prompt_view(
     try:
         if set(body) != {"systemInstruction", "contents", "generationConfig"}:
             raise ValueError
-        if canonical(body["generationConfig"]) != canonical(
-            _config(maximum, model=model, task=task)
-        ):
-            raise ValueError
         instruction = body["systemInstruction"]
         contents = body["contents"]
         if set(instruction) != {"parts"} or len(contents) != 1:
@@ -118,12 +160,32 @@ def gemini_prompt_view(
             if not isinstance(value, str) or not value.strip():
                 raise ValueError
             texts.append(value)
-        prefix = _MARKER + model + "\n"
+        structured_coaching = texts[0].startswith(_STRUCTURED_MARKER)
+        if structured_coaching and (
+            model != "gemini-3.8-flash" or task != "coaching" or OVERVIEW_MARKER not in texts[0]
+        ):
+            raise ValueError
+        prefix = (_STRUCTURED_MARKER if structured_coaching else _MARKER) + model + "\n"
         if not texts[0].startswith(prefix):
+            raise ValueError
+        config = _config(
+            maximum,
+            model=model,
+            task=task,
+            structured_coaching=structured_coaching,
+        )
+        if canonical(body["generationConfig"]) != canonical(config):
             raise ValueError
     except (KeyError, IndexError, TypeError, ValueError):
         raise GeminiTaskError("task_payload_metadata_mismatch") from None
-    _require_prompt_budget(texts[0], texts[1], model=model, task=task, maximum=maximum)
+    _require_prompt_budget(
+        texts[0],
+        texts[1],
+        model=model,
+        task=task,
+        maximum=maximum,
+        response_schema=config.get("responseJsonSchema"),
+    )
     return {
         "model": model,
         "max_completion_tokens": maximum,

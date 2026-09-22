@@ -191,7 +191,7 @@ def test_gemini_report_keeps_all_sixty_four_facts_and_full_overview() -> None:
         [packet],
         provider="gemini",
         model="gemini-3.8-flash",
-        max_completion_tokens=1800,
+        max_completion_tokens=8000,
     )
     body = task.as_provider_body()
     system = body["systemInstruction"]["parts"][0]["text"]
@@ -203,14 +203,42 @@ def test_gemini_report_keeps_all_sixty_four_facts_and_full_overview() -> None:
     assert OVERVIEW_MARKER in system
     profile = json.loads(system.rsplit("Profile:\n", 1)[1])
     assert profile["dimensions"] == load_report_profile()["dimensions"]
-    assert body["generationConfig"]["maxOutputTokens"] == 1800
-    assert 32000 < len((system + user).encode("utf-8")) + 1800 + 128 <= 48000
+    assert body["generationConfig"]["maxOutputTokens"] == 8000
+    schema_bytes = len(canonical(body["generationConfig"]["responseJsonSchema"]))
+    assert 48000 < len((system + user).encode("utf-8")) + schema_bytes + 8000 + 128 <= 96000
     assert len(facts["observations"]) == 64
     assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
     draft = _payload(transcript)
     draft["overview"] = overview_for(draft)
     validated = validate_coaching_result(result(task, envelope(draft)), task, transcript)
     assert validated.data() == parse_report_draft(draft, transcript).model_dump(mode="json")
+
+    # The former 1800-output request still replays byte-for-byte without the
+    # new schema. New generation must count that schema: this exact fixture
+    # now requires the already-approved extended lane, not silent truncation
+    # or an automatic increase to its requested allowance.
+    legacy = deepcopy(body)
+    legacy["generationConfig"].pop("responseJsonSchema")
+    legacy["generationConfig"]["maxOutputTokens"] = 1800
+    instruction = legacy["systemInstruction"]["parts"][0]
+    instruction["text"] = instruction["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    legacy_raw = canonical(legacy)
+    restored = replace(
+        task,
+        payload=legacy_raw,
+        input_sha256=hashlib.sha256(legacy_raw).hexdigest(),
+        max_completion_tokens=1800,
+    )
+    assert restored.payload == legacy_raw
+    assert type(task).from_dict(restored.as_dict(), payload=legacy_raw) == restored
+    with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
+        prepare_coaching_input(
+            transcript,
+            [packet],
+            provider="gemini",
+            model="gemini-3.8-flash",
+            max_completion_tokens=1800,
+        )
 
     # Excess text is refused; observations and quotes are never silently removed.
     larger = packet.model_copy(update={"uncertainties": ["अ" * 10000]})
@@ -242,6 +270,10 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
     full_call: bool,
 ) -> None:
     transcript, packet = _full_call_c5_case(repetitions=6) if full_call else _many_fact_case()
+    if not full_call:
+        # Selective C4 facts are legitimate; keep the complete source context.
+        # The separate 64-fact regression exercises the extended allowance.
+        packet = packet.model_copy(update={"observations": packet.observations[:4]})
     maximum = 8000 if full_call else 1800
     cost = 1000 if full_call else 500
     task = prepare_coaching_input(
@@ -309,6 +341,7 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
 
 def test_gemini_report_exact_byte_boundary_and_stage_cannot_be_overridden() -> None:
     transcript, packet = _many_fact_case()
+    packet = packet.model_copy(update={"observations": packet.observations[:4]})
     task = prepare_coaching_input(
         transcript,
         [packet],
@@ -319,12 +352,15 @@ def test_gemini_report_exact_byte_boundary_and_stage_cannot_be_overridden() -> N
     body = task.as_provider_body()
     system = body["systemInstruction"]["parts"][0]["text"]
     part = body["contents"][0]["parts"][0]
-    part["text"] += " " * (48000 - 1800 - 128 - len((system + part["text"]).encode("utf-8")))
+    schema_bytes = len(canonical(body["generationConfig"]["responseJsonSchema"]))
+    part["text"] += " " * (
+        48000 - 1800 - 128 - schema_bytes - len((system + part["text"]).encode("utf-8"))
+    )
     view = gemini_prompt_view(body, model=task.model, maximum=1800, task="coaching")
     assert prepare_gemini_body(view, task="coaching") == body
     raw = canonical(body)
     replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
-    with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
+    with pytest.raises(GeminiTaskError, match="task_payload_metadata_mismatch"):
         gemini_prompt_view(body, model=task.model, maximum=1800, task="facts")
     part["text"] += "x"
     with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
@@ -392,7 +428,8 @@ def test_admitted_full_call_preserves_every_turn_fact_and_profile() -> None:
     body = task.as_provider_body()
     system = body["systemInstruction"]["parts"][0]["text"]
     user = body["contents"][0]["parts"][0]["text"]
-    assert 48000 < len((system + user).encode("utf8")) + maximum + 128 <= 96000
+    schema_bytes = len(canonical(body["generationConfig"]["responseJsonSchema"]))
+    assert 48000 < len((system + user).encode("utf8")) + schema_bytes + maximum + 128 <= 96000
     facts = json.loads(user.split("\n", 1)[1])
     _assert_lossless_coaching_context(facts, transcript, packet)
     assert len(facts["observations"]) == 38

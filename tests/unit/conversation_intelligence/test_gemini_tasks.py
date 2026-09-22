@@ -11,7 +11,12 @@ import httpx
 import pytest
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
-from ac_platform.conversation_intelligence.gemini_tasks import GEMINI_TASK_MODELS
+from ac_platform.conversation_intelligence.gemini_tasks import (
+    GEMINI_TASK_MODELS,
+    GeminiTaskError,
+    gemini_prompt_view,
+    prepare_gemini_body,
+)
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     prepare_coaching_input,
@@ -165,6 +170,71 @@ def test_native_report_matches_shared_schema_and_keeps_raw_thoughts_private() ->
     changed["candidates"][0]["finishReason"] = "MAX_TOKENS"
     with pytest.raises(InferenceTaskError, match="provider_parsed_data_mismatch"):
         validate_coaching_result(replace(received, data=changed), task, transcript)
+
+
+def test_detailed_coaching_requires_all_report_sections_in_provider_schema() -> None:
+    _, task, _ = coaching_case()
+    body = task.as_provider_body()
+    schema = body["generationConfig"]["responseJsonSchema"]
+    assert {"objection_analysis", "closing_analysis", "overview"} <= set(schema["required"])
+    assert schema["additionalProperties"] is False
+    assert body["systemInstruction"]["parts"][0]["text"].startswith(
+        "AC_TASK_ADAPTER: gemini-json-v2\n"
+    )
+    assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
+
+
+@pytest.mark.parametrize("mutation", ["omit_section", "allow_extras", "remove_schema", "marker"])
+def test_structured_coaching_reconstruction_rejects_changed_contract(mutation: str) -> None:
+    _, task, _ = coaching_case()
+    body = task.as_provider_body()
+    config = body["generationConfig"]
+    if mutation == "omit_section":
+        config["responseJsonSchema"]["required"].remove("objection_analysis")
+    elif mutation == "allow_extras":
+        config["responseJsonSchema"]["additionalProperties"] = True
+    elif mutation == "remove_schema":
+        config.pop("responseJsonSchema")
+    else:
+        part = body["systemInstruction"]["parts"][0]
+        part["text"] = part["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    raw = canonical(body)
+    with pytest.raises(InferenceTaskError, match="task_payload_metadata_mismatch"):
+        replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
+
+
+def test_retained_legacy_gemini_request_validates_without_rewriting_its_bytes() -> None:
+    transcript, task, draft = coaching_case()
+    legacy = task.as_provider_body()
+    legacy["generationConfig"].pop("responseJsonSchema")
+    part = legacy["systemInstruction"]["parts"][0]
+    part["text"] = part["text"].replace("gemini-json-v2", "gemini-json-v1", 1)
+    raw = canonical(legacy)
+    historical = replace(task, payload=raw, input_sha256=hashlib.sha256(raw).hexdigest())
+    restored = type(task).from_dict(historical.as_dict(), payload=raw)
+    assert restored.payload == raw
+    assert restored.as_provider_body() == legacy
+    assert "responseJsonSchema" not in restored.as_provider_body()["generationConfig"]
+    assert validate_coaching_result(result(restored, envelope(draft)), restored, transcript).data()
+
+
+def test_schema_context_consumes_the_existing_coaching_input_budget() -> None:
+    _, task, _ = coaching_case()
+    native = task.as_provider_body()
+    view = gemini_prompt_view(native, model=task.model, maximum=3200, task="coaching")
+    schema_bytes = len(canonical(native["generationConfig"]["responseJsonSchema"]))
+    prefix = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: " + task.model + "\n"
+    system = view["messages"][0]["content"]
+    # At the old text-only boundary, the extra schema would exceed the same
+    # approved 48k total envelope. Both creation and replay must reject it.
+    available = 48_000 - 3200 - 128 - len((prefix + system).encode())
+    assert available > schema_bytes > 0
+    view["messages"][1]["content"] = "x" * available
+    with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
+        prepare_gemini_body(view, task="coaching")
+    native["contents"][0]["parts"][0]["text"] = "x" * available
+    with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
+        gemini_prompt_view(native, model=task.model, maximum=3200, task="coaching")
 
 
 @pytest.mark.parametrize(
