@@ -43,6 +43,10 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
 )
 from ac_platform.conversation_intelligence.execution_control import require_execution_enabled
+from ac_platform.conversation_intelligence.gemini_tasks import (
+    GeminiTaskError,
+    require_long_coaching_cost_approval,
+)
 from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
@@ -540,6 +544,21 @@ class ConversationAuthority:
             != approval.profile_sha256
         ):
             raise ConversationDenied("This input exceeds the approved processing bounds.")
+        if approval.stage == "C5" and approval.provider_id == "gemini":
+            try:
+                require_long_coaching_cost_approval(
+                    plan.prepared.as_provider_body(),
+                    model=approval.model_id,
+                    maximum=plan.prepared.max_completion_tokens or 0,
+                    cost_basis=approval.zero_cost_basis,
+                    cost_paise=approval.max_cost_paise,
+                    pricing_ref=approval.pricing_ref,
+                    price_evidence_sha256=approval.price_evidence_sha256,
+                )
+            except GeminiTaskError:
+                raise ConversationDenied(
+                    "The complete call needs a coaching quote within its approved cost limit."
+                ) from None
         await self.validate_route(
             app,
             actor,

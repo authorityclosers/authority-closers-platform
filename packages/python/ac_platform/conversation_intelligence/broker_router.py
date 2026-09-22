@@ -30,7 +30,10 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
 )
 from ac_platform.conversation_intelligence.entitlements import Reservation
-from ac_platform.conversation_intelligence.gemini_tasks import gemini_prompt_view
+from ac_platform.conversation_intelligence.gemini_tasks import (
+    gemini_prompt_view,
+    require_long_coaching_cost_approval,
+)
 from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.providers import ProviderResult
 
@@ -314,6 +317,16 @@ class FixedProviderRouter:
                     maximum=maximum,
                     task="coaching" if approval.stage == "C5" else "facts",
                 )
+                if approval.stage == "C5":
+                    require_long_coaching_cost_approval(
+                        body,
+                        model=approval.model_id,
+                        maximum=maximum,
+                        cost_basis=approval.zero_cost_basis,
+                        cost_paise=approval.max_cost_paise,
+                        pricing_ref=approval.pricing_ref,
+                        price_evidence_sha256=approval.price_evidence_sha256,
+                    )
             except (KeyError, TypeError, ValueError):
                 raise ProviderRouterError("broker_router_payload_mismatch") from None
         if not (

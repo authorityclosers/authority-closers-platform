@@ -323,7 +323,7 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
 
     body = task.as_provider_body()
     # A fresh matching digest must not allow an oversized native request.
-    body["contents"][0]["parts"][0]["text"] += " " * (96000 if full_call else 48000)
+    body["contents"][0]["parts"][0]["text"] += " " * (256000 if full_call else 48000)
     oversized = canonical(body)
     digest = hashlib.sha256(oversized).hexdigest()
     with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
@@ -396,13 +396,14 @@ def _full_call_c5_case(*, repetitions: int = 13) -> tuple[dict[str, Any], Any]:
     return transcript, packet
 
 
-@pytest.mark.parametrize("maximum", [1800, 3200, 4000, 8000])
+@pytest.mark.parametrize("maximum", [1800, 3200, 4000])
 def test_oversized_full_call_is_refused_without_losing_source_or_facts(maximum: int) -> None:
     transcript, packet = _full_call_c5_case()
     before = deepcopy(transcript), packet.model_dump_json()
     # Keep the original 152-turn/13-repetition fixture. It used to fit only
     # because C5 omitted most source text. Complete C2 coverage exceeds the
-    # unchanged allowance, including the explicitly approved extended route.
+    # unchanged smaller allowance. The structured extended route is covered
+    # separately with complete context and an exact paid-cost guard.
     with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
         prepare_coaching_input(
             transcript,

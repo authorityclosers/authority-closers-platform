@@ -11,6 +11,10 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
+from ac_platform.conversation_intelligence.admin_pricing import (
+    PRICING_SNAPSHOTS,
+    estimate_provider_usage,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.coaching_schema import coaching_response_json_schema
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
@@ -22,6 +26,7 @@ _STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
+GEMINI_FLASH_STRUCTURED_COACHING_TOTAL_LIMIT = 256_000
 
 
 class GeminiTaskError(ValueError):
@@ -73,14 +78,17 @@ def _require_prompt_budget(
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
-        # The 96k TOTAL envelope includes full C2 context and deduplicated C4.
-        # At most 87,872 input bytes + 8,000 output tokens + 128 overhead. At the
-        # frozen $0.75/$3.75 per-million input/output rates and INR100/USD,
-        # maximum 8000 output allocation, this is under 960 paise on the conservative
-        # byte-as-token basis, within the fresh INR10 C5 approval requirement.
+        # Retained v1 requests keep their 48k/96k bounds. Structured v2 can
+        # carry a complete long-call transcript within 256k total units, but
+        # both quote admission and dispatch independently require its actual
+        # conservative cost to fit the exact pinned paid approval.
         used = input_bytes + maximum + 128
         limit = (
-            GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT
+            (
+                GEMINI_FLASH_STRUCTURED_COACHING_TOTAL_LIMIT
+                if response_schema is not None
+                else GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT
+            )
             if maximum > 4_000
             else GEMINI_FLASH_COACHING_TOTAL_LIMIT
         )
@@ -194,6 +202,52 @@ def gemini_prompt_view(
             {"role": "user", "content": texts[1]},
         ],
     }
+
+
+def require_long_coaching_cost_approval(
+    body: Mapping[str, Any],
+    *,
+    model: str,
+    maximum: int,
+    cost_basis: str,
+    cost_paise: int,
+    pricing_ref: str,
+    price_evidence_sha256: str,
+) -> None:
+    """Admit added long-call context only inside its exact reviewed cost cap.
+
+    This is a pre-dispatch upper bound, not billing or settlement. One UTF-8
+    input byte is allocated one token, including the schema and wrapper. The
+    provider's total output cap already includes thinking. Old bounded inputs
+    retain their prior approval rules and saved request bytes.
+    """
+    if model != "gemini-3.8-flash":
+        return
+    gemini_prompt_view(body, model=model, maximum=maximum, task="coaching")
+    config = body["generationConfig"]
+    if "responseJsonSchema" not in config or maximum <= 4_000:
+        return
+    system = body["systemInstruction"]["parts"][0]["text"]
+    user = body["contents"][0]["parts"][0]["text"]
+    input_units = (
+        len((system + user).encode("utf-8")) + len(canonical(config["responseJsonSchema"])) + 128
+    )
+    if input_units + maximum <= GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT:
+        return
+    snapshot = PRICING_SNAPSHOTS[("gemini", model)]
+    estimate = estimate_provider_usage(
+        "gemini",
+        model,
+        {"promptTokenCount": input_units, "candidatesTokenCount": maximum},
+    )["paise"]
+    if (
+        cost_basis != "paid_pricing_evidence"
+        or pricing_ref != snapshot.pricing_ref
+        or price_evidence_sha256 != snapshot.evidence_sha256
+        or type(estimate) is not int
+        or estimate > cost_paise
+    ):
+        raise GeminiTaskError("long_coaching_cost_approval_required")
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
