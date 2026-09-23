@@ -456,6 +456,7 @@ function StandaloneStudioView({
             setAuthRequested(false);
           }}
           onAuthenticated={() => {
+            if (selected) openProfileGate(selected.intentId);
             setAuthRequested(false);
             setView({ kind: "loading" });
             setAttempt((value) => value + 1);
