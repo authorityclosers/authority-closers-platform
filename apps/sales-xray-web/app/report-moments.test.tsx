@@ -131,6 +131,7 @@ it("uses validated rewatch notes in report order with the exact quote, purpose a
   const first = report.overview!.rewatch[0];
   const second = report.overview!.rewatch[1];
   const onSelect = await render(report);
+  await filter("rewatch");
   expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(
     report.overview!.rewatch.length,
   );
@@ -228,20 +229,24 @@ it("falls back to historical findings without sorting, merging or inventing topi
   ]);
 });
 
-it("preserves an intentional empty rewatch selection even when detailed findings have evidence", async () => {
+it("does not let an empty shortlist hide evidence already supplied in findings", async () => {
   const report = suppliedReport();
   report.overview!.rewatch = [];
   await render(report);
-  expect(screen().textContent).toContain(
-    "No rewatch moments were selected for this report",
+  expect(screen().textContent).not.toContain("No source moments supplied");
+  expect(focused().querySelector("h3")?.textContent).toBe(
+    report.strengths[0].title,
   );
-  expect(screen().querySelector("[data-focused-moment]")).toBeNull();
-  expect(countReportMoments(report)).toBe(0);
+  expect(focused().querySelector("blockquote p")?.textContent).toBe(
+    report.strengths[0].evidence[0].quote,
+  );
+  expect(countReportMoments(report)).toBeGreaterThan(0);
+  expect(
+    [...screen().querySelectorAll("option")].map((option) => option.value),
+  ).not.toContain("rewatch");
 });
 
 it("exports a pure count of the same supplied evidence dataset, excluding missing excerpts", () => {
-  const detailed = suppliedReport();
-  expect(countReportMoments(detailed)).toBe(detailed.overview!.rewatch.length);
   const report = {
     ...manyMoments(),
     improvements: [
@@ -258,7 +263,7 @@ it("exports a pure count of the same supplied evidence dataset, excluding missin
   expect(countReportMoments(emptyReport())).toBe(0);
 });
 
-it("keeps duplicate source ranges attached to each original finding and quote", async () => {
+it("groups identical clips while preserving every finding context, category and different quote", async () => {
   const shared = excerpt(1);
   const otherQuote = {
     ...shared,
@@ -282,10 +287,22 @@ it("keeps duplicate source ranges attached to each original finding and quote", 
     ],
   };
   const onSelect = await render(report);
-  expect(countReportMoments(report)).toBe(3);
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(3);
+  expect(countReportMoments(report)).toBe(2);
+  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(2);
+  expect(focused().textContent).toContain("2 linked observations");
+  await click("Open review");
+  expect(dialog().textContent).toContain("First context");
+  expect(dialog().textContent).toContain("Improvement context");
+  expect(dialog().textContent).toContain("Second context");
+  await click("Close review moment", dialog());
   await click("Listen");
   await click("Next moment");
+  await click("Listen");
+  await filter("improvements");
+  expect(focused().querySelector("h3")?.textContent).toBe(
+    "Improvement context",
+  );
+  // The shared clip stays in its first-seen position; filtering changes its context.
   await click("Listen");
   await click("Next moment");
   await click("Listen");
@@ -293,7 +310,94 @@ it("keeps duplicate source ranges attached to each original finding and quote", 
     [shared, "Strength context"],
     [otherQuote, "Improvement context"],
     [shared, "Improvement context"],
+    [otherQuote, "Improvement context"],
   ]);
+  const printed = container.querySelector("[data-moments-print]")!;
+  expect(printed.querySelectorAll("article")).toHaveLength(2);
+  expect(printed.querySelectorAll("blockquote")).toHaveLength(2);
+  expect(printed.querySelector("article")?.textContent).toContain(
+    "First context",
+  );
+  expect(printed.querySelector("article")?.textContent).toContain(
+    "Second context",
+  );
+});
+
+it("shows all three distinct finding excerpts even when the shortlist selects only one", async () => {
+  const report = suppliedReport();
+  const evidence = [excerpt(10), excerpt(20), excerpt(30)];
+  report.overview!.rewatch = [
+    {
+      text: "Selected for rewatch",
+      purpose: "must_watch",
+      evidence: [evidence[0]],
+    },
+  ];
+  report.strengths = [
+    {
+      title: "Supported strength",
+      explanation: "Strength meaning",
+      evidence: [evidence[0]],
+    },
+  ];
+  report.improvements = [
+    {
+      title: "Supported improvement",
+      explanation: "Improvement meaning",
+      evidence: [evidence[1]],
+    },
+  ];
+  report.missed_opportunities = [
+    {
+      title: "Supported opening",
+      explanation: "Opening meaning",
+      evidence: [evidence[2]],
+    },
+  ];
+  report.objection_analysis = [];
+  report.closing_analysis = [];
+  const before = JSON.stringify(report);
+  const onSelect = await render(report);
+  expect(countReportMoments(report)).toBe(3);
+  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(3);
+  expect(focused().querySelector("h3")?.textContent).toBe(
+    "Selected for rewatch",
+  );
+  await click("Open review");
+  expect(dialog().textContent).toContain("Strength meaning");
+  await click("Close review moment", dialog());
+  await click("Next moment");
+  await click("Listen");
+  expect(onSelect).toHaveBeenLastCalledWith(
+    evidence[1],
+    "Supported improvement",
+  );
+  await click("Next moment");
+  await click("Listen");
+  expect(onSelect).toHaveBeenLastCalledWith(evidence[2], "Supported opening");
+  await filter("rewatch");
+  expect(screen().textContent).toContain("Moment 1 of 1");
+  expect(JSON.stringify(report)).toBe(before);
+});
+
+it("does not merge distinct segments or source-clock ranges even when the words repeat", () => {
+  const original = excerpt(1);
+  const report = {
+    ...emptyReport(),
+    strengths: [
+      {
+        title: "Repeated phrase",
+        explanation: "Each source occurrence matters",
+        evidence: [
+          original,
+          { ...original, segment_id: "different-segment" },
+          { ...original, start_ms: 1200 },
+          { ...original, end_ms: 1900 },
+        ],
+      },
+    ],
+  };
+  expect(countReportMoments(report)).toBe(4);
 });
 
 it("explains empty and missing-evidence states without counting phantom moments or offering playback", async () => {
