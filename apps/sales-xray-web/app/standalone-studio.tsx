@@ -14,6 +14,7 @@ import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
 import { AccountAuth } from "./account-auth";
 import { AccountProfile } from "./account-profile";
+import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { SalesXrayPreloader } from "./sales-xray-preloader";
 import {
@@ -187,10 +188,9 @@ function StandaloneStudioView({
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
   const [gateIntentId, setGateIntentId] = useState<string | null>(null);
-  const [eligibleReceipt, setEligibleReceipt] = useState<{
-    intentId: string;
-    identityKey: string;
-  } | null>(null);
+  const [eligibleReceipt, setEligibleReceipt] = useState<string | null>(null);
+  const eligibleReceiptRef = useRef<string | null>(null);
+  const gateIntentRef = useRef<string | null>(null);
   const generation = useRef(0);
   const activeController = useRef<AbortController | null>(null);
   const pending = usePendingAnalysis();
@@ -304,15 +304,35 @@ function StandaloneStudioView({
   const identityKey = accountChoices
     ? JSON.stringify([accountChoices.person_id, accountChoices.session_id])
     : null;
-  const eligibleForSelection = Boolean(
+  const eligibilityKey =
+    review.readOnly === false &&
+    !review.fixtureRequested &&
     selected &&
-      identityKey &&
-      eligibleReceipt?.intentId === selected.intentId &&
-      eligibleReceipt.identityKey === identityKey,
+    view.kind === "ready" &&
+    view.choices.selected_tenant_id &&
+    selected.boundContextKey ===
+      JSON.stringify([
+        view.choices.person_id,
+        view.choices.session_id,
+        view.choices.selected_tenant_id,
+      ])
+      ? JSON.stringify([
+          selected.intentId,
+          view.choices.person_id,
+          view.choices.session_id,
+          view.choices.selected_tenant_id,
+        ])
+      : null;
+  const eligibleForSelection = Boolean(
+    eligibilityKey && eligibleReceipt === eligibilityKey,
   );
+  const openProfileGate = (intentId: string) => {
+    gateIntentRef.current = intentId;
+    setGateIntentId(intentId);
+  };
   const requestAccountSignIn = () => {
     if (review.fixtureRequested || review.readOnly !== false) return;
-    if (selected) setGateIntentId(selected.intentId);
+    if (selected) openProfileGate(selected.intentId);
     setAuthRequested(true);
   };
   const requestAnalysisAccess = () => {
@@ -320,18 +340,13 @@ function StandaloneStudioView({
       return false;
     // The existing guest challenge and trial path remains available.
     if (view.kind === "unauthenticated") return true;
-    if (view.kind !== "ready" || !identityKey) {
-      if (accountChoices) setGateIntentId(selected.intentId);
+    if (view.kind !== "ready") {
+      if (accountChoices) openProfileGate(selected.intentId);
       return false;
     }
-    const boundContextKey = JSON.stringify([
-      view.choices.person_id,
-      view.choices.session_id,
-      view.choices.selected_tenant_id,
-    ]);
-    if (eligibleForSelection && selected.boundContextKey === boundContextKey)
+    if (eligibilityKey && eligibleReceiptRef.current === eligibilityKey)
       return true;
-    setGateIntentId(selected.intentId);
+    openProfileGate(selected.intentId);
     return false;
   };
   useEffect(() => {
@@ -342,6 +357,31 @@ function StandaloneStudioView({
       tenantId: view.choices.selected_tenant_id,
     });
   }, [view, pending]);
+  useEffect(() => {
+    if (
+      !eligibilityKey ||
+      eligibleReceiptRef.current === eligibilityKey ||
+      gateIntentId === selected?.intentId
+    )
+      return;
+    const controller = new AbortController();
+    const intentId = selected?.intentId;
+    void readAccountProfileEligibility(controller.signal)
+      .then((status) => {
+        if (
+          controller.signal.aborted ||
+          status !== "eligible" ||
+          gateIntentRef.current === intentId
+        )
+          return;
+        eligibleReceiptRef.current = eligibilityKey;
+        setEligibleReceipt(eligibilityKey);
+      })
+      .catch(() => {
+        // A failed read never grants access. The explicit click opens recovery.
+      });
+    return () => controller.abort();
+  }, [eligibilityKey, gateIntentId, selected?.intentId]);
   const accessValue: WorkspaceAccessValue = {
     status: view.kind,
     authenticated:
@@ -426,9 +466,16 @@ function StandaloneStudioView({
       <AccountProfile
         key={`${identityKey}:${selected.intentId}`}
         selectedFile={selected.file}
-        onEligible={() =>
-          setEligibleReceipt({ intentId: selected.intentId, identityKey })
-        }
+        onEligible={() => {
+          if (eligibilityKey) {
+            eligibleReceiptRef.current = eligibilityKey;
+            setEligibleReceipt(eligibilityKey);
+          }
+          gateIntentRef.current = null;
+          setGateIntentId((current) =>
+            current === selected.intentId ? null : current,
+          );
+        }}
         onSignIn={() => {
           setAuthRequested(true);
           setView({ kind: "loading" });

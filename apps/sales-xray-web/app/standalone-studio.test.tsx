@@ -403,6 +403,7 @@ it("keeps guest analysis available and carries the original File through explici
   expect(container.querySelector(`#account-profile-heading`)).toBeNull();
   expect(container.querySelector(`[data-tenant-id="${firstTenantId}"]`)).not.toBeNull();
   fetchMock.mockResolvedValueOnce(response({ tenant_id: firstTenantId }));
+  fetchMock.mockResolvedValueOnce(noContent());
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(`button[data-tenant-id="${firstTenantId}"]`)
@@ -439,8 +440,13 @@ it("waits for canonical profile eligibility before an authenticated upload can c
   const file = new File(["synthetic-audio"], "account-call.wav", {
     type: "audio/wav",
   });
+  fetchMock.mockResolvedValueOnce(response({}, 403));
   await act(async () => observed.pending?.selectFile(file));
+  await flush();
   const intentId = observed.pending?.selection?.intentId;
+  expect(fetchMock.mock.calls.filter(([path]) =>
+    path === "/v1/me/sales-xray-profile/write-eligibility",
+  )).toHaveLength(1);
   fetchMock.mockResolvedValueOnce(response(profileRecord()));
   fetchMock.mockResolvedValueOnce(response({}, 403));
   await act(async () => {
@@ -470,4 +476,91 @@ it("waits for canonical profile eligibility before an authenticated upload can c
       String(path).startsWith("/v1/conversation"),
     ),
   ).toBe(false);
+});
+
+it("uses a settled canonical 204 preflight for the first authenticated Analyze click", async () => {
+  const revokeUrl = stubObjectUrls();
+  const observed: {
+    pending: ReturnType<typeof usePendingAnalysis>;
+    access: ReturnType<typeof useWorkspaceAccess>;
+  } = { pending: null, access: null };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    const access = useWorkspaceAccess();
+    useEffect(() => {
+      observed.pending = pending;
+      observed.access = access;
+    }, [pending, access]);
+    return <p data-testid="studio-probe">{pending?.selection?.file.name}</p>;
+  }
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await act(async () =>
+    root.render(<StandaloneStudio><StudioProbe /></StandaloneStudio>),
+  );
+  await flush();
+  const file = new File(["synthetic-audio"], "eligible-call.wav", {
+    type: "audio/wav",
+  });
+  fetchMock.mockResolvedValueOnce(noContent());
+  await act(async () => observed.pending?.selectFile(file));
+  await flush();
+  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
+  expect(container.querySelector('[data-testid="studio-probe"]')).not.toBeNull();
+  expect(container.querySelector("#account-profile-heading")).toBeNull();
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-profile/write-eligibility",
+  ]);
+  expect(revokeUrl).not.toHaveBeenCalled();
+});
+
+it("does not reuse a 204 for another File or accept a late preflight after the profile gate opens", async () => {
+  stubObjectUrls();
+  const observed: {
+    pending: ReturnType<typeof usePendingAnalysis>;
+    access: ReturnType<typeof useWorkspaceAccess>;
+  } = { pending: null, access: null };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    const access = useWorkspaceAccess();
+    useEffect(() => {
+      observed.pending = pending;
+      observed.access = access;
+    }, [pending, access]);
+    return <p data-testid="studio-probe">{pending?.selection?.file.name}</p>;
+  }
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await act(async () =>
+    root.render(<StandaloneStudio><StudioProbe /></StandaloneStudio>),
+  );
+  await flush();
+  const first = new File(["one"], "first-call.wav", { type: "audio/wav" });
+  const second = new File(["two"], "second-call.wav", { type: "audio/wav" });
+  fetchMock.mockResolvedValueOnce(noContent());
+  await act(async () => observed.pending?.selectFile(first));
+  await flush();
+  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
+
+  const late = deferred<Response>();
+  fetchMock.mockReturnValueOnce(late.promise);
+  await act(async () => observed.pending?.selectFile(second));
+  await flush();
+  fetchMock.mockResolvedValueOnce(response(profileRecord()));
+  fetchMock.mockResolvedValueOnce(response({}, 403));
+  let allowed = true;
+  await act(async () => {
+    allowed = observed.access?.requestAnalysisAccess?.() ?? true;
+  });
+  expect(allowed).toBe(false);
+  await flush();
+  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(container.textContent).toContain(second.name);
+  late.resolve(noContent());
+  await flush();
+  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(container.querySelector('[data-testid="studio-probe"]')).toBeNull();
+  expect(fetchMock.mock.calls.filter(([path]) =>
+    path === "/v1/me/sales-xray-profile/write-eligibility",
+  )).toHaveLength(3);
 });
