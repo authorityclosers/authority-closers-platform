@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { AcquisitionGuideRail } from "./acquisition-dashboard-panels";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { AcquisitionShell } from "./acquisition-shell";
 import { projectProcessing } from "./processing-state";
 import type { FixtureReviewFrame } from "./fixture-review-states";
 import styles from "./acquisition-studio.module.css";
+import previewStyles from "./sales-xray-fixture-preview.module.css";
 
 /** The development review port alone may supply this synthetic frame. */
 export function SalesXrayFixturePreview({
@@ -22,7 +22,7 @@ export function SalesXrayFixturePreview({
         <section className="panel" role="status" aria-live="polite">
           <h1>Opening local test state</h1>
           <p>{message || "Checking local review availability…"}</p>
-          <Link href="/__review/">Review controls</Link>
+          <a href="/__review/">Review controls</a>
         </section>
       </AcquisitionShell>
     );
@@ -44,7 +44,7 @@ export function SalesXrayFixturePreview({
         data-fixture="true"
       >
         <div className="studio-main">
-          <nav className={styles.reviewNotice} aria-label="Fixture state navigation">
+          <nav className={`${styles.reviewNotice} ${previewStyles.navigation}`} aria-label="Fixture state navigation">
             <div>
               <strong>{frame.label}</strong>
               <small>
@@ -54,16 +54,16 @@ export function SalesXrayFixturePreview({
             </div>
             <div className={styles.reviewNavigationLinks}>
               {frame.navigation.previousUrl ? (
-                <Link href={frame.navigation.previousUrl}>Previous state</Link>
+                <a href={frame.navigation.previousUrl}>Previous state</a>
               ) : (
                 <span aria-disabled="true">Previous state</span>
               )}
               {frame.navigation.nextUrl ? (
-                <Link href={frame.navigation.nextUrl}>Next state</Link>
+                <a href={frame.navigation.nextUrl}>Next state</a>
               ) : (
                 <span aria-disabled="true">Next state</span>
               )}
-              <Link href="/__review/">All states</Link>
+              <a href="/__review/">All states</a>
             </div>
           </nav>
           <div className={styles.layout}>
@@ -78,7 +78,7 @@ export function SalesXrayFixturePreview({
                 fileMeta="Synthetic audio · no file stored"
               />
             </div>
-            <AcquisitionGuideRail stage="empty" />
+            <AcquisitionGuideRail stage="empty" staticPreview />
           </div>
         </div>
       </div>

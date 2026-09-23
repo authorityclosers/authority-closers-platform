@@ -68,11 +68,13 @@ export function AcquisitionGuideRail({
   completedStepIndexes = [],
   stagedFiles = [],
   maximumFileBytes,
+  staticPreview = false,
 }: {
   stage: AcquisitionStage;
   completedStepIndexes?: readonly number[];
   stagedFiles?: readonly Pick<File, "name" | "size">[];
   maximumFileBytes?: number;
+  staticPreview?: boolean;
 }) {
   const completed = new Set(completedStepIndexes);
   if (stage === "processing" || stage === "report") completed.add(0);
@@ -155,7 +157,7 @@ export function AcquisitionGuideRail({
   }
 
   return (
-    <aside className={styles.rail} aria-label="Getting started and help">
+    <aside className={styles.rail} aria-label="Getting started and help" data-static-preview={staticPreview}>
       <section className={`${styles.card} ${styles.guide}`} aria-labelledby="acquisition-guide-title">
         <div className={styles.cardHeading}>
           <Rocket className={styles.headingIcon} size={29} strokeWidth={1.9} aria-hidden="true" />
@@ -185,7 +187,7 @@ export function AcquisitionGuideRail({
             </li>
           ))}
         </ol>
-        <div className={styles.helpCard}>
+        {!staticPreview && <div className={styles.helpCard}>
           <div className={styles.helpIntro}>
             <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
             <div>
@@ -201,7 +203,7 @@ export function AcquisitionGuideRail({
               <li>Open saved calls to revisit a completed report.</li>
             </ul>
           </details>
-        </div>
+        </div>}
       </section>
       <section className={`${styles.card} ${styles.sampleCard}`} aria-labelledby="sample-insight-title">
         <div className={styles.sampleHeading}>
@@ -220,10 +222,10 @@ export function AcquisitionGuideRail({
           <span><i className={styles.violetDot} />Next steps</span>
         </div>
         <p className={styles.sampleDisclaimer}>Illustrative content, not from your calls.</p>
-        <details className={styles.sampleExplore}>
+        {!staticPreview && <details className={styles.sampleExplore}>
           <summary className={styles.cardAction}>Explore a sample analysis <ArrowRight size={17} aria-hidden="true" /></summary>
           <p>A report can connect each observation to a moment in the recording, when that evidence is available.</p>
-        </details>
+        </details>}
       </section>
     </aside>
   );

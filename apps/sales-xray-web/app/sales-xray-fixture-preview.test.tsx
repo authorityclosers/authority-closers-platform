@@ -74,7 +74,11 @@ it("mounts the real static processing panel after local health with no operation
   expect(container.querySelector('[data-stage="C4"]')?.getAttribute("data-state")).toBe("running");
   expect(container.textContent).toContain("Example processing state");
   expect(container.textContent).toContain("No call was uploaded or analysed");
+  const rail = container.querySelector('[aria-label="Getting started and help"]');
+  expect(rail?.getAttribute("data-static-preview")).toBe("true");
+  expect(rail?.querySelector("details")).toBeNull();
   expect(container.textContent).not.toContain("Check status");
+  expect(container.querySelector('a[href="/?new=1&sx-fixture=processing.report"]')).not.toBeNull();
   expect(container.querySelector('audio[src]')).toBeNull();
   expect(container.querySelector('a[href*="?call="]')).toBeNull();
   expect(container.querySelector('[data-testid="operational-studio"]')).toBeNull();

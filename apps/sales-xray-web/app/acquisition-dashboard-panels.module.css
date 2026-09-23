@@ -892,6 +892,19 @@
   }
 }
 
+/* Synthetic review frames keep the rail readable without offering live actions. */
+.rail[data-static-preview="true"] {
+  height: auto;
+  grid-template-rows: none;
+  gap: 8px;
+}
+
+.rail[data-static-preview="true"] .guide,
+.rail[data-static-preview="true"] .sampleCard {
+  height: auto;
+  min-height: 0;
+}
+
 @media (min-width: 1024px) and (max-height: 800px) {
   .rail {
     gap: 8px;

@@ -1,0 +1,25 @@
+@media (min-width: 1024px) and (max-height: 800px) {
+  .navigation {
+    flex-wrap: nowrap;
+    gap: 12px;
+    padding: 4px 12px;
+    font-size: 11px;
+  }
+
+  .navigation > div:first-child {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .navigation > div:first-child small {
+    display: inline;
+    font-size: 10px;
+  }
+
+  .navigation > div:last-child {
+    gap: 8px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
