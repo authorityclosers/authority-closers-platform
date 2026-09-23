@@ -21,6 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, prepare_gemini_body
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack,
+    report_language_instruction,
+)
 from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
 from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
@@ -66,6 +71,8 @@ FACT_PROMPT_COMPACT_MARKER = "FACT_OUTPUT: compact-facts-v2."
 COACHING_PROMPT_LEGACY: Literal["coaching-v1"] = "coaching-v1"
 COACHING_PROMPT_REFINED: Literal["coaching-v2"] = "coaching-v2"
 COACHING_PROMPT_V3: Literal["coaching-v3"] = "coaching-v3"
+COACHING_PROMPT_V4: Literal["coaching-v4"] = "coaching-v4"
+CoachingPromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"]
 COACHING_PROMPT_REFINED_MARKER = "COACHING_STATE: commercial-state-v2."
 COACHING_PROMPT_REFINED_INSTRUCTION = (
     "Preserve commercial state exactly. Say declined or refused only for an explicit source-"
@@ -1862,9 +1869,9 @@ def build_report_groq_prompt(
     model: str = GROQ_MODEL,
     detailed_overview: bool = True,
     provider: str = "groq",
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
-        COACHING_PROMPT_LEGACY
-    ),
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
+    report_language: ReportLanguage = "en",
+    qualitative_pack_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -1880,8 +1887,29 @@ def build_report_groq_prompt(
         COACHING_PROMPT_LEGACY,
         COACHING_PROMPT_REFINED,
         COACHING_PROMPT_V3,
+        COACHING_PROMPT_V4,
     }:
         raise ReportError("report_prompt_revision_invalid")
+    additional_instruction = ""
+    context_instruction = COACHING_CONTEXT_INSTRUCTION
+    if coaching_prompt_revision == COACHING_PROMPT_V4:
+        pack = load_qualitative_pack()
+        if qualitative_pack_sha256 != pack.sha256:
+            raise ReportError("report_qualitative_pack_mismatch")
+        try:
+            additional_instruction = (
+                pack.compile() + "\n" + report_language_instruction(report_language) + "\n"
+            )
+        except ValueError:
+            raise ReportError("report_language_invalid") from None
+        # Old revisions retain their exact bytes, including the English instruction.
+        context_instruction = context_instruction.replace(
+            "Use everyday English; short sentences; one idea; explain jargon. ",
+            "Use short sentences; one idea; explain jargon. ",
+        )
+    elif report_language != "en" or qualitative_pack_sha256 is not None:
+        raise ReportError("report_prompt_options_incompatible")
+    compact_evidence = coaching_prompt_revision in {COACHING_PROMPT_V3, COACHING_PROMPT_V4}
     validated = _validated_transcript(transcript)
     merged = merge_fact_packets(fact_packets, validated)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
@@ -1895,23 +1923,25 @@ def build_report_groq_prompt(
         "Return qualitative Sales Xray JSON with "
         + output_fields
         + COACHING_VOICE_INSTRUCTION
-        + COACHING_CONTEXT_INSTRUCTION
-        + (REPORT_STRUCTURE_INSTRUCTION if coaching_prompt_revision != COACHING_PROMPT_V3 else "")
+        + context_instruction
+        + additional_instruction
+        + (REPORT_STRUCTURE_INSTRUCTION if not compact_evidence else "")
         + (
             COACHING_PROMPT_REFINED_MARKER
             + " "
             + (
                 COACHING_PROMPT_V3_STATE_INSTRUCTION
-                if coaching_prompt_revision == COACHING_PROMPT_V3
+                if compact_evidence
                 else COACHING_PROMPT_REFINED_INSTRUCTION
             )
             + " "
-            if coaching_prompt_revision in {COACHING_PROMPT_REFINED, COACHING_PROMPT_V3}
+            if coaching_prompt_revision
+            in {COACHING_PROMPT_REFINED, COACHING_PROMPT_V3, COACHING_PROMPT_V4}
             else ""
         )
         + (
             COACHING_PROMPT_V3_MARKER + " " + COACHING_PROMPT_V3_INSTRUCTION + " "
-            if coaching_prompt_revision == COACHING_PROMPT_V3
+            if compact_evidence
             else ""
         )
         + "Set review_status to "

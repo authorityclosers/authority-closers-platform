@@ -46,10 +46,13 @@ from ac_platform.conversation_intelligence.activation_contract import (
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
+from ac_platform.conversation_intelligence.guest_models import ConversationProcessingContinuation
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
+    ConversationAnalysisSettings,
     ConversationBudgetAccount,
+    ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationProcessingPlan,
@@ -63,6 +66,7 @@ from ac_platform.conversation_intelligence.native_runtime import (
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -997,6 +1001,8 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 assert quote.status_code == 201, quote.text
                 plan = quote.json()
                 assert plan["max_cost_paise"] == 0
+                assert "report_language" not in plan
+                assert "coaching_prompt_revision" not in plan
                 assert [stage["provider"] for stage in plan["stages"]] == [
                     "elevenlabs",
                     "gemini",
@@ -1070,6 +1076,136 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 assert broker.calls == 3
                 client.cookies.set("ac_xray_guest", setup.stranger.token)
                 assert (await client.get(path + "/report")).status_code == 404
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_guest_report_language_quote_is_bounded_frozen_and_read_only(
+    postgres_harness: Any,
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        try:
+            data = _wav_one_second_48k()
+            submission = uuid4()
+            path = f"{PREFIX}/submissions/{submission}"
+            async with setup.sessions() as database, database.begin():
+                database.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.state.tenant_id,
+                        person_id=setup.state.person_id,
+                        session_id=setup.state.session_id,
+                        revision=1,
+                        c4_max_requests=64,
+                        c4_max_completion_tokens=1_400,
+                        c5_max_completion_tokens=3_200,
+                        c5_output_profile="detailed",
+                        c5_coaching_prompt_revision="coaching-v4",
+                        report_language_default="hi-Deva+en",
+                        created_at=setup.state.now,
+                    )
+                )
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                headers = await _headers(client, data)
+                upload = await client.put(path + "/source", content=data, headers=headers)
+                assert upload.status_code == 202, upload.text
+                await _reconcile(setup.sessions, setup.state)
+                local = OfflineConversationWorker(
+                    setup.sessions,
+                    storage=setup.runtime.storage,
+                    scratch=setup.runtime.scratch,
+                    environment="test",
+                )
+                assert await local.run_once()
+
+                malformed = await client.post(
+                    path + "/plan/quote",
+                    content=b'{"report_language":"mr-Deva+en","unexpected":true}',
+                    headers={
+                        "Origin": ORIGIN,
+                        "Content-Type": "application/json",
+                        "Idempotency-Key": "malformed-language-preference",
+                    },
+                )
+                assert malformed.status_code == 422
+                before_quote = await client.post(
+                    path + "/plan/quote",
+                    json={"report_language": "mr-Deva+en"},
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "explicit-marathi-plan"},
+                )
+                assert before_quote.status_code == 201, before_quote.text
+                quote = before_quote.json()
+                assert quote["report_language"] == "mr-Deva+en"
+                assert quote["coaching_prompt_revision"] == "coaching-v4"
+                assert "qualitative_pack_sha256" not in quote
+                assert "sources" not in quote
+
+                async with setup.sessions() as database:
+                    plan_row = await database.get(ConversationProcessingPlan, UUID(quote["id"]))
+                    assert plan_row is not None and plan_row.manifest is not None
+                    frozen_manifest = dict(plan_row.manifest)
+                    assert frozen_manifest["report_language"] == "mr-Deva+en"
+                    assert frozen_manifest["coaching_prompt_revision"] == "coaching-v4"
+                    assert frozen_manifest["qualitative_pack_sha256"] == (
+                        load_qualitative_pack().sha256
+                    )
+                    commands_before_read = await database.scalar(
+                        select(func.count()).select_from(ConversationCommand)
+                    )
+                    continuations_before_read = await database.scalar(
+                        select(func.count()).select_from(ConversationProcessingContinuation)
+                    )
+
+                read_plan = await client.get(path + "/plan")
+                assert read_plan.status_code == 200, read_plan.text
+                assert read_plan.json()["report_language"] == "mr-Deva+en"
+                assert read_plan.json()["coaching_prompt_revision"] == "coaching-v4"
+                assert "qualitative_pack_sha256" not in read_plan.json()
+
+                async with setup.sessions() as database:
+                    assert (
+                        await database.scalar(select(func.count()).select_from(ConversationCommand))
+                        == commands_before_read
+                    )
+                    assert (
+                        await database.scalar(
+                            select(func.count()).select_from(ConversationProcessingContinuation)
+                        )
+                        == continuations_before_read
+                    )
+
+                async with setup.sessions() as database, database.begin():
+                    database.add(
+                        ConversationAnalysisSettings(
+                            id=uuid4(),
+                            tenant_id=setup.state.tenant_id,
+                            person_id=setup.state.person_id,
+                            session_id=setup.state.session_id,
+                            revision=2,
+                            c4_max_requests=64,
+                            c4_max_completion_tokens=1_400,
+                            c5_max_completion_tokens=3_200,
+                            c5_output_profile="detailed",
+                            c5_coaching_prompt_revision="coaching-v4",
+                            report_language_default="en",
+                            created_at=setup.state.now,
+                        )
+                    )
+                still_frozen = await client.get(path + "/plan")
+                assert still_frozen.status_code == 200
+                assert still_frozen.json()["report_language"] == "mr-Deva+en"
+
+                client.cookies.set("ac_xray_guest", setup.stranger.token)
+                foreign = await client.get(path + "/plan")
+                assert foreign.status_code == 404
         finally:
             await setup.engine.dispose()
 

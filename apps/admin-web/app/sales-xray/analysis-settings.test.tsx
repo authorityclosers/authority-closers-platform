@@ -64,6 +64,10 @@ it("loads the bounded controls and saves a real future-plan revision", async () 
     '[aria-label="C5 output profile"]',
   );
   expect(profile).toBeTruthy();
+  // An older server does not advertise the new engine/language capability.
+  expect(
+    host.querySelectorAll('[aria-label="Report engine"] option'),
+  ).toHaveLength(1);
   await act(async () => {
     profile!.value = "standard";
     profile!.dispatchEvent(new Event("change", { bubbles: true }));
@@ -80,5 +84,67 @@ it("loads the bounded controls and saves a real future-plan revision", async () 
     settings: { c5_output_profile: "standard" },
   });
   expect(new Headers(post![1].headers).get("Idempotency-Key")).toBeTruthy();
+  expect(host.textContent).toContain("revision 1");
+});
+
+it("requires the versioned engine for Marathi and sends the exact selected settings", async () => {
+  const available = {
+    ...state,
+    bounds: {
+      ...state.bounds,
+      c5_coaching_prompt_revision: { values: ["coaching-v3", "coaching-v4"] },
+      report_language_default: { values: ["en", "hi-Deva+en", "mr-Deva+en"] },
+    },
+  };
+  const fetcher = vi.fn(async (_url: string, init: RequestInit) =>
+    json(
+      init.method === "POST"
+        ? {
+            ...available,
+            revision: 1,
+            settings: JSON.parse(init.body as string).settings,
+          }
+        : available,
+    ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(createElement(AnalysisSettingsPanel)));
+  const change = async (label: string, value: string) =>
+    act(async () => {
+      const field = host.querySelector<HTMLSelectElement>(
+        `[aria-label="${label}"]`,
+      )!;
+      field.value = value;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  const save = async () =>
+    act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) =>
+          button.textContent?.includes("Save future plan limits"),
+        )!
+        .click();
+    });
+  await change("Default report language", "mr-Deva+en");
+  await save();
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "require the qualitative v0.2 engine",
+  );
+  expect(
+    fetcher.mock.calls.filter(([, init]) => init.method === "POST"),
+  ).toHaveLength(0);
+  await change("Report engine", "coaching-v4");
+  await save();
+  const writes = fetcher.mock.calls.filter(
+    ([, init]) => init.method === "POST",
+  );
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(writes[0][1].body as string)).toMatchObject({
+    expected_revision: 0,
+    settings: {
+      c5_coaching_prompt_revision: "coaching-v4",
+      report_language_default: "mr-Deva+en",
+    },
+  });
   expect(host.textContent).toContain("revision 1");
 });

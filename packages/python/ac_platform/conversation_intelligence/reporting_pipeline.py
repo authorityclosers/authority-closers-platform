@@ -41,8 +41,13 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack,
+)
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V4,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
@@ -110,9 +115,18 @@ class StageRequest(BaseModel):
         default=FACT_PROMPT_LEGACY,
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = Field(
-        default=COACHING_PROMPT_LEGACY,
-        exclude_if=lambda value: value == COACHING_PROMPT_LEGACY,
+    coaching_prompt_revision: Literal[
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"
+    ] = Field(
+        default=COACHING_PROMPT_LEGACY, exclude_if=lambda value: value == COACHING_PROMPT_LEGACY
+    )
+    report_language: ReportLanguage | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    qualitative_pack_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+        exclude_if=lambda value: value is None,
     )
     output_profile: Literal["standard", "detailed"] = Field(
         default="detailed", exclude_if=lambda value: value == "detailed"
@@ -134,8 +148,22 @@ class StageRequest(BaseModel):
             raise ValueError("Coaching cannot select a fact prompt revision.")
         if self.stage == "C4" and self.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
             raise ValueError("Facts cannot select a coaching prompt revision.")
+        if self.stage == "C4" and (
+            self.report_language is not None or self.qualitative_pack_sha256 is not None
+        ):
+            raise ValueError("Facts cannot select coaching configuration.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):
             raise ValueError("Coaching requires complete fact checkpoints.")
+        if self.stage == "C5" and self.coaching_prompt_revision == COACHING_PROMPT_V4:
+            if (
+                self.report_language is None
+                or self.qualitative_pack_sha256 != load_qualitative_pack().sha256
+            ):
+                raise ValueError("Coaching requires the current qualitative pack and language.")
+        elif self.stage == "C5" and (
+            self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None
+        ):
+            raise ValueError("This coaching prompt revision cannot select language or a pack.")
         if len(set(self.fact_checkpoint_ids)) != len(self.fact_checkpoint_ids):
             raise ValueError("Duplicate fact checkpoint.")
         if self.profile is not None and len(canonical(self.profile)) > 128 * 1024:
@@ -507,6 +535,8 @@ class ReportingPipeline:
             max_completion_tokens=request.max_completion_tokens,
             output_profile=request.output_profile,
             coaching_prompt_revision=request.coaching_prompt_revision,
+            report_language=request.report_language or "en",
+            qualitative_pack_sha256=request.qualitative_pack_sha256,
         )
         if request.repair is not None:
             prepared = repair_coaching_input(prepared, request.repair)
@@ -518,6 +548,9 @@ class ReportingPipeline:
         }
         if request.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
             c5_config["coaching_prompt_revision"] = request.coaching_prompt_revision
+        if request.coaching_prompt_revision == COACHING_PROMPT_V4:
+            c5_config["report_language"] = request.report_language
+            c5_config["qualitative_pack_sha256"] = request.qualitative_pack_sha256
         if request.repair is not None:
             c5_config["repair"] = request.repair.model_dump(mode="json")
         template = build_checkpoint(

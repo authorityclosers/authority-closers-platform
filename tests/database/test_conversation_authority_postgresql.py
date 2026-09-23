@@ -1,12 +1,13 @@
 """Disposable PostgreSQL proof for the hosted conversation authority boundary.
 
-The approval bundle and provider configuration are synthetic, zero-cost test
-artifacts.  The durable worker uses ReportingBroker, so no provider network,
-credentials, paid allowance, or production deployment is exercised.
+Approval references and provider configuration are synthetic fixtures. Tests
+stop at durable admission, so no provider network, credentials, actual charge,
+or production deployment is exercised.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -30,24 +31,33 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
 )
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPE,
     ConversationApplication,
+    ConversationConflict,
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
-from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.budget_admin import ConversationBudgetAdmin
+from ac_platform.conversation_intelligence.checkpoints import (
+    build_checkpoint,
+    canonical,
+    content_hash,
+)
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
     TRANSCRIPT_RECIPE_BY_ROUTE,
     ConversationInference,
+    binding_for,
 )
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
+    ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationQuote,
@@ -392,9 +402,11 @@ async def _setup(
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
     duration_ms: int = 1_000,
+    complete_local_fixture: bool = True,
 ) -> AuthorityFixture:
     prepared = await prepare_local(postgres_harness, tmp_path, duration_ms=duration_ms)
-    assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
+    if complete_local_fixture:
+        assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -543,7 +555,9 @@ async def _start(
     *,
     key: str,
     request: StageRequest | None = None,
+    recording_id: UUID | None = None,
 ) -> dict[str, Any]:
+    target_recording_id = recording_id or setup.prepared.recording_id
     async with setup.sessions() as database, database.begin():
         service = ConversationInference(_application(setup, database), authority=setup.authority)
         acceptance = QuoteAcceptance(
@@ -553,7 +567,7 @@ async def _start(
         )
         await service.accept(
             setup.actor,
-            setup.prepared.recording_id,
+            target_recording_id,
             UUID(quote["id"]),
             acceptance,
             request=request,
@@ -561,17 +575,79 @@ async def _start(
         if request is None:
             return await service.request_transcription(
                 setup.actor,
-                setup.prepared.recording_id,
+                target_recording_id,
                 UUID(quote["id"]),
                 key=key,
             )
         return await service.request_stage(
             setup.actor,
-            setup.prepared.recording_id,
+            target_recording_id,
             UUID(quote["id"]),
             key=key,
             request=request,
         )
+
+
+async def _duplicate_ready_recording(setup: AuthorityFixture, key: str) -> UUID:
+    intent = setup.prepared.state.recording_intent.model_copy(
+        update={"source_bytes": len(setup.prepared.data), "content_type": "audio/wav"}
+    )
+    async with setup.sessions() as database, database.begin():
+        registered = await _application(setup, database).register(
+            setup.actor, intent, key=f"{key}-register"
+        )
+    recording_id = UUID(registered["id"])
+    async with setup.sessions() as database, database.begin():
+        stored = await _application(setup, database).store_source(
+            setup.actor,
+            recording_id,
+            chunks=(setup.prepared.data,),
+            storage=setup.prepared.storage,
+        )
+    assert stored["state"] == "ready"
+    return recording_id
+
+
+async def _seed_transcription_inputs(setup: AuthorityFixture, recording_id: UUID) -> None:
+    async with setup.sessions() as database, database.begin():
+        recording = await database.get(ConversationRecording, recording_id)
+        assert recording is not None
+        binding = binding_for(recording)
+        c0_payload = {
+            "source_sha256": recording.source_sha256,
+            "source_bytes": recording.source_bytes,
+            "content_type": recording.content_type,
+            "permission_reference": str(recording.permission_id),
+        }
+        c0 = build_checkpoint(binding, "C0", "recording-v1", {}, (), content_hash(c0_payload))
+        c1_payload = {
+            "source_sha256": recording.source_sha256,
+            "media_duration_ms": 1_000,
+        }
+        c1 = build_checkpoint(
+            binding,
+            "C1",
+            AUDIOATLAS_HOSTED_RECIPE,
+            {"decode_rate": 16_000, "window_profile": "audioatlas-40ms-10ms"},
+            (c0,),
+            content_hash(c1_payload),
+        )
+        for checkpoint, payload in ((c0, c0_payload), (c1, c1_payload)):
+            database.add(
+                ConversationCheckpoint(
+                    id=uuid4(),
+                    tenant_id=recording.tenant_id,
+                    person_id=recording.person_id,
+                    recording_id=recording.id,
+                    cache_key=checkpoint.cache_key,
+                    manifest_sha256=checkpoint.manifest_sha256,
+                    payload_sha256=checkpoint.payload_sha256,
+                    stage=checkpoint.stage,
+                    manifest=checkpoint.as_dict(),
+                    payload=payload,
+                    created_at=setup.prepared.state.now,
+                )
+            )
 
 
 async def _counts(setup: AuthorityFixture) -> tuple[int, int, int]:
@@ -923,6 +999,125 @@ def test_authority_stage_max_requests_spans_same_source_on_second_recording(
     run(exercise())
 
 
+def test_carried_budget_cap_does_not_expand_current_release_admission(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """A carried Admin ledger must not admit cumulative work above the current release cap."""
+
+    async def exercise() -> None:
+        setup = await _setup(
+            postgres_harness,
+            tmp_path,
+            funded=True,
+            complete_local_fixture=False,
+        )
+        try:
+            original_bundle = setup.bundle
+            historical_bundle = original_bundle.model_copy(update={"budget_cap_paise": 250_000})
+            async with setup.sessions() as database, database.begin():
+                saved = await ConversationBudgetAdmin(
+                    _application(setup, database),
+                    environment="test",
+                    operations_tenant_id=setup.actor.tenant_id,
+                ).save(
+                    setup.actor,
+                    bundle=historical_bundle,
+                    new_cap_paise=250_000,
+                    expected_revision=1,
+                    reason="Synthetic carried-cap regression fixture",
+                    key="risk22-historical-cap",
+                )
+                assert saved["budget"]["cap_paise"] == 250_000
+
+            config = _registry_config("hosted-test-config-v2", funded=True)
+            config = replace(
+                config,
+                providers=tuple(
+                    replace(provider, max_cost_paise=60_000)
+                    if provider.provider_id == "elevenlabs"
+                    else provider
+                    for provider in config.providers
+                ),
+            )
+            async with setup.sessions() as database, database.begin():
+                config_view = await ConversationProviderAdmin(_application(setup, database)).save(
+                    setup.actor,
+                    config.as_dict(),
+                    expected_revision=1,
+                    key="risk22-config-v2",
+                )
+            config = parse_registry_config(config_view["configuration"])
+            current_stages = tuple(
+                stage.model_copy(
+                    update={
+                        "configuration_sha256": config.digest,
+                        "max_cost_paise": 60_000,
+                        "max_requests": 2,
+                    }
+                )
+                if stage.stage == "C2"
+                else stage
+                for stage in original_bundle.stages
+            )
+            current_bundle = original_bundle.model_copy(update={"stages": current_stages})
+            setup.bundle_box["bundle"] = current_bundle
+            async with setup.sessions() as database, database.begin():
+                await setup.authority.claim_allowance(_application(setup, database), setup.actor)
+
+            second_recording_id = await _duplicate_ready_recording(setup, "risk22-second")
+            await _seed_transcription_inputs(setup, setup.prepared.recording_id)
+            await _seed_transcription_inputs(setup, second_recording_id)
+
+            # Both quotes are issued against the same untouched 250,000 ledger.
+            first_quote = await _issue(
+                setup, key="risk22-first-quote", recording_id=setup.prepared.recording_id
+            )
+            second_quote = await _issue(
+                setup, key="risk22-second-quote", recording_id=second_recording_id
+            )
+            assert first_quote["max_cost_paise"] == second_quote["max_cost_paise"] == 60_000
+
+            outcomes = await asyncio.gather(
+                _start(
+                    setup,
+                    first_quote,
+                    key="risk22-first-run",
+                    recording_id=setup.prepared.recording_id,
+                ),
+                _start(
+                    setup,
+                    second_quote,
+                    key="risk22-second-run",
+                    recording_id=second_recording_id,
+                ),
+                return_exceptions=True,
+            )
+            assert sum(isinstance(result, dict) for result in outcomes) == 1
+            conflicts = [result for result in outcomes if isinstance(result, ConversationConflict)]
+            assert len(conflicts) == 1
+            assert "allowance" in str(conflicts[0])
+
+            async with setup.sessions() as database:
+                row = await database.get(ConversationBudgetAccount, current_bundle.budget_scope_id)
+                assert row is not None
+                ledger = BudgetAccount.from_dict(row.snapshot)
+                jobs = await database.scalar(
+                    select(func.count())
+                    .select_from(Job)
+                    .where(
+                        Job.kind == INFERENCE_JOB,
+                        Job.tenant_id == setup.prepared.state.tenant_id,
+                    )
+                )
+            assert ledger.cap_paise == 250_000
+            assert sum(item.committed_paise for item in ledger.reservations) == 60_000
+            assert jobs == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_hosted_intake_http_rejects_capacity_after_existing_recording(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
@@ -1106,6 +1301,100 @@ def test_authority_pins_saved_draft_and_rejects_changed_expired_or_unavailable_a
                 )
             assert setup.broker.calls == 0
             assert await _counts(setup) == (1, 1, 1)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_provider_activation_replay_survives_later_draft_and_binds_original_command(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        # This control-plane test needs the saved provider record, not the
+        # unrelated offline C1 worker. Keep its setup synthetic and provider-free.
+        setup = await _setup(
+            postgres_harness,
+            tmp_path,
+            asr_provider="deepgram",
+            complete_local_fixture=False,
+        )
+        try:
+            legacy_intent = {
+                "target_revision": 1,
+                "configuration_sha256": setup.config_view["configuration_sha256"],
+                "approval_bundle_sha256": setup.bundle.digest,
+            }
+            async with setup.sessions() as database:
+                command = await database.scalar(
+                    select(ConversationCommand).where(
+                        ConversationCommand.tenant_id == setup.actor.tenant_id,
+                        ConversationCommand.person_id == setup.actor.person_id,
+                        ConversationCommand.key == "hosted-config-activation-v1",
+                    )
+                )
+                assert command is not None
+                assert command.intent_sha256 == content_hash(legacy_intent)
+                command_id = command.id
+
+            async with setup.sessions() as database, database.begin():
+                first = await ConversationProviderAdmin(_application(setup, database)).current(
+                    setup.actor, bundle=setup.bundle
+                )
+            assert first is not None and first["activation"] is not None
+
+            later = replace(setup.config, revision="hosted-test-config-v2")
+            async with setup.sessions() as database, database.begin():
+                await ConversationProviderAdmin(_application(setup, database)).save(
+                    setup.actor,
+                    later.as_dict(),
+                    expected_revision=1,
+                    key="hosted-config-v2",
+                )
+
+            async with setup.sessions() as database, database.begin():
+                service = ConversationProviderAdmin(_application(setup, database))
+                replay = await service.activate(
+                    setup.actor,
+                    target_revision=1,
+                    expected_revision=1,
+                    key="hosted-config-activation-v1",
+                    bundle=setup.bundle,
+                )
+                assert replay["revision"] == 2
+                assert replay["activation"] == first["activation"]
+
+                changed_approval = setup.bundle.model_copy(
+                    update={"issued_at_epoch": setup.bundle.issued_at_epoch - 1}
+                )
+                with pytest.raises(ConversationConflict, match="different command"):
+                    await service.activate(
+                        setup.actor,
+                        target_revision=1,
+                        expected_revision=2,
+                        key="hosted-config-activation-v1",
+                        bundle=changed_approval,
+                    )
+
+                with pytest.raises(ConversationConflict, match="changed"):
+                    await service.activate(
+                        setup.actor,
+                        target_revision=1,
+                        expected_revision=1,
+                        key="hosted-config-activation-new-key",
+                        bundle=setup.bundle,
+                    )
+            async with setup.sessions() as database:
+                command = await database.scalar(
+                    select(ConversationCommand).where(
+                        ConversationCommand.tenant_id == setup.actor.tenant_id,
+                        ConversationCommand.person_id == setup.actor.person_id,
+                        ConversationCommand.key == "hosted-config-activation-v1",
+                    )
+                )
+                assert command is not None
+                assert command.id == command_id
+                assert command.intent_sha256 == content_hash(legacy_intent)
         finally:
             await setup.engine.dispose()
 

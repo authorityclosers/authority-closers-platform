@@ -89,6 +89,55 @@ def test_effective_budget_cap_is_bounded_by_release_approval():
     assert effective_budget_cap_paise(75_000, 100_000) == 75_000
 
 
+def test_new_reservations_share_current_release_cap_with_carried_ledger():
+    minutes, budget = accounts()
+    approval = replace(
+        budget.cap_approval,
+        approved_cap_paise=250_000,
+        previous_budget_fingerprint="1" * 64,
+        explicit_above_ceiling=True,
+    )
+    budget = BudgetAccount(budget.scope_id, 250_000, approval)
+    first = quote(quote_id="quote-first", max_cost_paise=60_000)
+    held = reserve(
+        minutes,
+        budget,
+        "reserve-first",
+        first,
+        permission(first),
+        200,
+        release_cap_paise=100_000,
+    )
+    replay = reserve(
+        held.minutes,
+        held.budget,
+        "reserve-first",
+        first,
+        permission(first),
+        200,
+        release_cap_paise=50_000,
+    )
+    assert replay.changed is False and replay.budget == held.budget
+    second = quote(
+        quote_id="quote-second",
+        source=SourceBinding("tenant-a", "recording-b", "3" * 64, "v1"),
+        max_cost_paise=60_000,
+    )
+    with pytest.raises(ValueError, match="current release project budget exhausted"):
+        reserve(
+            held.minutes,
+            held.budget,
+            "reserve-second",
+            second,
+            permission(second),
+            200,
+            release_cap_paise=100_000,
+        )
+    assert held.budget.cap_paise == 250_000
+    assert held.budget.available_paise == 190_000
+    assert len(held.budget.reservations) == 1
+
+
 def reserved(*, seconds=600, cap=150_000, **changes):
     minutes, budget = accounts(seconds=seconds, cap=cap)
     value = quote(**changes)

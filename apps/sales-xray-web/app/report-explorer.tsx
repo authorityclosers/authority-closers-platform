@@ -3,7 +3,12 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import styles from "./report-explorer.module.css";
 
-export type ReportPanel = { id: string; label: string; content: ReactNode };
+export type ReportPanel = {
+  id: string;
+  label: string;
+  compactLabel?: string;
+  content: ReactNode;
+};
 
 /** Section changes preserve mounted search, measurement and audio state. */
 export function ReportExplorer({
@@ -32,6 +37,15 @@ export function ReportExplorer({
             }}
             type="button"
             role="tab"
+            aria-label={
+              panel.compactLabel
+                ? panel.label
+                    .toLowerCase()
+                    .includes(panel.compactLabel.toLowerCase())
+                  ? panel.label
+                  : `${panel.label} (${panel.compactLabel})`
+                : undefined
+            }
             id={`${prefix}-tab-${panel.id}`}
             aria-controls={`${prefix}-panel-${panel.id}`}
             aria-selected={active === panel.id}
@@ -51,7 +65,16 @@ export function ReportExplorer({
               buttons.current[next]?.focus();
             }}
           >
-            {panel.label}
+            {panel.compactLabel ? (
+              <>
+                <span className={styles.fullLabel}>{panel.label}</span>
+                <span className={styles.compactLabel}>
+                  {panel.compactLabel}
+                </span>
+              </>
+            ) : (
+              panel.label
+            )}
           </button>
         ))}
       </div>

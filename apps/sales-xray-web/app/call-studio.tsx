@@ -24,6 +24,7 @@ import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
+import { parseReportLanguage } from "./report-language";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -66,6 +67,12 @@ type ProcessingPlanStage = {
   privacy_notice: string;
 };
 export type ProcessingPlan = {
+  report_language?: import("./report-language").ReportLanguage;
+  coaching_prompt_revision?:
+    | "coaching-v1"
+    | "coaching-v2"
+    | "coaching-v3"
+    | "coaching-v4";
   id: string;
   recording_id: string;
   plan_fingerprint: string;
@@ -199,6 +206,8 @@ export function parseProcessingPlan(
     "report_run_id",
     "automatic_progression",
     "failure_code",
+    "report_language",
+    "coaching_prompt_revision",
   ];
   if (Object.keys(plan).some((key) => !expectedKeys.includes(key)))
     throw new ReportContractError("plan_unknown_field");
@@ -319,7 +328,28 @@ export function parseProcessingPlan(
     plan.failure_code === null
       ? null
       : planText(plan.failure_code, "plan_failure_code", 128);
+  const languageOptions: Pick<
+    ProcessingPlan,
+    "report_language" | "coaching_prompt_revision"
+  > = {};
+  if (
+    plan.report_language !== undefined ||
+    plan.coaching_prompt_revision !== undefined
+  ) {
+    languageOptions.report_language = parseReportLanguage(plan.report_language);
+    if (
+      !["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"].includes(
+        String(plan.coaching_prompt_revision),
+      ) ||
+      (plan.coaching_prompt_revision !== "coaching-v4" &&
+        languageOptions.report_language !== "en")
+    )
+      throw new ReportContractError("plan_language_revision_invalid");
+    languageOptions.coaching_prompt_revision =
+      plan.coaching_prompt_revision as ProcessingPlan["coaching_prompt_revision"];
+  }
   return {
+    ...languageOptions,
     id,
     recording_id: recordingId,
     plan_fingerprint: fingerprint,

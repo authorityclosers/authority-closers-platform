@@ -22,6 +22,10 @@ from ac_platform.conversation_intelligence.acquisition_challenge import (
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.acquisition_usage import ALLOWANCE_SECONDS
+from ac_platform.conversation_intelligence.analysis_settings import (
+    DEFAULT_ANALYSIS_SETTINGS,
+    latest_analysis_settings,
+)
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
@@ -171,7 +175,30 @@ def install_acquisition_runtime(
             "policy_revision": runtime.policy_revision if runtime else None,
             "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
         }
-        if host == "learner" and runtime is not None:
+        if runtime is None:
+            # Optional acquisition must remain disabled without touching its
+            # database or advertising language capabilities it cannot execute.
+            return value
+        operations_tenant_id = (
+            runtime.intake.authority.operations_tenant_id
+            if runtime.intake.authority is not None
+            else settings.operations_tenant_id
+        )
+        analysis_settings = DEFAULT_ANALYSIS_SETTINGS
+        if operations_tenant_id is not None:
+            async with sessions() as database:
+                _, analysis_settings = await latest_analysis_settings(
+                    database, operations_tenant_id
+                )
+        value.update(
+            report_languages=(
+                ["en"]
+                if analysis_settings.c5_coaching_prompt_revision == "coaching-v3"
+                else ["en", "hi-Deva+en", "mr-Deva+en"]
+            ),
+            report_language_default=analysis_settings.report_language_default,
+        )
+        if host == "learner":
             # The learner mount uses the existing account session. It never
             # receives the guest challenge or a guest bearer cookie.
             value.update({"site_key": None, "challenge_action": None, "auth_mode": "account"})

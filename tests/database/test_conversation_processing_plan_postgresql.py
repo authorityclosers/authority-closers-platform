@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.activation_contract import Acquisitio
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
     ConversationApplication,
+    ConversationConflict,
     ConversationDenied,
     ConversationNotFound,
 )
@@ -60,6 +61,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
@@ -85,13 +87,17 @@ async def _quote(
     *,
     storage: Any = None,
     recording_id: UUID | None = None,
+    report_language: str | None = None,
 ) -> dict[str, Any]:
     async with setup.sessions() as database, database.begin():
         service = ConversationProcessingPlans(
             _application(setup, database), setup.authority, storage
         )
         return await service.quote(
-            setup.actor, recording_id or setup.prepared.recording_id, key=key
+            setup.actor,
+            recording_id or setup.prepared.recording_id,
+            key=key,
+            report_language=report_language,
         )
 
 
@@ -124,6 +130,128 @@ def test_admin_analysis_settings_bound_new_plan_only(postgres_harness: Any, tmp_
                 assert stages[2]["max_completion_tokens"] == 512
                 assert row.manifest["output_profile"] == "standard"
                 assert row.manifest["analysis_settings_revision"] == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with setup.sessions() as database, database.begin():
+                database.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.authority.operations_tenant_id,
+                        person_id=setup.actor.person_id,
+                        session_id=setup.actor.session_id,
+                        revision=1,
+                        c4_max_requests=64,
+                        c4_max_completion_tokens=1_400,
+                        c5_max_completion_tokens=3_200,
+                        c5_output_profile="detailed",
+                        c5_coaching_prompt_revision="coaching-v4",
+                        report_language_default="mr-Deva+en",
+                        created_at=setup.prepared.state.now,
+                    )
+                )
+
+            frozen = await _quote(setup, "v4-frozen-quote")
+            assert "report_language" not in frozen
+            assert "coaching_prompt_revision" not in frozen
+            async with setup.sessions() as database:
+                original_row = await database.get(ConversationProcessingPlan, UUID(frozen["id"]))
+                assert original_row is not None and original_row.manifest is not None
+                original_manifest = dict(original_row.manifest)
+                assert original_manifest["analysis_settings_revision"] == 1
+                assert original_manifest["coaching_prompt_revision"] == "coaching-v4"
+                assert original_manifest["report_language"] == "mr-Deva+en"
+                assert (
+                    original_manifest["qualitative_pack_sha256"] == load_qualitative_pack().sha256
+                )
+
+            same_key = await _quote(setup, "v4-frozen-quote")
+            assert same_key == frozen
+            with pytest.raises(ConversationConflict, match="different command"):
+                await _quote(setup, "v4-frozen-quote", report_language="mr-Deva+en")
+
+            await _accept(setup, frozen, "v4-frozen-accept")
+            async with setup.sessions() as database, database.begin():
+                database.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.authority.operations_tenant_id,
+                        person_id=setup.actor.person_id,
+                        session_id=setup.actor.session_id,
+                        revision=2,
+                        c4_max_requests=64,
+                        c4_max_completion_tokens=1_400,
+                        c5_max_completion_tokens=3_200,
+                        c5_output_profile="detailed",
+                        c5_coaching_prompt_revision="coaching-v4",
+                        report_language_default="hi-Deva+en",
+                        created_at=setup.prepared.state.now,
+                    )
+                )
+            active_requote = await _quote(setup, "active-plan-other-language", report_language="en")
+            assert active_requote["id"] == frozen["id"]
+            assert active_requote["report_language"] == "mr-Deva+en"
+            assert active_requote["coaching_prompt_revision"] == "coaching-v4"
+            assert "qualitative_pack_sha256" not in active_requote
+
+            next_recording = await _duplicate_recording(setup, "v4-new-default-recording")
+            next_quote = await _quote(setup, "v4-new-default-quote", recording_id=next_recording)
+            assert "report_language" not in next_quote
+            async with setup.sessions() as database:
+                next_row = await database.get(ConversationProcessingPlan, UUID(next_quote["id"]))
+                assert next_row is not None and next_row.manifest is not None
+                assert next_row.manifest["analysis_settings_revision"] == 2
+                assert next_row.manifest["report_language"] == "hi-Deva+en"
+
+            async with setup.sessions() as database, database.begin():
+                database.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.authority.operations_tenant_id,
+                        person_id=setup.actor.person_id,
+                        session_id=setup.actor.session_id,
+                        revision=3,
+                        c4_max_requests=64,
+                        c4_max_completion_tokens=1_400,
+                        c5_max_completion_tokens=3_200,
+                        c5_output_profile="detailed",
+                        c5_coaching_prompt_revision="coaching-v3",
+                        report_language_default="en",
+                        created_at=setup.prepared.state.now,
+                    )
+                )
+            prior_quote_commands = await _count(
+                setup,
+                ConversationCommand,
+                ConversationCommand.action == "processing_plan_quote",
+            )
+            with pytest.raises(ConversationDenied, match="requires the coaching-v4"):
+                await _quote(
+                    setup,
+                    "v3-nonenglish-denied",
+                    recording_id=await _duplicate_recording(setup, "v3-denial-recording"),
+                    report_language="hi-Deva+en",
+                )
+            assert (
+                await _count(
+                    setup,
+                    ConversationCommand,
+                    ConversationCommand.action == "processing_plan_quote",
+                )
+                == prior_quote_commands
+            )
+            async with setup.sessions() as database:
+                persisted = await database.get(ConversationProcessingPlan, UUID(frozen["id"]))
+                assert persisted is not None and persisted.manifest == original_manifest
         finally:
             await setup.engine.dispose()
 

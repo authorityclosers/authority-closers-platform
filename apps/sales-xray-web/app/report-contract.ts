@@ -609,7 +609,12 @@ export function parseAcquisitionReport(
   value: unknown,
   expected: { submissionId: string; recordingId: string },
   transcript: Transcript,
-): { report: SalesReport; claimed: boolean; recovery?: RecoveryMetadata } {
+): {
+  report: SalesReport;
+  runId: string;
+  claimed: boolean;
+  recovery?: RecoveryMetadata;
+} {
   const envelope = object(value, "report_envelope");
   keys(
     envelope,
@@ -634,7 +639,7 @@ export function parseAcquisitionReport(
     envelope.transcript_revision !== transcript.revision
   )
     throw new ReportContractError("report_envelope_binding");
-  identifier(envelope.run_id, "report_run");
+  const runId = identifier(envelope.run_id, "report_run");
   const recovery =
     envelope.recovery === undefined
       ? undefined
@@ -703,8 +708,8 @@ export function parseAcquisitionReport(
     report.preview = parsePreview(projection.preview, report);
   }
   return recovery === undefined
-    ? { claimed, report }
-    : { claimed, report, recovery };
+    ? { claimed, report, runId }
+    : { claimed, report, runId, recovery };
 }
 
 export function parseJobResponse(

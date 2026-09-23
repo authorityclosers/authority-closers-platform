@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
     c5_repair_intent,
     manifest_for,
     maximum_plan_cost_with_repair,
+    parse_report_language_preference,
     plan_cost_label,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
@@ -89,6 +90,22 @@ def test_one_explicit_boolean_click_is_required(value: object) -> None:
                 "accepted": value,
             }
         )
+
+
+def test_optional_report_language_body_is_exact_and_legacy_empty_body_defaults() -> None:
+    assert parse_report_language_preference(b"") is None
+    for language in ("en", "hi-Deva+en", "mr-Deva+en"):
+        assert (
+            parse_report_language_preference(canonical({"report_language": language})) == language
+        )
+    for raw in (
+        b"not-json",
+        canonical({}),
+        canonical({"report_language": "Hindi"}),
+        canonical({"report_language": "mr-Deva+en", "coaching_prompt_revision": "coaching-v4"}),
+    ):
+        with pytest.raises(ValueError, match="report language preference"):
+            parse_report_language_preference(raw)
 
 
 @pytest.mark.parametrize("field", ["provider", "model", "max_cost_paise", "profile"])

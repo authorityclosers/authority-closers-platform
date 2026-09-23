@@ -317,6 +317,18 @@ class ConversationAnalysisSettings(Base):
             name="bounded_c5_tokens",
         ),
         CheckConstraint("c5_output_profile IN ('standard','detailed')", name="known_c5_profile"),
+        CheckConstraint(
+            "c5_coaching_prompt_revision IN ('coaching-v3','coaching-v4')",
+            name="known_c5_prompt",
+        ),
+        CheckConstraint(
+            "report_language_default IN ('en','hi-Deva+en','mr-Deva+en')",
+            name="known_report_language",
+        ),
+        CheckConstraint(
+            "c5_coaching_prompt_revision = 'coaching-v4' OR report_language_default = 'en'",
+            name="language_prompt_compatible",
+        ),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
@@ -327,6 +339,10 @@ class ConversationAnalysisSettings(Base):
     c4_max_completion_tokens: Mapped[int] = mapped_column(Integer)
     c5_max_completion_tokens: Mapped[int] = mapped_column(Integer)
     c5_output_profile: Mapped[str] = mapped_column(String(16))
+    c5_coaching_prompt_revision: Mapped[str] = mapped_column(
+        String(24), server_default="coaching-v3"
+    )
+    report_language_default: Mapped[str] = mapped_column(String(16), server_default="en")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

@@ -27,6 +27,8 @@ const defaults = {
   title: "Checking the conversation",
   paused: false,
   needsAttention: false,
+  refreshProblem: false,
+  waitingForApproval: false,
 };
 async function render(props: Partial<typeof defaults> = {}) {
   await act(async () =>
@@ -60,13 +62,11 @@ it("waits one minute, preserving the real stage title without a failure or perce
   await advance(1);
   expect(delayed()).toBe("true");
   expect(container.querySelector("h3")?.textContent).toBe(defaults.title);
-  expect(container.textContent).toContain("WAITING FOR AN UPDATE");
+  expect(container.textContent).toContain("No new stage update yet");
   expect(container.textContent).not.toMatch(/failed|paused|\d+%/i);
-  const messages = container.querySelectorAll("[data-visible]");
-  expect(messages).toHaveLength(4);
-  expect(messages[0].getAttribute("aria-hidden")).toBe("true");
-  expect(messages[3].hasAttribute("aria-hidden")).toBe(false);
-  expect(messages[3].textContent).toContain("no need to upload again");
+  expect(container.textContent).toContain(
+    "does not tell us how much work remains",
+  );
 });
 
 it("does not reset the wait when an identical poll returns a new object", async () => {
@@ -139,55 +139,77 @@ it("gives paused and error guidance priority and restarts the timer only on retu
 
 it("cleans up the timer when removed for a completed report or navigation", async () => {
   await render();
-  expect(vi.getTimerCount()).toBe(2);
+  expect(vi.getTimerCount()).toBe(1);
   await act(async () => root.render(null));
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("rotates same-stage cues without changing the real title, then stops cycling after the delayed notice", async () => {
+it("keeps one stable explanation throughout a long wait, without a cycling timer", async () => {
   await render();
-  const visible = () =>
-    container.querySelector('[data-visible="true"]')?.textContent;
-  expect(visible()).toContain("Reviewing the conversation");
+  const before = container.querySelector("h3")?.textContent;
   await advance(8_000);
-  expect(visible()).toContain("source moments");
-  expect(container.querySelector("h3")?.textContent).toBe(defaults.title);
-  await advance(8_000);
-  expect(visible()).toContain("Your call is saved");
-  await advance(44_000);
-  expect(visible()).toContain("No new stage update yet");
+  expect(container.textContent).toContain("source moments");
+  await advance(7_200_000);
+  expect(container.querySelector("h3")?.textContent).toBe(before);
+  expect(container.textContent).toContain("No new stage update yet");
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each([
   ["C2", "Turning your recording"],
-  ["C4", "Reviewing the conversation"],
+  ["C4", "source moments"],
   ["C5", "Bringing your takeaways"],
-])("shows %s cues only when that stage is running", async (stage, copy) => {
+])("explains %s only when its latest row is running", async (stage, copy) => {
   await render({
     progress: { ...running, stages: [{ stage, state: "running" }] },
   });
-  expect(
-    container.querySelector('[data-visible="true"]')?.textContent,
-  ).toContain(copy);
+  expect(container.textContent).toContain(copy);
   await render({
-    progress: { ...running, stages: [{ stage, state: "queued" }] },
+    progress: {
+      ...running,
+      stages: [
+        { stage, state: "running" },
+        { stage, state: "completed" },
+      ],
+    },
   });
-  expect(
-    container.querySelector('[data-visible="true"]')?.textContent,
-  ).toContain("Waiting for the next stage");
+  expect(container.textContent).not.toContain(copy);
 });
 
-it("uses recording-check cues before local validation completes", async () => {
-  await render({
-    progress: { ...running, local_state: "running", stages: [] },
+it("excludes time spent in a hidden tab from the unchanged foreground notice", async () => {
+  await render();
+  await advance(30_000);
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "hidden",
   });
-  expect(
-    container.querySelector('[data-visible="true"]')?.textContent,
-  ).toContain("format and duration");
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  await advance(600_000);
+  expect(delayed()).toBe("false");
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  await advance(29_999);
+  expect(delayed()).toBe("false");
+  await advance(1);
+  expect(delayed()).toBe("true");
 });
 
-it("does not cycle informational cues when reduced motion is requested", async () => {
+it.each(["refreshProblem", "waitingForApproval"] as const)(
+  "does not call %s a silent provider wait",
+  async (reason) => {
+    await render({ [reason]: true });
+    await advance(7_200_000);
+    expect(container.textContent).not.toContain("No new stage update yet");
+    expect(container.textContent).not.toMatch(
+      /failed|remaining seconds|percent/i,
+    );
+  },
+);
+
+it("does not rotate copy or add motion when reduced motion is requested", async () => {
   const original = window.matchMedia;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: true,
@@ -196,10 +218,9 @@ it("does not cycle informational cues when reduced motion is requested", async (
   });
   try {
     await render();
+    const text = container.textContent;
     await advance(24_000);
-    expect(
-      container.querySelector('[data-visible="true"]')?.textContent,
-    ).toContain("Reviewing the conversation");
+    expect(container.textContent).toBe(text);
     expect(vi.getTimerCount()).toBe(1);
   } finally {
     window.matchMedia = original;

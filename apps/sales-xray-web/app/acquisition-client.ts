@@ -1,4 +1,8 @@
 import { ReportContractError } from "./report-contract";
+import {
+  parseLanguageCapabilities,
+  type ReportLanguage,
+} from "./report-language";
 
 export const ACQUISITION = "/v1/conversation/acquisition";
 export const ACQUISITION_PAUSED_MESSAGE =
@@ -12,6 +16,8 @@ export type Entry = {
   challenge_action: string | null;
   policy_revision: string | null;
   allowance_seconds: number | null;
+  report_languages?: ReportLanguage[];
+  report_language_default?: ReportLanguage;
 };
 export type Allowance = {
   allowance_seconds: number;
@@ -226,6 +232,7 @@ export function parseEntry(value: unknown): Entry {
       challenge_action: null,
       policy_revision: entry.policy_revision,
       allowance_seconds: integer(entry.allowance_seconds, 6000),
+      ...parseLanguageCapabilities(entry),
     };
   }
   if (
@@ -244,6 +251,7 @@ export function parseEntry(value: unknown): Entry {
     challenge_action: entry.challenge_action,
     policy_revision: entry.policy_revision,
     allowance_seconds: integer(entry.allowance_seconds, 6000),
+    ...parseLanguageCapabilities(entry),
   };
 }
 export function parseAllowance(value: unknown): Allowance {

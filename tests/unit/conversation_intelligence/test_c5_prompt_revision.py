@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
     manifest_for,
     require_derived_input,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
@@ -42,6 +43,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_REFINED_MARKER,
     COACHING_PROMPT_V3,
     COACHING_PROMPT_V3_MARKER,
+    COACHING_PROMPT_V4,
     FactPacket,
     parse_fact_packet,
 )
@@ -82,6 +84,8 @@ def test_legacy_c5_request_and_payload_remain_byte_stable() -> None:
         fact_checkpoint_ids=(uuid4(),),
     )
     assert "coaching_prompt_revision" not in request.model_dump(mode="json")
+    assert "report_language" not in request.model_dump(mode="json")
+    assert "qualitative_pack_sha256" not in request.model_dump(mode="json")
     assert StageRequest.model_validate(request.model_dump(mode="json")) == request
 
 
@@ -282,6 +286,88 @@ def test_manifest_and_derived_request_pin_the_refined_revision() -> None:
         )
 
 
+def test_v4_manifest_and_derived_request_pin_language_and_pack_hash() -> None:
+    legacy = manifest_for(saved_plan())
+    old_data = legacy.as_dict()
+    assert "report_language" not in old_data
+    assert "qualitative_pack_sha256" not in old_data
+    pack_sha256 = load_qualitative_pack().sha256
+    v4_data = {
+        **old_data,
+        "coaching_prompt_revision": COACHING_PROMPT_V4,
+        "report_language": "hi-Deva+en",
+        "qualitative_pack_sha256": pack_sha256,
+    }
+    manifest = PlanManifest.model_validate_json(canonical(v4_data))
+    assert manifest.as_dict() == v4_data
+    assert PlanManifest.model_validate_json(canonical(manifest.as_dict())) == manifest
+
+    for invalid in (
+        {**old_data, "report_language": "mr-Deva+en"},
+        {**old_data, "qualitative_pack_sha256": pack_sha256},
+        {**old_data, "coaching_prompt_revision": COACHING_PROMPT_V4},
+        {**v4_data, "qualitative_pack_sha256": "0" * 64},
+    ):
+        with pytest.raises(ValueError):
+            PlanManifest.model_validate_json(canonical(invalid))
+
+    approval = manifest.stages[2]
+    selected = StageRequest(
+        stage="C5",
+        transcript_checkpoint_id=uuid4(),
+        fact_checkpoint_ids=(uuid4(),),
+        provider=approval.provider_id,
+        model=approval.model_id,
+        max_input_chars=manifest.max_input_chars,
+        max_completion_tokens=stage_completion_limit(
+            "C5",
+            approval.max_completion_tokens,
+            provider=approval.provider_id,
+            model=approval.model_id,
+        ),
+        coaching_prompt_revision=COACHING_PROMPT_V4,
+        report_language="hi-Deva+en",
+        qualitative_pack_sha256=pack_sha256,
+        profile=manifest.profile,
+    )
+    assert StageRequest.model_validate(selected.model_dump(mode="json")) == selected
+    checkpoint = Checkpoint(
+        SourceBinding("tenant", "recording", "a" * 64, "1"),
+        "C5",
+        COACHING_RECIPE,
+        canonical({"input_sha256": "a" * 64}).decode(),
+        (("C4", "b" * 64),),
+        "c" * 64,
+    )
+    plan = StagePlan(
+        cast(PreparedTaskInput, SimpleNamespace()),
+        checkpoint,
+        1_000,
+        selected,
+        {},
+        {},
+        manifest.profile,
+    )
+    require_derived_input(manifest, plan)
+    for changed in (
+        selected.model_copy(update={"report_language": "mr-Deva+en"}),
+        selected.model_copy(update={"coaching_prompt_revision": COACHING_PROMPT_V3}),
+    ):
+        with pytest.raises(ConversationDenied, match="derived request"):
+            require_derived_input(
+                manifest,
+                plan.__class__(
+                    plan.prepared,
+                    plan.checkpoint,
+                    plan.duration_ms,
+                    changed,
+                    plan.transcript,
+                    plan.native_transcript,
+                    plan.profile,
+                ),
+            )
+
+
 def test_c4_cannot_select_a_coaching_prompt_revision() -> None:
     with pytest.raises(ValueError, match="coaching prompt revision"):
         StageRequest(
@@ -291,9 +377,49 @@ def test_c4_cannot_select_a_coaching_prompt_revision() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"report_language": "en"},
+        {"qualitative_pack_sha256": "a" * 64},
+    ],
+)
+def test_c4_cannot_carry_language_or_qualitative_pack(options: dict[str, str]) -> None:
+    with pytest.raises(ValueError, match="coaching configuration"):
+        StageRequest(stage="C4", transcript_checkpoint_id=uuid4(), **options)
+
+
+def test_c5_only_accepts_pack_and_language_for_matching_v4_revision() -> None:
+    base = {
+        "stage": "C5",
+        "transcript_checkpoint_id": uuid4(),
+        "fact_checkpoint_ids": (uuid4(),),
+    }
+    with pytest.raises(ValueError, match="current qualitative pack"):
+        StageRequest(
+            **base,
+            coaching_prompt_revision=COACHING_PROMPT_V4,
+            report_language="en",
+        )
+    with pytest.raises(ValueError, match="current qualitative pack"):
+        StageRequest(
+            **base,
+            coaching_prompt_revision=COACHING_PROMPT_V4,
+            report_language="en",
+            qualitative_pack_sha256="0" * 64,
+        )
+    with pytest.raises(ValueError, match="cannot select language"):
+        StageRequest(
+            **base,
+            coaching_prompt_revision=COACHING_PROMPT_V3,
+            report_language="hi-Deva+en",
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "revision", [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3]
+    "revision",
+    [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3, COACHING_PROMPT_V4],
 )
 async def test_reporting_pipeline_pins_legacy_or_refined_c5_checkpoint_config(
     revision: str, monkeypatch: pytest.MonkeyPatch
@@ -355,11 +481,20 @@ async def test_reporting_pipeline_pins_legacy_or_refined_c5_checkpoint_config(
     pipeline.checkpoint = checkpoint  # type: ignore[method-assign]
     pipeline.provider_task = provider_task  # type: ignore[method-assign]
     pipeline.save = save  # type: ignore[method-assign]
+    v4_options = (
+        {
+            "report_language": "mr-Deva+en",
+            "qualitative_pack_sha256": load_qualitative_pack().sha256,
+        }
+        if revision == COACHING_PROMPT_V4
+        else {}
+    )
     request = StageRequest(
         stage="C5",
         transcript_checkpoint_id=uuid4(),
         fact_checkpoint_ids=(uuid4(),),
         coaching_prompt_revision=revision,  # type: ignore[arg-type]
+        **v4_options,
     )
 
     plan = await pipeline.plan(recording, request)
@@ -369,3 +504,9 @@ async def test_reporting_pipeline_pins_legacy_or_refined_c5_checkpoint_config(
         assert set(config) == {"input_sha256", "model", "profile_sha256", "provider"}
     else:
         assert config["coaching_prompt_revision"] == revision
+    if revision == COACHING_PROMPT_V4:
+        assert config["report_language"] == "mr-Deva+en"
+        assert config["qualitative_pack_sha256"] == load_qualitative_pack().sha256
+    else:
+        assert "report_language" not in config
+        assert "qualitative_pack_sha256" not in config

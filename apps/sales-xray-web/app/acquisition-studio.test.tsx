@@ -9,7 +9,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin }),
 }));
 import Page from "./page";
-import { remainingAllowanceLabel, savedCallsHref } from "./acquisition-studio";
+import { remainingAllowanceLabel } from "./acquisition-studio";
+import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import {
   allowance,
   entry,
@@ -44,6 +45,9 @@ let existing: boolean,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
+let entryBody: unknown;
+let quoteBody: unknown;
+let savedPlanBody: unknown;
 let progressOverride: unknown;
 let planFailure: { status: number; body: unknown } | null;
 let planFailureOnce: boolean;
@@ -112,6 +116,9 @@ beforeEach(() => {
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
+  entryBody = entry;
+  quoteBody = plan;
+  savedPlanBody = null;
   progressOverride = undefined;
   planFailure = null;
   planFailureOnce = false;
@@ -149,7 +156,7 @@ beforeEach(() => {
           selected_tenant_id: "tenant-1",
           workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
         });
-      if (path.endsWith("/entry")) return response(entry);
+      if (path.endsWith("/entry")) return response(entryBody);
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
       if (path.endsWith("/upload-policy")) return response(policy);
@@ -185,8 +192,10 @@ beforeEach(() => {
       if (path.endsWith("/plan/quote"))
         return quoteFailure
           ? response(quoteFailure.body, quoteFailure.status)
-          : response(plan, 201);
+          : response(quoteBody, 201);
       if (path.endsWith("/plan")) {
+        if (init.method !== "POST")
+          return savedPlanBody ? response(savedPlanBody) : response({}, 404);
         if (planFailure) {
           const failure = planFailure;
           if (planFailureOnce) {
@@ -357,7 +366,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(4);
+  ).toHaveLength(5);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -759,9 +768,23 @@ it("renders an explicit unlimited tester allowance", () => {
   ).toBe("Unlimited testing");
 });
 
-it("keeps saved calls navigation aligned with the mounted studio variant", () => {
-  expect(savedCallsHref(false)).toBe("/calls");
-  expect(savedCallsHref(true)).toBe("/sales-xray/calls");
+it("gives guests their owner-checked call link instead of promising an account library", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  const link = container.querySelector(
+    `[aria-label="Analysis progress"] a[href="/?call=${submissionId}"]`,
+  );
+  expect(link?.textContent).toContain("This call’s link");
+  expect(
+    container.querySelector(
+      '[aria-label="Analysis progress"] a[href="/calls"]',
+    ),
+  ).toBeNull();
+  expect(container.textContent).toContain(
+    "while your session and call remain available",
+  );
 });
 
 it("shows the live processing stages without inventing a percentage", async () => {
@@ -789,6 +812,406 @@ it("shows the live processing stages without inventing a percentage", async () =
   );
   expect(container.textContent).not.toMatch(/\b\d+%\b/);
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
+});
+
+it("keeps status refresh read-only after a lost quote and requires a separate review action", async () => {
+  quoteFailure = { status: 503, body: {} };
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  const before = calls.filter(({ init }) =>
+    ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+  ).length;
+  quoteFailure = null;
+  await click("Check again");
+  await act(async () => vi.advanceTimersByTimeAsync(12_000));
+  await flush();
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(before);
+  expect(container.textContent).toContain("Ready for your approval");
+  expect(container.textContent).not.toContain(
+    "Analysis can continue after you leave",
+  );
+  await click("Review analysis plan");
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    2,
+  );
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
+  await click("Continue analysis");
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
+});
+
+it("restores an unapproved call without quoting or accepting, including manual status checks", async () => {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  await click("Check status");
+  expect(container.textContent).toContain("Ready for your approval");
+  expect(container.textContent).toContain("approval is not confirmed yet");
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(0);
+});
+
+it("exposes explicit plan review when a progress change interrupts automatic quoting", async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishQuote!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementation(async (path, init = {}) => {
+    if (String(path).endsWith("/plan/quote")) {
+      calls.push({ path: String(path), init });
+      return new Promise<Response>((resolve) => {
+        finishQuote = resolve;
+      });
+    }
+    return original(path, init);
+  });
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  progressOverride = { ...progress, state: "active" };
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.textContent).toContain("Ready for your approval");
+  expect(button("Review analysis plan")).toBeDefined();
+  await act(async () => finishQuote(response(plan)));
+  await flush();
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
+  vi.mocked(fetch).mockImplementation(original);
+  await click("Review analysis plan");
+  expect(button("Continue analysis")).toBeDefined();
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
+});
+
+it("retains confirmed work during a refresh failure and clears the connection warning on success", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  vi.mocked(fetch).mockResolvedValueOnce(response({}, 503));
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.textContent).toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(container.textContent).not.toContain("Request a fresh plan");
+  expect(
+    container.querySelector(
+      '[aria-label="Analysis progress"][data-paused="true"]',
+    ),
+  ).toBeNull();
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(6_000));
+  await flush();
+  expect(container.textContent).not.toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(container.textContent).not.toContain("This request did not finish");
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(0);
+});
+
+it("keeps interactive progress controls outside the live status announcer", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  const panel = container.querySelector('[aria-label="Analysis progress"]')!;
+  expect(panel.getAttribute("role")).toBeNull();
+  expect(panel.querySelector('[role="status"] button')).toBeNull();
+  expect(panel.querySelector('[role="status"] a')).toBeNull();
+  expect(button("Check status")).toBeDefined();
+});
+
+it("bounds a hung status read and permits a GET-only retry without losing confirmed stages", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  savedLookupDelayed = true;
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(button("Checking status").disabled).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(STATUS_READ_TIMEOUT_MS));
+  await flush();
+  expect(button("Check status").disabled).toBe(false);
+  expect(container.textContent).toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  savedLookupDelayed = false;
+  await click("Check status");
+  expect(container.textContent).not.toContain(
+    "Status cannot currently be refreshed",
+  );
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(0);
+});
+
+it("ignores an old observation after unmount and replacement of the studio", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  let finishOld!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        finishOld = resolve;
+      }),
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  // Deliberately ignore fetch cancellation to verify the mounted UI guard.
+  await act(async () => root.render(<Page key="replacement-studio" />));
+  await flush();
+  progressOverride = {
+    ...progress,
+    state: "active",
+    automatic_progression: true,
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "running" },
+    ],
+  };
+  await click("Check status");
+  await act(async () =>
+    finishOld(
+      response({
+        ...progress,
+        state: "held",
+        stages: [{ stage: "C2", state: "uncertain" }],
+      }),
+    ),
+  );
+  await flush();
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "In progress",
+  );
+  expect(container.textContent).not.toContain("Analysis paused");
+  expect(
+    calls.filter(({ init }) =>
+      ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+    ),
+  ).toHaveLength(0);
+});
+
+it("binds the selected report language to the quote and preserves it through a legacy acceptance response", async () => {
+  entryBody = {
+    ...entry,
+    report_languages: ["en", "hi-Deva+en", "mr-Deva+en"],
+    report_language_default: "en",
+  };
+  quoteBody = {
+    ...plan,
+    report_language: "mr-Deva+en",
+    coaching_prompt_revision: "coaching-v4",
+  };
+  savedPlanBody = {
+    ...(quoteBody as object),
+    accepted: true,
+    state: "completed",
+    report_ready: true,
+    report_run_id: envelope.run_id,
+  };
+  await mount();
+  await select();
+  const selectLanguage =
+    container.querySelector<HTMLSelectElement>("#report-language")!;
+  expect(selectLanguage.value).toBe("en");
+  await act(async () => {
+    selectLanguage.value = "mr-Deva+en";
+    selectLanguage.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  const quote = calls.find(({ path }) => path.endsWith("/plan/quote"))!;
+  expect(JSON.parse(String(quote.init.body))).toEqual({
+    report_language: "mr-Deva+en",
+  });
+  expect(
+    (quote.init.headers as Record<string, string>)["Idempotency-Key"],
+  ).toContain("mr-Deva+en");
+  expect(container.textContent).toContain("Report language: Marathi + English");
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
+});
+
+it("restores the saved report language instead of today's default without another quote", async () => {
+  existing = true;
+  accepted = true;
+  entryBody = {
+    ...entry,
+    report_languages: ["en", "hi-Deva+en", "mr-Deva+en"],
+    report_language_default: "en",
+  };
+  savedPlanBody = {
+    ...plan,
+    accepted: true,
+    report_language: "hi-Deva+en",
+    coaching_prompt_revision: "coaching-v4",
+    report_ready: true,
+    report_run_id: envelope.run_id,
+    state: "completed",
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain("Report language: Hindi + English");
+  expect(
+    calls.filter(({ init }) => ["POST", "PUT"].includes(init.method ?? "")),
+  ).toHaveLength(0);
+});
+
+it("does not label a completed report using a plan for another report run", async () => {
+  existing = true;
+  accepted = true;
+  entryBody = {
+    ...entry,
+    report_languages: ["en", "hi-Deva+en"],
+    report_language_default: "en",
+  };
+  savedPlanBody = {
+    ...plan,
+    accepted: true,
+    report_language: "hi-Deva+en",
+    coaching_prompt_revision: "coaching-v4",
+    report_ready: true,
+    report_run_id: recordingId,
+    state: "completed",
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain("Report language:");
+  expect(
+    calls.filter(({ init }) => ["POST", "PUT"].includes(init.method ?? "")),
+  ).toHaveLength(0);
+});
+
+it("reconciles a committed acceptance after its response is interrupted without accepting twice", async () => {
+  entryBody = {
+    ...entry,
+    report_languages: ["en"],
+    report_language_default: "en",
+  };
+  quoteBody = {
+    ...plan,
+    report_language: "en",
+    coaching_prompt_revision: "coaching-v3",
+  };
+  savedPlanBody = {
+    ...(quoteBody as object),
+    accepted: true,
+    state: "active",
+    current_stage: "C2",
+  };
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishAccept!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementation(async (path, init = {}) => {
+    if (String(path).endsWith("/plan") && init.method === "POST") {
+      calls.push({ path: String(path), init });
+      accepted = true;
+      processingMode = "running";
+      return new Promise<Response>((resolve) => {
+        finishAccept = resolve;
+      });
+    }
+    return original(path, init);
+  });
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Analysis progress"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain("Ready to continue");
+  await act(async () =>
+    finishAccept(response({ ...plan, accepted: true, state: "active" })),
+  );
+  await flush();
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(1);
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+});
+
+it("requires review if the returned frozen plan differs from the requested language", async () => {
+  entryBody = {
+    ...entry,
+    report_languages: ["en", "hi-Deva+en"],
+    report_language_default: "hi-Deva+en",
+  };
+  quoteBody = {
+    ...plan,
+    report_language: "en",
+    coaching_prompt_revision: "coaching-v3",
+  };
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  expect(container.textContent).toContain("Report language: English");
+  expect(container.textContent).toContain("Ready to continue");
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
 });
 
 it("shows delayed-update guidance without changing progress, identity or submitting more work", async () => {
@@ -1168,7 +1591,7 @@ it("describes completed C4 chunks as saved work without claiming the entire stag
   );
 });
 
-it("retry keeps the same submission and source instead of a second charge", async () => {
+it("replays the same upload only after a retry lookup confirms no submission", async () => {
   existing = true;
   failedUpload = true;
   await mount();
@@ -1177,12 +1600,72 @@ it("retry keeps the same submission and source instead of a second charge", asyn
   await click("Analyse my call");
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   failedUpload = false;
+  lookupUnavailable = true;
+  const retryStart = calls.length;
   await click("Analyse my call");
+  expect(calls[retryStart].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}`,
+  );
   const puts = calls.filter((call) => call.init.method === "PUT");
   expect(puts).toHaveLength(2);
   expect(puts[0].path).toBe(puts[1].path);
   expect(puts[0].init.headers).toEqual(puts[1].init.headers);
 });
+
+it("recovers a committed upload after a lost response and a 31-minute wait without another PUT or plan", async () => {
+  existing = true;
+  failedUpload = true;
+  progressOverride = {
+    ...progress,
+    state: "active",
+    automatic_progression: true,
+    stages: [{ stage: "C2", state: "queued" }],
+  };
+  await mount();
+  await select();
+  await consent();
+  await click("Analyse my call");
+  await act(async () => vi.advanceTimersByTimeAsync(31 * 60_000));
+  const retryStart = calls.length;
+  await click("Analyse my call");
+  expect(calls[retryStart].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}`,
+  );
+  expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
+  expect(calls.some((call) => call.path.endsWith("/plan/quote"))).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Queued",
+  );
+});
+
+it.each(["mismatch", "denied", "malformed", "unavailable"])(
+  "does not replay upload when retry reconciliation is %s",
+  async (failure) => {
+    existing = true;
+    failedUpload = true;
+    await mount();
+    await select();
+    await consent();
+    await click("Analyse my call");
+    if (failure === "mismatch")
+      progressOverride = { ...progress, source_sha256: "a".repeat(64) };
+    else if (failure === "malformed") progressOverride = { state: "active" };
+    else if (failure === "denied") savedSubmissionUnauthorized = true;
+    else {
+      const original = vi.mocked(fetch).getMockImplementation()!;
+      vi.mocked(fetch).mockImplementation(async (path, init) =>
+        String(path).endsWith(`/submissions/${submissionId}`)
+          ? response({}, 503)
+          : original(path, init),
+      );
+    }
+    await click("Analyse my call");
+    expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+  },
+);
 
 it("reload fetches the retained call and refuses a mismatched report", async () => {
   existing = true;
@@ -1295,6 +1778,27 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(container.querySelector('[aria-label="Call audio player"]')).toBe(
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
+  expect(savedAudio?.getAttribute("src")).toBe(source);
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  await click("Prospect");
+  expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
+  const prospectSource =
+    envelope.report.content.overview.prospect_interpretations[0].source
+      .evidence[0];
+  expect(
+    container.querySelector('[data-prospect-part="verbatim"]')?.textContent,
+  ).toContain(prospectSource.quote);
+  await click("Play source moment");
+  expect((savedAudio as HTMLAudioElement).currentTime).toBe(
+    prospectSource.start_ms / 1000,
+  );
+  expect(play).toHaveBeenCalledOnce();
+  await click("Next-call plan");
+  expect(
+    container.querySelector('[aria-label="Call audio player"] audio'),
+  ).toBe(savedAudio);
   expect(savedAudio?.getAttribute("src")).toBe(source);
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/accept"))).toBe(false);

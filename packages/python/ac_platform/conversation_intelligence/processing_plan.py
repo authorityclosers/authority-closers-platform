@@ -63,6 +63,10 @@ from ac_platform.conversation_intelligence.processing_actor import (
     actor_from_row,
     same_actor,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
@@ -73,6 +77,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_V3,
+    COACHING_PROMPT_V4,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -165,9 +170,11 @@ class PlanManifest(BaseModel):
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
-        COACHING_PROMPT_LEGACY
-    )
+    coaching_prompt_revision: Literal[
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"
+    ] = COACHING_PROMPT_LEGACY
+    report_language: ReportLanguage | None = None
+    qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -216,6 +223,14 @@ class PlanManifest(BaseModel):
             or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
+        if self.coaching_prompt_revision == COACHING_PROMPT_V4:
+            if (
+                self.report_language is None
+                or self.qualitative_pack_sha256 != load_qualitative_pack().sha256
+            ):
+                raise ValueError("processing_plan_coaching_options_invalid")
+        elif self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None:
+            raise ValueError("processing_plan_coaching_options_invalid")
         return self
 
     def as_dict(self) -> dict[str, Any]:
@@ -234,6 +249,10 @@ class PlanManifest(BaseModel):
             value.pop("fact_prompt_revision", None)
         if self.coaching_prompt_revision == COACHING_PROMPT_LEGACY:
             value.pop("coaching_prompt_revision", None)
+        if self.report_language is None:
+            value.pop("report_language", None)
+        if self.qualitative_pack_sha256 is None:
+            value.pop("qualitative_pack_sha256", None)
         return value
 
 
@@ -250,6 +269,24 @@ class PlanAcceptance(BaseModel):
         if value is not True:
             raise ValueError("Explicit acceptance is required.")
         return True
+
+
+class PlanLanguagePreference(BaseModel):
+    """One optional caller preference; it cannot select an engine or pack."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    report_language: ReportLanguage
+
+
+def parse_report_language_preference(raw: bytes) -> ReportLanguage | None:
+    """Parse the bounded, exact optional language body used by quote routes."""
+
+    if not raw:
+        return None
+    try:
+        return PlanLanguagePreference.model_validate_json(raw).report_language
+    except ValueError:
+        raise ValueError("The report language preference is invalid.") from None
 
 
 def manifest_for(row: ConversationProcessingPlan) -> PlanManifest:
@@ -440,6 +477,11 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
             plan.checkpoint.stage == "C5"
             and plan.request.coaching_prompt_revision != value.coaching_prompt_revision
         )
+        or (plan.checkpoint.stage == "C5" and plan.request.report_language != value.report_language)
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.qualitative_pack_sha256 != value.qualitative_pack_sha256
+        )
         or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
         raise ConversationDenied("The derived request exceeds the accepted processing plan.")
@@ -515,9 +557,11 @@ class ConversationProcessingPlans:
         return None if job is None else c5_repair_intent(task, job)
 
     @staticmethod
-    def view(row: ConversationProcessingPlan) -> dict[str, Any]:
+    def view(
+        row: ConversationProcessingPlan, *, include_report_options: bool = False
+    ) -> dict[str, Any]:
         value = manifest_for(row)
-        return {
+        result = {
             "id": str(row.id),
             "recording_id": str(row.recording_id),
             "plan_fingerprint": row.plan_sha256,
@@ -552,6 +596,37 @@ class ConversationProcessingPlans:
             "report_run_id": row.progress.get("report_run_id"),
             "failure_code": row.progress.get("failure_code"),
         }
+        if include_report_options:
+            result["report_language"] = value.report_language or "en"
+            result["coaching_prompt_revision"] = value.coaching_prompt_revision
+        return result
+
+    @staticmethod
+    async def latest_submission_view(
+        database: AsyncSession,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        recording_id: UUID,
+        processing_lease_id: UUID,
+    ) -> dict[str, Any]:
+        """Read the latest retained plan for an owner-verified submission."""
+
+        row = await database.scalar(
+            select(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.recording_id == recording_id,
+                ConversationProcessingPlan.tenant_id == tenant_id,
+                ConversationProcessingPlan.person_id == person_id,
+                ConversationProcessingPlan.processing_lease_id == processing_lease_id,
+                ConversationProcessingPlan.erased_at.is_(None),
+            )
+            .order_by(ConversationProcessingPlan.created_at.desc())
+            .limit(1)
+        )
+        if row is None:
+            raise ConversationNotFound("No processing plan has been prepared for this call.")
+        return ConversationProcessingPlans.view(row, include_report_options=True)
 
     async def get(self, actor: ConversationActor, recording_id: UUID) -> dict[str, Any]:
         return self.view(await self._row(actor, recording_id))
@@ -563,6 +638,7 @@ class ConversationProcessingPlans:
         *,
         key: str,
         continuation_grant_id: UUID | None = None,
+        report_language: ReportLanguage | None = None,
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
@@ -584,9 +660,21 @@ class ConversationProcessingPlans:
             **actor_binding(actor),
             "authority_sha256": bundle.digest,
         }
+        if report_language is not None:
+            if not isinstance(report_language, str) or report_language not in {
+                "en",
+                "hi-Deva+en",
+                "mr-Deva+en",
+            }:
+                raise ConversationDenied("Choose a supported report language.")
+            command["report_language"] = report_language
+        include_report_options = report_language is not None
         replay = await self.app._replay(actor, key, "processing_plan_quote", command)
         if replay is not None and replay.result_id is not None:
-            return self.view(await self._row(actor, recording_id, replay.result_id))
+            return self.view(
+                await self._row(actor, recording_id, replay.result_id),
+                include_report_options=include_report_options,
+            )
         active = await self.db.scalar(
             select(ConversationProcessingPlan).where(
                 ConversationProcessingPlan.recording_id == recording_id,
@@ -594,7 +682,7 @@ class ConversationProcessingPlans:
             )
         )
         if active is not None:
-            return self.view(active)
+            return self.view(active, include_report_options=include_report_options)
         approvals: dict[str, StageApproval]
         if isinstance(actor, ProcessingActor):
             derived_approvals = {
@@ -651,6 +739,17 @@ class ConversationProcessingPlans:
             )
         settings_row, analysis_settings = await latest_analysis_settings(
             self.db, self.authority.operations_tenant_id
+        )
+        coaching_prompt_revision = analysis_settings.c5_coaching_prompt_revision
+        selected_language = report_language or analysis_settings.report_language_default
+        if coaching_prompt_revision == COACHING_PROMPT_V3 and selected_language != "en":
+            raise ConversationDenied(
+                "Non-English report language requires the coaching-v4 qualitative engine."
+            )
+        qualitative_pack_sha256 = (
+            load_qualitative_pack().sha256
+            if coaching_prompt_revision == COACHING_PROMPT_V4
+            else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
         if settings_row is not None:
@@ -719,7 +818,13 @@ class ConversationProcessingPlans:
                 stages=(c2, c4, c5),
                 profile=profile,
                 fact_prompt_revision=FACT_PROMPT_COMPACT,
-                coaching_prompt_revision=NEW_PLAN_COACHING_PROMPT_REVISION,
+                coaching_prompt_revision=coaching_prompt_revision,
+                report_language=(
+                    selected_language
+                    if coaching_prompt_revision == COACHING_PROMPT_V4 or report_language is not None
+                    else None
+                ),
+                qualitative_pack_sha256=qualitative_pack_sha256,
                 created_at_epoch=int(now.timestamp()),
                 expires_at_epoch=min(
                     int(now.timestamp()) + 3600,
@@ -760,7 +865,7 @@ class ConversationProcessingPlans:
         self.db.add(row)
         await self.db.flush()
         await self.app._receipt(actor, key, "processing_plan_quote", command, row.id, now)
-        return self.view(row)
+        return self.view(row, include_report_options=include_report_options)
 
     async def accept(
         self, actor: ConversationActor, recording_id: UUID, payload: PlanAcceptance, *, key: str
@@ -971,6 +1076,8 @@ class ConversationProcessingPlans:
                     output_profile=value.output_profile,
                     profile=value.profile,
                     coaching_prompt_revision=value.coaching_prompt_revision,
+                    report_language=value.report_language,
+                    qualitative_pack_sha256=value.qualitative_pack_sha256,
                 )
                 judge = await self._enqueue(
                     actor,

@@ -564,6 +564,9 @@ class ConversationInference:
         identifier = uuid4()
         minutes, budget = await self.accounts(recording, row)
         try:
+            release_cap_paise = (
+                self.authority.current(now).budget_cap_paise if self.authority is not None else None
+            )
             transition = reserve(
                 MinuteAccount.from_dict(minutes.snapshot),
                 BudgetAccount.from_dict(budget.snapshot),
@@ -571,6 +574,7 @@ class ConversationInference:
                 quote,
                 permission,
                 int(now.timestamp()),
+                release_cap_paise=release_cap_paise,
             )
         except ValueError:
             raise ConversationConflict(

@@ -38,7 +38,12 @@ async function render(label = "Explore report", second = "Transcript") {
             content: <p>Observed summary</p>,
           },
           { id: "transcript", label: second, content: <Search /> },
-          { id: "sound", label: "Sound", content: <p>Saved sound</p> },
+          {
+            id: "sound",
+            label: "Sound",
+            compactLabel: "Audio",
+            content: <p>Saved sound</p>,
+          },
         ]}
       />,
     ),
@@ -90,6 +95,8 @@ it("supports roving keyboard focus, wraparound and labelled panels", async () =>
     const panel = document.getElementById(tab.getAttribute("aria-controls")!);
     expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
   }
+  expect(tabs()[2].getAttribute("aria-label")).toBe("Sound (Audio)");
+  expect(tabs()[2].textContent).toContain("Audio");
 });
 
 it("falls back to a permitted panel if the selected section is removed", async () => {

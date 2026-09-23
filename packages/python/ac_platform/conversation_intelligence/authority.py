@@ -1094,6 +1094,7 @@ class ConversationAuthority:
                     quote,
                     permission,
                     int(now.timestamp()),
+                    release_cap_paise=bundle.budget_cap_paise,
                 )
             except ValueError:
                 raise ConversationConflict(
