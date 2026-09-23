@@ -71,6 +71,7 @@ from ac_platform.identity.password_auth import (
     PasswordIdentityService,
     PasswordPolicyError,
 )
+from ac_platform.identity.sales_xray_profile import get_sales_xray_profile
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
     IdentityConcurrencyError,
@@ -1604,8 +1605,7 @@ def install_identity_http(
                                 },
                             ),
                             dedupe_key=(
-                                f"identity-email-login:{issue.challenge_id}:"
-                                f"{issue.generation_id}"
+                                f"identity-email-login:{issue.challenge_id}:{issue.generation_id}"
                             ),
                         )
             except ValueError:
@@ -1637,6 +1637,7 @@ def install_identity_http(
             raise EmailLoginCodeRejectedResponse("The email code is no longer valid.")
         verified = None
         issued = None
+        profile_complete = False
         try:
             async with sessions() as database, database.begin():
                 verified = await EmailLoginCodeService(
@@ -1652,7 +1653,7 @@ def install_identity_http(
                 if person is not None:
                     identity = _identity(database)
                     tenant_id = None
-                    if verified.account_created:
+                    if verified.learner_provisioning_required:
                         tenant_id = await ensure_public_learner(database, person.id)
                     else:
                         candidate_tenant = settings.public_learner_tenant_id
@@ -1673,6 +1674,9 @@ def install_identity_http(
                     )
                     if tenant_id is not None:
                         await identity.select_tenant(issued.token, tenant_id)
+                    profile_complete = (
+                        await get_sales_xray_profile(database, person_id=person.id)
+                    ).profile_complete
         except ValueError:
             verified = None
         if verified is None or verified.person is None or issued is None:
@@ -1686,10 +1690,7 @@ def install_identity_http(
             email=verified.person.email or "",
             display_name=verified.person.display_name or verified.person.first_name,
             account_created=verified.account_created,
-            # Required phone-profile completion is owned by the dedicated
-            # phone-profile service. Fail closed until that API is integrated;
-            # WhatsApp profile data is intentionally not treated as phone.
-            profile_complete=False,
+            profile_complete=profile_complete,
             return_path=return_path,
         )
 

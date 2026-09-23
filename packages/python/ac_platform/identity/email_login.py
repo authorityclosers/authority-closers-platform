@@ -51,6 +51,7 @@ class IssuedEmailLoginCode:
 class VerifiedEmailLogin:
     person: Person | None
     account_created: bool = False
+    learner_provisioning_required: bool = False
 
 
 def _raw_secret(secret: bytes | str) -> bytes:
@@ -109,11 +110,15 @@ def decrypt_email_login_code(
     raw = base64.urlsafe_b64decode(
         challenge.encrypted_code + "=" * (-len(challenge.encrypted_code) % 4)
     )
-    code = AESGCM(_encryption_key(secret)).decrypt(
-        raw[:12],
-        raw[12:],
-        _aad(challenge.id, generation_id, challenge.normalized_email),
-    ).decode("ascii")
+    code = (
+        AESGCM(_encryption_key(secret))
+        .decrypt(
+            raw[:12],
+            raw[12:],
+            _aad(challenge.id, generation_id, challenge.normalized_email),
+        )
+        .decode("ascii")
+    )
     if _CODE_PATTERN.fullmatch(code) is None:
         raise ValueError("decrypted email login code is malformed")
     return code
@@ -122,9 +127,9 @@ def decrypt_email_login_code(
 def _exact_consent(value: str | None, required: str | None) -> str | None:
     submitted = value.strip() if isinstance(value, str) else ""
     configured = required.strip() if isinstance(required, str) else ""
-    if not submitted or not configured or not hmac.compare_digest(submitted, configured):
+    if not submitted or not configured or len(submitted) > 64 or "\x00" in submitted:
         return None
-    if len(submitted) > 64 or "\x00" in submitted:
+    if not hmac.compare_digest(submitted.encode("utf-8"), configured.encode("utf-8")):
         return None
     return submitted
 
@@ -182,9 +187,7 @@ class EmailLoginCodeService:
             .with_for_update()
         )
         person = await self.session.scalar(
-            select(Person)
-            .where(func.lower(Person.email) == normalized_email)
-            .with_for_update()
+            select(Person).where(func.lower(Person.email) == normalized_email).with_for_update()
         )
         accepted_consent = (
             _exact_consent(submitted_consent_version, required_consent_version)
@@ -206,9 +209,7 @@ class EmailLoginCodeService:
             # by a sign-in challenge. An unverified pre-registration identity
             # is the exception: mailbox proof may reclaim its untrusted password
             # only after this challenge binds the current explicit consent.
-            account_consent = (
-                accepted_consent if person.email_verified_at is None else None
-            )
+            account_consent = accepted_consent if person.email_verified_at is None else None
             if person.email_verified_at is None and account_consent is None:
                 return None
         else:
@@ -327,9 +328,7 @@ class EmailLoginCodeService:
             return VerifiedEmailLogin(person=None)
 
         person = await self.session.scalar(
-            select(Person)
-            .where(func.lower(Person.email) == normalized_email)
-            .with_for_update()
+            select(Person).where(func.lower(Person.email) == normalized_email).with_for_update()
         )
         if person is not None and person.status != PersonStatus.ACTIVE.value:
             challenge.consumed_at = current
@@ -380,14 +379,14 @@ class EmailLoginCodeService:
         # A concurrent registration can win the unique-email race after the
         # initial lookup. Re-evaluate status and privilege on that canonical
         # person before mailbox proof can issue any session.
-        if (
-            person.status != PersonStatus.ACTIVE.value
-            or await self._has_privileged_membership(person.id)
+        if person.status != PersonStatus.ACTIVE.value or await self._has_privileged_membership(
+            person.id
         ):
             challenge.consumed_at = current
             await self.session.flush()
             return VerifiedEmailLogin(person=None)
-        if person.email_verified_at is None:
+        first_mailbox_verification = person.email_verified_at is None
+        if first_mailbox_verification:
             accepted_consent = _exact_consent(
                 challenge.consent_version,
                 required_consent_version,
@@ -463,7 +462,11 @@ class EmailLoginCodeService:
             person.revision += 1
         challenge.consumed_at = current
         await self.session.flush()
-        return VerifiedEmailLogin(person=person, account_created=created)
+        return VerifiedEmailLogin(
+            person=person,
+            account_created=created,
+            learner_provisioning_required=created or first_mailbox_verification,
+        )
 
 
 __all__ = [

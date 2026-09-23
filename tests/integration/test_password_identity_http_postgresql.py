@@ -54,6 +54,7 @@ from ac_platform.identity.password_auth import (
     decrypt_challenge_token,
     hash_password,
 )
+from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
 from ac_platform.identity.services import ProviderAuthorizationType, VerifiedProviderAssertion
 from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
@@ -386,17 +387,19 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 ),
             )
             assert [response.status_code for response in requests] == [202, 202]
-            assert requests[0].json() == requests[1].json() == {
-                "accepted": True,
-                "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
-                "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
-            }
+            assert (
+                requests[0].json()
+                == requests[1].json()
+                == {
+                    "accepted": True,
+                    "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+                    "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+                }
+            )
             with Session(postgres_harness.engine) as database:
                 challenges = list(
                     database.scalars(
-                        select(EmailLoginCode).where(
-                            EmailLoginCode.normalized_email == email
-                        )
+                        select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
                     )
                 )
                 assert len(challenges) == 1
@@ -406,14 +409,20 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                     challenge,
                     generation_id=challenge.generation_id,
                 )
-                assert database.scalar(
-                    select(func.count())
-                    .select_from(OutboxEvent)
-                    .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
-                ) == 1
-                assert database.scalar(
-                    select(func.count()).select_from(Person).where(Person.email == email)
-                ) == 0
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(OutboxEvent)
+                        .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                    )
+                    == 1
+                )
+                assert (
+                    database.scalar(
+                        select(func.count()).select_from(Person).where(Person.email == email)
+                    )
+                    == 0
+                )
 
             wrong_code = "000000" if code != "000000" else "000001"
             bad = await clients[2].post(
@@ -488,11 +497,14 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 assert person.email_verified_at is not None
                 assert person.consent_version == consent_version
                 assert database.get(Membership, (public_tenant_id, person_id)) is not None
-                assert database.scalar(
-                    select(func.count())
-                    .select_from(IdentitySession)
-                    .where(IdentitySession.person_id == person_id)
-                ) == 1
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 1
+                )
                 final_challenge = database.get(EmailLoginCode, challenge.id)
                 assert final_challenge is not None
                 assert final_challenge.failed_attempts == 1
@@ -709,10 +721,17 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
             assert response.status_code == 200
             assert response.json()["account_created"] is False
             assert response.json()["person_id"] == str(person_id)
+            me = await verifier.get("/v1/me")
+            assert me.status_code == 200
+            assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+            assert me.json()["membership_role"] == "learner"
             with Session(postgres_harness.engine) as database:
                 person = database.get(Person, person_id)
                 assert person is not None
                 assert person.email_verified_at is not None
+                membership = database.get(Membership, (public_tenant_id, person_id))
+                assert membership is not None
+                assert membership.role == "learner" and membership.status == "active"
                 assert database.get(PasswordCredential, person_id) is None
                 old_challenges = list(
                     database.scalars(
@@ -724,16 +743,14 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                 old_session = database.scalar(
                     select(IdentitySession).where(
                         IdentitySession.person_id == person_id,
-                        IdentitySession.revocation_reason
-                        == "email_login_identity_reclaimed",
+                        IdentitySession.revocation_reason == "email_login_identity_reclaimed",
                     )
                 )
                 assert old_session is not None
                 audit = database.scalar(
                     select(AuditEvent).where(
                         AuditEvent.tenant_id == operations_tenant_id,
-                        AuditEvent.action
-                        == "identity.email_login_unverified_credential_reclaimed",
+                        AuditEvent.action == "identity.email_login_unverified_credential_reclaimed",
                         AuditEvent.resource_id == str(person_id),
                     )
                 )
@@ -840,11 +857,14 @@ def test_email_login_never_authenticates_privileged_membership(postgres_harness:
             )
             assert privileged_request.status_code == 202
             with Session(postgres_harness.engine) as database:
-                assert database.scalar(
-                    select(EmailLoginCode).where(
-                        EmailLoginCode.normalized_email == privileged_email
+                assert (
+                    database.scalar(
+                        select(EmailLoginCode).where(
+                            EmailLoginCode.normalized_email == privileged_email
+                        )
                     )
-                ) is None
+                    is None
+                )
             pending_request = await client.post(
                 "/v1/auth/email-code/request",
                 headers={"Origin": origin},
@@ -853,9 +873,7 @@ def test_email_login_never_authenticates_privileged_membership(postgres_harness:
             assert pending_request.status_code == 202
             with Session(postgres_harness.engine) as database:
                 pending_challenge = database.scalar(
-                    select(EmailLoginCode).where(
-                        EmailLoginCode.normalized_email == pending_email
-                    )
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == pending_email)
                 )
                 assert pending_challenge is not None
                 code = decrypt_email_login_code(
@@ -887,13 +905,14 @@ def test_email_login_never_authenticates_privileged_membership(postgres_harness:
             assert denied.status_code == 400
             assert "set-cookie" not in denied.headers
             with Session(postgres_harness.engine) as database:
-                assert database.scalar(
-                    select(func.count())
-                    .select_from(IdentitySession)
-                    .where(
-                        IdentitySession.person_id.in_((privileged_id, pending_id))
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id.in_((privileged_id, pending_id)))
                     )
-                ) == 0
+                    == 0
+                )
                 consumed = database.get(EmailLoginCode, pending_challenge.id)
                 assert consumed is not None
                 assert consumed.consumed_at is not None
@@ -1907,6 +1926,7 @@ def test_concurrent_existing_google_registrations_share_one_canonical_person(
 
 def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
     postgres_harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def scenario() -> None:
         public_tenant_id = uuid4()
@@ -1924,6 +1944,30 @@ def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
         async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
         sessions = async_sessionmaker(async_engine, expire_on_commit=False)
         provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+
+        original_lookup = AsyncSqlAlchemyIdentityRepository.find_provider_identities
+        absent_lookups = 0
+        both_observed_absent = asyncio.Event()
+
+        async def synchronize_absent_lookup(self, issuer: str, subject: str):
+            nonlocal absent_lookups
+            matches = await original_lookup(self, issuer, subject)
+            if (
+                issuer == "https://accounts.google.com"
+                and subject == provider_subject
+                and not matches
+            ):
+                absent_lookups += 1
+                if absent_lookups == 2:
+                    both_observed_absent.set()
+                await asyncio.wait_for(both_observed_absent.wait(), timeout=5)
+            return matches
+
+        monkeypatch.setattr(
+            AsyncSqlAlchemyIdentityRepository,
+            "find_provider_identities",
+            synchronize_absent_lookup,
+        )
         settings = Settings(
             environment="test",
             database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
@@ -1985,6 +2029,10 @@ def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
                 timeout=10,
             )
             assert sorted(response.status_code for response in callbacks) == [303, 409]
+            assert absent_lookups == 2
+            assert sorted(
+                [(await client.get("/v1/me")).status_code for client in clients]
+            ) == [200, 401]
 
             with Session(postgres_harness.engine) as database:
                 people = list(
