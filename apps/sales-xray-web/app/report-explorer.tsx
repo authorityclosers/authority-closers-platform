@@ -38,12 +38,13 @@ export function ReportExplorer({
             type="button"
             role="tab"
             aria-label={
-              panel.compactLabel &&
-              !panel.label
-                .toLowerCase()
-                .includes(panel.compactLabel.toLowerCase())
-                ? `${panel.label} (${panel.compactLabel})`
-                : panel.label
+              panel.compactLabel
+                ? panel.label
+                    .toLowerCase()
+                    .includes(panel.compactLabel.toLowerCase())
+                  ? panel.label
+                  : `${panel.label} (${panel.compactLabel})`
+                : undefined
             }
             id={`${prefix}-tab-${panel.id}`}
             aria-controls={`${prefix}-panel-${panel.id}`}
