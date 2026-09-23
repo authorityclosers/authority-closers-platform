@@ -183,7 +183,7 @@ test("workbench selects only observed states and restores bookmarkable app URLs"
       true,
     );
 
-    await page.getByRole("button", { name: "Next observed state" }).click();
+    await page.getByRole("button", { name: "Next state" }).click();
     await page
       .locator("#selected-name")
       .getByText("report.available", { exact: true })
@@ -191,17 +191,17 @@ test("workbench selects only observed states and restores bookmarkable app URLs"
     assert.equal(page.url().includes(`frame=${reportFrameId}`), true);
     assert.equal(
       await page
-        .getByRole("button", { name: "Next observed state" })
+        .getByRole("button", { name: "Next state" })
         .isDisabled(),
       true,
     );
-    await page.getByRole("button", { name: "Previous observed state" }).click();
+    await page.getByRole("button", { name: "Previous state" }).click();
     await page
       .locator("#selected-name")
       .getByText("processing.c2.running", { exact: true })
       .waitFor();
 
-    await page.getByRole("button", { name: "Next observed state" }).click();
+    await page.getByRole("button", { name: "Next state" }).click();
     await page
       .locator("#selected-name")
       .getByText("report.available", { exact: true })
@@ -265,6 +265,43 @@ test("workbench selects only observed states and restores bookmarkable app URLs"
     assert.equal(
       await page.evaluate(() => window.__fullscreenFrame),
       "sales-xray-canvas",
+    );
+    assert.deepEqual(calls.other, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("workbench opens pauseable fixture URLs without contacting the call API", async () => {
+  const { context, page } = await newPage();
+  try {
+    const bookmark = `${origin}/__review/#sx-workbench=v1&kind=fixture&id=processing.paused&width=desktop`;
+    await page.goto(bookmark);
+    await page.locator("#selected-name").getByText("Analysis paused").waitFor();
+    assert.equal(await page.locator("#fixture-navigation").getAttribute("open"), "");
+    let direct = new URL(await page.locator("#direct-url").inputValue());
+    assert.equal(direct.origin, origin);
+    assert.equal(direct.searchParams.get("sx-fixture"), "processing.paused");
+    assert.equal(direct.searchParams.get("new"), "1");
+    assert.equal(calls.start.length, 0);
+
+    await page.reload();
+    await page.locator("#selected-name").getByText("Analysis paused").waitFor();
+    assert.equal(page.url(), bookmark);
+    await page.getByRole("button", { name: "Next state" }).click();
+    await page.locator("#selected-name").getByText("Analysis needs attention").waitFor();
+    direct = new URL(await page.locator("#direct-url").inputValue());
+    assert.equal(direct.searchParams.get("sx-fixture"), "processing.failed");
+    assert.equal(calls.start.length, 0);
+
+    await page
+      .locator('#fixture-list [data-state-key="fixture:auth.email"]')
+      .click();
+    direct = new URL(await page.locator("#direct-url").inputValue());
+    assert.equal(direct.searchParams.get("sx-fixture"), "auth.email");
+    assert.equal(
+      await page.locator("#sales-xray-canvas").getAttribute("src"),
+      direct.href,
     );
     assert.deepEqual(calls.other, []);
   } finally {

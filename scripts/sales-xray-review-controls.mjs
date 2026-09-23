@@ -32,6 +32,11 @@ h1{margin:0;font-size:clamp(23px,2.5vw,32px);line-height:1.15;letter-spacing:-.0
 .muted{color:var(--muted)}
 .sidebar-copy{margin:4px 0 13px;color:var(--muted);font-size:13px}
 #state-list{display:grid;gap:6px;margin:12px 0 18px}
+#fixture-navigation{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid var(--border)}
+#fixture-navigation>summary{min-height:40px;cursor:pointer;font-weight:700}
+#fixture-list{display:grid;gap:5px;margin:8px 0 0}
+.fixture-group{margin:9px 0 2px;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.fixture-group:first-child{margin-top:0}
 .state-choice{width:100%;padding:10px 11px;text-align:left;border:1px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;overflow-wrap:anywhere}
 .state-choice:hover{background:#f6f8f9;border-color:#aebbc4}
 .state-choice[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 var(--accent);font-weight:650}
@@ -78,7 +83,7 @@ input[readonly]{background:#f7f8f9}
   <header class="page-header">
     <p class="eyebrow">Sales Xray · Review</p>
     <h1>State workbench</h1>
-    <p class="intro">Inspect captured browser states in the actual app; unobserved states stay absent.</p>
+    <p class="intro">Open paused local examples and captured observations in the actual Sales Xray app.</p>
   </header>
   <details class="review-note">
     <summary>UI review notes · 1</summary>
@@ -91,7 +96,12 @@ input[readonly]{background:#f7f8f9}
       <details id="state-navigation">
         <summary>Observed states &amp; call inspection</summary>
         <div class="sidebar-content">
-          <p class="sidebar-copy">Only browser captures and states returned by the authorized call API appear here.</p>
+          <p class="sidebar-copy">Inspect the mounted app using paused local examples or observations from this browser and calls you own.</p>
+          <details id="fixture-navigation">
+            <summary>Local test states</summary>
+            <p class="sidebar-copy">Fixed examples for UI review. No call is uploaded or analysed.</p>
+            <nav id="fixture-list" aria-label="Choose a local Sales Xray test state"></nav>
+          </details>
           <nav id="state-list" aria-label="Choose an observed Sales Xray state"></nav>
           <p id="state-status" class="status" role="status" aria-live="polite">Opening the live upload screen.</p>
           <hr class="divider">
@@ -115,8 +125,8 @@ input[readonly]{background:#f7f8f9}
           <span id="selected-name">Upload screen</span>
         </div>
         <div class="toolbar-actions">
-          <button class="button" type="button" id="previous" aria-label="Previous observed state">Previous</button>
-          <button class="button" type="button" id="next" aria-label="Next observed state">Next</button>
+          <button class="button" type="button" id="previous" aria-label="Previous state">Previous</button>
+          <button class="button" type="button" id="next" aria-label="Next state">Next</button>
         </div>
       </div>
       <div class="url-bar">
@@ -140,7 +150,7 @@ input[readonly]{background:#f7f8f9}
       <p class="canvas-foot">The app is loaded from the same local origin. State URLs are reflected in this workbench address so a selection can be bookmarked.</p>
     </section>
   </div>
-  <p class="help">Inspection does not upload a file, change consent, run analysis, or reconstruct unobserved processing and historical report states. The selected state is available only while its live or browser-local observation remains valid.</p>
+  <p class="help">Local test states are synthetic and paused. Observed states still require their browser snapshot or live access lease. Neither mode uploads a file, changes consent, or runs analysis.</p>
   <details class="help">
     <summary>What this workbench records</summary>
     <ul>
@@ -160,6 +170,8 @@ const status=document.getElementById("status");
 const localStatus=document.getElementById("local-status");
 const stateStatus=document.getElementById("state-status");
 const stateList=document.getElementById("state-list");
+const fixtureList=document.getElementById("fixture-list");
+const fixtureNavigation=document.getElementById("fixture-navigation");
 const selectedName=document.getElementById("selected-name");
 const directUrl=document.getElementById("direct-url");
 const canvas=document.getElementById("sales-xray-canvas");
@@ -172,6 +184,25 @@ syncStateNavigation();
 window.addEventListener("resize",syncStateNavigation,{passive:true});
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const reportSections=new Set(["overview","prospect","moments","skills","next-call-plan"]);
+const fixtureDefinitions=[
+  ["auth.email","Sign in with email","Account"],
+  ["auth.code","Enter email code","Account"],
+  ["auth.error","Email verification error","Account"],
+  ["profile.required","Complete your profile","Profile"],
+  ["profile.unverified","Verify mobile number","Profile"],
+  ["profile.ready","Profile ready","Profile"],
+  ["upload.empty","Empty upload","Upload"],
+  ["upload.selected","Selected audio","Upload"],
+  ["upload.validation","Invalid replacement","Upload"],
+  ["processing.received","Recording received","Processing"],
+  ["processing.transcribing","Transcribing","Processing"],
+  ["processing.conversation","Checking conversation","Processing"],
+  ["processing.report","Writing report","Processing"],
+  ["processing.paused","Analysis paused","Processing"],
+  ["processing.failed","Analysis needs attention","Processing"],
+];
+const fixtureIds=new Set(fixtureDefinitions.map(item=>item[0]));
+const fixtureStates=fixtureDefinitions.map(([id,name,group])=>({key:"fixture:"+id,kind:"fixture",name,detail:"Local fixture · "+group+" · paused",href:"/?new=1&sx-fixture="+encodeURIComponent(id),fixtureId:id,group}));
 const uploadState={key:"upload",kind:"upload",name:"Upload screen",detail:"Actual mounted app",href:"/?new=1"};
 let states=[uploadState], selectedKey="upload", activeCall=false, pendingCall=false, pendingLocal=false;
 let callValue=null, localValue=null, currentAppUrl=null, pendingBookmark=null, localLoaded=false;
@@ -190,6 +221,10 @@ function safeAppUrl(value){
   for(const key of new Set(url.searchParams.keys()))if(url.searchParams.getAll(key).length!==1)return null;
   const keys=[...url.searchParams.keys()];
   const hash=new URLSearchParams(url.hash.slice(1));
+  if(url.searchParams.has("sx-fixture")){
+    if(url.searchParams.get("new")!=="1"||keys.length!==2||keys.some(key=>!new Set(["new","sx-fixture"]).has(key))||url.hash||!fixtureIds.has(url.searchParams.get("sx-fixture")))return null;
+    return url;
+  }
   if(url.searchParams.has("new")){
     if(url.searchParams.get("new")!=="1"||keys.some(key=>!new Set(["new","sx-review-local"]).has(key))||url.hash)return null;
     const localId=url.searchParams.get("sx-review-local");
@@ -230,6 +265,7 @@ function hashFor(state){
   params.set("kind",state.kind);
   if(state.kind==="processing"){params.set("call",state.callId);params.set("frame",state.frameId);}
   if(state.kind==="local")params.set("frame",state.frameId);
+  if(state.kind==="fixture")params.set("id",state.fixtureId);
   params.set("width",viewport.dataset.width==="mobile"?"mobile":"desktop");
   return "#"+params.toString();
 }
@@ -242,17 +278,38 @@ function writeBookmark(state,replace){
 function parseBookmark(){
   const params=new URLSearchParams(location.hash.slice(1));
   if(!location.hash)return {kind:"upload",width:"desktop"};
-  const allowed=new Set(["sx-workbench","kind","call","frame","width"]);
+  const allowed=new Set(["sx-workbench","kind","call","frame","id","width"]);
   if([...params.keys()].some(key=>!allowed.has(key))||[...new Set(params.keys())].some(key=>params.getAll(key).length!==1)||params.get("sx-workbench")!=="v1")return null;
   const width=params.get("width")||"desktop";
   if(!["desktop","mobile"].includes(width))return null;
   const kind=params.get("kind");
   if(kind==="upload"&&[...params.keys()].every(key=>["sx-workbench","kind","width"].includes(key)))return {kind,width};
   if(kind==="local"&&params.getAll("frame").length===1&&uuid.test(params.get("frame"))&&[...params.keys()].every(key=>["sx-workbench","kind","frame","width"].includes(key)))return {kind,width,frameId:params.get("frame")};
+  if(kind==="fixture"&&params.getAll("id").length===1&&fixtureIds.has(params.get("id"))&&[...params.keys()].every(key=>["sx-workbench","kind","id","width"].includes(key)))return {kind,width,fixtureId:params.get("id")};
   if(kind==="processing"&&uuid.test(params.get("call")||"")&&uuid.test(params.get("frame")||"")&&[...params.keys()].every(key=>["sx-workbench","kind","call","frame","width"].includes(key)))return {kind,width,callId:params.get("call"),frameId:params.get("frame")};
   return null;
 }
+function stateForKey(key){return states.find(state=>state.key===key)||fixtureStates.find(state=>state.key===key)||null;}
+function selectedSequence(){return selectedKey.startsWith("fixture:")?fixtureStates:states;}
+function renderFixtures(){
+  fixtureList.replaceChildren();
+  let group="";
+  for(const state of fixtureStates){
+    if(state.group!==group){
+      group=state.group;
+      const heading=document.createElement("p");heading.className="fixture-group";heading.textContent=group;
+      fixtureList.append(heading);
+    }
+    const button=document.createElement("button");
+    button.type="button";button.className="state-choice";button.dataset.stateKey=state.key;
+    button.setAttribute("aria-pressed",String(state.key===selectedKey));
+    button.textContent=state.name;
+    button.addEventListener("click",()=>selectState(state,false));
+    fixtureList.append(button);
+  }
+}
 function renderStates(){
+  renderFixtures();
   stateList.replaceChildren();
   for(const state of states){
     const button=document.createElement("button");
@@ -264,15 +321,18 @@ function renderStates(){
     button.addEventListener("click",()=>selectState(state,false));
     stateList.append(button);
   }
-  const index=states.findIndex(state=>state.key===selectedKey);
-  previous.disabled=index<=0;next.disabled=index<0||index>=states.length-1;
+  const sequence=selectedSequence();
+  const index=sequence.findIndex(state=>state.key===selectedKey);
+  previous.disabled=index<=0;next.disabled=index<0||index>=sequence.length-1;
 }
 function selectState(state,replaceBookmark){
-  const known=states.find(item=>item.key===state.key);
+  if(!state)return false;
+  const known=stateForKey(state.key);
   if(!known)return false;
   const safe=safeAppUrl(known.href);
   if(!safe){stateStatus.textContent="This observed destination is not an allowed local app URL.";return false;}
   selectedKey=known.key;currentAppUrl=safe;
+  if(known.kind==="fixture")fixtureNavigation.open=true;
   selectedName.textContent=known.name;
   directUrl.value=safe.href;
   canvas.src=safe.href;
@@ -285,6 +345,7 @@ function findStateForBookmark(bookmark){
   if(!bookmark)return null;
   if(bookmark.kind==="upload")return states[0];
   if(bookmark.kind==="local")return states.find(state=>state.kind==="local"&&state.frameId===bookmark.frameId)||null;
+  if(bookmark.kind==="fixture")return fixtureStates.find(state=>state.fixtureId===bookmark.fixtureId)||null;
   if(bookmark.kind==="processing")return states.find(state=>state.kind==="processing"&&state.callId===bookmark.callId&&state.frameId===bookmark.frameId)||null;
   return null;
 }
@@ -301,18 +362,19 @@ function renderLocal(value){
     const found=findStateForBookmark(pendingBookmark);
     if(found){selectState(found,true);pendingBookmark=null;}
     else if(localLoaded){selectState(uploadState,true);pendingBookmark=null;stateStatus.textContent="That browser-local observation expired or is unavailable.";}
-  }else if(!states.some(state=>state.key===selectedKey))selectState(uploadState,true);
+  }else if(!stateForKey(selectedKey))selectState(uploadState,true);
 }
 function renderCall(value,requestedFrame){
   if(!value||!uuid.test(value.callId||"")||!Array.isArray(value.frames))throw Error("The call API returned an invalid observation catalog.");
   activeCall=true;callInput.value=value.callId;
-  const previousSelection=states.find(state=>state.key===selectedKey);
+  const previousSelection=stateForKey(selectedKey);
   const frames=value.frames.map(frame=>callFrameState(frame,value.callId)).filter(Boolean);
   callValue={callId:value.callId,expiresAt:value.expiresAt,frames};
   states=[uploadState,...(localValue&&Array.isArray(localValue.frames)?localValue.frames.map(localFrameState).filter(Boolean):[]),...frames];
   renderStates();
   const desired=requestedFrame?frames.find(state=>state.frameId===requestedFrame):frames.find(state=>previousSelection&&state.key===previousSelection.key);
-  if(desired)selectState(desired,true);
+  if(previousSelection?.kind==="fixture")selectState(previousSelection,true);
+  else if(desired)selectState(desired,true);
   else if(frames.length)selectState(frames[0],true);
   else selectState(uploadState,true);
   status.textContent=frames.length
@@ -377,8 +439,9 @@ document.getElementById("reset").addEventListener("click",async()=>{
   }catch(error){failCall(error);}
 });
 function moveSelection(direction){
-  const index=states.findIndex(state=>state.key===selectedKey);
-  const state=states[index+direction];
+  const sequence=selectedSequence();
+  const index=sequence.findIndex(state=>state.key===selectedKey);
+  const state=sequence[index+direction];
   if(state)selectState(state,false);
 }
 previous.addEventListener("click",()=>moveSelection(-1));
@@ -387,7 +450,7 @@ function setWidth(width,replace,updateBookmark=true){
   viewport.dataset.width=width;
   document.getElementById("desktop-width").setAttribute("aria-pressed",String(width==="desktop"));
   document.getElementById("mobile-width").setAttribute("aria-pressed",String(width==="mobile"));
-  const current=states.find(state=>state.key===selectedKey)||uploadState;
+  const current=stateForKey(selectedKey)||uploadState;
   if(updateBookmark)writeBookmark(current,replace);
 }
 document.getElementById("desktop-width").addEventListener("click",()=>setWidth("desktop",true));
@@ -416,6 +479,8 @@ function restoreBookmark(){
   if(bookmark.kind==="processing"){
     callInput.value=bookmark.callId;
     void loadCall(bookmark.callId,bookmark.frameId);
+  }else if(bookmark.kind==="fixture"){
+    pendingBookmark=null;selectState(findStateForBookmark(bookmark),true);
   }else if(bookmark.kind==="upload"){
     pendingBookmark=null;selectState(uploadState,true);
   }else{
@@ -431,6 +496,8 @@ if(initialBookmark)setWidth(initialBookmark.width,true,false);
 renderStates();
 if(initialBookmark&&initialBookmark.kind==="processing"){
   pendingBookmark=initialBookmark;callInput.value=initialBookmark.callId;void loadCall(initialBookmark.callId,initialBookmark.frameId);
+}else if(initialBookmark&&initialBookmark.kind==="fixture"){
+  pendingBookmark=null;selectState(findStateForBookmark(initialBookmark),true);
 }else if(initialBookmark&&initialBookmark.kind==="local")pendingBookmark=initialBookmark;
 else{pendingBookmark=null;selectState(uploadState,true);}
 void refreshLocal();
