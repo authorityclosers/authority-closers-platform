@@ -36,7 +36,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
-from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount
 from ac_platform.conversation_intelligence.inference import (
@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
+    ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationQuote,
@@ -1128,6 +1129,23 @@ def test_provider_activation_replay_survives_later_draft_and_binds_original_comm
             complete_local_fixture=False,
         )
         try:
+            legacy_intent = {
+                "target_revision": 1,
+                "configuration_sha256": setup.config_view["configuration_sha256"],
+                "approval_bundle_sha256": setup.bundle.digest,
+            }
+            async with setup.sessions() as database:
+                command = await database.scalar(
+                    select(ConversationCommand).where(
+                        ConversationCommand.tenant_id == setup.actor.tenant_id,
+                        ConversationCommand.person_id == setup.actor.person_id,
+                        ConversationCommand.key == "hosted-config-activation-v1",
+                    )
+                )
+                assert command is not None
+                assert command.intent_sha256 == content_hash(legacy_intent)
+                command_id = command.id
+
             async with setup.sessions() as database, database.begin():
                 first = await ConversationProviderAdmin(_application(setup, database)).current(
                     setup.actor, bundle=setup.bundle
@@ -1155,13 +1173,16 @@ def test_provider_activation_replay_survives_later_draft_and_binds_original_comm
                 assert replay["revision"] == 2
                 assert replay["activation"] == first["activation"]
 
+                changed_approval = setup.bundle.model_copy(
+                    update={"issued_at_epoch": setup.bundle.issued_at_epoch - 1}
+                )
                 with pytest.raises(ConversationConflict, match="different command"):
                     await service.activate(
                         setup.actor,
                         target_revision=1,
                         expected_revision=2,
                         key="hosted-config-activation-v1",
-                        bundle=setup.bundle,
+                        bundle=changed_approval,
                     )
 
                 with pytest.raises(ConversationConflict, match="changed"):
@@ -1172,6 +1193,17 @@ def test_provider_activation_replay_survives_later_draft_and_binds_original_comm
                         key="hosted-config-activation-new-key",
                         bundle=setup.bundle,
                     )
+            async with setup.sessions() as database:
+                command = await database.scalar(
+                    select(ConversationCommand).where(
+                        ConversationCommand.tenant_id == setup.actor.tenant_id,
+                        ConversationCommand.person_id == setup.actor.person_id,
+                        ConversationCommand.key == "hosted-config-activation-v1",
+                    )
+                )
+                assert command is not None
+                assert command.id == command_id
+                assert command.intent_sha256 == content_hash(legacy_intent)
         finally:
             await setup.engine.dispose()
 

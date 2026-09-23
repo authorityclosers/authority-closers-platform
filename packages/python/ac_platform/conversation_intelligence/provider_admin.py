@@ -420,7 +420,6 @@ class ConversationProviderAdmin:
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,
             "approval_bundle_sha256": bundle.digest,
-            "expected_revision": expected_revision,
         }
         replay = await self.application._replay(actor, key, "provider_activation", payload)
         if replay is not None and replay.result_id is not None:
