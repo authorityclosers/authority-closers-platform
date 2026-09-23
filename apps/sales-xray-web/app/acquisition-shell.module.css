@@ -654,3 +654,96 @@
     transition: none;
   }
 }
+
+/* The upload welcome occupies the former empty account-header space. */
+.shell[data-welcome="true"] .workspaceHeader {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  min-height: 148px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-block: 20px 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 103% 5%, #d9fff2 0%, #e6f9ff 23%, transparent 55%),
+    linear-gradient(115deg, #f7faff, #fff 58%);
+}
+.shell[data-welcome="true"] .workspaceHeader::before {
+  position: absolute;
+  z-index: -1;
+  inset: -80px 8% auto 32%;
+  height: 185px;
+  border-radius: 0 0 70% 90%;
+  background: linear-gradient(125deg, #dce9ff80, #eafffa00);
+  transform: rotate(8deg);
+  content: "";
+  pointer-events: none;
+}
+.shell[data-welcome="true"] .profileSlot {
+  flex: 0 0 auto;
+}
+.welcome {
+  min-width: 0;
+  padding-right: 1rem;
+}
+.welcomeKicker {
+  margin: 0 0 3px;
+  color: #41628c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+}
+.welcome h1 {
+  margin: 0;
+  color: #14233c;
+  font-size: clamp(27px, 3vw, 43px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.welcomeDescription {
+  max-width: 75ch;
+  margin: 5px 0 0;
+  color: #587092;
+  font-size: clamp(12px, 1.25vw, 16px);
+  line-height: 1.42;
+}
+.shell[data-mobile-fit="true"][data-welcome="true"] .workspaceHeader {
+  flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+  .shell[data-welcome="true"] .workspaceHeader {
+    padding-inline: 1.25rem;
+  }
+  .welcomeDescription {
+    max-width: 52ch;
+  }
+}
+@media (max-width: 620px) {
+  .shell[data-welcome="true"] .workspaceHeader {
+    display: block;
+    min-height: auto;
+    padding: 20px 16px 16px;
+  }
+  .shell[data-welcome="true"] .profileSlot {
+    display: none;
+  }
+  .shell[data-mobile-fit="true"][data-welcome="true"] .content {
+    display: flex;
+    flex-direction: column;
+  }
+  .shell[data-mobile-fit="true"][data-welcome="true"] .main {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+  .welcome h1 {
+    font-size: 31px;
+  }
+  .welcomeDescription {
+    max-width: 45ch;
+    font-size: 13px;
+  }
+}

@@ -1588,59 +1588,6 @@ export function AcquisitionStudio({
               </span>
             ))}
           </nav>
-          {!submission && !report && (
-            <div className="studio-intro">
-              <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
-              <h1>
-                {displayFileSelected
-                  ? "Turn your calls into clarity."
-                  : "Add a call to review."}
-              </h1>
-              <p>
-                Upload a sales call and let Sales Xray find the insights, so you
-                can coach, improve, and close more.
-              </p>
-            </div>
-          )}
-          {!displayFileSelected && !submission && !report && (
-            <div className={styles.uploadAtmosphere} aria-hidden="true">
-              <span className={styles.signalOrbit} />
-              <span className={styles.signalWave} />
-              <div className={styles.uploadAtmosphereSignals}>
-                <span className={`${styles.signalChip} ${styles.signalUpload}`}>
-                  <Upload size={28} aria-hidden="true" />
-                  <span className={styles.signalCopy}>
-                    <strong>Upload</strong>
-                    <small>Add your call recording</small>
-                  </span>
-                </span>
-                <span className={styles.signalConnector} aria-hidden="true">
-                  →
-                </span>
-                <span
-                  className={`${styles.signalChip} ${styles.signalChipRaised} ${styles.signalEvidence}`}
-                >
-                  <AudioLines size={28} aria-hidden="true" />
-                  <span className={styles.signalCopy}>
-                    <strong>We analyse</strong>
-                    <small>Find the key moments</small>
-                  </span>
-                </span>
-                <span className={styles.signalConnector} aria-hidden="true">
-                  →
-                </span>
-                <span
-                  className={`${styles.signalChip} ${styles.signalChipLower} ${styles.signalCoaching}`}
-                >
-                  <Sparkles size={28} aria-hidden="true" />
-                  <span className={styles.signalCopy}>
-                    <strong>Get your results</strong>
-                    <small>Coach with clarity</small>
-                  </span>
-                </span>
-              </div>
-            </div>
-          )}
           {!entry && !error && (
             <p role="status" className="visually-hidden" aria-live="polite">
               Preparing the upload limits…
@@ -1696,6 +1643,22 @@ export function AcquisitionStudio({
                   choose(event.dataTransfer.files?.[0]);
               }}
             >
+              {!displayFileSelected && !submission && !deletionOnlyId && (
+                <div className={styles.uploadCardHeader}>
+                  <div className={styles.uploadCardTitle}>
+                    <AudioLines size={29} aria-hidden="true" />
+                    <h2>Add a call to review</h2>
+                  </div>
+                  <span className={styles.allowanceBadge}>
+                    <ShieldCheck size={19} aria-hidden="true" />
+                    {remainingAllowanceLabel(
+                      allowance,
+                      entry?.allowance_seconds ?? null,
+                      allowanceUnknown,
+                    )}
+                  </span>
+                </div>
+              )}
               <div
                 className={styles.stepHeader}
                 aria-label="Current analysis step"
@@ -1791,7 +1754,6 @@ export function AcquisitionStudio({
                     <AudioLines className={styles.audioCue} size={30} />
                     <Upload className={styles.uploadCue} size={25} />
                   </span>
-                  <h2>Start with your sales call</h2>
                   <p className={styles.dropTitle}>
                     Drag and drop your audio file here
                   </p>
@@ -2270,6 +2232,44 @@ export function AcquisitionStudio({
                 </div>
               )}
             </section>
+            {!displayFileSelected && !submission && !report && !deletionOnlyId && (
+              <aside className={styles.startGuide} aria-labelledby="start-guide-title">
+                <div className={styles.startGuideHeading}>
+                  <Sparkles size={23} aria-hidden="true" />
+                  <h2 id="start-guide-title">Get started</h2>
+                </div>
+                <ol>
+                  <li>
+                    <span aria-hidden="true">1</span>
+                    <div>
+                      <strong>Choose a call</strong>
+                      <p>Select a recording from your device.</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span aria-hidden="true">2</span>
+                    <div>
+                      <strong>Review your choices</strong>
+                      <p>Check the language and privacy details before continuing.</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span aria-hidden="true">3</span>
+                    <div>
+                      <strong>Explore your report</strong>
+                      <p>Listen to the moments behind each finding when it is ready.</p>
+                    </div>
+                  </li>
+                </ol>
+                <div className={styles.startGuideHelp}>
+                  <h3>Need help?</h3>
+                  <p>The AC team can help with a recording or report question.</p>
+                  <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help">
+                    Contact support <ArrowRight size={16} aria-hidden="true" />
+                  </a>
+                </div>
+              </aside>
+            )}
             {!submission && !report && (
               <aside className={`panel ${styles.expect}`}>
                 <p className="eyebrow">WHAT YOU’LL GET</p>
@@ -2310,6 +2310,29 @@ export function AcquisitionStudio({
               </aside>
             )}
           </div>
+          {!displayFileSelected && !submission && !report && !deletionOnlyId && (
+            <div className={styles.overviewCards}>
+              <Link className={styles.overviewCard} href="/calls">
+                <span className={styles.overviewIcon} aria-hidden="true">
+                  <FolderOpen size={25} />
+                </span>
+                <span>
+                  <strong>Your saved calls</strong>
+                  <small>Open recordings and reports saved to your workspace.</small>
+                </span>
+                <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+              <div className={styles.overviewCard}>
+                <span className={styles.overviewIcon} aria-hidden="true">
+                  <ShieldCheck size={25} />
+                </span>
+                <span>
+                  <strong>Privacy before analysis</strong>
+                  <small>Review the details and give consent before your call is analysed.</small>
+                </span>
+              </div>
+            </div>
+          )}
           {visibleError && !savedCallNeedsSession && (
             <div className={`notice error ${styles.error}`} role="alert">
               {statusIssue && !error && (
@@ -2586,6 +2609,7 @@ export function AcquisitionStudio({
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
         mobileFit
+        welcome={!submission && !result && !busy && !deletionOnlyId}
       >
         {content}
       </AcquisitionShell>

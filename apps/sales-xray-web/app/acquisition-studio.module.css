@@ -146,13 +146,6 @@
   opacity: 0;
   animation: uploadCuePulse 4.4s ease-in-out infinite;
 }
-.app[data-stage="upload"] .dropZone h2 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
 .app[data-stage="upload"] .dropTitle {
   margin: 0;
   color: #10243d;
@@ -1849,6 +1842,251 @@
   }
   .report {
     margin: 0;
+  }
+}
+
+/* Upload landing layout. The guidance and links contain no fabricated activity. */
+.app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
+  gap: 18px;
+  padding-top: 20px;
+  background: linear-gradient(#f8fbff, #fff 65%);
+}
+.app[data-stage="upload"][data-selected="false"] .layout {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
+  align-items: start;
+  gap: 18px;
+}
+.app[data-stage="upload"][data-selected="false"] .upload,
+.startGuide,
+.overviewCard {
+  border: 1px solid #dbe5f6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px #d7e5fa29;
+}
+.app[data-stage="upload"][data-selected="false"] .upload {
+  padding: 16px;
+}
+.app[data-stage="upload"][data-selected="false"] .upload.dragging {
+  border-color: #008e86;
+  box-shadow: 0 0 0 4px #008e861c;
+}
+.uploadCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+.uploadCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  color: #00877f;
+}
+.uploadCardTitle h2 {
+  margin: 0;
+  color: #14233c;
+  font-size: clamp(19px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.uploadCardTitle svg {
+  flex: 0 0 29px;
+}
+.allowanceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 45%;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f4f7fc;
+  color: #334b70;
+  font-size: 11px;
+  line-height: 1.25;
+}
+.allowanceBadge svg {
+  flex: 0 0 19px;
+  color: #244b8c;
+}
+.app[data-stage="upload"][data-selected="false"] .dropZone {
+  min-height: clamp(255px, 35vh, 330px);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f4fcfd, #fbffff);
+}
+.app[data-stage="upload"][data-selected="false"] .allowance {
+  display: none;
+}
+.startGuide {
+  min-width: 0;
+  padding: 20px 18px;
+}
+.startGuideHeading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2eaf7;
+  color: #6351cf;
+}
+.startGuideHeading h2 {
+  margin: 0;
+  color: #14233c;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.startGuide ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.startGuide li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e2eaf7;
+}
+.startGuide li > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid #b9d3e4;
+  border-radius: 50%;
+  color: #087d78;
+  font-size: 12px;
+  font-weight: 800;
+}
+.startGuide li strong {
+  color: #14233c;
+  font-size: 13px;
+}
+.startGuide li p {
+  margin: 2px 0 0;
+  color: #617592;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.startGuideHelp {
+  margin-top: 15px;
+  padding: 14px;
+  border: 1px solid #cae7e2;
+  border-radius: 11px;
+  background: linear-gradient(125deg, #edfcf8, #f6fbff);
+}
+.startGuideHelp h3 {
+  margin: 0;
+  color: #14233c;
+  font-size: 15px;
+}
+.startGuideHelp p {
+  margin: 4px 0 10px;
+  color: #526985;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.startGuideHelp a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: #007d79;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.startGuideHelp a:hover {
+  text-decoration: underline;
+}
+.startGuideHelp a:focus-visible,
+.overviewCard:focus-visible {
+  outline: 3px solid #aebff6;
+  outline-offset: 3px;
+}
+.overviewCards {
+  flex: 0 0 auto;
+  order: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.overviewCard {
+  display: flex;
+  min-width: 0;
+  min-height: 105px;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 18px;
+  color: inherit;
+  text-decoration: none;
+}
+a.overviewCard:hover {
+  border-color: #96cdc9;
+  background: #fcfffe;
+}
+.overviewIcon {
+  display: grid;
+  flex: 0 0 35px;
+  width: 35px;
+  height: 35px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e9faf6;
+  color: #00877f;
+}
+.overviewCard > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.overviewCard strong {
+  color: #14233c;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.overviewCard small {
+  color: #617592;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.overviewCard > svg:last-child {
+  flex: 0 0 18px;
+  margin-left: auto;
+  color: #00877f;
+}
+@media (max-width: 760px) {
+  .app[data-stage="upload"][data-selected="false"] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .startGuide {
+    padding: 18px;
+  }
+}
+@media (max-width: 620px) {
+  .app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
+    padding: 16px 16px 22px;
+  }
+  .uploadCardHeader {
+    flex-wrap: wrap;
+  }
+  .allowanceBadge {
+    max-width: 100%;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 240px;
+  }
+  .overviewCards {
+    grid-template-columns: 1fr;
   }
 }
 

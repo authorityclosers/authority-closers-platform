@@ -24,6 +24,8 @@ export function AcquisitionShell({
   active = "analyse",
   compactBusy = false,
   mobileFit = false,
+  welcome = false,
+  displayName,
 }: {
   children: ReactNode;
   authenticated: boolean;
@@ -31,6 +33,9 @@ export function AcquisitionShell({
   active?: "analyse" | "calls";
   compactBusy?: boolean;
   mobileFit?: boolean;
+  welcome?: boolean;
+  /** A server-confirmed account name, when the caller has one. */
+  displayName?: string | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -52,6 +57,7 @@ export function AcquisitionShell({
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
       data-mobile-fit={mobileFit}
+      data-welcome={welcome}
     >
       <a className={styles.skip} href="#main-content">
         Skip to workspace
@@ -185,10 +191,32 @@ export function AcquisitionShell({
           />
         </header>
         <header className={styles.workspaceHeader}>
-          <ProfileMenu
-            authenticated={authenticated}
-            accountHref={accountHref}
-          />
+          {welcome && (
+            <div className={styles.welcome}>
+              <p className={styles.welcomeKicker}>TURN CALLS INTO CLARITY</p>
+              <h1>
+                {authenticated ? (
+                  <>
+                    Welcome back
+                    {displayName?.trim() ? `, ${displayName.trim()}` : ""}
+                    <span aria-hidden="true"> 👋</span>
+                  </>
+                ) : (
+                  "Welcome to Sales Xray"
+                )}
+              </h1>
+              <p className={styles.welcomeDescription}>
+                Upload a sales call and let Sales Xray find the insights, so you
+                can coach, improve, and close more.
+              </p>
+            </div>
+          )}
+          <div className={styles.profileSlot}>
+            <ProfileMenu
+              authenticated={authenticated}
+              accountHref={accountHref}
+            />
+          </div>
         </header>
         <main id="main-content" className={styles.main}>
           {children}

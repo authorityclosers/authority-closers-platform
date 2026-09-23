@@ -147,7 +147,7 @@ it("the mounted page displays observed upload controls without applying consent 
 
   window.history.pushState(null, "", `/?new=1&sx-review-local=${empty}`);
   await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
-  expect(container.textContent).toContain("Add a call to review.");
+  expect(container.textContent).toContain("Add a call to review");
   expect(container.textContent).not.toContain(
     "Observed sales conversation.wav",
   );
