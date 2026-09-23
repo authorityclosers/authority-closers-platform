@@ -32,6 +32,7 @@
 }
 
 .cloud {
+  position: relative;
   display: grid;
   width: 74px;
   height: 74px;
@@ -41,6 +42,40 @@
   background: #ddf8f1;
   color: #099394;
 }
+
+.cloud::after {
+  position: absolute;
+  inset: -8px;
+  border: 1px solid #12a99c45;
+  border-radius: 50%;
+  animation: upload-halo 3.2s ease-out infinite;
+  content: "";
+  pointer-events: none;
+}
+
+.uploadMark {
+  width: 49px;
+  height: 49px;
+  overflow: visible;
+}
+
+.uploadOrbit {
+  transform-origin: 32px 32px;
+  animation: upload-orbit 16s linear infinite;
+}
+
+.uploadCloud {
+  animation: cloud-breathe 3.2s ease-in-out infinite;
+}
+
+.uploadArrow {
+  animation: arrow-rise 2.4s ease-in-out infinite;
+}
+
+@keyframes upload-orbit { to { transform: rotate(360deg); } }
+@keyframes cloud-breathe { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
+@keyframes arrow-rise { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-2px); } }
+@keyframes upload-halo { 0% { opacity: .45; transform: scale(.87); } 70%, 100% { opacity: 0; transform: scale(1.16); } }
 
 .dropCopy {
   display: grid;
@@ -338,6 +373,87 @@
   font-weight: 700;
 }
 
+@media (min-width: 1024px) and (max-height: 1100px) {
+  .stage[data-has-files="true"] {
+    gap: 5px;
+  }
+
+  .stage[data-has-files="true"] .dropArea {
+    min-height: 55px;
+    gap: 3px 8px;
+    padding: 5px 10px;
+  }
+
+  .stage[data-has-files="true"] .cloud {
+    width: 29px;
+    height: 29px;
+  }
+
+  .stage[data-has-files="true"] .dropCopy strong {
+    font-size: 12px;
+  }
+
+  .stage[data-has-files="true"] .browse {
+    min-height: 17px;
+    font-size: 11px;
+  }
+
+  .stage[data-has-files="true"] .facts {
+    gap: 2px 8px;
+    padding-left: 37px;
+    font-size: 9px;
+  }
+
+  .stage[data-has-files="true"] .facts svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .stage[data-has-files="true"] .selection,
+  .stage[data-has-files="true"] .fileList {
+    gap: 4px;
+  }
+
+  .stage[data-has-files="true"] .selectionHeader {
+    min-height: 23px;
+  }
+
+  .stage[data-has-files="true"] .selectionHeader strong {
+    font-size: 12px;
+  }
+
+  .stage[data-has-files="true"] .selectionHeader small {
+    display: none;
+  }
+
+  .stage[data-has-files="true"] .fileCard {
+    min-height: 43px;
+    padding: 3px 6px;
+  }
+
+  .stage[data-has-files="true"] .fileIcon {
+    width: 29px;
+    height: 29px;
+  }
+
+  .stage[data-has-files="true"] .fileIcon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .stage[data-has-files="true"] .selectedBadge,
+  .stage[data-has-files="true"] .select {
+    min-height: 23px;
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  .stage[data-has-files="true"] .remove {
+    width: 22px;
+    height: 22px;
+  }
+}
+
 @media (min-width: 1024px) and (max-height: 800px) {
   .stage {
     gap: 8px;
@@ -427,5 +543,11 @@
 @media (prefers-reduced-motion: reduce) {
   .dropArea {
     transition: none;
+  }
+  .cloud::after,
+  .uploadOrbit,
+  .uploadCloud,
+  .uploadArrow {
+    animation: none;
   }
 }

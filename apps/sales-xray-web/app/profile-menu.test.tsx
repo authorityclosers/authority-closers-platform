@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
+import { WorkspaceAccessProvider } from "./workspace-access";
 
 vi.mock("./live-data-banner", () => ({ LocalSettingsButton: () => null }));
 (
@@ -98,6 +99,32 @@ it("does not fetch an account profile for a guest", async () => {
   );
   expect(fetchMock).not.toHaveBeenCalled();
   expect(host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent).toContain("Guest workspace");
+});
+it("starts inline account sign-in so a staged file can stay mounted", async () => {
+  const requestAccountSignIn = vi.fn();
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessProvider value={{
+        status: "unauthenticated",
+        authenticated: false,
+        context: null,
+        retry: () => {},
+        requestAccountSignIn,
+      }}>
+        <ProfileMenu authenticated={false} accountHref="/login" />
+      </WorkspaceAccessProvider>,
+    ),
+  );
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+  );
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Sign in to my AC account")!
+      .click(),
+  );
+  expect(requestAccountSignIn).toHaveBeenCalledOnce();
+  expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
 });
 it("discards the private document only after confirmed sign out", async () => {
   const assign = vi

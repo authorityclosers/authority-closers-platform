@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Check, Clock3, CloudUpload, FileAudio, HardDrive, Plus, X } from "lucide-react";
+import { AudioLines, Check, Clock3, FileAudio, HardDrive, Plus, X } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import styles from "./acquisition-file-stage.module.css";
@@ -9,7 +9,7 @@ const PAGE_SIZE = 2;
 const SUPPORTED_AUDIO = /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i;
 
 export type AcquisitionFileStageProps = Readonly<{
-  files: File[];
+  files: readonly File[];
   selectedFile: File | null;
   onSelect: (file: File) => void;
   onRemove: (file: File) => void;
@@ -60,6 +60,7 @@ export function AcquisitionFileStage({
 
   function drop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
     setDragActive(false);
     addFiles(event.dataTransfer.files);
   }
@@ -86,7 +87,18 @@ export function AcquisitionFileStage({
         onDrop={drop}
       >
         <span className={styles.cloud} aria-hidden="true">
-          {hasFiles ? <Plus size={21} /> : <CloudUpload size={36} strokeWidth={1.8} />}
+          {hasFiles ? <Plus size={21} /> : (
+            <svg className={styles.uploadMark} viewBox="0 0 64 64" fill="none" focusable="false">
+              <circle className={styles.uploadOrbit} cx="32" cy="32" r="29" stroke="currentColor" strokeOpacity=".25" strokeDasharray="2 7" />
+              <path className={styles.uploadCloud} d="M18 44h27a10 10 0 0 0 2-19.8A16 16 0 0 0 16 28a8 8 0 0 0 2 16Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <g className={styles.uploadArrow} stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M32 48V28" />
+                <path d="m25 35 7-7 7 7" />
+              </g>
+              <circle cx="11" cy="16" r="1.4" fill="currentColor" fillOpacity=".5" />
+              <circle cx="53" cy="49" r="1.4" fill="currentColor" fillOpacity=".5" />
+            </svg>
+          )}
         </span>
         <div className={styles.dropCopy}>
           <strong>

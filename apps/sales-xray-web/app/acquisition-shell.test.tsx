@@ -37,3 +37,13 @@ it("uses the same hero frame during processing and a neutral guest greeting", ()
   expect(guest).toContain("Welcome to Sales Xray");
   expect(guest).not.toContain("Welcome back");
 });
+
+it("labels a local processing fixture as an example", () => {
+  const preview = renderToStaticMarkup(
+    <AcquisitionShell authenticated={false} heroStage="processing" previewHero>
+      <p>Example status</p>
+    </AcquisitionShell>,
+  );
+  expect(preview).toContain("Example processing state");
+  expect(preview).not.toContain("We&#x27;re processing your call");
+});

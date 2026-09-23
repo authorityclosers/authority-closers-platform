@@ -17,6 +17,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LocalSettingsButton } from "./live-data-banner";
 import { ProfileMenu } from "./profile-menu";
 import { newCallHref } from "./new-call-navigation";
+import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./acquisition-shell.module.css";
 
 export function AcquisitionShell({
@@ -29,6 +30,7 @@ export function AcquisitionShell({
   welcome = false,
   heroStage,
   displayName,
+  previewHero = false,
 }: {
   children: ReactNode;
   authenticated: boolean;
@@ -40,8 +42,11 @@ export function AcquisitionShell({
   heroStage?: "welcome" | "processing";
   /** A server-confirmed account name, when the caller has one. */
   displayName?: string | null;
+  /** Label the explicit local review fixture without implying a real job. */
+  previewHero?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const access = useWorkspaceAccess();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const hasToggled = useRef(false);
   const accountHref = authenticated ? "/calls" : "/login";
@@ -145,7 +150,16 @@ export function AcquisitionShell({
             <FolderOpen size={18} aria-hidden="true" />
             <span>Saved calls</span>
           </Link>
-          <Link className={styles.navLink} href={accountHref}>
+          <Link
+            className={styles.navLink}
+            href={accountHref}
+            onClick={(event) => {
+              if (!authenticated && access?.requestAccountSignIn) {
+                event.preventDefault();
+                access.requestAccountSignIn();
+              }
+            }}
+          >
             <CircleUserRound size={18} aria-hidden="true" />
             <span>{accountLabel}</span>
           </Link>
@@ -179,7 +193,16 @@ export function AcquisitionShell({
             </small>
           </span>
           {!authenticated && (
-            <Link className={styles.signIn} href="/login">
+            <Link
+              className={styles.signIn}
+              href="/login"
+              onClick={(event) => {
+                if (access?.requestAccountSignIn) {
+                  event.preventDefault();
+                  access.requestAccountSignIn();
+                }
+              }}
+            >
               <LogIn size={15} aria-hidden="true" />
               Sign in to save calls
             </Link>
@@ -218,9 +241,11 @@ export function AcquisitionShell({
               <p className={styles.welcomeKicker}>TURN CALLS INTO CLARITY</p>
               {visibleHero === "processing" ? (
                 <>
-                  <h1>Analysing your call <AudioLines size={37} aria-hidden="true" /></h1>
+                  <h1>{previewHero ? "Example processing state" : "Analysing your call"} <AudioLines size={37} aria-hidden="true" /></h1>
                   <p className={styles.welcomeDescription}>
-                    We&apos;re processing your call and finding the key insights. This usually takes a few minutes.
+                    {previewHero
+                      ? "A read-only preview of how your call moves from upload to report."
+                      : "We're processing your call and finding the key insights. This usually takes a few minutes."}
                   </p>
                 </>
               ) : (
@@ -292,7 +317,16 @@ export function AcquisitionShell({
           <FolderOpen size={20} aria-hidden="true" />
           <span>Saved calls</span>
         </Link>
-        <Link className={styles.bottomLink} href={accountHref}>
+        <Link
+          className={styles.bottomLink}
+          href={accountHref}
+          onClick={(event) => {
+            if (!authenticated && access?.requestAccountSignIn) {
+              event.preventDefault();
+              access.requestAccountSignIn();
+            }
+          }}
+        >
           <CircleUserRound size={20} aria-hidden="true" />
           <span>{authenticated ? "Account" : "Profile"}</span>
         </Link>

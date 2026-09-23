@@ -179,6 +179,8 @@ beforeEach(() => {
           selected_tenant_id: "tenant-1",
           workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
         });
+      if (path === "/v1/me/sales-xray-profile/write-eligibility")
+        return new Response(null, { status: 204 });
       if (path.endsWith("/entry")) return response(entryBody);
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
@@ -768,6 +770,36 @@ it("consumes new-call intent when a new upload begins so reload can recover that
   expect(new URLSearchParams(window.location.search).has("new")).toBe(false);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+});
+
+it("keeps the next staged file ready after starting another call", async () => {
+  existing = true;
+  await mount();
+  const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const first = new File(["first"], "Discovery.wav", { type: "audio/wav" });
+  const second = new File(["second"], "Follow-up.m4a", { type: "audio/mp4" });
+  Object.defineProperty(first, "arrayBuffer", {
+    value: async () => new ArrayBuffer(10),
+  });
+  Object.defineProperty(input, "files", {
+    configurable: true,
+    value: [first, second],
+  });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+  expect(container.textContent).toContain("2 files added");
+  expect(container.textContent).toContain("Discovery.wav selected for analysis");
+  await consent();
+  await click("Analyse my call");
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  await act(async () =>
+    container.querySelector<HTMLElement>('summary[aria-label="More report actions"]')!.click(),
+  );
+  await click("Analyse another call");
+  expect(container.textContent).toContain("1 file added");
+  expect(container.textContent).toContain("Follow-up.m4a selected for analysis");
 });
 
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {

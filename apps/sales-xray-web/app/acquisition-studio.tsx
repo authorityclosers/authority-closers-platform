@@ -30,6 +30,8 @@ import {
   AcquisitionGuideRail,
   AcquisitionLowerPanels,
 } from "./acquisition-dashboard-panels";
+import { AcquisitionFileStage } from "./acquisition-file-stage";
+import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { SalesSkills } from "./sales-skills";
@@ -67,7 +69,7 @@ import {
   type UploadPolicy,
 } from "./acquisition-client";
 import { ProcessingVisual } from "./processing-visual";
-import { ProcessingExperience } from "./processing-experience";
+import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
 import { observeSubmission } from "./observe-submission";
@@ -147,6 +149,7 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const pending = usePendingAnalysis();
   const [entry, setEntry] = useState<Entry | null>(null);
   const router = useRouter();
   const [analysisPaused, setAnalysisPaused] = useState(false);
@@ -156,13 +159,17 @@ export function AcquisitionStudio({
   const [session, setSession] = useState(false);
   const [claimAvailable, setClaimAvailable] = useState(false);
   const [savedCallNeedsSession, setSavedCallNeedsSession] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [localStagedFiles, setLocalStagedFiles] = useState<File[]>([]);
+  const stagedFiles = pending?.stagedFiles ?? localStagedFiles;
+  const file = pending ? (pending.selection?.file ?? null) : localFile;
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("en");
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [localValidationError, setLocalValidationError] = useState(false);
   const chosenReportLanguage = useRef<ReportLanguage | null>(null);
   const languageCapabilities = useRef(false);
-  const [audioUrl, setAudioUrl] = useState("");
+  const [localAudioUrl, setLocalAudioUrl] = useState("");
+  const audioUrl = pending ? (pending.selection?.audioUrl ?? "") : localAudioUrl;
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
@@ -869,11 +876,64 @@ export function AcquisitionStudio({
       return;
     }
     setLocalValidationError(false);
-    chosenId.current = crypto.randomUUID();
-    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-    previewUrl.current = URL.createObjectURL(next);
-    setAudioUrl(previewUrl.current);
-    setFile(next);
+    if (pending) pending.selectFile(next);
+    else {
+      chosenId.current = crypto.randomUUID();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = URL.createObjectURL(next);
+      setLocalAudioUrl(previewUrl.current);
+      setLocalFile(next);
+      setLocalStagedFiles((current) =>
+        current.some((candidate) => candidate === next)
+          ? current
+          : [...current, next],
+      );
+    }
+  }
+
+  function addFiles(nextFiles: FileList | File[]) {
+    if (inFlight.current || submission || !policy) return;
+    const candidates = Array.from(nextFiles);
+    const valid = candidates.filter(
+      (candidate) =>
+        /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(candidate.name) &&
+        candidate.size > 0 &&
+        candidate.size <= policy.maximum_file_bytes,
+    );
+    const hasInvalidFiles = valid.length !== candidates.length;
+    if (valid.length === 0) {
+      if (hasInvalidFiles) {
+        setError(
+          "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        );
+        setLocalValidationError(true);
+      }
+      return;
+    }
+    if (pending) pending.addFiles(valid);
+    else
+      setLocalStagedFiles((current) => [
+        ...current,
+        ...valid.filter((candidate) => !current.includes(candidate)),
+      ]);
+    if (!file) choose(valid[0]);
+    if (hasInvalidFiles) {
+      setError(
+        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+      );
+      setLocalValidationError(true);
+    }
+  }
+
+  function removeStagedFile(removed: File) {
+    if (inFlight.current || submission) return;
+    const remaining = stagedFiles.filter((candidate) => candidate !== removed);
+    if (file === removed) {
+      if (remaining.length > 0) choose(remaining[0]);
+      else reset();
+    }
+    if (pending) pending.removeFile(removed);
+    else setLocalStagedFiles(remaining);
   }
 
   async function operation(
@@ -901,10 +961,11 @@ export function AcquisitionStudio({
       analysisWriteBlocked ||
       !file ||
       !policy ||
-      !consent ||
-      (!session && !token)
+      !consent
     )
       return;
+    if (access?.requestAnalysisAccess && !access.requestAnalysisAccess()) return;
+    if (!session && !token) return;
     if (embedded && !session) return;
     const selected = file;
     await operation("Uploading and checking your call…", async (signal) => {
@@ -937,7 +998,7 @@ export function AcquisitionStudio({
       const sha = Array.from(new Uint8Array(digest), (n) =>
         n.toString(16).padStart(2, "0"),
       ).join("");
-      const id = chosenId.current;
+      const id = pending?.selection?.intentId ?? chosenId.current;
       // Only an opaque selector is remembered. Cookies stay HttpOnly; no report,
       // transcript, filename, audio or credential is copied to browser storage.
       rememberSubmission(id);
@@ -1037,17 +1098,25 @@ export function AcquisitionStudio({
     });
   }
 
-  function reset(options?: { preserveSavedSubmission?: boolean }) {
+  function reset(options?: {
+    preserveSavedSubmission?: boolean;
+    preserveQueuedFiles?: boolean;
+  }) {
     if (inFlight.current) return;
+    const queuedForNext = options?.preserveQueuedFiles
+      ? stagedFiles.filter((candidate) => candidate !== file)
+      : [];
     if (activeRequestedCallId) setDismissedCallId(activeRequestedCallId);
     setExistingCallEntry(null);
     audio.current?.pause();
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = "";
-    setFile(null);
+    setLocalFile(null);
+    if (pending) pending.clearFiles();
+    else setLocalStagedFiles([]);
     setPrivacyOpen(false);
     setLocalValidationError(false);
-    setAudioUrl("");
+    setLocalAudioUrl("");
     setSubmission(null);
     setProgress(null);
     setStatusIssue("");
@@ -1070,11 +1139,21 @@ export function AcquisitionStudio({
     clearRequestedSubmission();
     if (!options?.preserveSavedSubmission) rememberSubmission(null);
     if (input.current) input.current.value = "";
+    if (queuedForNext.length > 0) {
+      if (pending) pending.addFiles(queuedForNext);
+      else {
+        setLocalStagedFiles(queuedForNext);
+        setLocalFile(queuedForNext[0]);
+        previewUrl.current = URL.createObjectURL(queuedForNext[0]);
+        setLocalAudioUrl(previewUrl.current);
+        chosenId.current = crypto.randomUUID();
+      }
+    }
   }
 
   function startAnotherCall() {
     if (inFlight.current) return;
-    reset({ preserveSavedSubmission: true });
+    reset({ preserveSavedSubmission: true, preserveQueuedFiles: true });
     setNewCallRequested(true);
     // Re-read entry/session without racing an older saved-call lookup.
     setAttempt((n) => n + 1);
@@ -1284,7 +1363,13 @@ export function AcquisitionStudio({
         !progress?.has_report &&
         consentedSubmissionId !== submission?.id,
     );
-    const visibleError = error || statusIssue;
+    const processingProjection = projectProcessing(progress, waitingForApproval);
+    const visibleError =
+      error ||
+      statusIssue ||
+      (pending?.accountChanged
+        ? "Your account or workspace changed. Choose your audio files again."
+        : "");
     const source = submission
       ? `${ACQUISITION}${submissionPath(submission.id)}/source`
       : audioUrl;
@@ -1642,7 +1727,7 @@ export function AcquisitionStudio({
                 event.preventDefault();
                 setDragActive(false);
                 if (!busy && !submission && !deletionOnlyId)
-                  choose(event.dataTransfer.files?.[0]);
+                  addFiles(event.dataTransfer.files);
               }}
             >
               {!submission && !deletionOnlyId && (
@@ -1766,6 +1851,22 @@ export function AcquisitionStudio({
                     Forget this saved call on this device
                   </button>
                 </>
+              ) : !submission && !deletionOnlyId && !localObservation ? (
+                <AcquisitionFileStage
+                  files={stagedFiles}
+                  selectedFile={file}
+                  onSelect={choose}
+                  onRemove={removeStagedFile}
+                  onClear={() => reset()}
+                  onAddFiles={addFiles}
+                  maxBytes={policy?.maximum_file_bytes}
+                  maxMinutes={
+                    policy
+                      ? Math.floor(policy.maximum_call_seconds / 60)
+                      : undefined
+                  }
+                  disabled={!policy || !!busy || reviewSelectionActive}
+                />
               ) : !displayFileSelected && !submission ? (
                 <div className={styles.dropZone} data-upload-dropzone>
                   <span className="studio-upload-icon">
@@ -2150,12 +2251,26 @@ export function AcquisitionStudio({
                 </div>
               )}
               {submission && !report && (!plan || plan.accepted) && (
-                <ProcessingExperience
+                <AcquisitionProcessingPanel
                   submissionId={submission.id}
                   progress={progress}
                   waitingForApproval={waitingForApproval}
                   accepted={plan?.accepted ?? false}
                   refreshProblem={!!statusIssue}
+                  stageRows={processingProjection.rows}
+                  statusText={processingProjection.title}
+                  fileName={displayFileName ?? undefined}
+                  fileMeta={
+                    displayFileBytes !== null
+                      ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
+                      : undefined
+                  }
+                  allowanceLabel={remainingAllowanceLabel(
+                    allowance,
+                    entry?.allowance_seconds ?? null,
+                    allowanceUnknown,
+                  )}
+                  paused={processingProjection.attention}
                 >
                   <button
                     type="button"
@@ -2211,7 +2326,7 @@ export function AcquisitionStudio({
                       Review analysis plan
                     </button>
                   )}
-                </ProcessingExperience>
+                </AcquisitionProcessingPanel>
               )}
               {(submission || deletionOnlyId) && (
                 <div className={styles.callActions}>
@@ -2264,12 +2379,14 @@ export function AcquisitionStudio({
               )}
             </section>
               {!submission && !report && !deletionOnlyId && (
-                <AcquisitionLowerPanels />
+                <AcquisitionLowerPanels compact={displayFileSelected} />
               )}
             </div>
             {!report && !deletionOnlyId && (
               <AcquisitionGuideRail
                 stage={submission ? "processing" : displayFileSelected ? "selected" : "empty"}
+                stagedFiles={stagedFiles}
+                maximumFileBytes={policy?.maximum_file_bytes}
               />
             )}
           </div>
@@ -2385,7 +2502,7 @@ export function AcquisitionStudio({
                         type="button"
                         role="menuitem"
                         disabled={!!busy}
-                        onClick={() => reset()}
+                        onClick={startAnotherCall}
                       >
                         <ArrowRight size={16} aria-hidden="true" />
                         Analyse another call

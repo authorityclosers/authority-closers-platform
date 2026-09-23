@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { requestSalesXrayLogout } from "./account-navigation";
 import { readAccountProfile } from "./account-profile-client";
 import { LocalSettingsButton } from "./live-data-banner";
+import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
 
 export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
@@ -35,6 +36,7 @@ export function ProfileMenu({
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
+  const access = useWorkspaceAccess();
 
   useEffect(() => {
     if (!authenticated) return;
@@ -151,16 +153,30 @@ export function ProfileMenu({
             </span>
           </div>
           <div className={styles.actions}>
-            <Link
-              href={accountHref}
-              className={styles.item}
-              onClick={() => setOpen(false)}
-            >
-              <FolderOpen size={16} aria-hidden="true" />
-              {authenticated
-                ? "Saved calls & account"
-                : "Sign in to my AC account"}
-            </Link>
+            {!authenticated && access?.requestAccountSignIn ? (
+              <button
+                type="button"
+                className={styles.item}
+                onClick={() => {
+                  setOpen(false);
+                  access.requestAccountSignIn?.();
+                }}
+              >
+                <FolderOpen size={16} aria-hidden="true" />
+                Sign in to my AC account
+              </button>
+            ) : (
+              <Link
+                href={accountHref}
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <FolderOpen size={16} aria-hidden="true" />
+                {authenticated
+                  ? "Saved calls & account"
+                  : "Sign in to my AC account"}
+              </Link>
+            )}
             <LocalSettingsButton className={styles.item} />
             {authenticated ? (
               <button
