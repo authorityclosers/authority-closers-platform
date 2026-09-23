@@ -1,6 +1,6 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { SalesSkills } from "./sales-skills";
 import type { ReportDimension } from "./report-contract";
@@ -125,9 +125,48 @@ it("keeps mixed or missing evidence neutral and handles an empty report", async 
   );
   expect(container.textContent).toContain("Mixed evidence");
   expect(container.textContent).toContain("Exact mixed source observation.");
+  await act(async () => button(`Open notes: ${dimensions[0].label}`).click());
+  expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+    "No recording excerpt was supplied for this skill.",
+  );
+  expect(
+    container.querySelector('[role="dialog"] button[aria-label^="Listen"]'),
+  ).toBeNull();
   await act(async () => root.render(<SalesSkills dimensions={[]} />));
   expect(container.textContent).toContain(
     "No skill observations were supplied",
   );
   expect(container.querySelector("article")).toBeNull();
+});
+
+it("shows exact skill excerpts and seeks their source, without using coaching citations as audio", async () => {
+  const evidence = {
+    segment_id: "segment-12",
+    quote: "The prospect said the rollout would take two weeks.",
+    start_ms: 72_000,
+    end_ms: 79_000,
+  };
+  const onSelectEvidence = vi.fn();
+  await act(async () =>
+    root.render(
+      <SalesSkills
+        dimensions={[{ ...dimensions[0], evidence: [evidence] }]}
+        onSelectEvidence={onSelectEvidence}
+      />,
+    ),
+  );
+  await act(async () => button(`Open notes: ${dimensions[0].label}`).click());
+  const dialog = container.querySelector('[role="dialog"]');
+  expect(dialog?.textContent).toContain(dimensions[0].observation);
+  expect(dialog?.textContent).toContain(evidence.quote);
+  expect(dialog?.textContent).toContain(
+    "01:12.000–01:19.000 · Source segment segment-12",
+  );
+  expect(dialog?.textContent).toContain("Doc-1");
+  expect(dialog?.querySelectorAll('[aria-label^="Listen to"]')).toHaveLength(1);
+  await act(async () =>
+    button(`Listen to ${dimensions[0].label} excerpt at 01:12.000`).click(),
+  );
+  expect(onSelectEvidence).toHaveBeenCalledExactlyOnceWith(evidence);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
 });

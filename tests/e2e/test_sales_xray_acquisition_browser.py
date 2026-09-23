@@ -493,9 +493,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # whose abort controller can discard Chromium's response
                     # body handle. Verify the actual 200 write above, then read
                     # canonical state with the same authenticated browser.
-                    profile_read = await context.request.get(
-                        ORIGIN + "/v1/me/sales-xray-profile"
-                    )
+                    profile_read = await context.request.get(ORIGIN + "/v1/me/sales-xray-profile")
                     assert profile_read.status == 200
                     profile_payload = await profile_read.json()
                     assert profile_payload["profile_complete"] is True

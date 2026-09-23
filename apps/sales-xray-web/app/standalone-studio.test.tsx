@@ -475,6 +475,61 @@ it("requires account access before analysis and carries the original File throug
   expect(revokeUrl).not.toHaveBeenCalled();
 });
 
+it("opens the profile gate after direct sign-in from file selection", async () => {
+  stubObjectUrls();
+  const observed: { pending: ReturnType<typeof usePendingAnalysis> } = {
+    pending: null,
+  };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    useEffect(() => {
+      observed.pending = pending;
+    }, [pending]);
+    return <p>{pending?.selection?.file.name}</p>;
+  }
+
+  fetchMock.mockResolvedValueOnce(response({}, 401));
+  await act(async () =>
+    root.render(
+      <StandaloneStudio>
+        <StudioProbe />
+      </StandaloneStudio>,
+    ),
+  );
+  await flush();
+  const file = new File(["synthetic-audio"], "direct-sign-in.wav", {
+    type: "audio/wav",
+  });
+  await act(async () => observed.pending?.selectFile(file));
+  expect(authSelectedFile).toBe(file);
+  expect(
+    container.querySelector('[data-testid="inline-account-auth"]'),
+  ).not.toBeNull();
+
+  const eligibility = deferred<Response>();
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  fetchMock.mockResolvedValueOnce(response(profileRecord()));
+  fetchMock.mockReturnValueOnce(eligibility.promise);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="inline-account-auth"] button',
+      )
+      ?.click(),
+  );
+  await flush();
+  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(container.textContent).toContain(file.name);
+  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-profile",
+    "/v1/me/sales-xray-profile/write-eligibility",
+  ]);
+  eligibility.resolve(noContent());
+  await flush();
+});
+
 it("waits for canonical profile eligibility before an authenticated upload can continue", async () => {
   const revokeUrl = stubObjectUrls();
   const observed: {

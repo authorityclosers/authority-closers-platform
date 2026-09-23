@@ -2711,7 +2711,12 @@ export function AcquisitionStudio({
                       id: "skills",
                       label: "Sales skills",
                       compactLabel: "Skills",
-                      content: <SalesSkills dimensions={report.dimensions} />,
+                      content: (
+                        <SalesSkills
+                          dimensions={report.dimensions}
+                          onSelectEvidence={seek}
+                        />
+                      ),
                     },
                     {
                       id: "next-call-plan",

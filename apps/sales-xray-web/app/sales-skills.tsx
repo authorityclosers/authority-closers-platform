@@ -11,12 +11,14 @@ import {
   Handshake,
   Lightbulb,
   MessagesSquare,
+  Play,
   Presentation,
   ShieldCheck,
   Target,
   Users,
 } from "lucide-react";
-import type { ReportDimension } from "./report-contract";
+import type { ReportDimension, ReportEvidence } from "./report-contract";
+import { formatTranscriptTime } from "./report-transcript";
 import { getReportUiCopy } from "./report-ui-copy";
 import { ReviewDialog } from "./review-dialog";
 import styles from "./sales-skills.module.css";
@@ -34,13 +36,22 @@ const topics = {
   communication_tonality: { icon: AudioLines, tone: "violet" },
 } as const;
 
-export function SalesSkills({ dimensions }: { dimensions: ReportDimension[] }) {
+type SkillDimension = ReportDimension & { evidence?: ReportEvidence[] };
+
+export function SalesSkills({
+  dimensions,
+  onSelectEvidence,
+}: {
+  dimensions: SkillDimension[];
+  onSelectEvidence?: (evidence: ReportEvidence) => void;
+}) {
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIndex = dimensions.findIndex(
     (item) => item.dimension_id === selectedId,
   );
   const selected = dimensions[selectedIndex];
+  const excerpts = selected?.evidence ?? [];
   const pageCount = Math.max(1, Math.ceil(dimensions.length / 4));
   const activePage = Math.min(page, pageCount - 1);
   const copy = getReportUiCopy();
@@ -152,8 +163,47 @@ export function SalesSkills({ dimensions }: { dimensions: ReportDimension[] }) {
             <span className={styles.status}>
               {copy.factorStatus[selected.status] ?? copy.factorStatus.unknown}
             </span>
-            <h3>What this call shows</h3>
+            <h3>Report observation</h3>
             <p>{selected.observation}</p>
+            <section className={styles.source} aria-label="Recording excerpts">
+              <h3>From the recording</h3>
+              {excerpts.length ? (
+                <ol className={styles.excerpts}>
+                  {excerpts.map((evidence, index) => (
+                    <li key={`${evidence.segment_id}-${index}`}>
+                      <span className={styles.sourceTime}>
+                        {formatTranscriptTime(evidence.start_ms)}–
+                        {formatTranscriptTime(evidence.end_ms)} · Source segment{" "}
+                        {evidence.segment_id}
+                      </span>
+                      <blockquote>{evidence.quote}</blockquote>
+                      {onSelectEvidence && (
+                        <button
+                          type="button"
+                          className={styles.listen}
+                          onClick={() => {
+                            setSelectedId(null);
+                            onSelectEvidence(evidence);
+                          }}
+                          aria-label={`Listen to ${selected.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
+                        >
+                          <Play
+                            size={15}
+                            fill="currentColor"
+                            aria-hidden="true"
+                          />
+                          Listen to this excerpt
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className={styles.noSource}>
+                  No recording excerpt was supplied for this skill.
+                </p>
+              )}
+            </section>
             {!!selected.citations.length && (
               <aside className={styles.references}>
                 <h3>
