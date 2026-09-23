@@ -606,6 +606,8 @@ def reserve(
     quote: Quote,
     permission: ExecutionPermission,
     now_epoch: int,
+    *,
+    release_cap_paise: int | None = None,
 ) -> LedgerTransition:
     existing = _pair(minutes, budget, reservation_id)
     if existing is not None:
@@ -630,6 +632,11 @@ def reserve(
         raise ValueError("insufficient explicit minute grant")
     if quote.max_cost_paise > budget.available_paise:
         raise ValueError("shared project budget exhausted")
+    if release_cap_paise is not None:
+        effective_cap = effective_budget_cap_paise(release_cap_paise, budget.cap_paise)
+        committed_paise = sum(item.committed_paise for item in budget.reservations)
+        if quote.max_cost_paise > effective_cap - committed_paise:
+            raise ValueError("current release project budget exhausted")
     reservation = Reservation(reservation_id, quote, permission)
     return LedgerTransition(
         replace(minutes, reservations=(*minutes.reservations, reservation)),
