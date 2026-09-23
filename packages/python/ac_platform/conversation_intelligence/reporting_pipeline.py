@@ -110,7 +110,7 @@ class StageRequest(BaseModel):
         default=FACT_PROMPT_LEGACY,
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = Field(
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = Field(
         default=COACHING_PROMPT_LEGACY,
         exclude_if=lambda value: value == COACHING_PROMPT_LEGACY,
     )
@@ -191,6 +191,16 @@ def _repair_system_content(system: str, repair: C5RepairIntent) -> str:
         "transcript, facts and frozen profile. Preserve uncertainty; do not add unsupported "
         "claims, scores, approvals, identities or new provenance. This is a format repair."
     )
+    if repair.failure_code == "conversation_report_evidence_invalid":
+        instruction += (
+            " Evidence correction: prefer {segment_id} alone for a whole source segment "
+            "of at most 2000 characters. Only use {segment_id,quote_start,quote_end} for "
+            "a shorter excerpt. These offsets are zero-based Python Unicode code-point "
+            "indices into that segment's text, with an exclusive end. They are never "
+            "audio timestamps. Require 0 <= quote_start < quote_end <= len(segment.text), "
+            "and an excerpt of at most 2000 characters. Do not copy start_ms/end_ms "
+            "into quote_start/quote_end. The server supplies native timestamps."
+        )
     return f"{head}\n{instruction}\n{marker}{profile}"
 
 

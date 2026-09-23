@@ -20,6 +20,14 @@ from ac_platform.conversation_intelligence.storage import StorageError
     ("error", "expected"),
     [
         (
+            InferenceTaskError("report_evidence_invalid"),
+            "conversation_report_evidence_invalid",
+        ),
+        (
+            InferenceTaskError("report_evidence_invalid: private words"),
+            "conversation_provider_result_validation_failed",
+        ),
+        (
             InferenceTaskError("report_dimension_status_invalid"),
             "conversation_report_dimension_status_invalid",
         ),

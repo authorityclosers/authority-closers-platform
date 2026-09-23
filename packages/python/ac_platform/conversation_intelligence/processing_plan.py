@@ -72,7 +72,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
 )
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
-    COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_V3,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -83,6 +83,7 @@ from ac_platform.outbox.repository import RecoveryStateRepository
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 C5_AUTO_REPAIR_ATTEMPTS = 1
+NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
 
 
 def planned_c5_requests(stage: StageApproval) -> int:
@@ -164,7 +165,9 @@ class PlanManifest(BaseModel):
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
+        COACHING_PROMPT_LEGACY
+    )
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -716,7 +719,7 @@ class ConversationProcessingPlans:
                 stages=(c2, c4, c5),
                 profile=profile,
                 fact_prompt_revision=FACT_PROMPT_COMPACT,
-                coaching_prompt_revision=COACHING_PROMPT_REFINED,
+                coaching_prompt_revision=NEW_PLAN_COACHING_PROMPT_REVISION,
                 created_at_epoch=int(now.timestamp()),
                 expires_at_epoch=min(
                     int(now.timestamp()) + 3600,

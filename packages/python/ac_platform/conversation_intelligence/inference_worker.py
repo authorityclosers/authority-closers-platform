@@ -180,6 +180,7 @@ def _provider_returned_receipt(
 # provider errors can contain a response body, transcript or credential URL.
 _VALIDATION_FAILURES = frozenset(
     {
+        "report_evidence_invalid",
         "report_evidence_quote_mismatch",
         "report_evidence_segment_invalid",
         "fact_evidence_outside_chunk",

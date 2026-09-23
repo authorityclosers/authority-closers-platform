@@ -14,6 +14,8 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+from ac_platform.conversation_intelligence.application import ConversationNotFound
+from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.native_runtime import NativeRuntime
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
@@ -315,3 +317,55 @@ async def test_learner_submission_routes_do_not_fall_back_to_guest_cookie(
         ):
             response = await client.get(path, headers=headers)
             assert response.status_code == 401, (path, response.text)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "suffix", ["", "/report", "/report.docx", "/transcript", "/waveform", "/source"]
+)
+async def test_unavailable_learner_submission_returns_private_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    database = _Database()
+    unwound: list[bool] = []
+
+    async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            yield AuthenticatedTransaction(
+                database,  # type: ignore[arg-type]
+                SimpleNamespace(),  # type: ignore[arg-type]
+                ResolvedActorContext(
+                    actor=ActorContext(PERSON_ID, SESSION_ID, PUBLIC_TENANT),
+                    membership_role="learner",
+                    person_revision=1,
+                    session_revision=1,
+                ),
+                "opaque-session",
+            )
+        finally:
+            unwound.append(True)
+
+    async def unavailable(_self: GuestOwnership, *_args: object, **_kwargs: object) -> None:
+        # Expired retention, deletion and unavailable ownership all use this
+        # non-disclosing domain denial; no report or source may be returned.
+        raise ConversationNotFound("This upload is unavailable.")
+
+    monkeypatch.setattr(GuestOwnership, "require_submission_owner", unavailable)
+    app = FastAPI()
+    register_problem_handlers(app)
+    install_acquisition_runtime(
+        app,
+        settings=_settings(),
+        sessions=lambda: _SessionScope(database),  # type: ignore[arg-type]
+        require_actor=require_actor,
+        runtime=_runtime(tmp_path),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="https://learner.example.test",
+    ) as client:
+        response = await client.get(f"/v1/conversation/acquisition/submissions/{uuid4()}{suffix}")
+    assert response.status_code == 404
+    assert "This upload is unavailable." in response.text
+    assert "no-store" in response.headers["cache-control"]
+    assert unwound == [True]

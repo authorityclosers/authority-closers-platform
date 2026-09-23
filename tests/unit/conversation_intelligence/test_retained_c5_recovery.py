@@ -18,6 +18,8 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_REFINED,
     COACHING_PROMPT_REFINED_MARKER,
+    COACHING_PROMPT_V3,
+    COACHING_PROMPT_V3_MARKER,
     FactPacket,
     load_report_profile,
 )
@@ -198,6 +200,10 @@ def test_retained_c5_request_revision_defaults_legacy_and_rebuilds_refined_input
         _coaching_prompt_revision({"coaching_prompt_revision": COACHING_PROMPT_REFINED})
         == COACHING_PROMPT_REFINED
     )
+    assert (
+        _coaching_prompt_revision({"coaching_prompt_revision": COACHING_PROMPT_V3})
+        == COACHING_PROMPT_V3
+    )
     with pytest.raises(ValueError, match="prompt revision"):
         _coaching_prompt_revision({"coaching_prompt_revision": "coaching-v9"})
 
@@ -212,6 +218,19 @@ def test_retained_c5_request_revision_defaults_legacy_and_rebuilds_refined_input
     )
     assert COACHING_PROMPT_REFINED_MARKER.encode() in refined.payload
     assert refined.input_sha256 == refined.payload_sha256
+
+    v3 = prepare_coaching_input(
+        transcript,
+        [facts],
+        profile=load_report_profile(),
+        output_profile="detailed",
+        coaching_prompt_revision=_coaching_prompt_revision(
+            {"coaching_prompt_revision": COACHING_PROMPT_V3}
+        ),
+    )
+    assert COACHING_PROMPT_REFINED_MARKER.encode() in v3.payload
+    assert COACHING_PROMPT_V3_MARKER.encode() in v3.payload
+    assert v3.input_sha256 == v3.payload_sha256
 
 
 def test_erasure_can_clear_successful_payload_without_rewriting_lineage() -> None:

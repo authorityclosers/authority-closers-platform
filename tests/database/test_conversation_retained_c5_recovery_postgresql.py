@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.recovery_models import ConversationRe
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_V3,
     GROQ_MODEL,
     FactPacket,
     load_report_profile,
@@ -83,7 +84,7 @@ from tests.database.test_conversation_submission_http_postgresql import (
 from tests.database.test_conversation_worker_postgresql import _prepare, _wav_one_second_48k
 
 pytest_plugins = ("tests.database.test_conversation_postgresql",)
-C5PromptRevision = Literal["coaching-v1", "coaching-v2"]
+C5PromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3"]
 
 
 def _transcript(source_sha256: str) -> dict[str, Any]:
@@ -722,7 +723,7 @@ async def _seed_guest_retained_case(postgres_harness: Any, scratch_root: Path) -
 
 @pytest.mark.parametrize(
     "coaching_prompt_revision",
-    [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED],
+    [COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3],
 )
 def test_retained_c5_recovery_real_postgres(
     postgres_harness: Any, tmp_path: Path, coaching_prompt_revision: C5PromptRevision

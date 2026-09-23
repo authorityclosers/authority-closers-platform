@@ -958,8 +958,9 @@ def test_processing_plan_acceptance_drives_c2_to_c6_with_exact_bindings(
     run(exercise())
 
 
+@pytest.mark.parametrize("failure", ["payload_missing_field", "evidence_invalid"])
 def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired_report(
-    postgres_harness: Any, tmp_path: Any
+    postgres_harness: Any, tmp_path: Any, failure: str
 ) -> None:
     """Exercise scheduler -> worker validation failure -> bounded repair -> C6."""
 
@@ -981,10 +982,22 @@ def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired
                     and not invalid_returned
                 ):
                     invalid_returned = True
-                    setup.broker.routes.append("groq")
-                    setup.broker.calls += 1
-                    setup.broker.payloads.append(payload)
-                    envelope = {"choices": [{"message": {"content": json.dumps({})}}]}
+                    valid_result = await original_execute(reservation, payload)
+                    report = json.loads(valid_result.data["choices"][0]["message"]["content"])
+                    if failure == "evidence_invalid":
+                        reference = report["strengths"][0]["evidence"][0]
+                        # Reproduce a provider confusing audio timing with
+                        # code-point offsets. Strict source validation must fail.
+                        report["strengths"][0]["evidence"] = [
+                            {
+                                "segment_id": reference["segment_id"],
+                                "quote_start": 20960,
+                                "quote_end": 28920,
+                            }
+                        ]
+                    else:
+                        report = {}
+                    envelope = {"choices": [{"message": {"content": json.dumps(report)}}]}
                     raw = canonical(envelope)
                     return ProviderResult(
                         provider="groq",
@@ -1023,7 +1036,7 @@ def test_processing_plan_repairs_returned_invalid_c5_once_and_publishes_repaired
                 assert plan is not None
                 assert plan.progress["c5_repair"]["attempt"] == 1
                 assert plan.progress["c5_repair"]["failure_code"] == (
-                    "conversation_report_payload_missing_field"
+                    f"conversation_report_{failure}"
                 )
                 tasks = list(
                     (

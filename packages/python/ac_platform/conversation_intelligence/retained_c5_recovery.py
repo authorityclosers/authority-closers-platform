@@ -58,6 +58,7 @@ from ac_platform.conversation_intelligence.recovery_models import (
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_V3,
     REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
@@ -76,14 +77,14 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PATH = re.compile(r"(?:^|/)(?:[^/~]|~[01])+(?:/(?:[^/~]|~[01])+)*\Z")
 _REVIEW_ORIGIN = "Codex automated proposal"
 _RECOVERY_SCHEMA = "ac.sales-xray.retained-c5-recovery-proof/1"
-C5PromptRevision = Literal["coaching-v1", "coaching-v2"]
+C5PromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3"]
 
 
 def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
     """Read the versioned C5 wording from a saved request, defaulting legacy."""
 
     value = request.get("coaching_prompt_revision", COACHING_PROMPT_LEGACY)
-    if value not in {COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED}:
+    if value not in {COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3}:
         raise ValueError("The stored C5 prompt revision is invalid.")
     return cast(C5PromptRevision, value)
 

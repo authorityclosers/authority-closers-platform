@@ -124,7 +124,10 @@ def test_complete_input_reconstructs_with_new_hash_but_unchanged_facts_and_profi
         validate_coaching_result(result(new, incomplete), new, transcript)
 
 
-def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction():
+@pytest.mark.parametrize(
+    "failure_code", ["conversation_report_json_invalid", "conversation_report_evidence_invalid"]
+)
+def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction(failure_code):
     transcript = _transcript()
     fact_input = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
     packet = FactPacket.model_validate(
@@ -136,7 +139,7 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction()
     )
     original = prepare_coaching_input(transcript, [packet])
     repair = C5RepairIntent(
-        failure_code="conversation_report_json_invalid",
+        failure_code=failure_code,
         original_run_id=uuid4(),
         original_response_sha256="a" * 64,
     )
@@ -145,7 +148,10 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction()
     repaired_body = repaired.as_provider_body()
     assert original_body["messages"][1] == repaired_body["messages"][1]
     assert "SERVER_REPAIR" not in original_body["messages"][0]["content"]
-    assert "conversation_report_json_invalid" in repaired_body["messages"][0]["content"]
+    assert failure_code in repaired_body["messages"][0]["content"]
+    if failure_code == "conversation_report_evidence_invalid":
+        assert "never audio timestamps" in repaired_body["messages"][0]["content"]
+        assert "prefer {segment_id} alone" in repaired_body["messages"][0]["content"]
     assert repaired_body["messages"][0]["content"].endswith(
         original_body["messages"][0]["content"].split("Profile:\n", 1)[1]
     )

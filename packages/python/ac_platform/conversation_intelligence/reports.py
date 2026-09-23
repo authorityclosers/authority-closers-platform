@@ -65,6 +65,7 @@ FACT_PROMPT_COMPACT: Literal["facts-v2"] = "facts-v2"
 FACT_PROMPT_COMPACT_MARKER = "FACT_OUTPUT: compact-facts-v2."
 COACHING_PROMPT_LEGACY: Literal["coaching-v1"] = "coaching-v1"
 COACHING_PROMPT_REFINED: Literal["coaching-v2"] = "coaching-v2"
+COACHING_PROMPT_V3: Literal["coaching-v3"] = "coaching-v3"
 COACHING_PROMPT_REFINED_MARKER = "COACHING_STATE: commercial-state-v2."
 COACHING_PROMPT_REFINED_INSTRUCTION = (
     "Preserve commercial state exactly. Say declined or refused only for an explicit source-"
@@ -72,6 +73,20 @@ COACHING_PROMPT_REFINED_INSTRUCTION = (
     "authorization or booking is not rejection. Say not established in this call where the "
     "evidence does not establish a decision. Do not infer an offered pilot, demo, order or "
     "follow-up from a floated possibility."
+)
+COACHING_PROMPT_V3_MARKER = "COACHING_EVIDENCE: source-bound-v3."
+COACHING_PROMPT_V3_INSTRUCTION = (
+    "For each finding, prefer evidence {segment_id} alone when the complete source segment is "
+    "nonblank and at most 2000 characters. Use {segment_id,quote_start,quote_end} only when a "
+    "shorter excerpt is needed. Excerpt offsets are zero-based Python Unicode code-point indices "
+    "into that segment's text, with an exclusive end: 0 <= quote_start < quote_end <= len(text), "
+    "and the excerpt is at most 2000 characters. These are text offsets, never "
+    "milliseconds or audio timestamps. Do not put start_ms/end_ms in quote_start/quote_end. The "
+    "server resolves the exact quote and native timestamps from the transcript. In recommended "
+    "example phrases and coaching advice, do not invent or assume seller product terms, prices, "
+    "schedules, features, durations, results, guarantees or commitments. Use only source-supported "
+    "facts; when a detail is not established, ask a neutral question or use a clear conditional "
+    "placeholder such as [confirmed schedule]."
 )
 
 
@@ -1842,7 +1857,9 @@ def build_report_groq_prompt(
     model: str = GROQ_MODEL,
     detailed_overview: bool = True,
     provider: str = "groq",
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY,
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
+        COACHING_PROMPT_LEGACY
+    ),
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -1854,7 +1871,11 @@ def build_report_groq_prompt(
         raise ReportError("report_model_invalid")
     if provider not in {"groq", "gemini"}:
         raise ReportError("report_provider_invalid")
-    if coaching_prompt_revision not in {COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED}:
+    if coaching_prompt_revision not in {
+        COACHING_PROMPT_LEGACY,
+        COACHING_PROMPT_REFINED,
+        COACHING_PROMPT_V3,
+    }:
         raise ReportError("report_prompt_revision_invalid")
     validated = _validated_transcript(transcript)
     merged = merge_fact_packets(fact_packets, validated)
@@ -1873,7 +1894,12 @@ def build_report_groq_prompt(
         + REPORT_STRUCTURE_INSTRUCTION
         + (
             COACHING_PROMPT_REFINED_MARKER + " " + COACHING_PROMPT_REFINED_INSTRUCTION + " "
-            if coaching_prompt_revision == COACHING_PROMPT_REFINED
+            if coaching_prompt_revision in {COACHING_PROMPT_REFINED, COACHING_PROMPT_V3}
+            else ""
+        )
+        + (
+            COACHING_PROMPT_V3_MARKER + " " + COACHING_PROMPT_V3_INSTRUCTION + " "
+            if coaching_prompt_revision == COACHING_PROMPT_V3
             else ""
         )
         + "Set review_status to "

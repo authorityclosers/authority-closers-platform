@@ -258,13 +258,18 @@ def install_submission_http(
     async def read_only_owner(request: Request) -> AsyncIterator[_Owner]:
         host = guard(request, Response(), write=False)
         if host == "learner":
-            async with learner_read_account(request) as auth:
-                yield _Owner(
-                    ownership(auth.database),
-                    None,
-                    auth.resolved.actor,
-                    shared_identity_locks=True,
-                )
+            try:
+                async with learner_read_account(request) as auth:
+                    yield _Owner(
+                        ownership(auth.database),
+                        None,
+                        auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
+            except ConversationError as error:
+                # Translate read denials after the account transaction unwinds,
+                # including source requests rejected before streaming starts.
+                raise fail(error.status, str(error)) from None
             return
         try:
             current = _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=False)

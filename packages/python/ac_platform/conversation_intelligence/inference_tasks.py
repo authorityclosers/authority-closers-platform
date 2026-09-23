@@ -965,7 +965,9 @@ def prepare_coaching_input(
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
     output_profile: Literal["standard", "detailed"] = "detailed",
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2"] = COACHING_PROMPT_LEGACY,
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
+        COACHING_PROMPT_LEGACY
+    ),
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 

@@ -231,6 +231,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
 @pytest.mark.parametrize(
     "failure_code",
     [
+        "conversation_report_evidence_invalid",
         "conversation_gemini_response_json_invalid",
         "conversation_report_payload_missing_field",
         "conversation_report_overview_invalid",
