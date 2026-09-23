@@ -501,6 +501,8 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             with _navigation_window(page, navigation_windows):
                 page.get_by_role("link", name="Sign in with AC").click()
                 expect(page).to_have_url(re.compile(re.escape(f"{backend.origin}/login") + r"/?$"))
+                expect(page.locator("#account-auth-heading")).to_be_visible()
+                page.get_by_role("button", name="Use my existing password", exact=True).click()
                 expect(page.get_by_role("heading", name="Welcome back.")).to_be_visible()
             page.screenshot(path=str(evidence / "login.png"), full_page=True)
             page.get_by_label("Email address").fill(backend.account.email)

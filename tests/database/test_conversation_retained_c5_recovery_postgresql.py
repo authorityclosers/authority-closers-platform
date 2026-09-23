@@ -53,6 +53,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
+from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_REFINED,
@@ -858,6 +859,19 @@ def test_retained_c5_recovery_real_postgres(
                 admin = await service.admin_report(admin_actor, case["run_id"])
                 assert owner is not None and owner["report"] is not None
                 assert admin is not None and admin["report"] is not None
+                owner_view = await ConversationReports(
+                    ConversationApplication(database, clock=lambda: prepared.state.now)
+                ).get(prepared.state.actor, case["run_id"])
+                assert owner_view["report"] == owner["report"]
+                assert owner_view["recovery"] == {
+                    "version": owner["version"],
+                    "validation_state": "corrected",
+                    "provider_calls": 0,
+                    "human_approved": False,
+                    "official_score": False,
+                }
+                assert "original_raw_sha256" in admin["recovery"]
+                assert "canonical_c5_checkpoint_id" in admin["recovery"]
             async with sessions() as database, database.begin():
                 permission = await database.get(
                     ConversationPermission, prepared.state.permission_id

@@ -390,6 +390,8 @@ function processingStageLabel(stage: string | null): string {
 }
 
 function processingPlanMessage(plan: ProcessingPlan): string {
+  if (plan.state === "held" && plan.failure_code === "account_profile_required")
+    return "Processing is paused until your AC contact profile is complete. Your approved plan and completed work are saved; no new analysis has been started.";
   if (plan.state === "held")
     return "Processing is paused. Saved results remain available; review the approval before continuing.";
   if (plan.state === "cancelled")
@@ -612,6 +614,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const shouldPollJob = Boolean(
     job &&
       !job.report &&
+      !job.executionHold &&
       !reportBlocked &&
       !["failed", "cancelled", "completed"].includes(job.state),
   );
@@ -1513,7 +1516,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             )}
             {job && !job.report && !plan && (
               <div className="studio-progress" role="status">
-                {reportBlocked ? (
+                {reportBlocked || job.executionHold ? (
                   <X size={24} />
                 ) : job.state === "completed" ? (
                   <Check size={24} />
@@ -1528,17 +1531,21 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <h3>
                   {reportBlocked
                     ? "The report could not be verified"
-                    : job.state === "completed"
-                      ? "Local audio analysis is ready"
-                      : job.state === "failed"
-                        ? "The report needs attention"
-                        : "Your call is being processed"}
+                    : job.executionHold
+                      ? "Complete your account profile to continue"
+                      : job.state === "completed"
+                        ? "Local audio analysis is ready"
+                        : job.state === "failed"
+                          ? "The report needs attention"
+                          : "Your call is being processed"}
                 </h3>
                 <p>
                   {reportBlocked
                     ? "No report is shown until it matches this recording."
-                    : job.message ||
-                      "The server has accepted your call. This page will show the report when it is ready."}
+                    : job.executionHold
+                      ? "Processing is paused until your AC contact profile is complete. No further analysis is running."
+                      : job.message ||
+                        "The server has accepted your call. This page will show the report when it is ready."}
                 </p>
                 <p className="small-text">
                   {reportBlocked
@@ -1574,13 +1581,16 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <h3>
                   {reportBlocked
                     ? "The approved plan could not be verified"
-                    : plan.state === "held" || plan.state === "cancelled"
-                      ? "The report needs a fresh plan"
-                      : plan.report_ready
-                        ? "Your report is being loaded"
-                        : plan.state === "completed"
-                          ? "The report was not saved"
-                          : processingStageLabel(plan.current_stage)}
+                    : plan.state === "held" &&
+                        plan.failure_code === "account_profile_required"
+                      ? "Complete your account profile to continue"
+                      : plan.state === "held" || plan.state === "cancelled"
+                        ? "The report needs a fresh plan"
+                        : plan.report_ready
+                          ? "Your report is being loaded"
+                          : plan.state === "completed"
+                            ? "The report was not saved"
+                            : processingStageLabel(plan.current_stage)}
                 </h3>
                 <p>
                   {reportBlocked
@@ -1638,15 +1648,16 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   Per-stage completion receipts are not included in this
                   response.
                 </p>
-                {(plan.state === "held" || plan.state === "cancelled") && (
-                  <button
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={() => void requestFreshProcessingPlan()}
-                  >
-                    Request a fresh plan
-                  </button>
-                )}
+                {(plan.state === "held" || plan.state === "cancelled") &&
+                  plan.failure_code !== "account_profile_required" && (
+                    <button
+                      className="secondary-button"
+                      disabled={!!busy}
+                      onClick={() => void requestFreshProcessingPlan()}
+                    >
+                      Request a fresh plan
+                    </button>
+                  )}
               </div>
             )}
             {error && (
@@ -1800,6 +1811,13 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               {sections.heading}
             </p>
             <h1 lang="en">{sections.title}</h1>
+            {job.recovery && (
+              <p className="notice" role="status">
+                Recovered draft · version {job.recovery.version}. This uses a
+                retained response; it is not a new analysis or a human-approved
+                assessment.
+              </p>
+            )}
             <p className="studio-report-summary">{job.report.summary}</p>
             <div className="studio-report-actions">
               <button

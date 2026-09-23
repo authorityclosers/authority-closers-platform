@@ -39,3 +39,28 @@ Hosted application run `35919019052` for `7580f2c7` passed its compiled acquisit
 Static preview export now supplies no callback flow without reading request parameters. The ordinary server-rendered callback still forwards the exact string flow to the existing validating client. The new regression tests cover both paths. Both static-preview export and the ordinary optimized production build pass locally after the repair. Hosted validation must be rerun on the successor revision.
 
 The report review sheet also uses border-box sizing, incorporating UI checkpoint `f83b68ff`. The UI owner verified a 390px sheet and document both remain 390px wide after this one-declaration change. That synthetic preview check establishes layout containment, not generated report quality. Root includes no synthetic report fixture route in this release.
+
+## Saved-report and account-first regression repairs
+
+Hosted application run `35920706731` for `14d12ac3` reached the broader suites. Its compiled account browser, Python static/policy gates and capacity simulation passed. The frontend suite exposed two learner fixture assumptions about account/profile admission. The database shards exposed fresh guest upload fixtures that now correctly receive 401, the migration catalogue's two new identity/profile tables, and browser regressions. This source was not packaged for web deployment or released.
+
+The saved-run report parser rejected the real API's nullable `execution_hold` field before reading a valid report's transcript. It now accepts only the known profile hold or null, preserving strict unknown-field and source/quote/time checks. Held direct jobs stop polling and show an explicit profile pause. The owner retained-report response now uses the same bounded recovery envelope as the acquisition report, including its immutable version. Admin retains the richer recovery audit view. Recovered drafts are explicitly labelled as retained responses rather than new analysis or human approval.
+
+Account-first fixtures use verified canonical accounts and completed profiles for new uploads. Explicit guest denial, source ownership, cookie/origin tampering, private playback and allowance settlement remain tested. Learner tests now cover profile eligibility and show that an incomplete profile produces no upload or plan mutation. The standalone password browser test follows the visible existing-password choice on the shared sign-in form.
+
+Local checks at this repair checkpoint:
+
+- All three compiled legacy saved-report/standalone browser journeys passed over real loopback HTTP and isolated PostgreSQL, including report opening, retained audio playback and sign-out.
+- Full Sales Xray web suite passed 418 tests after the retained-report label and accepted-plan pause assertions; the affected report contract/CallStudio suite separately passed 57 tests.
+- Learner acquisition suite: 10 passed. Migration catalogue and release-guard tests: 14 passed.
+- Retained C5 PostgreSQL recovery suite: 4 passed, including the exact owner-facing recovery envelope and preservation of the Admin audit metadata.
+- Account library, submission HTTP and learner-plan PostgreSQL suites: 18 passed. The subsequent historical guest-claim fixture extension passed both account-library tests, preserving the original recording principal and visitor usage without another job or charge while denying fresh guest uploads.
+- Static preview export, ordinary optimized production build, TypeScript and ESLint passed. Exact-source hosted checks must still be rerun after all repairs are committed.
+
+These checks do not establish real email/SMS delivery, coaching-v5 output quality, production deployment, or complete Brain 3 coverage. No paid provider request was made by this repair checkpoint.
+
+## Accepted-plan profile pauses
+
+The coordinator now inspects the exact queued inference tasks it selects, including reused tasks, and publishes the bounded `account_profile_required` progress marker when their job is held before dispatch. The canonical plan remains active. Owner GET routes remain read-only and project that marker as a held presentation; they do not advance processing or enqueue work. After canonical profile completion and audited job reconciliation, the next normal scheduler tick clears the marker. The stopped browser view requires refresh or re-entry to observe resumption.
+
+The focused PostgreSQL regression passes through the actual worker, latest-submission and direct-plan reads, profile service, reconciliation service and scheduler. It verifies zero provider calls/receipts or acquisition settlement and unchanged job/task identities, complete budget snapshot, revision and reservation count across hold and resume ticks. The existing processing-plan unit suite passes 32 tests. Full Python lint and typing pass; both new/changed plan files pass formatting. Hosted exact-source validation remains required.

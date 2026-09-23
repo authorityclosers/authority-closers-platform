@@ -165,6 +165,8 @@ export type Job = {
   id: string;
   state: string;
   message: string;
+  executionHold?: "account_profile_required";
+  recovery?: RecoveryMetadata;
   report?: SalesReport;
 };
 
@@ -797,6 +799,8 @@ export function parseJobStatus(
       "message",
       "provider_calls",
       "report",
+      "execution_hold",
+      "recovery",
     ],
     "job",
   );
@@ -817,10 +821,24 @@ export function parseJobStatus(
   }
   if (job.recipe_revision !== undefined)
     text(job.recipe_revision, "job_recipe_revision", 128);
+  if (
+    job.execution_hold !== undefined &&
+    job.execution_hold !== null &&
+    job.execution_hold !== "account_profile_required"
+  )
+    throw new ReportContractError("job_execution_hold_invalid");
+  const recovery =
+    job.recovery === undefined
+      ? undefined
+      : parseRecoveryMetadata(job.recovery);
   return {
     id: text(job.id, "job_id", 128),
     state,
     message: optionalText(job.message, "job_message", 2_000),
+    ...(job.execution_hold === "account_profile_required"
+      ? { executionHold: "account_profile_required" as const }
+      : {}),
+    ...(recovery === undefined ? {} : { recovery }),
   };
 }
 

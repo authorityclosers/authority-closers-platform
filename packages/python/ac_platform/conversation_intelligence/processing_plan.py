@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     effective_budget_cap_paise,
 )
 from ac_platform.conversation_intelligence.inference import (
+    INFERENCE_JOB,
     TRANSCRIPT_RECIPE_BY_ROUTE,
     TRANSCRIPT_RECIPES,
     ConversationInference,
@@ -84,6 +85,9 @@ from ac_platform.conversation_intelligence.reports import (
     load_report_profile,
 )
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    is_account_profile_hold,
+)
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -560,16 +564,23 @@ class ConversationProcessingPlans:
 
     @staticmethod
     def view(
-        row: ConversationProcessingPlan, *, include_report_options: bool = False
+        row: ConversationProcessingPlan,
+        *,
+        include_report_options: bool = False,
     ) -> dict[str, Any]:
         value = manifest_for(row)
+        account_profile_hold = (
+            row.state == "active"
+            and row.acceptance_command_id is not None
+            and row.progress.get("failure_code") == "account_profile_required"
+        )
         result = {
             "id": str(row.id),
             "recording_id": str(row.recording_id),
             "plan_fingerprint": row.plan_sha256,
             "privacy_revision": PLAN_PRIVACY_REVISION,
             "accepted": row.acceptance_command_id is not None,
-            "state": row.state,
+            "state": "held" if account_profile_hold else row.state,
             "automatic_progression": True,
             "cost_label": plan_cost_label(value.max_cost_paise),
             "max_cost_paise": value.max_cost_paise,
@@ -596,7 +607,11 @@ class ConversationProcessingPlans:
             "current_stage": row.progress.get("current_stage"),
             "report_ready": row.state == "completed" and bool(row.progress.get("report_run_id")),
             "report_run_id": row.progress.get("report_run_id"),
-            "failure_code": row.progress.get("failure_code"),
+            "failure_code": (
+                "account_profile_required"
+                if account_profile_hold
+                else row.progress.get("failure_code")
+            ),
         }
         if include_report_options:
             result["report_language"] = value.report_language or "en"
@@ -1019,6 +1034,38 @@ class ConversationProcessingPlans:
         assert task is not None
         return task
 
+    async def _account_profile_hold_stage(
+        self,
+        row: ConversationProcessingPlan,
+        tasks: list[ConversationInferenceTask],
+    ) -> str | None:
+        """Identify a selected plan task held before its external effect began."""
+
+        for task in tasks:
+            if (
+                task.state != "queued"
+                or task.erased_at is not None
+                or task.tenant_id != row.tenant_id
+                or task.person_id != row.person_id
+                or task.recording_id != row.recording_id
+                or task.generation != row.generation
+            ):
+                continue
+            job = await self.db.get(Job, task.job_id)
+            if (
+                job is not None
+                and job.tenant_id == row.tenant_id
+                and job.kind == INFERENCE_JOB
+                and job.external_side_effect
+                and job.payload == {"schema": 1, "run_id": str(task.run_id)}
+                and job.dispatch_started_at is None
+                and job.delivery_ambiguous_at is None
+                and job.provider_receipt is None
+                and is_account_profile_hold(job)
+            ):
+                return task.stage
+        return None
+
     async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 
@@ -1121,6 +1168,14 @@ class ConversationProcessingPlans:
                     if repair_progress is not None:
                         row.progress["c5_repair"] = repair_progress
                     return
+        profile_hold_stage = await self._account_profile_hold_stage(row, tasks)
+        if profile_hold_stage is not None:
+            row.progress = {
+                "current_stage": profile_hold_stage,
+                "failure_code": "account_profile_required",
+            }
+            row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
+            return
         bad = next(
             (item for item in tasks if item.state in {"failed", "uncertain", "cancelled"}), None
         )

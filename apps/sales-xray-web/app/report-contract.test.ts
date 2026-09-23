@@ -3,6 +3,7 @@ import {
   encodeConversationId,
   parseAcquisitionReport,
   parseJobResponse,
+  parseJobStatus,
   parseSavedRecordings,
   parseTranscript,
   REPORT_REVIEW_STATUS,
@@ -70,6 +71,42 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it("accepts the nullable server hold without changing report source checks", () => {
+    const payload = { ...job(), execution_hold: null };
+    expect(parseJobResponse(payload, binding).report).toBeDefined();
+    expect(() =>
+      parseJobResponse(payload, { ...binding, sourceSha256: "11".repeat(32) }),
+    ).toThrow("report_source_mismatch");
+    expect(
+      parseJobStatus({
+        ...job(null),
+        execution_hold: "account_profile_required",
+      }).executionHold,
+    ).toBe("account_profile_required");
+    expect(() =>
+      parseJobStatus({ ...job(null), execution_hold: "untrusted_hold" }),
+    ).toThrow("job_execution_hold_invalid");
+  });
+
+  it("validates recovery metadata on legacy saved-run reports", () => {
+    const recovery = {
+      version: 1,
+      validation_state: "revalidated",
+      provider_calls: 0,
+      human_approved: false,
+      official_score: false,
+    };
+    expect(parseJobResponse({ ...job(), recovery }, binding).recovery).toEqual(
+      recovery,
+    );
+    expect(() =>
+      parseJobResponse(
+        { ...job(), recovery: { ...recovery, human_approved: true } },
+        binding,
+      ),
+    ).toThrow("report_recovery_human_approved_invalid");
+  });
+
   it("normalizes a strict report without practice or model review text", () => {
     const parsed = parseJobResponse(job(), binding);
     expect(parsed.report?.review_status).toBe(REPORT_REVIEW_STATUS);

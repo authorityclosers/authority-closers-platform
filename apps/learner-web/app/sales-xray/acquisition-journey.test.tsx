@@ -36,6 +36,7 @@ vi.mock("../components/site-shell", () => ({
 let root: Root, host: HTMLDivElement;
 let requests: { path: string; init: RequestInit }[];
 let workspaceStatus: number, entryStatus: number, sessionStatus: number;
+let profileEligible: boolean;
 let accepted: boolean, claimed: boolean, needsClaim: boolean;
 let navigate: ReturnType<typeof vi.spyOn>;
 const json = (body: unknown, status = 200) =>
@@ -86,6 +87,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   requests = [];
   workspaceStatus = entryStatus = sessionStatus = 200;
+  profileEligible = true;
   accepted = needsClaim = false;
   claimed = true;
   host = document.createElement("div");
@@ -103,6 +105,25 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (path: string, init: RequestInit = {}) => {
       requests.push({ path, init });
+      if (path === "/v1/me/sales-xray-profile/write-eligibility")
+        return new Response(null, { status: profileEligible ? 204 : 403 });
+      if (path === "/v1/me/sales-xray-profile")
+        return json({
+          name: profileEligible ? "Synthetic Learner" : null,
+          email: "learner@example.invalid",
+          phone_number_e164: profileEligible ? "+12025550123" : null,
+          phone_verified: false,
+          profile_complete: profileEligible,
+          revision: 1,
+        });
+      if (path === "/v1/auth/email-code/config?surface=sales_xray")
+        return json({
+          enabled: true,
+          consent_version: "synthetic-consent-v1",
+          google_enabled: false,
+          expires_in_seconds: 600,
+          resend_after_seconds: 60,
+        });
       if (path === "/v1/me/workspaces")
         return json(
           {
@@ -263,7 +284,13 @@ it.each(["workspace", "entry", "session"])(
     if (boundary === "session") sessionStatus = 401;
     await mount();
     expect(host.textContent).toContain("Sign in");
-    expect(host.querySelector('a[href="/login"]')).not.toBeNull();
+    if (boundary === "workspace") {
+      await click("Sign in");
+      expect(host.querySelector("#account-auth-heading")).not.toBeNull();
+      expect(host.querySelector("#account-email")).not.toBeNull();
+    } else {
+      expect(host.querySelector('a[href="/login"]')).not.toBeNull();
+    }
     expect(host.querySelector('script[src*="turnstile"]')).toBeNull();
     expect(
       host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled ??
@@ -273,6 +300,31 @@ it.each(["workspace", "entry", "session"])(
     expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
   },
 );
+
+it("keeps learner audio local when the canonical profile is incomplete", async () => {
+  profileEligible = false;
+  await mount();
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const file = new File(["synthetic"], "Pending learner call.wav", {
+    type: "audio/wav",
+  });
+  Object.defineProperty(file, "arrayBuffer", {
+    value: async () => new ArrayBuffer(10),
+  });
+  Object.defineProperty(input, "files", { configurable: true, value: [file] });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Analyse my call");
+  expect(host.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(host.textContent).toContain(file.name);
+  expect(mutationRequests()).toHaveLength(0);
+  expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
+});
 
 it("keeps a pending ownership claim explicit and restores its report without re-uploading", async () => {
   needsClaim = true;

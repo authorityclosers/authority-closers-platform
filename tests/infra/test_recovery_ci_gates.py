@@ -298,7 +298,8 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
         "new browser context signs in again with email OTP",
     ):
         assert assertion in wrapper
-    assert browser_test.count(".set_input_files(") == 1
+    assert browser_test.count(".set_files(") == 1
+    assert "page.expect_file_chooser()" in browser_test
     assert "request.post_data_buffer" in browser_test
     assert "record_request(request)" in browser_test
     assert "external_mutating_requests == []" in browser_test
