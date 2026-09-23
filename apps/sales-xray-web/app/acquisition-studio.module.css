@@ -2,6 +2,39 @@
   min-height: 0;
   background: #fff;
 }
+.reviewNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 10px clamp(16px, 3vw, 44px);
+  border: 1px solid color-mix(in srgb, CanvasText 22%, Canvas);
+  border-radius: 8px;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 13px;
+}
+.reviewNotice a {
+  color: LinkText;
+  font-weight: 650;
+}
+.reviewNotice > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reviewNotice small {
+  display: block;
+  color: GrayText;
+}
+.reviewNavigationLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
 .app[data-stage="upload"] {
   --mint: #007d79;
   --ink: #0e213d;

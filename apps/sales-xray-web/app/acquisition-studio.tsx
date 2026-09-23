@@ -157,6 +157,8 @@ export function AcquisitionStudio({
   const [savedCallNeedsSession, setSavedCallNeedsSession] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("en");
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [localValidationError, setLocalValidationError] = useState(false);
   const chosenReportLanguage = useRef<ReportLanguage | null>(null);
   const languageCapabilities = useRef(false);
   const [audioUrl, setAudioUrl] = useState("");
@@ -226,6 +228,83 @@ export function AcquisitionStudio({
   const review = useProcessingReview(
     activeRequestedCallId ?? submission?.id ?? null,
   );
+  const reviewSelectionActive =
+    review.requested ||
+    review.localRequested ||
+    Boolean(review.frame || review.localFrame);
+  const analysisWriteBlocked =
+    review.readOnly !== false || reviewSelectionActive;
+  const localObservation = review.localFrame?.observation ?? null;
+  const observedFileSelected = Boolean(
+    localObservation?.file_name && localObservation.file_size_bytes,
+  );
+  const displayFileSelected = localObservation
+    ? observedFileSelected
+    : Boolean(file);
+  const displayFileName = localObservation
+    ? localObservation.file_name
+    : (file?.name ?? null);
+  const displayFileBytes = localObservation
+    ? localObservation.file_size_bytes
+    : (file?.size ?? null);
+  const displayReportLanguage = localObservation
+    ? localObservation.report_language
+    : reportLanguage;
+  const displayConsent = localObservation
+    ? localObservation.consent_checked
+    : consent;
+  const displayPrivacyOpen = localObservation
+    ? localObservation.privacy_open
+    : privacyOpen;
+
+  useEffect(() => {
+    if (
+      review.readOnly !== true ||
+      review.requested ||
+      review.localRequested ||
+      !entry?.enabled ||
+      submission ||
+      result ||
+      deletionOnlyId
+    )
+      return;
+    review.captureLocal({
+      phase: localValidationError
+        ? "upload.validation.error"
+        : file
+          ? "upload.file.selected"
+          : "upload.empty",
+      privacy_open: privacyOpen,
+      consent_checked: consent,
+      report_language: entry.report_languages ? reportLanguage : null,
+      verification: !policy
+        ? "checking"
+        : session
+          ? "session-present"
+          : token
+            ? "guest-challenge-complete"
+            : "guest-challenge-required",
+      // choose() intentionally retains the previously selected valid File when
+      // a replacement fails local validation. Keep that visible fact in the
+      // observation while preserving the validation-error phase.
+      file_name: file ? file.name.slice(0, 255) : null,
+      file_size_bytes: file?.size ?? null,
+    });
+  }, [
+    consent,
+    deletionOnlyId,
+    entry,
+    file,
+    localValidationError,
+    policy,
+    privacyOpen,
+    reportLanguage,
+    result,
+    review,
+    session,
+    submission,
+    token,
+  ]);
 
   useEffect(() => {
     active.current = true;
@@ -468,6 +547,8 @@ export function AcquisitionStudio({
 
   const getPlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
+      if (analysisWriteBlocked)
+        return Promise.reject(new Error("read_only_review"));
       const language = chosenReportLanguage.current ?? "en";
       const supportsLanguage = languageCapabilities.current;
       if (!quoteKey.current)
@@ -490,11 +571,12 @@ export function AcquisitionStudio({
         throw new Error("plan_language_unconfirmed");
       return quoted;
     },
-    [],
+    [analysisWriteBlocked],
   );
 
   const refreshStalePlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
+      if (analysisWriteBlocked) return false;
       if (stalePlanRefresh.current === bound.id) return false;
       stalePlanRefresh.current = bound.id;
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
@@ -507,12 +589,12 @@ export function AcquisitionStudio({
       setPollAttempt((n) => n + 1);
       return true;
     },
-    [getPlan],
+    [getPlan, analysisWriteBlocked],
   );
 
   const acceptPlanRequest = useCallback(
     async (bound: Submission, shown: ProcessingPlan, signal: AbortSignal) => {
-      if (analysisPaused) {
+      if (analysisPaused || analysisWriteBlocked) {
         setPlanRequiresAction(true);
         return;
       }
@@ -558,7 +640,7 @@ export function AcquisitionStudio({
         setPollAttempt((n) => n + 1);
       }
     },
-    [analysisPaused],
+    [analysisPaused, analysisWriteBlocked],
   );
 
   // Recover the saved language from the immutable plan, never from today's
@@ -697,6 +779,7 @@ export function AcquisitionStudio({
       consentedSubmissionId !== submission.id ||
       planRequiresAction ||
       analysisPaused ||
+      analysisWriteBlocked ||
       requestedPlan.current === submission.id
     )
       return;
@@ -751,6 +834,7 @@ export function AcquisitionStudio({
     };
   }, [
     analysisPaused,
+    analysisWriteBlocked,
     acceptPlanRequest,
     getPlan,
     refreshStalePlan,
@@ -780,8 +864,10 @@ export function AcquisitionStudio({
       setError(
         "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
       );
+      setLocalValidationError(true);
       return;
     }
+    setLocalValidationError(false);
     chosenId.current = crypto.randomUUID();
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = URL.createObjectURL(next);
@@ -810,7 +896,14 @@ export function AcquisitionStudio({
   }
 
   async function upload() {
-    if (!file || !policy || !consent || (!session && !token)) return;
+    if (
+      analysisWriteBlocked ||
+      !file ||
+      !policy ||
+      !consent ||
+      (!session && !token)
+    )
+      return;
     if (embedded && !session) return;
     const selected = file;
     await operation("Uploading and checking your call…", async (signal) => {
@@ -901,6 +994,7 @@ export function AcquisitionStudio({
 
   async function approvePlan() {
     if (
+      analysisWriteBlocked ||
       analysisPaused ||
       !submission ||
       !plan ||
@@ -928,7 +1022,7 @@ export function AcquisitionStudio({
   }
 
   async function freshPlan() {
-    if (!submission || analysisPaused) return;
+    if (!submission || analysisPaused || analysisWriteBlocked) return;
     const bound = submission;
     await operation("Checking available analysis…", async (signal) => {
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
@@ -950,6 +1044,8 @@ export function AcquisitionStudio({
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = "";
     setFile(null);
+    setPrivacyOpen(false);
+    setLocalValidationError(false);
     setAudioUrl("");
     setSubmission(null);
     setProgress(null);
@@ -996,6 +1092,7 @@ export function AcquisitionStudio({
   }
 
   async function claim() {
+    if (analysisWriteBlocked) return;
     await operation("Saving with your account…", async (signal) => {
       const claimed = record(
         await acquisition("/claim", { method: "POST", signal }),
@@ -1014,7 +1111,7 @@ export function AcquisitionStudio({
 
   async function erase() {
     const deletionId = submission?.id ?? deletionOnlyId;
-    if (!deletionId || !deleteConfirm) return;
+    if (analysisWriteBlocked || !deletionId || !deleteConfirm) return;
     await operation("Deleting this call…", async (signal) => {
       const deleted = record(
         await acquisition(submissionPath(deletionId), {
@@ -1082,10 +1179,17 @@ export function AcquisitionStudio({
       );
   }
 
-  if (review.requested && !review.frame) {
+  if (
+    (review.requested && !review.frame) ||
+    (review.localRequested && !review.localFrame)
+  ) {
     const reviewStatus = (
       <section className="panel" role="status">
-        <h1>Opening observed state</h1>
+        <h1>
+          {review.localRequested
+            ? "Opening browser-local state"
+            : "Opening observed service state"}
+        </h1>
         <p>{review.message || "Verifying live access…"}</p>
         <a href="/__review/">Review controls</a>
         {activeRequestedCallId && (
@@ -1116,7 +1220,9 @@ export function AcquisitionStudio({
     busy: review.frame ? "" : busy,
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
-      : error,
+      : localObservation?.phase === "upload.validation.error"
+        ? "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit."
+        : error,
     statusIssue: review.frame ? "" : statusIssue,
     checkingStatus: review.frame ? false : checkingStatus,
     requestedCallEntryState: review.frame
@@ -1301,7 +1407,7 @@ export function AcquisitionStudio({
                       <button
                         className="text-button"
                         type="button"
-                        disabled={!!busy}
+                        disabled={!!busy || analysisWriteBlocked}
                         onClick={() => setDeleteConfirm(true)}
                       >
                         Request deletion
@@ -1311,7 +1417,7 @@ export function AcquisitionStudio({
                         <button
                           className="secondary-button"
                           type="button"
-                          disabled={!!busy}
+                          disabled={!!busy || analysisWriteBlocked}
                           onClick={() => void erase()}
                         >
                           Request recording deletion
@@ -1319,7 +1425,7 @@ export function AcquisitionStudio({
                         <button
                           className="text-button"
                           type="button"
-                          disabled={!!busy}
+                          disabled={!!busy || analysisWriteBlocked}
                           onClick={() => setDeleteConfirm(false)}
                         >
                           Keep call
@@ -1387,20 +1493,22 @@ export function AcquisitionStudio({
         data-theme="light"
         data-variant={variant}
         data-stage={
-          report
-            ? "report"
-            : submission
-              ? "processing"
-              : busy
-                ? "uploading"
-                : "upload"
+          localObservation?.phase === "upload.validation.error"
+            ? "upload-error"
+            : report
+              ? "report"
+              : submission
+                ? "processing"
+                : busy
+                  ? "uploading"
+                  : "upload"
         }
-        data-selected={file ? "true" : "false"}
+        data-selected={displayFileSelected ? "true" : "false"}
         onClickCapture={
-          review.frame
+          reviewSelectionActive
             ? (event) => {
-                // Review allows native readers/details and navigation; operational
-                // buttons cannot mutate the live controller from a historical view.
+                // Review allows native readers/details and navigation; buttons
+                // cannot mutate the live controller from an observed frame.
                 if (
                   event.target instanceof Element &&
                   event.target.closest("button")
@@ -1412,7 +1520,70 @@ export function AcquisitionStudio({
             : undefined
         }
       >
+        {(review.frame || review.localFrame) && (
+          <nav
+            className={styles.reviewNotice}
+            aria-label="Observed state navigation"
+          >
+            <div>
+              <strong>
+                {review.localFrame?.label ??
+                  `Observed processing · ${review.frame?.progress.state ?? "state"}`}
+              </strong>
+              {(() => {
+                const navigation =
+                  review.localFrame?.navigation ?? review.frame?.navigation;
+                return (
+                  <small>
+                    {navigation
+                      ? `Observed state ${navigation.position} of ${navigation.total}.`
+                      : "Only states actually captured in this session can be visited."}
+                    {review.localFrame
+                      ? " Display only; the file and consent value are not restored or applied."
+                      : " Live API data is rechecked before each state is opened."}
+                  </small>
+                );
+              })()}
+            </div>
+            {(() => {
+              const navigation =
+                review.localFrame?.navigation ?? review.frame?.navigation;
+              return (
+                <div className={styles.reviewNavigationLinks}>
+                  {navigation?.previousUrl ? (
+                    <a href={navigation.previousUrl}>Previous state</a>
+                  ) : (
+                    <span aria-disabled="true">Previous state</span>
+                  )}
+                  {navigation?.nextUrl ? (
+                    <a href={navigation.nextUrl}>Next state</a>
+                  ) : (
+                    <span aria-disabled="true">Next state</span>
+                  )}
+                  <a href="/__review/">All states</a>
+                </div>
+              );
+            })()}
+          </nav>
+        )}
         <div className="studio-main">
+          {review.readOnly !== false && (
+            <aside className="panel" role="status" aria-live="polite">
+              <strong>
+                {review.readOnly === true
+                  ? "Read-only review is active."
+                  : "Checking local review permissions."}
+              </strong>
+              <p>
+                {review.readOnly === true
+                  ? "This is the mounted Sales Xray app using live API reads. Upload, analysis, account claim and deletion commands are disabled. File selection, report-language selection, privacy details and the consent checkbox stay in this browser."
+                  : "Analysis actions stay disabled until the local bridge confirms its mode."}
+              </p>
+              {review.readOnly === true && (
+                <a href="/__review/">Open review controls</a>
+              )}
+            </aside>
+          )}
           <AnalysisAvailability onChange={setAnalysisPaused} />
           <nav className="studio-steps" aria-label="Analysis steps">
             {[
@@ -1438,7 +1609,7 @@ export function AcquisitionStudio({
             <div className="studio-intro">
               <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
               <h1>
-                {file
+                {displayFileSelected
                   ? "Turn your calls into clarity."
                   : "Add a call to review."}
               </h1>
@@ -1448,7 +1619,7 @@ export function AcquisitionStudio({
               </p>
             </div>
           )}
-          {!file && !submission && !report && (
+          {!displayFileSelected && !submission && !report && (
             <div className={styles.uploadAtmosphere} aria-hidden="true">
               <span className={styles.signalOrbit} />
               <span className={styles.signalWave} />
@@ -1511,7 +1682,7 @@ export function AcquisitionStudio({
               <button
                 type="button"
                 className="primary-button"
-                disabled={!!busy}
+                disabled={!!busy || analysisWriteBlocked}
                 onClick={() => void claim()}
               >
                 Save to my account
@@ -1608,7 +1779,7 @@ export function AcquisitionStudio({
                     </div>
                   </div>
                 </div>
-              ) : deletionOnlyId && !file && !submission ? (
+              ) : deletionOnlyId && !displayFileSelected && !submission ? (
                 <>
                   <span className="studio-upload-icon">
                     <FileText size={30} />
@@ -1631,7 +1802,7 @@ export function AcquisitionStudio({
                     Forget this saved call on this device
                   </button>
                 </>
-              ) : !file && !submission ? (
+              ) : !displayFileSelected && !submission ? (
                 <div className={styles.dropZone} data-upload-dropzone>
                   <span className="studio-upload-icon">
                     <AudioLines className={styles.audioCue} size={30} />
@@ -1686,12 +1857,16 @@ export function AcquisitionStudio({
                       <AudioLines size={25} />
                     </span>
                     <div>
-                      <h2>{file?.name || "Your saved sales call"}</h2>
+                      <h2>{displayFileName || "Your saved sales call"}</h2>
                       <p>
                         {result
                           ? time(result.transcript.duration_ms)
-                          : file
-                            ? `Selected locally · ${(file.size / 1048576).toFixed(1)} MB`
+                          : displayFileSelected
+                            ? file
+                              ? `Selected locally · ${(file.size / 1048576).toFixed(1)} MB`
+                              : displayFileBytes !== null
+                                ? `Observed locally · ${(displayFileBytes / 1048576).toFixed(1)} MB`
+                                : "File selection observed locally"
                             : "Private original recording"}
                       </p>
                     </div>
@@ -1700,7 +1875,7 @@ export function AcquisitionStudio({
                         type="button"
                         className="secondary-button"
                         aria-label="Change selected call"
-                        disabled={!!busy}
+                        disabled={!!busy || reviewSelectionActive}
                         onClick={() => reset()}
                       >
                         Change file
@@ -1710,7 +1885,14 @@ export function AcquisitionStudio({
                   {!submission && !result ? (
                     <details className={styles.previewDetails}>
                       <summary>Preview recording</summary>
-                      {audioPlayer}
+                      {file ? (
+                        audioPlayer
+                      ) : (
+                        <p className="small-text">
+                          Audio playback is not part of this browser-local
+                          observation. Select the actual file again to play it.
+                        </p>
+                      )}
                     </details>
                   ) : (
                     <div
@@ -1748,7 +1930,13 @@ export function AcquisitionStudio({
                 type="file"
                 accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
                 aria-label="Choose sales call audio"
-                disabled={!policy || !!busy || !!submission || !!deletionOnlyId}
+                disabled={
+                  !policy ||
+                  !!busy ||
+                  !!submission ||
+                  !!deletionOnlyId ||
+                  reviewSelectionActive
+                }
                 onChange={(event) => choose(event.target.files?.[0])}
               />
               {!deletionOnlyId && policy && (
@@ -1763,109 +1951,168 @@ export function AcquisitionStudio({
                   </span>
                 </div>
               )}
-              {file && !busy && !deletionOnlyId && policy && !submission && (
-                <div className="studio-consent">
-                  <p className={styles.verifyHeading}>
-                    <span>2</span> Verify and continue
-                  </p>
-                  <h3>Upload privately</h3>
-                  {entry?.report_languages && (
-                    <div className={styles.reportLanguage}>
-                      <label htmlFor="report-language">Report language</label>
-                      <select
-                        id="report-language"
-                        value={reportLanguage}
-                        disabled={!!busy}
-                        onChange={(event) => {
-                          const selected = parseReportLanguage(
-                            event.target.value,
-                          );
-                          chosenReportLanguage.current = selected;
-                          setReportLanguage(selected);
-                        }}
-                      >
-                        {entry.report_languages.map((language) => (
-                          <option key={language} value={language}>
-                            {reportLanguageLabels[language]}
-                          </option>
-                        ))}
-                      </select>
-                      <p>
-                        Hindi and Marathi use Devanagari with natural English
-                        sales terms. Original transcript quotes stay unchanged.
-                      </p>
-                    </div>
-                  )}
-                  <p className={styles.freeBadge}>
-                    <span aria-hidden="true">
-                      <Check size={13} />
-                    </span>
-                    Free analysis · included in your trial
-                  </p>
-                  <details className={styles.privacyDetails}>
-                    <summary>Privacy details</summary>
-                    <p>{policy.description}</p>
-                    <p>
-                      Your recording is retained for {policy.retention_days}{" "}
-                      days so this review can finish and remain available. You
-                      can request deletion from Privacy &amp; support.
+              {displayFileSelected &&
+                !busy &&
+                !deletionOnlyId &&
+                policy &&
+                !submission && (
+                  <div className="studio-consent">
+                    <p className={styles.verifyHeading}>
+                      <span>2</span> Verify and continue
                     </p>
-                    <p>
-                      {policy.privacy_details ||
-                        "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
+                    <h3>Upload privately</h3>
+                    {entry?.report_languages && (
+                      <div className={styles.reportLanguage}>
+                        <label htmlFor="report-language">Report language</label>
+                        <select
+                          id="report-language"
+                          value={displayReportLanguage ?? ""}
+                          disabled={!!busy || reviewSelectionActive}
+                          onChange={(event) => {
+                            const selected = parseReportLanguage(
+                              event.target.value,
+                            );
+                            chosenReportLanguage.current = selected;
+                            setReportLanguage(selected);
+                          }}
+                        >
+                          {localObservation && (
+                            <option value="">
+                              No language selection observed
+                            </option>
+                          )}
+                          {displayReportLanguage &&
+                            !entry.report_languages.includes(
+                              displayReportLanguage,
+                            ) && (
+                              <option
+                                value={displayReportLanguage}
+                                key={displayReportLanguage}
+                              >
+                                {reportLanguageLabels[displayReportLanguage]}{" "}
+                                (observed)
+                              </option>
+                            )}
+                          {entry.report_languages.map((language) => (
+                            <option key={language} value={language}>
+                              {reportLanguageLabels[language]}
+                            </option>
+                          ))}
+                        </select>
+                        <p>
+                          Hindi and Marathi use Devanagari with natural English
+                          sales terms. Original transcript quotes stay
+                          unchanged.
+                        </p>
+                      </div>
+                    )}
+                    <p className={styles.freeBadge}>
+                      <span aria-hidden="true">
+                        <Check size={13} />
+                      </span>
+                      Free analysis · included in your trial
                     </p>
-                  </details>
-                  <label className={styles.consentLabel}>
-                    <input
-                      type="checkbox"
-                      checked={consent}
-                      disabled={!!busy}
-                      onChange={(event) => setConsent(event.target.checked)}
-                    />
-                    <span>
-                      I agree to the{" "}
-                      <a href="https://app.authorityclosers.com/terms">Terms</a>{" "}
-                      and{" "}
-                      <a href="https://app.authorityclosers.com/privacy">
-                        Privacy Policy
-                      </a>
-                      .
-                    </span>
-                  </label>
-                  <div className={styles.uploadActions}>
-                    {!embedded &&
-                      !session &&
-                      entry?.site_key &&
-                      entry.challenge_action && (
-                        <UploadCheck
-                          key={checkKey}
-                          siteKey={entry.site_key}
-                          action={entry.challenge_action}
-                          onToken={onToken}
-                        />
-                      )}
-                    <button
-                      type="button"
-                      className="primary-button studio-wide"
-                      disabled={
-                        !consent ||
-                        (!session && !token) ||
-                        !!busy ||
-                        (allowance?.available_seconds === 0 &&
-                          !allowance?.unlimited)
-                      }
-                      onClick={() => void upload()}
+                    <details
+                      className={styles.privacyDetails}
+                      open={displayPrivacyOpen}
+                      onClick={(event) => {
+                        if (reviewSelectionActive) event.preventDefault();
+                      }}
+                      onToggle={(event) => {
+                        if (!reviewSelectionActive)
+                          setPrivacyOpen(event.currentTarget.open);
+                      }}
                     >
-                      {busy ? (
-                        <LoaderCircle className="spin" size={17} />
+                      <summary>Privacy details</summary>
+                      <p>{policy.description}</p>
+                      <p>
+                        Your recording is retained for {policy.retention_days}{" "}
+                        days so this review can finish and remain available. You
+                        can request deletion from Privacy &amp; support.
+                      </p>
+                      <p>
+                        {policy.privacy_details ||
+                          "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
+                      </p>
+                    </details>
+                    <label className={styles.consentLabel}>
+                      <input
+                        type="checkbox"
+                        checked={displayConsent}
+                        disabled={!!busy || reviewSelectionActive}
+                        aria-describedby={
+                          localObservation ? "observed-consent-note" : undefined
+                        }
+                        onChange={(event) => setConsent(event.target.checked)}
+                      />
+                      <span>
+                        I agree to the{" "}
+                        <a href="https://app.authorityclosers.com/terms">
+                          Terms
+                        </a>{" "}
+                        and{" "}
+                        <a href="https://app.authorityclosers.com/privacy">
+                          Privacy Policy
+                        </a>
+                        .
+                      </span>
+                    </label>
+                    {localObservation && (
+                      <p className="small-text" id="observed-consent-note">
+                        Observed checkbox value only. This does not count as
+                        consent or approval.
+                      </p>
+                    )}
+                    <div className={styles.uploadActions}>
+                      {localObservation ? (
+                        <p className="small-text" role="status">
+                          {localObservation.verification === "checking"
+                            ? "Upload verification was still checking when this state was observed."
+                            : localObservation.verification ===
+                                "session-present"
+                              ? "An account or guest session was present at capture; no credentials were restored."
+                              : localObservation.verification ===
+                                  "guest-challenge-complete"
+                                ? "Guest verification was completed locally at capture. Its token is not restored or reused."
+                                : "Guest verification was required at capture. The challenge is not run in read-only review."}
+                        </p>
                       ) : (
-                        <ArrowRight size={17} aria-hidden="true" />
+                        !analysisWriteBlocked &&
+                        !embedded &&
+                        !session &&
+                        entry?.site_key &&
+                        entry.challenge_action && (
+                          <UploadCheck
+                            key={checkKey}
+                            siteKey={entry.site_key}
+                            action={entry.challenge_action}
+                            onToken={onToken}
+                          />
+                        )
                       )}
-                      {busy || "Analyse my call"}
-                    </button>
+                      <button
+                        type="button"
+                        className="primary-button studio-wide"
+                        disabled={
+                          analysisWriteBlocked ||
+                          !consent ||
+                          (!session && !token) ||
+                          !!busy ||
+                          (allowance?.available_seconds === 0 &&
+                            !allowance?.unlimited)
+                        }
+                        onClick={() => void upload()}
+                      >
+                        {busy ? (
+                          <LoaderCircle className="spin" size={17} />
+                        ) : (
+                          <ArrowRight size={17} aria-hidden="true" />
+                        )}
+                        {busy || "Analyse my call"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               {submission && !report && plan && !plan.accepted && (
                 <div className="studio-consent">
                   <h3>Ready to continue</h3>
@@ -1897,7 +2144,12 @@ export function AcquisitionStudio({
                   <button
                     type="button"
                     className="primary-button studio-wide"
-                    disabled={!!busy || planExpired || analysisPaused}
+                    disabled={
+                      !!busy ||
+                      planExpired ||
+                      analysisPaused ||
+                      analysisWriteBlocked
+                    }
                     onClick={() => void approvePlan()}
                   >
                     {busy ? (
@@ -1911,7 +2163,9 @@ export function AcquisitionStudio({
                     <button
                       className="text-button"
                       type="button"
-                      disabled={!!busy || analysisPaused}
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
                       onClick={() => void freshPlan()}
                     >
                       Refresh expired plan
@@ -1960,7 +2214,9 @@ export function AcquisitionStudio({
                     <button
                       className="secondary-button"
                       type="button"
-                      disabled={!!busy || analysisPaused}
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
                       onClick={() => void freshPlan()}
                     >
                       <FileText size={17} aria-hidden="true" />
@@ -1971,7 +2227,9 @@ export function AcquisitionStudio({
                     <button
                       type="button"
                       className="primary-button"
-                      disabled={!!busy || analysisPaused}
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
                       onClick={() => void freshPlan()}
                     >
                       Review analysis plan
@@ -1995,7 +2253,7 @@ export function AcquisitionStudio({
                         <button
                           className="text-button"
                           type="button"
-                          disabled={!!busy}
+                          disabled={!!busy || analysisWriteBlocked}
                           onClick={() => setDeleteConfirm(true)}
                         >
                           Request deletion
@@ -2009,7 +2267,7 @@ export function AcquisitionStudio({
                           <button
                             type="button"
                             className="secondary-button"
-                            disabled={!!busy}
+                            disabled={!!busy || analysisWriteBlocked}
                             onClick={() => void erase()}
                           >
                             Request recording deletion
@@ -2103,7 +2361,9 @@ export function AcquisitionStudio({
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={!!busy || analysisPaused}
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
                       onClick={() => void freshPlan()}
                     >
                       Request a fresh plan
@@ -2203,7 +2463,7 @@ export function AcquisitionStudio({
                             <button
                               className={styles.reportMenuTextButton}
                               type="button"
-                              disabled={!!busy}
+                              disabled={!!busy || analysisWriteBlocked}
                               onClick={() => setDeleteConfirm(true)}
                             >
                               Request deletion
@@ -2216,7 +2476,7 @@ export function AcquisitionStudio({
                               </p>
                               <button
                                 type="button"
-                                disabled={!!busy}
+                                disabled={!!busy || analysisWriteBlocked}
                                 onClick={() => void erase()}
                               >
                                 Request recording deletion

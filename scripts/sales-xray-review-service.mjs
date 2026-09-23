@@ -72,14 +72,52 @@ export function createReviewService({
       const isReset = method === "POST" && pathname === "/__review/api/reset";
       const isCatalog =
         method === "GET" && pathname === "/__review/api/catalog";
+      const isLocalObserve =
+        method === "POST" && pathname === "/__review/api/local/observe";
+      const isLocalCatalog =
+        method === "GET" && pathname === "/__review/api/local/catalog";
+      const localMatch =
+        method === "GET" &&
+        /^\/__review\/api\/local\/frames\/([0-9a-f-]{36})$/.exec(pathname);
       const match =
         method === "GET" &&
         /^\/__review\/api\/frames\/([0-9a-f-]{36})$/.exec(pathname);
-      if (!isStart && !isReset && !isCatalog && !match)
+      if (
+        !isStart &&
+        !isReset &&
+        !isCatalog &&
+        !match &&
+        !isLocalObserve &&
+        !isLocalCatalog &&
+        !localMatch
+      )
         return response(404, { detail: "Unknown review action." });
       if (isReset) {
         store.reset(session);
         return response(200, { reset: true });
+      }
+      if (isLocalObserve) {
+        if (!body || Object.keys(body).length !== 1 || !("observation" in body))
+          return response(400, {
+            detail: "Choose one allowlisted browser-local observation.",
+          });
+        const id = store.observeLocal(session, body.observation);
+        return id
+          ? response(200, { id })
+          : response(400, {
+              detail:
+                "The browser-local observation is invalid or unavailable.",
+            });
+      }
+      if (isLocalCatalog) return response(200, store.localCatalog(session));
+      if (localMatch) {
+        const value = store.localFrame(session, localMatch[1]);
+        return value
+          ? response(200, value)
+          : response(404, {
+              detail:
+                "This browser-local observation expired or is no longer available.",
+            });
       }
       if (isStart) {
         if (!body || Object.keys(body).length !== 1 || !UUID.test(body.call_id))
