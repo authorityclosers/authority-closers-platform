@@ -26,6 +26,12 @@
   color: #00988d;
 }
 
+.headingSignal {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
 .panel[data-animated="true"] .headingWave {
   animation: signalBreath 3.2s ease-in-out infinite;
 }
@@ -98,7 +104,7 @@
   content: "";
 }
 
-.stage[data-state="completed"]::after {
+.stage[data-visual-state="completed"]::after {
   background: #59caba;
 }
 
@@ -116,20 +122,20 @@
   color: #6f809e;
 }
 
-.stage[data-state="completed"] .stageIcon {
+.stage[data-visual-state="completed"] .stageIcon {
   border-color: #d4f4eb;
   background: #0b9c91;
   color: #fff;
   box-shadow: 0 0 0 6px #eefcf8;
 }
 
-.stage[data-state="saved"] .stageIcon {
+.stage[data-visual-state="saved"] .stageIcon {
   border-color: #c4ebe5;
   background: #eafaf6;
   color: #0a9b8c;
 }
 
-.stage[data-state="active"] .stageIcon {
+.stage[data-visual-state="active"] .stageIcon {
   border-color: #e8dcff;
   background: #f4edff;
   color: #7542e8;
@@ -137,7 +143,7 @@
   animation: activeHalo 3s ease-in-out infinite;
 }
 
-.stage[data-state="attention"] .stageIcon {
+.stage[data-visual-state="attention"] .stageIcon {
   border-color: #ffdfbf;
   background: #fff5e9;
   color: #a15a11;
@@ -150,12 +156,23 @@
   line-height: 1.25;
 }
 
-.stage small {
+.stageDescription {
   max-width: 18ch;
   color: #62769d;
   font-size: clamp(10px, 1vw, 13px);
   line-height: 1.35;
 }
+
+.stageStatus {
+  color: #50658d;
+  font-size: clamp(9px, 0.87vw, 11px);
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.stage[data-visual-state="attention"] .stageStatus { color: #8b4e0d; }
+.stage[data-visual-state="active"] .stageStatus { color: #6940bd; }
+.stage[data-visual-state="completed"] .stageStatus { color: #087b72; }
 
 .signalCard {
   display: grid;
@@ -196,18 +213,41 @@
   background: #d9e6ee;
 }
 
-.signalCopy strong {
+.panel .signalCopy h3 {
   display: block;
+  margin: 0;
+  color: #111d43;
   font-size: clamp(12px, 1.25vw, 16px);
   font-weight: 750;
   line-height: 1.3;
 }
 
-.signalCopy p {
-  margin: 5px 0 0;
+.panel .journey .signalCopy p {
+  margin: 4px 0 0;
   color: #62769d;
-  font-size: clamp(10px, 1.04vw, 13px);
-  line-height: 1.4;
+  font-size: clamp(9px, 0.94vw, 12px);
+  line-height: 1.35;
+}
+
+.panel .journey .signalCopy p:first-child {
+  margin: 0 0 4px;
+  font-size: 9px;
+  letter-spacing: 0.09em;
+}
+
+.panel .journey .signalCopy p:last-child:not(:first-child) {
+  margin-top: 6px;
+}
+
+.connection {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #ead2a4;
+  border-radius: 9px;
+  background: #fff8eb;
+  color: #705219;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .fileCard {
@@ -302,6 +342,46 @@
 .fileStatus[data-state="active"] span { animation: statusPulse 1.8s ease-in-out infinite; }
 .fileStatus[data-state="attention"] { background: #fff3e7; color: #8b4e0d; }
 
+.savedEvidence {
+  margin: 0;
+  color: #3d7468;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.savedWork {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #d5eee6;
+  border-radius: 9px;
+  background: #f2fbf8;
+  color: #296153;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.savedWork svg { flex: 0 0 auto; color: #0a8f7d; }
+.savedWork strong { display: block; margin-bottom: 3px; font-size: 11px; }
+.savedWork p { margin: 3px 0 0; }
+
+.footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
+.footer > p {
+  flex: 1 1 220px;
+  margin: 0;
+  color: #657697;
+  font-size: clamp(9px, 0.85vw, 11px);
+  line-height: 1.35;
+}
+
 .actions {
   display: flex;
   flex: 0 0 auto;
@@ -309,6 +389,13 @@
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
+}
+
+.actions > :is(button, a) {
+  min-height: 34px;
+  margin: 0;
+  padding: 6px 9px;
+  font-size: 11px;
 }
 
 @keyframes signalBreath { 50% { opacity: 0.58; transform: scaleY(0.84); } }
@@ -322,9 +409,13 @@
   .stageIcon { width: 48px; height: 48px; }
   .stage:not(:last-child)::after { top: 24px; left: calc(50% + 31px); width: calc(100% - 62px); }
   .stage strong { margin-top: 3px; }
+  .stageDescription { font-size: 9px; }
+  .stageStatus { font-size: 9px; }
   .signalCard { min-height: 84px; }
   .fileCard { gap: 8px; padding: 10px; }
   .fileRow { min-height: 46px; }
+  .savedWork { padding: 5px 7px; font-size: 9px; }
+  .footer > p { font-size: 9px; }
 }
 
 @media (max-width: 680px) {
@@ -333,14 +424,15 @@
   .allowance { font-size: 10px; }
   .journey { gap: 20px; }
   .stage strong { font-size: 11px; }
-  .stage small { font-size: 10px; }
+  .stageDescription { font-size: 10px; }
+  .stageStatus { font-size: 9px; }
   .signalCard { grid-template-columns: minmax(80px, 0.7fr) 1px minmax(0, 1.3fr); gap: 10px; }
   .fileStatus { padding: 5px 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel[data-animated="true"] .headingWave,
-  .stage[data-state="active"] .stageIcon,
+  .stage[data-visual-state="active"] .stageIcon,
   .signalCard[data-animated="true"] .waveBar,
   .fileStatus[data-state="active"] span { animation: none; }
 }

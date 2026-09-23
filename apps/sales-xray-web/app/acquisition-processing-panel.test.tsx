@@ -16,11 +16,12 @@ it("shows only stage completion supplied by confirmed processing rows", () => {
     />,
   );
 
-  expect(markup).toContain('aria-label="Listening: Complete"');
-  expect(markup).toContain('aria-label="Understanding: In progress"');
+  expect(markup).toContain('aria-label="Transcribing your call: Complete"');
+  expect(markup).toContain('aria-label="Checking the conversation: In progress"');
   expect(markup).toContain('aria-current="step"');
   expect(markup).toContain('data-state="completed"');
-  expect(markup).toContain('data-state="active"');
+  expect(markup).toContain('data-state="running"');
+  expect(markup).toContain('data-stage="C4"');
   expect(markup).toContain("My call.m4a");
   expect(markup).toContain("M4A · 12.4 MB");
   expect(markup).toContain("Checking the conversation");
@@ -30,9 +31,21 @@ it("shows only stage completion supplied by confirmed processing rows", () => {
 it("halts activity treatment for a held state and does not invent allowance or file details", () => {
   const markup = renderToStaticMarkup(
     <AcquisitionProcessingPanel
-      stageRows={[{ stage: "C2", state: "held", label: "Needs attention" }]}
+      stageRows={[
+        { stage: "C2", state: "completed", label: "Complete" },
+        { stage: "C4", state: "uncertain", label: "Paused · needs attention" },
+      ]}
       statusText="Analysis paused"
       paused
+      submissionId="call-one"
+      progress={{
+        state: "held",
+        local_state: "completed",
+        failure_code: null,
+        has_report: false,
+        automatic_progression: false,
+        stages: [{ stage: "C2", state: "completed" }, { stage: "C4", state: "uncertain" }],
+      }}
     />,
   );
 
@@ -40,6 +53,8 @@ it("halts activity treatment for a held state and does not invent allowance or f
   expect(markup).toContain('data-animated="false"');
   expect(markup).toContain("Needs attention");
   expect(markup).toContain("Your recording");
+  expect(markup).toContain("The completed transcript stays attached");
+  expect(markup).toContain("This stage needs checking before analysis can continue");
   expect(markup).not.toContain("Unlimited testing");
   expect(markup).not.toContain("12.4 MB");
   expect(markup).not.toContain('aria-current="step"');
