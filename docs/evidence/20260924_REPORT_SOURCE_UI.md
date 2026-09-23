@@ -7,3 +7,5 @@ The root report contract validates optional evidence before rendering, including
 The integrated source checkpoint is `80abdca8`, with the root evidence parser and account-first integration. The focused standalone, SalesSkills, report-contract and AcquisitionStudio selection passes 115 tests. ESLint and the optimized Next build, including TypeScript, pass. An independent local read-only review found no concrete blocker in the excerpt/seek connection; that review did not run tests.
 
 No v5 provider report or production activation is claimed. This is a single-call presentation change, not implementation of full Brain 3 persistent learner history or cross-call coaching.
+
+The subsequent `006bcd48` checkpoint keeps the saved call outcome beside the next-call recommendations, with playback for its supplied source spans. An absent outcome does not produce an invented strip or claim. The focused NextCallPlan, SalesSkills and AcquisitionStudio selection passes 78 tests after integration. The final compiled journey remains a separate acceptance check.

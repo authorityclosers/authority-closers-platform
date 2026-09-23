@@ -42,6 +42,9 @@ it("shows source-backed keep, change and practice without fake progress or a pra
   expect(container.textContent).toContain(
     report.overview!.practice!.instructions,
   );
+  expect(
+    container.querySelector('[aria-label="Call outcome"]')?.textContent,
+  ).toContain(report.overview!.outcome!.text);
   expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   expect(container.textContent).not.toContain("Start practice");
   await act(async () => button("Change").click());
@@ -55,6 +58,10 @@ it("plays exact supplied evidence and exposes all full notes in a bounded reader
     root.render(<NextCallPlan report={report} onSelectEvidence={select} />),
   );
   const evidence = report.improvements[0].evidence[0];
+  const outcomeEvidence = report.overview!.outcome!.evidence[0];
+  await act(async () => button(`Listen to call outcome at 00:03.500`).click());
+  expect(select).toHaveBeenCalledWith(outcomeEvidence, "Call outcome");
+  select.mockClear();
   await act(async () =>
     button(
       `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
@@ -98,6 +105,7 @@ it("does not invent coaching or playback when source fields are absent", async (
   expect(container.textContent).toContain(
     "No timed source moment was supplied",
   );
+  expect(container.querySelector('[aria-label="Call outcome"]')).toBeNull();
   expect(
     container.querySelector('[aria-label^="Play source moment"]'),
   ).toBeNull();
