@@ -106,7 +106,7 @@ it("renders all three local preview states without auth traffic or success callb
     if (previewState === "auth.code")
       expect(host.textContent).toContain("Check your email.");
     if (previewState === "auth.error")
-      expect(host.textContent).toContain("temporarily unavailable");
+      expect(host.textContent).toContain("Email code sign-in isn’t available right now.");
   }
   expect(fetcher).not.toHaveBeenCalled();
   expect(onAuthenticated).not.toHaveBeenCalled();
