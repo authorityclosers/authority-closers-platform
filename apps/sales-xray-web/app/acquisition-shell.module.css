@@ -100,18 +100,15 @@
   color: var(--shell-ink);
   text-decoration: none;
 }
-.brand > span:last-child,
 .mobileBrand > span:last-child {
   display: grid;
   gap: 0.15rem;
   min-width: 0;
 }
-.brand strong,
 .mobileBrand strong {
   font-size: 1.05rem;
   letter-spacing: -0.02em;
 }
-.brand small,
 .mobileBrand small {
   color: var(--shell-muted);
   font-size: 0.55rem;
@@ -375,16 +372,6 @@
 .collapsed .sidebarFooter {
   display: none;
 }
-.collapsed .brand > span:last-child {
-  position: absolute;
-  width: 0;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 160ms ease,
-    width 260ms ease;
-}
 .collapsed .nav {
   width: 100%;
   justify-items: center;
@@ -459,7 +446,6 @@
   .sidebarTop .sidebarToggle:focus-visible {
     opacity: 1;
   }
-  .brand > span:last-child,
   .workspaceLabel,
   .sidebarAccount,
   .sidebarFooter {
