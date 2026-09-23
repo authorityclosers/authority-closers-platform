@@ -54,7 +54,7 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
-    load_qualitative_pack,
+    load_qualitative_pack_for_revision,
 )
 from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
@@ -64,6 +64,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_REFINED,
     COACHING_PROMPT_V3,
     COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
     REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
@@ -82,7 +83,9 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PATH = re.compile(r"(?:^|/)(?:[^/~]|~[01])+(?:/(?:[^/~]|~[01])+)*\Z")
 _REVIEW_ORIGIN = "Codex automated proposal"
 _RECOVERY_SCHEMA = "ac.sales-xray.retained-c5-recovery-proof/1"
-C5PromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"]
+C5PromptRevision = Literal[
+    "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+]
 
 
 def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
@@ -94,6 +97,7 @@ def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
         COACHING_PROMPT_REFINED,
         COACHING_PROMPT_V3,
         COACHING_PROMPT_V4,
+        COACHING_PROMPT_V5,
     }:
         raise ValueError("The stored C5 prompt revision is invalid.")
     return value
@@ -102,19 +106,19 @@ def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
 def _coaching_prompt_options(
     request: dict[str, Any],
 ) -> tuple[C5PromptRevision, ReportLanguage, str | None]:
-    """Validate saved C5 wording options and bind v4 to the bundled pack."""
+    """Validate saved C5 wording options and bind each version to its bundled pack."""
 
     revision = _coaching_prompt_revision(request)
     language = request.get("report_language")
     pack_sha256 = request.get("qualitative_pack_sha256")
-    if revision == COACHING_PROMPT_V4:
+    if revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
         if not isinstance(language, str) or language not in {
             "en",
             "hi-Deva+en",
             "mr-Deva+en",
         }:
             raise ValueError("The stored C5 report language is invalid.")
-        if pack_sha256 != load_qualitative_pack().sha256:
+        if pack_sha256 != load_qualitative_pack_for_revision(revision).sha256:
             raise ValueError("The stored C5 qualitative pack does not match.")
         return revision, cast(ReportLanguage, language), cast(str, pack_sha256)
     if (language is not None and language != "en") or pack_sha256 is not None:

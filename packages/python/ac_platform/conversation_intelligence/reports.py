@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, 
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
     load_qualitative_pack,
+    load_qualitative_pack_for_revision,
     report_language_instruction,
 )
 from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
@@ -72,7 +73,10 @@ COACHING_PROMPT_LEGACY: Literal["coaching-v1"] = "coaching-v1"
 COACHING_PROMPT_REFINED: Literal["coaching-v2"] = "coaching-v2"
 COACHING_PROMPT_V3: Literal["coaching-v3"] = "coaching-v3"
 COACHING_PROMPT_V4: Literal["coaching-v4"] = "coaching-v4"
-CoachingPromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"]
+COACHING_PROMPT_V5: Literal["coaching-v5"] = "coaching-v5"
+CoachingPromptRevision = Literal[
+    "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+]
 COACHING_PROMPT_REFINED_MARKER = "COACHING_STATE: commercial-state-v2."
 COACHING_PROMPT_REFINED_INSTRUCTION = (
     "Preserve commercial state exactly. Say declined or refused only for an explicit source-"
@@ -99,6 +103,20 @@ COACHING_PROMPT_V3_INSTRUCTION = (
     "timestamps or mixed formats; server supplies verbatim quote/native times. Never invent "
     "product claims in advice/phrases. Use source facts; otherwise neutral questions or "
     "[confirmed detail]."
+)
+COACHING_PROMPT_V5_MARKER = "COACHING_DEPTH: evidence-meaning-action-v5."
+COACHING_PROMPT_V5_INSTRUCTION = (
+    "Every dimension: evidence[]; observed/conflicted needs refs, unknown may use []. "
+    "Each supported skill: a plain paragraph of behavior, possible buyer relevance, limits, "
+    "then a keep/change action or sample phrase. No one-line labels. Credit earlier criteria, "
+    "attempts and corrections. A later mistake cannot cause an earlier refusal. Distinguish "
+    "proposal, conditional permission, agreement and completion; price preference from approved "
+    "budget; measurement plans from proven benefit. Explain unresolved fit. One practice, "
+    "seller-controlled success: if all next steps are declined, accurate read-back and stopping "
+    "without invitation, activation or recontact is success. Preserve final no-next-action; "
+    "future practice permits no recontact. Select distinct "
+    "supported moments: no fixed quota or padding. Text proves no audio qualities, traits, "
+    "motives or causal trust; speaker labels are unverified. Missing evidence is not absence."
 )
 
 
@@ -215,6 +233,11 @@ class ReportDimension(_StrictModel):
     ]
     observation: str = Field(min_length=1, max_length=4_000)
     citations: list[ReportCitation] = Field(min_length=1, max_length=8)
+    evidence: list[ReportEvidence] | None = Field(
+        default=None,
+        max_length=8,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class ReportSection(_StrictModel):
@@ -1117,6 +1140,8 @@ def _normalise_dimensions(
     *,
     profile: Mapping[str, Any],
     transcript: Mapping[str, Any],
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
+    canonical_read: bool = False,
 ) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
     by_id = {str(item["id"]): item for item in profile_dimensions}
@@ -1130,6 +1155,8 @@ def _normalise_dimensions(
         isinstance(item, Mapping) and _LEGACY_DIMENSION_MARKERS.intersection(item)
         for item in raw_items
     ):
+        if coaching_prompt_revision == COACHING_PROMPT_V5:
+            raise ReportError("report_v5_dimensions_invalid")
         return _normalise_legacy_dimensions(raw_items, profile=profile, transcript=transcript)
     supplied: dict[str, dict[str, Any]] = {}
     for item in raw_items:
@@ -1159,6 +1186,23 @@ def _normalise_dimensions(
         )
         if not isinstance(observation, str) or not observation.strip():
             raise ReportError("report_dimension_observation_invalid")
+        raw_evidence = item.get("evidence")
+        evidence: list[dict[str, Any]] = []
+        if coaching_prompt_revision == COACHING_PROMPT_V5 and not isinstance(raw_evidence, list):
+            raise ReportError("report_dimension_evidence_required")
+        retain_evidence = coaching_prompt_revision == COACHING_PROMPT_V5 or canonical_read
+        if retain_evidence and raw_evidence is not None:
+            if not isinstance(raw_evidence, list) or len(raw_evidence) > 8:
+                raise ReportError("report_dimension_evidence_invalid")
+            evidence = [_normalise_c5_evidence(reference, transcript) for reference in raw_evidence]
+        elif coaching_prompt_revision == COACHING_PROMPT_V5:
+            raise ReportError("report_dimension_evidence_required")
+        if (
+            status in {"observed", "conflicted"}
+            and coaching_prompt_revision == COACHING_PROMPT_V5
+            and not evidence
+        ):
+            raise ReportError("report_dimension_evidence_required")
         supplied_citations = item.get("citations")
         citations: list[Mapping[str, Any]]
         if supplied_citations is None:
@@ -1176,6 +1220,8 @@ def _normalise_dimensions(
                 isinstance(citation, Mapping) and frozenset(citation) == _C5_COMPACT_EVIDENCE_KEYS
                 for citation in supplied_citations
             ):
+                if coaching_prompt_revision == COACHING_PROMPT_V5:
+                    raise ReportError("report_dimension_citations_invalid")
                 for citation in supplied_citations:
                     _normalise_c5_evidence(citation, transcript)
                 citations = [
@@ -1202,7 +1248,15 @@ def _normalise_dimensions(
                 "citations": citations,
             }
         )
+        if retain_evidence and raw_evidence is not None:
+            normalized["evidence"] = evidence
+        else:
+            # Legacy provider input does not persist this v5-only field. A
+            # canonical read opts in above after report-store integrity checks.
+            normalized.pop("evidence", None)
         supplied[dimension_id] = normalized
+    if coaching_prompt_revision == COACHING_PROMPT_V5 and set(supplied) != set(by_id):
+        raise ReportError("report_dimensions_incomplete")
     output: list[dict[str, Any]] = []
     for expected in profile_dimensions:
         dimension_id = str(expected["id"])
@@ -1219,6 +1273,7 @@ def _normalise_dimensions(
                 "status": "unknown",
                 "observation": "No qualitative assessment was returned for this dimension.",
                 "citations": derived_citations,
+                **({"evidence": []} if coaching_prompt_revision == COACHING_PROMPT_V5 else {}),
             }
         )
     return output
@@ -1888,10 +1943,12 @@ def build_report_groq_prompt(
         COACHING_PROMPT_REFINED,
         COACHING_PROMPT_V3,
         COACHING_PROMPT_V4,
+        COACHING_PROMPT_V5,
     }:
         raise ReportError("report_prompt_revision_invalid")
     additional_instruction = ""
     context_instruction = COACHING_CONTEXT_INSTRUCTION
+    v5_instruction = ""
     if coaching_prompt_revision == COACHING_PROMPT_V4:
         pack = load_qualitative_pack()
         if qualitative_pack_sha256 != pack.sha256:
@@ -1907,9 +1964,33 @@ def build_report_groq_prompt(
             "Use everyday English; short sentences; one idea; explain jargon. ",
             "Use short sentences; one idea; explain jargon. ",
         )
+    elif coaching_prompt_revision == COACHING_PROMPT_V5:
+        pack = load_qualitative_pack_for_revision(COACHING_PROMPT_V5)
+        if qualitative_pack_sha256 != pack.sha256:
+            raise ReportError("report_qualitative_pack_mismatch")
+        try:
+            additional_instruction = (
+                pack.compile() + "\n" + report_language_instruction(report_language) + "\n"
+            )
+        except ValueError:
+            raise ReportError("report_language_invalid") from None
+        context_instruction = context_instruction.replace(
+            "Use everyday English; short sentences; one idea; explain jargon. ",
+            "Use short sentences; one idea; explain jargon. ",
+        )
+        v5_instruction = COACHING_PROMPT_V5_MARKER + " " + COACHING_PROMPT_V5_INSTRUCTION + " "
     elif report_language != "en" or qualitative_pack_sha256 is not None:
         raise ReportError("report_prompt_options_incompatible")
-    compact_evidence = coaching_prompt_revision in {COACHING_PROMPT_V3, COACHING_PROMPT_V4}
+    compact_evidence = coaching_prompt_revision in {
+        COACHING_PROMPT_V3,
+        COACHING_PROMPT_V4,
+        COACHING_PROMPT_V5,
+    }
+    evidence_wire_instruction = COACHING_PROMPT_V3_INSTRUCTION
+    if coaching_prompt_revision == COACHING_PROMPT_V5:
+        evidence_wire_instruction = evidence_wire_instruction.replace(
+            "observation/citations", "observation/evidence"
+        )
     validated = _validated_transcript(transcript)
     merged = merge_fact_packets(fact_packets, validated)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
@@ -1936,14 +2017,20 @@ def build_report_groq_prompt(
             )
             + " "
             if coaching_prompt_revision
-            in {COACHING_PROMPT_REFINED, COACHING_PROMPT_V3, COACHING_PROMPT_V4}
+            in {
+                COACHING_PROMPT_REFINED,
+                COACHING_PROMPT_V3,
+                COACHING_PROMPT_V4,
+                COACHING_PROMPT_V5,
+            }
             else ""
         )
         + (
-            COACHING_PROMPT_V3_MARKER + " " + COACHING_PROMPT_V3_INSTRUCTION + " "
+            COACHING_PROMPT_V3_MARKER + " " + evidence_wire_instruction + " "
             if compact_evidence
             else ""
         )
+        + v5_instruction
         + "Set review_status to "
         f"{REVIEW_STATUS!r}. Do not score, grade, rank or publish official results. "
         "Max three strengths/improvements. Credit questions do not prove inability to pay; price "
@@ -2037,6 +2124,8 @@ def parse_report_draft(
     *,
     source_label: str | None = None,
     profile: Mapping[str, Any] | None = None,
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
+    canonical_read: bool = False,
 ) -> ReportDraft:
     """Validate a decoded model object and bind every claim to native transcript data."""
 
@@ -2131,6 +2220,8 @@ def parse_report_draft(
         dimensions,
         profile=resolved_profile,
         transcript=validated_transcript,
+        coaching_prompt_revision=coaching_prompt_revision,
+        canonical_read=canonical_read,
     )
     normalized["report_sections"] = _normalise_sections(
         payload.get("report_sections"), profile=resolved_profile
@@ -2170,6 +2261,7 @@ def parse_groq_response(
     *,
     source_label: str | None = None,
     profile: Mapping[str, Any] | None = None,
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
 ) -> ReportDraft:
     """Decode only the model content; raw provider bytes remain the caller's receipt."""
 
@@ -2197,10 +2289,15 @@ def parse_groq_response(
         transcript,
         source_label=source_label,
         profile=profile,
+        coaching_prompt_revision=coaching_prompt_revision,
     )
 
 
 __all__ = [
+    "COACHING_PROMPT_V4",
+    "COACHING_PROMPT_V5",
+    "COACHING_PROMPT_V5_MARKER",
+    "CoachingPromptRevision",
     "DEFAULT_INPUT_CHARS",
     "AggregateFactPacket",
     "MAX_AGGREGATE_OVERVIEW_CHARS",

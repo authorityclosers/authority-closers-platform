@@ -173,7 +173,11 @@ class ConversationReports:
                 raise ValueError("unbound draft")
             report = ReportDraft.model_validate(draft.payload)
             checked = parse_report_draft(
-                draft.payload, transcript, source_label=report.source_label, profile=profile
+                draft.payload,
+                transcript,
+                source_label=report.source_label,
+                profile=profile,
+                canonical_read=True,
             )
             if content_hash(checked.model_dump(mode="json")) != draft.report_sha256:
                 raise ValueError("unbound report")

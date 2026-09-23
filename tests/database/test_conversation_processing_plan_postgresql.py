@@ -61,7 +61,9 @@ from ac_platform.conversation_intelligence.processing_plan import (
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
 from ac_platform.conversation_intelligence.providers import ProviderResult
-from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
@@ -136,8 +138,9 @@ def test_admin_analysis_settings_bound_new_plan_only(postgres_harness: Any, tmp_
     run(exercise())
 
 
+@pytest.mark.parametrize("prompt_revision", ["coaching-v4", "coaching-v5"])
 def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
-    postgres_harness: Any, tmp_path: Any
+    postgres_harness: Any, tmp_path: Any, prompt_revision: str
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
@@ -154,7 +157,7 @@ def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
                         c4_max_completion_tokens=1_400,
                         c5_max_completion_tokens=3_200,
                         c5_output_profile="detailed",
-                        c5_coaching_prompt_revision="coaching-v4",
+                        c5_coaching_prompt_revision=prompt_revision,
                         report_language_default="mr-Deva+en",
                         created_at=setup.prepared.state.now,
                     )
@@ -168,10 +171,11 @@ def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
                 assert original_row is not None and original_row.manifest is not None
                 original_manifest = dict(original_row.manifest)
                 assert original_manifest["analysis_settings_revision"] == 1
-                assert original_manifest["coaching_prompt_revision"] == "coaching-v4"
+                assert original_manifest["coaching_prompt_revision"] == prompt_revision
                 assert original_manifest["report_language"] == "mr-Deva+en"
                 assert (
-                    original_manifest["qualitative_pack_sha256"] == load_qualitative_pack().sha256
+                    original_manifest["qualitative_pack_sha256"]
+                    == load_qualitative_pack_for_revision(prompt_revision).sha256
                 )
 
             same_key = await _quote(setup, "v4-frozen-quote")
@@ -192,7 +196,9 @@ def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
                         c4_max_completion_tokens=1_400,
                         c5_max_completion_tokens=3_200,
                         c5_output_profile="detailed",
-                        c5_coaching_prompt_revision="coaching-v4",
+                        c5_coaching_prompt_revision="coaching-v5"
+                        if prompt_revision == "coaching-v4"
+                        else "coaching-v4",
                         report_language_default="hi-Deva+en",
                         created_at=setup.prepared.state.now,
                     )
@@ -200,7 +206,7 @@ def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
             active_requote = await _quote(setup, "active-plan-other-language", report_language="en")
             assert active_requote["id"] == frozen["id"]
             assert active_requote["report_language"] == "mr-Deva+en"
-            assert active_requote["coaching_prompt_revision"] == "coaching-v4"
+            assert active_requote["coaching_prompt_revision"] == prompt_revision
             assert "qualitative_pack_sha256" not in active_requote
 
             next_recording = await _duplicate_recording(setup, "v4-new-default-recording")
@@ -211,6 +217,11 @@ def test_analysis_engine_language_freezes_for_quote_replay_and_active_plan(
                 assert next_row is not None and next_row.manifest is not None
                 assert next_row.manifest["analysis_settings_revision"] == 2
                 assert next_row.manifest["report_language"] == "hi-Deva+en"
+                assert next_row.manifest["coaching_prompt_revision"] != prompt_revision
+                assert (
+                    next_row.manifest["qualitative_pack_sha256"]
+                    != original_manifest["qualitative_pack_sha256"]
+                )
 
             async with setup.sessions() as database, database.begin():
                 database.add(

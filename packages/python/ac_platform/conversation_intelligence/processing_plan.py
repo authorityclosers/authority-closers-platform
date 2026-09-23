@@ -65,7 +65,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
-    load_qualitative_pack,
+    load_qualitative_pack_for_revision,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
@@ -78,6 +78,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_V3,
     COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -171,7 +172,7 @@ class PlanManifest(BaseModel):
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
     coaching_prompt_revision: Literal[
-        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
     ] = COACHING_PROMPT_LEGACY
     report_language: ReportLanguage | None = None
     qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
@@ -223,10 +224,11 @@ class PlanManifest(BaseModel):
             or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
-        if self.coaching_prompt_revision == COACHING_PROMPT_V4:
+        if self.coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
             if (
                 self.report_language is None
-                or self.qualitative_pack_sha256 != load_qualitative_pack().sha256
+                or self.qualitative_pack_sha256
+                != load_qualitative_pack_for_revision(self.coaching_prompt_revision).sha256
             ):
                 raise ValueError("processing_plan_coaching_options_invalid")
         elif self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None:
@@ -744,11 +746,12 @@ class ConversationProcessingPlans:
         selected_language = report_language or analysis_settings.report_language_default
         if coaching_prompt_revision == COACHING_PROMPT_V3 and selected_language != "en":
             raise ConversationDenied(
-                "Non-English report language requires the coaching-v4 qualitative engine."
+                "Non-English report language requires the coaching-v4 or coaching-v5 "
+                "qualitative engine."
             )
         qualitative_pack_sha256 = (
-            load_qualitative_pack().sha256
-            if coaching_prompt_revision == COACHING_PROMPT_V4
+            load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
+            if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
             else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
@@ -821,7 +824,8 @@ class ConversationProcessingPlans:
                 coaching_prompt_revision=coaching_prompt_revision,
                 report_language=(
                     selected_language
-                    if coaching_prompt_revision == COACHING_PROMPT_V4 or report_language is not None
+                    if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+                    or report_language is not None
                     else None
                 ),
                 qualitative_pack_sha256=qualitative_pack_sha256,

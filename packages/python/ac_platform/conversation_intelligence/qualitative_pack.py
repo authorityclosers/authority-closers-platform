@@ -17,7 +17,9 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 
 ReportLanguage = Literal["en", "hi-Deva+en", "mr-Deva+en"]
 QUALITATIVE_PACK_ID = "sx-qualitative-20260922-r1"
+QUALITATIVE_PACK_V5_ID = "sx-qualitative-20260924-r1"
 _PACK_PATH = Path(__file__).with_name("profiles") / "sales_xray_qualitative_20260922.json"
+_PACK_V5_PATH = Path(__file__).with_name("profiles") / "sales_xray_qualitative_20260924.json"
 
 
 class _Immutable(BaseModel):
@@ -43,7 +45,7 @@ class QualitativeRule(_Immutable):
 
 class QualitativePack(_Immutable):
     schema_id: Literal["ac.sales-xray.qualitative-pack/1"]
-    id: Literal["sx-qualitative-20260922-r1"]
+    id: Literal["sx-qualitative-20260922-r1", "sx-qualitative-20260924-r1"]
     scope: Literal["single_call"]
     numeric_evaluation: Literal[False]
     sources: tuple[PackSource, ...] = Field(min_length=1, max_length=8)
@@ -79,7 +81,23 @@ class QualitativePack(_Immutable):
 def load_qualitative_pack(pack_id: str = QUALITATIVE_PACK_ID) -> QualitativePack:
     if pack_id != QUALITATIVE_PACK_ID:
         raise ValueError("qualitative_pack_unknown")
-    return QualitativePack.model_validate_json(_PACK_PATH.read_bytes())
+    pack = QualitativePack.model_validate_json(_PACK_PATH.read_bytes())
+    if pack.id != QUALITATIVE_PACK_ID:
+        raise ValueError("qualitative_pack_id_mismatch")
+    return pack
+
+
+def load_qualitative_pack_for_revision(revision: str) -> QualitativePack:
+    """Load the immutable pack bound to a coaching revision without fallback."""
+
+    if revision == "coaching-v4":
+        return load_qualitative_pack()
+    if revision == "coaching-v5":
+        pack = QualitativePack.model_validate_json(_PACK_V5_PATH.read_bytes())
+        if pack.id != QUALITATIVE_PACK_V5_ID:
+            raise ValueError("qualitative_pack_id_mismatch")
+        return pack
+    raise ValueError("qualitative_pack_revision_unknown")
 
 
 def report_language_instruction(language: ReportLanguage) -> str:

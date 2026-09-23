@@ -82,7 +82,10 @@ def test_history_is_bounded_tenant_scoped_and_does_not_mutate(postgres_harness: 
     run(scenario())
 
 
-def test_language_versions_replay_and_do_not_silently_reset(postgres_harness: Any) -> None:
+@pytest.mark.parametrize("revision", ["coaching-v4", "coaching-v5"])
+def test_language_versions_replay_and_do_not_silently_reset(
+    postgres_harness: Any, revision: str
+) -> None:
     async def scenario() -> None:
         engine = create_async_engine(postgres_harness.url)
         try:
@@ -101,7 +104,7 @@ def test_language_versions_replay_and_do_not_silently_reset(postgres_harness: An
                 values = AnalysisSettings.model_validate(
                     {
                         **DEFAULT_ANALYSIS_SETTINGS.model_dump(),
-                        "c5_coaching_prompt_revision": "coaching-v4",
+                        "c5_coaching_prompt_revision": revision,
                         "report_language_default": "mr-Deva+en",
                     }
                 )

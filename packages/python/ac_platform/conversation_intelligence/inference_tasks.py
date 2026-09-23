@@ -35,6 +35,9 @@ from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKE
 from ac_platform.conversation_intelligence.reports import (
     COACHING_CONTEXT_MARKER,
     COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    COACHING_PROMPT_V5_MARKER,
     FACT_PROMPT_COMPACT_MARKER,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
@@ -1037,10 +1040,6 @@ def validate_coaching_result(
         expected_provider=task_input.provider,
         expected_operation=_TEXT_OPERATION,
     )
-    try:
-        draft = parse_groq_response(_text_response(result), transcript, profile=resolved_profile)
-    except ReportError as exc:
-        raise InferenceTaskError(str(exc)) from None
     # Legacy saved tasks remain readable. Newly quoted format-specific inputs
     # cannot silently complete with a broad legacy report that omits the overview.
     assert task_input.max_completion_tokens is not None
@@ -1051,6 +1050,19 @@ def validate_coaching_result(
         maximum=task_input.max_completion_tokens,
         task="coaching",
     )
+    try:
+        draft = parse_groq_response(
+            _text_response(result),
+            transcript,
+            profile=resolved_profile,
+            coaching_prompt_revision=(
+                COACHING_PROMPT_V5
+                if COACHING_PROMPT_V5_MARKER in prompt["messages"][0]["content"]
+                else COACHING_PROMPT_V4
+            ),
+        )
+    except ReportError as exc:
+        raise InferenceTaskError(str(exc)) from None
     if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
         _fail("report_overview_missing")
     return _output(
