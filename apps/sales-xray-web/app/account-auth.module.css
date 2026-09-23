@@ -408,6 +408,29 @@
   font-size: 13px;
   margin: 0 0 15px;
 }
+.noticeActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  width: 100%;
+}
+.noticePrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #0d5968;
+  border-radius: 7px;
+  background: #0d5968;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+.noticePrimary:hover:not(:disabled) { background: #176b72; }
+.noticeActions .textButton { color: #245575; }
 .textButton,
 .resend,
 .password {

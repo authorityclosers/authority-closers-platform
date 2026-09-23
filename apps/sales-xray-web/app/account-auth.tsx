@@ -333,7 +333,7 @@ export function AccountAuth({
       if (!request.signal.aborted) complete();
     } catch {
       if (!request.signal.aborted)
-        setError("We couldn’t sign you in. Check your email and password, then try again.");
+        setError("We couldn’t complete password sign-in. Check your details or try again later.");
     } finally {
       if (passwordRef.current) passwordRef.current.value = "";
       inFlight.current = false;
@@ -596,6 +596,8 @@ export function AccountAuth({
               "Opening your account securely…"
             ) : displayedStep === "password" ? (
               "Sign in with your existing Authority Closers password."
+            ) : unavailable ? (
+              "Sign in with your existing Authority Closers account."
             ) : (
               "Sign in or create your account. It only takes a moment."
             )}
@@ -609,15 +611,25 @@ export function AccountAuth({
             <>
               {displayedStep !== "password" && unavailable ? (
                 <div role="status" className={styles.notice}>
-                  Sign-in is temporarily unavailable.
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    disabled={preview}
-                    onClick={() => setLoadAttempt((value) => value + 1)}
-                  >
-                    Try again
-                  </button>
+                  <span>Email code sign-in isn’t available right now.</span>
+                  <div className={styles.noticeActions}>
+                    <button
+                      type="button"
+                      className={styles.noticePrimary}
+                      disabled={preview}
+                      onClick={() => { setStep("password"); setError(""); }}
+                    >
+                      Use my existing password <ArrowRight size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.textButton}
+                      disabled={preview}
+                      onClick={() => setLoadAttempt((value) => value + 1)}
+                    >
+                      Check code sign-in again
+                    </button>
+                  </div>
                 </div>
               ) : displayedStep !== "password" && !activeConfig ? (
                 <p role="status" className={styles.notice}>
@@ -625,7 +637,7 @@ export function AccountAuth({
                   Preparing secure sign-in…
                 </p>
               ) : null}
-              {displayedStep === "email" ? (
+              {displayedStep === "email" && unavailable ? null : displayedStep === "email" ? (
                 <>
                   {activeConfig?.google_enabled && (
                     <button
@@ -883,7 +895,7 @@ export function AccountAuth({
               ? "Your recording stays here while you sign in."
               : "The same account works across Authority Closers."}
           </p>
-          {displayedStep === "email" && (
+          {displayedStep === "email" && !unavailable && (
             <button
               type="button"
               className={styles.password}

@@ -68,7 +68,7 @@ it("renders all three local preview states without auth traffic or success callb
     expect(host.textContent).toContain(file.name);
     expect(host.textContent).toContain("not uploaded yet");
     if (previewState === "auth.code") expect(host.textContent).toContain("Check your email.");
-    if (previewState === "auth.error") expect(host.textContent).toContain("temporarily unavailable");
+    if (previewState === "auth.error") expect(host.textContent).toContain("Email code sign-in isn’t available right now.");
   }
   expect(fetcher).not.toHaveBeenCalled();
   expect(onAuthenticated).not.toHaveBeenCalled();
