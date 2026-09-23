@@ -1,0 +1,120 @@
+{
+  "schema": "ac.sales-xray.acceptance-plan/1",
+  "status": "application integration gates; not the prototype unit test results",
+  "provider_calls_allowed": 0,
+  "live_reads": "only explicitly selected existing resources through fixed bridge; no automated broad crawler",
+  "checks": [
+    {
+      "id": "A01",
+      "name": "Source and phase",
+      "experiment": "Record base/current head, dirty source digest, bridge policy, app/build/browser versions. Keep repository source separate from deployed response metadata.",
+      "pass_condition": "No claim of deployment or provider quality.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A02",
+      "name": "Read-only bridge",
+      "experiment": "Offline bridge tests attempt every operational POST/PUT/PATCH/DELETE including quote, claim, source, plan, runs and delete. Count upstream fetches.",
+      "pass_condition": "Zero operational upstream requests; original non-review bridge tests retained.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A03",
+      "name": "Live response fidelity",
+      "experiment": "With offline known response bytes, test permitted passthrough and bounded opt-in capture. With an existing owner-authorized call, use only necessary real GETs.",
+      "pass_condition": "Bodies/status unchanged; no /v1 replay replacement; unknown method/path denied.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A04",
+      "name": "Restore entry",
+      "experiment": "Budget-neutral browser regression delays workspace/session/submission/report reads separately, direct ready call URL, fresh URL and invalid call URL. Inspect initial export and frame transitions.",
+      "pass_condition": "Neutral until intent/ownership known; direct validated report; no upload/onboarding/preparation flash on existing ready call; no writes.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A05",
+      "name": "URL and history",
+      "experiment": "Open Calls -> call -> section -> source point; Back/reload/invalid section; injected state/approval params.",
+      "pass_condition": "Call navigation pushes; section replaces without remount; no background stage history; query never changes authority.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A06",
+      "name": "Historical freeze",
+      "experiment": "Capture two permitted real observations when available; pin older view, allow current state to advance independently; edit CSS and remount.",
+      "pass_condition": "Pinned view does not advance; labels show capture time/local source and last current check; no backend pause claim.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A07",
+      "name": "Uncaptured history",
+      "experiment": "Choose C2-running for a completed call with no prior observation.",
+      "pass_condition": "Unavailable, not reconstructed from C2-completed and not a hidden fixture.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A08",
+      "name": "Fresh auth and invalidation",
+      "experiment": "Offline tests revoke session, change selected tenant, delete source, change report source/run, lose network during capture access.",
+      "pass_condition": "No historical payload before checks; access lease expires/masks; revoked artifacts purged; no stale private data under error screen.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A09",
+      "name": "Parser lineage",
+      "experiment": "Reuse existing TS parsers with captured response set; change one source SHA, recording ID, report run, transcript revision or negative schema fixture.",
+      "pass_condition": "Invalid set never appears as report.ready; no validator weakening.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A10",
+      "name": "Reset races",
+      "experiment": "20 page generation resets, held late local frame response, mode switches, CSS HMR.",
+      "pass_condition": "No stale frame takeover, no duplicated subscriptions/polls/writes; live auth preserved only for same session/tenant.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A11",
+      "name": "Time and motion",
+      "experiment": "Synthetic regression before/after 60000ms foreground, hidden/visible, offline; local presentation-only timer preview separately.",
+      "pass_condition": "No fake clock in live bridge; age never advances canonical stage; reduced-motion and 180ms behavior remain separately tested.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A12",
+      "name": "Audio and reader",
+      "experiment": "Switch all five sections; open/close source reader; keyboard loop and Escape; test source unavailable and source replacement.",
+      "pass_condition": "One dock/element per call; no tab-triggered source reload; no autoplay from URL; restore focus or logical fallback.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A13",
+      "name": "Pixels and reflow",
+      "experiment": "Actual full-page captures at 320/375/390/768/1024/1440 plus internal-scroll/dialog views where needed; long authorized language content when available.",
+      "pass_condition": "No horizontal clipping or obscured actions; scrolling allowed; missing real content variants recorded unavailable, covered synthetically in regression only.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A14",
+      "name": "Bounds and privacy",
+      "experiment": "Exceed frame/event/body/byte/TTL/command limits; logout/purge; inspect exported receipts and any saved private image permissions.",
+      "pass_condition": "Bounded memory and explicit eviction; no body truncation; no raw customer text/cookies/audio/IDs in safe export; no cloud artifacts for customer images.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A15",
+      "name": "Build exclusion and Next isolation",
+      "experiment": "Compile standalone/static without review flag; assert flag+build fails. Inspect module graph/traced output/routes. Probe inner Next with local canary env variants.",
+      "pass_condition": "No local adapter/control/store code in release; no /__review handler; dev fragments ignored; inner Next has no upstream rewrites; bridge alone owns fixed VPS egress.",
+      "result": "pending-application-integration"
+    },
+    {
+      "id": "A16",
+      "name": "Falsification benchmark",
+      "experiment": "Offline compiled A/B of original bootstrap and proposed canonical route using identical existing synthetic payloads and fixed 100ms GET delays. 20 runs per version at 390 and 1440, same runtime/cache mode.",
+      "pass_condition": "Record report-validated-to-paint and total navigation latency, request graph/count, transient wrong-view frames, layout shift, audio remounts. Reject extra waterfall or regressions; no invented improvement percentage.",
+      "result": "pending-application-integration"
+    }
+  ]
+}

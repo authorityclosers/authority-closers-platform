@@ -1,0 +1,399 @@
+{
+  "schema": "ac.sales-xray.workspace-decision/1",
+  "status": "public sanitized architecture; catalogue is a specification, not a claim of installed integration",
+  "decision_id": "SX-WS-01",
+  "base_sha": "eb4d6ac48173d82efa9ca24ec15696a686465027",
+  "confidence": 0.9,
+  "production": {
+    "canonical_routes": {
+      "standalone": "/?call=<submission UUID>",
+      "embedded": "/sales-xray?call=<submission UUID>"
+    },
+    "first_slice_bookmarks": [
+      "call",
+      "section"
+    ],
+    "section_values": [
+      "overview",
+      "prospect",
+      "moments",
+      "skills",
+      "next-call-plan"
+    ],
+    "later_guarded_bookmarks": [
+      "report: exact currently-addressable authorized report identity",
+      "moment: source/revision-bound evidence identity"
+    ],
+    "not_url_authority": [
+      "stage",
+      "has_report",
+      "accepted",
+      "consent",
+      "permissions",
+      "provider",
+      "report_language"
+    ],
+    "ephemeral": [
+      "owner-check",
+      "file-picker",
+      "file-object",
+      "hashing",
+      "transfer",
+      "transport-warning",
+      "dialog-open",
+      "hover",
+      "focus",
+      "observation-age",
+      "audio-playback"
+    ],
+    "history": {
+      "open_call": "push",
+      "successful_new_upload_call_binding": "replace",
+      "section": "replace-without-scroll",
+      "background_stage": "no-history-change",
+      "dialog": "no-URL-change; explicit-close-or-Escape",
+      "library_filter_sort": "push-on-explicit-commit",
+      "library_search": "local-only-until-scoped-search-supported"
+    },
+    "loading": "neutral static/hydration shell; parse intent before choosing upload; owner-checked direct report"
+  },
+  "local": {
+    "upstream": "fixed existing VPS bridge; no public API response substitution",
+    "control_page": "/__review/",
+    "presentation_port": "default live pass-through; exact dev-Webpack alias to local adapter only",
+    "modes": {
+      "live": "current real authorized observations, ordinary controller; review process blocks business writes",
+      "observed": "previous real response set and captured UI state; fresh authorization; no operational rewind",
+      "presentation": "authorized real base plus allowlisted UI-only selection; no invented workflow or language content"
+    },
+    "guard": "bridge policy read-only-review set at process launch, not per-tab query",
+    "auth_exceptions": [
+      "ordinary explicit login",
+      "ordinary explicit logout",
+      "ordinary explicit workspace selection"
+    ],
+    "public_api_business_writes": "deny all POST PUT PATCH DELETE acquisition/intake/recording/run commands including quote",
+    "capture": "opt-in, read-response minimum, memory-only first slice; no HAR/storage-state/audio capture",
+    "limits_proposed": {
+      "active_calls_per_handle": 1,
+      "frames": 128,
+      "ui_events": 256,
+      "unique_json_bytes": 16777216,
+      "max_json_response_bytes": 4194304,
+      "hard_ttl_seconds": 1800,
+      "authorization_lease_seconds": 30,
+      "command_queue": 16,
+      "command_json_bytes": 16384,
+      "note_characters": 2000,
+      "later_replay_max_events": 32
+    },
+    "expiry": "earliest local hard TTL, lost ownership/session, actual resource retention/invalidation; mask on uncertainty",
+    "historical_report_rule": "current resource access alone is insufficient; exact artifact still authorized/retrievable or unavailable",
+    "time_rule": "never globally fake Date/timers in live bridge; pure presentation age only in labeled presentation mode",
+    "reset": "new page/view generation; abort reads, pause audio, reset local UI; preserve session only within same owner/tenant; never replay writes",
+    "control_security": [
+      "exact host/origin checks",
+      "same-origin CSRF protection for commands",
+      "no arbitrary URLs/selectors/JS/file paths",
+      "bounded typed commands",
+      "auth-bound opaque references not capabilities",
+      "no CORS wildcard",
+      "keep X-Frame-Options DENY"
+    ]
+  },
+  "state_registry": [
+    {
+      "id": "access.checking",
+      "source": "standalone-studio.tsx"
+    },
+    {
+      "id": "access.login-required",
+      "source": "standalone-studio.tsx"
+    },
+    {
+      "id": "access.workspace-choice",
+      "source": "standalone-studio.tsx"
+    },
+    {
+      "id": "access.no-workspace",
+      "source": "standalone-studio.tsx"
+    },
+    {
+      "id": "access.unavailable",
+      "source": "standalone-studio.tsx"
+    },
+    {
+      "id": "restore.opening",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "restore.missing",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "restore.permission-denied",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "restore.session-required",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.empty",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.selected",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.consent-needed",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.challenge-needed",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.hashing",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.transferring",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "upload.receipt-uncertain",
+      "source": "acquisition-studio.tsx"
+    },
+    {
+      "id": "processing.recording-check",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c2.queued",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c2.running",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c4.queued",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c4.running",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c4.saved-partial",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c5.queued",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.c5.running",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.approval-required",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.held",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "processing.status-unknown",
+      "source": "processing-state.ts"
+    },
+    {
+      "id": "report.fetching",
+      "source": "observe-submission.ts"
+    },
+    {
+      "id": "report.validating",
+      "source": "observe-submission.ts"
+    },
+    {
+      "id": "report.ready",
+      "source": "observe-submission.ts"
+    },
+    {
+      "id": "report.unavailable",
+      "source": "observe-submission.ts"
+    },
+    {
+      "id": "library.loading",
+      "source": "calls-library.tsx"
+    },
+    {
+      "id": "library.empty",
+      "source": "calls-library.tsx"
+    },
+    {
+      "id": "library.ready",
+      "source": "calls-library.tsx"
+    },
+    {
+      "id": "library.unavailable",
+      "source": "calls-library.tsx"
+    }
+  ],
+  "orthogonal_dimensions": {
+    "observation_health": [
+      "fresh",
+      "read-retrying",
+      "read-unavailable",
+      "offline",
+      "foreground-unchanged"
+    ],
+    "section": [
+      "overview",
+      "prospect",
+      "moments",
+      "skills",
+      "next-call-plan"
+    ],
+    "audio": [
+      "unloaded",
+      "loading",
+      "paused",
+      "playing",
+      "unavailable"
+    ],
+    "reader": [
+      "closed",
+      "open-valid-source-point"
+    ],
+    "focus_hover": "allowlisted current component targets only; trusted user interaction or fixed runner function",
+    "language": [
+      "en",
+      "hi-Deva+en",
+      "mr-Deva+en"
+    ],
+    "language_rule": "read saved authorized report/plan; never translate or relabel captured content by query",
+    "content_rule": "choose an actually available authorized content bundle; no fabricated long/empty report in owner workbench",
+    "viewport": [
+      {
+        "width": 320,
+        "height": 720
+      },
+      {
+        "width": 375,
+        "height": 667
+      },
+      {
+        "width": 390,
+        "height": 844
+      },
+      {
+        "width": 768,
+        "height": 1024
+      },
+      {
+        "width": 1024,
+        "height": 626
+      },
+      {
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "motion": [
+      "system",
+      "reduce"
+    ]
+  },
+  "invalid_combinations": [
+    "report.ready without validated bound report and transcript",
+    "processing stage forced by query",
+    "completed C2 rewritten to running because earlier history absent",
+    "queued rendered as active",
+    "offline or age implies job failure",
+    "old report with new transcript/source",
+    "real quote consent copied from history",
+    "reader point absent from selected authorized report",
+    "audio playing without real playback authorization/gesture",
+    "Hindi/Marathi choice applied to a differently bound stored report",
+    "global prospect/journey inferred from a single call"
+  ],
+  "commands_first_slice": [
+    "open-live",
+    "select-frame",
+    "select-section",
+    "open-reader",
+    "close-reader",
+    "focus-target",
+    "hover-target",
+    "set-viewport",
+    "set-motion",
+    "capture-frame",
+    "capture-image",
+    "add-note",
+    "reset-view",
+    "return-live",
+    "forget-history",
+    "accept-baseline"
+  ],
+  "commands_next_increment": [
+    "preview-observation-age",
+    "play-observed-history"
+  ],
+  "removed_commands": [
+    "set-stage",
+    "set-approved",
+    "upload-for-preview",
+    "retry-provider",
+    "eval",
+    "navigate-arbitrary-url"
+  ],
+  "review_capture_sizes": [
+    {
+      "width": 320,
+      "height": 720
+    },
+    {
+      "width": 375,
+      "height": 667
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1024,
+      "height": 626
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "routine_matrix": {
+    "widths": [
+      390,
+      1440
+    ],
+    "scenes": [
+      "restore.opening-to-ready",
+      "processing.c4.running",
+      "processing.held",
+      "report.ready-reader-open"
+    ],
+    "additional": {
+      "width": 320,
+      "scene": "report.ready",
+      "reason": "long-text reflow"
+    }
+  },
+  "acceptance_evidence": "application integration pending; prototype model tests are separate",
+  "catalogue_rule": "A name registers a classification, not availability. Matching actual capture and current resource/artifact authorization are required; unsupported captures remain unavailable."
+}

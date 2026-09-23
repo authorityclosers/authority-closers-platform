@@ -1,0 +1,93 @@
+{
+  "schema": "sx-ws-01-public-manifest/1",
+  "base_commit": "eb4d6ac48173d82efa9ca24ec15696a686465027",
+  "root": "docs/cloud-handoffs/sx-ws-01/",
+  "excludes": [
+    "manifest.json",
+    ".build/",
+    "execution-logs",
+    "private-receipts"
+  ],
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 28,
+      "sha256": "4d6a0d594dbe00407ef08fdf7d459fdb8fe527b27f6ab457b0c70e8e8315188a"
+    },
+    {
+      "path": "Decision-and-Handoff.md",
+      "bytes": 7609,
+      "sha256": "d579135b38d5fcd8791e077c76de2597f24e98a4fe790d70ad874bc69e912bce"
+    },
+    {
+      "path": "INTEGRATION.md",
+      "bytes": 7609,
+      "sha256": "ea6ec2f540e7827ea230f7121de7ba28746e930ce1e9abf04f5c46eb1fc75bc6"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6301,
+      "sha256": "76ad0678200351aeb8e0e70496f76e61f8aa9b72abb78091e6069fa7b955f6cf"
+    },
+    {
+      "path": "acceptance.json",
+      "bytes": 7132,
+      "sha256": "0059789985b0647d475ba6ce202c3f2ec4d8c777dca9b69be838a36e4cae7b11"
+    },
+    {
+      "path": "contract.json",
+      "bytes": 10672,
+      "sha256": "287a4fabb1035247bed7d90dd94ddbea838e54e0bfb0c6536844419134a522c6"
+    },
+    {
+      "path": "package.json",
+      "bytes": 321,
+      "sha256": "066e4a9d639ddb9a6e2e616e56a1f1d4eaf9d557059e8d12758af35a9268a44b"
+    },
+    {
+      "path": "src/commands.ts",
+      "bytes": 6971,
+      "sha256": "b44aa81db86cadeee97335313691b31bd8c935a71dc075e3e1f07dffd29ab7cf"
+    },
+    {
+      "path": "src/core.ts",
+      "bytes": 20542,
+      "sha256": "88d249d0abcc629ba285fb2282dca14fc99e708f65a598b381444b0ce5d32338"
+    },
+    {
+      "path": "src/dev-view-port.ts",
+      "bytes": 2627,
+      "sha256": "9d00bd49c1531e62ae31fdc8c5d9c74c857fd4f8dcb618e2672641637ef96a81"
+    },
+    {
+      "path": "src/view-port.ts",
+      "bytes": 359,
+      "sha256": "c0ddbd13667b103d446f449274eeb84af5443a2387933ea2f21a934c3a6acb7c"
+    },
+    {
+      "path": "test/core.test.mjs",
+      "bytes": 16651,
+      "sha256": "b79a5a0df78440e95fa102e550f249084f557c2eb706187698f16b37c3728948"
+    },
+    {
+      "path": "test/fault-sim.mjs",
+      "bytes": 4090,
+      "sha256": "138bea084afb17220585b0866e4984aedc5c8edffd6fc893af667fb8e44a96ad"
+    },
+    {
+      "path": "test/helpers.mjs",
+      "bytes": 2654,
+      "sha256": "d73a5dd5d613e91ea301d65bf0c8afb596d4f9c1c082cd8d516cba4cd37c8964"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 405,
+      "sha256": "4fc919b831d0f55cac95634ca0f7f660c19cc60be1c44c75789a38df53d528c5"
+    },
+    {
+      "path": "verify-manifest.mjs",
+      "bytes": 786,
+      "sha256": "3475c51f5f212c8b9a570aa793b9b2210ba5ff1471a9c6aeca89d75a7300c290"
+    }
+  ]
+}
