@@ -100,6 +100,21 @@
   color: var(--shell-ink);
   text-decoration: none;
 }
+.brand {
+  gap: 0.55rem;
+}
+.brandWordmark {
+  display: grid;
+  width: 7rem;
+  height: 2.5rem;
+  min-width: 0;
+  place-items: center;
+}
+.brandWordmark img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .mobileBrand > span:last-child {
   display: grid;
   gap: 0.15rem;
@@ -350,6 +365,9 @@
   height: 2.5rem;
   place-items: center;
 }
+.collapsed .brandWordmark {
+  display: none;
+}
 .collapsed .sidebarToggle {
   position: absolute;
   z-index: 2;
@@ -428,6 +446,9 @@
     height: 2.5rem;
     place-items: center;
     justify-content: center;
+  }
+  .brandWordmark {
+    display: none;
   }
   .sidebarTop .sidebarToggle {
     position: absolute;

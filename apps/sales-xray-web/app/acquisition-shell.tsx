@@ -76,6 +76,15 @@ export function AcquisitionShell({
                 priority
               />
             </span>
+            <span className={styles.brandWordmark} aria-hidden="true">
+              <Image
+                src="/brand/ac-v0.1/sales-xray-wordmark.svg"
+                alt=""
+                width={112}
+                height={40}
+                priority
+              />
+            </span>
           </Link>
           <button
             ref={toggleRef}
