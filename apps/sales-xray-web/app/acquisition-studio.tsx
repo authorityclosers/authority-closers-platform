@@ -34,6 +34,7 @@ import { ReportExplorer } from "./report-explorer";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
+import { ProspectSnapshot } from "./prospect-snapshot";
 import {
   ReportTranscript,
   formatTranscriptTime as time,
@@ -1875,6 +1876,17 @@ export function AcquisitionStudio({
                     ),
                   },
                   {
+                    id: "prospect",
+                    label: "Prospect",
+                    content: (
+                      <ProspectSnapshot
+                        report={report}
+                        onSelectEvidence={seek}
+                        onUnlock={() => router.push("/login")}
+                      />
+                    ),
+                  },
+                  {
                     id: "moments",
                     label: "Moments",
                     content: (
@@ -1901,11 +1913,13 @@ export function AcquisitionStudio({
                   {
                     id: "skills",
                     label: "Sales skills",
+                    compactLabel: "Skills",
                     content: <SalesSkills dimensions={report.dimensions} />,
                   },
                   {
                     id: "next-call-plan",
                     label: "Next-call plan",
+                    compactLabel: "Next-call",
                     content: (
                       <NextCallPlan
                         report={report}

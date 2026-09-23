@@ -39,6 +39,10 @@
     transform 140ms ease;
 }
 
+.compactLabel {
+  display: none;
+}
+
 .tabs button::after {
   position: absolute;
   right: 0;
@@ -77,6 +81,7 @@
 .panel {
   min-width: 0;
   padding-block-start: 12px;
+  scroll-margin-block-start: 60px;
 }
 
 .panel > section + section {
@@ -97,9 +102,18 @@
   }
 
   .tabs button {
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
     padding-inline: 1px;
     font-size: 12px;
+  }
+
+  .fullLabel {
+    display: none;
+  }
+
+  .compactLabel {
+    display: inline;
   }
 }
 

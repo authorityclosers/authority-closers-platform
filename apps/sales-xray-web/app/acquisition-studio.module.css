@@ -1325,8 +1325,13 @@
     flex-wrap: nowrap;
     margin-bottom: 4px;
   }
-  .reportHeading p {
+  .reportHeading p:not(.reportMetadata) {
     display: none;
+  }
+  .reportHeading .reportMetadata {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
   }
   .app[data-stage="report"] .reportHeader h1 {
     font-size: 24px;

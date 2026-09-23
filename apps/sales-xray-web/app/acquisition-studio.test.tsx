@@ -366,7 +366,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(4);
+  ).toHaveLength(5);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -1778,6 +1778,27 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(container.querySelector('[aria-label="Call audio player"]')).toBe(
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
+  expect(savedAudio?.getAttribute("src")).toBe(source);
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockResolvedValue(undefined);
+  await click("Prospect");
+  expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
+  const prospectSource =
+    envelope.report.content.overview.prospect_interpretations[0].source
+      .evidence[0];
+  expect(
+    container.querySelector('[data-prospect-part="verbatim"]')?.textContent,
+  ).toContain(prospectSource.quote);
+  await click("Play source moment");
+  expect((savedAudio as HTMLAudioElement).currentTime).toBe(
+    prospectSource.start_ms / 1000,
+  );
+  expect(play).toHaveBeenCalledOnce();
+  await click("Next-call plan");
+  expect(
+    container.querySelector('[aria-label="Call audio player"] audio'),
+  ).toBe(savedAudio);
   expect(savedAudio?.getAttribute("src")).toBe(source);
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/accept"))).toBe(false);
