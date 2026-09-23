@@ -327,7 +327,7 @@ class ConversationAnalysisSettings(Base):
         ),
         CheckConstraint(
             "c5_coaching_prompt_revision = 'coaching-v4' OR report_language_default = 'en'",
-            name="report_language_prompt_compatible",
+            name="language_prompt_compatible",
         ),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

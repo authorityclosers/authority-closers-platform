@@ -619,9 +619,7 @@ async def _seed_transcription_inputs(setup: AuthorityFixture, recording_id: UUID
             "content_type": recording.content_type,
             "permission_reference": str(recording.permission_id),
         }
-        c0 = build_checkpoint(
-            binding, "C0", "recording-v1", {}, (), content_hash(c0_payload)
-        )
+        c0 = build_checkpoint(binding, "C0", "recording-v1", {}, (), content_hash(c0_payload))
         c1_payload = {
             "source_sha256": recording.source_sha256,
             "media_duration_ms": 1_000,
@@ -1015,9 +1013,7 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
         )
         try:
             original_bundle = setup.bundle
-            historical_bundle = original_bundle.model_copy(
-                update={"budget_cap_paise": 250_000}
-            )
+            historical_bundle = original_bundle.model_copy(update={"budget_cap_paise": 250_000})
             async with setup.sessions() as database, database.begin():
                 saved = await ConversationBudgetAdmin(
                     _application(setup, database),
@@ -1044,9 +1040,7 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
                 ),
             )
             async with setup.sessions() as database, database.begin():
-                config_view = await ConversationProviderAdmin(
-                    _application(setup, database)
-                ).save(
+                config_view = await ConversationProviderAdmin(_application(setup, database)).save(
                     setup.actor,
                     config.as_dict(),
                     expected_revision=1,
@@ -1068,9 +1062,7 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
             current_bundle = original_bundle.model_copy(update={"stages": current_stages})
             setup.bundle_box["bundle"] = current_bundle
             async with setup.sessions() as database, database.begin():
-                await setup.authority.claim_allowance(
-                    _application(setup, database), setup.actor
-                )
+                await setup.authority.claim_allowance(_application(setup, database), setup.actor)
 
             second_recording_id = await _duplicate_ready_recording(setup, "risk22-second")
             await _seed_transcription_inputs(setup, setup.prepared.recording_id)
@@ -1101,9 +1093,7 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
                 return_exceptions=True,
             )
             assert sum(isinstance(result, dict) for result in outcomes) == 1
-            conflicts = [
-                result for result in outcomes if isinstance(result, ConversationConflict)
-            ]
+            conflicts = [result for result in outcomes if isinstance(result, ConversationConflict)]
             assert len(conflicts) == 1
             assert "allowance" in str(conflicts[0])
 

@@ -33,7 +33,7 @@ def upgrade() -> None:
         ("known_c5_prompt", "c5_coaching_prompt_revision IN ('coaching-v3','coaching-v4')"),
         ("known_report_language", "report_language_default IN ('en','hi-Deva+en','mr-Deva+en')"),
         (
-            "report_language_prompt_compatible",
+            "language_prompt_compatible",
             "c5_coaching_prompt_revision = 'coaching-v4' OR report_language_default = 'en'",
         ),
     ):

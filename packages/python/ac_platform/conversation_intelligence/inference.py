@@ -565,9 +565,7 @@ class ConversationInference:
         minutes, budget = await self.accounts(recording, row)
         try:
             release_cap_paise = (
-                self.authority.current(now).budget_cap_paise
-                if self.authority is not None
-                else None
+                self.authority.current(now).budget_cap_paise if self.authority is not None else None
             )
             transition = reserve(
                 MinuteAccount.from_dict(minutes.snapshot),

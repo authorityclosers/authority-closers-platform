@@ -168,9 +168,20 @@ def install_acquisition_runtime(
         if host == "learner":
             async with learner_account(request, read_only=True):
                 pass
+        value: dict[str, object] = {
+            "enabled": runtime is not None,
+            "site_key": runtime.site_key if runtime else None,
+            "challenge_action": UPLOAD_ACTION if runtime else None,
+            "policy_revision": runtime.policy_revision if runtime else None,
+            "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
+        }
+        if runtime is None:
+            # Optional acquisition must remain disabled without touching its
+            # database or advertising language capabilities it cannot execute.
+            return value
         operations_tenant_id = (
             runtime.intake.authority.operations_tenant_id
-            if runtime is not None and runtime.intake.authority is not None
+            if runtime.intake.authority is not None
             else settings.operations_tenant_id
         )
         analysis_settings = DEFAULT_ANALYSIS_SETTINGS
@@ -179,21 +190,15 @@ def install_acquisition_runtime(
                 _, analysis_settings = await latest_analysis_settings(
                     database, operations_tenant_id
                 )
-        report_languages = (
-            ["en"]
-            if analysis_settings.c5_coaching_prompt_revision == "coaching-v3"
-            else ["en", "hi-Deva+en", "mr-Deva+en"]
+        value.update(
+            report_languages=(
+                ["en"]
+                if analysis_settings.c5_coaching_prompt_revision == "coaching-v3"
+                else ["en", "hi-Deva+en", "mr-Deva+en"]
+            ),
+            report_language_default=analysis_settings.report_language_default,
         )
-        value: dict[str, object] = {
-            "enabled": runtime is not None,
-            "site_key": runtime.site_key if runtime else None,
-            "challenge_action": UPLOAD_ACTION if runtime else None,
-            "policy_revision": runtime.policy_revision if runtime else None,
-            "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
-            "report_languages": report_languages,
-            "report_language_default": analysis_settings.report_language_default,
-        }
-        if host == "learner" and runtime is not None:
+        if host == "learner":
             # The learner mount uses the existing account session. It never
             # receives the guest challenge or a guest bearer cookie.
             value.update({"site_key": None, "challenge_action": None, "auth_mode": "account"})

@@ -39,3 +39,11 @@ Visual testing found and fixed a real top-clipping defect in a vertically center
 The cloud-generated desktop/mobile references and their hashes are retained in the private orchestration ledger. The implemented progress hierarchy follows those references; the broader existing shell is not yet claimed to match the complete v0.2 visual design. No human usability trial or universal device guarantee is claimed.
 
 Research rationale, primary sources, cloud/local evidence boundaries and falsification criteria: [progress research handoff](progress-research-handoff.md).
+
+## Broader acceptance and CI findings
+
+The production Next build passed, then the required compiled-browser wrapper passed all 15 assertions with 84 HTTP receipts, no intercepted AC APIs, no provider network calls and no page errors. It exercised the actual loopback API/PostgreSQL, upload consent, plan, report, private playback, reload, account claim/password login, workspace selection, account library, sign-out, foreign-owner denial and deletion request. Build ID: `PfpUzb0gOPw_2WrTvWZrq`. Private receipts: `compiled-browser-c4910444/` in the task evidence directory.
+
+Broader engine unit tests passed **1,221** cases; one POSIX ownership case is unavailable on Windows and remains required in Linux CI. Full Python mypy passed for 303 files. A first run used the machine's normal temporary path, which the private-file guard rejected; the dedicated external test directory passed without weakening that guard.
+
+PR #64's first CI run (`35837851521`) passed frontend and compiled-browser validation but exposed a real schema drift: the new language/prompt constraint's generated name exceeded PostgreSQL's identifier bound and was truncated. Before any deployment of migration 0044, its name and the model name were shortened consistently. A fresh disposable loopback schema migrated from the historical baseline to head, preserved its existing tenant, and passed `alembic check` with no new upgrade operations. The same integration pass fixed the disabled acquisition endpoint to preserve its existing response and avoid an unnecessary settings/database read; all four enabled/configured-tenant combinations are covered. Two formatting failures in the earlier budget patch were corrected. Exact-source CI must pass after these corrections before release.
