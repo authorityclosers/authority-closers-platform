@@ -452,11 +452,7 @@ class AcquisitionReports:
             []
             if not linked_job_ids
             else list(
-                (
-                    await self.database.scalars(
-                        select(Job).where(Job.id.in_(linked_job_ids))
-                    )
-                ).all()
+                (await self.database.scalars(select(Job).where(Job.id.in_(linked_job_ids)))).all()
             )
         )
         execution_hold = (

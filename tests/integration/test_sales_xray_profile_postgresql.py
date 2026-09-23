@@ -51,10 +51,7 @@ def profile_harness(postgres_harness: _Harness) -> _Harness:
 
 def test_alembic_schema_matches_the_profile_model(profile_harness: _Harness) -> None:
     inspector = inspect(profile_harness.engine)
-    columns = {
-        column["name"]
-        for column in inspector.get_columns("sales_xray_profiles")
-    }
+    columns = {column["name"] for column in inspector.get_columns("sales_xray_profiles")}
     assert {
         "id",
         "person_id",

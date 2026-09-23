@@ -407,9 +407,7 @@ def test_incomplete_contact_profile_holds_local_work_without_settling_or_refundi
                 assert job.hold_reason == "sales_xray_profile_incomplete"
                 assert job.lease_token is None and job.leased_until is None
                 assert minutes is not None and minutes.snapshot == before_minutes
-                assert not list(
-                    await database.scalars(select(ConversationAcquisitionSettlement))
-                )
+                assert not list(await database.scalars(select(ConversationAcquisitionSettlement)))
                 held_events = (
                     await database.scalars(
                         select(AuditEvent).where(

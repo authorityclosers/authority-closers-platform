@@ -369,7 +369,7 @@ def test_numeric_email_login_code_template_rejects_non_six_digit_values() -> Non
                 idempotency_key="email-login/malformed-code",
                 variables={
                     "first_name": "there",
-                "code": "12345",
+                    "code": "12345",
                     "expires_at": "2026-08-31T18:30:00+00:00",
                 },
                 communication_class="verification_security",

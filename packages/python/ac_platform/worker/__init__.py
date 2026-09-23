@@ -213,7 +213,6 @@ async def resolve_password_message(
         None,
     )
 
-
     if route is None:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     payload = route.normalize_payload(job.payload)

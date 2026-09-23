@@ -2030,9 +2030,10 @@ def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
             )
             assert sorted(response.status_code for response in callbacks) == [303, 409]
             assert absent_lookups == 2
-            assert sorted(
-                [(await client.get("/v1/me")).status_code for client in clients]
-            ) == [200, 401]
+            assert sorted([(await client.get("/v1/me")).status_code for client in clients]) == [
+                200,
+                401,
+            ]
 
             with Session(postgres_harness.engine) as database:
                 people = list(
