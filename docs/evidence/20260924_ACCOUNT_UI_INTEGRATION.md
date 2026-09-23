@@ -31,3 +31,11 @@ The same original audio bytes remain browser-local until email authentication an
 The integrated web suite passes all 412 tests. The optimized build and ESLint pass, and Python type checking reports no issues in 310 source files. Final formatting repairs change only layout/quoting in source and tests. Sanitized machine receipts are saved beside this evidence under `sales-xray-v02-20260923/account-required-browser-proof.json` and `account-required-browser-receipt.json`.
 
 This completes local account-journey acceptance; it does not establish staging/production deployment or coaching-v5 report quality.
+
+## Hosted build repair and mobile containment
+
+Hosted application run `35919019052` for `7580f2c7` passed its compiled acquisition-browser gate, Python static and policy gates, and capacity simulation. Frontend validation and all four Python test shards stopped at the same prerequisite: the static Sales Xray preview tried to await request search parameters on `/auth/complete`. The Python shards did not reach their tests; these failures are not recorded as passing test suites.
+
+Static preview export now supplies no callback flow without reading request parameters. The ordinary server-rendered callback still forwards the exact string flow to the existing validating client. The new regression tests cover both paths. Both static-preview export and the ordinary optimized production build pass locally after the repair. Hosted validation must be rerun on the successor revision.
+
+The report review sheet also uses border-box sizing, incorporating UI checkpoint `f83b68ff`. The UI owner verified a 390px sheet and document both remain 390px wide after this one-declaration change. That synthetic preview check establishes layout containment, not generated report quality. Root includes no synthetic report fixture route in this release.
