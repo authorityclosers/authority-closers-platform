@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
@@ -9,7 +9,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin }),
 }));
 import Page from "./page";
-import { remainingAllowanceLabel } from "./acquisition-studio";
+import {
+  AcquisitionStudio,
+  remainingAllowanceLabel,
+} from "./acquisition-studio";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import {
   allowance,
@@ -22,6 +25,10 @@ import {
   recordingId,
   transcript,
 } from "../tests/acquisition-fixture";
+
+const secondSubmissionId = "22222222-2222-4222-8222-222222222222";
+const secondReportSummary =
+  "The second saved call has its own verified report.";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -45,6 +52,7 @@ let existing: boolean,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
+let activeReportSubmissionId: string;
 let entryBody: unknown;
 let quoteBody: unknown;
 let savedPlanBody: unknown;
@@ -76,7 +84,21 @@ async function click(text: string) {
   await flush();
 }
 async function mount() {
-  await act(async () => root.render(<Page />));
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () => root.render(page));
+  await flush();
+}
+async function navigateToCall(callId: string) {
+  window.history.replaceState(null, "", `/?call=${callId}`);
+  const page = await Page({
+    searchParams: Promise.resolve({ call: callId }),
+  });
+  await act(async () => root.render(page));
   await flush();
 }
 async function select() {
@@ -116,6 +138,7 @@ beforeEach(() => {
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
+  activeReportSubmissionId = submissionId;
   entryBody = entry;
   quoteBody = plan;
   savedPlanBody = null;
@@ -210,7 +233,22 @@ beforeEach(() => {
           202,
         );
       }
-      if (path.endsWith("/report")) return response(reportBody);
+      if (path.endsWith("/report"))
+        return response(
+          activeReportSubmissionId === secondSubmissionId
+            ? {
+                ...envelope,
+                submission_id: secondSubmissionId,
+                report: {
+                  ...envelope.report,
+                  content: {
+                    ...envelope.report.content,
+                    summary: secondReportSummary,
+                  },
+                },
+              }
+            : reportBody,
+        );
       if (path.endsWith("/transcript")) return response(transcript);
       if (path.endsWith("/claim")) {
         claimed = false;
@@ -228,7 +266,8 @@ beforeEach(() => {
         savedSubmissionUnauthorized
       )
         return response({}, 401);
-      if (path.endsWith(`/submissions/${submissionId}`))
+      if (path.endsWith(`/submissions/${submissionId}`)) {
+        activeReportSubmissionId = submissionId;
         return init.method === "DELETE"
           ? deletionDenied
             ? response({}, 404)
@@ -268,6 +307,16 @@ beforeEach(() => {
                         state: accepted ? "report_ready" : "ready",
                       },
               );
+      }
+      if (path.endsWith(`/submissions/${secondSubmissionId}`)) {
+        activeReportSubmissionId = secondSubmissionId;
+        return response({
+          ...progress,
+          submission_id: secondSubmissionId,
+          has_report: true,
+          state: "report_ready",
+        });
+      }
       throw new Error("Unexpected test request");
     }),
   );
@@ -562,6 +611,82 @@ it("opens a normally saved call when its session remains valid", async () => {
   expect(container.textContent).not.toContain("Start a new call");
 });
 
+it("keeps a deep-linked call neutral until its owner read returns, then opens its report", async () => {
+  existing = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${submissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+
+  await mount();
+  expect(container.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(container.textContent).toContain("Opening your saved call");
+  expect(container.textContent).not.toContain("Add a call to review");
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[data-stage="opening"]')).toBeNull();
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+  expect(calls.some(({ path }) => path.endsWith("/upload-policy"))).toBe(false);
+});
+
+it("drops the prior report before restoring a different call selector", async () => {
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${secondSubmissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+  await navigateToCall(secondSubmissionId);
+  expect(container.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(container.textContent).not.toContain(secondReportSummary);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(container.textContent).toContain(secondReportSummary);
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
 it("desktop and mobile Analyse navigation explicitly starts a new call", async () => {
   await mount();
   const desktop = container.querySelector('nav[aria-label="Workspace"] a');
@@ -612,7 +737,7 @@ it("generic failed lookup with no parsed submission can escape and remains new a
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
-  await click("Analyse another call");
+  await click("Start a new call");
   expect(window.location.search).toBe("?new=1");
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(
@@ -1003,7 +1128,13 @@ it("ignores an old observation after unmount and replacement of the studio", asy
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   // Deliberately ignore fetch cancellation to verify the mounted UI guard.
-  await act(async () => root.render(<Page key="replacement-studio" />));
+  await act(async () =>
+    root.render(
+      <Fragment key="replacement-studio">
+        <AcquisitionStudio />
+      </Fragment>,
+    ),
+  );
   await flush();
   progressOverride = {
     ...progress,

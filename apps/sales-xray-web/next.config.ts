@@ -5,6 +5,9 @@ import path from "node:path";
 // destination, cookies, credentials or arbitrary URL from a query parameter.
 const configured = process.env.AC_CONVERSATION_API_ORIGIN;
 const staticPreview = process.env.AC_SALES_XRAY_STATIC_PREVIEW === "1";
+const reviewRequested =
+  process.env.NODE_ENV === "development" &&
+  process.env.AC_SALES_XRAY_REVIEW === "1";
 let apiOrigin: string | undefined;
 if (configured) {
   const url = new URL(configured);
@@ -30,10 +33,24 @@ const config: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@ac/ui", "@ac/sales-xray-client"],
   logging: false,
+  webpack(config, { dev }) {
+    // This environment-selected alias is not a source-file change. Give the
+    // persistent cache an explicit mode key when switching launchers.
+    if (config.cache && typeof config.cache === "object") {
+      config.cache.version = `${config.cache.version ?? ""}:sales-xray-review-${dev && reviewRequested}`;
+    }
+    if (dev && reviewRequested) {
+      config.resolve.alias["./processing-review-port$"] = path.join(
+        __dirname,
+        "app/processing-review-port.dev.ts",
+      );
+    }
+    return config;
+  },
   ...(!staticPreview
     ? {
         async rewrites() {
-          return apiOrigin
+          return apiOrigin && !reviewRequested
             ? [
                 {
                   source: "/v1/conversation/:path*",

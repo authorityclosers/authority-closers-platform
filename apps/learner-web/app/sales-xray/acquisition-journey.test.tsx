@@ -64,8 +64,17 @@ const click = async (text: string) => {
   await act(async () => button(text).click());
   await flush();
 };
-const mount = async (library = false) => {
-  await act(async () => root.render(library ? <CallsPage /> : <Page />));
+const mount = async (library = false, callId?: string) => {
+  if (callId)
+    window.history.replaceState(null, "", `/sales-xray?call=${callId}`);
+  const page = library ? (
+    <CallsPage />
+  ) : (
+    await Page({
+      searchParams: Promise.resolve(callId ? { call: callId } : {}),
+    })
+  );
+  await act(async () => root.render(page));
   await flush();
 };
 const mutationRequests = () =>
@@ -280,6 +289,60 @@ it("keeps a pending ownership claim explicit and restores its report without re-
     "/v1/conversation/acquisition/claim",
   ]);
   expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+});
+
+it("shows a neutral opening state while a learner deep link is checked, then opens the saved report", async () => {
+  accepted = claimed = true;
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${submissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+
+  await mount(false, submissionId);
+  expect(host.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(host.textContent).toContain("Opening your saved call");
+  expect(host.textContent).not.toContain("Add a call to review");
+  expect(host.querySelector('input[type="file"]')).toBeNull();
+  expect(mutationRequests()).toHaveLength(0);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
+  expect(host.querySelector('[data-stage="opening"]')).toBeNull();
+  expect(mutationRequests()).toHaveLength(0);
+});
+
+it("shows a restored pending call as processing without returning to upload or accepting work", async () => {
+  await mount(false, submissionId);
+  expect(host.querySelector('[data-stage="processing"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
+  expect(
+    host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(true);
+  expect(host.textContent).not.toContain("Start with your sales call");
+  expect(mutationRequests()).toHaveLength(0);
+});
+
+it("opens an authorized saved report when upload setup reads are unavailable", async () => {
+  accepted = claimed = true;
+  entryStatus = sessionStatus = 503;
+  await mount(false, submissionId);
+  expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
+  expect(host.textContent).toContain(envelope.report.content.summary);
+  expect(requests.some(({ path }) => path.endsWith("/upload-policy"))).toBe(
+    false,
+  );
+  expect(mutationRequests()).toHaveLength(0);
 });
 
 it("opens an account library result in the learner report route without processing it", async () => {

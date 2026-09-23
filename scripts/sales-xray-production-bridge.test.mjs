@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   createServer,
+  parseCliBoolean,
   PRODUCTION_UPSTREAM_ORIGIN,
   resolveApiRoute,
   validateBridgeConfig,
@@ -38,11 +39,16 @@ function cookieFrom(responseValue) {
   return `ac_sales_xray_dev_session=${match[1]}`;
 }
 
-async function startTestBridge(fetcher) {
+async function startTestBridge(fetcher, options = {}) {
   const port = await freePort();
   const browserOrigin = `http://salesxray.localhost:${port}`;
   const innerOrigin = "http://127.0.0.1:3116";
-  const created = createServer({ browserOrigin, innerOrigin, fetcher });
+  const created = createServer({
+    browserOrigin,
+    innerOrigin,
+    fetcher,
+    ...options,
+  });
   await new Promise((resolve, reject) => {
     created.server.once("error", reject);
     created.server.listen(port, "127.0.0.1", resolve);
@@ -137,6 +143,18 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
       "GET",
       "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/report.docx",
     ],
+    [
+      "GET",
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan",
+    ],
+    [
+      "POST",
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan/quote",
+    ],
+    [
+      "POST",
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan",
+    ],
     ["POST", "/v1/conversation/intake/quote"],
     ["GET", "/v1/conversation/recordings"],
     [
@@ -204,6 +222,241 @@ test("production destination is pinned and Sales Xray route surface is narrow", 
     ),
     { kind: "blocked" },
   );
+  const submissionPlan =
+    "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan";
+  for (const [method, path] of [
+    ["GET", submissionPlan],
+    ["POST", `${submissionPlan}/quote`],
+    ["POST", submissionPlan],
+  ])
+    assert.deepEqual(
+      resolveApiRoute(method, path),
+      { kind: "api", auth: "session", requiresSession: true },
+      `${method} ${path} remains owner-session scoped`,
+    );
+  for (const [method, path, search = ""] of [
+    ["POST", `${submissionPlan}/quote/extra`],
+    ["GET", `${submissionPlan}/quote`],
+    ["PUT", submissionPlan],
+    ["DELETE", `${submissionPlan}/quote`],
+    ["PATCH", submissionPlan],
+    ["POST", submissionPlan, "?unexpected=1"],
+    ["GET", submissionPlan, "?unexpected=1"],
+    ["GET", "/v1/admin/conversation/analysis-settings/history"],
+    ["POST", "/v1/admin/conversation/analysis-settings/history"],
+    ["GET", "/v1/admin/conversation/analysis-settings/history/"],
+  ])
+    assert.deepEqual(
+      resolveApiRoute(method, path, search),
+      { kind: "blocked" },
+      `${method} ${path}${search} remains blocked`,
+    );
+
+  for (const [method, path] of [
+    ["GET", "/v1/me"],
+    ["GET", "/v1/conversation/acquisition/submissions"],
+    [
+      "GET",
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan",
+    ],
+    ["POST", "/v1/auth/password/login"],
+    ["POST", "/v1/auth/logout"],
+    ["POST", "/v1/context"],
+  ])
+    assert.equal(
+      resolveApiRoute(method, path, "", { analysisReadOnly: true }).kind,
+      "api",
+      `${method} ${path} remains available in analysis read-only mode`,
+    );
+  for (const [method, path] of [
+    ["POST", "/v1/conversation/intake/quote"],
+    ["POST", "/v1/conversation/runs"],
+    ["POST", "/v1/conversation/acquisition/claim"],
+    ["POST", "/v1/conversation/acquisition/session"],
+    [
+      "POST",
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan/quote",
+    ],
+    ["GET", "/v1/auth/google/start"],
+    ["POST", "/v1/admin/conversation/analysis-settings/history"],
+  ])
+    assert.deepEqual(
+      resolveApiRoute(method, path, "", { analysisReadOnly: true }),
+      { kind: "blocked" },
+      `${method} ${path} is blocked in analysis read-only mode`,
+    );
+});
+
+test("analysis read-only mode denies data mutations before upstream fetch", async () => {
+  const calls = [];
+  const bridge = await startTestBridge(
+    async (target, init = {}) => {
+      const url = new URL(target);
+      calls.push({
+        path: url.pathname,
+        method: init.method,
+        headers: init.headers,
+      });
+      if (url.pathname === "/v1/auth/password/login")
+        return response(JSON.stringify({ authenticated: true }), {
+          headers: {
+            "set-cookie": `__Host-ac_session=${sessionValue}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+          },
+        });
+      if (url.pathname === "/v1/auth/logout")
+        return new Response(null, { status: 204 });
+      return response(JSON.stringify({ ok: true }));
+    },
+    { analysisReadOnly: true },
+  );
+  try {
+    const health = await request(bridge, "/health");
+    assert.equal(health.status, 200);
+    assert.equal((await health.json()).analysis_read_only, true);
+
+    const base =
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1";
+    const blocked = [
+      ["POST", `${base}/plan/quote`],
+      ["POST", `${base}/plan`],
+      ["PUT", `${base}/source`],
+      ["DELETE", base],
+      ["POST", "/v1/conversation/intake/quote"],
+      ["POST", "/v1/conversation/runs"],
+      ["POST", "/v1/conversation/acquisition/claim"],
+      ["POST", "/v1/conversation/acquisition/session"],
+      ["POST", "/v1/context?unexpected=1"],
+      ["GET", "/v1/auth/google/start?surface=admin"],
+      ["POST", "/v1/admin/conversation/analysis-settings/history"],
+    ];
+    for (const [method, path] of blocked) {
+      const result = await request(bridge, path, {
+        method,
+        headers: {
+          ...(method === "GET" ? {} : { origin: bridge.browserOrigin }),
+          "content-type": "application/json",
+        },
+        body: method === "GET" ? undefined : "{}",
+      });
+      assert.equal(result.status, 404, `${method} ${path}`);
+    }
+    assert.equal(
+      calls.length,
+      0,
+      "denied actions must not invoke upstream fetch",
+    );
+
+    const read = await request(bridge, "/v1/conversation/capabilities");
+    assert.equal(read.status, 200);
+    assert.equal(calls.at(-1).path, "/v1/conversation/capabilities");
+
+    const login = await request(bridge, "/v1/auth/password/login", {
+      method: "POST",
+      headers: {
+        origin: bridge.browserOrigin,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email: "owner@example.invalid",
+        password: "synthetic",
+      }),
+    });
+    assert.equal(login.status, 200);
+    assert.ok(!login.headers.get("set-cookie").includes(sessionValue));
+    assert.equal(calls.at(-1).path, "/v1/auth/password/login");
+    const localCookie = cookieFrom(login);
+
+    const savedPlan = await request(bridge, `${base}/plan`, {
+      headers: { cookie: localCookie },
+    });
+    assert.equal(savedPlan.status, 200);
+    assert.equal(calls.at(-1).path, `${base}/plan`);
+
+    const context = await request(bridge, "/v1/context", {
+      method: "POST",
+      headers: {
+        origin: bridge.browserOrigin,
+        cookie: localCookie,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ workspace_id: "synthetic-workspace" }),
+    });
+    assert.equal(context.status, 200);
+    assert.equal(calls.at(-1).path, "/v1/context");
+    assert.equal(
+      calls.at(-1).headers.get("cookie"),
+      `__Host-ac_session=${sessionValue}`,
+    );
+
+    const logout = await request(bridge, "/v1/auth/logout", {
+      method: "POST",
+      headers: { origin: bridge.browserOrigin, cookie: localCookie },
+    });
+    assert.equal(logout.status, 204);
+    assert.match(logout.headers.get("set-cookie") ?? "", /Max-Age=0/);
+    assert.deepEqual(
+      calls.slice(-3).map(({ path }) => path),
+      [`${base}/plan`, "/v1/context", "/v1/auth/logout"],
+    );
+  } finally {
+    await bridge.close();
+  }
+});
+
+test("default mode preserves live processing routes and validates the CLI flag", async () => {
+  assert.equal(parseCliBoolean(undefined, "analysis-read-only"), false);
+  assert.equal(parseCliBoolean("true", "analysis-read-only"), true);
+  assert.equal(parseCliBoolean("false", "analysis-read-only"), false);
+  assert.throws(
+    () => parseCliBoolean("1", "analysis-read-only"),
+    /exactly true or false/,
+  );
+  assert.throws(
+    () => createServer({ analysisReadOnly: "true" }),
+    /must be a boolean/,
+  );
+
+  const calls = [];
+  const bridge = await startTestBridge(async (target, init = {}) => {
+    const url = new URL(target);
+    calls.push({ path: url.pathname, method: init.method });
+    if (url.pathname === "/v1/auth/password/login")
+      return response("{}", {
+        headers: {
+          "set-cookie": `__Host-ac_session=${sessionValue}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+        },
+      });
+    return response(JSON.stringify({ quoted: true }));
+  });
+  try {
+    const health = await request(bridge, "/health");
+    assert.equal((await health.json()).analysis_read_only, false);
+    const login = await request(bridge, "/v1/auth/password/login", {
+      method: "POST",
+      headers: { origin: bridge.browserOrigin },
+    });
+    const localCookie = cookieFrom(login);
+    const quote = await request(
+      bridge,
+      "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan/quote",
+      {
+        method: "POST",
+        headers: {
+          origin: bridge.browserOrigin,
+          cookie: localCookie,
+          "content-type": "application/json",
+        },
+        body: "{}",
+      },
+    );
+    assert.equal(quote.status, 200);
+    assert.deepEqual(calls.at(-1), {
+      path: "/v1/conversation/acquisition/submissions/1adde9e9-42c8-4a53-bf01-31acd3a240c1/plan/quote",
+      method: "POST",
+    });
+  } finally {
+    await bridge.close();
+  }
 });
 
 test("password login maps only the opaque upstream cookie to an ephemeral local handle", async () => {

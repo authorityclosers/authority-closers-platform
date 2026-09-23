@@ -23,6 +23,8 @@ vm.runInNewContext(
 const fixture = fixtureModule.exports;
 const normalMotion = process.env.SALES_XRAY_QA_MOTION === "normal";
 const activityChecks = process.env.SALES_XRAY_QA_ACTIVITY === "1";
+const observedChecks = process.env.SALES_XRAY_QA_OBSERVED === "1";
+const observedFrameId = "33333333-3333-4333-8333-333333333333";
 const reportEnvelope = structuredClone(fixture.envelope);
 if (process.env.SALES_XRAY_QA_LONG === "1") {
   const content = reportEnvelope.report.content;
@@ -57,6 +59,7 @@ assert.match(
 const output = path.join(
   root,
   ".tmp/sales-xray-ui-qa",
+  observedChecks ? "observed-progress" : ".",
   normalMotion ? "normal-motion" : ".",
   process.env.SALES_XRAY_QA_LONG === "1" ? "long" : ".",
 );
@@ -174,6 +177,7 @@ try {
     { width: 1024, height: 626 },
     { width: 390, height: 844 },
     { width: 375, height: 667 },
+    { width: 320, height: 568 },
   ]) {
     if (
       process.env.SALES_XRAY_QA_WIDTH &&
@@ -189,9 +193,14 @@ try {
         reducedMotion: normalMotion ? "no-preference" : "reduce",
       });
       let apiRequests = 0;
+      let observationReads = 0;
       const delayedState = state.startsWith("delayed-");
       const mutations = [];
-      let liveState = delayedState ? state.slice("delayed-".length) : state;
+      let liveState = observedChecks
+        ? "report"
+        : delayedState
+          ? state.slice("delayed-".length)
+          : state;
       let sourceId = fixture.submissionId;
       let sourceSha = fixture.progress.source_sha256;
       let finishUpload;
@@ -216,6 +225,45 @@ try {
             },
           };
         });
+      if (observedChecks) {
+        assert.ok(["C2", "C4", "C5", "held"].includes(state));
+        await context.route("**/__review/api/frames/**", async (route) => {
+          observationReads++;
+          assert.equal(route.request().method(), "GET");
+          const active = ["C2", "C4", "C5"].indexOf(state);
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              id: observedFrameId,
+              observedAt: Date.now() - 1000,
+              leaseUntil: Date.now() + 30_000,
+              receipt: {
+                ...fixture.progress,
+                state: state === "held" ? "held" : "active",
+                local_state: "completed",
+                automatic_progression: true,
+                has_report: false,
+                stages: ["C2", "C4", "C5"].map((stage, index) => ({
+                  stage,
+                  state:
+                    state === "held"
+                      ? index === 0
+                        ? "completed"
+                        : index === 1
+                          ? "uncertain"
+                          : "queued"
+                      : index < active
+                        ? "completed"
+                        : index === active
+                          ? "running"
+                          : "queued",
+                })),
+              },
+            }),
+          });
+        });
+      }
       await context.route("**/v1/**", async (route) => {
         apiRequests++;
         if (route.request().method() !== "GET")
@@ -271,24 +319,31 @@ try {
             ...fixture.progress,
             submission_id: sourceId,
             source_sha256: sourceSha,
-            state: liveState === "held" ? "held" : "active",
+            state:
+              liveState === "report"
+                ? "completed"
+                : liveState === "held"
+                  ? "held"
+                  : "active",
             local_state: liveState === "checking" ? "running" : "completed",
             automatic_progression: true,
             has_report: liveState === "report",
             stages: ["C2", "C4", "C5"].map((stage, i) => ({
               stage,
               state:
-                liveState === "held"
-                  ? i === 0
-                    ? "completed"
-                    : i === 1
-                      ? "uncertain"
-                      : "queued"
-                  : i < active
-                    ? "completed"
-                    : i === active
-                      ? "running"
-                      : "queued",
+                liveState === "report"
+                  ? "completed"
+                  : liveState === "held"
+                    ? i === 0
+                      ? "completed"
+                      : i === 1
+                        ? "uncertain"
+                        : "queued"
+                    : i < active
+                      ? "completed"
+                      : i === active
+                        ? "running"
+                        : "queued",
             })),
           };
         } else status = 404;
@@ -315,8 +370,12 @@ try {
         "uploading",
         "calls",
       ].includes(state);
+      if (state === "report")
+        await page.goto(`${origin}/?qa-origin=report-workspace`, {
+          waitUntil: "domcontentloaded",
+        });
       await page.goto(
-        `${origin}${state === "calls" ? "/calls" : saved ? `/?call=${fixture.submissionId}` : "/"}`,
+        `${origin}${state === "calls" ? "/calls" : saved ? `/?call=${fixture.submissionId}` : "/"}${observedChecks ? `#sx-review=v1&mode=observed&frame=${observedFrameId}` : ""}`,
         { waitUntil: "domcontentloaded" },
       );
       await page.locator("#main-content").waitFor();
@@ -352,7 +411,20 @@ try {
           .getByRole("tab", { name: "Overview", exact: true })
           .waitFor();
       else if (saved)
-        await page.locator('[aria-label="Processing stages"]').waitFor();
+        await page
+          .locator('[aria-label="Processing stages"]')
+          .waitFor()
+          .catch(async (error) => {
+            console.error(
+              JSON.stringify({
+                state,
+                observedChecks,
+                observationReads,
+                visible: await page.locator("body").innerText(),
+              }),
+            );
+            throw error;
+          });
       await page.waitForTimeout(300);
       await page.evaluate(() => document.fonts.ready);
       await page.evaluate(
@@ -514,11 +586,77 @@ try {
             viewport.height - (viewport.width < 621 ? 78 : 0),
           `${state} action offscreen: ${JSON.stringify(metrics)}`,
         );
-      if (state !== "report")
-        assert.ok(
-          metrics.mainScroll <= metrics.mainHeight + 1,
-          `${state} inner viewport overflow: ${JSON.stringify(metrics)}`,
-        );
+      if (state !== "report") {
+        if (
+          saved &&
+          viewport.height <= 720 &&
+          metrics.mainScroll > metrics.mainHeight + 1
+        ) {
+          // Small screens may scroll; they must not clip controls behind the
+          // fixed navigation. Keep the one-viewport assertion at normal sizes.
+          const reachability = await page.evaluate(() => {
+            const main = document.querySelector(".studio-main");
+            main.scrollTop = main.scrollHeight;
+            const boundary = main.getBoundingClientRect();
+            const actions = [
+              ...main.querySelectorAll(
+                'section[aria-label="Analysis progress"] footer :is(a,button)',
+              ),
+            ].map((el) => {
+              const rect = el.getBoundingClientRect();
+              return {
+                text: el.textContent,
+                top: rect.top,
+                bottom: rect.bottom,
+                height: rect.height,
+              };
+            });
+            const privacy = [...main.querySelectorAll("summary")]
+              .find((el) => el.textContent.includes("Privacy & support"))
+              ?.getBoundingClientRect();
+            return {
+              top: boundary.top,
+              bottom: boundary.bottom,
+              scrollTop: main.scrollTop,
+              actions,
+              privacyBottom: privacy?.bottom,
+            };
+          });
+          assert.ok(reachability.actions.length >= 2);
+          assert.ok(
+            reachability.actions.every(
+              (action) =>
+                action.top >= reachability.top &&
+                action.bottom <= reachability.bottom &&
+                action.height >= 44,
+            ),
+            "short-screen processing actions remain fully reachable",
+          );
+          assert.ok(
+            reachability.privacyBottom <= reachability.bottom,
+            "privacy control stays reachable",
+          );
+          await page.screenshot({
+            path: path.join(
+              output,
+              `${state}-${viewport.width}x${viewport.height}-scrolled.png`,
+            ),
+          });
+          results.push({
+            state: `${state}-short-screen-scroll`,
+            ...viewport,
+            ...reachability,
+            verified: true,
+          });
+          await page.evaluate(() => {
+            document.querySelector(".studio-main").scrollTop = 0;
+          });
+        } else
+          assert.ok(
+            metrics.mainScroll <= metrics.mainHeight + 1,
+            `${state} inner viewport overflow: ${JSON.stringify(metrics)}`,
+          );
+      }
       assert.deepEqual(errors, [], `${state} page errors`);
       results.push({ state, ...metrics, apiRequests });
       if (delayedState) {
@@ -628,6 +766,53 @@ try {
         });
       }
       if (state === "report") {
+        // Exercise the actual mounted explorer and browser history. This is
+        // fixture-backed navigation QA, not live provider-quality evidence.
+        const beforeSectionReads = apiRequests;
+        const beforeSectionMutations = mutations.length;
+        await page.evaluate(() => {
+          window.__qaOriginalAudio = document.querySelector("audio");
+        });
+        await page.getByRole("tab", { name: "Prospect", exact: true }).click();
+        assert.equal(
+          new URL(page.url()).searchParams.get("section"),
+          "prospect",
+        );
+        await page.getByRole("tab", { name: "Moments", exact: true }).click();
+        assert.equal(
+          new URL(page.url()).searchParams.get("section"),
+          "moments",
+          "clicking another section replaces the bookmark in place",
+        );
+        assert.equal(
+          await page.evaluate(
+            () => document.querySelector("audio") === window.__qaOriginalAudio,
+          ),
+          true,
+        );
+        assert.equal(
+          mutations.length,
+          beforeSectionMutations,
+          "section navigation must not create work",
+        );
+        assert.equal(
+          apiRequests,
+          beforeSectionReads,
+          "section navigation must not reread the report",
+        );
+        await page.reload();
+        await page.locator('[data-report-section="moments"]').waitFor();
+        assert.equal(
+          mutations.length,
+          beforeSectionMutations,
+          "bookmark reload must not create work",
+        );
+        await page.getByRole("tab", { name: "Overview", exact: true }).click();
+        results.push({
+          state: "report-section-navigation",
+          width: viewport.width,
+          verified: true,
+        });
         await assertReportFits(page, "Overview", viewport);
         if (viewport.width <= 760) {
           for (const label of [
@@ -969,6 +1154,52 @@ try {
           await reviewOpener.evaluate((el) => el === document.activeElement),
           true,
         );
+        if (state === "report") {
+          await page.goBack({ waitUntil: "domcontentloaded" });
+          const destination = new URL(page.url());
+          assert.equal(
+            destination.searchParams.get("qa-origin"),
+            "report-workspace",
+            "Back returns to the page that opened the saved report",
+          );
+          assert.equal(destination.searchParams.has("call"), false);
+          assert.equal(destination.searchParams.has("section"), false);
+          results.push({
+            state: "report-section-back-to-origin",
+            width: viewport.width,
+            verified: true,
+          });
+        }
+      }
+      if (observedChecks) {
+        assert.ok(
+          observationReads > 0,
+          "development port reads the selected observation",
+        );
+        assert.equal(
+          await page
+            .getByRole("tab", { name: "Overview", exact: true })
+            .count(),
+          0,
+          "completed live report does not replace the selected processing observation",
+        );
+        const statusButton = page.getByRole("button", {
+          name: "Check status",
+          exact: true,
+        });
+        if (await statusButton.isVisible()) await statusButton.click();
+        assert.deepEqual(
+          mutations,
+          [],
+          "observed progress never submits operational mutations",
+        );
+        results.push({
+          state: `observed-${state}`,
+          ...viewport,
+          observationReads,
+          mutations: 0,
+          verified: true,
+        });
       }
       finishUpload();
       await context.close();
@@ -1016,6 +1247,10 @@ try {
       }
     }
   }
+  assert.ok(
+    results.length > 0,
+    "viewport selection must execute at least one check",
+  );
   await writeFile(
     path.join(output, "viewport-results.json"),
     JSON.stringify(
@@ -1023,6 +1258,7 @@ try {
         capturedAt: new Date().toISOString(),
         origin,
         data: "synthetic-only",
+        observedChecks,
         browser: "Chromium",
         reducedMotion: !normalMotion,
         results,

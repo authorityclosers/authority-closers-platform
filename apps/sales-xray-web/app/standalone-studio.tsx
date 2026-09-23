@@ -145,9 +145,11 @@ async function selectWorkspace(tenantId: string, signal: AbortSignal) {
 export function StandaloneStudio({
   children = <CallStudio />,
   variant = "standalone",
+  openingExistingCall = false,
 }: {
   children?: ReactNode;
   variant?: "standalone" | "embedded";
+  openingExistingCall?: boolean;
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
@@ -260,7 +262,10 @@ export function StandaloneStudio({
   if (view.kind === "loading" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <SalesXrayPreloader phase="session" />
+        <SalesXrayPreloader
+          phase="session"
+          openingExistingCall={openingExistingCall}
+        />
       </WorkspaceAccessProvider>
     );
   const chooser = view.kind === "chooser" || view.kind === "selecting";
@@ -269,7 +274,9 @@ export function StandaloneStudio({
     : view.kind === "empty"
       ? "No workspace is ready yet."
       : view.kind === "unauthenticated"
-        ? "Sign in to analyse your calls."
+        ? openingExistingCall
+          ? "Sign in to open your saved call."
+          : "Sign in to analyse your calls."
         : "Workspace access needs attention.";
 
   return (
@@ -324,8 +331,9 @@ export function StandaloneStudio({
           {view.kind === "unauthenticated" ? (
             <>
               <p>
-                Use your AC account to keep your calls, reports and remaining
-                minutes together.
+                {openingExistingCall
+                  ? "Sign in with the account that owns this saved call."
+                  : "Use your AC account to keep your calls, reports and remaining minutes together."}
               </p>
               <Link href="/login" className="primary-button">
                 Sign in <ArrowRight size={16} aria-hidden="true" />

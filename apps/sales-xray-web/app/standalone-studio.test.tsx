@@ -52,10 +52,10 @@ async function flush() {
   });
 }
 
-async function mount() {
+async function mount(openingExistingCall = false) {
   await act(async () =>
     root.render(
-      <StandaloneStudio>
+      <StandaloneStudio openingExistingCall={openingExistingCall}>
         <div data-testid="call-studio">Conversation studio</div>
       </StandaloneStudio>,
     ),
@@ -115,6 +115,19 @@ it("does not announce a confirmed session while access is still pending", async 
     container.querySelector("ac-preloader")?.getAttribute("environment"),
   ).toBe("production");
   pending.resolve(response({}, 401));
+  await flush();
+  expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
+});
+
+it("keeps a requested saved call on a neutral access-check surface", async () => {
+  const pending = deferred<Response>();
+  fetchMock.mockReturnValueOnce(pending.promise);
+  await mount(true);
+  expect(container.textContent).toContain("Opening your saved call");
+  expect(container.textContent).toContain("Checking workspace access");
+  expect(container.textContent).not.toContain("Getting Sales Xray ready");
+  expect(container.querySelector('[data-testid="call-studio"]')).toBeNull();
+  pending.resolve(response(workspaceChoices(firstTenantId)));
   await flush();
   expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
 });
