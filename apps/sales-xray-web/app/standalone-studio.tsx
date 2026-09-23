@@ -184,6 +184,7 @@ function StandaloneStudioView({
   const generation = useRef(0);
   const activeController = useRef<AbortController | null>(null);
   const pending = usePendingAnalysis();
+  const observeAccount = pending?.observeAccount;
   const review = useProcessingReview(null);
 
   useEffect(() => {
@@ -204,9 +205,14 @@ function StandaloneStudioView({
         )
           return;
         if (choices === null) {
+          observeAccount?.(null);
           setView({ kind: "unauthenticated" });
           return;
         }
+        observeAccount?.({
+          personId: choices.person_id,
+          sessionId: choices.session_id,
+        });
         if (choices.selected_tenant_id !== null) {
           setView({ kind: "ready", choices });
           return;
@@ -230,7 +236,7 @@ function StandaloneStudioView({
         activeController.current = null;
       if (generation.current === requestGeneration) generation.current += 1;
     };
-  }, [attempt, review.fixtureRequested, review.readOnly]);
+  }, [attempt, observeAccount, review.fixtureRequested, review.readOnly]);
 
   useEffect(
     () => () => {

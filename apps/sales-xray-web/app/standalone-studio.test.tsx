@@ -238,12 +238,30 @@ it("retains the same selected File through sign-in refresh and workspace choice"
   const file = new File([new Uint8Array([1, 2, 3])], "synthetic.wav", {
     type: "audio/wav",
   });
-  await act(async () => observed.pending?.selectFile(file));
+  const queued = new File([new Uint8Array([4, 5, 6])], "queued.wav", {
+    type: "audio/wav",
+  });
+  await act(async () => observed.pending?.addFiles([file, queued]));
   const intentId = observed.pending?.selection?.intentId;
   expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  await act(async () => observed.access?.retry());
+  await flush();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    "Workspace access could not be checked",
+  );
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+  expect(revokeUrl).not.toHaveBeenCalled();
 
   fetchMock.mockResolvedValueOnce(response(workspaceChoices()));
-  await act(async () => observed.access?.retry());
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Try again"))
+      ?.click(),
+  );
   await flush();
   expect(container.querySelector('[data-testid="file-name"]')).toBeNull();
   expect(revokeUrl).not.toHaveBeenCalled();
@@ -256,6 +274,7 @@ it("retains the same selected File through sign-in refresh and workspace choice"
   );
   await flush();
   expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.stagedFiles[1]).toBe(queued);
   expect(observed.pending?.selection?.intentId).toBe(intentId);
   expect(observed.access?.context).toEqual({
     personId,
