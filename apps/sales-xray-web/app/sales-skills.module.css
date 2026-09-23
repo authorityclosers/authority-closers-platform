@@ -349,7 +349,8 @@
     height: 22px;
   }
   .skills .card h3 {
-    font-size: 12px;
+    font-size: clamp(13px, 1.1vw, 14px);
+    line-height: 1.3;
   }
 }
 @media (max-width: 620px) {
@@ -396,18 +397,18 @@
     height: 21px;
   }
   .skills .card h3 {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.3;
   }
   .status {
     margin-top: 5px;
-    font-size: 10px;
+    font-size: 11px;
     padding: 2px 7px;
   }
   .open {
     min-height: 32px;
     padding-top: 6px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
