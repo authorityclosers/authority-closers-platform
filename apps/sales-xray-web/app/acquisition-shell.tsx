@@ -76,10 +76,6 @@ export function AcquisitionShell({
                 priority
               />
             </span>
-            <span>
-              <strong>Sales Xray</strong>
-              <small>BY AUTHORITY CLOSERS</small>
-            </span>
           </Link>
           <button
             ref={toggleRef}
