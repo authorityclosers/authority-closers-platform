@@ -69,6 +69,7 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 
@@ -98,6 +99,12 @@ def _is_postgres_deadlock(error: DBAPIError) -> bool:
     """Recognize only PostgreSQL's serialization code for a deadlock."""
 
     return getattr(error.orig, "sqlstate", None) == "40P01"
+
+
+def _actor_binding(actor: ActorContext | None) -> tuple[UUID, UUID, UUID | None] | None:
+    if actor is None:
+        return None
+    return actor.person_id, actor.session_id, actor.tenant_id
 
 
 def _preflight_with_deadline(
@@ -410,7 +417,10 @@ def install_submission_http(
             )
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
+        actor_binding: tuple[UUID, UUID, UUID | None] | None = None
         async with asynccontextmanager(current_owner)(request) as owner:
+            await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+            actor_binding = _actor_binding(owner.actor)
             allowance = await owner.ownership.sessions.allowance(**owner.arguments)
             available_seconds = allowance["available_seconds"]
             if (
@@ -485,6 +495,11 @@ def install_submission_http(
                         bounded_preflight.measure, path, submission_id, hashes[0]
                     )
                     async with asynccontextmanager(current_owner)(request) as owner:
+                        await require_sales_xray_write_profile(
+                            owner.ownership.database, owner.actor
+                        )
+                        if _actor_binding(owner.actor) != actor_binding:
+                            raise fail(409, "Your account or tenant changed during upload.")
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
                             measured, policy_sha256=policies[0], **owner.arguments
@@ -588,10 +603,13 @@ def install_submission_http(
         owner: _Owner = dependency,
     ) -> dict[str, Any]:
         guard(request, response, write=True)
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
         report_language = await quote_language_preference(request)
         if runtime.authority is None:
             raise fail(409, "Your recording is private. Provider analysis is not enabled yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
         continuation_grant_id = await owner.ownership.ensure_processing_continuation(
             submission_id, key=key, **owner.arguments
         )
@@ -632,6 +650,7 @@ def install_submission_http(
         owner: _Owner = dependency,
     ) -> dict[str, Any]:
         guard(request, response, write=True)
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
         if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
             raise fail(415, "Approve the displayed analysis plan.")
         raw = bytearray()
@@ -649,6 +668,8 @@ def install_submission_http(
         if runtime.authority is None:
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
         await owner.ownership.ensure_processing_continuation(
             submission_id, key=key, **owner.arguments
         )

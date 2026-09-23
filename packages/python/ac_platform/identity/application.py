@@ -23,6 +23,7 @@ from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.identity.models import DeletionRequestStatus, PersonStatus, SessionAudience
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
+from ac_platform.identity.sales_xray_profile import erase_sales_xray_profile
 from ac_platform.identity.services import (
     AccountUnavailableError,
     AmbiguousProviderIdentityError,
@@ -1063,6 +1064,7 @@ class AsyncIdentityApplication:
             )
             if not privacy_complete:
                 return request
+        await erase_sales_xray_profile(self._session, person_id=person.id)
         if person.status != PersonStatus.DELETED.value:
             await self._repository.save_person(
                 replace(
