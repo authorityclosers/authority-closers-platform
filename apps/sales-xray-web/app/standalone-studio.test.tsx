@@ -7,6 +7,31 @@ import { StandaloneStudio } from "./standalone-studio";
 import { usePendingAnalysis } from "./pending-analysis";
 import { useWorkspaceAccess } from "./workspace-access";
 
+let authSelectedFile: { name: string; size: number } | null = null;
+vi.mock("./account-auth", () => ({
+  AccountAuth: ({
+    selectedFile,
+    onAuthenticated,
+  }: {
+    selectedFile: { name: string; size: number } | null;
+    onAuthenticated: () => void;
+  }) => {
+    authSelectedFile = selectedFile;
+    return (
+      <section data-testid="inline-account-auth">
+        <span>{selectedFile?.name ?? "No selected file"}</span>
+        <button type="button" onClick={onAuthenticated}>
+          Complete sign in
+        </button>
+      </section>
+    );
+  },
+}));
+vi.mock("./profile-menu", () => ({
+  PROFILE_UPDATED_EVENT: "sales-xray:profile-updated",
+  ProfileMenu: () => null,
+}));
+
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -66,12 +91,41 @@ async function mount(openingExistingCall = false) {
 }
 
 beforeEach(() => {
+  authSelectedFile = null;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
+
+function profileRecord(complete = true) {
+  return {
+    name: complete ? "Synthetic Person" : null,
+    email: "person@example.invalid",
+    phone_number_e164: complete ? "+12025550123" : null,
+    phone_verified: complete,
+    profile_complete: complete,
+    revision: 1,
+  };
+}
+
+function noContent() {
+  return new Response(null, { status: 204 });
+}
+
+function stubObjectUrls() {
+  const revokeUrl = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:synthetic-auth-flow"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeUrl,
+  });
+  return revokeUrl;
+}
 
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -283,4 +337,137 @@ it("retains the same selected File through sign-in refresh and workspace choice"
   });
   expect(createUrl).toHaveBeenCalledOnce();
   expect(revokeUrl).not.toHaveBeenCalled();
+});
+
+it("keeps guest analysis available and carries the original File through explicit sign-in, profile, and workspace choice", async () => {
+  const revokeUrl = stubObjectUrls();
+  const observed: {
+    pending: ReturnType<typeof usePendingAnalysis>;
+    access: ReturnType<typeof useWorkspaceAccess>;
+  } = { pending: null, access: null };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    const access = useWorkspaceAccess();
+    useEffect(() => {
+      observed.pending = pending;
+      observed.access = access;
+    }, [pending, access]);
+    return <p data-testid="studio-probe">{pending?.selection?.file.name}</p>;
+  }
+
+  fetchMock.mockResolvedValueOnce(response({}, 401));
+  await act(async () =>
+    root.render(<StandaloneStudio><StudioProbe /></StandaloneStudio>),
+  );
+  await flush();
+  const file = new File(["synthetic-audio"], "private-call.wav", {
+    type: "audio/wav",
+  });
+  const queued = new File(["queued-audio"], "next-call.wav", {
+    type: "audio/wav",
+  });
+  await act(async () => observed.pending?.addFiles([file, queued]));
+  const intentId = observed.pending?.selection?.intentId;
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
+  expect(container.querySelector('[data-testid="studio-probe"]')).not.toBeNull();
+  expect(fetchMock).toHaveBeenCalledOnce();
+
+  await act(async () => observed.access?.requestAccountSignIn?.());
+  expect(container.querySelector('[data-testid="inline-account-auth"]')).not.toBeNull();
+  expect(authSelectedFile).toBe(file);
+  expect(revokeUrl).not.toHaveBeenCalled();
+
+  const eligibility = deferred<Response>();
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices()));
+  fetchMock.mockResolvedValueOnce(response(profileRecord()));
+  fetchMock.mockReturnValueOnce(eligibility.promise);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[data-testid="inline-account-auth"] button')
+      ?.click(),
+  );
+  await flush();
+  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(container.textContent).toContain(file.name);
+  expect(container.querySelector('[data-testid="studio-probe"]')).toBeNull();
+  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-profile",
+    "/v1/me/sales-xray-profile/write-eligibility",
+  ]);
+
+  eligibility.resolve(noContent());
+  await flush();
+  expect(container.querySelector(`#account-profile-heading`)).toBeNull();
+  expect(container.querySelector(`[data-tenant-id="${firstTenantId}"]`)).not.toBeNull();
+  fetchMock.mockResolvedValueOnce(response({ tenant_id: firstTenantId }));
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(`button[data-tenant-id="${firstTenantId}"]`)
+      ?.click(),
+  );
+  await flush();
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+  expect(observed.pending?.selection?.intentId).toBe(intentId);
+  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
+  expect(revokeUrl).not.toHaveBeenCalled();
+});
+
+it("waits for canonical profile eligibility before an authenticated upload can continue", async () => {
+  const revokeUrl = stubObjectUrls();
+  const observed: {
+    pending: ReturnType<typeof usePendingAnalysis>;
+    access: ReturnType<typeof useWorkspaceAccess>;
+  } = { pending: null, access: null };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    const access = useWorkspaceAccess();
+    useEffect(() => {
+      observed.pending = pending;
+      observed.access = access;
+    }, [pending, access]);
+    return <p data-testid="studio-probe">{pending?.selection?.file.name}</p>;
+  }
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await act(async () =>
+    root.render(<StandaloneStudio><StudioProbe /></StandaloneStudio>),
+  );
+  await flush();
+  const file = new File(["synthetic-audio"], "account-call.wav", {
+    type: "audio/wav",
+  });
+  await act(async () => observed.pending?.selectFile(file));
+  const intentId = observed.pending?.selection?.intentId;
+  fetchMock.mockResolvedValueOnce(response(profileRecord()));
+  fetchMock.mockResolvedValueOnce(response({}, 403));
+  await act(async () => {
+    expect(observed.access?.requestAnalysisAccess?.()).toBe(false);
+  });
+  await flush();
+  expect(container.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(container.textContent).toContain("has not confirmed call review access");
+  expect(container.querySelector('[data-testid="studio-probe"]')).toBeNull();
+  expect(revokeUrl).not.toHaveBeenCalled();
+
+  fetchMock.mockResolvedValueOnce(response(profileRecord()));
+  fetchMock.mockResolvedValueOnce(noContent());
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("Check access again"))
+      ?.click(),
+  );
+  await flush();
+  expect(container.querySelector('[data-testid="studio-probe"]')).not.toBeNull();
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.selection?.intentId).toBe(intentId);
+  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
+  expect(revokeUrl).not.toHaveBeenCalled();
+  expect(
+    fetchMock.mock.calls.some(([path]) =>
+      String(path).startsWith("/v1/conversation"),
+    ),
+  ).toBe(false);
 });

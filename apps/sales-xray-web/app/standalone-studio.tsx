@@ -12,6 +12,9 @@ import Link from "next/link";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
+import { AccountAuth } from "./account-auth";
+import { AccountProfile } from "./account-profile";
+import { AcquisitionShell } from "./acquisition-shell";
 import { SalesXrayPreloader } from "./sales-xray-preloader";
 import {
   WorkspaceAccessProvider,
@@ -39,7 +42,7 @@ type ViewState =
   | { kind: "loading" }
   | { kind: "unauthenticated" }
   | { kind: "ready"; choices: WorkspaceChoices }
-  | { kind: "empty" }
+  | { kind: "empty"; choices: WorkspaceChoices }
   | { kind: "unavailable"; message: string }
   | {
       kind: "chooser" | "selecting";
@@ -181,6 +184,12 @@ function StandaloneStudioView({
   const Main = embedded ? "div" : "main";
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
+  const [authRequested, setAuthRequested] = useState(false);
+  const [gateIntentId, setGateIntentId] = useState<string | null>(null);
+  const [eligibleReceipt, setEligibleReceipt] = useState<{
+    intentId: string;
+    identityKey: string;
+  } | null>(null);
   const generation = useRef(0);
   const activeController = useRef<AbortController | null>(null);
   const pending = usePendingAnalysis();
@@ -220,7 +229,7 @@ function StandaloneStudioView({
         setView(
           choices.workspaces.length
             ? { kind: "chooser", choices }
-            : { kind: "empty" },
+            : { kind: "empty", choices },
         );
       })
       .catch(() => {
@@ -283,6 +292,47 @@ function StandaloneStudioView({
       setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };
+  const selected = pending?.selection ?? null;
+  const accountChoices =
+    view.kind === "ready" ||
+    view.kind === "chooser" ||
+    view.kind === "selecting" ||
+    view.kind === "empty"
+      ? view.choices
+      : null;
+  const identityKey = accountChoices
+    ? JSON.stringify([accountChoices.person_id, accountChoices.session_id])
+    : null;
+  const eligibleForSelection = Boolean(
+    selected &&
+      identityKey &&
+      eligibleReceipt?.intentId === selected.intentId &&
+      eligibleReceipt.identityKey === identityKey,
+  );
+  const requestAccountSignIn = () => {
+    if (review.fixtureRequested || review.readOnly !== false) return;
+    if (selected) setGateIntentId(selected.intentId);
+    setAuthRequested(true);
+  };
+  const requestAnalysisAccess = () => {
+    if (review.fixtureRequested || review.readOnly !== false || !selected)
+      return false;
+    // The existing guest challenge and trial path remains available.
+    if (view.kind === "unauthenticated") return true;
+    if (view.kind !== "ready" || !identityKey) {
+      if (accountChoices) setGateIntentId(selected.intentId);
+      return false;
+    }
+    const boundContextKey = JSON.stringify([
+      view.choices.person_id,
+      view.choices.session_id,
+      view.choices.selected_tenant_id,
+    ]);
+    if (eligibleForSelection && selected.boundContextKey === boundContextKey)
+      return true;
+    setGateIntentId(selected.intentId);
+    return false;
+  };
   useEffect(() => {
     if (view.kind !== "ready" || !view.choices.selected_tenant_id) return;
     pending?.bindContext({
@@ -303,6 +353,9 @@ function StandaloneStudioView({
           ? false
           : null,
     retry,
+    ...(review.readOnly === false && !review.fixtureRequested
+      ? { requestAccountSignIn, requestAnalysisAccess }
+      : {}),
     context:
       view.kind === "ready" && view.choices.selected_tenant_id
         ? {
@@ -325,6 +378,56 @@ function StandaloneStudioView({
         {children}
       </WorkspaceAccessProvider>
     );
+  if (
+    review.readOnly === false &&
+    authRequested &&
+    view.kind === "unauthenticated"
+  )
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        <AccountAuth
+          selectedFile={selected?.file ?? null}
+          onAuthenticated={() => {
+            setAuthRequested(false);
+            setView({ kind: "loading" });
+            setAttempt((value) => value + 1);
+          }}
+        />
+      </WorkspaceAccessProvider>
+    );
+  if (
+    review.readOnly === false &&
+    selected &&
+    identityKey &&
+    gateIntentId === selected.intentId &&
+    !eligibleForSelection
+  ) {
+    const profile = (
+      <AccountProfile
+        key={`${identityKey}:${selected.intentId}`}
+        selectedFile={selected.file}
+        onEligible={() =>
+          setEligibleReceipt({ intentId: selected.intentId, identityKey })
+        }
+        onSignIn={() => {
+          setAuthRequested(true);
+          setView({ kind: "loading" });
+          setAttempt((value) => value + 1);
+        }}
+      />
+    );
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        {embedded ? (
+          <div style={{ ...shellStyle, minHeight: "auto" }}>{profile}</div>
+        ) : (
+          <AcquisitionShell authenticated homeHref="/">
+            {profile}
+          </AcquisitionShell>
+        )}
+      </WorkspaceAccessProvider>
+    );
+  }
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
@@ -407,9 +510,19 @@ function StandaloneStudioView({
                   ? "Sign in with the account that owns this saved call."
                   : "Use your AC account to keep your calls, reports and remaining minutes together."}
               </p>
-              <Link href="/login" className="primary-button">
-                Sign in <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              {review.readOnly === false ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={requestAccountSignIn}
+                >
+                  Sign in <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              ) : (
+                <Link href="/login" className="primary-button">
+                  Sign in <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              )}
             </>
           ) : chooser ? (
             <>
