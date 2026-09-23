@@ -8,9 +8,9 @@ import {
 
 it("accepts only exact, allowlisted local fixture addresses", () => {
   for (const id of fixtureStateIds) {
-    expect(fixtureStateId(new URL(fixtureUrl(id), "http://local.test").search)).toBe(
-      id,
-    );
+    expect(
+      fixtureStateId(new URL(fixtureUrl(id), "http://local.test").search),
+    ).toBe(id);
   }
   for (const invalid of [
     "?new=1&sx-fixture=processing.unknown",
@@ -36,9 +36,7 @@ it("keeps fixture frames static, synthetic, and navigable without a report", () 
       index ? fixtureUrl(fixtureStateIds[index - 1]) : null,
     );
     expect(stage.navigation.nextUrl).toBe(
-      index + 1 < stages.length
-        ? fixtureUrl(fixtureStateIds[index + 1])
-        : null,
+      index + 1 < stages.length ? fixtureUrl(fixtureStateIds[index + 1]) : null,
     );
     expect(stage.progress?.has_report).not.toBe(true);
     if (stage.progress) expect(stage.progress.failure_code).toBeNull();

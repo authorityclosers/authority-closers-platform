@@ -139,13 +139,11 @@ it("requires confirmed account identity before allowing the parent to resume", (
 });
 
 it("sends only a same-origin JSON auth request and never exposes provider error bodies", async () => {
-  const fetcher = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ detail: "private-provider-diagnostics" }), {
-        status: 400,
-      }),
-    );
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ detail: "private-provider-diagnostics" }), {
+      status: 400,
+    }),
+  );
   vi.stubGlobal("fetch", fetcher);
   await expect(
     emailCodeRequest("verify", new AbortController().signal, {

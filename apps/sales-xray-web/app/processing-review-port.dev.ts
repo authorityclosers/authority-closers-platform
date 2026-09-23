@@ -263,7 +263,8 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
   }, []);
 
   useEffect(() => {
-    if (!requested || !callId || !frameId || localRequested || fixtureRequested) return;
+    if (!requested || !callId || !frameId || localRequested || fixtureRequested)
+      return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -536,20 +537,20 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
             : readOnly === false
               ? "Local fixture states require the read-only review bridge."
               : "Checking local review availability…"
-      : requested
-        ? !frameId
-          ? "Invalid review address. Select an observed state in the controls."
-          : value.key === key
-            ? value.message
-            : "Verifying this observed state against your live access…"
-        : localRequested
-          ? !localFrameId
-            ? "Invalid browser-local state address. Choose an observed state in the controls."
-            : localValue.key === snapshot
-              ? localValue.message ||
-                "Opening the observed browser-local state…"
-              : "Opening the observed browser-local state…"
-          : "";
+        : requested
+          ? !frameId
+            ? "Invalid review address. Select an observed state in the controls."
+            : value.key === key
+              ? value.message
+              : "Verifying this observed state against your live access…"
+          : localRequested
+            ? !localFrameId
+              ? "Invalid browser-local state address. Choose an observed state in the controls."
+              : localValue.key === snapshot
+                ? localValue.message ||
+                  "Opening the observed browser-local state…"
+                : "Opening the observed browser-local state…"
+            : "";
   return {
     requested,
     frame,

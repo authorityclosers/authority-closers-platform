@@ -155,7 +155,9 @@ it("rejects fixture preview when local read-only health is unavailable", async (
     return <p>{selected.fixtureFrame?.label ?? selected.message}</p>;
   }
   await act(async () => root.render(<FixtureView />));
-  expect(container.textContent).toContain("require the read-only review bridge");
+  expect(container.textContent).toContain(
+    "require the read-only review bridge",
+  );
   expect(container.textContent).not.toContain("Enter email code");
 });
 it("rejects duplicate selectors, arbitrary commands and malformed frame IDs", () => {

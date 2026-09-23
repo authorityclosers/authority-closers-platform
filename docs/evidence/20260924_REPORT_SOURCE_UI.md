@@ -9,3 +9,5 @@ The integrated source checkpoint is `80abdca8`, with the root evidence parser an
 No v5 provider report or production activation is claimed. This is a single-call presentation change, not implementation of full Brain 3 persistent learner history or cross-call coaching.
 
 The subsequent `006bcd48` checkpoint keeps the saved call outcome beside the next-call recommendations, with playback for its supplied source spans. An absent outcome does not produce an invented strip or claim. The focused NextCallPlan, SalesSkills and AcquisitionStudio selection passes 78 tests after integration. The final compiled journey remains a separate acceptance check.
+
+The completed integrated local web suite passes 412 tests, and the compiled account/report journey passes its 24 required assertions. That journey uses an explicit synthetic provider report; it proves workflow, ownership and playback, not semantic quality of a newly generated coaching-v5 report. The latter remains pending.
