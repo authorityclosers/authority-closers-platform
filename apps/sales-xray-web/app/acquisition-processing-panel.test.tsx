@@ -59,3 +59,40 @@ it("halts activity treatment for a held state and does not invent allowance or f
   expect(markup).not.toContain("12.4 MB");
   expect(markup).not.toContain('aria-current="step"');
 });
+
+it("renders a static fixture with no live-call timer, saved-work claim, or action", () => {
+  const markup = renderToStaticMarkup(
+    <AcquisitionProcessingPanel
+      staticPreview
+      stageRows={[
+        { stage: "C2", state: "completed", label: "Complete" },
+        { stage: "C4", state: "running", label: "In progress" },
+      ]}
+      statusText="Checking the conversation"
+      submissionId="00000000-0000-4000-8000-000000000001"
+      progress={{
+        state: "active",
+        local_state: "completed",
+        failure_code: null,
+        has_report: false,
+        automatic_progression: true,
+        stages: [
+          { stage: "C2", state: "completed" },
+          { stage: "C4", state: "running" },
+        ],
+      }}
+      fileName="Example call.wav"
+    >
+      <button type="button">Check status</button>
+    </AcquisitionProcessingPanel>,
+  );
+  expect(markup).toContain("Example processing state");
+  expect(markup).toContain("No call was uploaded or analysed");
+  expect(markup).toContain("Example audio");
+  expect(markup).toContain('data-animated="false"');
+  expect(markup).toContain('data-fixture="true"');
+  expect(markup).not.toContain("LAST CONFIRMED STATUS");
+  expect(markup).not.toContain("Uploaded file");
+  expect(markup).not.toContain("Your recording is saved");
+  expect(markup).not.toContain("Check status");
+});

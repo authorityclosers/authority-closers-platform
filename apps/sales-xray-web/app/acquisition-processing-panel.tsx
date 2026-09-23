@@ -27,6 +27,8 @@ type Props = {
   waitingForApproval?: boolean;
   accepted?: boolean;
   refreshProblem?: boolean;
+  /** Local review only: render static synthetic stages without live-call claims. */
+  staticPreview?: boolean;
   children?: ReactNode;
 };
 
@@ -73,6 +75,7 @@ export function AcquisitionProcessingPanel({
   waitingForApproval = false,
   accepted = false,
   refreshProblem = false,
+  staticPreview = false,
   children,
 }: Props) {
   const projection = projectProcessing(progress ?? null, waitingForApproval);
@@ -101,7 +104,7 @@ export function AcquisitionProcessingPanel({
   const queued = rows.some((row) => row.state === "queued" || row.state === "pending");
   const needsAttention = paused || rows.some((row) => ["held", "failed", "cancelled", "uncertain"].includes(row.state ?? ""));
   const connectionProblem = refreshProblem || offline;
-  const motionSuspended = hidden || needsAttention || connectionProblem;
+  const motionSuspended = staticPreview || hidden || needsAttention || connectionProblem;
   const currentStage = projection.current?.stage ?? rows.find((row) => row.state === "running")?.id ?? "processing";
   const guidance = accepted || progress?.automatic_progression
     ? "Analysis can continue after you leave. Keep this call’s link to return in this browser while your session and call remain available."
@@ -109,13 +112,13 @@ export function AcquisitionProcessingPanel({
   const fileStatus = needsAttention ? "Needs attention" : active ? "Processing" : queued ? "Queued" : "Checking status";
 
   return (
-    <section className={styles.panel} aria-label="Analysis progress" data-paused={needsAttention} data-motion-suspended={motionSuspended} data-animated={active && !motionSuspended}>
+    <section className={styles.panel} aria-label={staticPreview ? "Example analysis progress" : "Analysis progress"} data-paused={needsAttention} data-motion-suspended={motionSuspended} data-animated={active && !motionSuspended} data-fixture={staticPreview}>
       <div className={styles.heading}>
         <span className={styles.headingSignal} data-phase={currentStage} data-paused={needsAttention} aria-hidden="true">
           <AudioLines className={styles.headingWave} size={33} strokeWidth={1.85} />
         </span>
-        <h2 id="acquisition-processing-title">Processing your call</h2>
-        {allowanceLabel && (
+        <h2 id="acquisition-processing-title">{staticPreview ? "Example processing state" : "Processing your call"}</h2>
+        {!staticPreview && allowanceLabel && (
           <span className={styles.allowance}><ShieldCheck size={19} strokeWidth={1.8} aria-hidden="true" />{allowanceLabel}</span>
         )}
       </div>
@@ -170,7 +173,13 @@ export function AcquisitionProcessingPanel({
           </svg>
           <span className={styles.signalDivider} aria-hidden="true" />
           <div className={styles.signalCopy} role="status" aria-live="polite" aria-atomic="true">
-            {submissionId ? (
+            {staticPreview ? (
+              <div>
+                <p>LOCAL TEST STATE</p>
+                <h3>{statusText}</h3>
+                <p>Paused interface example. No call was uploaded or analysed.</p>
+              </div>
+            ) : submissionId ? (
               <ProcessingStatusCopy
                 submissionId={submissionId}
                 progress={progress ?? null}
@@ -187,7 +196,7 @@ export function AcquisitionProcessingPanel({
         </div>
       </div>
 
-      {connectionProblem && (
+      {!staticPreview && connectionProblem && (
         <p className={styles.connection} role="status">
           {offline ? "Your browser is offline." : "Status cannot currently be refreshed."}{" "}
           The stage trail shows the last confirmed information.
@@ -197,7 +206,7 @@ export function AcquisitionProcessingPanel({
       <div className={styles.fileCard}>
         <div className={styles.fileHeading}>
           <FileText size={23} strokeWidth={1.9} aria-hidden="true" />
-          <h3>Uploaded file</h3>
+          <h3>{staticPreview ? "Example audio" : "Uploaded file"}</h3>
         </div>
         <div className={styles.fileRow}>
           <span className={styles.fileIcon} aria-hidden="true"><FileAudio2 size={24} strokeWidth={1.8} /></span>
@@ -205,14 +214,14 @@ export function AcquisitionProcessingPanel({
             <strong title={fileName || undefined}>{fileName || "Your recording"}</strong>
             {fileMeta && <small>{fileMeta}</small>}
           </span>
-          <span className={styles.fileStatus} data-state={needsAttention ? "attention" : active ? "active" : "waiting"}>
-            <span aria-hidden="true" />{fileStatus}
+          <span className={styles.fileStatus} data-state={staticPreview ? "waiting" : needsAttention ? "attention" : active ? "active" : "waiting"}>
+            <span aria-hidden="true" />{staticPreview ? "Example" : fileStatus}
           </span>
         </div>
-        {!needsAttention && projection.savedEvidence && (
+        {!staticPreview && !needsAttention && projection.savedEvidence && (
           <p className={styles.savedEvidence}>Some conversation analysis is saved with this call.</p>
         )}
-        {needsAttention && (
+        {!staticPreview && needsAttention && (
           <aside className={styles.savedWork} aria-label="Saved work">
             <ShieldCheck size={17} aria-hidden="true" />
             <div>
@@ -227,10 +236,12 @@ export function AcquisitionProcessingPanel({
         )}
       </div>
       <footer className={styles.footer}>
-        <p>{needsAttention
-          ? "Completed work remains saved. Review the available recovery action before continuing."
-          : guidance}</p>
-        <div className={styles.actions}>{children}</div>
+        <p>{staticPreview
+          ? "This example stays paused. Choose another state in the review controls."
+          : needsAttention
+            ? "Completed work remains saved. Review the available recovery action before continuing."
+            : guidance}</p>
+        {!staticPreview && <div className={styles.actions}>{children}</div>}
       </footer>
     </section>
   );

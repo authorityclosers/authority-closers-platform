@@ -173,6 +173,7 @@
 .stage[data-visual-state="attention"] .stageStatus { color: #8b4e0d; }
 .stage[data-visual-state="active"] .stageStatus { color: #6940bd; }
 .stage[data-visual-state="completed"] .stageStatus { color: #087b72; }
+.panel[data-fixture="true"] .stage[data-visual-state="active"] .stageIcon { animation: none; }
 
 .signalCard {
   display: grid;

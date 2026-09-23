@@ -25,6 +25,7 @@ import {
   usePendingAnalysis,
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
+import { SalesXrayFixturePreview } from "./sales-xray-fixture-preview";
 
 type Workspace = Readonly<{
   tenant_id: string;
@@ -365,6 +366,25 @@ function StandaloneStudioView({
           }
         : null,
   };
+  if (
+    review.fixtureRequested &&
+    (!review.fixtureFrame || review.fixtureFrame.kind === "processing")
+  )
+    return (
+      <WorkspaceAccessProvider
+        value={{
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: () => {},
+        }}
+      >
+        <SalesXrayFixturePreview
+          frame={review.fixtureFrame}
+          message={review.message}
+        />
+      </WorkspaceAccessProvider>
+    );
   if (review.fixtureRequested)
     return (
       <WorkspaceAccessProvider
