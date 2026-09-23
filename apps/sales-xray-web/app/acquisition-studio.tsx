@@ -16,11 +16,8 @@ import {
   FolderOpen,
   HardDrive,
   LoaderCircle,
-  ListChecks,
   MoreHorizontal,
   ShieldCheck,
-  Sparkles,
-  Upload,
 } from "lucide-react";
 import {
   CallStudio,
@@ -29,6 +26,10 @@ import {
   type CallStudioVariant,
 } from "./call-studio";
 import { AcquisitionShell } from "./acquisition-shell";
+import {
+  AcquisitionGuideRail,
+  AcquisitionLowerPanels,
+} from "./acquisition-dashboard-panels";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { SalesSkills } from "./sales-skills";
@@ -1623,6 +1624,7 @@ export function AcquisitionStudio({
           <div
             className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
+            <div className={styles.primaryColumn}>
             <section
               className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
               aria-label="Your call"
@@ -1643,10 +1645,26 @@ export function AcquisitionStudio({
                   choose(event.dataTransfer.files?.[0]);
               }}
             >
-              {!displayFileSelected && !submission && !deletionOnlyId && (
+              {!submission && !deletionOnlyId && (
                 <div className={styles.uploadCardHeader}>
                   <div className={styles.uploadCardTitle}>
-                    <AudioLines size={29} aria-hidden="true" />
+                    <svg
+                      className={styles.animatedWaveMark}
+                      viewBox="0 0 46 46"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle cx="23" cy="23" r="19" stroke="currentColor" strokeOpacity=".12" strokeDasharray="2 5" />
+                      <path d="M3 23h5m30 0h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeOpacity=".4" />
+                      <g className={styles.waveBars} fill="currentColor">
+                        <rect x="9" y="18" width="2.8" height="10" rx="1.4" />
+                        <rect x="14.5" y="12" width="2.8" height="22" rx="1.4" />
+                        <rect x="20" y="6" width="2.8" height="34" rx="1.4" />
+                        <rect x="25.5" y="14" width="2.8" height="18" rx="1.4" />
+                        <rect x="31" y="10" width="2.8" height="26" rx="1.4" />
+                        <rect x="36.5" y="18" width="2.8" height="10" rx="1.4" />
+                      </g>
+                    </svg>
                     <h2>Add a call to review</h2>
                   </div>
                   <span className={styles.allowanceBadge}>
@@ -1751,8 +1769,21 @@ export function AcquisitionStudio({
               ) : !displayFileSelected && !submission ? (
                 <div className={styles.dropZone} data-upload-dropzone>
                   <span className="studio-upload-icon">
-                    <AudioLines className={styles.audioCue} size={30} />
-                    <Upload className={styles.uploadCue} size={25} />
+                    <svg
+                      className={styles.animatedUploadMark}
+                      viewBox="0 0 64 64"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle className={styles.uploadOrbit} cx="32" cy="32" r="29" stroke="currentColor" strokeOpacity=".26" strokeDasharray="2 7" />
+                      <path className={styles.uploadCloud} d="M18 44h27a10 10 0 0 0 2-19.8A16 16 0 0 0 16 28a8 8 0 0 0 2 16Z" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <g className={styles.uploadArrow} stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M32 48V28" />
+                        <path d="m25 35 7-7 7 7" />
+                      </g>
+                      <circle cx="11" cy="16" r="1.4" fill="currentColor" fillOpacity=".48" />
+                      <circle cx="53" cy="49" r="1.4" fill="currentColor" fillOpacity=".48" />
+                    </svg>
                   </span>
                   <p className={styles.dropTitle}>
                     Drag and drop your audio file here
@@ -2232,107 +2263,16 @@ export function AcquisitionStudio({
                 </div>
               )}
             </section>
-            {!displayFileSelected && !submission && !report && !deletionOnlyId && (
-              <aside className={styles.startGuide} aria-labelledby="start-guide-title">
-                <div className={styles.startGuideHeading}>
-                  <Sparkles size={23} aria-hidden="true" />
-                  <h2 id="start-guide-title">Get started</h2>
-                </div>
-                <ol>
-                  <li>
-                    <span aria-hidden="true">1</span>
-                    <div>
-                      <strong>Choose a call</strong>
-                      <p>Select a recording from your device.</p>
-                    </div>
-                  </li>
-                  <li>
-                    <span aria-hidden="true">2</span>
-                    <div>
-                      <strong>Review your choices</strong>
-                      <p>Check the language and privacy details before continuing.</p>
-                    </div>
-                  </li>
-                  <li>
-                    <span aria-hidden="true">3</span>
-                    <div>
-                      <strong>Explore your report</strong>
-                      <p>Listen to the moments behind each finding when it is ready.</p>
-                    </div>
-                  </li>
-                </ol>
-                <div className={styles.startGuideHelp}>
-                  <h3>Need help?</h3>
-                  <p>The AC team can help with a recording or report question.</p>
-                  <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help">
-                    Contact support <ArrowRight size={16} aria-hidden="true" />
-                  </a>
-                </div>
-              </aside>
-            )}
-            {!submission && !report && (
-              <aside className={`panel ${styles.expect}`}>
-                <p className="eyebrow">WHAT YOU’LL GET</p>
-                <h2>What you’ll get</h2>
-                <ol>
-                  <li>
-                    <FileText size={22} aria-hidden="true" />
-                    <div>
-                      <h3>A clear call overview</h3>
-                      <p>
-                        Understand the outcome, your strengths and the most
-                        useful improvements.
-                      </p>
-                    </div>
-                  </li>
-                  <li>
-                    <ListChecks size={22} aria-hidden="true" />
-                    <div>
-                      <h3>Feedback you can hear</h3>
-                      <p>
-                        Jump from a finding to the exact moment in your
-                        recording.
-                      </p>
-                    </div>
-                  </li>
-                  <li>
-                    <Sparkles size={22} aria-hidden="true" />
-                    <div>
-                      <h3>Your next-call focus</h3>
-                      <p>Turn the feedback into one practical rehearsal.</p>
-                    </div>
-                  </li>
-                </ol>
-                <p className={styles.draftNote}>
-                  AI-generated coaching based on Dipak’s principles. Each report
-                  remains a draft until reviewed.
-                </p>
-              </aside>
+              {!submission && !report && !deletionOnlyId && (
+                <AcquisitionLowerPanels />
+              )}
+            </div>
+            {!report && !deletionOnlyId && (
+              <AcquisitionGuideRail
+                stage={submission ? "processing" : displayFileSelected ? "selected" : "empty"}
+              />
             )}
           </div>
-          {!displayFileSelected && !submission && !report && !deletionOnlyId && (
-            <div className={styles.overviewCards}>
-              <Link className={styles.overviewCard} href="/calls">
-                <span className={styles.overviewIcon} aria-hidden="true">
-                  <FolderOpen size={25} />
-                </span>
-                <span>
-                  <strong>Your saved calls</strong>
-                  <small>Open recordings and reports saved to your workspace.</small>
-                </span>
-                <ArrowRight size={18} aria-hidden="true" />
-              </Link>
-              <div className={styles.overviewCard}>
-                <span className={styles.overviewIcon} aria-hidden="true">
-                  <ShieldCheck size={25} />
-                </span>
-                <span>
-                  <strong>Privacy before analysis</strong>
-                  <small>Review the details and give consent before your call is analysed.</small>
-                </span>
-              </div>
-            </div>
-          )}
           {visibleError && !savedCallNeedsSession && (
             <div className={`notice error ${styles.error}`} role="alert">
               {statusIssue && !error && (
@@ -2609,7 +2549,13 @@ export function AcquisitionStudio({
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
         mobileFit
-        welcome={!submission && !result && !busy && !deletionOnlyId}
+        heroStage={
+          !result && !busy && !deletionOnlyId
+            ? submission
+              ? "processing"
+              : "welcome"
+            : undefined
+        }
       >
         {content}
       </AcquisitionShell>

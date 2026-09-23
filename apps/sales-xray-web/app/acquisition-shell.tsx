@@ -89,10 +89,14 @@ export function AcquisitionShell({
               />
             </span>
             <span className={styles.brandWordmark} aria-hidden="true">
-              <svg viewBox="0 0 125 44" focusable="false">
-                <text x="0" y="23" className={styles.brandName}>Sales Xray</text>
-                <text x="0" y="39" className={styles.brandByline}>BY AUTHORITY CLOSERS</text>
-              </svg>
+              <Image
+                src="/brand/ac-v0.1/sales-xray-wordmark.svg"
+                alt=""
+                width={125}
+                height={44}
+                unoptimized
+                priority
+              />
             </span>
           </Link>
           <button

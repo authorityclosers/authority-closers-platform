@@ -1998,7 +1998,7 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   expect(button("Forget this saved call on this device")).toBeDefined();
   await click("Forget this saved call on this device");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
-  expect(container.textContent).toContain("Start with your sales call");
+  expect(container.textContent).toContain("Add a call to review");
   expect(
     container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
   ).toBe(false);

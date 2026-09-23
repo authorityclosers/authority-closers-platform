@@ -1,15 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 40" role="img" aria-label="Sales Xray">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 125 44" role="img" aria-label="Sales Xray">
   <defs>
-    <linearGradient id="scan" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#08776e"/>
-      <stop offset="1" stop-color="#58b6a9"/>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#087e79"/>
+      <stop offset="1" stop-color="#24b5a8"/>
     </linearGradient>
   </defs>
-  <text x="1" y="10.5" fill="#617386" font-family="Segoe UI, Arial, sans-serif" font-size="9.4" font-weight="800" letter-spacing="2.35">SALES</text>
-  <path d="M70 7.5h31" stroke="#beded8" stroke-width="1" stroke-linecap="round"/>
-  <circle cx="105" cy="7.5" r="2" fill="#08776e"/>
-  <text x="0" y="32" fill="#162a3d" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="900" letter-spacing="-1.9">XRAY</text>
-  <path d="M79 27h30M94 13v28" stroke="url(#scan)" stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
-  <circle cx="94" cy="27" r="8" fill="none" stroke="url(#scan)" stroke-width="1.4"/>
-  <circle cx="94" cy="27" r="2.3" fill="#08776e"/>
+  <text x="0" y="23" fill="#111b3e" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="-1.45">Sales</text>
+  <path d="M59 6l11 17M70 6L59 23" fill="none" stroke="url(#beam)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M61 8l7 12" fill="none" stroke="#b5f1e8" stroke-width="1" stroke-linecap="round" opacity=".9"/>
+  <text x="72" y="23" fill="#111b3e" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-weight="800" letter-spacing="-1.45">ray</text>
+  <circle cx="116" cy="11" r="5.5" fill="#effcf9" stroke="#55baad" stroke-width="1.2"/>
+  <path d="M116 2v5m0 8v5m-9-9h5m8 0h5" fill="none" stroke="#087e79" stroke-width="1.1" stroke-linecap="round"/>
+  <circle cx="116" cy="11" r="1.6" fill="#087e79"/>
+  <path d="M0 29h122" stroke="#d7e9ed" stroke-width=".8"/>
+  <text x="0" y="40" fill="#526990" font-family="Segoe UI, Arial, sans-serif" font-size="7.2" font-weight="800" letter-spacing="1.22">BY AUTHORITY CLOSERS</text>
 </svg>

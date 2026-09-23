@@ -1847,16 +1847,17 @@
 
 /* Upload landing layout. The guidance and links contain no fabricated activity. */
 .app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
-  gap: 18px;
-  padding-top: 20px;
+  gap: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
   background: linear-gradient(#f8fbff, #fff 65%);
 }
 .app[data-stage="upload"][data-selected="false"] .layout {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 324px);
   align-items: start;
-  gap: 18px;
+  gap: 16px;
 }
 .app[data-stage="upload"][data-selected="false"] .upload,
 .startGuide,
@@ -1916,9 +1917,22 @@
   color: #244b8c;
 }
 .app[data-stage="upload"][data-selected="false"] .dropZone {
-  min-height: clamp(255px, 35vh, 330px);
+  min-height: 296px;
   border-radius: 14px;
   background: linear-gradient(145deg, #f4fcfd, #fbffff);
+}
+.app[data-stage="upload"][data-selected="false"] .dropTitle {
+  font-size: clamp(19px, 1.65vw, 23px);
+}
+.app[data-stage="upload"][data-selected="false"] .formatFacts {
+  gap: 8px 20px;
+  font-size: 13px;
+}
+.app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+  width: 82px;
+  height: 82px;
+  background: #ddf8f0;
+  color: #078d87;
 }
 .app[data-stage="upload"][data-selected="false"] .allowance {
   display: none;
@@ -2308,5 +2322,239 @@ a.overviewCard:hover {
 @media (prefers-reduced-motion: reduce) {
   .progressRail > div {
     transition: none;
+  }
+}
+
+/* The reference layout keeps the upload and supporting cards in one column. */
+.primaryColumn {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.app[data-stage="upload"] .layout,
+.app[data-stage="processing"] .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 324px);
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.app[data-stage="upload"][data-selected="true"] .layout {
+  flex: 0 0 auto;
+}
+.app[data-stage="upload"][data-selected="true"] .upload {
+  overflow: visible;
+  min-height: 0;
+}
+.app[data-stage="processing"] :global(.studio-main) {
+  justify-content: flex-start;
+  max-width: 1320px;
+  padding: 0 24px 24px;
+}
+.app[data-stage="processing"] .upload {
+  padding: 16px;
+  border: 1px solid #dbe5f6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px #d7e5fa29;
+}
+@media (max-width: 1100px) {
+  .app[data-stage="upload"] .layout,
+  .app[data-stage="upload"][data-selected="false"] .layout,
+  .app[data-stage="upload"][data-selected="true"] .layout,
+  .app[data-stage="processing"] .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 260px);
+    gap: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 214px;
+    padding: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 7px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropTitle {
+    font-size: 17px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropSelect {
+    min-height: 34px;
+    font-size: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .formatFacts {
+    gap: 4px 9px;
+    font-size: 10px;
+  }
+  .app[data-stage="upload"] .uploadCardTitle h2 {
+    font-size: 21px;
+  }
+  .app[data-stage="upload"] .allowanceBadge {
+    padding: 6px;
+    font-size: 10px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-main) {
+    padding-top: 0;
+    gap: 10px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .uploadCardHeader {
+    margin-bottom: 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .selectionHeading,
+  .app[data-stage="upload"][data-selected="true"] .verifyHeading {
+    display: none;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) {
+    min-height: 55px;
+    margin-bottom: 2px;
+    padding: 7px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) > :global(.secondary-button) {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails {
+    margin-bottom: 0;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails summary,
+  .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
+    min-height: 20px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-consent) .consentLabel {
+    min-height: 29px;
+    margin: 0;
+    padding: 2px 0;
+    font-size: 11px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .uploadActions :global(.studio-wide) {
+    min-height: 36px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 760px) {
+  .app[data-stage="upload"] .layout,
+  .app[data-stage="upload"][data-selected="false"] .layout,
+  .app[data-stage="upload"][data-selected="true"] .layout,
+  .app[data-stage="processing"] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .app[data-stage="upload"] :global(.studio-main) {
+    gap: 10px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .app[data-stage="upload"] .layout {
+    gap: 10px;
+  }
+  .app[data-stage="upload"] .primaryColumn {
+    gap: 10px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .uploadCardHeader {
+    margin-bottom: 8px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 204px;
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 6px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropTitle {
+    font-size: 18px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropSelect {
+    min-height: 32px;
+    font-size: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .formatFacts {
+    gap: 4px 10px;
+    font-size: 10px;
+  }
+}
+
+/* Gentle motion gives the recording and upload marks a sense of activity. */
+.animatedWaveMark {
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px !important;
+  overflow: visible;
+}
+.waveBars rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wave-breathe 2.4s ease-in-out infinite;
+}
+.waveBars rect:nth-child(2) { animation-delay: -1.8s; }
+.waveBars rect:nth-child(3) { animation-delay: -1.25s; }
+.waveBars rect:nth-child(4) { animation-delay: -.6s; }
+.waveBars rect:nth-child(5) { animation-delay: -1.55s; }
+.waveBars rect:nth-child(6) { animation-delay: -.95s; }
+.animatedUploadMark {
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+}
+.uploadOrbit {
+  transform-origin: 32px 32px;
+  animation: upload-orbit 16s linear infinite;
+}
+.uploadCloud {
+  animation: cloud-breathe 3.2s ease-in-out infinite;
+}
+.uploadArrow {
+  animation: arrow-rise 2.4s ease-in-out infinite;
+}
+.app[data-stage="upload"] .dropZone :global(.studio-upload-icon)::after {
+  position: absolute;
+  inset: -9px;
+  border: 1px solid #12a99c45;
+  border-radius: 50%;
+  animation: upload-halo 3.2s ease-out infinite;
+  content: "";
+  pointer-events: none;
+}
+@keyframes wave-breathe {
+  0%, 100% { transform: scaleY(.72); opacity: .7; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes upload-orbit {
+  to { transform: rotate(360deg); }
+}
+@keyframes cloud-breathe {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+@keyframes arrow-rise {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes upload-halo {
+  0% { opacity: .45; transform: scale(.87); }
+  70%, 100% { opacity: 0; transform: scale(1.16); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waveBars rect,
+  .uploadOrbit,
+  .uploadCloud,
+  .uploadArrow,
+  .app[data-stage="upload"] .dropZone :global(.studio-upload-icon)::after {
+    animation: none;
   }
 }

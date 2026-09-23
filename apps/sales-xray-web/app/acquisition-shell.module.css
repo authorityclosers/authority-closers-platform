@@ -1441,3 +1441,58 @@
     display: none;
   }
 }
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .shell[data-welcome="true"] .workspaceHeader {
+    min-height: 118px;
+    padding: 16px 20px 9px;
+  }
+  .welcomeKicker {
+    font-size: 9px;
+  }
+  .welcome h1 {
+    font-size: 34px;
+  }
+  .welcomeDescription {
+    max-width: 64ch;
+    margin-top: 1px;
+    font-size: 13px;
+  }
+  .profileSlot {
+    flex-basis: 192px;
+  }
+  .profileSlot > div > button {
+    width: 192px;
+    min-height: 45px;
+  }
+  .profileSlot > div > button > span:first-child {
+    width: 31px;
+    height: 31px;
+  }
+  .heroSlogan {
+    top: 67px;
+    right: 16px;
+    font-size: 11px;
+  }
+  .heroSlogan svg {
+    width: 40px;
+    height: 30px;
+  }
+  .workspaceFooter {
+    min-height: 42px;
+    flex-wrap: nowrap;
+    gap: 14px;
+    padding: 5px 20px;
+    font-size: 10px;
+  }
+  .workspaceFooter > span {
+    flex-wrap: nowrap;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .workspaceFooter .footerCta {
+    min-height: 30px;
+    padding-inline: 10px;
+    font-size: 11px;
+  }
+}

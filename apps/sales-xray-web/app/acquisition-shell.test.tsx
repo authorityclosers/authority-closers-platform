@@ -11,7 +11,7 @@ it("keeps the navigation, help, hero, and footer in the desktop shell", () => {
   );
 
   expect(markup).toContain('aria-label="Sales Xray navigation"');
-  expect(markup).toContain("BY AUTHORITY CLOSERS");
+  expect(markup).toContain("/brand/ac-v0.1/sales-xray-wordmark.svg");
   expect(markup).toContain("Need help?");
   expect(markup).toContain("Welcome back");
   expect(markup).toContain("Better");
