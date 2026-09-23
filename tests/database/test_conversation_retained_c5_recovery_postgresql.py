@@ -87,6 +87,17 @@ pytest_plugins = ("tests.database.test_conversation_postgresql",)
 C5PromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3"]
 
 
+@pytest.fixture
+def postgres_harness() -> Any:
+    # Each prompt revision seeds a control account. Isolate the schema so the
+    # complete parameterized file cannot collide on its unique email identity.
+    from tests.database.test_conversation_postgresql import (
+        postgres_harness as shared_postgres_harness,
+    )
+
+    yield from shared_postgres_harness.__wrapped__()
+
+
 def _transcript(source_sha256: str) -> dict[str, Any]:
     return {
         "source_sha256": source_sha256,

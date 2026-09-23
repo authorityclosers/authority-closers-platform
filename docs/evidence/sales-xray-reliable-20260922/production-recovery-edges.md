@@ -108,3 +108,11 @@ The production retained draft additionally has an append-only second correction
 version replacing the unsupported product assertion with a neutral discovery
 question. It renders after reload, and saved audio reaches the end. Both prior
 response and correction versions are preserved, with zero new provider calls.
+
+Candidate `a48ecaf7` passed the browser regression in CI but exposed a test-fixture
+collision when all three retained-recovery prompt versions ran together. The
+third synthetic control account reused the second case's unique email within
+the shared module schema. These cases now use a fresh disposable schema per
+test; no application authorization rule or runtime behavior changed. The entire
+four-case retained-recovery file passed together against PostgreSQL (4 passed,
+40.28 seconds) before the next freeze.
