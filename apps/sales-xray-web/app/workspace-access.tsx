@@ -22,7 +22,7 @@ export type WorkspaceAccessValue = Readonly<{
     tenantId: string;
   }> | null;
   retry: () => void;
-  /** Start the optional account path while keeping selected browser File objects. */
+  /** Open account access while keeping selected browser File objects. */
   requestAccountSignIn?: () => void;
   /** Return true only when this click may continue to the existing upload checks. */
   requestAnalysisAccess?: () => boolean;

@@ -187,6 +187,9 @@ function StandaloneStudioView({
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
+  const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
+    string | null
+  >(null);
   const [gateIntentId, setGateIntentId] = useState<string | null>(null);
   const [eligibleReceipt, setEligibleReceipt] = useState<string | null>(null);
   const eligibleReceiptRef = useRef<string | null>(null);
@@ -338,10 +341,9 @@ function StandaloneStudioView({
   const requestAnalysisAccess = () => {
     if (review.fixtureRequested || review.readOnly !== false || !selected)
       return false;
-    // Keep the selected File local until shared AC sign-in and profile checks
-    // finish. Opening auth does not grant permission to upload or analyse.
     if (view.kind === "unauthenticated") {
-      requestAccountSignIn();
+      openProfileGate(selected.intentId);
+      setAuthRequested(true);
       return false;
     }
     if (view.kind !== "ready") {
@@ -412,7 +414,10 @@ function StandaloneStudioView({
   };
   if (
     review.fixtureRequested &&
-    (!review.fixtureFrame || review.fixtureFrame.kind === "processing")
+    (!review.fixtureFrame ||
+      review.fixtureFrame.kind === "processing" ||
+      review.fixtureFrame.kind === "auth" ||
+      review.fixtureFrame.id === "upload.selected")
   )
     return (
       <WorkspaceAccessProvider
@@ -444,13 +449,17 @@ function StandaloneStudioView({
     );
   if (
     review.readOnly === false &&
-    (authRequested || !!selected) &&
-    view.kind === "unauthenticated"
+    view.kind === "unauthenticated" &&
+    (authRequested || (selected && dismissedAuthIntentId !== selected.intentId))
   )
     return (
       <WorkspaceAccessProvider value={accessValue}>
         <AccountAuth
           selectedFile={selected?.file ?? null}
+          onCancel={() => {
+            setDismissedAuthIntentId(selected?.intentId ?? null);
+            setAuthRequested(false);
+          }}
           onAuthenticated={() => {
             if (selected) openProfileGate(selected.intentId);
             setAuthRequested(false);

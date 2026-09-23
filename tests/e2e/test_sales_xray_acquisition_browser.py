@@ -489,7 +489,15 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         ).click()
                     saved_profile = await profile_response.value
                     assert saved_profile.status == 200
-                    profile_payload = await saved_profile.json()
+                    # The UI completes its read and unmounts the profile form,
+                    # whose abort controller can discard Chromium's response
+                    # body handle. Verify the actual 200 write above, then read
+                    # canonical state with the same authenticated browser.
+                    profile_read = await context.request.get(
+                        ORIGIN + "/v1/me/sales-xray-profile"
+                    )
+                    assert profile_read.status == 200
+                    profile_payload = await profile_read.json()
                     assert profile_payload["profile_complete"] is True
                     assert profile_payload["name"] == "Synthetic Browser Learner"
                     assert profile_payload["phone_number_e164"] == "+12025550123"
@@ -767,10 +775,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         library_page.get_by_text("Deletion requested.", exact=False)
                     ).to_be_visible()
                     account_menu = library_page.get_by_role(
-                        "button", name="Open AC account menu", exact=True
+                        "button", name="Open Synthetic Browser Learner menu", exact=True
                     )
-                    if await account_menu.count():
-                        await account_menu.click()
+                    await expect(account_menu).to_be_visible()
+                    await account_menu.click()
                     async with library_page.expect_response(
                         lambda response: (
                             response.url.endswith("/v1/auth/logout")

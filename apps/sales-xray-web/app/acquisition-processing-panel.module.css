@@ -504,6 +504,20 @@
   }
 }
 
+@media (min-width: 1024px) and (min-height: 801px) and (max-height: 1000px) {
+  .panel[data-fixture="true"] {
+    gap: 9px;
+    padding-block: 14px;
+  }
+  .panel[data-fixture="true"] .journey {
+    padding-block: 19px;
+  }
+  .panel[data-fixture="true"] .fileCard {
+    gap: 10px;
+    padding-block: 14px;
+  }
+}
+
 @media (max-width: 680px) {
   .panel {
     min-height: 0;

@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import {
   emailCodeRequest,
   isAuthCompleteMessage,
@@ -35,14 +41,41 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
+const AUTH_WAVE_HEIGHTS = [
+  17, 25, 19, 37, 52, 34, 59, 73, 46, 28, 64, 82, 56, 36, 67, 88, 62, 40, 74,
+  54, 82, 59, 35, 64, 45, 71, 39, 25, 49, 28, 17,
+] as const;
+const subscribeHostname = () => () => {};
+const serverHostname = () => "";
+const LEARNER_ORIGINS_BY_SOURCE_HOST = {
+  "salesxray-staging.authorityclosers.com":
+    "https://learner-staging.authorityclosers.com",
+  "salesxray.authorityclosers.com": "https://learner.authorityclosers.com",
+} as const;
+
+/** Only source-owned hosts may provide a learner recovery destination. */
+export function learnerAuthLinksForHost(hostname: string) {
+  const origin =
+    LEARNER_ORIGINS_BY_SOURCE_HOST[
+      hostname.toLowerCase() as keyof typeof LEARNER_ORIGINS_BY_SOURCE_HOST
+    ];
+  return origin
+    ? {
+        registerHref: `${origin}/register`,
+        forgotPasswordHref: `${origin}/forgot-password`,
+      }
+    : { registerHref: null, forgotPasswordHref: null };
+}
 
 export function AccountAuth({
   selectedFile,
   onAuthenticated,
+  onCancel,
   previewState,
 }: {
   selectedFile?: { name: string; size: number } | null;
   onAuthenticated: () => void;
+  onCancel?: (selectedFile: { name: string; size: number }) => void;
   previewState?: AccountAuthPreviewState;
 }) {
   const preview = process.env.NODE_ENV !== "production" && !!previewState;
@@ -74,6 +107,12 @@ export function AccountAuth({
   const codeRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const verified = useRef(false);
+  const hostname = useSyncExternalStore(
+    subscribeHostname,
+    () => window.location.hostname,
+    serverHostname,
+  );
+  const learnerLinks = learnerAuthLinksForHost(hostname);
   const activeConfig = preview ? PREVIEW_CONFIG : config;
   const displayedStep = preview
     ? previewState === "auth.code"
@@ -468,6 +507,17 @@ export function AccountAuth({
     (preview && previewState === "auth.error");
   const available =
     activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const brandContent = (
+    <>
+      <Image src="/brand/ac-v0.1/symbol.svg" alt="" width={48} height={48} />
+      <Image
+        src="/brand/ac-v0.1/sales-xray-wordmark.svg"
+        alt=""
+        width={147}
+        height={52}
+      />
+    </>
+  );
   return (
     <section
       className={`xray-app ${styles.auth}`}
@@ -476,22 +526,28 @@ export function AccountAuth({
       data-review-preview={preview ? "true" : undefined}
     >
       <div className={styles.story}>
-        <Link className={styles.brand} href="/" aria-label="Sales Xray home">
-          <Image
-            src="/brand/ac-v0.1/symbol.svg"
-            alt=""
-            width={38}
-            height={38}
-          />
-          <span>
-            <strong>Sales Xray</strong>
-            <small>by Authority Closers</small>
-          </span>
-        </Link>
+        {selectedFile ? (
+          onCancel ? (
+            <button
+              type="button"
+              className={styles.brand}
+              aria-label="Back to your call"
+              onClick={() => onCancel(selectedFile)}
+            >
+              {brandContent}
+            </button>
+          ) : (
+            <div className={styles.brand} aria-label="Sales Xray">
+              {brandContent}
+            </div>
+          )
+        ) : (
+          <Link className={styles.brand} href="/" aria-label="Sales Xray home">
+            {brandContent}
+          </Link>
+        )}
         <div className={styles.storyCopy}>
-          <p className={styles.eyebrow}>
-            A better conversation starts with clarity
-          </p>
+          <p className={styles.eyebrow}>TURN CALLS INTO CLARITY</p>
           <h2>
             Hear the opportunity
             <br />
@@ -500,7 +556,49 @@ export function AccountAuth({
           <p>Bring your conversation. Leave with a clearer next step.</p>
         </div>
         <div className={styles.wave} aria-hidden="true">
-          <AudioLines strokeWidth={0.65} />
+          <svg
+            className={styles.waveRibbon}
+            viewBox="0 0 640 220"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient
+                id="account-auth-ribbon"
+                x1="0"
+                x2="1"
+                y1="0"
+                y2="0"
+              >
+                <stop offset="0" stopColor="#66cced" stopOpacity=".38" />
+                <stop offset=".22" stopColor="#c1ffff" stopOpacity=".9" />
+                <stop offset=".55" stopColor="#7af2ed" stopOpacity=".62" />
+                <stop offset="1" stopColor="#35afe4" stopOpacity=".82" />
+              </linearGradient>
+            </defs>
+            {Array.from({ length: 16 }, (_, index) => {
+              const offset = (index - 7.5) * 3.2;
+              return (
+                <path
+                  key={index}
+                  d={`M -20 ${131 + offset} C 64 ${132 + offset}, 98 ${43 + offset}, 166 ${85 + offset} C 238 ${132 + offset}, 262 ${211 + offset}, 346 ${152 + offset} C 415 ${102 + offset}, 450 ${176 + offset}, 514 ${84 + offset} C 557 ${24 + offset}, 598 ${61 + offset}, 664 ${104 + offset}`}
+                  fill="none"
+                  stroke="url(#account-auth-ribbon)"
+                  strokeWidth="1.1"
+                />
+              );
+            })}
+          </svg>
+          <div className={styles.waveBars}>
+            {AUTH_WAVE_HEIGHTS.map((height, index) => (
+              <span
+                key={index}
+                style={{
+                  height: `${height}%`,
+                  animationDelay: `${-index * 64}ms`,
+                }}
+              />
+            ))}
+          </div>
         </div>
         <p className={styles.shared}>
           <ShieldCheck size={17} />
@@ -508,6 +606,19 @@ export function AccountAuth({
         </p>
       </div>
       <div className={styles.formColumn}>
+        {selectedFile && onCancel ? (
+          <button
+            type="button"
+            className={styles.returnLink}
+            onClick={() => onCancel(selectedFile)}
+          >
+            <ArrowLeft size={17} aria-hidden="true" /> Back to your call
+          </button>
+        ) : !selectedFile ? (
+          <Link className={styles.returnLink} href="/">
+            <ArrowLeft size={17} aria-hidden="true" /> Return to app
+          </Link>
+        ) : null}
         <div className={styles.card}>
           <p className={styles.eyebrow}>
             {displayedStep === "code"
@@ -580,12 +691,26 @@ export function AccountAuth({
                       className={styles.google}
                       onClick={google}
                       disabled={preview || !available || !consent || pending}
+                      aria-describedby={
+                        !consent && available
+                          ? "account-google-consent-hint"
+                          : undefined
+                      }
                     >
                       <span aria-hidden="true" className={styles.googleMark}>
                         G
                       </span>
                       Continue with Google
                     </button>
+                  )}
+                  {activeConfig?.google_enabled && available && !consent && (
+                    <p
+                      id="account-google-consent-hint"
+                      className={styles.consentHint}
+                    >
+                      Agree to the Terms and Privacy Policy below to continue
+                      with Google.
+                    </p>
                   )}
                   {activeConfig?.google_enabled && (
                     <div className={styles.divider}>
@@ -671,52 +796,80 @@ export function AccountAuth({
                   )}
                 </>
               ) : displayedStep === "password" ? (
-                <form className={styles.form} onSubmit={submitPassword}>
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    disabled={pending}
-                    onClick={() => {
-                      setStep("email");
-                      setError("");
-                    }}
-                  >
-                    <ArrowLeft size={15} /> Other sign-in options
-                  </button>
-                  <label htmlFor="account-password-email">Email address</label>
-                  <div className={styles.inputWrap}>
-                    <Mail size={18} aria-hidden="true" />
-                    <input
-                      id="account-password-email"
-                      type="email"
-                      autoComplete="username"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      maxLength={320}
-                      required
+                <>
+                  <form className={styles.form} onSubmit={submitPassword}>
+                    <button
+                      type="button"
+                      className={styles.textButton}
                       disabled={pending}
-                    />
-                  </div>
-                  <label htmlFor="account-password">Password</label>
-                  <div className={styles.inputWrap}>
-                    <input
-                      id="account-password"
-                      ref={passwordRef}
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      disabled={pending}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className={styles.primary}
-                    disabled={pending || preview}
-                  >
-                    {pending ? "Signing in…" : "Sign in"}
-                    <ArrowRight size={18} aria-hidden="true" />
-                  </button>
-                </form>
+                      onClick={() => {
+                        setStep("email");
+                        setError("");
+                      }}
+                    >
+                      <ArrowLeft size={15} /> Other sign-in options
+                    </button>
+                    <label htmlFor="account-password-email">
+                      Email address
+                    </label>
+                    <div className={styles.inputWrap}>
+                      <Mail size={18} aria-hidden="true" />
+                      <input
+                        id="account-password-email"
+                        type="email"
+                        autoComplete="username"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        maxLength={320}
+                        required
+                        disabled={pending}
+                      />
+                    </div>
+                    <label htmlFor="account-password">Password</label>
+                    <div className={styles.inputWrap}>
+                      <input
+                        id="account-password"
+                        ref={passwordRef}
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        disabled={pending}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className={styles.primary}
+                      disabled={pending || preview}
+                    >
+                      {pending ? "Signing in…" : "Sign in"}
+                      <ArrowRight size={18} aria-hidden="true" />
+                    </button>
+                  </form>
+                  {!selectedFile && (
+                    <div className={styles.passwordLinks}>
+                      {learnerLinks.forgotPasswordHref ? (
+                        <a href={learnerLinks.forgotPasswordHref}>
+                          Forgot your password?
+                        </a>
+                      ) : (
+                        <p>
+                          Reset your password in the Authority Closers learning
+                          app.
+                        </p>
+                      )}
+                      {learnerLinks.registerHref ? (
+                        <a href={learnerLinks.registerHref}>
+                          Create a learner account
+                        </a>
+                      ) : (
+                        <p>
+                          Create your learner account in the Authority Closers
+                          learning app.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <form className={styles.form} onSubmit={verify}>
                   <button

@@ -126,7 +126,7 @@ export function ProfileMenu({
         <span className={styles.triggerCopy}>
           <strong title={accountName || undefined}>{accountLabel}</strong>
           <small>
-            {authenticated ? "Private workspace" : "Sign in to save calls"}
+            {authenticated ? "Private workspace" : "Sign in to analyse calls"}
           </small>
         </span>
         <ChevronDown className={styles.chevron} size={15} aria-hidden="true" />
@@ -150,7 +150,7 @@ export function ProfileMenu({
               <small>
                 {authenticated
                   ? "Calls and reports stay scoped to your workspace."
-                  : "Sign in when you’re ready to save your calls."}
+                  : "Sign in to analyse calls and open your reports."}
               </small>
             </span>
           </div>

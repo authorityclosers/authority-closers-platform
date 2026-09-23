@@ -15,3 +15,9 @@ Compiled browser testing discovered a missing low-cardinality telemetry vocabula
 - The compiled real-cookie HTTP/PostgreSQL browser journey is still in progress. Early runs exposed and repaired the telemetry failure, cross-loop test diagnostics and stale form selectors. No claim of full browser acceptance is made by this checkpoint.
 
 This local test uses fictional audio, a synthetic email delivery adapter and a synthetic provider broker; it does not send a real email, SMS or paid provider request. It must not be described as production verification or report-quality acceptance. The separate UI studio's development worktree is untouched by this integration.
+
+## Shared login checkpoint
+
+The `6e13ea81` UI checkpoint replaces the separate login form with the shared compact account component, opens authentication immediately after file selection, and preserves the same File through Back and sign-in. The root integration explicitly opens the canonical profile gate after successful inline authentication. The obsolete separate login implementation is removed.
+
+The integrated optimized build, lint, and 87 focused account/login/profile/fixture tests pass. The compiled browser run now verifies the complete local selection, OTP, required profile, original-byte upload, processing, exactly-once allowance settlement, report, reload, second-context login, saved-call discovery, actual retained audio playback and deletion. Its final sign-out step exposed a stale harness selector: the account menu now includes the saved profile name. The harness now addresses that visible name and awaits the actual menu. Full acceptance remains pending its rerun, including logout and private-endpoint denial; the partial run is not reported as a pass.
