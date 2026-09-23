@@ -7,6 +7,7 @@ import {
   ACCOUNT_PROFILE_ELIGIBILITY_PATH,
   ACCOUNT_PROFILE_PATH,
 } from "./account-profile-client";
+import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -14,6 +15,8 @@ import {
 
 let host: HTMLDivElement;
 let root: Root;
+let profileUpdatedCount: number;
+let onProfileUpdated: (event: Event) => void;
 const selectedFile = { name: "Chosen call.wav", size: 24, type: "audio/wav" };
 const baseProfile = {
   name: null,
@@ -35,10 +38,14 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  profileUpdatedCount = 0;
+  onProfileUpdated = () => { profileUpdatedCount += 1; };
+  window.addEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
 });
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  window.removeEventListener(PROFILE_UPDATED_EVENT, onProfileUpdated);
   host.remove();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -112,6 +119,7 @@ it("keeps the selected file in view and advances only after a server 204", async
   await changeCountry("US");
   await changeInput("phone_number_e164", "+14155550123");
   await submit();
+  expect(profileUpdatedCount).toBe(1);
   expect(onEligible).not.toHaveBeenCalled();
   expect(host.textContent).toContain("details were saved");
   expect(host.textContent).toContain("No audio was uploaded");
@@ -161,6 +169,7 @@ it("keeps a draft on a revision conflict and requires review before resaving", a
   await changeCountry("US");
   await changeInput("phone_number_e164", "+14155550123");
   await submit();
+  expect(profileUpdatedCount).toBe(0);
   expect(onEligible).not.toHaveBeenCalled();
   expect(host.textContent).toContain("changed in another session");
   expect(
