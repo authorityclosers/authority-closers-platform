@@ -1,4 +1,4 @@
-"""Exact migration-bound parity through learner app-update read receipts."""
+"""Exact migration-bound parity through Sales Xray analysis-language settings."""
 
 from __future__ import annotations
 
@@ -47,6 +47,7 @@ REVIEWER_IDENTITY = "20260914_0038"
 PROVIDER_ACTIVATION = "20260914_0039"
 PROCESSING_CONTINUATION = "20260914_0040"
 EXECUTION_CONTROL = "20260914_0041"
+ANALYSIS_LANGUAGE = "20260923_0044"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -74,9 +75,10 @@ HEADS = (
     EXECUTION_CONTROL,
     "20260915_0042",
     "20260915_0043",
+    ANALYSIS_LANGUAGE,
 )
 VERSIONED_HEADS = HEADS[1:]
-TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
+TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION, ANALYSIS_LANGUAGE)
 NEW_TABLES = {
     PRACTICE: (
         "practice_set_versions",
@@ -578,6 +580,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         96,
         97,
         98,
+        98,
     )
     expected_contracts = (
         None,
@@ -606,6 +609,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v21",
         "ac-postgres-parity-v22",
         "ac-postgres-parity-v23",
+        "ac-postgres-parity-v24",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

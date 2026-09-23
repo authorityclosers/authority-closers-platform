@@ -7,14 +7,19 @@ change the set of tables whose row counts the restore drill compares.
 
 The restore drill now recognizes this head with the next versioned contract,
 `ac-postgres-parity-v24`, using the exact table set already reviewed for
-`20260915_0043`. The contracts for `0042` and `0043` remain unchanged. This
-keeps parity fail-closed for unknown heads while allowing restore validation
-for the current migration.
+`20260915_0043`. The canonical PostgreSQL backup writer and restore-proof
+controller carry the same v24 mapping. The cross-module contract test asserts
+all three mappings are identical and migration 0044 retains the 98-table set.
+The contracts for `0042` and `0043` remain unchanged. This keeps parity
+fail-closed for unknown heads while allowing backup and restore validation for
+the current migration.
 
-The new regression failed before the mapping was added with
-`migration head has no reviewed row-count parity contract`. After the fix:
-
-- `tests/infra/test_restore_drill.py`: 87 passed, 2 skipped.
-- `ruff check` on the restore-drill script and infra tests: passed.
-- The two skips require either the pinned PostgreSQL image or an explicit
-  restore-drill integration opt-in with an approved dump.
+The restore-only regression failed before the mapping was added with
+`migration head has no reviewed row-count parity contract`. The shared
+backup/proof catalogue regression also failed before both canonical mappings
+were synchronized. After the fix, the control-plane parity, backup, restore
+proof, and restore-drill suites passed together: 1,498 passed, 9 skipped.
+Ruff checks passed for the changed Python scripts and infra tests. The skips
+are platform-specific checks, an unavailable pinned PostgreSQL image, and the
+restore-drill integration test that requires explicit opt-in with an approved
+dump.
