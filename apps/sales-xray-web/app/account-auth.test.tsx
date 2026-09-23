@@ -74,6 +74,23 @@ it("renders all three local preview states without auth traffic or success callb
   expect(onAuthenticated).not.toHaveBeenCalled();
 });
 
+it("returns to the staged call with the same selected file and no navigation", async () => {
+  const onCancel = vi.fn();
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(
+    <AccountAuth selectedFile={file} onAuthenticated={vi.fn()} onCancel={onCancel} previewState="auth.email" />,
+  ));
+  await flush();
+  const back = Array.from(host.querySelectorAll("button")).find((item) => item.textContent?.includes("Back to your call"));
+  expect(back).toBeTruthy();
+  expect(host.querySelector('a[aria-label="Sales Xray home"]')).toBeNull();
+  await act(async () => back!.click());
+  expect(onCancel).toHaveBeenCalledExactlyOnceWith(file);
+  expect(host.textContent).toContain(file.name);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it("keeps the local file through explicit consent, neutral code request and verified account", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
