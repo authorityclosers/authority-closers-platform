@@ -407,8 +407,6 @@ class ConversationProviderAdmin:
         )
         if target is None or latest is None:
             raise ConversationConflict("Provider revision is unavailable. Reload settings.")
-        if latest.revision != expected_revision:
-            raise ConversationConflict("Provider settings changed. Reload before activating.")
         budget_row = await self.database.scalar(
             select(ConversationBudgetAccount)
             .where(ConversationBudgetAccount.scope_id == bundle.budget_scope_id)
@@ -422,6 +420,7 @@ class ConversationProviderAdmin:
             "target_revision": target.revision,
             "configuration_sha256": target.configuration_sha256,
             "approval_bundle_sha256": bundle.digest,
+            "expected_revision": expected_revision,
         }
         replay = await self.application._replay(actor, key, "provider_activation", payload)
         if replay is not None and replay.result_id is not None:
@@ -429,6 +428,8 @@ class ConversationProviderAdmin:
             if row is None or row.tenant_id != actor.tenant_id:
                 raise ConversationConflict("The activation receipt is unavailable.")
             return (await self.current(actor, bundle=bundle)) or {}
+        if latest.revision != expected_revision:
+            raise ConversationConflict("Provider settings changed. Reload before activating.")
         sequence = (
             await self.database.scalar(
                 select(func.max(ConversationProviderActivation.sequence)).where(

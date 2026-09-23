@@ -32,6 +32,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
     ConversationApplication,
+    ConversationConflict,
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
@@ -392,9 +393,11 @@ async def _setup(
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
     duration_ms: int = 1_000,
+    complete_local_fixture: bool = True,
 ) -> AuthorityFixture:
     prepared = await prepare_local(postgres_harness, tmp_path, duration_ms=duration_ms)
-    assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
+    if complete_local_fixture:
+        assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -1106,6 +1109,69 @@ def test_authority_pins_saved_draft_and_rejects_changed_expired_or_unavailable_a
                 )
             assert setup.broker.calls == 0
             assert await _counts(setup) == (1, 1, 1)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_provider_activation_replay_survives_later_draft_and_binds_original_command(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        # This control-plane test needs the saved provider record, not the
+        # unrelated offline C1 worker. Keep its setup synthetic and provider-free.
+        setup = await _setup(
+            postgres_harness,
+            tmp_path,
+            asr_provider="deepgram",
+            complete_local_fixture=False,
+        )
+        try:
+            async with setup.sessions() as database, database.begin():
+                first = await ConversationProviderAdmin(_application(setup, database)).current(
+                    setup.actor, bundle=setup.bundle
+                )
+            assert first is not None and first["activation"] is not None
+
+            later = replace(setup.config, revision="hosted-test-config-v2")
+            async with setup.sessions() as database, database.begin():
+                await ConversationProviderAdmin(_application(setup, database)).save(
+                    setup.actor,
+                    later.as_dict(),
+                    expected_revision=1,
+                    key="hosted-config-v2",
+                )
+
+            async with setup.sessions() as database, database.begin():
+                service = ConversationProviderAdmin(_application(setup, database))
+                replay = await service.activate(
+                    setup.actor,
+                    target_revision=1,
+                    expected_revision=1,
+                    key="hosted-config-activation-v1",
+                    bundle=setup.bundle,
+                )
+                assert replay["revision"] == 2
+                assert replay["activation"] == first["activation"]
+
+                with pytest.raises(ConversationConflict, match="different command"):
+                    await service.activate(
+                        setup.actor,
+                        target_revision=1,
+                        expected_revision=2,
+                        key="hosted-config-activation-v1",
+                        bundle=setup.bundle,
+                    )
+
+                with pytest.raises(ConversationConflict, match="changed"):
+                    await service.activate(
+                        setup.actor,
+                        target_revision=1,
+                        expected_revision=1,
+                        key="hosted-config-activation-new-key",
+                        bundle=setup.bundle,
+                    )
         finally:
             await setup.engine.dispose()
 
