@@ -346,10 +346,10 @@ def test_authenticated_requests_keep_identity_lock_order(postgres_harness, monke
             identity_locked, competing_admission = asyncio.Event(), asyncio.Event()
             original_admit = ConversationApplication.admit
 
-            async def observed_admit(app, actor):
+            async def observed_admit(app, actor, *, shared_identity_locks=False):
                 if asyncio.current_task().get_name() == "competing-acquisition":
                     competing_admission.set()
-                return await original_admit(app, actor)
+                return await original_admit(app, actor, shared_identity_locks=shared_identity_locks)
 
             monkeypatch.setattr(ConversationApplication, "admit", observed_admit)
 

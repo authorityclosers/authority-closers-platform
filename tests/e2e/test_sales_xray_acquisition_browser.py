@@ -141,8 +141,15 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                 *,
                 token: str | None = None,
                 actor: Any = None,
+                shared_identity_locks: bool = False,
             ) -> dict[str, Any]:
-                result = await original_report(self, submission_id, token=token, actor=actor)
+                result = await original_report(
+                    self,
+                    submission_id,
+                    token=token,
+                    actor=actor,
+                    shared_identity_locks=shared_identity_locks,
+                )
                 report = result.get("report")
                 if not isinstance(report, dict):
                     raise AssertionError("synthetic report projection is missing")
