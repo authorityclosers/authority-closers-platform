@@ -151,6 +151,7 @@ def _registry_config(
     text_provider: str = "groq",
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
+    asr_cost_paise: int = 50_000,
 ) -> RegistryConfig:
     asr_model = "nova-3" if asr_provider == "deepgram" else "scribe_v2"
     asr_endpoint = (
@@ -176,7 +177,7 @@ def _registry_config(
                 asr_provider,
                 asr_model,
                 asr_endpoint,
-                max_cost_paise=50_000 if funded else 0,
+                max_cost_paise=asr_cost_paise if funded else 0,
             ),
             _provider(
                 text_provider,
@@ -280,6 +281,7 @@ def _bundle(
     text_provider: str = "groq",
     text_cost_paise: int = 0,
     asr_provider: str = "elevenlabs",
+    asr_cost_paise: int = 50_000,
     max_source_duration_ms: int = 1_000,
 ) -> HostedApprovalBundle:
     bundle_expires = expires_at_epoch or now_epoch + 3_600
@@ -331,7 +333,7 @@ def _bundle(
                 max_completion_tokens=0,
                 profile_sha256=None,
                 paid=funded,
-                max_cost_paise=50_000 if funded else 0,
+                max_cost_paise=asr_cost_paise if funded else 0,
                 max_source_duration_ms=max_source_duration_ms,
             ),
             _stage(

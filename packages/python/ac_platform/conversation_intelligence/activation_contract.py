@@ -38,6 +38,7 @@ MAX_APPROVAL_BUNDLE_BYTES = 512 * 1024
 MAX_ALLOWANCES = 64
 MAX_STAGES = 192
 MAX_INTERNAL_TESTER_ACCOUNTS = 8
+MAX_STAGE_CALL_SUPPLEMENTS = 64
 ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"] = (
     "ac.sales-xray.acquisition-provider-policy/1"
 )
@@ -247,6 +248,49 @@ class StageApproval(_StrictFrozenModel):
                 raise ValueError("c5_profile_required")
             if self.stage == "C4" and self.profile_sha256 is not None:
                 raise ValueError("c4_profile_must_be_none")
+        return self
+
+
+class StageCallSupplement(_StrictFrozenModel):
+    """One exact, source-scoped addition to an acquisition stage call cap.
+
+    Supplements are included in the release-pinned approval digest. They do
+    not mutate the acquisition policy, approval identifier, or historical
+    reservation counter. This v1 contract intentionally supports only the
+    bounded C5 test lane and has hard ceilings independent of operator input.
+    """
+
+    id: UUID
+    authorization_ref: str = Field(min_length=6, max_length=256)
+    base_approval_id: UUID
+    tenant_id: UUID
+    processing_person_id: UUID
+    owner_person_id: UUID
+    source_sha256: str = Field(pattern=_DIGEST)
+    configuration_sha256: str = Field(pattern=_DIGEST)
+    stage: Literal["C5"]
+    recipe_revision: str = Field(min_length=1, max_length=256)
+    coaching_prompt_revision: Literal["coaching-v4"]
+    report_language: Literal["en", "hi-Deva+en", "mr-Deva+en"]
+    processing_plan_sha256: str = Field(pattern=_DIGEST)
+    prepared_input_sha256: str = Field(pattern=_DIGEST)
+    issued_at_epoch: StrictInt = Field(gt=0)
+    expires_at_epoch: StrictInt = Field(gt=0)
+    max_additional_requests: StrictInt = Field(ge=1, le=2)
+    max_cost_per_request_paise: StrictInt = Field(ge=1, le=2_200)
+    max_aggregate_cost_paise: StrictInt = Field(ge=1, le=4_400)
+
+    _authorization_ref = field_validator("authorization_ref")(_validate_reference)
+    _recipe_revision = field_validator("recipe_revision")(_validate_identifier)
+
+    @model_validator(mode="after")
+    def validate_supplement_bounds(self) -> Self:
+        if self.expires_at_epoch <= self.issued_at_epoch:
+            raise ValueError("stage_supplement_window_invalid")
+        if self.max_aggregate_cost_paise > (
+            self.max_additional_requests * self.max_cost_per_request_paise
+        ):
+            raise ValueError("stage_supplement_aggregate_exceeds_request_cap")
         return self
 
 
@@ -517,6 +561,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
         default=(), max_length=MAX_INTERNAL_TESTER_ACCOUNTS
     )
     acquisition_policy: AcquisitionProviderPolicy | None = None
+    stage_call_supplements: tuple[StageCallSupplement, ...] = Field(
+        default=(), max_length=MAX_STAGE_CALL_SUPPLEMENTS
+    )
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
     _budget_authorization_ref = field_validator("budget_authorization_ref")(_validate_reference)
@@ -528,6 +575,8 @@ class HostedApprovalBundle(_StrictFrozenModel):
     def validate_bundle_consistency(self) -> Self:
         if self.expires_at_epoch <= self.issued_at_epoch:
             raise ValueError("approval_bundle_window_invalid")
+        if self.stage_call_supplements and self.environment == "production":
+            raise ValueError("stage_supplements_not_approved_for_production")
 
         approvals: list[AllowanceApproval | StageApproval] = [
             *self.allowances,
@@ -543,6 +592,24 @@ class HostedApprovalBundle(_StrictFrozenModel):
         tester_emails = [approval.email for approval in self.internal_tester_accounts]
         if len(tester_emails) != len(set(tester_emails)):
             raise ValueError("duplicate_internal_tester_email")
+        supplement_ids = [item.id for item in self.stage_call_supplements]
+        if len(supplement_ids) != len(set(supplement_ids)) or set(supplement_ids) & set(
+            approval_ids + tester_ids
+        ):
+            raise ValueError("duplicate_approval_id")
+        supplement_scopes = [
+            (
+                item.base_approval_id,
+                item.owner_person_id,
+                item.source_sha256,
+                item.configuration_sha256,
+                item.stage,
+                item.processing_plan_sha256,
+            )
+            for item in self.stage_call_supplements
+        ]
+        if len(supplement_scopes) != len(set(supplement_scopes)):
+            raise ValueError("duplicate_stage_supplement_scope")
 
         allowance_recipients = [
             (approval.tenant_id, approval.person_id) for approval in self.allowances
@@ -622,6 +689,37 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("acquisition_stage_expiry_outside_bundle")
             if policy.id in approval_ids:
                 raise ValueError("duplicate_approval_id")
+        elif self.stage_call_supplements:
+            raise ValueError("stage_supplement_requires_acquisition_policy")
+        if policy is not None:
+            for supplement in self.stage_call_supplements:
+                if (
+                    supplement.tenant_id != policy.tenant_id
+                    or supplement.processing_person_id != policy.processing_person_id
+                    or supplement.issued_at_epoch < self.issued_at_epoch
+                    or supplement.expires_at_epoch
+                    > min(self.expires_at_epoch, policy.expires_at_epoch)
+                ):
+                    raise ValueError("stage_supplement_scope_or_expiry_invalid")
+                try:
+                    base = policy.derive_stage(
+                        tenant_id=supplement.tenant_id,
+                        person_id=supplement.processing_person_id,
+                        source_sha256=supplement.source_sha256,
+                        stage=supplement.stage,
+                        configuration_sha256=supplement.configuration_sha256,
+                    )
+                except ValueError:
+                    raise ValueError("stage_supplement_base_approval_invalid") from None
+                if (
+                    base.id != supplement.base_approval_id
+                    or base.recipe_revision != supplement.recipe_revision
+                    or base.expires_at_epoch < supplement.expires_at_epoch
+                    or base.stage != "C5"
+                    or base.zero_cost_basis != "paid_pricing_evidence"
+                    or supplement.max_cost_per_request_paise > base.max_cost_paise
+                ):
+                    raise ValueError("stage_supplement_base_approval_invalid")
         return self
 
     @property
@@ -649,6 +747,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
             # Existing /1 artifacts retain byte-for-byte canonical form until
             # an operator explicitly issues a tester exemption approval.
             value.pop("internal_tester_accounts", None)
+        if not self.stage_call_supplements:
+            # Keep the canonical bytes and digest of historical /1 bundles.
+            value.pop("stage_call_supplements", None)
         for stage in value["stages"]:
             if stage.get("max_cost_paise") == 0:
                 stage.pop("max_cost_paise", None)
@@ -763,6 +864,8 @@ __all__ = [
     "MAX_ALLOWANCES",
     "MAX_STAGES",
     "StageApproval",
+    "StageCallSupplement",
+    "MAX_STAGE_CALL_SUPPLEMENTS",
     "load_approval_bundle",
     "load_hosted_approval_bundle",
 ]

@@ -15,6 +15,11 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationAcquisitionUsage,
+    ConversationVisitor,
+    ConversationVisitorClaim,
+)
 from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionProviderPolicy,
     HostedApprovalBundle,
@@ -24,6 +29,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
+    utc,
 )
 from ac_platform.conversation_intelligence.budget_admin import (
     ADMIN_BUDGET_CEILING_PAISE,
@@ -47,21 +53,32 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
     GeminiTaskError,
     require_long_coaching_cost_approval,
 )
+from ac_platform.conversation_intelligence.guest_models import (
+    ConversationGuestSubmission,
+    ConversationProcessingLease,
+)
 from ac_platform.conversation_intelligence.inference import (
+    INFERENCE_JOB,
     ConversationInference,
     ServicePlan,
+    TranscriptionPlan,
     binding_for,
+    verified_checkpoint,
 )
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
+    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationPlanStageAuthorization,
+    ConversationProcessingPlan,
     ConversationProviderActivation,
     ConversationProviderConfiguration,
     ConversationQuote,
     ConversationQuoteAcceptance,
     ConversationRecording,
+    ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import (
     ConversationActor,
@@ -79,8 +96,20 @@ from ac_platform.conversation_intelligence.provider_registry import (
     resolve_dispatch,
 )
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES
-from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
+from ac_platform.conversation_intelligence.reporting_pipeline import (
+    ReportingPipeline,
+    StagePlan,
+    StageRequest,
+)
+from ac_platform.conversation_intelligence.stage_supplements import (
+    StageSupplementContext,
+    matches_stage_supplement,
+    processing_plan_sha256,
+    supplemental_reservations,
+)
 from ac_platform.identity.models import Person
+from ac_platform.outbox.models import Job, JobStatus
+from ac_platform.outbox.repository import canonical_receipt_digest
 from ac_platform.tenancy.models import Membership, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
@@ -869,6 +898,370 @@ class ConversationAuthority:
             ) from None
 
     @staticmethod
+    async def _human_processing_owner(
+        app: ConversationApplication,
+        actor: ProcessingActor,
+        recording: ConversationRecording,
+        now: datetime,
+    ) -> UUID | None:
+        """Resolve the source owner through immutable usage and claim rows."""
+
+        lease = await app.database.get(ConversationProcessingLease, actor.processing_lease_id)
+        if (
+            lease is None
+            or lease.tenant_id != actor.tenant_id
+            or lease.person_id != actor.person_id
+            or lease.revoked_at is not None
+        ):
+            return None
+        usage = await app.database.get(ConversationAcquisitionUsage, lease.usage_id)
+        link = await app.database.scalar(
+            select(ConversationGuestSubmission).where(
+                ConversationGuestSubmission.tenant_id == actor.tenant_id,
+                ConversationGuestSubmission.recording_id == recording.id,
+                ConversationGuestSubmission.processing_lease_id == lease.id,
+            )
+        )
+        if (
+            usage is None
+            or link is None
+            or usage.tenant_id != actor.tenant_id
+            or usage.id != lease.usage_id
+            or usage.submission_id != link.submission_id
+            or usage.source_sha256 != recording.source_sha256
+            or link.usage_id != usage.id
+            or link.person_id != actor.person_id
+            or link.source_sha256 != recording.source_sha256
+        ):
+            return None
+        if usage.visitor_id is None:
+            owner_id = usage.person_id
+        else:
+            visitor = await app.database.get(ConversationVisitor, usage.visitor_id)
+            claim = await app.database.get(ConversationVisitorClaim, usage.visitor_id)
+            if (
+                visitor is None
+                or visitor.tenant_id != actor.tenant_id
+                or visitor.revoked_at is not None
+                or (claim is not None and claim.tenant_id != actor.tenant_id)
+                or (claim is None and utc(visitor.expires_at) <= utc(now))
+            ):
+                return None
+            owner_id = None if claim is None else claim.person_id
+        if owner_id is None:
+            return None
+        person = await app.database.get(Person, owner_id)
+        member = await app.database.get(Membership, (actor.tenant_id, owner_id))
+        tenant = await app.database.get(Tenant, actor.tenant_id)
+        if (
+            person is None
+            or person.status != "active"
+            or member is None
+            or member.status != "active"
+            or member.ended_at is not None
+            or tenant is None
+            or tenant.status != "active"
+        ):
+            return None
+        return owner_id
+
+    @staticmethod
+    async def _supplement_primary_input_sha256(
+        app: ConversationApplication,
+        actor: ProcessingActor,
+        recording: ConversationRecording,
+        plan: StagePlan,
+        active_plan: ConversationProcessingPlan,
+        bundle: HostedApprovalBundle,
+        approval: StageApproval,
+    ) -> str | None:
+        """Bind repair to the exact primary C5 input admitted by this plan."""
+
+        repair = plan.request.repair
+        if repair is None:
+            return plan.prepared.input_sha256
+        original = await app.database.get(ConversationInferenceTask, repair.original_run_id)
+        if (
+            original is None
+            or original.stage != "C5"
+            or original.state != "uncertain"
+            or original.erased_at is not None
+            or not same_actor(original, actor)
+            or original.recording_id != recording.id
+            or original.generation != recording.generation
+            or original.quote_id is None
+            or original.intent is None
+            or content_hash(original.intent) != original.intent_sha256
+        ):
+            return None
+        request = original.intent.get("request")
+        prepared = original.intent.get("input")
+        if (
+            not isinstance(request, dict)
+            or request != plan.request.model_copy(update={"repair": None}).model_dump(mode="json")
+            or not isinstance(prepared, dict)
+        ):
+            return None
+        primary_input_sha256 = prepared.get("input_sha256")
+        if (
+            not isinstance(primary_input_sha256, str)
+            or len(primary_input_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in primary_input_sha256)
+        ):
+            return None
+        link = await app.database.get(ConversationPlanStageAuthorization, original.quote_id)
+        quote_row = await app.database.get(ConversationQuote, original.quote_id)
+        job = await app.database.get(Job, original.job_id)
+        if (
+            link is None
+            or quote_row is None
+            or job is None
+            or link.plan_id != active_plan.id
+            or link.cache_key != original.cache_key
+            or quote_row.revoked_at is not None
+            or quote_row.recording_id != recording.id
+            or quote_row.tenant_id != recording.tenant_id
+            or quote_row.person_id != actor.person_id
+        ):
+            return None
+        try:
+            quote = Quote.from_dict(quote_row.quote)
+            permission = ExecutionPermission.from_dict(quote_row.execution_permission)
+            from ac_platform.conversation_intelligence.processing_plan import c5_repair_intent
+
+            traced_repair = c5_repair_intent(original, job)
+        except (ConversationConflict, TypeError, ValueError, KeyError):
+            return None
+        if (
+            link.quote_fingerprint != quote.fingerprint
+            or original.input_sha256 != primary_input_sha256
+            or quote.input_sha256 != primary_input_sha256
+            or quote.quote_id != str(original.quote_id)
+            or permission.quote_fingerprint != quote.fingerprint
+            or permission.authorization_ref
+            != ConversationAuthority.authorization_ref(bundle, approval)
+            or traced_repair != repair
+        ):
+            return None
+        return primary_input_sha256
+
+    async def _matching_stage_supplement(
+        self,
+        app: ConversationApplication,
+        actor: ConversationActor,
+        recording: ConversationRecording,
+        plan: ServicePlan,
+        approval: StageApproval,
+        bundle: HostedApprovalBundle,
+        now: datetime,
+    ) -> Any | None:
+        if (
+            not bundle.stage_call_supplements
+            or not isinstance(actor, ProcessingActor)
+            or not isinstance(plan, StagePlan)
+            or plan.request.stage != "C5"
+            or plan.request.coaching_prompt_revision != "coaching-v4"
+            or plan.request.report_language not in {"en", "hi-Deva+en", "mr-Deva+en"}
+        ):
+            return None
+        # A supplement is usable only inside the single currently accepted
+        # processing plan. Its fingerprint excludes the release digest (which
+        # pins the supplement itself) and time/session ephemera, while the
+        # canonical consent helper separately validates those live bindings.
+        from ac_platform.conversation_intelligence.processing_plan import (
+            require_derived_input,
+            require_plan_consent,
+        )
+
+        active_plans = (
+            await app.database.scalars(
+                select(ConversationProcessingPlan).where(
+                    ConversationProcessingPlan.recording_id == recording.id,
+                    ConversationProcessingPlan.tenant_id == actor.tenant_id,
+                    ConversationProcessingPlan.person_id == actor.person_id,
+                    ConversationProcessingPlan.state == "active",
+                    ConversationProcessingPlan.erased_at.is_(None),
+                )
+            )
+        ).all()
+        if len(active_plans) != 1 or not same_actor(active_plans[0], actor):
+            return None
+        try:
+            manifest = await require_plan_consent(app, actor, active_plans[0], self)
+            require_derived_input(manifest, plan)
+            current_plan_sha256 = processing_plan_sha256(manifest.as_dict())
+        except ConversationDenied:
+            return None
+        owner_id = await self._human_processing_owner(app, actor, recording, now)
+        if owner_id is None:
+            return None
+        primary_input_sha256 = await self._supplement_primary_input_sha256(
+            app, actor, recording, plan, active_plans[0], bundle, approval
+        )
+        if primary_input_sha256 is None:
+            return None
+        context = StageSupplementContext(
+            tenant_id=actor.tenant_id,
+            processing_person_id=actor.person_id,
+            owner_person_id=owner_id,
+            source_sha256=recording.source_sha256,
+            configuration_sha256=approval.configuration_sha256,
+            stage="C5",
+            recipe_revision=plan.recipe_revision,
+            coaching_prompt_revision="coaching-v4",
+            report_language=plan.request.report_language,
+            processing_plan_sha256=current_plan_sha256,
+            prepared_input_sha256=primary_input_sha256,
+        )
+        matching = tuple(
+            item
+            for item in bundle.stage_call_supplements
+            if matches_stage_supplement(
+                item,
+                approval,
+                context,
+                now_epoch=int(utc(now).timestamp()),
+            )
+        )
+        return matching[0] if len(matching) == 1 else None
+
+    @staticmethod
+    async def _completed_c2_cache_proof(
+        app: ConversationApplication,
+        actor: ConversationActor,
+        recording: ConversationRecording,
+        plan: ServicePlan,
+        approval: StageApproval,
+        cached: ConversationInferenceTask | None,
+    ) -> bool:
+        """Prove an exact completed C2 cache hit before exempting it from cap."""
+
+        if (
+            not isinstance(plan, TranscriptionPlan)
+            or plan.checkpoint.stage != "C2"
+            or cached is None
+            or cached.stage != "C2"
+            or cached.state != "completed"
+            or cached.erased_at is not None
+            or not same_actor(cached, actor)
+            or cached.recording_id != recording.id
+            or cached.tenant_id != recording.tenant_id
+            or cached.person_id != recording.person_id
+            or cached.generation != recording.generation
+            or cached.cache_key != plan.checkpoint.cache_key
+            or cached.input_sha256 != plan.prepared.input_sha256
+            or cached.intent is None
+            or content_hash(cached.intent) != cached.intent_sha256
+            or cached.intent_sha256 != content_hash(plan.intent())
+            or cached.checkpoint_id is None
+        ):
+            return False
+        database = app.database
+        run = await database.get(ConversationRun, cached.run_id)
+        job = await database.get(Job, cached.job_id)
+        checkpoint = await database.get(ConversationCheckpoint, cached.checkpoint_id)
+        quote_row = await database.get(ConversationQuote, cached.quote_id)
+        accepted = await database.get(ConversationQuoteAcceptance, cached.quote_id)
+        if (
+            run is None
+            or job is None
+            or checkpoint is None
+            or quote_row is None
+            or accepted is None
+            or run.id != cached.run_id
+            or run.job_id != cached.job_id
+            or run.recording_id != recording.id
+            or run.tenant_id != recording.tenant_id
+            or run.person_id != recording.person_id
+            or run.generation != recording.generation
+            or run.recipe_revision != plan.recipe_revision
+            or run.state != "completed"
+            or run.completed_at is None
+            or job.tenant_id != recording.tenant_id
+            or job.kind != INFERENCE_JOB
+            or job.dedupe_key != f"conversation:provider:{cached.run_id}"
+            or job.payload != {"schema": 1, "run_id": str(cached.run_id)}
+            or not job.external_side_effect
+            or job.status != JobStatus.SUCCEEDED.value
+            or job.dispatch_started_at is None
+            or job.provider_idempotency_key != job.dedupe_key
+            or job.provider_receipt is None
+            or job.provider_receipt_digest is None
+            or not isinstance(job.provider_receipt, dict)
+            or quote_row.revoked_at is not None
+            or quote_row.recording_id != recording.id
+            or quote_row.tenant_id != recording.tenant_id
+            or quote_row.person_id != recording.person_id
+            or not same_actor(accepted, actor)
+        ):
+            return False
+        try:
+            receipt = job.provider_receipt
+            if canonical_receipt_digest(receipt) != job.provider_receipt_digest:
+                return False
+            verified = verified_checkpoint(checkpoint, binding_for(recording))
+            quote = Quote.from_dict(quote_row.quote)
+            permission = ExecutionPermission.from_dict(quote_row.execution_permission)
+        except (ConversationConflict, TypeError, ValueError, KeyError):
+            return False
+        approval_prefix = f"hosted-stage-v1:{approval.id}:"
+        approval_digest = permission.authorization_ref.removeprefix(approval_prefix)
+        response_sha256 = receipt.get("response_sha256")
+        dispatch_epoch = int(utc(job.dispatch_started_at).timestamp())
+        return (
+            checkpoint.stage == "C2"
+            and verified.cache_key == plan.checkpoint.cache_key
+            and checkpoint.recording_id == recording.id
+            and isinstance(checkpoint.payload, dict)
+            and isinstance(response_sha256, str)
+            and len(response_sha256) == 64
+            and all(character in "0123456789abcdef" for character in response_sha256)
+            and checkpoint.payload.get("revision") == response_sha256
+            and checkpoint.payload.get("raw_response_sha256") == response_sha256
+            and receipt.get("schema") == "ac.sales-xray.provider-receipt/1"
+            and receipt.get("provider") == plan.prepared.provider
+            and receipt.get("model") == plan.prepared.model
+            and receipt.get("input_sha256") == plan.prepared.input_sha256
+            and receipt.get("validation") == "transcript_schema_and_source_binding"
+            and receipt.get("validation_state") == "validated"
+            and receipt.get("human_approved") is False
+            and receipt.get("raw_blob_id") == str(cached.run_id)
+            and receipt.get("idempotency_key") == job.dedupe_key
+            and receipt.get("checkpoint_id") == str(checkpoint.id)
+            and receipt.get("checkpoint_manifest_sha256") == checkpoint.manifest_sha256
+            and quote.quote_id == str(quote_row.id) == str(cached.quote_id)
+            and quote.source == binding_for(recording)
+            and quote.account_id == str(actor.person_id)
+            and quote.budget_scope_id == str(quote_row.budget_scope_id)
+            and quote.provider_id == plan.prepared.provider == approval.provider_id
+            and quote.provider_model == plan.prepared.model == approval.model_id
+            and quote.recipe_revision == plan.recipe_revision == approval.recipe_revision
+            and quote.operation == plan.prepared.operation
+            and quote.input_sha256 == plan.prepared.input_sha256
+            and quote.entitlement_seconds == 0
+            and quote.max_cost_paise == approval.max_cost_paise
+            and quote.provider_configuration_sha256 == approval.configuration_sha256
+            and quote.privacy_revision == approval.privacy_revision
+            and quote.permission_ref == approval.permission_ref
+            and quote.provider_terms_ref == approval.provider_terms_ref
+            and quote.retention_ref == approval.retention_ref
+            and quote.professional_gate_ref == approval.professional_gate_ref
+            and quote.pricing_ref == approval.pricing_ref
+            and permission.quote_fingerprint == quote.fingerprint
+            and permission.approved_by == str(actor.person_id)
+            and permission.expires_at_epoch == quote.expires_at_epoch
+            and accepted.quote_fingerprint == quote.fingerprint
+            and accepted.privacy_revision == quote.privacy_revision
+            and permission.authorization_ref.startswith(approval_prefix)
+            and approval_digest is not None
+            and len(approval_digest) == 64
+            and all(character in "0123456789abcdef" for character in approval_digest)
+            and quote.created_at_epoch
+            <= dispatch_epoch
+            < min(quote.expires_at_epoch, permission.expires_at_epoch)
+        )
+
+    @staticmethod
     def authorization_ref(bundle: HostedApprovalBundle, approval: StageApproval) -> str:
         return f"hosted-stage-v1:{approval.id}:{bundle.digest}"
 
@@ -937,9 +1330,53 @@ class ConversationAuthority:
                 ConversationInferenceTask.erased_at.is_(None),
             )
         )
-        if len(used) > approval.max_requests or (
-            len(used) >= approval.max_requests and not already_reserved and cached is None
+        supplement = await self._matching_stage_supplement(
+            app, actor, recording, plan, approval, bundle, now
+        )
+        request_limit = approval.max_requests
+        supplement_count = 0
+        supplement_cost = 0
+        if supplement is not None:
+            request_limit += supplement.max_additional_requests
+            try:
+                supplement_count, supplement_cost = supplemental_reservations(
+                    tuple(used), base_max_requests=approval.max_requests
+                )
+            except ValueError:
+                raise ConversationDenied(
+                    "This recording's approved provider allowance is used."
+                ) from None
+            if (
+                supplement_count > supplement.max_additional_requests
+                or supplement_cost > supplement.max_aggregate_cost_paise
+                or quote.max_cost_paise > supplement.max_cost_per_request_paise
+                or (
+                    not already_reserved
+                    and supplement_cost + quote.max_cost_paise > supplement.max_aggregate_cost_paise
+                )
+                or (not already_reserved and supplement_count >= supplement.max_additional_requests)
+            ):
+                raise ConversationDenied("This recording's approved provider allowance is used.")
+        c2_cache_proven = False
+        if (
+            approval.stage == "C2"
+            and cached is not None
+            and (len(used) > approval.max_requests or len(used) >= approval.max_requests)
         ):
+            c2_cache_proven = await self._completed_c2_cache_proof(
+                app, actor, recording, plan, approval, cached
+            )
+        exhausted = len(used) > request_limit or (
+            len(used) >= request_limit
+            and not already_reserved
+            and cached is None
+            and not c2_cache_proven
+        )
+        # Above the base allowance, only a fully verified completed C2 cache
+        # hit can bypass the historical counter; it cannot reach dispatch.
+        if approval.stage == "C2" and len(used) > approval.max_requests:
+            exhausted = not c2_cache_proven
+        if exhausted:
             raise ConversationDenied("This recording's approved provider allowance is used.")
         return approval
 
