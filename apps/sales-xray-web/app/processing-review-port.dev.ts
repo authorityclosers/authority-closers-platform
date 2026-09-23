@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { parseProgress, parseSubmission, UUID } from "./acquisition-client";
+import { fixtureFrame, fixtureStateId } from "./fixture-review-states";
 import type {
   LocalReviewObservation,
   ProcessingReview,
@@ -69,6 +70,15 @@ function subscribe(listener: () => void) {
 
 function routeSnapshot() {
   return `${window.location.search}\u0000${window.location.hash}`;
+}
+
+function activeReviewSelection() {
+  const search = new URLSearchParams(window.location.search);
+  return (
+    window.location.hash.startsWith("#sx-review=") ||
+    search.has("sx-review-local") ||
+    search.has("sx-fixture")
+  );
 }
 
 function parseRouteSnapshot(value: string) {
@@ -202,6 +212,8 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
   const frameId = reviewFrameId(hash);
   const localRequested = new URLSearchParams(search).has("sx-review-local");
   const localFrameId = localReviewFrameId(search);
+  const fixtureRequested = new URLSearchParams(search).has("sx-fixture");
+  const selectedFixtureId = fixtureStateId(search);
   const [readOnly, setReadOnly] = useState<boolean | null>(null);
   const [value, setValue] = useState<{
     key: string;
@@ -251,7 +263,7 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
   }, []);
 
   useEffect(() => {
-    if (!requested || !callId || !frameId || localRequested) return;
+    if (!requested || !callId || !frameId || localRequested || fixtureRequested) return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -380,10 +392,10 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
       if (timer) clearTimeout(timer);
       if (expiry) clearTimeout(expiry);
     };
-  }, [requested, callId, frameId, key, localRequested]);
+  }, [requested, callId, frameId, key, localRequested, fixtureRequested]);
 
   useEffect(() => {
-    if (!localRequested || requested) return;
+    if (!localRequested || requested || fixtureRequested) return;
     const abort = new AbortController();
     let expiry: ReturnType<typeof setTimeout> | undefined;
     if (!localFrameId) {
@@ -471,11 +483,11 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
       abort.abort();
       if (expiry) clearTimeout(expiry);
     };
-  }, [localRequested, localFrameId, requested, snapshot]);
+  }, [localRequested, localFrameId, requested, fixtureRequested, snapshot]);
 
   const captureLocal = useCallback(
     (observation: LocalReviewObservation) => {
-      if (readOnly !== true || requested || localRequested) return;
+      if (readOnly !== true || activeReviewSelection()) return;
       const serialized = JSON.stringify(observation);
       if (serialized === lastLocalObservation.current) return;
       lastLocalObservation.current = serialized;
@@ -497,7 +509,7 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
         }
       });
     },
-    [localRequested, readOnly, requested],
+    [readOnly],
   );
 
   const frame = requested && value.key === key ? value.frame : null;
@@ -505,9 +517,25 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
     localRequested && !requested && localValue.key === snapshot
       ? localValue.frame
       : null;
+  const selectedFixtureFrame =
+    fixtureRequested &&
+    !requested &&
+    !localRequested &&
+    readOnly === true &&
+    selectedFixtureId
+      ? fixtureFrame(selectedFixtureId)
+      : null;
   const message =
-    requested && localRequested
+    [requested, localRequested, fixtureRequested].filter(Boolean).length > 1
       ? "Choose one observed state address. Remove either the review hash or browser-local selector."
+      : fixtureRequested
+        ? !selectedFixtureId
+          ? "Invalid local fixture address. Choose a listed state in the review controls."
+          : readOnly === true
+            ? ""
+            : readOnly === false
+              ? "Local fixture states require the read-only review bridge."
+              : "Checking local review availability…"
       : requested
         ? !frameId
           ? "Invalid review address. Select an observed state in the controls."
@@ -527,6 +555,8 @@ export function useProcessingReview(callId: string | null): ProcessingReview {
     frame,
     localRequested,
     localFrame,
+    fixtureRequested,
+    fixtureFrame: selectedFixtureFrame,
     readOnly,
     captureLocal,
     message,

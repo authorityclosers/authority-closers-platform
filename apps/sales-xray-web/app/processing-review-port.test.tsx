@@ -109,11 +109,54 @@ it("production ignores inspection selectors and makes no review requests", () =>
     frame: null,
     localRequested: false,
     localFrame: null,
+    fixtureRequested: false,
+    fixtureFrame: null,
     readOnly: false,
     captureLocal: expect.any(Function),
     message: "",
   });
   expect(fetch).not.toHaveBeenCalled();
+});
+it("opens only local fixture data after read-only health is confirmed", async () => {
+  window.history.replaceState(null, "", "/?new=1&sx-fixture=processing.paused");
+  const fetch = mockFetch(() => {
+    throw new Error("Fixture inspection must not call any other endpoint");
+  });
+  vi.stubGlobal("fetch", fetch);
+  function FixtureView() {
+    const selected = useProcessingReview(null);
+    return (
+      <p
+        data-requested={String(selected.fixtureRequested)}
+        data-progress={selected.fixtureFrame?.progress?.state ?? ""}
+      >
+        {selected.fixtureFrame?.label ?? selected.message}
+      </p>
+    );
+  }
+  await act(async () => root.render(<FixtureView />));
+  expect(container.textContent).toBe("Analysis paused");
+  expect(container.querySelector("p")?.dataset.requested).toBe("true");
+  expect(container.querySelector("p")?.dataset.progress).toBe("held");
+  expect(fetch.mock.calls.map((call) => call[0])).toEqual(["/health"]);
+});
+
+it("rejects fixture preview when local read-only health is unavailable", async () => {
+  window.history.replaceState(null, "", "/?new=1&sx-fixture=auth.code");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ analysis_read_only: false }),
+    })),
+  );
+  function FixtureView() {
+    const selected = useProcessingReview(null);
+    return <p>{selected.fixtureFrame?.label ?? selected.message}</p>;
+  }
+  await act(async () => root.render(<FixtureView />));
+  expect(container.textContent).toContain("require the read-only review bridge");
+  expect(container.textContent).not.toContain("Enter email code");
 });
 it("rejects duplicate selectors, arbitrary commands and malformed frame IDs", () => {
   expect(reviewFrameId(hash)).toBe(frame);
