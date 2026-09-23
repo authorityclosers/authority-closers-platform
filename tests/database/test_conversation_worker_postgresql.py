@@ -24,8 +24,12 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence import worker as worker_module
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationAcquisitionSettlement,
+)
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
 )
@@ -43,6 +47,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationMinuteAccount,
     ConversationPermission,
     ConversationQuote,
+    ConversationRecording,
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.storage import (
@@ -52,6 +57,7 @@ from ac_platform.conversation_intelligence.storage import (
     PrivateLocalRecordingStorage,
 )
 from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
+from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import RecoveryStateRepository
@@ -351,6 +357,195 @@ def test_real_worker_registers_stores_quotes_runs_native_and_settles(
             )
             assert feature.startswith(b"ACAAF001")
             _assert_scratch_empty(prepared.scratch)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_incomplete_contact_profile_holds_local_work_without_settling_or_refunding(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        prepared = await _prepare(postgres_harness, tmp_path)
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with sessions() as database, database.begin():
+                profile = await database.scalar(
+                    select(SalesXrayProfile).where(
+                        SalesXrayProfile.person_id == prepared.state.person_id
+                    )
+                )
+                assert profile is not None
+                profile.phone_number_e164 = None
+                run_row = await database.get(ConversationRun, prepared.run_id)
+                assert run_row is not None
+                job_id = run_row.job_id
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                before_minutes = dict(minutes.snapshot)
+
+            def forbidden_native(*_: Any, **__: Any) -> Any:
+                pytest.fail("profile-incomplete work reached native AudioAtlas")
+
+            monkeypatch.setattr(prepared.worker, "_inspect", forbidden_native)
+            assert await prepared.worker.run_once()
+
+            async with sessions() as database, database.begin():
+                run_row = await database.get(ConversationRun, prepared.run_id)
+                job = await database.get(Job, job_id)
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert run_row is not None and run_row.state == "queued"
+                assert job is not None and job.status == "held"
+                assert job.hold_reason == "sales_xray_profile_incomplete"
+                assert job.lease_token is None and job.leased_until is None
+                assert minutes is not None and minutes.snapshot == before_minutes
+                assert not list(
+                    await database.scalars(select(ConversationAcquisitionSettlement))
+                )
+                held_events = (
+                    await database.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.tenant_id == prepared.state.tenant_id,
+                            AuditEvent.action == "conversation.account_profile_required_held",
+                            AuditEvent.resource_id == str(job_id),
+                        )
+                    )
+                ).all()
+                assert len(held_events) == 1
+                assert held_events[0].actor_type == "system"
+                assert held_events[0].actor_person_id is None
+                assert held_events[0].payload == {
+                    "hold_reason": "sales_xray_profile_incomplete",
+                    "job_kind": "conversation.inspect_local.v1",
+                }
+                response = await build_application(database, prepared.state).get_run(
+                    prepared.state.actor,
+                    prepared.run_id,
+                )
+                assert response["state"] == "queued"
+                assert response["execution_hold"] == "account_profile_required"
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_profile_gate_refreshes_stale_identity_map_before_dispatch(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        prepared = await _prepare(postgres_harness, tmp_path)
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with sessions() as stale, stale.begin():
+                cached = await stale.scalar(
+                    select(SalesXrayProfile).where(
+                        SalesXrayProfile.person_id == prepared.state.person_id
+                    )
+                )
+                assert cached is not None and cached.phone_number_e164 is not None
+
+                async with sessions() as updater, updater.begin():
+                    current = await updater.scalar(
+                        select(SalesXrayProfile)
+                        .where(SalesXrayProfile.person_id == prepared.state.person_id)
+                        .execution_options(populate_existing=True)
+                    )
+                    assert current is not None
+                    current.phone_number_e164 = None
+                    current.revision += 1
+
+                from ac_platform.conversation_intelligence.worker_account_gate import (
+                    PROFILE_INCOMPLETE_HOLD_REASON,
+                    AccountProfileRequired,
+                    require_person_profile,
+                )
+
+                with pytest.raises(AccountProfileRequired) as failure:
+                    await require_person_profile(
+                        stale,
+                        person_id=prepared.state.person_id,
+                    )
+                assert failure.value.hold_reason == PROFILE_INCOMPLETE_HOLD_REASON
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_profile_change_after_local_marker_preserves_in_flight_reservation(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        prepared = await _prepare(postgres_harness, tmp_path)
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            original_check = worker_module.require_recording_owner_profile
+            checks = 0
+
+            async def profile_changes_between_fences(
+                database: AsyncSession,
+                recording: ConversationRecording,
+                *,
+                now: datetime,
+            ) -> None:
+                nonlocal checks
+                checks += 1
+                if checks == 1:
+                    await original_check(database, recording, now=now)
+                else:
+                    from ac_platform.conversation_intelligence.worker_account_gate import (
+                        PROFILE_INCOMPLETE_HOLD_REASON,
+                        AccountProfileRequired,
+                    )
+
+                    raise AccountProfileRequired(PROFILE_INCOMPLETE_HOLD_REASON)
+
+            monkeypatch.setattr(
+                worker_module,
+                "require_recording_owner_profile",
+                profile_changes_between_fences,
+            )
+
+            def forbidden_native(*_: Any, **__: Any) -> Any:
+                pytest.fail("profile-incomplete work reached native AudioAtlas")
+
+            monkeypatch.setattr(prepared.worker, "_inspect", forbidden_native)
+            assert await prepared.worker.run_once()
+            assert checks == 2
+
+            async with sessions() as database, database.begin():
+                run_row = await database.get(ConversationRun, prepared.run_id)
+                assert run_row is not None and run_row.state == "running"
+                job = await database.get(Job, run_row.job_id)
+                assert job is not None and job.status == "dead_letter"
+                assert job.last_error == (
+                    "conversation_account_profile_changed_after_dispatch_marker"
+                )
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                reservation = MinuteAccount.from_dict(minutes.snapshot).reservations[0]
+                assert reservation.state == "in_flight"
+                assert reservation.committed_seconds == reservation.quote.entitlement_seconds
+                response = await build_application(database, prepared.state).get_run(
+                    prepared.state.actor,
+                    prepared.run_id,
+                )
+                assert response["state"] == "failed"
+                assert response["execution_hold"] is None
         finally:
             await engine.dispose()
 

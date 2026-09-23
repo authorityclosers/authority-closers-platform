@@ -72,6 +72,11 @@ from ac_platform.conversation_intelligence.storage import (
     PrivateLocalRecordingStorage,
     StorageError,
 )
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    AccountProfileRequired,
+    hold_current_job_for_account_profile,
+    require_recording_owner_profile,
+)
 from ac_platform.identity.models import Person
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
@@ -792,6 +797,14 @@ class OfflineConversationWorker:
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
                 recording, run, quoted, _ = await self._scope(db, job)
+                # Account admission is adjacent to the local/native dispatch
+                # marker. A missing profile moves the leased job to an audited
+                # hold without releasing acquisition or minute reservations.
+                await require_recording_owner_profile(
+                    db,
+                    recording,
+                    now=datetime.now(UTC),
+                )
                 minutes, budget = await self._accounts(db, recording, quoted)
                 transition = mark_dispatched(
                     MinuteAccount.from_dict(minutes.snapshot),
@@ -812,17 +825,44 @@ class OfflineConversationWorker:
                 root = Path(directory)
                 if cached is not None:
                     result = cached
-                elif self.native_runtime is not None:
-                    result = await fenced.run(
-                        self._inspect_hosted,
-                        source,
-                        source_sha,
-                        source_bytes,
-                        root,
-                        work.job_id,
-                    )
                 else:
-                    result = await fenced.run(self._inspect, source, source_sha, source_bytes, root)
+                    # The native marker is already committed at this point.
+                    # Recheck directly before the helper call; if this
+                    # point-in-time check sees an incomplete profile, use
+                    # explicit job reconciliation, never the pre-dispatch
+                    # hold/refund path. Its transaction ends before native
+                    # work, so later profile changes are outside this check.
+                    async with self.sessions() as db, db.begin():
+                        job = await self._job(db, work)
+                        recording, _, _, _ = await self._scope(db, job)
+                        try:
+                            await require_recording_owner_profile(
+                                db,
+                                recording,
+                                now=datetime.now(UTC),
+                            )
+                        except AccountProfileRequired as error:
+                            raise AccountProfileRequired(
+                                error.hold_reason,
+                                dispatch_started=True,
+                            ) from error
+                    if self.native_runtime is not None:
+                        result = await fenced.run(
+                            self._inspect_hosted,
+                            source,
+                            source_sha,
+                            source_bytes,
+                            root,
+                            work.job_id,
+                        )
+                    else:
+                        result = await fenced.run(
+                            self._inspect,
+                            source,
+                            source_sha,
+                            source_bytes,
+                            root,
+                        )
                 feature_path = root / "result" / "features.aaf"
                 if cached is None and feature_path.stat().st_size != self._feature_bytes(result):
                     raise StorageError("conversation_c1_result_size_mismatch")
@@ -989,6 +1029,30 @@ class OfflineConversationWorker:
                 with suppress(BaseException):
                     owned.exception()
             raise
+        except AccountProfileRequired as error:
+            if error.dispatch_started:
+                async with self.sessions() as db, db.begin():
+                    await self._job(db, work)
+                    await JobRepository(db).fail(
+                        work.job_id,
+                        work.lease_token,
+                        "conversation_account_profile_changed_after_dispatch_marker",
+                        permanent=True,
+                    )
+                return True
+            async with self.sessions() as db, db.begin():
+                await hold_current_job_for_account_profile(
+                    db,
+                    job_id=work.job_id,
+                    lease_token=work.lease_token,
+                    recovery_generation=work.recovery_generation,
+                    expected_kind=work.kind,
+                    hold_reason=error.hold_reason,
+                    now=datetime.now(UTC),
+                )
+            # A fenced/started job is intentionally left to its existing
+            # recovery path; this branch never refunds or rewrites run state.
+            return True
         except Exception:
             # No provider/media exception text enters shared operational logs.
             # A failed local attempt is not a no-charge receipt: leave any
