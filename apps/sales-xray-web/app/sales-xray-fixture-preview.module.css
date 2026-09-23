@@ -56,6 +56,31 @@
   min-height: 0;
 }
 
+/* The multi-file rail is sized to the full viewport in production. This
+   fixture has an additional review bar above it, so let its cards size to
+   their content instead of pushing the workspace into a nested scroll. */
+.selectedApp :global(aside[aria-label="Added files and next steps"]) {
+  height: auto;
+  grid-template-rows: none;
+  gap: 4px;
+}
+
+@media (min-width: 1024px) and (max-height: 760px) {
+  .selectedApp :global(aside[aria-label="Added files and next steps"] > section:first-child) {
+    height: auto;
+    padding-block: 5px;
+  }
+
+  .selectedApp :global(aside[aria-label="Added files and next steps"] > section:last-child) {
+    height: 180px;
+    padding-block: 7px;
+  }
+
+  .selectedApp :global(aside[aria-label="Added files and next steps"] > section:last-child ol > li) {
+    min-height: 43px;
+  }
+}
+
 /* The processing fixture has an extra review bar; remove the production
    panel's viewport-sized minimum so the exact content fits beneath it. */
 .processingApp :global([aria-label="Example analysis progress"]) {
