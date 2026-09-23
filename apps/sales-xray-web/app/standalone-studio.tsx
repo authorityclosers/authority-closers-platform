@@ -408,7 +408,7 @@ function StandaloneStudioView({
   };
   if (
     review.fixtureRequested &&
-    (!review.fixtureFrame || review.fixtureFrame.kind === "processing")
+    (!review.fixtureFrame || review.fixtureFrame.kind === "processing" || review.fixtureFrame.kind === "auth" || review.fixtureFrame.id === "upload.selected")
   )
     return (
       <WorkspaceAccessProvider

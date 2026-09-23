@@ -110,3 +110,77 @@ it("keeps the operational studio unmounted when the read-only bridge is unavaila
   expect(container.querySelector('[data-fixture="true"]')).toBeNull();
   expect(requests).toEqual(["/health"]);
 });
+
+it("renders one or three local synthetic Files in the production stage without operational requests", async () => {
+  window.history.replaceState(null, "", "/?new=1&sx-fixture=upload.selected");
+  const requests: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) => {
+      requests.push(path);
+      if (path === "/health")
+        return new Response(JSON.stringify({ analysis_read_only: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      throw new Error(`Unexpected synthetic preview request: ${path}`);
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <StandaloneStudio>
+        <div data-testid="operational-studio">Operational studio</div>
+      </StandaloneStudio>,
+    ),
+  );
+  expect(container.querySelector('[data-fixture="true"]')).not.toBeNull();
+  expect(container.textContent).toContain("Synthetic layout preview");
+  expect(container.textContent).toContain("No real recording is selected, stored, or uploaded.");
+  expect(container.querySelector('[data-testid="operational-studio"]')).toBeNull();
+  expect(container.querySelectorAll('[aria-label="Added audio files"] li')).toHaveLength(1);
+  expect(container.textContent).toContain("Synthetic discovery call.wav");
+
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "3 files")
+      ?.click(),
+  );
+  expect(container.querySelector('[data-preview-mode="multiple"]')).not.toBeNull();
+  expect(container.querySelectorAll('[aria-label="Added audio files"] li')).toHaveLength(2);
+  expect(container.textContent).toContain("3 files added");
+  expect(container.textContent).toContain("Synthetic objection call.mp3");
+  expect(container.querySelector('[aria-label="Added files and next steps"]')).not.toBeNull();
+  expect(requests).toEqual(["/health"]);
+});
+
+it.each(["auth.email", "auth.code", "auth.error"] as const)(
+  "mounts the real %s preview with selected-file context and no auth requests",
+  async (state) => {
+    window.history.replaceState(null, "", `/?new=1&sx-fixture=${state}`);
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) => {
+        requests.push(path);
+        if (path === "/health")
+          return new Response(JSON.stringify({ analysis_read_only: true }), {
+            headers: { "content-type": "application/json" },
+          });
+        throw new Error(`Unexpected auth preview request: ${path}`);
+      }),
+    );
+    await act(async () =>
+      root.render(
+        <StandaloneStudio>
+          <div data-testid="operational-studio">Operational studio</div>
+        </StandaloneStudio>,
+      ),
+    );
+    expect(container.querySelector('[data-fixture="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-review-preview="true"]')).not.toBeNull();
+    expect(container.querySelector("#account-auth-heading")).not.toBeNull();
+    expect(container.textContent).toContain("Synthetic selected call.wav");
+    expect(container.textContent).toContain("No account request is sent");
+    expect(container.querySelector('[data-testid="operational-studio"]')).toBeNull();
+    expect(requests).toEqual(["/health"]);
+  },
+);
