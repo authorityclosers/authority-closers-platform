@@ -9,8 +9,10 @@ components. Never run this harness against an external database or host.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -22,19 +24,26 @@ import httpx
 import pytest
 import uvicorn
 from playwright.async_api import async_playwright, expect
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationAcquisitionSettlement,
+    ConversationAcquisitionUsage,
+)
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
-from ac_platform.identity.models import PasswordCredential, Person
-from ac_platform.identity.password_auth import hash_password
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.identity.models import Person
+from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
+from ac_platform.providers import FakeEmailAdapter
+from ac_platform.tenancy.models import Tenant
+from ac_platform.worker import DurableWorker, build_default_dispatcher
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import _make_due
@@ -58,7 +67,7 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
-def test_compiled_guest_upload_report_reload_claim_and_deletion(
+def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     evidence = os.environ.get("AC_SALES_XRAY_ACQUISITION_BROWSER_EVIDENCE_DIR")
@@ -74,23 +83,17 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
         import ac_platform.http.app as app_module
 
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
-        password = "Synthetic-library-" + uuid4().hex + "!"
+        email = f"browser-{uuid4().hex}@example.test"
+        operations_tenant_id = uuid4()
         async with setup.sessions() as database, database.begin():
-            email = await database.scalar(
-                select(Person.email).where(Person.id == setup.state.person_id)
-            )
+            # Email-code audit records use the configured operations tenant as
+            # their canonical boundary, so make it part of this isolated DB.
             database.add(
-                PasswordCredential(
-                    person_id=setup.state.person_id, password_hash=hash_password(password)
+                Tenant(
+                    id=operations_tenant_id,
+                    slug=operations_tenant_id.hex,
+                    name="Synthetic browser operations workspace",
                 )
-            )
-            second_tenant = uuid4()
-            database.add(
-                Tenant(id=second_tenant, slug=second_tenant.hex, name="Synthetic second workspace")
-            )
-            await database.flush()
-            database.add(
-                Membership(tenant_id=second_tenant, person_id=setup.state.person_id, role="learner")
             )
         server: uvicorn.Server | None = None
         serving = None
@@ -110,6 +113,10 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         Path(tempfile.gettempdir()) / "ac-xray-browser.sock"
                     ),
                     "sales_xray_native_image_ref": "sha256:" + "a" * 64,
+                    "operations_tenant_id": operations_tenant_id,
+                    "learner_consent_version": "browser-account-consent-v1",
+                    "email_challenge_secret": SecretStr(secrets.token_urlsafe(32)),
+                    "external_side_effects_hold": False,
                 }
             )
             # model_copy does not parse URL values; parse the non-secret update
@@ -119,6 +126,16 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
             configured.sales_xray_app_url = HttpUrl(ORIGIN)
             monkeypatch.setattr(app_module, "settings", configured)
             monkeypatch.setattr(app_module, "session_factory", setup.sessions)
+
+            # The HTTP request writes the canonical outbox event. This explicit
+            # fake adapter lets the browser receive that real queued code
+            # without contacting an email provider.
+            mail_adapter = FakeEmailAdapter()
+            email_worker = DurableWorker(
+                setup.sessions,
+                dispatcher=build_default_dispatcher(configured, provider=mail_adapter),
+                settings=configured,
+            )
 
             def native(self: Any, source: Path, outdir: Path, *, job_id: UUID, rate: Any):
                 return signals.validate_media(source, outdir, rate=rate)
@@ -253,6 +270,81 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     asyncio.run_coroutine_threadsafe(operation, database_loop)
                 )
 
+            await db(_reconcile(setup.sessions, setup.state))
+            assert await db(email_worker.prepare())
+
+            async def deliver_email_code(*, message_start: int) -> str:
+                for _ in range(8):
+                    await db(email_worker.run_once())
+                    matches = [
+                        message
+                        for message in mail_adapter.sent_messages[message_start:]
+                        if message.template == "identity-email-login-code"
+                        and message.to.casefold() == email.casefold()
+                    ]
+                    if matches:
+                        code = matches[-1].variables.get("code")
+                        assert isinstance(code, str) and len(code) == 6 and code.isdigit()
+                        return code
+                    await asyncio.sleep(0.05)
+                raise AssertionError("The real local email outbox did not deliver a login code.")
+
+            async def authenticate_with_email_code(target: Any) -> dict[str, Any]:
+                await target.get_by_label("Email address").fill(email)
+                await target.get_by_role("checkbox").check()
+                before = len(mail_adapter.sent_messages)
+                async with target.expect_response(
+                    lambda response: (
+                        response.url.endswith("/v1/auth/email-code/request")
+                        and response.request.method == "POST"
+                    )
+                ) as request_response:
+                    await target.get_by_role(
+                        "button", name="Send sign-in code", exact=True
+                    ).click()
+                requested = await request_response.value
+                assert requested.status == 202
+                request_body = requested.request.post_data_json
+                assert request_body["surface"] == "sales_xray"
+                assert request_body["return_path"] == "/"
+                assert request_body["consent"] is True
+                assert request_body["consent_version"] == "browser-account-consent-v1"
+                await expect(
+                    target.get_by_role("heading", name="Check your email.", exact=True)
+                ).to_be_visible()
+                try:
+                    code = await deliver_email_code(message_start=before)
+                except AssertionError:
+                    # A recently consumed challenge remains inside the actual
+                    # resend cooldown. Let the UI-supplied server timer expire,
+                    # then perform a real resend through the same browser.
+                    resend = target.get_by_role(
+                        "button", name=re.compile(r"^Resend code")
+                    )
+                    await expect(resend).to_be_enabled(timeout=70_000)
+                    before = len(mail_adapter.sent_messages)
+                    await resend.click()
+                    code = await deliver_email_code(message_start=before)
+                await target.get_by_label("Sign-in code").fill(code)
+                async with target.expect_response(
+                    lambda response: (
+                        response.url.endswith("/v1/auth/email-code/verify")
+                        and response.request.method == "POST"
+                    )
+                ) as verify_response:
+                    await target.get_by_role(
+                        "button", name="Verify and continue", exact=True
+                    ).click()
+                verified = await verify_response.value
+                assert verified.status == 200
+                verify_body = verified.request.post_data_json
+                assert verify_body["surface"] == "sales_xray"
+                assert verify_body["return_path"] == "/"
+                assert verify_body["code"] == code
+                payload = await verified.json()
+                assert payload["authenticated"] is True
+                return payload
+
             async def browser_exercise():
                 async with async_playwright() as playwright:
                     browser = await playwright.chromium.launch(headless=True)
@@ -261,8 +353,10 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     )
                     page = await context.new_page()
                     network = []
+                    requests = []
                     errors = []
                     plan_posts = []
+                    journey_checks: dict[str, Any] = {}
 
                     def record_response(response):
                         if response.url.startswith(ORIGIN + "/v1/"):
@@ -277,6 +371,17 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                             )
 
                     page.on("response", record_response)
+                    page.on(
+                        "request",
+                        lambda request: requests.append(
+                            {
+                                "path": request.url.split(ORIGIN)[-1],
+                                "method": request.method,
+                            }
+                            if request.url.startswith(ORIGIN + "/v1/")
+                            else None
+                        ),
+                    )
                     page.on("pageerror", lambda error: errors.append(type(error).__name__))
                     await page.route(
                         "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
@@ -299,10 +404,127 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     await file_input.set_input_files(
                         {"name": "Synthetic test call.wav", "mimeType": "audio/wav", "buffer": data}
                     )
+                    # The account-first gate may open directly on file select or
+                    # behind the primary action. In either case, the actual
+                    # selected File remains in this document while the
+                    # authentication and profile steps complete.
+                    if not await page.get_by_label("Email address").is_visible():
+                        await page.get_by_role(
+                            "button", name="Analyse my call", exact=True
+                        ).click()
+                    await expect(page.get_by_label("Email address")).to_be_visible()
+                    await expect(
+                        page.get_by_text("Synthetic test call.wav", exact=False).first
+                    ).to_be_visible()
+                    assert await file_input.evaluate(
+                        "input => input.files?.[0]?.name ?? null"
+                    ) == "Synthetic test call.wav"
+                    journey_checks["same_file_retained_in_auth_modal"] = True
+
+                    def source_or_plan_write(item: dict[str, str]) -> bool:
+                        path = item["path"].split("?", 1)[0]
+                        return (
+                            item["method"] in {"POST", "PUT", "PATCH"}
+                            and (
+                                path.endswith("/source")
+                                or path.endswith("/plan")
+                                or "/upload" in path
+                                or path.endswith("/submissions")
+                            )
+                        )
+
+                    assert not any(source_or_plan_write(item) for item in requests)
+                    assert plan_posts == [] and broker.calls == 0
+                    journey_checks["pre_auth_source_or_plan_writes"] = sum(
+                        source_or_plan_write(item) for item in requests
+                    )
+                    journey_checks["pre_auth_provider_calls"] = broker.calls
+                    async with setup.sessions() as diagnostic_db:
+                        assert (
+                            await diagnostic_db.scalar(
+                                select(ConversationAcquisitionUsage.id).limit(1)
+                            )
+                            is None
+                        )
+
+                    authenticated = await authenticate_with_email_code(page)
+                    assert authenticated["account_created"] is True
+                    assert authenticated["profile_complete"] is False
+                    journey_checks["email_otp_verified"] = any(
+                        message.template == "identity-email-login-code"
+                        and message.to.casefold() == email.casefold()
+                        for message in mail_adapter.sent_messages
+                    )
+                    journey_checks["account_created_before_profile"] = bool(
+                        authenticated["account_created"]
+                        and not authenticated["profile_complete"]
+                    )
+                    owner_person_id = UUID(authenticated["person_id"])
+                    assert await file_input.evaluate(
+                        "input => input.files?.[0]?.name ?? null"
+                    ) == "Synthetic test call.wav"
+                    await expect(
+                        page.get_by_role(
+                            "heading", name="A few details before we review your call."
+                        )
+                    ).to_be_visible()
+                    journey_checks["pre_profile_source_or_plan_writes"] = sum(
+                        source_or_plan_write(item) for item in requests
+                    )
+
+                    await page.get_by_label("Full name").fill("Synthetic Browser Learner")
+                    await page.get_by_label("Mobile number").fill("+12025550123")
+                    async with page.expect_response(
+                        lambda response: (
+                            response.url.endswith("/v1/me/sales-xray-profile")
+                            and response.request.method == "PUT"
+                        )
+                    ) as profile_response:
+                        await page.get_by_role(
+                            "button", name="Save details and check access", exact=True
+                        ).click()
+                    saved_profile = await profile_response.value
+                    assert saved_profile.status == 200
+                    profile_payload = await saved_profile.json()
+                    assert profile_payload["profile_complete"] is True
+                    assert profile_payload["name"] == "Synthetic Browser Learner"
+                    assert profile_payload["phone_number_e164"] == "+12025550123"
+                    assert profile_payload["phone_verified"] is False
                     await expect(
                         page.get_by_role("button", name="Analyse my call", exact=True)
-                    ).to_be_disabled()
-                    await page.get_by_role("checkbox").first.check()
+                    ).to_be_visible(timeout=20_000)
+                    assert await file_input.evaluate(
+                        "input => input.files?.[0]?.name ?? null"
+                    ) == "Synthetic test call.wav"
+                    assert not any(source_or_plan_write(item) for item in requests)
+                    assert plan_posts == [] and broker.calls == 0
+                    journey_checks["profile_complete_before_upload"] = bool(
+                        profile_payload["profile_complete"]
+                    )
+                    journey_checks["same_file_retained_through_profile"] = (
+                        await file_input.evaluate("input => input.files?.[0]?.name ?? null")
+                        == "Synthetic test call.wav"
+                    )
+
+                    async with setup.sessions() as diagnostic_db:
+                        person = await diagnostic_db.get(Person, owner_person_id)
+                        profile = await diagnostic_db.scalar(
+                            select(SalesXrayProfile).where(
+                                SalesXrayProfile.person_id == owner_person_id
+                            )
+                        )
+                        assert person is not None and person.email_verified_at is not None
+                        assert person.consent_version == "browser-account-consent-v1"
+                        assert profile is not None
+                        assert profile.phone_number_e164 == "+12025550123"
+                        assert profile.phone_verified_at is None
+
+                    await page.get_by_role("checkbox").last.check()
+                    journey_checks["same_file_retained_for_upload"] = (
+                        await file_input.evaluate("input => input.files?.[0]?.name ?? null")
+                        == "Synthetic test call.wav"
+                    )
+                    assert journey_checks["same_file_retained_for_upload"] is True
                     async with page.expect_response(
                         lambda response: (
                             response.url.endswith("/source") and response.request.method == "PUT"
@@ -328,6 +550,9 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         )
                     uploaded = await uploaded_response.json()
                     submission_id = uploaded["submission_id"]
+                    assert await file_input.evaluate(
+                        "input => input.files?.[0]?.name ?? null"
+                    ) == "Synthetic test call.wav"
                     await db(_reconcile(setup.sessions, setup.state))
                     local = OfflineConversationWorker(
                         setup.sessions,
@@ -397,6 +622,31 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                             "Lead volume",
                         ],
                     }
+                    async with setup.sessions() as diagnostic_db:
+                        usage_rows = list(
+                            (
+                                await diagnostic_db.scalars(
+                                    select(ConversationAcquisitionUsage).where(
+                                        ConversationAcquisitionUsage.person_id
+                                        == owner_person_id
+                                    )
+                                )
+                            ).all()
+                        )
+                        assert len(usage_rows) == 1
+                        usage = usage_rows[0]
+                        assert usage.visitor_id is None
+                        assert usage.submission_id == UUID(submission_id)
+                        assert usage.source_sha256 == hashlib.sha256(data).hexdigest()
+                        settlement = await diagnostic_db.get(
+                            ConversationAcquisitionSettlement, usage.id
+                        )
+                        assert settlement is not None
+                        assert settlement.kind == "completed"
+                        assert settlement.charged_seconds == usage.reserved_seconds == 1
+                        journey_checks["acquisition_usage_count"] = len(usage_rows)
+                        journey_checks["settlement_count"] = int(settlement is not None)
+                        journey_checks["charged_seconds"] = settlement.charged_seconds
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     await page.get_by_role("tab", name="Moments", exact=True).click()
@@ -421,34 +671,31 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     )
                     await page.pdf(path=str(receipt / "report-print.pdf"), print_background=True)
 
-                    async def sign_in(target):
-                        await target.goto(ORIGIN + "/login", wait_until="domcontentloaded")
-                        await target.get_by_label("Email address").fill(email)
-                        await target.get_by_label("Password").fill(password)
-                        await target.get_by_role("button", name="Sign in", exact=True).click()
-                        await expect(
-                            target.get_by_role("heading", name="Choose your Sales Xray workspace.")
-                        ).to_be_visible()
-                        await expect(target.locator("button[data-tenant-id]")).to_have_count(2)
-                        await target.get_by_role(
-                            "button", name="Disposable Sales Xray tenant", exact=True
-                        ).click()
-
-                    # Use the actual password UI and server workspace chooser.
-                    # Signing in must still require explicit claim of this guest call.
-                    await sign_in(page)
-                    await expect(
-                        page.get_by_role("button", name="Save to my account", exact=True)
-                    ).to_be_visible()
-                    await page.get_by_role("button", name="Save to my account", exact=True).click()
-                    await expect(
-                        page.get_by_role("region", name="Sales call report")
-                    ).to_be_visible(timeout=20000)
                     fresh = await browser.new_context(viewport={"width": 1440, "height": 1000})
                     library_page = await fresh.new_page()
                     library_page.on("response", record_response)
                     library_page.on("pageerror", lambda error: errors.append(type(error).__name__))
-                    await sign_in(library_page)
+                    library_page.on(
+                        "request",
+                        lambda request: requests.append(
+                            {
+                                "path": request.url.split(ORIGIN)[-1],
+                                "method": request.method,
+                            }
+                            if request.url.startswith(ORIGIN + "/v1/")
+                            else None
+                        ),
+                    )
+                    await library_page.goto(ORIGIN + "/login", wait_until="domcontentloaded")
+                    reauthenticated = await authenticate_with_email_code(library_page)
+                    assert reauthenticated["account_created"] is False
+                    assert reauthenticated["profile_complete"] is True
+                    assert reauthenticated["person_id"] == str(owner_person_id)
+                    journey_checks["relogin_existing_account"] = bool(
+                        not reauthenticated["account_created"]
+                        and reauthenticated["person_id"] == str(owner_person_id)
+                    )
+                    await library_page.goto(ORIGIN + "/calls", wait_until="domcontentloaded")
                     assert (
                         await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")
                         is None
@@ -515,9 +762,11 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     await expect(
                         library_page.get_by_text("Deletion requested.", exact=False)
                     ).to_be_visible()
-                    await library_page.get_by_role(
+                    account_menu = library_page.get_by_role(
                         "button", name="Open AC account menu", exact=True
-                    ).click()
+                    )
+                    if await account_menu.count():
+                        await account_menu.click()
                     async with library_page.expect_response(
                         lambda response: (
                             response.url.endswith("/v1/auth/logout")
@@ -561,19 +810,30 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                                 "native_socket_simulated": True,
                                 "challenge_simulated": True,
                                 "http_receipts": network,
+                                "http_requests": requests,
+                                "journey_checks": journey_checks,
                                 "page_errors": errors,
                                 "passed": [
+                                    "selected audio remains browser-local before authentication",
+                                    "pre-auth requests contain no source upload or processing plan",
+                                    "email OTP delivered through local outbox and verified",
+                                    "new canonical account exists before profile completion",
+                                    "required account name and mobile profile completed",
+                                    "no source transfer until authenticated profile is complete",
+                                    "the same selected browser File uploads after "
+                                    "profile completion",
                                     "inline upload consent",
                                     "native C1",
-                                    "explicit provider plan",
+                                    "explicit provider plan after profile and upload consent",
                                     "C6 overview",
+                                    "acquisition allowance settled exactly once",
                                     "private range playback",
                                     "reload without retranscription",
                                     "390px reflow",
                                     "print",
-                                    "explicit account claim",
-                                    "actual password login and two-workspace chooser",
-                                    "new browser context discovers claimed call in account library",
+                                    "new browser context signs in again with email OTP",
+                                    "new browser context discovers call in canonical "
+                                    "account library",
                                     "library row opens retained report and actual audio plays",
                                     "rendered Sign out button returns204 and private endpoints401",
                                     "stranger denied",

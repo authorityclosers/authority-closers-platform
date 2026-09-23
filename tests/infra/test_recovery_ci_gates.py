@@ -285,6 +285,19 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
     browser_test = (ROOT / "tests/e2e/test_sales_xray_acquisition_browser.py").read_text("utf-8")
     assert "source upload failed:" in browser_test
     assert '" ".join(detail.split())[:240]' in browser_test
+    assert "test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion" in (
+        wrapper
+    )
+    for assertion in (
+        "pre-auth requests contain no source upload or processing plan",
+        "email OTP delivered through local outbox and verified",
+        "required account name and mobile profile completed",
+        "the same selected browser File uploads after profile completion",
+        "acquisition allowance settled exactly once",
+        "new browser context signs in again with email OTP",
+    ):
+        assert assertion in wrapper
+    assert "actual password login and two-workspace chooser" not in wrapper
 
     validation = workflow["jobs"]["validate"]
     assert gate_id in validation["needs"]
