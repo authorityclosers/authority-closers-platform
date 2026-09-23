@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { StandaloneStudio } from "./standalone-studio";
+import { usePendingAnalysis } from "./pending-analysis";
+import { useWorkspaceAccess } from "./workspace-access";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -204,4 +206,62 @@ it("keeps the studio closed after a forbidden context selection", async () => {
       String(path).startsWith("/v1/conversation"),
     ),
   ).toBe(false);
+});
+
+it("retains the same selected File through sign-in refresh and workspace choice", async () => {
+  const createUrl = vi.fn(() => "blob:synthetic-selected-file");
+  const revokeUrl = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createUrl,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeUrl,
+  });
+  const observed: {
+    pending: ReturnType<typeof usePendingAnalysis>;
+    access: ReturnType<typeof useWorkspaceAccess>;
+  } = { pending: null, access: null };
+  function StudioProbe() {
+    const pending = usePendingAnalysis();
+    const access = useWorkspaceAccess();
+    useEffect(() => {
+      observed.pending = pending;
+      observed.access = access;
+    }, [pending, access]);
+    return <p data-testid="file-name">{pending?.selection?.file.name ?? "No file"}</p>;
+  }
+  fetchMock.mockResolvedValueOnce(response({}, 401));
+  await act(async () => root.render(<StandaloneStudio><StudioProbe /></StandaloneStudio>));
+  await flush();
+  const file = new File([new Uint8Array([1, 2, 3])], "synthetic.wav", {
+    type: "audio/wav",
+  });
+  await act(async () => observed.pending?.selectFile(file));
+  const intentId = observed.pending?.selection?.intentId;
+  expect(observed.pending?.selection?.file).toBe(file);
+
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices()));
+  await act(async () => observed.access?.retry());
+  await flush();
+  expect(container.querySelector('[data-testid="file-name"]')).toBeNull();
+  expect(revokeUrl).not.toHaveBeenCalled();
+
+  fetchMock.mockResolvedValueOnce(response({ tenant_id: firstTenantId }));
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(`button[data-tenant-id="${firstTenantId}"]`)
+      ?.click(),
+  );
+  await flush();
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.selection?.intentId).toBe(intentId);
+  expect(observed.access?.context).toEqual({
+    personId,
+    sessionId,
+    tenantId: firstTenantId,
+  });
+  expect(createUrl).toHaveBeenCalledOnce();
+  expect(revokeUrl).not.toHaveBeenCalled();
 });

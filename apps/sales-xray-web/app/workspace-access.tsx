@@ -15,6 +15,12 @@ export type WorkspaceAccessValue = Readonly<{
   status: WorkspaceAccessStatus;
   /** True only after the server has confirmed an authenticated AC session. */
   authenticated: boolean | null;
+  /** Server-confirmed account, session and selected workspace identity. */
+  context: Readonly<{
+    personId: string;
+    sessionId: string;
+    tenantId: string;
+  }> | null;
   retry: () => void;
 }>;
 

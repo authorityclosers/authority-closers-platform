@@ -17,6 +17,11 @@ import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
 } from "./workspace-access";
+import {
+  PendingAnalysisProvider,
+  usePendingAnalysis,
+} from "./pending-analysis";
+import { useProcessingReview } from "./processing-review-port";
 
 type Workspace = Readonly<{
   tenant_id: string;
@@ -33,7 +38,7 @@ export type WorkspaceChoices = Readonly<{
 type ViewState =
   | { kind: "loading" }
   | { kind: "unauthenticated" }
-  | { kind: "ready" }
+  | { kind: "ready"; choices: WorkspaceChoices }
   | { kind: "empty" }
   | { kind: "unavailable"; message: string }
   | {
@@ -151,14 +156,42 @@ export function StandaloneStudio({
   variant?: "standalone" | "embedded";
   openingExistingCall?: boolean;
 }) {
+  return (
+    <PendingAnalysisProvider>
+      <StandaloneStudioView
+        variant={variant}
+        openingExistingCall={openingExistingCall}
+      >
+        {children}
+      </StandaloneStudioView>
+    </PendingAnalysisProvider>
+  );
+}
+
+function StandaloneStudioView({
+  children = <CallStudio />,
+  variant = "standalone",
+  openingExistingCall = false,
+}: {
+  children?: ReactNode;
+  variant?: "standalone" | "embedded";
+  openingExistingCall?: boolean;
+}) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const generation = useRef(0);
   const activeController = useRef<AbortController | null>(null);
+  const pending = usePendingAnalysis();
+  const review = useProcessingReview(null);
 
   useEffect(() => {
+    // The development review port confirms its local bridge before any
+    // account read. Production returns false synchronously and uses the normal
+    // server-confirmed workspace path.
+    if (review.readOnly === null) return;
+    if (review.fixtureRequested) return;
     const controller = new AbortController();
     const requestGeneration = ++generation.current;
     activeController.current?.abort();
@@ -175,7 +208,7 @@ export function StandaloneStudio({
           return;
         }
         if (choices.selected_tenant_id !== null) {
-          setView({ kind: "ready" });
+          setView({ kind: "ready", choices });
           return;
         }
         setView(
@@ -197,7 +230,7 @@ export function StandaloneStudio({
         activeController.current = null;
       if (generation.current === requestGeneration) generation.current += 1;
     };
-  }, [attempt]);
+  }, [attempt, review.fixtureRequested, review.readOnly]);
 
   useEffect(
     () => () => {
@@ -219,7 +252,10 @@ export function StandaloneStudio({
       await selectWorkspace(tenantId, controller.signal);
       if (controller.signal.aborted || generation.current !== requestGeneration)
         return;
-      setView({ kind: "ready" });
+      setView({
+        kind: "ready",
+        choices: { ...choices, selected_tenant_id: tenantId },
+      });
     } catch {
       if (
         !controller.signal.aborted &&
@@ -237,9 +273,18 @@ export function StandaloneStudio({
   }
 
   const retry = () => {
-    setView({ kind: "loading" });
+    if (view.kind !== "unauthenticated" && view.kind !== "ready")
+      setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };
+  useEffect(() => {
+    if (view.kind !== "ready" || !view.choices.selected_tenant_id) return;
+    pending?.bindContext({
+      personId: view.choices.person_id,
+      sessionId: view.choices.session_id,
+      tenantId: view.choices.selected_tenant_id,
+    });
+  }, [view, pending]);
   const accessValue: WorkspaceAccessValue = {
     status: view.kind,
     authenticated:
@@ -252,7 +297,28 @@ export function StandaloneStudio({
           ? false
           : null,
     retry,
+    context:
+      view.kind === "ready" && view.choices.selected_tenant_id
+        ? {
+            personId: view.choices.person_id,
+            sessionId: view.choices.session_id,
+            tenantId: view.choices.selected_tenant_id,
+          }
+        : null,
   };
+  if (review.fixtureRequested)
+    return (
+      <WorkspaceAccessProvider
+        value={{
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: () => {},
+        }}
+      >
+        {children}
+      </WorkspaceAccessProvider>
+    );
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
