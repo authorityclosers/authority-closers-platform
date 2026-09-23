@@ -11,6 +11,7 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     PreparedTaskInput,
     prepare_coaching_input,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
@@ -20,6 +21,7 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_REFINED_MARKER,
     COACHING_PROMPT_V3,
     COACHING_PROMPT_V3_MARKER,
+    COACHING_PROMPT_V4,
     FactPacket,
     load_report_profile,
 )
@@ -27,7 +29,9 @@ from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5Correction,
     RetainedC5CorrectionIntent,
     _apply_corrections,
+    _coaching_prompt_options,
     _coaching_prompt_revision,
+    _rebuild_prepared_c5_input,
 )
 
 
@@ -231,6 +235,68 @@ def test_retained_c5_request_revision_defaults_legacy_and_rebuilds_refined_input
     assert COACHING_PROMPT_REFINED_MARKER.encode() in v3.payload
     assert COACHING_PROMPT_V3_MARKER.encode() in v3.payload
     assert v3.input_sha256 == v3.payload_sha256
+
+
+def test_retained_c5_rebuild_uses_saved_v4_language_and_pack_and_rejects_drift() -> None:
+    transcript = _coaching_transcript()
+    facts = FactPacket.model_validate(
+        {
+            "schema": "ac.sales-xray.style-independent-facts/1",
+            "source_sha256": transcript["source_sha256"],
+            "transcript_revision": transcript["revision"],
+            "timebase_id": transcript["timebase_id"],
+            "chunk_index": 1,
+            "chunk_count": 1,
+            "covered_segment_ids": ["seg-1"],
+            "overview": "The buyer asked about price and timing.",
+            "observations": [],
+            "uncertainties": [],
+        }
+    )
+    pack_sha256 = load_qualitative_pack().sha256
+    saved_request = {
+        "coaching_prompt_revision": COACHING_PROMPT_V4,
+        "report_language": "mr-Deva+en",
+        "qualitative_pack_sha256": pack_sha256,
+        "output_profile": "detailed",
+    }
+    original = prepare_coaching_input(
+        transcript,
+        [facts],
+        profile=load_report_profile(),
+        coaching_prompt_revision=COACHING_PROMPT_V4,
+        report_language="mr-Deva+en",
+        qualitative_pack_sha256=pack_sha256,
+    )
+    rebuilt = _rebuild_prepared_c5_input(
+        transcript,
+        (facts,),
+        profile=load_report_profile(),
+        input_metadata=original.as_dict(),
+        request=saved_request,
+    )
+    assert rebuilt == original
+    assert _coaching_prompt_options(saved_request) == (
+        COACHING_PROMPT_V4,
+        "mr-Deva+en",
+        pack_sha256,
+    )
+
+    with pytest.raises(ValueError, match="qualitative pack does not match"):
+        _rebuild_prepared_c5_input(
+            transcript,
+            (facts,),
+            profile=load_report_profile(),
+            input_metadata=original.as_dict(),
+            request={**saved_request, "qualitative_pack_sha256": "0" * 64},
+        )
+    with pytest.raises(ValueError, match="prompt options are incompatible"):
+        _coaching_prompt_options(
+            {
+                "coaching_prompt_revision": COACHING_PROMPT_V3,
+                "report_language": "hi-Deva+en",
+            }
+        )
 
 
 def test_erasure_can_clear_successful_payload_without_rewriting_lineage() -> None:

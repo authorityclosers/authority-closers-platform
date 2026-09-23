@@ -63,6 +63,10 @@ from ac_platform.conversation_intelligence.processing_actor import (
     actor_from_row,
     same_actor,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
@@ -73,6 +77,7 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_V3,
+    COACHING_PROMPT_V4,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
@@ -165,9 +170,11 @@ class PlanManifest(BaseModel):
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
-    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
-        COACHING_PROMPT_LEGACY
-    )
+    coaching_prompt_revision: Literal[
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"
+    ] = COACHING_PROMPT_LEGACY
+    report_language: ReportLanguage | None = None
+    qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -216,6 +223,14 @@ class PlanManifest(BaseModel):
             or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
+        if self.coaching_prompt_revision == COACHING_PROMPT_V4:
+            if (
+                self.report_language is None
+                or self.qualitative_pack_sha256 != load_qualitative_pack().sha256
+            ):
+                raise ValueError("processing_plan_coaching_options_invalid")
+        elif self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None:
+            raise ValueError("processing_plan_coaching_options_invalid")
         return self
 
     def as_dict(self) -> dict[str, Any]:
@@ -234,6 +249,10 @@ class PlanManifest(BaseModel):
             value.pop("fact_prompt_revision", None)
         if self.coaching_prompt_revision == COACHING_PROMPT_LEGACY:
             value.pop("coaching_prompt_revision", None)
+        if self.report_language is None:
+            value.pop("report_language", None)
+        if self.qualitative_pack_sha256 is None:
+            value.pop("qualitative_pack_sha256", None)
         return value
 
 
@@ -439,6 +458,11 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         or (
             plan.checkpoint.stage == "C5"
             and plan.request.coaching_prompt_revision != value.coaching_prompt_revision
+        )
+        or (plan.checkpoint.stage == "C5" and plan.request.report_language != value.report_language)
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.qualitative_pack_sha256 != value.qualitative_pack_sha256
         )
         or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
@@ -971,6 +995,8 @@ class ConversationProcessingPlans:
                     output_profile=value.output_profile,
                     profile=value.profile,
                     coaching_prompt_revision=value.coaching_prompt_revision,
+                    report_language=value.report_language,
+                    qualitative_pack_sha256=value.qualitative_pack_sha256,
                 )
                 judge = await self._enqueue(
                     actor,
