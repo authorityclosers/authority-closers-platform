@@ -1,21 +1,25 @@
 "use client";
 
-import { ArrowRight, ShieldCheck } from "lucide-react";
-import { BrandMark } from "@ac/ui";
+import { ArrowRight, AudioLines, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import {
-  type CSSProperties,
   type FormEvent,
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import styles from "./login-form.module.css";
 
 const GOOGLE_AUTH_START =
   "/v1/auth/google/start?action=authenticate&surface=sales_xray&return_path=%2F";
 const LOGIN_ERROR =
   "We couldn’t sign you in. Check your email and password, then try again.";
+const WAVE_HEIGHTS = [
+  17, 25, 19, 37, 52, 34, 59, 73, 46, 28, 64, 82, 56, 36, 67, 88,
+  62, 40, 74, 54, 82, 59, 35, 64, 45, 71, 39, 25, 49, 28, 17,
+] as const;
 const subscribeHostname = () => () => {};
 const serverHostname = () => "";
 
@@ -46,40 +50,6 @@ export function learnerAuthLinksForHost(hostname: string): LearnerAuthLinks {
     forgotPasswordHref: `${learnerOrigin}/forgot-password`,
   };
 }
-
-const shellStyle: CSSProperties = {
-  minHeight: "100vh",
-  display: "grid",
-  placeItems: "center",
-  padding: "32px 20px",
-  background: "var(--canvas)",
-};
-const cardStyle: CSSProperties = {
-  width: "min(100%, 440px)",
-  padding: "34px",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  background: "var(--surface)",
-  boxShadow: "var(--shadow)",
-};
-const fieldStyle: CSSProperties = {
-  display: "grid",
-  gap: 7,
-};
-const inputStyle: CSSProperties = {
-  width: "100%",
-  minHeight: 46,
-  padding: "10px 12px",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  background: "var(--surface)",
-  color: "var(--text)",
-};
-const linkStyle: CSSProperties = {
-  color: "var(--action)",
-  fontSize: 12,
-  fontWeight: 650,
-};
 
 export function LoginForm() {
   const [pending, setPending] = useState(false);
@@ -142,212 +112,75 @@ export function LoginForm() {
     }
   }
 
-  const actionButtonStyle: CSSProperties = {
-    width: "100%",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-  };
-
   return (
-    <main className="xray-app simple-app" data-theme="light" style={shellStyle}>
-      <section style={cardStyle} aria-labelledby="sales-xray-login-heading">
-        <header style={{ display: "grid", gap: 15, marginBottom: 28 }}>
-          <Link
-            href="/"
-            aria-label="Sales Xray home"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 12,
-              width: "fit-content",
-              color: "var(--text)",
-              textDecoration: "none",
-              fontSize: 16,
-              fontWeight: 650,
-            }}
-          >
-            <BrandMark
-              width={30}
-              height={30}
-              aria-hidden="true"
-              style={{ color: "var(--mint)" }}
-            />
-            <span>
-              Dipak’s Sales Xray
-              <small
-                style={{
-                  display: "block",
-                  marginTop: 2,
-                  color: "var(--muted)",
-                  fontSize: 9,
-                  letterSpacing: 1.7,
-                }}
-              >
-                AUTHORITY CLOSERS
-              </small>
-            </span>
+    <main className={`xray-app ${styles.shell}`} data-theme="light">
+      <div className={styles.layout}>
+        <section className={styles.story} aria-label="About Sales Xray">
+          <Link href="/" className={styles.brand} aria-label="Sales Xray home">
+            <Image src="/brand/ac-v0.1/symbol.svg" alt="" width={48} height={48} priority />
+            <Image src="/brand/ac-v0.1/sales-xray-wordmark.svg" alt="Sales Xray by Authority Closers" width={147} height={52} priority />
           </Link>
-          <p
-            style={{
-              margin: 0,
-              color: "var(--muted)",
-              fontSize: 11,
-              fontWeight: 650,
-              letterSpacing: 1.6,
-              textTransform: "uppercase",
-            }}
-          >
-            Existing account access
-          </p>
-        </header>
-
-        <h1
-          id="sales-xray-login-heading"
-          style={{ margin: "0 0 9px", fontSize: 32, letterSpacing: -0.8 }}
-        >
-          Welcome back.
-        </h1>
-        <p style={{ margin: "0 0 26px", color: "var(--muted)" }}>
-          Sign in with your existing Authority Closers account to open your
-          calls and reports.
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-            marginBottom: 22,
-            padding: "12px 13px",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            background: "var(--mint-bg)",
-            color: "var(--mint)",
-            fontSize: 12,
-          }}
-        >
-          <ShieldCheck size={17} aria-hidden="true" />
-          <span>Your AC account keeps your calls private.</span>
-        </div>
-
-        <form
-          method="post"
-          onSubmit={submit}
-          aria-busy={pending}
-          style={{ display: "grid", gap: 17 }}
-        >
-          <div style={fieldStyle}>
-            <label htmlFor="sales-xray-email">Email address</label>
-            <input
-              id="sales-xray-email"
-              name="email"
-              type="email"
-              autoComplete="username"
-              inputMode="email"
-              required
-              disabled={pending}
-              style={inputStyle}
-            />
-          </div>
-          <div style={fieldStyle}>
-            <label htmlFor="sales-xray-password">Password</label>
-            <input
-              id="sales-xray-password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              disabled={pending}
-              style={inputStyle}
-            />
-          </div>
-
-          {error ? (
-            <div
-              ref={errorRef}
-              role="alert"
-              tabIndex={-1}
-              style={{
-                padding: "11px 13px",
-                border: "1px solid var(--danger)",
-                borderRadius: 7,
-                background: "var(--danger-bg)",
-                color: "var(--danger)",
-                fontSize: 12,
-              }}
-            >
-              {error}
+          <div className={styles.storyBody}>
+            <p className={styles.storyKicker}>TURN CALLS INTO CLARITY</p>
+            <h2>Better conversations<br />begin with <em>insight.</em></h2>
+            <p className={styles.storyLead}>Return to your calls and reports, and keep coaching with clarity.</p>
+            <div className={styles.visual} aria-hidden="true">
+              <div className={styles.visualRing} />
+              <div className={styles.wave}>
+                {WAVE_HEIGHTS.map((height, index) => (
+                  <span key={index} style={{ height: `${height}%`, animationDelay: `${-index * 64}ms` }} />
+                ))}
+              </div>
+              <div className={styles.signalTag}><AudioLines size={17} /> CONVERSATION STUDIO</div>
             </div>
-          ) : null}
+          </div>
+          <div className={styles.storyFooter}><ShieldCheck size={17} aria-hidden="true" /> One Authority Closers account for your calls and reports.</div>
+        </section>
 
-          <button
-            type="submit"
-            className="primary-button"
-            disabled={pending}
-            style={actionButtonStyle}
-          >
-            {pending ? "Signing in…" : "Sign in"}
-            <ArrowRight size={17} aria-hidden="true" />
-          </button>
-        </form>
+        <section className={styles.formSide} aria-labelledby="sales-xray-login-heading">
+          <div className={styles.formPanel}>
+            <div className={styles.formHeading}>
+              <p className={styles.eyebrow}>EXISTING ACCOUNT ACCESS</p>
+              <h1 id="sales-xray-login-heading">Welcome back<span>.</span></h1>
+              <p>Sign in with your Authority Closers account to open your saved calls and reports.</p>
+            </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            margin: "23px 0",
-            color: "var(--muted)",
-            fontSize: 11,
-            textTransform: "uppercase",
-            letterSpacing: 1.5,
-          }}
-        >
-          <span style={{ height: 1, flex: 1, background: "var(--border)" }} />
-          <span>or</span>
-          <span style={{ height: 1, flex: 1, background: "var(--border)" }} />
-        </div>
+            <form method="post" onSubmit={submit} aria-busy={pending} className={styles.form}>
+              <div className={styles.field}>
+                <label htmlFor="sales-xray-email">Email address</label>
+                <input id="sales-xray-email" name="email" type="email" autoComplete="username" inputMode="email" placeholder="you@company.com" required disabled={pending} />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="sales-xray-password">Password</label>
+                <input id="sales-xray-password" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required disabled={pending} />
+              </div>
+              {error ? <div ref={errorRef} role="alert" tabIndex={-1} className={styles.error}>{error}</div> : null}
+              <button type="submit" className={styles.submit} disabled={pending}>
+                {pending ? "Signing in…" : "Sign in to Sales Xray"}<ArrowRight size={18} aria-hidden="true" />
+              </button>
+            </form>
 
-        <a
-          className="secondary-button"
-          href={GOOGLE_AUTH_START}
-          style={actionButtonStyle}
-        >
-          Continue with Google
-        </a>
-
-        <div
-          style={{
-            display: "grid",
-            gap: 10,
-            marginTop: 25,
-            paddingTop: 20,
-            borderTop: "1px solid var(--border)",
-            fontSize: 12,
-          }}
-        >
-          {links.forgotPasswordHref ? (
-            <a href={links.forgotPasswordHref} style={linkStyle}>
-              Forgot your password?
+            <div className={styles.divider}><span>or continue with</span></div>
+            <a className={styles.google} href={GOOGLE_AUTH_START}>
+              <span className={styles.googleMark} aria-hidden="true">G</span>Google
             </a>
-          ) : (
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Reset your password in the Authority Closers learning app.
-            </p>
-          )}
-          {links.registerHref ? (
-            <a href={links.registerHref} style={linkStyle}>
-              Create a learner account
-            </a>
-          ) : (
-            <p style={{ margin: 0, color: "var(--muted)" }}>
-              Create your account in the Authority Closers learning app.
-            </p>
-          )}
-        </div>
-      </section>
+
+            <div className={styles.helpLinks}>
+              {links.forgotPasswordHref ? (
+                <a href={links.forgotPasswordHref}>Forgot your password?</a>
+              ) : (
+                <p>Reset your password in the Authority Closers learning app.</p>
+              )}
+              {links.registerHref ? (
+                <a href={links.registerHref}>Create a learner account <ArrowRight size={15} aria-hidden="true" /></a>
+              ) : (
+                <p>Create your account in the Authority Closers learning app.</p>
+              )}
+            </div>
+          </div>
+          <p className={styles.formFooter}><ShieldCheck size={15} aria-hidden="true" /> Your AC account keeps your calls private.</p>
+        </section>
+      </div>
     </main>
   );
 }
