@@ -6,44 +6,10 @@ import { z } from "zod";
 
 import { newIdempotencyKey } from "@ac/operations-web/api";
 
+import { settingsSchema, responseSchema } from "./analysis-settings-contract";
+import { AnalysisSettingsHistory } from "./analysis-settings-history";
+
 import styles from "./analysis-settings.module.css";
-
-const settingsSchema = z
-  .object({
-    c4_max_requests: z.number().int().min(1).max(64),
-    c4_max_completion_tokens: z.number().int().min(256).max(4000),
-    c5_max_completion_tokens: z.number().int().min(256).max(8000),
-    c5_output_profile: z.enum(["standard", "detailed"]),
-  })
-  .strict();
-
-const responseSchema = z
-  .object({
-    revision: z.number().int().nonnegative(),
-    settings: settingsSchema,
-    bounds: z
-      .object({
-        c4_max_requests: z.object({
-          min: z.number().int(),
-          max: z.number().int(),
-        }),
-        c4_max_completion_tokens: z.object({
-          min: z.number().int(),
-          max: z.number().int(),
-        }),
-        c5_max_completion_tokens: z.object({
-          min: z.number().int(),
-          max: z.number().int(),
-        }),
-        c5_output_profile: z.object({
-          values: z.array(z.enum(["standard", "detailed"])),
-        }),
-      })
-      .strict(),
-    created_at: z.string().nullable(),
-    message: z.string().min(1),
-  })
-  .strict();
 
 type State = z.infer<typeof responseSchema>;
 const endpoint = "/v1/admin/conversation/analysis-settings";
@@ -103,6 +69,10 @@ export function AnalysisSettingsPanel() {
 
   async function save() {
     if (!state || !draft || busy) return;
+    if (!settingsSchema.safeParse(draft).success) {
+      setError("Use whole numbers within the displayed limits before saving.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -282,6 +252,7 @@ export function AnalysisSettingsPanel() {
             </button>
             <span>Revision {state.revision}</span>
           </div>
+          <AnalysisSettingsHistory revision={state.revision} />
           <p className={styles.hint}>
             Provider budget, trial allowances, timeouts and retries remain
             release-managed until their server consumers are configured.

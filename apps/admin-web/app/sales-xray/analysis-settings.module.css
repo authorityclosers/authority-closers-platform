@@ -120,6 +120,48 @@
   background: #edfcf2;
   color: #095c37;
 }
+.history {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid #d8e0e9;
+  padding-top: 1rem;
+  min-width: 0;
+}
+.history > button {
+  justify-self: start;
+}
+.revisions {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.revisions li {
+  padding: 1rem;
+  border: 1px solid #d8e0e9;
+  border-radius: 0.6rem;
+  overflow-wrap: anywhere;
+}
+.revisions time {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  color: #526579;
+}
+.revisions dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0;
+}
+.revisions dt {
+  font-size: 0.82rem;
+  color: #526579;
+}
+.revisions dd {
+  margin: 0.2rem 0 0;
+  font-weight: 650;
+}
 @media (max-width: 720px) {
   .grid {
     grid-template-columns: 1fr;

@@ -10,6 +10,7 @@ from sqlalchemy import select
 from ac_platform.conversation_intelligence.analysis_settings import (
     AnalysisSettings,
     latest_analysis_settings,
+    settings_from_row,
     settings_view,
 )
 from ac_platform.conversation_intelligence.application import (
@@ -46,6 +47,39 @@ class ConversationAnalysisSettingsAdmin:
         assert tenant_id is not None
         row, settings = await latest_analysis_settings(self.database, tenant_id)
         return settings_view(row, settings)
+
+    async def history(
+        self,
+        actor: ActorContext,
+        *,
+        limit: int = 10,
+        before_revision: int | None = None,
+    ) -> dict[str, Any]:
+        """Read bounded immutable revisions under the same authority as editing."""
+        await self.admit(actor)
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ConversationError("Use a history limit from 1 to 50.")
+        if before_revision is not None and (
+            type(before_revision) is not int or before_revision < 1
+        ):
+            raise ConversationError("Use a positive history revision.")
+        query = select(ConversationAnalysisSettings).where(
+            ConversationAnalysisSettings.tenant_id == actor.tenant_id
+        )
+        if before_revision is not None:
+            query = query.where(ConversationAnalysisSettings.revision < before_revision)
+        rows = list(
+            (
+                await self.database.scalars(
+                    query.order_by(ConversationAnalysisSettings.revision.desc()).limit(limit + 1)
+                )
+            ).all()
+        )
+        page = rows[:limit]
+        return {
+            "items": [settings_view(row, settings_from_row(row)) for row in page],
+            "next_before_revision": page[-1].revision if len(rows) > limit else None,
+        }
 
     async def save(
         self,
