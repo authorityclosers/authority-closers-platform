@@ -34,3 +34,37 @@ The PostgreSQL suite passed 22/22; Ruff and mypy previously passed for the
 integrated profile source (307 Python source files). These are local integration
 results, not proof of deployed OTP delivery, browser upload continuity, report
 quality or production acceptance.
+
+## Worker admission checkpoint
+
+The integrated worker change at `90b66b0c` resolves the actual customer through
+the canonical acquisition usage/claim and checks the current verified contact
+profile. It does not substitute the processing service identity. Fresh shared
+row locks refresh ORM state and serialize profile writes across the provider
+execution transaction. A pre-dispatch denial holds only the current job with an
+audit event, preserving reservations, tasks and prior receipts. Run and
+acquisition progress expose `execution_hold: account_profile_required` so the UI
+can offer profile completion without restarting paid work.
+
+On 23 September, six focused PostgreSQL tests passed in 106.99 seconds after
+integration. They cover incomplete owner profile, stale identity-map refresh,
+profile changes after the local/provider dispatch markers and unclaimed guest
+work. Mypy passed for 308 source files; Ruff and `git diff --check` passed.
+
+```text
+python -m pytest tests/database/test_conversation_worker_postgresql.py tests/database/test_conversation_inference_postgresql.py tests/database/test_conversation_guest_ownership_postgresql.py -q -k "incomplete_contact_profile or profile_gate_refreshes or profile_change_after_local_marker or incomplete_profile_holds_provider or profile_change_after_dispatch_marker or unclaimed_guest_worker_holds" --maxfail=1 --basetemp <new-private-scratch-directory>
+```
+
+The native helper was built from the checked-out source with its source/binary
+manifest before the passing run. Two earlier verification attempts exposed test
+environment prerequisites: the default Windows temp ancestor was rejected by
+the storage guard, and this new worktree initially had no native binary. The
+passing run used a new private scratch directory and the verified native build;
+neither protection was disabled.
+
+After a dispatch marker, denial follows the uncertain/dead-letter path and
+retains the in-flight reservation for explicit reconciliation. The local native
+profile check is point-in-time: its transaction ends before the helper executes.
+There is no automatic unhold, refund or retry. These local tests do not establish
+live provider delivery, new report quality, mounted auth UI or production
+acceptance. This checkpoint is not deployed.
