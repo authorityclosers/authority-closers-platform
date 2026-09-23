@@ -471,7 +471,7 @@ export function AcquisitionStudio({
               // checks for the saved call itself.
               setSavedCallNeedsSession(true);
               setError(
-                "That saved call belongs to another browser session. Start a new call with your available trial allowance, or sign in to recover it.",
+                "That saved call belongs to another browser session. Sign in to recover it, or start a new call.",
               );
               if (requested)
                 setExistingCallEntry({
@@ -508,7 +508,7 @@ export function AcquisitionStudio({
             });
         } else if (timedOut) {
           setError(
-            "Sales Xray is taking longer than expected to load. Check again to continue your guest analysis.",
+            "Sales Xray is taking longer than expected to load. Check again to continue your call.",
           );
           if (requested)
             setExistingCallEntry({
@@ -1553,8 +1553,8 @@ export function AcquisitionStudio({
           aria-live="polite"
         >
           <p>
-            That saved call belongs to another browser session. Start a new call
-            with your available trial allowance, or sign in to recover it.
+            That saved call belongs to another browser session. Sign in to
+            recover it, or start a new call.
           </p>
           <div className={styles.errorActions}>
             <Link className="text-button" href="/login">
@@ -2156,6 +2156,7 @@ export function AcquisitionStudio({
                       ) : (
                         !analysisWriteBlocked &&
                         !embedded &&
+                        !(access?.authenticated === false && access.requestAnalysisAccess) &&
                         !session &&
                         entry?.site_key &&
                         entry.challenge_action && (
@@ -2173,7 +2174,7 @@ export function AcquisitionStudio({
                         disabled={
                           analysisWriteBlocked ||
                           !consent ||
-                          (!session && !token) ||
+                          (!(access?.authenticated === false && access.requestAnalysisAccess) && !session && !token) ||
                           !!busy ||
                           (allowance?.available_seconds === 0 &&
                             !allowance?.unlimited)

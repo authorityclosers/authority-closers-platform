@@ -189,7 +189,7 @@ export function AcquisitionShell({
             <small>
               {authenticated
                 ? "Private workspace"
-                : "Free analysis in this browser"}
+                : "Sign in to analyse calls"}
             </small>
           </span>
           {!authenticated && (
@@ -204,7 +204,7 @@ export function AcquisitionShell({
               }}
             >
               <LogIn size={15} aria-hidden="true" />
-              Sign in to save calls
+              Sign in to analyse calls
             </Link>
           )}
         </div>

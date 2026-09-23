@@ -187,6 +187,7 @@ function StandaloneStudioView({
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
+  const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<string | null>(null);
   const [gateIntentId, setGateIntentId] = useState<string | null>(null);
   const [eligibleReceipt, setEligibleReceipt] = useState<string | null>(null);
   const eligibleReceiptRef = useRef<string | null>(null);
@@ -338,8 +339,11 @@ function StandaloneStudioView({
   const requestAnalysisAccess = () => {
     if (review.fixtureRequested || review.readOnly !== false || !selected)
       return false;
-    // The existing guest challenge and trial path remains available.
-    if (view.kind === "unauthenticated") return true;
+    if (view.kind === "unauthenticated") {
+      openProfileGate(selected.intentId);
+      setAuthRequested(true);
+      return false;
+    }
     if (view.kind !== "ready") {
       if (accountChoices) openProfileGate(selected.intentId);
       return false;
@@ -440,13 +444,17 @@ function StandaloneStudioView({
     );
   if (
     review.readOnly === false &&
-    authRequested &&
-    view.kind === "unauthenticated"
+    view.kind === "unauthenticated" &&
+    (authRequested || (selected && dismissedAuthIntentId !== selected.intentId))
   )
     return (
       <WorkspaceAccessProvider value={accessValue}>
         <AccountAuth
           selectedFile={selected?.file ?? null}
+          onCancel={() => {
+            setDismissedAuthIntentId(selected?.intentId ?? null);
+            setAuthRequested(false);
+          }}
           onAuthenticated={() => {
             setAuthRequested(false);
             setView({ kind: "loading" });

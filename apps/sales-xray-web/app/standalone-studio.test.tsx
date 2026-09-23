@@ -8,14 +8,18 @@ import { usePendingAnalysis } from "./pending-analysis";
 import { useWorkspaceAccess } from "./workspace-access";
 
 let authSelectedFile: { name: string; size: number } | null = null;
+let authPending: ReturnType<typeof usePendingAnalysis> = null;
 vi.mock("./account-auth", () => ({
   AccountAuth: ({
     selectedFile,
     onAuthenticated,
+    onCancel,
   }: {
     selectedFile: { name: string; size: number } | null;
     onAuthenticated: () => void;
+    onCancel?: (selectedFile: { name: string; size: number }) => void;
   }) => {
+    authPending = usePendingAnalysis();
     authSelectedFile = selectedFile;
     return (
       <section data-testid="inline-account-auth">
@@ -23,6 +27,11 @@ vi.mock("./account-auth", () => ({
         <button type="button" onClick={onAuthenticated}>
           Complete sign in
         </button>
+        {selectedFile && onCancel && (
+          <button type="button" onClick={() => onCancel(selectedFile)}>
+            Back to your call
+          </button>
+        )}
       </section>
     );
   },
@@ -92,6 +101,7 @@ async function mount(openingExistingCall = false) {
 
 beforeEach(() => {
   authSelectedFile = null;
+  authPending = null;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -296,9 +306,9 @@ it("retains the same selected File through sign-in refresh and workspace choice"
     type: "audio/wav",
   });
   await act(async () => observed.pending?.addFiles([file, queued]));
-  const intentId = observed.pending?.selection?.intentId;
-  expect(observed.pending?.selection?.file).toBe(file);
-  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+  const intentId = authPending?.selection?.intentId;
+  expect(authPending?.selection?.file).toBe(file);
+  expect(authPending?.stagedFiles[1]).toBe(queued);
 
   fetchMock.mockResolvedValueOnce(response({}, 503));
   await act(async () => observed.access?.retry());
@@ -306,8 +316,8 @@ it("retains the same selected File through sign-in refresh and workspace choice"
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     "Workspace access could not be checked",
   );
-  expect(observed.pending?.selection?.file).toBe(file);
-  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+  expect(authPending?.selection?.file).toBe(file);
+  expect(authPending?.stagedFiles[1]).toBe(queued);
   expect(revokeUrl).not.toHaveBeenCalled();
 
   fetchMock.mockResolvedValueOnce(response(workspaceChoices()));
@@ -339,7 +349,7 @@ it("retains the same selected File through sign-in refresh and workspace choice"
   expect(revokeUrl).not.toHaveBeenCalled();
 });
 
-it("keeps guest analysis available and carries the original File through explicit sign-in, profile, and workspace choice", async () => {
+it("requires account access before analysis and carries the original File through sign-in, profile, and workspace choice", async () => {
   const revokeUrl = stubObjectUrls();
   const observed: {
     pending: ReturnType<typeof usePendingAnalysis>;
@@ -367,16 +377,30 @@ it("keeps guest analysis available and carries the original File through explici
     type: "audio/wav",
   });
   await act(async () => observed.pending?.addFiles([file, queued]));
-  const intentId = observed.pending?.selection?.intentId;
-  expect(observed.pending?.selection?.file).toBe(file);
-  expect(observed.access?.requestAnalysisAccess?.()).toBe(true);
-  expect(container.querySelector('[data-testid="studio-probe"]')).not.toBeNull();
-  expect(fetchMock).toHaveBeenCalledOnce();
-
-  await act(async () => observed.access?.requestAccountSignIn?.());
+  const intentId = authPending?.selection?.intentId;
+  expect(authPending?.selection?.file).toBe(file);
+  expect(container.querySelector('[data-testid="studio-probe"]')).toBeNull();
   expect(container.querySelector('[data-testid="inline-account-auth"]')).not.toBeNull();
   expect(authSelectedFile).toBe(file);
+  expect(fetchMock).toHaveBeenCalledOnce();
   expect(revokeUrl).not.toHaveBeenCalled();
+
+  await act(async () =>
+    [...container.querySelectorAll<HTMLButtonElement>('[data-testid="inline-account-auth"] button')]
+      .find((button) => button.textContent === "Back to your call")
+      ?.click(),
+  );
+  expect(container.querySelector('[data-testid="inline-account-auth"]')).toBeNull();
+  expect(container.querySelector('[data-testid="studio-probe"]')).not.toBeNull();
+  expect(observed.pending?.selection?.file).toBe(file);
+  expect(observed.pending?.stagedFiles[1]).toBe(queued);
+  expect(revokeUrl).not.toHaveBeenCalled();
+
+  await act(async () => {
+    expect(observed.access?.requestAnalysisAccess?.()).toBe(false);
+  });
+  expect(container.querySelector('[data-testid="inline-account-auth"]')).not.toBeNull();
+  expect(authSelectedFile).toBe(file);
 
   const eligibility = deferred<Response>();
   fetchMock.mockResolvedValueOnce(response(workspaceChoices()));

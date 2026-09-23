@@ -43,6 +43,7 @@ vi.mock("./upload-check", () => ({
 let root: Root, container: HTMLDivElement;
 let calls: Array<{ path: string; init: RequestInit }>;
 let existing: boolean,
+  workspaceUnauthorized: boolean,
   accepted: boolean,
   claimed: boolean,
   failedUpload: boolean,
@@ -129,6 +130,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
   existing = false;
+  workspaceUnauthorized = false;
   accepted = false;
   claimed = false;
   failedUpload = false;
@@ -172,6 +174,8 @@ beforeEach(() => {
           );
         });
       }
+      if (path === "/v1/me/workspaces" && workspaceUnauthorized)
+        return response({}, 401);
       if (path === "/v1/me/workspaces")
         return response({
           person_id: "person-1",
@@ -181,6 +185,8 @@ beforeEach(() => {
         });
       if (path === "/v1/me/sales-xray-profile/write-eligibility")
         return new Response(null, { status: 204 });
+      if (path === "/v1/auth/email-code/config?surface=sales_xray")
+        return response({}, 503);
       if (path.endsWith("/entry")) return response(entryBody);
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
@@ -330,6 +336,29 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+it("opens account access on guest file selection and keeps Analyze gated without a guest upload", async () => {
+  workspaceUnauthorized = true;
+  await mount();
+  await select();
+  expect(container.textContent).toContain("Sales call.wav");
+  expect(container.querySelector('[aria-label="Back to your call"]')).not.toBeNull();
+  expect(calls.some(({ path, init }) => path.endsWith("/source") && init.method === "PUT")).toBe(false);
+  expect(calls.some(({ path, init }) => path.endsWith("/session") && init.method === "POST")).toBe(false);
+
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="Back to your call"]')?.click(),
+  );
+  await flush();
+  expect(container.textContent).toContain("Sales call.wav");
+  expect(container.textContent).not.toContain("Complete upload check");
+  await consent();
+  expect(button("Analyse my call").disabled).toBe(false);
+  await click("Analyse my call");
+  expect(container.querySelector('[aria-label="Back to your call"]')).not.toBeNull();
+  expect(calls.some(({ path, init }) => path.endsWith("/source") && init.method === "PUT")).toBe(false);
+  expect(calls.some(({ path, init }) => path.endsWith("/session") && init.method === "POST")).toBe(false);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
