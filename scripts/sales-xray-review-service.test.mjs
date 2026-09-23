@@ -269,8 +269,9 @@ test("review routes are opt-in, exact, local-only, and hardened", async () => {
     assert.match(controlsHtml, /State workbench/);
     assert.match(
       controlsHtml,
-      /Only browser captures and states returned by the authorized call API appear here/,
+      /Inspect the mounted app using paused local examples or observations from this browser and calls you own/,
     );
+    assert.match(controlsHtml, /Local test states/);
 
     const script = await request(bridge, "/__review/controls.js");
     assert.equal(script.status, 200);
