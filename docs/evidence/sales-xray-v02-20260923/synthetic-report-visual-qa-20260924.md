@@ -24,3 +24,9 @@ The **Next-call plan** tab displayed the exact outcome: “No sale was agreed. T
 - Fixture-focused tests: 2/2 passed. Typecheck, scoped ESLint, Prettier, and `git diff --check` passed for the fixture change.
 - Mobile review-sheet follow-up: 4 focused files/40 tests, typecheck, and `git diff --check` passed for `f83b68ff`.
 - These checks cover layout and source navigation for synthetic data. They do not validate a generated v5 report, audio playback, provider processing, or the coaching quality of a real report. The inspected v4 report remains below the requested quality bar pending generation and review of a v5 report.
+
+## Preview typography correction
+
+The local preview wrapper had no font declaration, so its header, section tabs, skill cards, and buttons inherited the browser's Times New Roman default. The mounted Sales Xray shell already sets the app's sans face; this was a fixture-only mismatch. The preview wrapper now uses the same `--font-sans` fallback stack, 14 px base size, and 1.55 line height. Production report components and copy are unchanged by this correction.
+
+After the change, computed font families for the preview main, heading, section tab, and skill heading were all `"Segoe UI", sans-serif`. At 1024 × 768, the document measured 1009 px across a 1024 px viewport; at 390 × 844, it measured 375 px across a 390 px viewport. Neither had horizontal overflow. The fixture's 2 tests, web typecheck, Prettier check, and diff check passed.

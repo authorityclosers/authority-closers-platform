@@ -4,6 +4,9 @@
   padding: clamp(16px, 3vw, 40px);
   background: linear-gradient(145deg, #f2f7ff, #f8fffd 65%, #fff);
   color: #10243d;
+  font-family: var(--font-sans, "Segoe UI"), sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
 }
 .frame {
   box-sizing: border-box;
