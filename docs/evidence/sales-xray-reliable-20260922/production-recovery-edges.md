@@ -68,8 +68,8 @@ available; the draft is marked as a Codex proposal, not human-adjudicated scorin
 Private receipts, exact response hashes and fictional report bodies are retained
 outside Git. No customer audio, secrets, response text or operational SQL edits
 are included in this evidence file. Independent read-only review found no blocking
-defects in these three fixes. Exact-source CI and deployment of this follow-up
-remain pending until separately recorded.
+defects in these three fixes. Exact-source CI, deployment and fresh production
+acceptance subsequently passed; see [production acceptance](production-270a-acceptance.md).
 
 ## Versioned coaching guidance
 
