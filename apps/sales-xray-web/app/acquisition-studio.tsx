@@ -1567,23 +1567,6 @@ export function AcquisitionStudio({
           </nav>
         )}
         <div className="studio-main">
-          {review.readOnly !== false && (
-            <aside className="panel" role="status" aria-live="polite">
-              <strong>
-                {review.readOnly === true
-                  ? "Read-only review is active."
-                  : "Checking local review permissions."}
-              </strong>
-              <p>
-                {review.readOnly === true
-                  ? "This is the mounted Sales Xray app using live API reads. Upload, analysis, account claim and deletion commands are disabled. File selection, report-language selection, privacy details and the consent checkbox stay in this browser."
-                  : "Analysis actions stay disabled until the local bridge confirms its mode."}
-              </p>
-              {review.readOnly === true && (
-                <a href="/__review/">Open review controls</a>
-              )}
-            </aside>
-          )}
           <AnalysisAvailability onChange={setAnalysisPaused} />
           <nav className="studio-steps" aria-label="Analysis steps">
             {[
