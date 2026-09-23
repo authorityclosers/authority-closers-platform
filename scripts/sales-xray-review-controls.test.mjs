@@ -3,6 +3,7 @@ import http from "node:http";
 import { after, before, beforeEach, test } from "node:test";
 import { chromium } from "playwright";
 
+import { fixtureStateIds } from "../apps/sales-xray-web/app/fixture-review-states.ts";
 import { reviewHtml, reviewScript } from "./sales-xray-review-controls.mjs";
 
 const callId = "11111111-2222-4333-8444-555555555555";
@@ -278,6 +279,12 @@ test("workbench opens pauseable fixture URLs without contacting the call API", a
     const bookmark = `${origin}/__review/#sx-workbench=v1&kind=fixture&id=processing.paused&width=desktop`;
     await page.goto(bookmark);
     await page.locator("#selected-name").getByText("Analysis paused").waitFor();
+    assert.deepEqual(
+      await page.locator("#fixture-list [data-state-key]").evaluateAll((buttons) =>
+        buttons.map((button) => button.dataset.stateKey.slice("fixture:".length)),
+      ),
+      [...fixtureStateIds],
+    );
     assert.equal(await page.locator("#fixture-navigation").getAttribute("open"), "");
     let direct = new URL(await page.locator("#direct-url").inputValue());
     assert.equal(direct.origin, origin);
