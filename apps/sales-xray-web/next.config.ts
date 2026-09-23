@@ -33,6 +33,9 @@ const config: NextConfig = {
   poweredByHeader: false,
   transpilePackages: ["@ac/ui", "@ac/sales-xray-client"],
   logging: false,
+  // Production uses Turbopack with the ordinary no-op review port. Only the
+  // explicit local launcher selects webpack and the development alias below.
+  turbopack: {},
   webpack(config, { dev }) {
     // This environment-selected alias is not a source-file change. Give the
     // persistent cache an explicit mode key when switching launchers.

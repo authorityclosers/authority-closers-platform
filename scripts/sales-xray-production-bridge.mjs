@@ -58,9 +58,11 @@ const FORBIDDEN_INCOMING_HEADERS = new Set([
   "forwarded",
 ]);
 const REVIEW_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+  "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 const REVIEW_FRAME_PATH =
   /^\/__review\/api\/frames\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const LOCAL_REVIEW_FRAME_PATH =
+  /^\/__review\/api\/local\/frames\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function jsonHeaders() {
   return {
@@ -701,10 +703,16 @@ function isReviewPath(pathname) {
 function isReviewApiPath(pathname, method) {
   return (
     (method === "POST" &&
-      ["/__review/api/start", "/__review/api/reset"].includes(pathname)) ||
+      [
+        "/__review/api/start",
+        "/__review/api/reset",
+        "/__review/api/local/observe",
+      ].includes(pathname)) ||
     (method === "GET" &&
       (pathname === "/__review/api/catalog" ||
-        REVIEW_FRAME_PATH.test(pathname)))
+        pathname === "/__review/api/local/catalog" ||
+        REVIEW_FRAME_PATH.test(pathname) ||
+        LOCAL_REVIEW_FRAME_PATH.test(pathname)))
   );
 }
 
@@ -753,6 +761,7 @@ function responseHeaders(
     clearLocalCookie,
     allowLocationOrigin,
     rewriteLocationOrigin,
+    localCanvas = false,
   } = {},
 ) {
   const headers = {};
@@ -763,7 +772,9 @@ function responseHeaders(
   headers["cache-control"] = "no-store";
   headers["referrer-policy"] = "no-referrer";
   headers["x-content-type-options"] = "nosniff";
-  headers["x-frame-options"] = "DENY";
+  headers["x-frame-options"] = localCanvas ? "SAMEORIGIN" : "DENY";
+  if (localCanvas)
+    headers["content-security-policy"] = "frame-ancestors 'self'";
   headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()";
   if (allowLocationOrigin && rewriteLocationOrigin) {
     const location = upstream.headers.get("location");
@@ -854,9 +865,16 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   for (const name of [
     "next-router-state-tree",
     "next-router-prefetch",
+    "next-router-segment-prefetch",
+    "next-hmr-refresh",
     "next-url",
     "rsc",
     "x-nextjs-data",
+    // React development Flight data references a separate HMR debug stream.
+    // These IDs bind the two streams; stripping them leaves navigation pending
+    // even after the RSC and stylesheet responses have completed successfully.
+    "x-nextjs-request-id",
+    "x-nextjs-html-request-id",
   ]) {
     const value = request.headers[name];
     if (value)
@@ -878,6 +896,7 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   }
   sendUpstreamResponse(response, upstream, {
     head: request.method === "HEAD",
+    localCanvas: true,
     allowLocationOrigin: innerOrigin,
     rewriteLocationOrigin: new URL(
       request.headers.host
@@ -1087,7 +1106,10 @@ export function createSalesXrayProductionBridge({
         if (
           (incoming.pathname === "/__review/api/start" &&
             (bodyKeys.length !== 1 || bodyKeys[0] !== "call_id")) ||
-          (incoming.pathname === "/__review/api/reset" && bodyKeys.length !== 0)
+          (incoming.pathname === "/__review/api/reset" &&
+            bodyKeys.length !== 0) ||
+          (incoming.pathname === "/__review/api/local/observe" &&
+            (bodyKeys.length !== 1 || bodyKeys[0] !== "observation"))
         ) {
           writeReviewJson(response, 400, {
             detail: "Use the exact start or reset review request shape.",

@@ -15,6 +15,80 @@ const otherCallId = "33333333-3333-4333-8333-333333333333";
 const recordingId = "22222222-2222-4222-8222-222222222222";
 const sourceHash = "a".repeat(64);
 
+test("browser-local observation links are session scoped and never fetch the VPS", async () => {
+  let upstreamReads = 0;
+  const service = createReviewService({
+    upstreamOrigin: PRODUCTION_UPSTREAM_ORIGIN,
+    fetcher: async () => {
+      upstreamReads += 1;
+      throw new Error("local observation must not read the upstream API");
+    },
+  });
+  const observation = {
+    phase: "upload.file.selected",
+    privacy_open: true,
+    consent_checked: true,
+    report_language: "mr-Deva+en",
+    verification: "session-present",
+    file_name: "Actual call.wav",
+    file_size_bytes: 24576,
+  };
+  const captured = await service.handle({
+    pathname: "/__review/api/local/observe",
+    search: "",
+    method: "POST",
+    session: "owner",
+    headers: {},
+    body: { observation },
+  });
+  assert.equal(captured.status, 200);
+  const catalog = await service.handle({
+    pathname: "/__review/api/local/catalog",
+    search: "",
+    method: "GET",
+    session: "owner",
+    headers: {},
+  });
+  assert.equal(catalog.status, 200);
+  assert.equal(catalog.body.frames.length, 1);
+  const id = catalog.body.frames[0].id;
+  const frame = await service.handle({
+    pathname: `/__review/api/local/frames/${id}`,
+    search: "",
+    method: "GET",
+    session: "owner",
+    headers: {},
+  });
+  assert.equal(frame.status, 200);
+  assert.deepEqual(frame.body.observation, observation);
+  assert.equal(
+    (
+      await service.handle({
+        pathname: `/__review/api/local/frames/${id}`,
+        search: "",
+        method: "GET",
+        session: "other",
+        headers: {},
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await service.handle({
+        pathname: "/__review/api/local/observe",
+        search: "",
+        method: "POST",
+        session: "owner",
+        headers: {},
+        body: { observation: { ...observation, filename: "private.wav" } },
+      })
+    ).status,
+    400,
+  );
+  assert.equal(upstreamReads, 0);
+});
+
 test("a failed older access read cannot erase a newer capture", async () => {
   let rejectOld;
   const old = new Promise((_, reject) => {
@@ -172,6 +246,10 @@ test("review routes are opt-in, exact, local-only, and hardened", async () => {
   try {
     assert.equal((await request(normal, "/__review/")).status, 404);
     assert.equal((await request(normal, "/__review/api/catalog")).status, 404);
+    assert.equal(
+      (await request(normal, "/__review/api/local/catalog")).status,
+      404,
+    );
     assert.equal(upstreamCalls.length, 0, "disabled review paths never proxy");
   } finally {
     await normal.close();
@@ -187,7 +265,12 @@ test("review routes are opt-in, exact, local-only, and hardened", async () => {
     );
     assert.equal(page.headers.get("x-frame-options"), "DENY");
     assert.equal(page.headers.get("cache-control"), "no-store");
-    assert.match(await page.text(), /Local controls · real VPS data/);
+    const controlsHtml = await page.text();
+    assert.match(controlsHtml, /State workbench/);
+    assert.match(
+      controlsHtml,
+      /Only browser captures and states returned by the authorized call API appear here/,
+    );
 
     const script = await request(bridge, "/__review/controls.js");
     assert.equal(script.status, 200);
@@ -233,6 +316,10 @@ test("review routes are opt-in, exact, local-only, and hardened", async () => {
     );
     assert.equal((await request(bridge, "/__review/api/reset")).status, 404);
     assert.equal((await request(bridge, "/__review/api/catalog")).status, 401);
+    assert.equal(
+      (await request(bridge, "/__review/api/local/catalog")).status,
+      401,
+    );
 
     const crossOrigin = await request(bridge, "/__review/api/start", {
       method: "POST",
@@ -334,6 +421,93 @@ test("capture reads only the selected authenticated submission and blocks analys
       beforeWrite + 1,
       "reset never makes an upstream request",
     );
+  } finally {
+    await bridge.close();
+  }
+});
+
+test("browser-local observation capture and inspection never reach the upstream API", async () => {
+  const upstreamCalls = [];
+  const bridge = await startBridge(async (target, init = {}) => {
+    const url = new URL(target);
+    upstreamCalls.push({ path: url.pathname, method: init.method });
+    if (url.pathname === "/v1/auth/password/login")
+      return upstreamResponse({ authenticated: true }, 200, {
+        "set-cookie": `__Host-ac_session=${sessionValue}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+      });
+    return upstreamResponse({ ok: true });
+  });
+  try {
+    const cookie = await login(bridge);
+    assert.equal(upstreamCalls.length, 1);
+    const observation = {
+      phase: "upload.file.selected",
+      privacy_open: true,
+      consent_checked: false,
+      report_language: "en",
+      verification: "session-present",
+      file_name: "Review sample.wav",
+      file_size_bytes: 1024,
+    };
+    const captured = await request(bridge, "/__review/api/local/observe", {
+      method: "POST",
+      headers: {
+        origin: bridge.browserOrigin,
+        cookie,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ observation }),
+    });
+    assert.equal(captured.status, 200);
+    const { id } = await captured.json();
+    const catalog = await request(bridge, "/__review/api/local/catalog", {
+      headers: { cookie },
+    });
+    assert.equal(catalog.status, 200);
+    const listed = await catalog.json();
+    assert.equal(listed.frames.length, 1);
+    assert.equal(listed.frames[0].id, id);
+    assert.equal("observation" in listed.frames[0], false);
+    const frame = await request(bridge, `/__review/api/local/frames/${id}`, {
+      headers: { cookie },
+    });
+    assert.equal(frame.status, 200);
+    assert.deepEqual((await frame.json()).observation, observation);
+    assert.equal(upstreamCalls.length, 1);
+
+    const invalid = await request(bridge, "/__review/api/local/observe", {
+      method: "POST",
+      headers: {
+        origin: bridge.browserOrigin,
+        cookie,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        observation: { ...observation, file_contents: "private audio bytes" },
+      }),
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal(upstreamCalls.length, 1);
+
+    const cleared = await request(bridge, "/__review/api/reset", {
+      method: "POST",
+      headers: {
+        origin: bridge.browserOrigin,
+        cookie,
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    assert.equal(cleared.status, 200);
+    assert.deepEqual(
+      await (
+        await request(bridge, "/__review/api/local/catalog", {
+          headers: { cookie },
+        })
+      ).json(),
+      { expiresAt: null, frames: [] },
+    );
+    assert.equal(upstreamCalls.length, 1);
   } finally {
     await bridge.close();
   }

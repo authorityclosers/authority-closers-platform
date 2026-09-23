@@ -4,6 +4,7 @@ import {
   progressReceipt,
   ReviewFrameStore,
   REVIEW_LIMITS,
+  localReviewObservation,
 } from "./sales-xray-review-store.mjs";
 const call = "11111111-1111-4111-8111-111111111111";
 const base = () => ({
@@ -130,4 +131,77 @@ test("new call scope resets old history and capacity is bounded", () => {
   assert.throws(() => store.start("other", call), /capacity/);
   store.start("owner", "33333333-3333-4333-8333-333333333333");
   assert.equal(store.frame("owner", id), null);
+});
+
+test("browser-local snapshots retain only allowlisted volatile control values", () => {
+  const { store } = setup();
+  const observation = {
+    phase: "upload.file.selected",
+    privacy_open: true,
+    consent_checked: true,
+    report_language: "hi-Deva+en",
+    verification: "session-present",
+    file_name: "Sales call.wav",
+    file_size_bytes: 1800,
+  };
+  const id = store.observeLocal("owner", observation);
+  assert.ok(id);
+  assert.equal(store.observeLocal("owner", observation), id);
+  assert.equal(store.localCatalog("owner").frames.length, 1);
+  assert.equal("observation" in store.localCatalog("owner").frames[0], false);
+  assert.deepEqual(store.localFrame("owner", id).observation, observation);
+  const validationError = { ...observation, phase: "upload.validation.error" };
+  const validationId = store.observeLocal("owner", validationError);
+  assert.ok(validationId);
+  assert.deepEqual(
+    store.localFrame("owner", validationId).observation,
+    validationError,
+  );
+  assert.equal(
+    localReviewObservation({ ...validationError, file_size_bytes: null }),
+    null,
+  );
+  assert.equal(
+    localReviewObservation({ ...validationError, file_name: null }),
+    null,
+  );
+  assert.equal(store.localFrame("other", id), null);
+  assert.equal(
+    localReviewObservation({ ...observation, file_name: "x".repeat(256) }),
+    null,
+  );
+  assert.equal(
+    localReviewObservation({ ...observation, challenge_token: "secret" }),
+    null,
+  );
+});
+
+test("browser-local observations expire, are not extended by call capture, and reset with the session", () => {
+  const { store, advance } = setup();
+  const id = store.observeLocal("owner", {
+    phase: "upload.empty",
+    privacy_open: false,
+    consent_checked: false,
+    report_language: null,
+    verification: "checking",
+    file_name: null,
+    file_size_bytes: null,
+  });
+  assert.ok(id);
+  store.start("owner", call);
+  assert.ok(store.localFrame("owner", id));
+  advance(REVIEW_LIMITS.lifetimeMs);
+  assert.equal(store.localFrame("owner", id), null);
+  assert.equal(store.localCatalog("owner").frames.length, 0);
+  store.observeLocal("owner", {
+    phase: "upload.file.selected",
+    privacy_open: false,
+    consent_checked: false,
+    report_language: "en",
+    verification: "session-present",
+    file_name: "Sales call.wav",
+    file_size_bytes: 1800,
+  });
+  store.reset("owner");
+  assert.deepEqual(store.localCatalog("owner").frames, []);
 });

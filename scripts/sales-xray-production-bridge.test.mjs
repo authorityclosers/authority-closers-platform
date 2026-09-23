@@ -92,6 +92,67 @@ async function rawRequest(bridge, path) {
   });
 }
 
+test("workbench frames only its same-origin local app, never upstream API responses", async () => {
+  const bridge = await startTestBridge(
+    async () =>
+      response("local page", {
+        headers: { "content-type": "text/html" },
+      }),
+    { analysisReadOnly: true },
+  );
+  try {
+    const controls = await request(bridge, "/__review/");
+    assert.match(
+      controls.headers.get("content-security-policy"),
+      /frame-src 'self'/,
+    );
+    assert.equal(controls.headers.get("x-frame-options"), "DENY");
+    const app = await request(bridge, "/?new=1");
+    assert.equal(app.headers.get("x-frame-options"), "SAMEORIGIN");
+    assert.equal(
+      app.headers.get("content-security-policy"),
+      "frame-ancestors 'self'",
+    );
+    const api = await request(bridge, "/v1/conversation/acquisition/entry");
+    assert.equal(api.headers.get("x-frame-options"), "DENY");
+  } finally {
+    await bridge.close();
+  }
+});
+
+test("Next development navigation keeps Flight debug correlation only on the local UI hop", async () => {
+  const calls = [];
+  const bridge = await startTestBridge(async (url, init) => {
+    calls.push({ url: String(url), headers: init.headers });
+    return response("ok");
+  });
+  const headers = {
+    rsc: "1",
+    "x-nextjs-request-id": "synthetic-flight-request",
+    "x-nextjs-html-request-id": "synthetic-html-request",
+    "next-router-segment-prefetch": "/calls",
+    "next-hmr-refresh": "1",
+  };
+  try {
+    assert.equal(
+      (await request(bridge, "/calls?_rsc=synthetic", { headers })).status,
+      200,
+    );
+    assert.equal(calls[0].url, "http://127.0.0.1:3116/calls?_rsc=synthetic");
+    for (const [name, value] of Object.entries(headers))
+      assert.equal(calls[0].headers.get(name), value);
+    assert.equal(
+      (await request(bridge, "/v1/conversation/acquisition/entry", { headers }))
+        .status,
+      200,
+    );
+    for (const name of Object.keys(headers))
+      assert.equal(calls[1].headers.get(name), null);
+  } finally {
+    await bridge.close();
+  }
+});
+
 test("production destination is pinned and Sales Xray route surface is narrow", () => {
   assert.throws(
     () =>

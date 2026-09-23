@@ -2,6 +2,18 @@ import { createHash, randomUUID } from "node:crypto";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA = /^[a-f0-9]{64}$/;
+const LOCAL_PHASES = new Set([
+  "upload.empty",
+  "upload.file.selected",
+  "upload.validation.error",
+]);
+const LOCAL_VERIFICATION = new Set([
+  "checking",
+  "session-present",
+  "guest-challenge-required",
+  "guest-challenge-complete",
+]);
+const REPORT_LANGUAGES = new Set(["en", "hi-Deva+en", "mr-Deva+en"]);
 const STATES = new Set([
   "queued",
   "pending",
@@ -18,12 +30,93 @@ const STATES = new Set([
 ]);
 export const REVIEW_LIMITS = Object.freeze({
   frames: 128,
+  localFrames: 128,
   sessions: 16,
   bytes: 16 * 1024 ** 2,
+  localBytes: 1024 * 1024,
   responseBytes: 4 * 1024 ** 2,
   lifetimeMs: 30 * 60_000,
   leaseMs: 30_000,
 });
+
+// Browser-local observations contain display metadata only: never file content,
+// upload hash, challenge token, source URL, or free-form UI text.
+export function localReviewObservation(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.keys(value).length !== 7 ||
+    !LOCAL_PHASES.has(value.phase) ||
+    typeof value.privacy_open !== "boolean" ||
+    typeof value.consent_checked !== "boolean" ||
+    !(
+      value.report_language === null ||
+      REPORT_LANGUAGES.has(value.report_language)
+    ) ||
+    !LOCAL_VERIFICATION.has(value.verification) ||
+    !(
+      value.file_name === null ||
+      (typeof value.file_name === "string" &&
+        value.file_name.length > 0 &&
+        value.file_name.length <= 255 &&
+        !/[\u0000-\u001f\u007f]/.test(value.file_name))
+    ) ||
+    !(
+      value.file_size_bytes === null ||
+      (Number.isSafeInteger(value.file_size_bytes) &&
+        value.file_size_bytes > 0 &&
+        value.file_size_bytes <= 32 * 1024 ** 2)
+    ) ||
+    (value.phase === "upload.file.selected" &&
+      (value.file_name === null || value.file_size_bytes === null)) ||
+    (value.phase === "upload.empty" &&
+      (value.file_name !== null || value.file_size_bytes !== null)) ||
+    (value.phase === "upload.validation.error" &&
+      (value.file_name === null) !== (value.file_size_bytes === null))
+  )
+    return null;
+  return {
+    phase: value.phase,
+    privacy_open: value.privacy_open,
+    consent_checked: value.consent_checked,
+    report_language: value.report_language,
+    verification: value.verification,
+    file_name: value.file_name,
+    file_size_bytes: value.file_size_bytes,
+  };
+}
+
+export function localReviewLabel(value) {
+  const observation = localReviewObservation(value);
+  if (!observation) return null;
+  const phase = {
+    "upload.empty": "Upload · empty",
+    "upload.file.selected": "Upload · actual file selected",
+    "upload.validation.error": "Upload · local validation error",
+  }[observation.phase];
+  const file = observation.file_name
+    ? `${observation.file_name} · ${(observation.file_size_bytes / 1048576).toFixed(1)} MB`
+    : "";
+  const privacy = observation.privacy_open
+    ? "privacy details open"
+    : "privacy details closed";
+  const consent = observation.consent_checked
+    ? "consent checkbox checked locally"
+    : "consent checkbox unchecked";
+  const language = observation.report_language
+    ? `report language ${observation.report_language}`
+    : "report language unavailable";
+  const verification = {
+    checking: "verification checking",
+    "session-present": "account or guest session present",
+    "guest-challenge-required": "guest challenge required",
+    "guest-challenge-complete": "guest challenge completed locally",
+  }[observation.verification];
+  return [phase, file, privacy, consent, language, verification]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 // Called only with an actual successful upstream submission read. Deliberately
 // excludes report/transcript text, profile data, provider receipts and credentials.
@@ -97,6 +190,7 @@ export function observedStage(receipt) {
 
 export class ReviewFrameStore {
   #sessions = new Map();
+  #localSessions = new Map();
   constructor({
     now = Date.now,
     id = randomUUID,
@@ -106,9 +200,17 @@ export class ReviewFrameStore {
     this.id = id;
     this.limits = limits;
   }
-  reset(session) {
+  resetCall(session) {
     clearTimeout(this.#sessions.get(session)?.expiryTimer);
     this.#sessions.delete(session);
+  }
+  resetLocal(session) {
+    clearTimeout(this.#localSessions.get(session)?.expiryTimer);
+    this.#localSessions.delete(session);
+  }
+  reset(session) {
+    this.resetCall(session);
+    this.resetLocal(session);
   }
   #entry(session) {
     const entry = this.#sessions.get(session);
@@ -129,7 +231,7 @@ export class ReviewFrameStore {
       this.#sessions.size >= this.limits.sessions
     )
       throw new Error("review_capacity");
-    this.reset(session);
+    this.resetCall(session);
     const entry = {
       callId,
       epoch: this.id(),
@@ -234,6 +336,92 @@ export class ReviewFrameStore {
           state: frame.state,
           receipt: frame.receipt,
           leaseUntil: entry.leaseUntil,
+        })
+      : null;
+  }
+  #localEntry(session) {
+    const entry = this.#localSessions.get(session);
+    if (entry && this.now() >= entry.expiresAt) {
+      this.resetLocal(session);
+      return null;
+    }
+    return entry ?? null;
+  }
+  observeLocal(session, value) {
+    if (typeof session !== "string" || !session) return null;
+    const observation = localReviewObservation(value);
+    if (!observation) return null;
+    let entry = this.#localEntry(session);
+    if (!entry) {
+      for (const key of this.#localSessions.keys()) this.#localEntry(key);
+      if (this.#localSessions.size >= this.limits.sessions) return null;
+      entry = {
+        expiresAt: this.now() + this.limits.lifetimeMs,
+        frames: [],
+        bytes: 0,
+        sequence: 0,
+        lastDigest: null,
+      };
+      entry.expiryTimer = setTimeout(() => {
+        if (this.#localSessions.get(session) === entry)
+          this.resetLocal(session);
+      }, this.limits.lifetimeMs);
+      entry.expiryTimer.unref();
+      this.#localSessions.set(session, entry);
+    }
+    const json = JSON.stringify(observation);
+    const bytes = Buffer.byteLength(json);
+    if (bytes > this.limits.localBytes) return null;
+    const digest = createHash("sha256").update(json).digest("hex");
+    if (entry.lastDigest === digest) return entry.frames.at(-1)?.id ?? null;
+    const frame = {
+      id: this.id(),
+      sequence: ++entry.sequence,
+      observedAt: this.now(),
+      state: observation.phase,
+      label: localReviewLabel(observation),
+      observation,
+      digest,
+      bytes,
+    };
+    entry.frames.push(frame);
+    entry.bytes += bytes;
+    entry.lastDigest = digest;
+    while (
+      entry.frames.length > this.limits.localFrames ||
+      entry.bytes > this.limits.localBytes
+    )
+      entry.bytes -= entry.frames.shift().bytes;
+    return frame.id;
+  }
+  localCatalog(session) {
+    const entry = this.#localEntry(session);
+    return {
+      expiresAt: entry?.expiresAt ?? null,
+      frames: (entry?.frames ?? []).map(
+        ({
+          observation: _observation,
+          digest: _digest,
+          bytes: _bytes,
+          ...metadata
+        }) => ({
+          ...metadata,
+        }),
+      ),
+    };
+  }
+  localFrame(session, id) {
+    const entry = this.#localEntry(session);
+    const frame = entry?.frames.find((value) => value.id === id);
+    return frame
+      ? structuredClone({
+          id: frame.id,
+          sequence: frame.sequence,
+          observedAt: frame.observedAt,
+          state: frame.state,
+          label: frame.label,
+          observation: frame.observation,
+          expiresAt: entry.expiresAt,
         })
       : null;
   }
