@@ -64,7 +64,9 @@ from ac_platform.conversation_intelligence.native_runtime import (
     NativeRuntimeError,
     SocketNativeRuntime,
 )
-from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
+from ac_platform.conversation_intelligence.processing_plan import (
+    ProcessingPlanScheduler,
+)
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
@@ -115,7 +117,18 @@ class OfflinePreflight:
         return signals.inspect_media(source, outdir, rate=rate)
 
 
-async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> SimpleNamespace:
+async def _setup(
+    postgres: Any,
+    tmp_path: Path,
+    *,
+    gemini: bool = False,
+    funded: bool = False,
+    text_cost_paise: int = 0,
+    asr_cost_paise: int = 50_000,
+    c2_max_requests: int = 1,
+    c4_max_requests: int = 1,
+    c5_max_requests: int = 1,
+) -> SimpleNamespace:
     engine = create_async_engine(postgres.url)
     state = await seed(engine)
     scope_id = await seed_budget(engine)
@@ -161,7 +174,13 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
     selected_policy = policy(scope_id, state.tenant_id)
     if gemini:
         admin = await _promote_admin(engine, state)
-        config = _registry_config("guest-gemini-test-v1", text_provider="gemini")
+        config = _registry_config(
+            "guest-gemini-test-v1",
+            funded=funded,
+            text_provider="gemini",
+            text_cost_paise=text_cost_paise,
+            asr_cost_paise=asr_cost_paise,
+        )
         async with sessions() as db, db.begin():
             view = await ConversationProviderAdmin(ConversationApplication(db)).save(
                 admin, config.as_dict(), expected_revision=0, key="guest-gemini-config"
@@ -172,12 +191,17 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
             hashlib.sha256(_wav_one_second_48k()).hexdigest(),
             view["configuration_sha256"],
             now_epoch=int(state.now.timestamp()),
+            funded=funded,
             text_provider="gemini",
+            text_cost_paise=text_cost_paise,
+            asr_cost_paise=asr_cost_paise,
         )
+        stage_request_limits = {"C2": c2_max_requests, "C4": c4_max_requests, "C5": c5_max_requests}
         acquisition_stages = tuple(
             AcquisitionStagePolicy.model_validate(
                 {
                     **item.model_dump(exclude={"id", "tenant_id", "person_id", "source_sha256"}),
+                    "max_requests": stage_request_limits[item.stage],
                     "max_completion_tokens": {"C2": 0, "C4": 1_400, "C5": 1_800}[item.stage],
                 }
             )
@@ -203,8 +227,9 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
             }
         )
         bundle = type(bundle).model_validate_json(bundle.model_dump_json())
+        bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
-            lambda: bundle, environment="test", operations_tenant_id=state.tenant_id
+            lambda: bundle_box["bundle"], environment="test", operations_tenant_id=state.tenant_id
         )
         selected_policy = IntakePolicy(
             budget_scope_id=bundle.budget_scope_id,
@@ -248,6 +273,7 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
         app=app,
         require_actor=require_actor,
         authority=authority,
+        bundle_box=None if not gemini else bundle_box,
     )
 
 
