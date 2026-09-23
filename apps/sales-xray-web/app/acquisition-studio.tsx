@@ -39,8 +39,6 @@ import {
   formatTranscriptTime as time,
 } from "./report-transcript";
 import {
-  parseAcquisitionReport,
-  parseTranscript,
   type ReportEvidence,
   type SalesReport,
   type Transcript,
@@ -67,7 +65,14 @@ import {
   type UploadPolicy,
 } from "./acquisition-client";
 import { ProcessingVisual } from "./processing-visual";
-import { ProcessingStatusCopy } from "./processing-status-copy";
+import { ProcessingExperience } from "./processing-experience";
+import { latestStage, projectProcessing } from "./processing-state";
+import { observeSubmission } from "./observe-submission";
+import {
+  parseReportLanguage,
+  reportLanguageLabels,
+  type ReportLanguage,
+} from "./report-language";
 import { isNewCallRequested, setNewCallRequested } from "./new-call-navigation";
 import { UploadCheck } from "./upload-check";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -75,31 +80,12 @@ import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider } from "./source-waveform";
 import styles from "./acquisition-studio.module.css";
 
-type Result = { report: SalesReport; transcript: Transcript; claimed: boolean };
-const stageNames: Record<string, string> = {
-  C2: "Transcribing your call",
-  C4: "Checking the conversation",
-  C5: "Writing your coaching report",
+type Result = {
+  report: SalesReport;
+  transcript: Transcript;
+  runId: string;
+  claimed: boolean;
 };
-const processingStages = ["C2", "C4", "C5"] as const;
-const stageLabels = { C2: "Transcript", C4: "Conversation", C5: "Report" };
-type ProcessingStage = (typeof processingStages)[number];
-
-function latestStage(progress: Progress | null, stage: ProcessingStage) {
-  return progress?.stages.findLast((row) => row.stage === stage) ?? null;
-}
-
-function stageStatusLabel(status: string | null) {
-  if (status === "completed") return "Complete";
-  if (status === "saved") return "Work saved";
-  if (status === "running") return "In progress";
-  if (status === "uncertain") return "Paused · needs attention";
-  if (status === "queued" || status === "pending") return "Queued";
-  if (status === "cancelled") return "Cancelled";
-  if (status === "failed" || status === "held") return "Needs attention";
-  return status === null ? "Not started" : "Status needs checking";
-}
-
 function pausedFailureMessage(failureCode: string | null): string {
   if (
     failureCode === "conversation_broker_service_identity_unavailable" ||
@@ -118,10 +104,6 @@ const message = (error: unknown) =>
   error instanceof AcquisitionError
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
-
-export function savedCallsHref(embedded: boolean): string {
-  return embedded ? "/sales-xray/calls" : "/calls";
-}
 
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
@@ -163,6 +145,9 @@ export function AcquisitionStudio({
   const [claimAvailable, setClaimAvailable] = useState(false);
   const [savedCallNeedsSession, setSavedCallNeedsSession] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("en");
+  const chosenReportLanguage = useRef<ReportLanguage | null>(null);
+  const languageCapabilities = useRef(false);
   const [audioUrl, setAudioUrl] = useState("");
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
@@ -184,6 +169,8 @@ export function AcquisitionStudio({
   const [error, setError] = useState<string | AcquisitionError>("");
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
+  const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [moment, setMoment] = useState<ReportEvidence | null>(null);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -230,6 +217,14 @@ export function AcquisitionStudio({
         const config = parseEntry(await acquisition("/entry", { signal }));
         if (signal.aborted) return;
         setEntry(config);
+        languageCapabilities.current = config.report_languages !== undefined;
+        if (
+          !chosenReportLanguage.current ||
+          !config.report_languages?.includes(chosenReportLanguage.current)
+        ) {
+          chosenReportLanguage.current = config.report_language_default ?? "en";
+          setReportLanguage(chosenReportLanguage.current);
+        }
         if (!config.enabled) return;
         const terms = parsePolicy(
           await acquisition("/upload-policy", { signal }),
@@ -354,15 +349,27 @@ export function AcquisitionStudio({
 
   const getPlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
-      if (!quoteKey.current) quoteKey.current = `report-plan:${bound.id}`;
-      return parseProcessingPlan(
+      const language = chosenReportLanguage.current ?? "en";
+      const supportsLanguage = languageCapabilities.current;
+      if (!quoteKey.current)
+        quoteKey.current = `report-plan:${bound.id}${supportsLanguage ? `:${language}` : ""}`;
+      const quoted = parseProcessingPlan(
         await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
           method: "POST",
           signal,
-          headers: { "Idempotency-Key": quoteKey.current },
+          headers: {
+            "Idempotency-Key": quoteKey.current,
+            ...(supportsLanguage ? { "Content-Type": "application/json" } : {}),
+          },
+          ...(supportsLanguage
+            ? { body: JSON.stringify({ report_language: language }) }
+            : {}),
         }),
         bound.recordingId,
       );
+      if (supportsLanguage && !quoted.report_language)
+        throw new Error("plan_language_unconfirmed");
+      return quoted;
     },
     [],
   );
@@ -413,7 +420,20 @@ export function AcquisitionStudio({
         bound.recordingId,
       );
       if (!signal.aborted) {
-        setPlan(accepted);
+        if (
+          accepted.id !== shown.id ||
+          accepted.plan_fingerprint !== shown.plan_fingerprint
+        )
+          throw new Error("accepted_plan_mismatch");
+        setPlan({
+          ...accepted,
+          ...(shown.report_language
+            ? {
+                report_language: shown.report_language,
+                coaching_prompt_revision: shown.coaching_prompt_revision,
+              }
+            : {}),
+        });
         setPlanRequiresAction(false);
         setPlanExpired(false);
         setPollAttempt((n) => n + 1);
@@ -421,6 +441,49 @@ export function AcquisitionStudio({
     },
     [analysisPaused],
   );
+
+  // Recover the saved language from the immutable plan, never from today's
+  // Admin default. This owner-read route cannot create a replacement quote.
+  useEffect(() => {
+    if (
+      !submission ||
+      !entry?.report_languages ||
+      consentedSubmissionId === submission.id
+    )
+      return;
+    const abort = new AbortController();
+    const bound = submission;
+    void (async () => {
+      try {
+        const saved = parseProcessingPlan(
+          await acquisition(`${submissionPath(bound.id)}/plan`, {
+            signal: abort.signal,
+          }),
+          bound.recordingId,
+        );
+        if (!abort.signal.aborted)
+          setPlan((current) => {
+            if (!current) return saved;
+            // An owner read may confirm an acceptance whose response was lost.
+            // Never overwrite a different plan, or demote known acceptance.
+            return current.id === saved.id &&
+              current.plan_fingerprint === saved.plan_fingerprint &&
+              (!current.accepted || saved.accepted)
+              ? saved
+              : current;
+          });
+      } catch {
+        // A legacy call may have no plan. Progress/report verification remains
+        // authoritative, and no inferred language label is shown.
+      }
+    })();
+    return () => abort.abort();
+  }, [
+    submission,
+    entry?.report_languages,
+    consentedSubmissionId,
+    result?.runId,
+  ]);
 
   useEffect(() => {
     if (!submission || result) return;
@@ -430,30 +493,15 @@ export function AcquisitionStudio({
     const bound = submission;
     async function poll() {
       try {
-        const next = parseProgress(
-          await acquisition(submissionPath(bound.id), { signal: abort.signal }),
-          bound,
-        );
+        setCheckingStatus(true);
+        const observed = await observeSubmission(bound, abort.signal);
         if (abort.signal.aborted) return;
+        const next = observed.progress;
         setProgress(next);
-        if (next.has_report) {
-          const transcript = parseTranscript(
-            await acquisition(`${submissionPath(bound.id)}/transcript`, {
-              signal: abort.signal,
-            }),
-            bound.sha,
-          );
-          const verified = parseAcquisitionReport(
-            await acquisition(`${submissionPath(bound.id)}/report`, {
-              signal: abort.signal,
-            }),
-            { submissionId: bound.id, recordingId: bound.recordingId },
-            transcript,
-          );
-          if (!abort.signal.aborted) {
-            setResult({ ...verified, transcript });
-            setError("");
-          }
+        setStatusIssue("");
+        if (observed.result) {
+          setResult(observed.result);
+          setError("");
           return;
         }
         if (
@@ -471,63 +519,19 @@ export function AcquisitionStudio({
             );
           return;
         }
-        if (
-          next.local_state === "completed" &&
-          !next.automatic_progression &&
-          requestedPlan.current !== bound.id
-        ) {
-          requestedPlan.current = bound.id;
-          let approved: ProcessingPlan;
-          try {
-            approved = await getPlan(bound, abort.signal);
-          } catch (error) {
-            // A lost/failed quote must remain recoverable. The latch only
-            // suppresses duplicate in-flight requests; it must not turn one
-            // transient failure into a permanent "report pending" state.
-            if (requestedPlan.current === bound.id) requestedPlan.current = "";
-            throw error;
-          }
-          if (!abort.signal.aborted) {
-            setPlan(approved);
-            setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
-            const canAutoApprove =
-              consentedSubmissionId === bound.id &&
-              !planRequiresAction &&
-              !analysisPaused &&
-              approved.expires_at_epoch * 1000 > Date.now();
-            if (canAutoApprove) {
-              try {
-                await acceptPlanRequest(bound, approved, abort.signal);
-              } catch (error) {
-                if (
-                  error instanceof AcquisitionError &&
-                  error.reason === "plan_stale"
-                ) {
-                  if (!(await refreshStalePlan(bound, abort.signal))) {
-                    setPlanRequiresAction(true);
-                    throw error;
-                  }
-                } else {
-                  setPlanRequiresAction(true);
-                  throw error;
-                }
-              }
-            } else {
-              setPlanRequiresAction(true);
-            }
-          }
-        }
         failures = 0;
       } catch (error) {
         if (abort.signal.aborted) return;
         failures += 1;
-        setError(message(error));
+        setStatusIssue(message(error));
         if (
           failures >= 3 ||
           (error instanceof AcquisitionError &&
             [401, 403, 404, 409].includes(error.status))
         )
           return;
+      } finally {
+        if (!abort.signal.aborted) setCheckingStatus(false);
       }
       if (!abort.signal.aborted)
         timer = setTimeout(() => void poll(), failures ? 6000 : 3000);
@@ -536,6 +540,77 @@ export function AcquisitionStudio({
     return () => {
       abort.abort();
       if (timer) clearTimeout(timer);
+    };
+  }, [submission, result, pollAttempt]);
+
+  // Automatic acceptance is bound to the upload just consented to in this
+  // mounted page. Restoring or refreshing a call never recreates that consent.
+  const localProcessingState = progress?.local_state;
+  const automaticProgression = progress?.automatic_progression;
+  const publishedReport = progress?.has_report;
+  const processingState = progress?.state;
+  useEffect(() => {
+    if (
+      !submission ||
+      result ||
+      publishedReport ||
+      localProcessingState !== "completed" ||
+      automaticProgression ||
+      ["held", "cancelled", "completed"].includes(processingState ?? "") ||
+      consentedSubmissionId !== submission.id ||
+      planRequiresAction ||
+      analysisPaused ||
+      requestedPlan.current === submission.id
+    )
+      return;
+    const abort = new AbortController();
+    const bound = submission;
+    requestedPlan.current = bound.id;
+    void (async () => {
+      try {
+        const approved = await getPlan(bound, abort.signal);
+        if (abort.signal.aborted) return;
+        setPlan(approved);
+        setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
+        if (
+          approved.report_language &&
+          approved.report_language !== chosenReportLanguage.current
+        ) {
+          setPlanRequiresAction(true);
+          return;
+        }
+        await acceptPlanRequest(bound, approved, abort.signal);
+      } catch (error) {
+        if (abort.signal.aborted) return;
+        if (
+          error instanceof AcquisitionError &&
+          error.reason === "plan_stale"
+        ) {
+          try {
+            if (await refreshStalePlan(bound, abort.signal)) return;
+          } catch (refreshError) {
+            if (!abort.signal.aborted) {
+              setPlanRequiresAction(true);
+              setError(message(refreshError));
+            }
+            return;
+          }
+        }
+        if (!abort.signal.aborted) {
+          setPlanRequiresAction(true);
+          setError(message(error));
+        }
+      }
+    })();
+    return () => {
+      abort.abort();
+      // A dependency change can interrupt an already-dispatched quote or
+      // acceptance. Do not silently start it again or hide the review action.
+      // Observation will reconcile any work the server has already accepted.
+      if (active.current)
+        setConsentedSubmissionId((current) =>
+          current === bound.id ? null : current,
+        );
     };
   }, [
     analysisPaused,
@@ -546,7 +621,10 @@ export function AcquisitionStudio({
     planRequiresAction,
     submission,
     result,
-    pollAttempt,
+    localProcessingState,
+    automaticProgression,
+    publishedReport,
+    processingState,
   ]);
 
   function choose(next: File | undefined) {
@@ -736,6 +814,8 @@ export function AcquisitionStudio({
     setAudioUrl("");
     setSubmission(null);
     setProgress(null);
+    setStatusIssue("");
+    setCheckingStatus(false);
     setPlan(null);
     setResult(null);
     setConsent(false);
@@ -876,37 +956,21 @@ export function AcquisitionStudio({
   }
   const report = result?.report;
   const reportReady = Boolean(report);
-  const currentStage =
-    progress?.stages.findLast((stage) => stage.state === "running") ??
-    progress?.stages.find(
-      (stage) => stage.state === "queued" || stage.state === "pending",
-    ) ??
-    progress?.stages.findLast((stage) => stage.state !== "completed");
-  const uncertainStage = processingStages
-    .map((stage) => latestStage(progress, stage))
-    .find((stage) => stage?.state === "uncertain");
-  const pausedStage = uncertainStage ?? currentStage;
-  const processingPaused = Boolean(
-    progress && (progress.state === "held" || uncertainStage),
-  );
-  const processingNeedsAttention = Boolean(
-    processingPaused ||
-      error ||
-      (progress &&
-        (["failed", "cancelled"].includes(progress.local_state ?? "") ||
-          ["cancelled", "completed"].includes(progress.state))),
-  );
-  const hasSavedTranscript = progress?.stages.some(
-    (stage) => stage.stage === "C2" && stage.state === "completed",
-  );
-  const hasSavedAnalysis = progress?.stages.some(
-    (stage) => stage.stage === "C4" && stage.state === "completed",
-  );
+  const processingNeedsAttention = projectProcessing(progress, false).attention;
   const canReviewHeldPlan =
     !error &&
     progress?.state === "held" &&
     progress.local_state === "completed" &&
     latestStage(progress, "C2")?.state === "completed";
+  const waitingForApproval = Boolean(
+    !plan?.accepted &&
+      !progress?.automatic_progression &&
+      progress?.local_state === "completed" &&
+      !processingNeedsAttention &&
+      !progress?.has_report &&
+      consentedSubmissionId !== submission?.id,
+  );
+  const visibleError = error || statusIssue;
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
@@ -1330,6 +1394,33 @@ export function AcquisitionStudio({
                   <span>2</span> Verify and continue
                 </p>
                 <h3>Upload privately</h3>
+                {entry?.report_languages && (
+                  <div className={styles.reportLanguage}>
+                    <label htmlFor="report-language">Report language</label>
+                    <select
+                      id="report-language"
+                      value={reportLanguage}
+                      disabled={!!busy}
+                      onChange={(event) => {
+                        const selected = parseReportLanguage(
+                          event.target.value,
+                        );
+                        chosenReportLanguage.current = selected;
+                        setReportLanguage(selected);
+                      }}
+                    >
+                      {entry.report_languages.map((language) => (
+                        <option key={language} value={language}>
+                          {reportLanguageLabels[language]}
+                        </option>
+                      ))}
+                    </select>
+                    <p>
+                      Hindi and Marathi use Devanagari with natural English
+                      sales terms. Original transcript quotes stay unchanged.
+                    </p>
+                  </div>
+                )}
                 <p className={styles.freeBadge}>
                   <span aria-hidden="true">
                     <Check size={13} />
@@ -1403,6 +1494,15 @@ export function AcquisitionStudio({
             {submission && !report && plan && !plan.accepted && (
               <div className="studio-consent">
                 <h3>Ready to continue</h3>
+                {plan.report_language && (
+                  <p>
+                    Report language:{" "}
+                    <strong>
+                      {reportLanguageLabels[plan.report_language]}
+                    </strong>
+                    . This choice is saved with this analysis plan.
+                  </p>
+                )}
                 <p>
                   Your saved call is ready for the next review step. Continue
                   with this same recording to start the analysis.
@@ -1445,145 +1545,64 @@ export function AcquisitionStudio({
               </div>
             )}
             {submission && !report && (!plan || plan.accepted) && (
-              <div
-                className={`studio-progress ${styles.processingPanel}`}
-                data-paused={processingNeedsAttention}
-                role="status"
-                aria-live="polite"
+              <ProcessingExperience
+                submissionId={submission.id}
+                progress={progress}
+                waitingForApproval={waitingForApproval}
+                accepted={plan?.accepted ?? false}
+                refreshProblem={!!statusIssue}
               >
-                <ProcessingVisual
-                  phase={
-                    processingPaused
-                      ? pausedStage?.stage === "C2" ||
-                        pausedStage?.stage === "C4" ||
-                        pausedStage?.stage === "C5"
-                        ? pausedStage.stage
-                        : "processing"
-                      : currentStage?.stage === "C2" ||
-                          currentStage?.stage === "C4" ||
-                          currentStage?.stage === "C5"
-                        ? currentStage.stage
-                        : "processing"
-                  }
-                  paused={processingNeedsAttention}
-                />
-                <ProcessingStatusCopy
-                  submissionId={submission.id}
-                  progress={progress}
-                  paused={processingPaused}
-                  needsAttention={processingNeedsAttention}
-                  title={
-                    progress?.local_state !== "completed"
-                      ? "Checking your recording"
-                      : currentStage
-                        ? stageNames[currentStage.stage]
-                        : "Preparing your analysis"
-                  }
-                />
-                <div
-                  className={styles.progressRail}
-                  aria-label="Processing stages"
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!!busy || checkingStatus}
+                  onClick={() => {
+                    setConsentedSubmissionId(null);
+                    setPollAttempt((n) => n + 1);
+                  }}
                 >
-                  {processingStages.map((stage, index) => {
-                    const latestStatus =
-                      latestStage(progress, stage)?.state ?? null;
-                    // C4 can have more chunks than the API currently exposes.
-                    const status =
-                      stage === "C4" &&
-                      latestStatus === "completed" &&
-                      !latestStage(progress, "C5")
-                        ? "saved"
-                        : latestStatus;
-                    return (
-                      <div
-                        key={stage}
-                        data-stage={stage}
-                        data-state={status ?? "not-started"}
-                        data-complete={status === "completed"}
-                        aria-label={`${stageNames[stage]}: ${stageStatusLabel(status)}`}
-                      >
-                        <span aria-hidden="true">
-                          {status === "completed" ? (
-                            <Check size={13} />
-                          ) : (
-                            index + 1
-                          )}
-                        </span>
-                        <p>
-                          {stageLabels[stage]}
-                          <small>{stageStatusLabel(status)}</small>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className={styles.progressGuidance}>
-                  <p className="eyebrow">
-                    {processingNeedsAttention
-                      ? "YOUR SAVED WORK"
-                      : "WHILE YOU WAIT"}
-                  </p>
-                  <ul>
-                    <li>
-                      {processingNeedsAttention
-                        ? hasSavedTranscript
-                          ? "The completed transcript stays attached to this call."
-                          : "A completed transcript has not been confirmed yet."
-                        : "Keep this tab open or return later from this browser."}
-                    </li>
-                    {hasSavedAnalysis && (
-                      <li>
-                        Some conversation analysis is saved with this call.
-                      </li>
-                    )}
-                    <li>
-                      {processingNeedsAttention
-                        ? "You do not need to upload the recording again."
-                        : null}
-                    </li>
-                  </ul>
-                  <div className={styles.progressActions}>
-                    <Link
-                      href={savedCallsHref(embedded)}
-                      className="secondary-button"
-                    >
-                      <FolderOpen size={17} aria-hidden="true" />
-                      Open saved calls
-                    </Link>
-                    {processingNeedsAttention && (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        disabled={!!busy}
-                        onClick={startAnotherCall}
-                      >
-                        <ArrowRight size={16} aria-hidden="true" />
-                        Analyse another call
-                      </button>
-                    )}
-                    {canReviewHeldPlan && (
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={!!busy || analysisPaused}
-                        onClick={() => void freshPlan()}
-                      >
-                        {busy ? (
-                          <LoaderCircle className="spin" size={17} />
-                        ) : (
-                          <FileText size={17} />
-                        )}
-                        {busy || "Review and continue analysis"}
-                      </button>
-                    )}
-                  </div>
-                  {canReviewHeldPlan && (
-                    <p className={styles.resumeNotice}>
-                      Nothing restarts until you review and continue.
-                    </p>
-                  )}
-                </div>
-              </div>
+                  {checkingStatus ? "Checking status…" : "Check status"}
+                </button>
+                <Link
+                  href={`${embedded ? "/sales-xray" : "/"}?call=${submission.id}`}
+                  className="secondary-button"
+                >
+                  <FolderOpen size={17} aria-hidden="true" />
+                  This call’s link
+                </Link>
+                {processingNeedsAttention && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={startAnotherCall}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" />
+                    Analyse another call
+                  </button>
+                )}
+                {canReviewHeldPlan && (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={!!busy || analysisPaused}
+                    onClick={() => void freshPlan()}
+                  >
+                    <FileText size={17} aria-hidden="true" />
+                    {busy || "Review and continue analysis"}
+                  </button>
+                )}
+                {waitingForApproval && !plan && (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={!!busy || analysisPaused}
+                    onClick={() => void freshPlan()}
+                  >
+                    Review analysis plan
+                  </button>
+                )}
+              </ProcessingExperience>
             )}
             {(submission || deletionOnlyId) && (
               <div className={styles.callActions}>
@@ -1674,9 +1693,19 @@ export function AcquisitionStudio({
             </aside>
           )}
         </div>
-        {error && !savedCallNeedsSession && (
+        {visibleError && !savedCallNeedsSession && (
           <div className={`notice error ${styles.error}`} role="alert">
-            <p>{error instanceof AcquisitionError ? error.message : error}</p>
+            {statusIssue && !error && (
+              <p>
+                Status could not be refreshed. This does not mean analysis
+                failed.
+              </p>
+            )}
+            <p>
+              {visibleError instanceof AcquisitionError
+                ? visibleError.message
+                : visibleError}
+            </p>
             <div className={styles.errorActions}>
               <button
                 className="secondary-button"
@@ -1685,21 +1714,14 @@ export function AcquisitionStudio({
                 onClick={() => {
                   setError("");
                   if (submission) {
-                    if (
-                      !plan &&
-                      progress?.local_state === "completed" &&
-                      !progress.automatic_progression
-                    ) {
-                      requestedPlan.current = "";
-                      quoteKey.current = "";
-                    }
+                    setConsentedSubmissionId(null);
                     setPollAttempt((n) => n + 1);
                   } else setAttempt((n) => n + 1);
                 }}
               >
                 Check again
               </button>
-              {submission && progress?.local_state === "completed" && (
+              {error && submission && progress?.local_state === "completed" && (
                 <button
                   type="button"
                   className="secondary-button"
@@ -1720,11 +1742,12 @@ export function AcquisitionStudio({
                   Analyse another call
                 </button>
               )}
-              {error instanceof AcquisitionError && error.status === 401 && (
-                <Link className="text-button" href="/login">
-                  Sign in
-                </Link>
-              )}
+              {visibleError instanceof AcquisitionError &&
+                visibleError.status === 401 && (
+                  <Link className="text-button" href="/login">
+                    Sign in
+                  </Link>
+                )}
             </div>
           </div>
         )}
@@ -1743,6 +1766,14 @@ export function AcquisitionStudio({
                   <p>
                     Actionable insights. Real conversations. A stronger you.
                   </p>
+                  {plan?.report_language &&
+                    plan.report_run_id === result.runId && (
+                      <p className={styles.reportMetadata}>
+                        Report language:{" "}
+                        {reportLanguageLabels[plan.report_language]} · Original
+                        quotes preserved
+                      </p>
+                    )}
                 </div>
                 <details className={styles.reportMoreActions}>
                   <summary
