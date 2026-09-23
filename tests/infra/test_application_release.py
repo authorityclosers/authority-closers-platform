@@ -792,8 +792,9 @@ def test_caddy_routes_only_named_application_hosts() -> None:
     assert application_routes.count("path /v1/*") == 6
     # Each environment's Sales Xray host has its own same-origin /v1 proxy in
     # addition to the four learner/admin/coach/API application routes.
-    assert application_routes.count("reverse_proxy ac-production-api:8000") == 5
-    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 5
+    # Two additional proxies check eligibility, then forward processing writes.
+    assert application_routes.count("reverse_proxy ac-production-api:8000") == 7
+    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 7
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @learner_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @learner {"
     )
