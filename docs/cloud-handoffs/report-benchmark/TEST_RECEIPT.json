@@ -1,0 +1,91 @@
+{
+  "status": "offline_protocol_tests_only",
+  "date": "2026-09-23",
+  "toolchain": {
+    "python": "3.13.5",
+    "implementation": "CPython",
+    "jsonschema": "4.26.0",
+    "operating_system": "Linux",
+    "hashing": "hashlib SHA-256 and Git blob SHA-1"
+  },
+  "commands": [
+    {
+      "command": "python sx_benchmark_offline.py check sx_benchmark_experiment.json",
+      "exit_code": 0,
+      "observed_status": "passed",
+      "planned_counts": {
+        "screen": {
+          "planned_families": 18,
+          "planned_minutes": "360"
+        },
+        "holdout": {
+          "planned_families": 36,
+          "planned_minutes": "1140"
+        }
+      }
+    },
+    {
+      "command": "python sx_benchmark_offline.py example-cost",
+      "exit_code": 0,
+      "observed_status": "illustrative_assumptions_not_actual_usage"
+    },
+    {
+      "command": "python sx_benchmark_offline.py summarize sx_benchmark_results_template.csv --arm-id v4_final --track audio_to_report --split holdout --seed 20260923 --draws 10000",
+      "exit_code": 0,
+      "observed_status": "no_evaluable_calls",
+      "observations": 0,
+      "estimate": null,
+      "ci95": null
+    },
+    {
+      "command": "python -m py_compile sx_benchmark_offline.py test_protocol.py",
+      "exit_code": 0
+    },
+    {
+      "command": "python -m unittest -v test_protocol.py",
+      "exit_code": 0,
+      "tests_passed": 20,
+      "tests_failed": 0,
+      "test_names": [
+        "test_abstention_sensitivity",
+        "test_blind_labels_require_unblinding",
+        "test_degenerate_interval_is_widened",
+        "test_deployment_rejected",
+        "test_duplicate_family_rejected",
+        "test_duplicate_primary_results_rejected",
+        "test_duplicate_rule_rejected",
+        "test_empty_results_no_observations",
+        "test_example_cost_is_not_actual",
+        "test_fabricated_audio_hash_rejected",
+        "test_json_schema_and_synthetic_unknown_attempt",
+        "test_positive_cap_rejected",
+        "test_private_sources_are_citations_only",
+        "test_provider_execution_rejected",
+        "test_result_template_is_empty",
+        "test_secondary_render_not_independent",
+        "test_spend_authorization_rejected",
+        "test_synthetic_preferences_and_tie",
+        "test_valid_protocol_zero_runs",
+        "test_wrong_corpus_duration_rejected"
+      ]
+    }
+  ],
+  "real_provider_calls": 0,
+  "real_benchmark_reports": 0,
+  "blinded_human_reviews": 0,
+  "warnings": [
+    "Original utility emits ResourceWarning for unclosed CSV readers at lines 28 and 92; source intentionally preserved."
+  ],
+  "limits": [
+    "No application, provider-adapter, real language-quality, account eligibility or invoice validation performed.",
+    "Synthetic tests exercise utility and schema behavior only."
+  ],
+  "original_files_preserved": 7,
+  "publication_privacy_review": {
+    "method": "Manual review plus string-pattern checks; not a guarantee against all possible sensitive content.",
+    "result": "No personal reviewer names, operational fixture details, credentials, raw customer data, chat requests or private source passages found in selected publication files.",
+    "private_source_policy": "Authorized IDs/URLs and numeric citation locators only."
+  },
+  "schema_whitespace_compaction_semantically_verified": true,
+  "original_byte_identical_public_files": 4
+}

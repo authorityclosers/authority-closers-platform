@@ -1,0 +1,78 @@
+{
+  "format": "sha256-manifest-v1",
+  "repository": "authorityclosers/authority-closers-platform",
+  "branch": "codex/cloud-report-benchmark-20260923",
+  "base_commit": "eb4d6ac48173d82efa9ca24ec15696a686465027",
+  "root": "docs/cloud-handoffs/report-benchmark/",
+  "scope": "Only these payload files plus MANIFEST.json and MANIFEST.sha256 are added. No existing files are changed.",
+  "self_hash_policy": "MANIFEST.json and MANIFEST.sha256 are excluded from payload entries; MANIFEST.sha256 hashes MANIFEST.json; commit SHA is an external receipt.",
+  "files": [
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/README.md",
+      "bytes": 5084,
+      "sha256": "d5340f6e8fcb47af113ef458fdaabee145ffdfa68da3ed7691285d10e9c935af",
+      "derivation": "new_public_transfer_support"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/TEST_RECEIPT.json",
+      "bytes": 3361,
+      "sha256": "0d7be80f1685506a67d2a44225ee01f349407cb518307af5de0f62d3c0447eb6",
+      "derivation": "new_public_transfer_support"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_budget_template.csv",
+      "bytes": 999,
+      "sha256": "c62530add4d2bf09e31271c31691b67b6c1cccec973df43ae1875d9a54e108bb",
+      "original_sha256": "c62530add4d2bf09e31271c31691b67b6c1cccec973df43ae1875d9a54e108bb",
+      "derivation": "byte_identical"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_corpus.csv",
+      "bytes": 4408,
+      "sha256": "f92c36c63f60679eb598f47bea70822f56e9d134eb7d47841150e66cfe1b0303",
+      "original_sha256": "f92c36c63f60679eb598f47bea70822f56e9d134eb7d47841150e66cfe1b0303",
+      "derivation": "byte_identical"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_experiment.json",
+      "bytes": 52553,
+      "sha256": "abb34267b9acee0631d4fde29a3ba8f1f56c0e8222b8cf2c25ef538d8cc9a6e4",
+      "original_sha256": "da6f45384b12e19d607854c74490eb4c43686c7014bbdaf8e6c32a72081abe96",
+      "derivation": "sanitized_public_copy"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_offline.py",
+      "bytes": 7665,
+      "sha256": "4252445c6a3a46e3995cf4ffe10f8d1e33d09f27ac1b14820f88bd1b35342bc4",
+      "original_sha256": "4252445c6a3a46e3995cf4ffe10f8d1e33d09f27ac1b14820f88bd1b35342bc4",
+      "derivation": "byte_identical"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_records.schema.json",
+      "bytes": 11467,
+      "sha256": "6573ac25c633b2c98a2bc114baa3f3c31a56d388180215aef737aa3c5f9461dc",
+      "original_sha256": "d54b185e04cd404ca41a11eaa4a0dd5a49d34b5880f99b5811d7b84a74a8a2db",
+      "derivation": "whitespace_only_semantically_identical"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_results_template.csv",
+      "bytes": 776,
+      "sha256": "2f4f248bed26124e07f5ddc8b2c8c3fb7f4e27def8099dbc7fdaa503780f7d65",
+      "original_sha256": "2f4f248bed26124e07f5ddc8b2c8c3fb7f4e27def8099dbc7fdaa503780f7d65",
+      "derivation": "byte_identical"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/sx_benchmark_workflow.md",
+      "bytes": 12309,
+      "sha256": "747e717c318c7b49293a5a397500b0d4212a5a9b3307fa0b20778377b0cea472",
+      "original_sha256": "20c21f0aa01430c2f0c88f0ce13d646154c07d94ed954dff5114b25cf08c9d97",
+      "derivation": "sanitized_public_copy"
+    },
+    {
+      "path": "docs/cloud-handoffs/report-benchmark/test_protocol.py",
+      "bytes": 8378,
+      "sha256": "d1eaccea4dfc36908d874a5857a6491ae84c6ba71d828f9d350bcd4e2bd0fc74",
+      "derivation": "new_public_transfer_support"
+    }
+  ]
+}
