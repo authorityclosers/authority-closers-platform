@@ -213,6 +213,67 @@
 .notes p {
   margin: 0;
 }
+.source {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid #cfe9e6;
+  border-radius: 12px;
+  background: #f3fbfa;
+}
+.source h3 {
+  margin: 0 0 10px;
+  color: #087b79;
+}
+.excerpts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.excerpts li + li {
+  padding-top: 12px;
+  border-top: 1px solid #d6e9e7;
+}
+.sourceTime {
+  color: #526b7e;
+  font-size: 12px;
+  font-weight: 700;
+}
+.excerpts blockquote {
+  margin: 7px 0 10px;
+  padding-left: 13px;
+  border-left: 3px solid #16a59b;
+  color: #18384a;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.listen {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid #b6deda;
+  border-radius: 8px;
+  background: #fff;
+  color: #006d69;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.listen:hover {
+  border-color: #007e77;
+}
+.listen:focus-visible {
+  outline: 3px solid #4c71e5;
+  outline-offset: 2px;
+}
+.noSource {
+  color: #63788d;
+  font-size: 13px;
+}
 .references {
   margin-top: 20px;
   padding: 1px 18px 16px;
