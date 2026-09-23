@@ -23,6 +23,7 @@
   --accent: #007e6f;
   --badge: #dcf7ed;
   display: grid;
+  box-sizing: border-box;
   width: min(760px, 100%);
   max-height: min(760px, calc(100dvh - 24px));
   grid-template-rows: auto minmax(0, 1fr) auto;
