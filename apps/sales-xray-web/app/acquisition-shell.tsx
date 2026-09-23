@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  ArrowUpRight,
   AudioLines,
+  BookOpen,
   CircleUserRound,
   FolderOpen,
   LogIn,
@@ -25,6 +27,7 @@ export function AcquisitionShell({
   compactBusy = false,
   mobileFit = false,
   welcome = false,
+  heroStage,
   displayName,
 }: {
   children: ReactNode;
@@ -34,6 +37,7 @@ export function AcquisitionShell({
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
+  heroStage?: "welcome" | "processing";
   /** A server-confirmed account name, when the caller has one. */
   displayName?: string | null;
 }) {
@@ -44,6 +48,7 @@ export function AcquisitionShell({
   const accountLabel = authenticated
     ? "Account & saved calls"
     : "Profile & account";
+  const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
 
   useEffect(() => {
     if (!hasToggled.current) return;
@@ -57,7 +62,8 @@ export function AcquisitionShell({
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
       data-mobile-fit={mobileFit}
-      data-welcome={welcome}
+      data-welcome={Boolean(visibleHero)}
+      data-hero-stage={visibleHero}
     >
       <a className={styles.skip} href="#main-content">
         Skip to workspace
@@ -83,13 +89,10 @@ export function AcquisitionShell({
               />
             </span>
             <span className={styles.brandWordmark} aria-hidden="true">
-              <Image
-                src="/brand/ac-v0.1/sales-xray-wordmark.svg"
-                alt=""
-                width={112}
-                height={40}
-                priority
-              />
+              <svg viewBox="0 0 125 44" focusable="false">
+                <text x="0" y="23" className={styles.brandName}>Sales Xray</text>
+                <text x="0" y="39" className={styles.brandByline}>BY AUTHORITY CLOSERS</text>
+              </svg>
             </span>
           </Link>
           <button
@@ -144,6 +147,21 @@ export function AcquisitionShell({
           </Link>
           <LocalSettingsButton className={styles.navLink} />
         </nav>
+        <details className={styles.sidebarHelp} id="sales-xray-help">
+          <summary>
+            <BookOpen size={32} strokeWidth={1.8} aria-hidden="true" />
+            <h2>Need help?</h2>
+            <p>Explore our guides, sample analysis, and best practices.</p>
+            <span className={styles.helpAction}>
+              View guides &amp; tips <ArrowUpRight size={17} aria-hidden="true" />
+            </span>
+          </summary>
+          <ul>
+            <li>Choose a supported audio file up to 32 MB.</li>
+            <li>Review the language and privacy details before analysis.</li>
+            <li>Open saved calls to revisit completed reports.</li>
+          </ul>
+        </details>
         <div className={styles.sidebarAccount}>
           <span className={styles.avatar} aria-hidden="true">
             {authenticated ? "AC" : "G"}
@@ -152,7 +170,7 @@ export function AcquisitionShell({
             <strong>{authenticated ? "AC account" : "Guest workspace"}</strong>
             <small>
               {authenticated
-                ? "Private calls and reports"
+                ? "Private workspace"
                 : "Free analysis in this browser"}
             </small>
           </span>
@@ -191,11 +209,19 @@ export function AcquisitionShell({
           />
         </header>
         <header className={styles.workspaceHeader}>
-          {welcome && (
+          {visibleHero && (
             <div className={styles.welcome}>
               <p className={styles.welcomeKicker}>TURN CALLS INTO CLARITY</p>
-              <h1>
-                {authenticated ? (
+              {visibleHero === "processing" ? (
+                <>
+                  <h1>Analysing your call <AudioLines size={37} aria-hidden="true" /></h1>
+                  <p className={styles.welcomeDescription}>
+                    We&apos;re processing your call and finding the key insights. This usually takes a few minutes.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h1>{authenticated ? (
                   <>
                     Welcome back
                     {displayName?.trim() ? `, ${displayName.trim()}` : ""}
@@ -203,12 +229,19 @@ export function AcquisitionShell({
                   </>
                 ) : (
                   "Welcome to Sales Xray"
-                )}
-              </h1>
-              <p className={styles.welcomeDescription}>
-                Upload a sales call and let Sales Xray find the insights, so you
-                can coach, improve, and close more.
-              </p>
+                )}</h1>
+                  <p className={styles.welcomeDescription}>
+                    Upload a sales call and let Sales Xray find the insights, so you
+                    can coach, improve, and close more.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+          {visibleHero && (
+            <div className={styles.heroSlogan} aria-hidden="true">
+              <span>Better<br />conversations.<br />Win more deals</span>
+              <svg viewBox="0 0 70 46" focusable="false"><path d="M2 42C26 33 43 20 65 3M50 5l15-2-5 14" /></svg>
             </div>
           )}
           <div className={styles.profileSlot}>
@@ -221,6 +254,19 @@ export function AcquisitionShell({
         <main id="main-content" className={styles.main}>
           {children}
         </main>
+        {visibleHero && (
+          <footer className={styles.workspaceFooter}>
+            <span><strong>Sales Xray</strong> <span>© {new Date().getFullYear()} Authority Closers. All rights reserved.</span></span>
+            <nav aria-label="Legal and support">
+              <a href="https://app.authorityclosers.com/privacy">Privacy</a>
+              <a href="https://app.authorityclosers.com/terms">Terms</a>
+              <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help">Help</a>
+            </nav>
+            <a className={styles.footerCta} href={newCallHref(homeHref)}>
+              Turn conversations into closers <ArrowUpRight size={17} aria-hidden="true" />
+            </a>
+          </footer>
+        )}
       </div>
       <nav
         className={styles.bottomNav}
