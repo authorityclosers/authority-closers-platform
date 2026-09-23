@@ -1,4 +1,5 @@
 import type { Progress, Submission } from "./acquisition-client";
+import type { FixtureReviewFrame } from "./fixture-review-states";
 
 export type ProcessingReview = {
   requested: boolean;
@@ -17,6 +18,8 @@ export type ProcessingReview = {
     observation: LocalReviewObservation;
     navigation: ReviewNavigation | null;
   } | null;
+  fixtureRequested: boolean;
+  fixtureFrame: FixtureReviewFrame | null;
   readOnly: boolean | null;
   captureLocal: (observation: LocalReviewObservation) => void;
   message: string;
@@ -56,6 +59,8 @@ export function useProcessingReview(_callId: string | null): ProcessingReview {
     frame: null,
     localRequested: false,
     localFrame: null,
+    fixtureRequested: false,
+    fixtureFrame: null,
     readOnly: false,
     captureLocal: noopCaptureLocal,
     message: "",
