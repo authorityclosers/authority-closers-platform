@@ -5,8 +5,11 @@ import {
   BookOpen,
   Check,
   Clock3,
+  FileAudio,
   FileText,
   FolderOpen,
+  HardDrive,
+  ListChecks,
   Rocket,
   Sparkles,
 } from "lucide-react";
@@ -52,17 +55,104 @@ const steps = [
   },
 ] as const;
 
+const supportedAudioName = /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i;
+
+function fileSizeLabel(bytes: number): string {
+  const megabytes = bytes / 1048576;
+  return `${Number(megabytes.toFixed(1))} MB`;
+}
+
 /** The first milestone is true only after a submission exists. Other milestones require real evidence. */
 export function AcquisitionGuideRail({
   stage,
   completedStepIndexes = [],
+  stagedFiles = [],
+  maximumFileBytes,
 }: {
   stage: AcquisitionStage;
   completedStepIndexes?: readonly number[];
+  stagedFiles?: readonly Pick<File, "name" | "size">[];
+  maximumFileBytes?: number;
 }) {
   const completed = new Set(completedStepIndexes);
   if (stage === "processing" || stage === "report") completed.add(0);
   const count = [...completed].filter((index) => index >= 0 && index < steps.length).length;
+
+  if (stage === "selected" && stagedFiles.length >= 2) {
+    const supportedCount = stagedFiles.filter((file) => supportedAudioName.test(file.name)).length;
+    const fileLimit = typeof maximumFileBytes === "number" && maximumFileBytes > 0
+      ? maximumFileBytes
+      : null;
+    const withinLimitCount = fileLimit !== null
+      ? stagedFiles.filter((file) => file.size <= fileLimit).length
+      : 0;
+
+    return (
+      <aside className={styles.rail} aria-label="Added files and next steps">
+        <section className={`${styles.card} ${styles.guide} ${styles.queueGuide}`} aria-labelledby="queue-guide-title">
+          <div className={styles.cardHeading}>
+            <Rocket className={styles.headingIcon} size={29} strokeWidth={1.9} aria-hidden="true" />
+            <h2 id="queue-guide-title">Ready to review</h2>
+          </div>
+          <div className={styles.queueOverview}>
+            <span className={styles.queueCount} aria-hidden="true">{stagedFiles.length}</span>
+            <div>
+              <strong>{stagedFiles.length} files added</strong>
+              <small>Choose one recording to analyse next</small>
+            </div>
+          </div>
+          <ul className={styles.queueChecks}>
+            <li>
+              <span className={`${styles.queueCheckIcon} ${supportedCount === stagedFiles.length ? styles.queueCheckGood : ""}`} aria-hidden="true">
+                {supportedCount === stagedFiles.length ? <Check size={16} /> : <FileAudio size={16} />}
+              </span>
+              <span><strong>Supported filename formats</strong><small>{supportedCount} of {stagedFiles.length} have a supported extension</small></span>
+            </li>
+            <li>
+              <span className={`${styles.queueCheckIcon} ${fileLimit !== null && withinLimitCount === stagedFiles.length ? styles.queueCheckGood : ""}`} aria-hidden="true">
+                {fileLimit !== null && withinLimitCount === stagedFiles.length ? <Check size={16} /> : <HardDrive size={16} />}
+              </span>
+              <span>
+                <strong>{fileLimit !== null ? "Within the file size limit" : "File sizes selected"}</strong>
+                <small>{fileLimit !== null
+                  ? `${withinLimitCount} of ${stagedFiles.length} are ${fileSizeLabel(fileLimit)} or less`
+                  : `${fileSizeLabel(stagedFiles.reduce((total, file) => total + file.size, 0))} in total on this device`}</small>
+              </span>
+            </li>
+            <li>
+              <span className={styles.queueCheckIcon} aria-hidden="true"><ListChecks size={16} /></span>
+              <span><strong>One call at a time</strong><small>Select a call and give consent before its upload and analysis.</small></span>
+            </li>
+          </ul>
+          <div className={styles.helpCard}>
+            <div className={styles.helpIntro}>
+              <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
+              <div><h3>Need help?</h3><p>Review each file before starting its analysis.</p></div>
+            </div>
+            <details>
+              <summary className={styles.cardAction}>View guides &amp; tips <ArrowRight size={17} aria-hidden="true" /></summary>
+              <ul className={styles.helpTips}>
+                <li>Select a supported file that fits the size limit.</li>
+                <li>Review language and privacy details for that call.</li>
+                <li>Consent applies to the selected call only.</li>
+              </ul>
+            </details>
+          </div>
+        </section>
+        <section className={`${styles.card} ${styles.nextCard}`} aria-labelledby="queue-next-title">
+          <div className={styles.sampleHeading}>
+            <AudioLines size={23} aria-hidden="true" />
+            <h2 id="queue-next-title">What happens next?</h2>
+          </div>
+          <ol className={styles.nextSteps}>
+            <li><span>1</span><div><strong>Select one call</strong><small>Choose the recording you want to review first.</small></div></li>
+            <li><span>2</span><div><strong>Review and consent</strong><small>Confirm its language and privacy choices.</small></div></li>
+            <li><span>3</span><div><strong>Analyse, then continue</strong><small>Return for the next call after this one.</small></div></li>
+          </ol>
+        </section>
+      </aside>
+    );
+  }
 
   return (
     <aside className={styles.rail} aria-label="Getting started and help">
@@ -142,12 +232,14 @@ export function AcquisitionGuideRail({
 export function AcquisitionLowerPanels({
   calls = [],
   activity = [],
+  compact = false,
 }: {
   calls?: readonly SavedCallPreview[];
   activity?: readonly RecentActivityPreview[];
+  compact?: boolean;
 }) {
   return (
-    <div className={styles.lowerPanels}>
+    <div className={styles.lowerPanels} data-compact={compact}>
       <section className={styles.card} aria-labelledby="saved-calls-title">
         <div className={styles.lowerHeading}>
           <FolderOpen size={28} strokeWidth={1.8} aria-hidden="true" />
