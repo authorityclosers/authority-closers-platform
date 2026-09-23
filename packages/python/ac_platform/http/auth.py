@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -42,6 +42,12 @@ from ac_platform.identity.application import (
     AccountDeletionPrivacyHook,
     AsyncIdentityApplication,
     ResolvedActorContext,
+)
+from ac_platform.identity.email_login import (
+    EMAIL_LOGIN_CODE_TTL,
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_RESEND_AFTER,
+    EmailLoginCodeService,
 )
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
@@ -355,6 +361,25 @@ class PasswordVerifyRequest(BaseModel):
     token: str = Field(min_length=40, max_length=512)
 
 
+class EmailLoginCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=320)
+    consent: StrictBool = False
+    consent_version: str | None = Field(default=None, min_length=1, max_length=64)
+    surface: Literal["learner", "sales_xray"] = "sales_xray"
+    return_path: str = Field(default="/", min_length=1, max_length=512)
+
+
+class EmailLoginCodeVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=320)
+    code: str = Field(min_length=1, max_length=32)
+    surface: Literal["learner", "sales_xray"] = "sales_xray"
+    return_path: str = Field(default="/", min_length=1, max_length=512)
+
+
 class PasswordRegistrationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -368,6 +393,36 @@ class PasswordSessionResponse(BaseModel):
     person_id: UUID
     email: str
     display_name: str | None
+
+
+class EmailLoginCodeConfigResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    consent_version: str | None
+    google_enabled: bool
+    expires_in_seconds: int
+    resend_after_seconds: int
+
+
+class EmailLoginCodeRequestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: Literal[True]
+    expires_in_seconds: int
+    resend_after_seconds: int
+
+
+class EmailLoginCodeVerifyResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authenticated: Literal[True]
+    person_id: UUID
+    email: str
+    display_name: str | None
+    account_created: bool
+    profile_complete: bool
+    return_path: str
 
 
 class PasswordRecoveryResponse(BaseModel):
@@ -468,6 +523,12 @@ class PasswordRegistrationUnavailable(DomainError):
     code = "password_registration_unavailable"
     title = "Password registration is not available"
     status = 503
+
+
+class EmailLoginCodeRejectedResponse(DomainError):
+    code = "email_login_code_rejected"
+    title = "The email code is no longer valid"
+    status = 400
 
 
 class LearnerConsentRequired(DomainError):
@@ -1261,6 +1322,16 @@ def _surface_origin(settings: Settings, surface: str) -> str:
     return str(value).rstrip("/")
 
 
+def _email_login_return_path(surface: str, candidate: str) -> str:
+    """Keep the JSON sign-in flow on a fixed, same-origin destination."""
+
+    normalized = normalize_return_path(candidate)
+    allowed = {"/"} if surface == "sales_xray" else {"/", "/sales-xray"}
+    if normalized != candidate or normalized not in allowed:
+        raise InvalidAuthTransaction("The requested return path is not allowed.")
+    return normalized
+
+
 def _surface_callback_uri(settings: Settings, surface: str) -> str:
     return f"{_surface_origin(settings, surface)}/v1/auth/google/callback"
 
@@ -1469,6 +1540,158 @@ def install_identity_http(
         except LearnerProvisioningError as error:
             raise PasswordRegistrationUnavailable(str(error)) from error
         return tenant_id
+
+    @router.get("/auth/email-code/config", response_model=EmailLoginCodeConfigResponse)
+    async def email_login_code_config(
+        request: Request,
+        response: Response,
+        surface: Literal["learner", "sales_xray"] = Query(default="sales_xray"),
+    ) -> EmailLoginCodeConfigResponse:
+        _require_surface_host(request, settings, surface)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        enabled = settings.public_learner_tenant_id is not None and consent_version is not None
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeConfigResponse(
+            enabled=enabled,
+            consent_version=consent_version,
+            google_enabled=(
+                settings.google_oauth_configured
+                and not isinstance(identity_provider, DisabledIdentityProvider)
+            ),
+            expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+            resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+        )
+
+    @router.post(
+        "/auth/email-code/request",
+        response_model=EmailLoginCodeRequestResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def request_email_login_code(
+        request: Request,
+        response: Response,
+        body: EmailLoginCodeRequest,
+    ) -> EmailLoginCodeRequestResponse:
+        require_safe_origin(request, settings)
+        _require_surface_host(request, settings, body.surface)
+        _email_login_return_path(body.surface, body.return_path)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        if settings.public_learner_tenant_id is not None and consent_version is not None:
+            try:
+                async with sessions() as database, database.begin():
+                    issue = await EmailLoginCodeService(
+                        database,
+                        challenge_secret=challenge_secret,
+                        audit_tenant_id=settings.operations_tenant_id,
+                    ).begin(
+                        email=body.email,
+                        consent_accepted=body.consent,
+                        submitted_consent_version=body.consent_version,
+                        required_consent_version=consent_version,
+                    )
+                    if issue is not None:
+                        await OutboxRepository(database).enqueue(
+                            EventEnvelope(
+                                name=EMAIL_LOGIN_REQUEST_EVENT,
+                                category=EventCategory.OPERATIONAL,
+                                aggregate_type="email_login_code",
+                                aggregate_id=issue.challenge_id,
+                                tenant_id=None,
+                                payload={
+                                    "challenge_id": str(issue.challenge_id),
+                                    "generation_id": str(issue.generation_id),
+                                },
+                            ),
+                            dedupe_key=(
+                                f"identity-email-login:{issue.challenge_id}:"
+                                f"{issue.generation_id}"
+                            ),
+                        )
+            except ValueError:
+                # Malformed addresses and ineligible accounts receive the same
+                # public acknowledgement as a queued sign-in email.
+                pass
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeRequestResponse(
+            accepted=True,
+            expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+            resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+        )
+
+    @router.post(
+        "/auth/email-code/verify",
+        response_model=EmailLoginCodeVerifyResponse,
+    )
+    async def verify_email_login_code(
+        request: Request,
+        response: Response,
+        body: EmailLoginCodeVerifyRequest,
+    ) -> EmailLoginCodeVerifyResponse:
+        require_safe_origin(request, settings)
+        _require_surface_host(request, settings, body.surface)
+        return_path = _email_login_return_path(body.surface, body.return_path)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        if settings.public_learner_tenant_id is None or consent_version is None:
+            raise EmailLoginCodeRejectedResponse("The email code is no longer valid.")
+        verified = None
+        issued = None
+        try:
+            async with sessions() as database, database.begin():
+                verified = await EmailLoginCodeService(
+                    database,
+                    challenge_secret=challenge_secret,
+                    audit_tenant_id=settings.operations_tenant_id,
+                ).verify(
+                    email=body.email,
+                    code=body.code,
+                    required_consent_version=consent_version,
+                )
+                person = verified.person
+                if person is not None:
+                    identity = _identity(database)
+                    tenant_id = None
+                    if verified.account_created:
+                        tenant_id = await ensure_public_learner(database, person.id)
+                    else:
+                        candidate_tenant = settings.public_learner_tenant_id
+                        membership = await database.scalar(
+                            select(Membership).where(
+                                Membership.tenant_id == candidate_tenant,
+                                Membership.person_id == person.id,
+                                Membership.role == MembershipRole.LEARNER.value,
+                                Membership.status == MembershipStatus.ACTIVE.value,
+                            )
+                        )
+                        if membership is not None:
+                            tenant_id = candidate_tenant
+                    issued = await identity.issue_authenticated_session(
+                        person.id,
+                        user_agent=request.headers.get("user-agent"),
+                        ip_address=request.client.host if request.client else None,
+                    )
+                    if tenant_id is not None:
+                        await identity.select_tenant(issued.token, tenant_id)
+        except ValueError:
+            verified = None
+        if verified is None or verified.person is None or issued is None:
+            raise EmailLoginCodeRejectedResponse("The email code is no longer valid.")
+        _set_session_cookie(response, issued.token, settings)
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeVerifyResponse(
+            authenticated=True,
+            person_id=verified.person.id,
+            email=verified.person.email or "",
+            display_name=verified.person.display_name or verified.person.first_name,
+            account_created=verified.account_created,
+            # Required phone-profile completion is owned by the dedicated
+            # phone-profile service. Fail closed until that API is integrated;
+            # WhatsApp profile data is intentionally not treated as phone.
+            profile_complete=False,
+            return_path=return_path,
+        )
 
     @router.post(
         "/auth/password/register",

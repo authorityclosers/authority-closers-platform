@@ -468,6 +468,45 @@ def test_password_auth_contract_uses_json_body_for_one_time_tokens() -> None:
     )
 
 
+def test_email_code_config_and_routes_expose_a_small_surface_bound_contract() -> None:
+    settings = _settings().model_copy(
+        update={
+            "google_oauth_client_id": "test.apps.googleusercontent.com",
+            "google_oauth_client_secret": SecretStr("test-google-oauth-secret-long-enough"),
+        }
+    )
+    client = _client(settings=settings)
+    config = client.get("/v1/auth/email-code/config?surface=learner")
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+
+    assert config.status_code == 200
+    assert config.json() == {
+        "enabled": True,
+        "consent_version": "staging-test-document-v1",
+        "google_enabled": True,
+        "expires_in_seconds": 600,
+        "resend_after_seconds": 60,
+    }
+    assert config.headers["cache-control"] == "no-store"
+    assert {
+        "/v1/auth/email-code/config",
+        "/v1/auth/email-code/request",
+        "/v1/auth/email-code/verify",
+    } <= set(paths)
+    assert client.get("/v1/auth/email-code/config?surface=admin").status_code == 422
+
+
+def test_email_code_config_disables_new_signup_without_current_consent_and_tenant() -> None:
+    settings = _settings_without_registration_config()
+    response = _client(settings=settings).get("/v1/auth/email-code/config?surface=learner")
+
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+    assert response.json()["consent_version"] is None
+    assert response.json()["google_enabled"] is False
+
+
 def test_auth_start_binds_state_nonce_pkce_and_safe_return_in_signed_cookie() -> None:
     response = _client().get(
         "/v1/auth/google/start",

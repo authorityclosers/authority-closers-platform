@@ -9,7 +9,7 @@ import subprocess
 import sys
 from collections.abc import Coroutine, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -28,9 +28,19 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.auth_transactions import AuthTransaction
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.email_login import (
+    EMAIL_LOGIN_ATTEMPT_LIMIT,
+    EMAIL_LOGIN_CODE_TTL,
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_RESEND_AFTER,
+    EMAIL_LOGIN_SEND_WINDOW,
+    EmailLoginCodeService,
+    decrypt_email_login_code,
+)
 from ac_platform.identity.models import (
     EmailChallenge,
     EmailChallengeKind,
+    EmailLoginCode,
     IdentityCommandIdempotency,
     PasswordCredential,
     Person,
@@ -38,10 +48,15 @@ from ac_platform.identity.models import (
     ProviderIdentity,
 )
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.identity.password_auth import decrypt_challenge_token, hash_password
+from ac_platform.identity.password_auth import (
+    InvalidPasswordCredentials,
+    PasswordIdentityService,
+    decrypt_challenge_token,
+    hash_password,
+)
 from ac_platform.identity.services import ProviderAuthorizationType, VerifiedProviderAssertion
 from ac_platform.outbox.models import OutboxEvent
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +111,29 @@ def _run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
         with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             return runner.run(coroutine)
     return asyncio.run(coroutine)
+
+
+def _email_code_settings(
+    schema_url: URL,
+    *,
+    public_tenant_id: UUID,
+    operations_tenant_id: UUID,
+    consent_version: str,
+) -> Settings:
+    return Settings(
+        environment="test",
+        database_url=schema_url.render_as_string(hide_password=False),
+        session_token_pepper="postgres-email-login-token-pepper-long-enough",  # noqa: S106
+        oauth_transaction_secret="postgres-email-login-oauth-secret-long-enough",  # noqa: S106
+        email_challenge_secret="postgres-email-login-challenge-secret-long-enough",  # noqa: S106
+        learner_consent_version=consent_version,
+        public_learner_tenant_id=public_tenant_id,
+        operations_tenant_id=operations_tenant_id,
+        public_app_url="https://app.authorityclosers.test",
+        admin_app_url="https://admin.authorityclosers.test",
+        api_url="https://api.authorityclosers.test",
+        sales_xray_app_url="https://salesxray.authorityclosers.test",
+    )
 
 
 def _postgres_url() -> URL:
@@ -268,6 +306,600 @@ def test_recovery_preserves_account_eligibility_without_authentication(
                     assert (person.email_verified_at is not None) is verified
         finally:
             await engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_code_concurrently_provisions_one_account_and_commits_failures(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        consent_version = "sales-xray-terms-v1"
+        email = f"email-login-{uuid4().hex}@example.test"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"email-login-public-{public_tenant_id.hex}",
+                        name="Email login public learner tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"email-login-ops-{operations_tenant_id.hex}",
+                        name="Email login operations tenant",
+                    ),
+                ]
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+
+        def client() -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+                base_url=origin,
+            )
+
+        clients = [client() for _ in range(5)]
+        try:
+            config = await clients[0].get("/v1/auth/email-code/config?surface=sales_xray")
+            assert config.status_code == 200
+            assert config.json() == {
+                "enabled": True,
+                "consent_version": consent_version,
+                "google_enabled": False,
+                "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+                "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+            }
+            request_body = {
+                "email": email,
+                "consent": True,
+                "consent_version": consent_version,
+                "surface": "sales_xray",
+                "return_path": "/",
+            }
+            requests = await asyncio.gather(
+                clients[0].post(
+                    "/v1/auth/email-code/request",
+                    headers={"Origin": origin},
+                    json=request_body,
+                ),
+                clients[1].post(
+                    "/v1/auth/email-code/request",
+                    headers={"Origin": origin},
+                    json=request_body,
+                ),
+            )
+            assert [response.status_code for response in requests] == [202, 202]
+            assert requests[0].json() == requests[1].json() == {
+                "accepted": True,
+                "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+                "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+            }
+            with Session(postgres_harness.engine) as database:
+                challenges = list(
+                    database.scalars(
+                        select(EmailLoginCode).where(
+                            EmailLoginCode.normalized_email == email
+                        )
+                    )
+                )
+                assert len(challenges) == 1
+                challenge = challenges[0]
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(OutboxEvent)
+                    .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                ) == 1
+                assert database.scalar(
+                    select(func.count()).select_from(Person).where(Person.email == email)
+                ) == 0
+
+            wrong_code = "000000" if code != "000000" else "000001"
+            bad = await clients[2].post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "code": wrong_code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert bad.status_code == 400
+            with Session(postgres_harness.engine) as database:
+                failed_challenge = database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert failed_challenge is not None
+                assert failed_challenge.failed_attempts == 1
+                assert failed_challenge.consumed_at is None
+
+            verification = {
+                "email": email,
+                "code": code,
+                "surface": "sales_xray",
+                "return_path": "/",
+            }
+            results = await asyncio.gather(
+                clients[3].post(
+                    "/v1/auth/email-code/verify",
+                    headers={"Origin": origin},
+                    json=verification,
+                ),
+                clients[4].post(
+                    "/v1/auth/email-code/verify",
+                    headers={"Origin": origin},
+                    json=verification,
+                ),
+            )
+            assert sorted(response.status_code for response in results) == [200, 400]
+            successful = next(response for response in results if response.status_code == 200)
+            assert successful.json() == {
+                "authenticated": True,
+                "person_id": successful.json()["person_id"],
+                "email": email,
+                "display_name": None,
+                "account_created": True,
+                "profile_complete": False,
+                "return_path": "/",
+            }
+            cookie = successful.headers["set-cookie"].lower()
+            assert "httponly" in cookie
+            assert "samesite=lax" in cookie
+            assert "domain=" not in cookie
+            me_client = clients[3] if results[0] is successful else clients[4]
+            me = await me_client.get("/v1/me")
+            assert me.status_code == 200
+            person_id = UUID(me.json()["person_id"])
+            assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+            assert me.json()["membership_role"] == "learner"
+            replay = await clients[2].post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json=verification,
+            )
+            assert replay.status_code == 400
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.first_name is None
+                assert person.whatsapp_number is None
+                assert person.email_verified_at is not None
+                assert person.consent_version == consent_version
+                assert database.get(Membership, (public_tenant_id, person_id)) is not None
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(IdentitySession)
+                    .where(IdentitySession.person_id == person_id)
+                ) == 1
+                final_challenge = database.get(EmailLoginCode, challenge.id)
+                assert final_challenge is not None
+                assert final_challenge.failed_attempts == 1
+                assert final_challenge.consumed_at is not None
+        finally:
+            for current_client in clients:
+                await current_client.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_resend_does_not_reset_failure_budget(postgres_harness: _Harness) -> None:
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        email = f"email-budget-{uuid4().hex}@example.test"
+        secret = "postgres-email-budget-secret-long-enough-for-hmac-and-aes"  # noqa: S105
+        consent = "email-budget-consent-v1"
+        started = datetime(2026, 9, 23, 12, tzinfo=UTC)
+
+        async def begin(at: datetime):
+            async with sessions() as database, database.begin():
+                return await EmailLoginCodeService(
+                    database,
+                    challenge_secret=secret,
+                ).begin(
+                    email=email,
+                    consent_accepted=True,
+                    submitted_consent_version=consent,
+                    required_consent_version=consent,
+                    now=at,
+                )
+
+        async def fail_current(at: datetime) -> None:
+            async with sessions() as database, database.begin():
+                challenge = await database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert challenge is not None
+                valid_code = decrypt_email_login_code(
+                    secret,
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+                wrong_code = "999999" if valid_code != "999999" else "999998"
+                result = await EmailLoginCodeService(
+                    database,
+                    challenge_secret=secret,
+                ).verify(
+                    email=email,
+                    code=wrong_code,
+                    required_consent_version=consent,
+                    now=at,
+                )
+                assert result.person is None
+
+        try:
+            first = await begin(started)
+            assert first is not None
+            await fail_current(started + timedelta(seconds=1))
+            await fail_current(started + timedelta(seconds=2))
+            resent = await begin(started + EMAIL_LOGIN_RESEND_AFTER)
+            assert resent is not None
+            assert resent.challenge_id == first.challenge_id
+            with Session(postgres_harness.engine) as database:
+                after_resend = database.get(EmailLoginCode, first.challenge_id)
+                assert after_resend is not None
+                assert after_resend.failed_attempts == 2
+                assert after_resend.sends_in_window == 2
+            await fail_current(started + timedelta(seconds=61))
+            await fail_current(started + timedelta(seconds=62))
+            await fail_current(started + timedelta(seconds=63))
+            blocked = await begin(started + timedelta(seconds=64))
+            assert blocked is None
+            with Session(postgres_harness.engine) as database:
+                exhausted = database.get(EmailLoginCode, first.challenge_id)
+                assert exhausted is not None
+                assert exhausted.failed_attempts == EMAIL_LOGIN_ATTEMPT_LIMIT
+                assert exhausted.consumed_at is not None
+            reset = await begin(started + EMAIL_LOGIN_SEND_WINDOW + timedelta(seconds=1))
+            assert reset is not None
+            assert reset.challenge_id == first.challenge_id
+            with Session(postgres_harness.engine) as database:
+                restarted = database.get(EmailLoginCode, first.challenge_id)
+                assert restarted is not None
+                assert restarted.failed_attempts == 0
+                assert restarted.sends_in_window == 1
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_reclaim_cancels_unverified_password_credentials_and_sessions(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        person_id = uuid4()
+        email = f"email-reclaim-{person_id.hex}@example.test"
+        consent_version = "email-reclaim-consent-v1"
+        now = datetime.now(UTC)
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"email-reclaim-public-{public_tenant_id.hex}",
+                        name="Email reclaim public tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"email-reclaim-ops-{operations_tenant_id.hex}",
+                        name="Email reclaim operations tenant",
+                    ),
+                    Person(id=person_id, email=email, email_verified_at=None),
+                ]
+            )
+            database.flush()
+            database.add(
+                PasswordCredential(
+                    person_id=person_id,
+                    password_hash=hash_password("attacker-known-password-phrase"),
+                )
+            )
+            database.add_all(
+                [
+                    EmailChallenge(
+                        id=uuid4(),
+                        person_id=person_id,
+                        kind=EmailChallengeKind.VERIFICATION.value,
+                        token_hash=hashlib.sha256(b"old-verification-token").digest(),
+                        encrypted_token="opaque-verification-token",  # noqa: S106
+                        issued_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(minutes=9),
+                    ),
+                    EmailChallenge(
+                        id=uuid4(),
+                        person_id=person_id,
+                        kind=EmailChallengeKind.PASSWORD_RESET.value,
+                        token_hash=hashlib.sha256(b"old-reset-token").digest(),
+                        encrypted_token="opaque-reset-token",  # noqa: S106
+                        issued_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(minutes=9),
+                    ),
+                    IdentitySession(
+                        id=uuid4(),
+                        person_id=person_id,
+                        token_hash=hashlib.sha256(b"old-unverified-session").digest(),
+                        created_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(days=1),
+                        audience="account",
+                    ),
+                ]
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+
+        def client() -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+                base_url=origin,
+            )
+
+        requester, verifier = client(), client()
+        try:
+            request = await requester.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "consent": True,
+                    "consent_version": consent_version,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                challenge = database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert challenge is not None
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+            response = await verifier.post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "code": code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["account_created"] is False
+            assert response.json()["person_id"] == str(person_id)
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.email_verified_at is not None
+                assert database.get(PasswordCredential, person_id) is None
+                old_challenges = list(
+                    database.scalars(
+                        select(EmailChallenge).where(EmailChallenge.person_id == person_id)
+                    )
+                )
+                assert len(old_challenges) == 2
+                assert all(item.consumed_at is not None for item in old_challenges)
+                old_session = database.scalar(
+                    select(IdentitySession).where(
+                        IdentitySession.person_id == person_id,
+                        IdentitySession.revocation_reason
+                        == "email_login_identity_reclaimed",
+                    )
+                )
+                assert old_session is not None
+                audit = database.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.tenant_id == operations_tenant_id,
+                        AuditEvent.action
+                        == "identity.email_login_unverified_credential_reclaimed",
+                        AuditEvent.resource_id == str(person_id),
+                    )
+                )
+                assert audit is not None
+                assert audit.payload == {
+                    "password_credential_removed": True,
+                    "email_challenges_consumed": 2,
+                    "sessions_revoked": 1,
+                }
+            async with async_sessionmaker(async_engine)() as database, database.begin():
+                try:
+                    await PasswordIdentityService(
+                        database,
+                        token_secret=settings.email_challenge_secret.get_secret_value(),
+                    ).authenticate(
+                        email=email,
+                        password="attacker-known-password-phrase",  # noqa: S106
+                    )
+                except InvalidPasswordCredentials:
+                    pass
+                else:
+                    pytest.fail("the reclaimed unverified password authenticated")
+        finally:
+            await requester.aclose()
+            await verifier.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_never_authenticates_privileged_membership(postgres_harness: _Harness) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        privileged_tenant_id = uuid4()
+        privileged_id = uuid4()
+        pending_id = uuid4()
+        privileged_email = f"otp-admin-{privileged_id.hex}@example.test"
+        pending_email = f"otp-pending-admin-{pending_id.hex}@example.test"
+        consent_version = "email-admin-consent-v1"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"otp-admin-public-{public_tenant_id.hex}",
+                        name="Email OTP public tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"otp-admin-ops-{operations_tenant_id.hex}",
+                        name="Email OTP operations tenant",
+                    ),
+                    Tenant(
+                        id=privileged_tenant_id,
+                        slug=f"otp-admin-privileged-{privileged_tenant_id.hex}",
+                        name="Email OTP privileged tenant",
+                    ),
+                    Person(
+                        id=privileged_id,
+                        email=privileged_email,
+                        email_verified_at=datetime.now(UTC),
+                    ),
+                    Person(
+                        id=pending_id,
+                        email=pending_email,
+                        email_verified_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            database.flush()
+            database.add(
+                Membership(
+                    tenant_id=privileged_tenant_id,
+                    person_id=privileged_id,
+                    role=MembershipRole.ADMIN.value,
+                    status=MembershipStatus.ACTIVE.value,
+                )
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+        client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+            base_url=origin,
+        )
+        try:
+            privileged_request = await client.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={"email": privileged_email, "surface": "sales_xray"},
+            )
+            assert privileged_request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                assert database.scalar(
+                    select(EmailLoginCode).where(
+                        EmailLoginCode.normalized_email == privileged_email
+                    )
+                ) is None
+            pending_request = await client.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={"email": pending_email, "surface": "sales_xray"},
+            )
+            assert pending_request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                pending_challenge = database.scalar(
+                    select(EmailLoginCode).where(
+                        EmailLoginCode.normalized_email == pending_email
+                    )
+                )
+                assert pending_challenge is not None
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    pending_challenge,
+                    generation_id=pending_challenge.generation_id,
+                )
+            # Privilege is rechecked at consume time, not just when the email
+            # is queued, so a newly granted admin role cannot inherit OTP auth.
+            with Session(postgres_harness.engine) as database, database.begin():
+                database.add(
+                    Membership(
+                        tenant_id=privileged_tenant_id,
+                        person_id=pending_id,
+                        role=MembershipRole.OWNER.value,
+                        status=MembershipStatus.ACTIVE.value,
+                    )
+                )
+            denied = await client.post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": pending_email,
+                    "code": code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert denied.status_code == 400
+            assert "set-cookie" not in denied.headers
+            with Session(postgres_harness.engine) as database:
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(IdentitySession)
+                    .where(
+                        IdentitySession.person_id.in_((privileged_id, pending_id))
+                    )
+                ) == 0
+                consumed = database.get(EmailLoginCode, pending_challenge.id)
+                assert consumed is not None
+                assert consumed.consumed_at is not None
+        finally:
+            await client.aclose()
+            await async_engine.dispose()
 
     _run_async(scenario())
 
@@ -489,7 +1121,12 @@ def test_password_identity_recovery_and_onboarding_on_fresh_postgresql(
                 )
                 assert committed_response.status_code == 200
                 assert concurrent_replay.status_code == 200
-                assert concurrent_replay.json() == committed_response.json()
+                replayed_state = concurrent_replay.json()
+                committed_state = committed_response.json()
+                replayed_updated_at = datetime.fromisoformat(replayed_state.pop("updated_at"))
+                committed_updated_at = datetime.fromisoformat(committed_state.pop("updated_at"))
+                assert replayed_state == committed_state
+                assert replayed_updated_at == committed_updated_at
                 del committed_response  # The server committed, but the caller lost the response.
 
                 profile = await client.put(
