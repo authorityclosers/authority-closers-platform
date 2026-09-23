@@ -33,6 +33,9 @@ from ac_platform.conversation_intelligence.providers import (
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.conversation_intelligence.reports import (
     COACHING_CONTEXT_MARKER,
+    COACHING_PROMPT_LEGACY,
+    FACT_PROMPT_COMPACT_MARKER,
+    FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
     ReportError,
@@ -143,6 +146,24 @@ def _text_provider_body(
         return prepare_gemini_body(prompt, task=task)
     except GeminiTaskError as exc:
         raise InferenceTaskError(str(exc)) from None
+
+
+def _compact_fact_input(task_input: PreparedTaskInput) -> bool:
+    if task_input.task != "facts":
+        return False
+    assert task_input.max_completion_tokens is not None
+    body = _text_prompt_view(
+        task_input.as_provider_body(),
+        provider=task_input.provider,
+        model=task_input.model,
+        maximum=task_input.max_completion_tokens,
+        task="facts",
+    )
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not messages:
+        _fail("task_prompt_invalid")
+    system = messages[0].get("content") if isinstance(messages[0], Mapping) else None
+    return isinstance(system, str) and FACT_PROMPT_COMPACT_MARKER in system
 
 
 def _text_response(result: ProviderResult) -> Mapping[str, Any]:
@@ -810,6 +831,7 @@ def prepare_fact_inputs(
     model: str = GROQ_MODEL,
     max_input_chars: int = 16_000,
     max_completion_tokens: int = 1_400,
+    prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY,
 ) -> tuple[PreparedTaskInput, ...]:
     """Prepare immutable C4 style-independent fact requests for every chunk."""
 
@@ -820,6 +842,7 @@ def prepare_fact_inputs(
             max_input_chars=max_input_chars,
             max_completion_tokens=max_completion_tokens,
             model=model,
+            prompt_revision=prompt_revision,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
@@ -914,7 +937,13 @@ def validate_fact_result(
     )
     chunk = _chunk_for_input(task_input, transcript)
     try:
-        packet = parse_fact_packet(_text_response(result), transcript, chunk=chunk)
+        packet = parse_fact_packet(
+            _text_response(result),
+            transcript,
+            chunk=chunk,
+            compact=_compact_fact_input(task_input),
+            max_completion_tokens=task_input.max_completion_tokens or 1_400,
+        )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     return _output(
@@ -936,6 +965,9 @@ def prepare_coaching_input(
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
     output_profile: Literal["standard", "detailed"] = "detailed",
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
+        COACHING_PROMPT_LEGACY
+    ),
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -955,6 +987,7 @@ def prepare_coaching_input(
             model=model,
             provider=provider,
             detailed_overview=output_profile == "detailed",
+            coaching_prompt_revision=coaching_prompt_revision,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None

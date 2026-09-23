@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
 )
+from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     validate_coaching_result,
@@ -63,6 +64,7 @@ from ac_platform.conversation_intelligence.processing_actor import actor_from_ro
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.storage import (
+    CHUNK_BYTES,
     ObjectKey,
     ObjectKind,
     PrivateLocalRecordingStorage,
@@ -178,6 +180,7 @@ def _provider_returned_receipt(
 # provider errors can contain a response body, transcript or credential URL.
 _VALIDATION_FAILURES = frozenset(
     {
+        "report_evidence_invalid",
         "report_evidence_quote_mismatch",
         "report_evidence_segment_invalid",
         "fact_evidence_outside_chunk",
@@ -202,6 +205,12 @@ _VALIDATION_FAILURES = frozenset(
 
 def provider_failure_code(error: BaseException) -> str:
     """Map failures to content-free codes without changing recovery policy."""
+    if isinstance(error, InferenceBrokerError):
+        # Broker and provider transport failures are already validated against
+        # the broker's stable, content-free error-code allowlist. Preserve that
+        # code so operators can distinguish credential, transport and provider
+        # failures without retaining response bodies or secrets.
+        return f"conversation_{error.code}"
     if isinstance(error, InferenceTaskError):
         if len(error.args) == 1 and type(error.args[0]) is str:
             code = error.args[0]
@@ -463,7 +472,10 @@ class ConversationInferenceWorker:
                 scope.task.run_id,
                 ObjectKind.PROVIDER_RESPONSE,
             ),
-            (result.raw_json,),
+            (
+                result.raw_json[offset : offset + CHUNK_BYTES]
+                for offset in range(0, len(result.raw_json), CHUNK_BYTES)
+            ),
             expected_sha256=result.response_sha256,
             expected_bytes=len(result.raw_json),
         )
@@ -554,10 +566,11 @@ class ConversationInferenceWorker:
                 scope.task.state = scope.run.state = "running"
                 reservation = transition.reservation
 
-            # Keep the durable effect fence across the provider call and raw
-            # response write, but end that transaction before committing the
-            # provider-returned receipt. Validation must never be able to roll
-            # that evidence back.
+            # Keep the durable effect fence across the provider call, receipt
+            # commit and raw response write. Close the dispatch transaction
+            # before the receipt commit so its separate transaction cannot
+            # wait on the dispatch row lock. Validation must never be able to
+            # roll that evidence back.
             async with self.sessions() as db, db.begin():
                 job = await JobRepository(db).lock_for_dispatch(
                     work.job_id,
@@ -580,8 +593,12 @@ class ConversationInferenceWorker:
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
                     result = await self.broker.execute(reservation, payload)
-                await fenced.run(self._save_raw, scope, result)
 
+            # Persist bounded provider-effect evidence before writing the raw
+            # response object.  If local storage fails after the provider has
+            # returned, the receipt still fences any redispatch and preserves
+            # the request/response hashes and provider request id for typed
+            # reconciliation.
             await self._record_provider_returned_receipt(
                 work,
                 result=result,
@@ -589,6 +606,7 @@ class ConversationInferenceWorker:
                 run_id=scope.task.run_id,
                 stage=scope.task.stage,
             )
+            await fenced.run(self._save_raw, scope, result)
 
             async with self.sessions() as db, db.begin():
                 job = await JobRepository(db).lock_for_dispatch(

@@ -65,7 +65,7 @@ domain worker must validate and persist them before that mount is torn down.
 
 Host cgroupv2 memory/CPU/pids enforcement, the default Docker seccomp profile,
 user-namespace/rootless configuration and current patched runtime must be verified.
-The1CPU/768 MiB envelope below is a candidate safety cap, not KVM4 capacity proof.
+The1CPU/1 GiB envelope below is a candidate safety cap, not KVM4 capacity proof.
 The16kHz profile is fixed here. A48kHz profile requires a separate measured resource
 envelope; it must not silently expand these limits.
 
@@ -92,15 +92,15 @@ timeout --signal=TERM --kill-after=5s 750s docker run --rm --init \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
   --pids-limit=32 \
-  --memory=768m \
-  --memory-swap=768m \
+  --memory=1g \
+  --memory-swap=1g \
   --cpus=1 \
   --ulimit=nofile=64:64 \
   --ulimit=core=0:0 \
-  --ulimit=fsize=268435456:268435456 \
+  --ulimit=fsize=536870912:536870912 \
   --log-driver=none \
   --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777 \
-  --tmpfs=/work:rw,noexec,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=0700 \
+  --tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700 \
   --mount "type=bind,source=$AC_SOURCE_FILE,target=/input/source.media,readonly,bind-propagation=rprivate" \
   --mount "type=bind,source=$AC_OUTPUT_DIR,target=/output,bind-propagation=rprivate" \
   --entrypoint=python \
@@ -120,7 +120,7 @@ assert all(int(status[name].strip(), 16) == 0 for name in ("CapEff", "CapPrm", "
 assert status["NoNewPrivs"].strip() == "1" and status["Seccomp"].strip() == "2"
 assert set(os.listdir("/sys/class/net")) == {"lo"}
 cgroup = Path("/sys/fs/cgroup")
-assert 0 < int((cgroup / "memory.max").read_text()) <= 805306368
+assert 0 < int((cgroup / "memory.max").read_text()) <= 1073741824
 assert int((cgroup / "memory.swap.max").read_text()) == 0
 assert 0 < int((cgroup / "pids.max").read_text()) <= 32
 quota, period = (cgroup / "cpu.max").read_text().split()
@@ -130,7 +130,7 @@ for line in Path("/proc/self/mountinfo").read_text().splitlines():
     fields = line.split()
     mounts[fields[4]] = (set(fields[5].split(",")), fields[fields.index("-") + 1])
 assert "ro" in mounts["/"][0] and "ro" in mounts["/input/source.media"][0]
-for mount, size in (("/work", 536870912), ("/tmp", 16777216)):
+for mount, size in (("/work", 805306368), ("/tmp", 16777216)):
     assert mounts[mount][1] == "tmpfs"
     assert {"rw", "nosuid", "nodev", "noexec"} <= mounts[mount][0]
     filesystem = os.statvfs(mount)
@@ -162,6 +162,13 @@ and checkpoint validation permits domain publication. The outer deadline kills
 the named container even if the CLI or decoder stops responding. The default
 Docker seccomp policy stays enabled; never use privileged mode, host namespaces,
 added capabilities, Docker socket mounts or `seccomp=unconfined`.
+
+The exact simultaneous-byte estimate for a 3,600-second 16 kHz run includes the
+provisional one-second PCM decode, the native f64 rows, the packed feature file,
+and the source snapshot. It is 339,618,472 bytes for mono and 746,345,768 bytes
+for stereo at the 128 MiB source ceiling. The old 512 MiB work limit admitted the
+mono case but rejected stereo; the 768 MiB work limit admits both with the same
+one-hour/channel contract.
 
 Network isolation, resource limits and tmpfs semantics are documented by
 [Docker's run reference](https://docs.docker.com/engine/containers/run/),

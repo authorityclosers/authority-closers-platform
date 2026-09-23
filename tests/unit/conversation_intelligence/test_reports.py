@@ -202,7 +202,7 @@ def test_parser_rejects_mixed_or_incomplete_legacy_feedback_shapes() -> None:
         parse_report_draft(payload, transcript)
 
 
-def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
+def test_parser_rejects_numeric_and_unbound_evidence_but_keeps_provider_additions() -> None:
     transcript = _transcript()
     bad_quote = _payload(transcript)
     bad_quote["strengths"][0]["evidence"][0]["quote"] = "not in the segment"
@@ -221,8 +221,8 @@ def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
 
     unknown = _payload(transcript)
     unknown["unexpected"] = "provider expansion"
-    with pytest.raises(ReportError, match="report_payload_invalid"):
-        parse_report_draft(unknown, transcript)
+    output = parse_report_draft(unknown, transcript)
+    assert output.provider_extras == {"unexpected": "provider expansion"}
 
 
 @pytest.mark.parametrize(

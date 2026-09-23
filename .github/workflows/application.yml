@@ -77,6 +77,87 @@ jobs:
       - name: Build frontend packages
         run: pnpm -r --if-present build
 
+  validate-sales-xray-acquisition-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_sales_xray_browser
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_sales_xray_browser"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AC_ENVIRONMENT: test
+      AC_RELEASE_ID: ci-${{ github.sha }}
+      AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:5432/ac_sales_xray_browser
+      AC_CONVERSATION_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:5432/ac_sales_xray_browser
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.7
+      - name: Install locked browser-gate dependencies
+        run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Install FFmpeg prerequisites for acquisition browser
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          command -v ffmpeg
+          command -v ffprobe
+          ffmpeg -version
+          ffprobe -version
+      - name: Install locked acquisition browser
+        timeout-minutes: 5
+        run: uv run --frozen python -m playwright install --with-deps chromium
+      - name: Build verified AudioAtlas for acquisition browser
+        run: |
+          set -euo pipefail
+          command -v g++
+          g++ --version
+          uv run --frozen python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Build Sales Xray production standalone
+        env:
+          AC_CONVERSATION_API_ORIGIN: http://127.0.0.1:18116
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Require Sales Xray acquisition browser journey
+        timeout-minutes: 20
+        run: >-
+          uv run --frozen python
+          scripts/ci/verify_sales_xray_acquisition_browser.py
+          --evidence-dir "${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}"
+      - name: Upload sanitized Sales Xray acquisition receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sales-xray-acquisition-browser-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}/sales-xray-acquisition-browser-receipt.json
+            ${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}/proof.json
+            ${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}/acquisition-browser.junit.xml
+          if-no-files-found: error
+          retention-days: 14
+
   validate-python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -451,6 +532,7 @@ jobs:
       - academy-capacity-simulation
       - validate-python-static
       - validate-frontend
+      - validate-sales-xray-acquisition-browser
       - validate-python-tests
       - validate-python-gates
     runs-on: ubuntu-latest
@@ -480,6 +562,7 @@ jobs:
           ACADEMY_RESULT: ${{ needs.academy-capacity-simulation.result }}
           PYTHON_STATIC_RESULT: ${{ needs.validate-python-static.result }}
           FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
+          SALES_XRAY_ACQUISITION_BROWSER_RESULT: ${{ needs.validate-sales-xray-acquisition-browser.result }}
           PYTHON_TESTS_RESULT: ${{ needs.validate-python-tests.result }}
           PYTHON_GATES_RESULT: ${{ needs.validate-python-gates.result }}
         run: |
@@ -488,6 +571,7 @@ jobs:
             "$ACADEMY_RESULT" \
             "$PYTHON_STATIC_RESULT" \
             "$FRONTEND_RESULT" \
+            "$SALES_XRAY_ACQUISITION_BROWSER_RESULT" \
             "$PYTHON_TESTS_RESULT" \
             "$PYTHON_GATES_RESULT"; do
             if [ "$result" != "success" ]; then

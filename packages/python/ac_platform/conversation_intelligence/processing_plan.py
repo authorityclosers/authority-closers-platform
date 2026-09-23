@@ -70,13 +70,20 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StagePlan,
     StageRequest,
 )
-from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V3,
+    FACT_PROMPT_COMPACT,
+    FACT_PROMPT_LEGACY,
+    load_report_profile,
+)
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 C5_AUTO_REPAIR_ATTEMPTS = 1
+NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
 
 
 def planned_c5_requests(stage: StageApproval) -> int:
@@ -157,6 +164,10 @@ class PlanManifest(BaseModel):
     stages: tuple[StageApproval, StageApproval, StageApproval]
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
+    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
+    coaching_prompt_revision: Literal["coaching-v1", "coaching-v2", "coaching-v3"] = (
+        COACHING_PROMPT_LEGACY
+    )
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -219,6 +230,10 @@ class PlanManifest(BaseModel):
             value.pop("automatic_c5_repair_cost_paise", None)
         if self.output_profile == "detailed":
             value.pop("output_profile", None)
+        if self.fact_prompt_revision == FACT_PROMPT_LEGACY:
+            value.pop("fact_prompt_revision", None)
+        if self.coaching_prompt_revision == COACHING_PROMPT_LEGACY:
+            value.pop("coaching_prompt_revision", None)
         return value
 
 
@@ -414,8 +429,16 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         )
         or (plan.checkpoint.stage == "C4" and plan.request.chunk_index > approval.max_requests)
         or (
+            plan.checkpoint.stage == "C4"
+            and plan.request.fact_prompt_revision != value.fact_prompt_revision
+        )
+        or (
             plan.checkpoint.stage == "C5"
             and content_hash(plan.profile) != content_hash(value.profile)
+        )
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.coaching_prompt_revision != value.coaching_prompt_revision
         )
         or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
@@ -695,6 +718,8 @@ class ConversationProcessingPlans:
                 duration_ms=source.duration_ms,
                 stages=(c2, c4, c5),
                 profile=profile,
+                fact_prompt_revision=FACT_PROMPT_COMPACT,
+                coaching_prompt_revision=NEW_PLAN_COACHING_PROMPT_REVISION,
                 created_at_epoch=int(now.timestamp()),
                 expires_at_epoch=min(
                     int(now.timestamp()) + 3600,
@@ -817,6 +842,10 @@ class ConversationProcessingPlans:
         if existing is not None:
             if existing.erased_at is not None or existing.generation != row.generation:
                 raise ConversationConflict("The saved stage is no longer reusable.")
+            # The coordinator must observe terminal tasks to publish their
+            # exact hold or select the separately authorized bounded C5 repair.
+            # Returning the retained task here never dispatches it again;
+            # fresh stage requests are fenced by inference.request_stage.
             if existing.state == "completed":
                 if existing.checkpoint_id is None:
                     raise ConversationConflict("The saved stage checkpoint is unavailable.")
@@ -900,6 +929,7 @@ class ConversationProcessingPlans:
                 transcript_checkpoint_id=c2.checkpoint_id,
                 provider=c4.provider_id,
                 model=c4.model_id,
+                fact_prompt_revision=value.fact_prompt_revision,
                 max_input_chars=value.max_input_chars,
                 max_completion_tokens=stage_completion_limit(
                     "C4", c4.max_completion_tokens, provider=c4.provider_id, model=c4.model_id
@@ -940,6 +970,7 @@ class ConversationProcessingPlans:
                     ),
                     output_profile=value.output_profile,
                     profile=value.profile,
+                    coaching_prompt_revision=value.coaching_prompt_revision,
                 )
                 judge = await self._enqueue(
                     actor,

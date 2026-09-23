@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import io
 import secrets
 import tempfile
+import threading
 import wave
 from copy import deepcopy
 from datetime import timedelta
@@ -26,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 import ac_platform.conversation_intelligence.inference_worker as inference_worker_module
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence import signals
+from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
@@ -62,9 +65,11 @@ from ac_platform.conversation_intelligence.processing_plan import ProcessingPlan
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import install_identity_http
+from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
@@ -237,6 +242,7 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
         runtime=runtime,
         native=native,
         app=app,
+        require_actor=require_actor,
         authority=authority,
     )
 
@@ -275,6 +281,35 @@ async def _upload_for_read_test(setup: Any, client: httpx.AsyncClient) -> tuple[
     return path, submission
 
 
+class _HeldPlaybackIterator:
+    """Yield one body block, then hold the source fence until the test releases it."""
+
+    def __init__(self, data: bytes) -> None:
+        self._first = data[:1]
+        self._rest = data[1:]
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self._calls = 0
+
+    def __iter__(self) -> _HeldPlaybackIterator:
+        return self
+
+    def __next__(self) -> bytes:
+        if self._calls == 0:
+            self._calls = 1
+            return self._first
+        if self._calls == 1:
+            self._calls = 2
+            self.started.set()
+            if not self.release.wait(5):
+                raise AssertionError("held playback iterator was not released")
+            return self._rest
+        raise StopIteration
+
+    def close(self) -> None:
+        self.release.set()
+
+
 def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
     postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -300,7 +335,9 @@ def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
                 progress = await client.get(path)
                 assert progress.status_code == 200, progress.text
                 assert calls == 2
-                assert progress.json()["submission_id"] == path.rsplit("/", 1)[-1]
+                body = progress.json()
+                assert body["submission_id"] == path.rsplit("/", 1)[-1]
+                assert body["failure_code"] is None
         finally:
             await setup.engine.dispose()
 
@@ -447,6 +484,285 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                     == ()
                 )
         finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_authenticated_playback_keeps_shared_navigation_and_fences_deletion(
+    postgres_harness: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read navigation may overlap playback; deletion waits for its source fence."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        install_acquisition_http(
+            setup.app,
+            settings=setup.settings,
+            sessions=setup.sessions,
+            require_actor=setup.require_actor,
+            factory=setup.factory,
+            challenge=UploadChallenge(
+                secret=SecretStr("synthetic-test-challenge"), hostname="salesxray.example.test"
+            ),
+        )
+        source_client: httpx.AsyncClient | None = None
+        read_client: httpx.AsyncClient | None = None
+        delete_client: httpx.AsyncClient | None = None
+        source_task: asyncio.Task[httpx.Response] | None = None
+        delete_task: asyncio.Task[httpx.Response] | None = None
+        held: _HeldPlaybackIterator | None = None
+        try:
+            source_client = httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            )
+            read_client = httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            )
+            delete_client = httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            )
+            for client in (source_client, read_client, delete_client):
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+            data, submission = _wav_one_second_48k(), uuid4()
+            path = f"{PREFIX}/submissions/{submission}"
+            uploaded = await source_client.put(
+                path + "/source", content=data, headers=await _headers(source_client, data)
+            )
+            assert uploaded.status_code == 202, uploaded.text
+            stranger = await read_client.get(path, cookies={"ac_xray_guest": setup.stranger.token})
+            assert stranger.status_code == 404
+
+            async with setup.sessions() as db, db.begin():
+                await setup.factory(db).claim(setup.guest.token, setup.state.actor)
+            await _reconcile(setup.sessions, setup.state)
+            upload_worker = OfflineConversationWorker(
+                setup.sessions,
+                storage=setup.runtime.storage,
+                scratch=setup.runtime.scratch,
+                environment="test",
+            )
+            assert await upload_worker.run_once()
+            for client in (source_client, read_client, delete_client):
+                client.cookies.clear()
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+            async with setup.sessions() as db:
+                session_before = await db.get(IdentitySession, setup.state.session_id)
+                assert session_before is not None
+                activity_before = (session_before.revision, session_before.last_seen_at)
+
+            held = _HeldPlaybackIterator(data)
+
+            def held_iter(_key: Any, *, expected_sha256: str) -> _HeldPlaybackIterator:
+                assert expected_sha256 == hashlib.sha256(data).hexdigest()
+                return held
+
+            monkeypatch.setattr(setup.runtime.storage, "iter_bytes", held_iter)
+            source_task = asyncio.create_task(
+                source_client.get(path + "/source", headers={"Range": "bytes=0-100"})
+            )
+            assert await asyncio.to_thread(held.started.wait, 2)
+
+            session_task = asyncio.create_task(read_client.get(PREFIX + "/session"))
+            progress_task = asyncio.create_task(read_client.get(path))
+            library_task = asyncio.create_task(read_client.get(PREFIX + "/submissions"))
+            workspaces_task = asyncio.create_task(read_client.get("/v1/me/workspaces"))
+            session, progress, library, workspaces = await asyncio.gather(
+                asyncio.wait_for(session_task, 2),
+                asyncio.wait_for(progress_task, 2),
+                asyncio.wait_for(library_task, 2),
+                asyncio.wait_for(workspaces_task, 2),
+            )
+            assert session.status_code == 200, session.text
+            assert progress.status_code == 200, progress.text
+            assert library.status_code == 200, library.text
+            assert workspaces.status_code == 200, workspaces.text
+
+            async with setup.sessions() as db:
+                session_after_reads = await db.get(IdentitySession, setup.state.session_id)
+                assert session_after_reads is not None
+                assert (
+                    session_after_reads.revision,
+                    session_after_reads.last_seen_at,
+                ) == activity_before
+
+            delete_task = asyncio.create_task(
+                delete_client.delete(
+                    path,
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "held-stream-delete"},
+                )
+            )
+            lock_attempted = asyncio.Event()
+            original_lock_person = AsyncIdentityApplication._lock_person
+
+            async def observed_lock_person(self: Any, *args: Any, **kwargs: Any) -> Any:
+                lock_attempted.set()
+                return await original_lock_person(self, *args, **kwargs)
+
+            monkeypatch.setattr(AsyncIdentityApplication, "_lock_person", observed_lock_person)
+            await asyncio.wait_for(lock_attempted.wait(), 2)
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(delete_task), 0.2)
+
+            held.release.set()
+            source = await asyncio.wait_for(source_task, 5)
+            deleted = await asyncio.wait_for(delete_task, 5)
+            assert source.status_code == 206, source.text
+            assert source.content == data[:101]
+            assert deleted.status_code == 202, deleted.text
+
+            await _reconcile(setup.sessions, setup.state)
+            worker = OfflineConversationWorker(
+                setup.sessions,
+                storage=setup.runtime.storage,
+                scratch=setup.runtime.scratch,
+                environment="test",
+            )
+            assert await worker.run_once()
+            assert (
+                setup.runtime.storage.list_recording(
+                    setup.state.tenant_id, UUID(uploaded.json()["recording_id"])
+                )
+                == ()
+            )
+        finally:
+            if held is not None:
+                held.release.set()
+            pending = [
+                task for task in (source_task, delete_task) if task is not None and not task.done()
+            ]
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            for client in (source_client, read_client, delete_client):
+                if client is not None:
+                    await client.aclose()
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_cancelled_authenticated_playback_closes_response_fence(
+    postgres_harness: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Client backpressure cancellation closes the real source iterator and transaction."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        source_started = asyncio.Event()
+        source_release = asyncio.Event()
+        source_cancelled = asyncio.Event()
+
+        async def gated_app(scope: Any, receive: Any, send: Any) -> None:
+            async def gated_send(message: Any) -> None:
+                if (
+                    scope.get("path", "").endswith("/source")
+                    and message["type"] == "http.response.body"
+                    and message.get("body")
+                ):
+                    source_started.set()
+                    try:
+                        await source_release.wait()
+                    except asyncio.CancelledError:
+                        source_cancelled.set()
+                        raise
+                await send(message)
+
+            await setup.app(scope, receive, gated_send)
+
+        source_client: httpx.AsyncClient | None = None
+        delete_client: httpx.AsyncClient | None = None
+        source_task: asyncio.Task[httpx.Response] | None = None
+        delete_task: asyncio.Task[httpx.Response] | None = None
+        try:
+            source_client = httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=gated_app), base_url=ORIGIN
+            )
+            delete_client = httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            )
+            for client in (source_client, delete_client):
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+            data, submission = _wav_one_second_48k(), uuid4()
+            path = f"{PREFIX}/submissions/{submission}"
+            uploaded = await delete_client.put(
+                path + "/source", content=data, headers=await _headers(delete_client, data)
+            )
+            assert uploaded.status_code == 202, uploaded.text
+            async with setup.sessions() as db, db.begin():
+                await setup.factory(db).claim(setup.guest.token, setup.state.actor)
+            await _reconcile(setup.sessions, setup.state)
+            upload_worker = OfflineConversationWorker(
+                setup.sessions,
+                storage=setup.runtime.storage,
+                scratch=setup.runtime.scratch,
+                environment="test",
+            )
+            assert await upload_worker.run_once()
+            for client in (source_client, delete_client):
+                client.cookies.clear()
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+            source_task = asyncio.create_task(source_client.get(path + "/source"))
+            await asyncio.wait_for(source_started.wait(), 2)
+
+            lock_attempted = asyncio.Event()
+            original_lock_person = AsyncIdentityApplication._lock_person
+
+            async def observed_lock_person(self: Any, *args: Any, **kwargs: Any) -> Any:
+                lock_attempted.set()
+                return await original_lock_person(self, *args, **kwargs)
+
+            monkeypatch.setattr(AsyncIdentityApplication, "_lock_person", observed_lock_person)
+            delete_task = asyncio.create_task(
+                delete_client.delete(
+                    path,
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "cancelled-stream-delete"},
+                )
+            )
+            await asyncio.wait_for(lock_attempted.wait(), 2)
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(delete_task), 0.2)
+
+            source_task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(source_task, 5)
+            await asyncio.wait_for(source_cancelled.wait(), 2)
+            deleted = await asyncio.wait_for(delete_task, 5)
+            assert deleted.status_code == 202, deleted.text
+
+            await _reconcile(setup.sessions, setup.state)
+            delete_worker = OfflineConversationWorker(
+                setup.sessions,
+                storage=setup.runtime.storage,
+                scratch=setup.runtime.scratch,
+                environment="test",
+            )
+            assert await delete_worker.run_once()
+            assert (
+                setup.runtime.storage.list_recording(
+                    setup.state.tenant_id, UUID(uploaded.json()["recording_id"])
+                )
+                == ()
+            )
+        finally:
+            source_release.set()
+            pending = [
+                task for task in (source_task, delete_task) if task is not None and not task.done()
+            ]
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            for client in (source_client, delete_client):
+                if client is not None:
+                    await client.aclose()
             await setup.engine.dispose()
 
     run(exercise())

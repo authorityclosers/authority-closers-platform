@@ -14,11 +14,20 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
-from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
+from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_REFINED_MARKER,
+    COACHING_PROMPT_V3,
+    COACHING_PROMPT_V3_MARKER,
+    FactPacket,
+    load_report_profile,
+)
 from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5Correction,
     RetainedC5CorrectionIntent,
     _apply_corrections,
+    _coaching_prompt_revision,
 )
 
 
@@ -168,6 +177,60 @@ def test_historical_c5_bytes_survive_prompt_drift_and_wrong_bytes_fail() -> None
         PreparedTaskInput.from_dict(metadata, payload=drifted.payload)
     with pytest.raises(InferenceTaskError, match="task_payload_digest_mismatch"):
         PreparedTaskInput.from_dict(metadata, payload=b"{}").as_provider_body()
+
+
+def test_retained_c5_request_revision_defaults_legacy_and_rebuilds_refined_input() -> None:
+    transcript = _coaching_transcript()
+    facts = FactPacket.model_validate(
+        {
+            "schema": "ac.sales-xray.style-independent-facts/1",
+            "source_sha256": transcript["source_sha256"],
+            "transcript_revision": transcript["revision"],
+            "timebase_id": transcript["timebase_id"],
+            "chunk_index": 1,
+            "chunk_count": 1,
+            "covered_segment_ids": ["seg-1"],
+            "overview": "The buyer asked about price and timing.",
+            "observations": [],
+            "uncertainties": [],
+        }
+    )
+    assert _coaching_prompt_revision({}) == COACHING_PROMPT_LEGACY
+    assert (
+        _coaching_prompt_revision({"coaching_prompt_revision": COACHING_PROMPT_REFINED})
+        == COACHING_PROMPT_REFINED
+    )
+    assert (
+        _coaching_prompt_revision({"coaching_prompt_revision": COACHING_PROMPT_V3})
+        == COACHING_PROMPT_V3
+    )
+    with pytest.raises(ValueError, match="prompt revision"):
+        _coaching_prompt_revision({"coaching_prompt_revision": "coaching-v9"})
+
+    refined = prepare_coaching_input(
+        transcript,
+        [facts],
+        profile=load_report_profile(),
+        output_profile="detailed",
+        coaching_prompt_revision=_coaching_prompt_revision(
+            {"coaching_prompt_revision": COACHING_PROMPT_REFINED}
+        ),
+    )
+    assert COACHING_PROMPT_REFINED_MARKER.encode() in refined.payload
+    assert refined.input_sha256 == refined.payload_sha256
+
+    v3 = prepare_coaching_input(
+        transcript,
+        [facts],
+        profile=load_report_profile(),
+        output_profile="detailed",
+        coaching_prompt_revision=_coaching_prompt_revision(
+            {"coaching_prompt_revision": COACHING_PROMPT_V3}
+        ),
+    )
+    assert COACHING_PROMPT_REFINED_MARKER.encode() in v3.payload
+    assert COACHING_PROMPT_V3_MARKER.encode() in v3.payload
+    assert v3.input_sha256 == v3.payload_sha256
 
 
 def test_erasure_can_clear_successful_payload_without_rewriting_lineage() -> None:

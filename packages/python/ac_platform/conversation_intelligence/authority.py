@@ -25,7 +25,11 @@ from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
 )
-from ac_platform.conversation_intelligence.budget_admin import is_admin_budget_approval_ref
+from ac_platform.conversation_intelligence.budget_admin import (
+    ADMIN_BUDGET_CEILING_PAISE,
+    is_admin_budget_approval_ref,
+    is_any_admin_budget_approval_ref,
+)
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
@@ -39,6 +43,10 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
 )
 from ac_platform.conversation_intelligence.execution_control import require_execution_enabled
+from ac_platform.conversation_intelligence.gemini_tasks import (
+    GeminiTaskError,
+    require_long_coaching_cost_approval,
+)
 from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
@@ -83,12 +91,28 @@ def _budget_matches_release(previous: BudgetAccount, bundle: HostedApprovalBundl
         previous.cap_approval.approval_ref == bundle.budget_authorization_ref
         and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
     )
-    admin_approval = is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
+    admin_approval = (
+        is_admin_budget_approval_ref(previous.cap_approval.approval_ref, bundle.digest)
+        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
+    )
+    carried_admin_approval = (
+        is_any_admin_budget_approval_ref(previous.cap_approval.approval_ref)
+        and previous.cap_approval.owner_actor_id == str(bundle.budget_owner_id)
+        and previous.cap_paise <= ADMIN_BUDGET_CEILING_PAISE
+    )
     try:
         effective_budget_cap_paise(bundle.budget_cap_paise, previous.cap_paise)
     except ValueError:
         return False
-    return previous.scope_id == str(bundle.budget_scope_id) and (release_approval or admin_approval)
+    # A release-bound budget may only continue when the persisted amount is
+    # within the current release ceiling. Historical Admin approvals are
+    # handled separately above and may carry a larger reserved snapshot; new
+    # work is still bounded by ``effective_budget_cap_paise``.
+    if release_approval and previous.cap_paise > bundle.budget_cap_paise:
+        return False
+    return previous.scope_id == str(bundle.budget_scope_id) and (
+        release_approval or admin_approval or carried_admin_approval
+    )
 
 
 class ConversationAuthority:
@@ -520,6 +544,21 @@ class ConversationAuthority:
             != approval.profile_sha256
         ):
             raise ConversationDenied("This input exceeds the approved processing bounds.")
+        if approval.stage == "C5" and approval.provider_id == "gemini":
+            try:
+                require_long_coaching_cost_approval(
+                    plan.prepared.as_provider_body(),
+                    model=approval.model_id,
+                    maximum=plan.prepared.max_completion_tokens or 0,
+                    cost_basis=approval.zero_cost_basis,
+                    cost_paise=approval.max_cost_paise,
+                    pricing_ref=approval.pricing_ref,
+                    price_evidence_sha256=approval.price_evidence_sha256,
+                )
+            except GeminiTaskError:
+                raise ConversationDenied(
+                    "The complete call needs a coaching quote within its approved cost limit."
+                ) from None
         await self.validate_route(
             app,
             actor,

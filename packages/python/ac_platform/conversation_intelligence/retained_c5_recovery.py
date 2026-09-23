@@ -16,7 +16,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -56,6 +56,10 @@ from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_V3,
+    REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
 )
@@ -73,6 +77,16 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PATH = re.compile(r"(?:^|/)(?:[^/~]|~[01])+(?:/(?:[^/~]|~[01])+)*\Z")
 _REVIEW_ORIGIN = "Codex automated proposal"
 _RECOVERY_SCHEMA = "ac.sales-xray.retained-c5-recovery-proof/1"
+C5PromptRevision = Literal["coaching-v1", "coaching-v2", "coaching-v3"]
+
+
+def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
+    """Read the versioned C5 wording from a saved request, defaulting legacy."""
+
+    value = request.get("coaching_prompt_revision", COACHING_PROMPT_LEGACY)
+    if value not in {COACHING_PROMPT_LEGACY, COACHING_PROMPT_REFINED, COACHING_PROMPT_V3}:
+        raise ValueError("The stored C5 prompt revision is invalid.")
+    return cast(C5PromptRevision, value)
 
 
 class RetainedC5Correction(BaseModel):
@@ -628,6 +642,7 @@ class RetainedC5RecoveryService:
                 model = input_metadata.get("model")
                 maximum = input_metadata.get("max_completion_tokens")
                 output_profile = request.get("output_profile", "detailed")
+                coaching_prompt_revision = _coaching_prompt_revision(request)
                 if (
                     not isinstance(provider, str)
                     or not isinstance(model, str)
@@ -643,6 +658,7 @@ class RetainedC5RecoveryService:
                     max_completion_tokens=maximum,
                     profile=profile,
                     output_profile=output_profile,
+                    coaching_prompt_revision=coaching_prompt_revision,
                 )
             else:
                 prepared = PreparedTaskInput.from_dict(input_metadata, payload=historical_input)
@@ -713,6 +729,7 @@ class RetainedC5RecoveryService:
     ) -> dict[str, Any]:
         return {
             "schema_id": _RECOVERY_SCHEMA,
+            "validator_revision": REPORT_VALIDATOR_REVISION,
             "recovery_version_id": str(version_id),
             "validation_mode": "retained_c5_response_revalidation",
             "provider_calls": 0,
@@ -841,10 +858,18 @@ class RetainedC5RecoveryService:
                 bound.recording,
                 message="The retained recovery version was already created.",
             )
+        # The request identity stays stable so an old command key replays its
+        # original receipt, even after an upgrade. A fresh command revalidates
+        # under the current admission contract instead of caching an earlier
+        # validator's negative result forever. _load_bound holds the run lock,
+        # serializing version allocation and same-revision deduplication.
+        fingerprint = content_hash(
+            {**command_intent, "validator_revision": REPORT_VALIDATOR_REVISION}
+        )
         existing = await self.database.scalar(
             select(ConversationRetainedC5Version).where(
                 ConversationRetainedC5Version.run_id == run_id,
-                ConversationRetainedC5Version.fingerprint == content_hash(command_intent),
+                ConversationRetainedC5Version.fingerprint == fingerprint,
             )
         )
         if existing is not None:
@@ -939,7 +964,6 @@ class RetainedC5RecoveryService:
         )
         version_number = int(next_version or 1)
         version_id = uuid4()
-        fingerprint = content_hash(command_intent)
         report_sha256 = "0" * 64 if normalized is None else content_hash(normalized)
         proof = self._proof(
             bound,

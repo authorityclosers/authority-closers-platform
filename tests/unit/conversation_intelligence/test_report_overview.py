@@ -39,6 +39,205 @@ def test_new_overview_preserves_source_and_old_reports_keep_their_serialized_sha
     assert result.model_dump(mode="json", exclude={"overview"}) == legacy
 
 
+def test_provider_scalar_findings_keep_source_bound_report_usable() -> None:
+    """Gemini prose-only findings must not discard an otherwise valid report."""
+
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["missed_details"] = [
+        {
+            "finding_index": 0,
+            "prospect_signal": {
+                "text": "The buyer stated a timing concern.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "closer_response": {
+                "text": "The closer accepted it.",
+                "evidence": [{"segment_id": "s1"}],
+            },
+            "follow_up": "Clarify the timeframe.",
+            "potential_impact": "A clearer next step may be possible.",
+        }
+    ]
+    payload["strengths"] = ["Polite and respectful opening."]
+    payload["missed_opportunities"] = ["The timeline was not clarified before closing."]
+    payload["improvements"] = ["Ask one gentle timeline question before ending."]
+
+    result = parse_report_draft(payload, transcript)
+
+    # The scalar strength has no source span, so it remains reviewable in
+    # provider_extras and is excluded from the canonical evidence contract.
+    assert result.strengths == []
+    assert len(result.missed_opportunities) == 1
+    assert len(result.improvements) == 1
+    assert result.overview is not None
+    assert result.overview.strength_details == []
+    assert result.overview.golden_moments == []
+    extras = result.provider_extras["compatibility"]["unbound_findings"]
+    assert extras["strengths"] == ["Polite and respectful opening."]
+
+
+def test_legacy_scalar_diagnosis_is_omitted_without_blocking_report() -> None:
+    """A legacy provider diagnosis cannot be promoted without source evidence."""
+
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"]["diagnosis"] = "A useful but unbound provider diagnosis."
+
+    result = parse_report_draft(payload, transcript)
+
+    assert result.overview is not None
+    assert result.overview.diagnosis is None
+    assert result.provider_extras["compatibility"]["overview_scalars"]["diagnosis"] == (
+        "A useful but unbound provider diagnosis."
+    )
+
+
+@pytest.mark.parametrize("flattened", [False, True])
+@pytest.mark.parametrize("scalar_diagnosis", [False, True])
+@pytest.mark.parametrize("single_evidence", [False, True])
+@pytest.mark.parametrize("business_impact", [False, True])
+def test_scalar_findings_compose_with_overview_envelopes(
+    flattened: bool, scalar_diagnosis: bool, single_evidence: bool, business_impact: bool
+) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    if business_impact:
+        overview["business_impact"] = {
+            "status": "insufficient_data",
+            "missing_inputs": ["Comparable conversion history"],
+        }
+    if single_evidence:
+        happened = overview["improvement_details"][0]["what_happened"]
+        happened["evidence"] = happened["evidence"][0]
+    if scalar_diagnosis:
+        overview["diagnosis"] = "An unbound diagnosis remains diagnostic only."
+    payload["improvements"] = ["Clarify the buyer's timing concern."]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+
+    report = parse_report_draft(payload, transcript)
+
+    assert len(report.improvements) == 1
+    assert report.overview is not None
+    assert [item.model_dump() for item in report.improvements[0].evidence] == [
+        item.model_dump() for item in report.overview.improvement_details[0].what_happened.evidence
+    ]
+    assert report.overview.diagnosis is None
+
+
+@pytest.mark.parametrize("flattened", [False, True])
+def test_scalar_improvement_evidence_follows_explicit_index(flattened: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    first = deepcopy(overview["improvement_details"][0])
+    second = deepcopy(first)
+    first["what_happened"]["evidence"] = [{"segment_id": "s1"}]
+    second["finding_index"] = 1
+    second["what_happened"]["evidence"] = [{"segment_id": "s2"}]
+    overview["improvement_details"] = [second, first]
+    overview["business_impact"] = {
+        "status": "insufficient_data",
+        "missing_inputs": ["Comparable conversion history"],
+    }
+    payload["improvements"] = ["First source improvement.", "Second source improvement."]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+
+    report = parse_report_draft(payload, transcript)
+
+    assert report.overview is not None
+    assert [item.evidence[0].segment_id for item in report.improvements] == ["s1", "s2"]
+    for index, finding in enumerate(report.improvements):
+        detail = next(
+            item for item in report.overview.improvement_details if item.finding_index == index
+        )
+        assert [item.model_dump() for item in finding.evidence] == [
+            item.model_dump() for item in detail.what_happened.evidence
+        ]
+
+
+@pytest.mark.parametrize("bad_index", [False, -1, 2, "0"])
+def test_scalar_adaptation_rejects_invalid_detail_identity(bad_index: Any) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = ["A scalar improvement."]
+    payload["overview"]["improvement_details"][0]["finding_index"] = bad_index
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+def test_scalar_adaptation_rejects_duplicate_detail_identity() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = ["First scalar improvement.", "Second scalar improvement."]
+    payload["overview"]["improvement_details"] *= 2
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+@pytest.mark.parametrize("single_evidence", [False, True])
+def test_scalar_missed_opportunities_use_explicit_indices(single_evidence: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    details = [
+        {
+            "finding_index": index,
+            "prospect_signal": {"text": "A stated concern.", "evidence": [{"segment_id": segment}]},
+            "closer_response": {"text": "A response.", "evidence": [{"segment_id": segment}]},
+            "follow_up": "Clarify this concern.",
+            "potential_impact": "A clearer next step may be possible.",
+        }
+        for index, segment in enumerate(("s1", "s2"))
+    ]
+    overview["missed_details"] = list(reversed(details))
+    if single_evidence:
+        for detail in details:
+            for field in ("prospect_signal", "closer_response"):
+                detail[field]["evidence"] = detail[field]["evidence"][0]
+    payload["overview"] = overview
+    payload["missed_opportunities"] = ["First missed opportunity.", "Second missed opportunity."]
+    report = parse_report_draft(payload, transcript)
+    assert [item.evidence[0].segment_id for item in report.missed_opportunities] == ["s1", "s2"]
+
+
+def test_flattened_overview_cannot_hide_missing_required_fields() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    overview.pop("final_assessment")
+    payload.update(overview)
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+@pytest.mark.parametrize("flattened", [False, True])
+def test_scalar_singular_evidence_still_rejects_fabricated_quote(flattened: bool) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    overview = overview_for(payload)
+    happened = overview["improvement_details"][0]["what_happened"]
+    happened["evidence"] = {**happened["evidence"][0], "quote": "Not in the transcript"}
+    payload["improvements"] = ["A scalar improvement"]
+    if flattened:
+        payload.update(overview)
+    else:
+        payload["overview"] = overview
+    with pytest.raises(ReportError):
+        parse_report_draft(payload, transcript)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

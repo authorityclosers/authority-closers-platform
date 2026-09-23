@@ -34,6 +34,13 @@ MAX_REFERENCE_BYTES = 4 * 1024 * 1024
 MAX_CHALLENGE_SECRET_BYTES = 4 * 1024
 API_UID = 10001
 API_GID = 0
+# The dedicated worker is deliberately non-root.  Its manifest is non-secret,
+# but it still has to be readable by the worker after Docker bind-mounts it.
+# Keep this as an installer contract rather than relying on whatever umask or
+# group happened to create an activation bundle.
+WORKER_UID = 10001
+WORKER_GID = 10001
+WORKER_SERVICE_MODE = 0o440
 CHALLENGE_SECRET_MODE = 0o400
 CHALLENGE_SECRET_NAME = "challenge-secret"  # noqa: S105 - basename only
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -182,6 +189,42 @@ def _validate_challenge_secret_reference(value: object) -> None:
             or stat.S_IMODE(info.st_mode) != CHALLENGE_SECRET_MODE
         ):
             raise _fail("upload challenge file ownership or mode is not API-readable")
+
+
+def _repair_worker_service_metadata(path: Path) -> None:
+    """Make the non-secret worker manifest readable by UID/GID 10001.
+
+    Activation files are managed outside Git and are commonly created with a
+    root-only umask.  The release controller owns this metadata transition;
+    it does not change the manifest bytes or its digest.  Refuse symlinks,
+    non-root ownership, and unexpected file types before changing metadata.
+    """
+
+    if os.name != "posix":
+        return
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise _fail("worker service manifest metadata is unavailable") from exc
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or stat.S_ISLNK(info.st_mode)
+    ):
+        raise _fail("worker service manifest must be a root-owned regular file")
+    try:
+        os.chown(path, 0, WORKER_GID, follow_symlinks=False)
+        os.chmod(path, WORKER_SERVICE_MODE, follow_symlinks=False)
+        verified = path.lstat()
+    except OSError as exc:
+        raise _fail("worker service manifest metadata could not be repaired") from exc
+    if (
+        verified.st_uid != 0
+        or verified.st_gid != WORKER_GID
+        or stat.S_IMODE(verified.st_mode) != WORKER_SERVICE_MODE
+    ):
+        raise _fail("worker service manifest is not readable by the hosted worker")
 
 
 def _release_identity(release: Path) -> str:
@@ -358,7 +401,7 @@ def _load_activation(
     release_id: str,
     environment: str,
     managed_operations_tenant: str,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     expected_keys = {
         "schema_version",
         "environment",
@@ -387,17 +430,20 @@ def _load_activation(
         or value["previous_release_policy"] != "exact_target_release"
     ):
         raise _fail("activation descriptor identity or policy is invalid")
-    if not isinstance(value["native_image_ref"], str) or IMAGE_REF.fullmatch(
-        value["native_image_ref"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_ref"], str)
+        or IMAGE_REF.fullmatch(value["native_image_ref"]) is None
+    ):
         raise _fail("native_image_ref must be immutable")
-    if not isinstance(value["native_image_config_id"], str) or IMAGE_REF.fullmatch(
-        value["native_image_config_id"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_config_id"], str)
+        or IMAGE_REF.fullmatch(value["native_image_config_id"]) is None
+    ):
         raise _fail("native_image_config_id must be immutable")
-    if not isinstance(value["helper_unit"], str) or UNIT_NAME.fullmatch(
-        value["helper_unit"]
-    ) is None:
+    if (
+        not isinstance(value["helper_unit"], str)
+        or UNIT_NAME.fullmatch(value["helper_unit"]) is None
+    ):
         raise _fail("helper_unit must be a fixed systemd service name")
 
     overlay = release / OVERLAY_RELATIVE
@@ -460,17 +506,24 @@ def _load_activation(
         or approval.get("environment") != environment
     ):
         raise _fail("approval is not bound to the selected environment")
-    if _checked_uuid(
-        approval.get("provider_control_tenant_id"),
-        "approval.provider_control_tenant_id",
-    ) != operations_tenant:
+    if (
+        _checked_uuid(
+            approval.get("provider_control_tenant_id"),
+            "approval.provider_control_tenant_id",
+        )
+        != operations_tenant
+    ):
         raise _fail("approval control tenant differs from service operations tenant")
     _validate_service_mode(service, env, approval)
-    return overlay, env_path
+    return overlay, env_path, service_path
 
 
 def compose_inputs(
-    release: Path, environment: str, operations_tenant_id: str | None = None
+    release: Path,
+    environment: str,
+    operations_tenant_id: str | None = None,
+    *,
+    repair_worker_metadata: bool = False,
 ) -> tuple[Path, Path, str] | None:
     capability, release_id = _load_capability(release, environment)
     if capability is None:
@@ -495,13 +548,15 @@ def compose_inputs(
     if _sha256(activation_raw) != expected_sha:
         raise _fail("activation descriptor digest differs from the release policy")
     descriptor = _json_file(activation_path, MAX_ACTIVATION_BYTES, trusted=True)
-    overlay, env_path = _load_activation(
+    overlay, env_path, service_path = _load_activation(
         descriptor,
         release,
         release_id,
         environment,
         managed_operations_tenant,
     )
+    if repair_worker_metadata:
+        _repair_worker_service_metadata(service_path)
     return overlay, env_path, descriptor["compose_profile"]
 
 
@@ -511,10 +566,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("release", type=Path)
     parser.add_argument("environment", choices=("staging", "production"))
     parser.add_argument("--operations-tenant-id")
+    parser.add_argument(
+        "--repair-worker-metadata",
+        action="store_true",
+        help="repair only the root-owned worker manifest mode/group before Compose",
+    )
     args = parser.parse_args(argv)
     try:
         result = compose_inputs(
-            args.release, args.environment, args.operations_tenant_id
+            args.release,
+            args.environment,
+            args.operations_tenant_id,
+            repair_worker_metadata=args.repair_worker_metadata,
         )
         if result is not None:
             for value in result:

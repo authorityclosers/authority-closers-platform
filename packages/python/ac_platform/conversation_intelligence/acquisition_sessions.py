@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
+    TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
     existing_account_seconds,
 )
@@ -205,7 +206,12 @@ class AcquisitionSessions:
         return visitor.id
 
     async def _owner(
-        self, token: str | None, actor: ActorContext | None, now: datetime
+        self,
+        token: str | None,
+        actor: ActorContext | None,
+        now: datetime,
+        *,
+        shared_identity_locks: bool = False,
     ) -> tuple[UUID | None, UUID | None]:
         if actor is not None and type(actor) is not ActorContext:
             raise ConversationDenied("A current Academy identity is required.")
@@ -225,7 +231,10 @@ class AcquisitionSessions:
                 return visitor.id, None
         if actor is None or actor.tenant_id != self.tenant_id:
             raise ConversationDenied("A current upload or Academy session is required.")
-        await ConversationApplication(self.database, clock=self.clock).admit(actor)
+        await ConversationApplication(self.database, clock=self.clock).admit(
+            actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         return None, actor.person_id
 
     async def _used(self, visitor_id: UUID | None, person_id: UUID | None) -> int:
@@ -242,10 +251,19 @@ class AcquisitionSessions:
         return total
 
     async def allowance(
-        self, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, int | bool | None]:
         now = await self._admit()
-        owner = await self._owner(token, actor, now)
+        owner = await self._owner(
+            token,
+            actor,
+            now,
+            shared_identity_locks=shared_identity_locks,
+        )
         used = await self._used(*owner)
         value: dict[str, int | bool | None] = {
             "allowance_seconds": ALLOWANCE_SECONDS,
@@ -303,7 +321,7 @@ class AcquisitionSessions:
             tester is None
             and await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS
         ):
-            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
+            raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         self.database.add(
             ConversationAcquisitionUsage(

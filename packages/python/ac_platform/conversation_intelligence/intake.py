@@ -105,7 +105,13 @@ class ConversationIntake:
             ):
                 raise ConversationDenied("The approved private intake configuration changed.")
 
-    async def _quote(self, actor: ConversationActor, identifier: UUID) -> ConversationQuote:
+    async def _quote(
+        self,
+        actor: ConversationActor,
+        identifier: UUID,
+        *,
+        allow_committed_source_replay: bool = False,
+    ) -> ConversationQuote:
         await self.admit(actor)
         row = await self.database.scalar(
             select(ConversationQuote)
@@ -124,7 +130,14 @@ class ConversationIntake:
         if quote.recipe_revision != self.policy.acoustic_recipe:
             raise ConversationConflict("The analysis recipe changed. Prepare this call again.")
         if quote.expires_at_epoch <= now.timestamp():
-            raise ConversationConflict("The quote expired. Prepare this call again.")
+            if not allow_committed_source_replay:
+                raise ConversationConflict("The quote expired. Prepare this call again.")
+            # A committed source may be retried after the short-lived quote
+            # window.  Keep the fresh-upload path above strict: only the
+            # durable ready state can use this idempotent replay exception.
+            recording = await self.application._recording(actor, row.recording_id)
+            if recording.state != "ready":
+                raise ConversationConflict("The quote expired. Prepare this call again.")
         await self.application.get(actor, row.recording_id)
         return row
 
@@ -313,7 +326,7 @@ class ConversationIntake:
     async def require_accepted(
         self, actor: ConversationActor, recording_id: UUID, quote_id: UUID
     ) -> dict[str, Any]:
-        row = await self._quote(actor, quote_id)
+        row = await self._quote(actor, quote_id, allow_committed_source_replay=True)
         if row.recording_id != recording_id:
             raise ConversationDenied("The quote does not belong to this recording.")
         await require_intake_acceptance(self.application, actor, row)

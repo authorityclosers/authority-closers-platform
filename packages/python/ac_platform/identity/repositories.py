@@ -578,6 +578,20 @@ class AsyncSqlAlchemyIdentityRepository:
         )
         return None if row is None else _person_snapshot(row)
 
+    async def get_person_for_share(self, person_id: UUID) -> PersonSnapshot | None:
+        """Take the shared canonical-person fence for read-only auth."""
+
+        row = cast(
+            Person | None,
+            await self._session.scalar(
+                select(Person)
+                .where(Person.id == person_id)
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _person_snapshot(row)
+
     async def find_people_by_exact_email_for_update(self, email: str) -> Sequence[PersonSnapshot]:
         """Lock every canonical person with this already-normalized email."""
 
@@ -1000,6 +1014,20 @@ class AsyncSqlAlchemyIdentityRepository:
                 select(SessionRow)
                 .where(SessionRow.id == session_id)
                 .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _session_snapshot(row)
+
+    async def get_session_for_share(self, session_id: UUID) -> StoredSession | None:
+        """Take the shared session fence for read-only auth."""
+
+        row = cast(
+            SessionRow | None,
+            await self._session.scalar(
+                select(SessionRow)
+                .where(SessionRow.id == session_id)
+                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             ),
         )

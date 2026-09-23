@@ -7,6 +7,7 @@ binding. Reading retained evidence cannot renew processing or dispatch a provide
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from ac_platform.conversation_intelligence.inference import (
     binding_for,
     verified_checkpoint,
 )
+from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.measurement_view import ConversationMeasurements
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
@@ -46,6 +48,99 @@ from ac_platform.conversation_intelligence.report_store import ConversationRepor
 from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
+
+# ``Job.last_error`` is deliberately a bounded storage field, not a public
+# diagnostic channel.  Progress may expose only the stable, content-free codes
+# emitted by the inference worker.  Keep the local validation vocabulary here
+# so an arbitrary provider/DB message can never cross the HTTP boundary.
+_VALIDATION_FAILURE_CODES = frozenset(
+    {
+        "report_evidence_quote_mismatch",
+        "report_evidence_segment_invalid",
+        "fact_evidence_outside_chunk",
+        "report_json_invalid",
+        "report_findings_invalid",
+        "report_dimension_status_invalid",
+        "report_overview_missing",
+        "report_overview_invalid",
+        "report_payload_invalid",
+        "report_payload_missing_field",
+        "fact_packet_invalid",
+        "provider_result_route_mismatch",
+        "provider_result_input_digest_mismatch",
+        "provider_raw_json_digest_mismatch",
+        "provider_parsed_data_mismatch",
+        "gemini_response_blocked",
+        "gemini_response_incomplete",
+        "gemini_response_json_invalid",
+    }
+)
+_BASE_FAILURE_CODES = frozenset(
+    {
+        "conversation_provider_execution_unresolved",
+        "conversation_provider_execution_timeout",
+        "conversation_provider_storage_failed",
+    }
+)
+_PLAN_FAILURE_CODES = frozenset(
+    {
+        "stage_failed",
+        "stage_uncertain",
+        "stage_cancelled",
+        "processing_authorization_or_input_unavailable",
+    }
+)
+_FAILURE_CODE_PATTERN = re.compile(r"^conversation_[a-z][a-z0-9_]{0,127}$")
+
+
+def _safe_progress_failure_code(value: object) -> str | None:
+    """Return an allowlisted inference failure code suitable for public progress."""
+
+    if not isinstance(value, str):
+        return None
+    if value in _PLAN_FAILURE_CODES:
+        return value
+    if _FAILURE_CODE_PATTERN.fullmatch(value) is None:
+        return None
+    if value in _BASE_FAILURE_CODES or value.removeprefix("conversation_") in (
+        _VALIDATION_FAILURE_CODES
+    ):
+        return value
+    # Broker codes are validated by the same constructor that accepts provider
+    # HTTP status codes.  Its fallback is detectable by comparing ``code``.
+    candidate = value.removeprefix("conversation_")
+    broker_error = InferenceBrokerError(candidate)
+    return value if broker_error.code == candidate else None
+
+
+def _progress_failure_code(
+    plan: ConversationProcessingPlan | None,
+    task_rows: list[tuple[ConversationInferenceTask, str | None]],
+    *,
+    generation: int,
+    has_report: bool,
+) -> str | None:
+    """Project one current-generation failure without reviving superseded work."""
+
+    if has_report or (plan is not None and plan.state == "active"):
+        return None
+    failure_code = _safe_progress_failure_code(
+        plan.progress.get("failure_code")
+        if plan is not None and plan.generation == generation and isinstance(plan.progress, dict)
+        else None
+    )
+    task_failure_code = next(
+        (
+            code
+            for task, last_error in reversed(task_rows)
+            if task.generation == generation
+            and task.state in {"failed", "uncertain"}
+            and (code := _safe_progress_failure_code(last_error)) is not None
+        ),
+        None,
+    )
+    return task_failure_code if task_failure_code is not None else failure_code
 
 
 class AcquisitionReports:
@@ -55,13 +150,21 @@ class AcquisitionReports:
         self.reports = ConversationReports(self.application)
 
     async def recording(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> tuple[SubmissionScope, ConversationRecording]:
         # Root-owned per-visitor read fencing spans this caller transaction.
         # Streaming one call must not take the global acquisition lock or
         # block an unrelated visitor from starting their upload.
         scope = await self.ownership.require_submission_owner(
-            submission_id, token=token, actor=actor
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
         )
         recording = await self.database.scalar(
             select(ConversationRecording)
@@ -78,7 +181,12 @@ class AcquisitionReports:
         if recording is None:
             raise ConversationNotFound("This upload is unavailable.")
         # The recording lock also serializes erasure/permission revocation.
-        await self.ownership.require_submission_owner(submission_id, token=token, actor=actor)
+        await self.ownership.require_submission_owner(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         return scope, recording
 
     async def _draft(self, recording: ConversationRecording) -> ConversationReportDraft | None:
@@ -96,9 +204,19 @@ class AcquisitionReports:
         return result
 
     async def report(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        scope, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -159,9 +277,19 @@ class AcquisitionReports:
         return {"submission_id": str(submission_id), **envelope}
 
     async def transcript(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        _, recording = await self.recording(submission_id, token=token, actor=actor)
+        _, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -217,15 +345,35 @@ class AcquisitionReports:
         }
 
     async def waveform(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        _, recording = await self.recording(submission_id, token=token, actor=actor)
+        _, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         return await ConversationMeasurements(self.application).waveform_from_recording(recording)
 
     async def progress(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        scope, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         local_run = await self.database.scalar(
             select(ConversationRun).where(
                 ConversationRun.recording_id == recording.id,
@@ -248,25 +396,39 @@ class AcquisitionReports:
                 ConversationProcessingPlan.tenant_id == recording.tenant_id,
                 ConversationProcessingPlan.person_id == recording.person_id,
                 ConversationProcessingPlan.processing_lease_id == scope.processing_lease_id,
+                ConversationProcessingPlan.generation == recording.generation,
                 ConversationProcessingPlan.erased_at.is_(None),
             )
-            .order_by(ConversationProcessingPlan.created_at.desc())
+            .order_by(
+                ConversationProcessingPlan.created_at.desc(),
+                ConversationProcessingPlan.id.desc(),
+            )
             .limit(1)
         )
-        tasks = (
-            await self.database.scalars(
-                select(ConversationInferenceTask)
-                .where(
-                    ConversationInferenceTask.recording_id == recording.id,
-                    ConversationInferenceTask.tenant_id == recording.tenant_id,
-                    ConversationInferenceTask.person_id == recording.person_id,
-                    ConversationInferenceTask.processing_lease_id == scope.processing_lease_id,
-                    ConversationInferenceTask.erased_at.is_(None),
+        task_rows = [
+            (row[0], row[1])
+            for row in (
+                await self.database.execute(
+                    select(ConversationInferenceTask, Job.last_error)
+                    .join(Job, Job.id == ConversationInferenceTask.job_id)
+                    .where(
+                        ConversationInferenceTask.recording_id == recording.id,
+                        ConversationInferenceTask.tenant_id == recording.tenant_id,
+                        ConversationInferenceTask.person_id == recording.person_id,
+                        ConversationInferenceTask.processing_lease_id == scope.processing_lease_id,
+                        ConversationInferenceTask.generation == recording.generation,
+                        ConversationInferenceTask.erased_at.is_(None),
+                    )
+                    .order_by(
+                        ConversationInferenceTask.created_at.desc(),
+                        ConversationInferenceTask.run_id.desc(),
+                    )
+                    .limit(128)
                 )
-                .order_by(ConversationInferenceTask.created_at)
-                .limit(128)
-            )
-        ).all()
+            ).all()
+        ]
+        task_rows = list(reversed(task_rows))
+        tasks = [row[0] for row in task_rows]
         has_report = False
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
@@ -282,6 +444,12 @@ class AcquisitionReports:
             except ConversationConflict:
                 if recovered is None:
                     has_report = False
+        failure_code = _progress_failure_code(
+            plan,
+            task_rows,
+            generation=recording.generation,
+            has_report=has_report,
+        )
         return {
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
@@ -290,5 +458,6 @@ class AcquisitionReports:
             "state": "report_ready" if has_report else plan.state if plan else recording.state,
             "has_report": has_report,
             "automatic_progression": plan is not None and plan.state == "active",
+            "failure_code": failure_code,
             "stages": [{"stage": task.stage, "state": task.state} for task in tasks],
         }

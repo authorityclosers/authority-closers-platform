@@ -33,6 +33,7 @@ from ac_platform.outbox.models import (
     OperationsRecoveryState,
     RecoveryStatus,
 )
+from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
     EXPIRED_DISPATCH_AMBIGUITY_REASON,
     JobRepository,
@@ -147,7 +148,7 @@ def test_stale_worker_cannot_mark_a_successful_job_ambiguous(database: Engine) -
         assert row.last_error is None
 
 
-async def test_expired_dispatch_requires_audited_retry_before_postgresql_reclaim(
+async def test_expired_dispatch_requires_typed_reconciliation_before_postgresql_reclaim(
     database: Engine,
 ) -> None:
     # A fixed early timestamp keeps this repeatable in the shared disposable
@@ -255,18 +256,21 @@ async def test_expired_dispatch_requires_audited_retry_before_postgresql_reclaim
                 tenant_id=tenant_id,
                 permissions=frozenset({"job_retry"}),
             )
-            retried = await JobRepository(session).retry(
-                unresolved,
-                actor=actor,
-                reason="provider state reviewed; redispatch approved",
-                audit=AuditRepository(session),
-                now=now,
-            )
-            assert retried.status == JobStatus.QUEUED.value
-            assert retried.dispatch_started_at is None
-            assert retried.provider_idempotency_key is None
-            assert retried.delivery_ambiguous_at is None
-            assert retried.reconciled_by == operator_id
+            dispatch_started_at = unresolved.dispatch_started_at
+            delivery_ambiguous_at = unresolved.delivery_ambiguous_at
+            with pytest.raises(ReconciliationRequiredError):
+                await JobRepository(session).retry(
+                    unresolved,
+                    actor=actor,
+                    reason="provider state reviewed; redispatch approved",
+                    audit=AuditRepository(session),
+                    now=now,
+                )
+            assert unresolved.status == JobStatus.DEAD_LETTER.value
+            assert unresolved.dispatch_started_at == dispatch_started_at
+            assert unresolved.provider_idempotency_key == provider_key
+            assert unresolved.delivery_ambiguous_at == delivery_ambiguous_at
+            assert unresolved.reconciled_by is None
             audit_event = await session.scalar(
                 select(AuditEvent).where(
                     AuditEvent.tenant_id == tenant_id,
@@ -274,17 +278,14 @@ async def test_expired_dispatch_requires_audited_retry_before_postgresql_reclaim
                     AuditEvent.resource_id == str(unresolved_id),
                 )
             )
-            assert audit_event is not None
-            assert audit_event.payload["prior_effect_evidence"]["provider_idempotency_key"] == (
-                provider_key
-            )
+            assert audit_event is None
 
         async with AsyncSession(async_engine) as session, session.begin():
             claimed = await JobRepository(session).claim(
                 lease_for=timedelta(seconds=30),
                 limit=1,
             )
-            assert [row.id for row in claimed] == [unresolved_id]
+            assert claimed == []
     finally:
         await async_engine.dispose()
 

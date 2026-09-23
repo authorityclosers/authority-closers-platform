@@ -72,6 +72,14 @@ export type SalesReport = {
   report_sections: ReportSection[];
 };
 
+export type RecoveryMetadata = {
+  version: number;
+  validation_state: "needs_correction" | "revalidated" | "corrected";
+  provider_calls: 0;
+  human_approved: false;
+  official_score: false;
+};
+
 const PREVIEW_LIMITS = {
   strengths: 3,
   improvements: 3,
@@ -409,6 +417,49 @@ function parseSections(value: unknown): ReportSection[] {
   });
 }
 
+function parseRecoveryMetadata(value: unknown): RecoveryMetadata {
+  const recovery = object(value, "report_recovery");
+  keys(
+    recovery,
+    [
+      "version",
+      "validation_state",
+      "provider_calls",
+      "human_approved",
+      "official_score",
+    ],
+    "report_recovery",
+  );
+  const version = integer(
+    recovery.version,
+    "report_recovery_version",
+    1,
+    2_147_483_647,
+  );
+  const validationState = text(
+    recovery.validation_state,
+    "report_recovery_validation_state",
+    32,
+  );
+  if (
+    !["needs_correction", "revalidated", "corrected"].includes(validationState)
+  )
+    throw new ReportContractError("report_recovery_validation_state_invalid");
+  if (recovery.provider_calls !== 0)
+    throw new ReportContractError("report_recovery_provider_calls_invalid");
+  if (recovery.human_approved !== false)
+    throw new ReportContractError("report_recovery_human_approved_invalid");
+  if (recovery.official_score !== false)
+    throw new ReportContractError("report_recovery_official_score_invalid");
+  return {
+    version,
+    validation_state: validationState as RecoveryMetadata["validation_state"],
+    provider_calls: 0,
+    human_approved: false,
+    official_score: false,
+  };
+}
+
 function parseReport(
   value: unknown,
   binding: ReportSourceBinding,
@@ -558,7 +609,7 @@ export function parseAcquisitionReport(
   value: unknown,
   expected: { submissionId: string; recordingId: string },
   transcript: Transcript,
-): { report: SalesReport; claimed: boolean } {
+): { report: SalesReport; claimed: boolean; recovery?: RecoveryMetadata } {
   const envelope = object(value, "report_envelope");
   keys(
     envelope,
@@ -571,6 +622,7 @@ export function parseAcquisitionReport(
       "transcript_revision",
       "source_label",
       "report",
+      "recovery",
     ],
     "report_envelope",
   );
@@ -583,6 +635,10 @@ export function parseAcquisitionReport(
   )
     throw new ReportContractError("report_envelope_binding");
   identifier(envelope.run_id, "report_run");
+  const recovery =
+    envelope.recovery === undefined
+      ? undefined
+      : parseRecoveryMetadata(envelope.recovery);
   const projection = object(envelope.report, "report_projection");
   keys(
     projection,
@@ -646,7 +702,9 @@ export function parseAcquisitionReport(
       throw new ReportContractError("report_preview_account_invalid");
     report.preview = parsePreview(projection.preview, report);
   }
-  return { claimed, report };
+  return recovery === undefined
+    ? { claimed, report }
+    : { claimed, report, recovery };
 }
 
 export function parseJobResponse(

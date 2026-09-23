@@ -191,3 +191,16 @@ def test_cli_failure_outputs_no_exception_payload(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "worker_service_failed\n"
+
+
+def test_cli_failure_preserves_only_stable_worker_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def invalid(*args: Any) -> Any:
+        raise ValueError("worker_config_invalid")
+
+    monkeypatch.setattr(service, "load_service_config", invalid)
+    assert service.main(["--config", str(tmp_path / "missing"), "--sha256", "a" * 64]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "worker_service_failed:worker_config_invalid\n"

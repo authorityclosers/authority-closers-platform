@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from types import SimpleNamespace
 from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 
@@ -21,6 +22,12 @@ from ac_platform.conversation_intelligence.inference_worker import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
+from ac_platform.conversation_intelligence.storage import (
+    CHUNK_BYTES,
+    ObjectKey,
+    ObjectKind,
+    PrivateLocalRecordingStorage,
+)
 
 
 def _transcript() -> dict[str, Any]:
@@ -206,3 +213,34 @@ def test_unknown_stage_cannot_become_a_provider_payload() -> None:
 
     with pytest.raises(ConversationConflict, match="stage is invalid"):
         worker._payload(_scope("C6", SimpleNamespace(payload=b"prepared")))
+
+
+def test_save_raw_streams_provider_response_in_storage_chunks(tmp_path) -> None:
+    storage = PrivateLocalRecordingStorage(tmp_path / "objects")
+    worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
+    worker.storage = storage
+    tenant_id, recording_id, run_id = uuid4(), uuid4(), uuid4()
+    scope = cast(
+        Scope,
+        SimpleNamespace(
+            task=SimpleNamespace(tenant_id=tenant_id, run_id=run_id),
+            recording=SimpleNamespace(id=recording_id),
+        ),
+    )
+    raw = b"provider-response" * ((CHUNK_BYTES // 17) + 2)
+    raw = raw[: CHUNK_BYTES + 17]
+    result_value = ProviderResult(
+        provider="elevenlabs",
+        model="scribe_v2",
+        request_id="synthetic-large-response",
+        response_sha256=hashlib.sha256(raw).hexdigest(),
+        raw_json=raw,
+        data={},
+        usage={"total_tokens": 0},
+        input_sha256="a" * 64,
+    )
+
+    worker._save_raw(scope, result_value)
+
+    key = ObjectKey(tenant_id, recording_id, run_id, ObjectKind.PROVIDER_RESPONSE)
+    assert b"".join(storage.iter_bytes(key, expected_sha256=result_value.response_sha256)) == raw

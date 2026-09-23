@@ -92,6 +92,149 @@ jobs:
             --entrypoint=python "$image_id" \
             -m ac_platform.conversation_intelligence doctor
 
+      - name: Exercise hosted native upload gate under worker and native sandbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_root="$(mktemp -d /tmp/ac-sales-xray-native-smoke.XXXXXX)"
+          workspace_root="$smoke_root/workspace"
+          socket_root="$smoke_root/socket"
+          output_root="$workspace_root/native-output-tmpfs"
+          socket_path="$socket_root/native.sock"
+          receipt="$workspace_root/smoke-receipt.json"
+          helper_log="$smoke_root/helper.log"
+          helper_pid=""
+
+          # Keep the smoke root private while allowing the numeric worker to
+          # traverse it. The runner remains the owner for cleanup/log capture;
+          # execute-only access avoids depending on supplementary groups after
+          # the worker identity is made exact.
+          sudo -n chown "$(id -u)":10001 "$smoke_root"
+          sudo -n chmod 0711 "$smoke_root"
+
+          cleanup() {
+            set +e
+            if [[ -n "$helper_pid" ]]; then
+              sudo -n kill -TERM "$helper_pid" >/dev/null 2>&1 || true
+              wait "$helper_pid" >/dev/null 2>&1 || true
+            fi
+            if mountpoint -q "$output_root"; then
+              sudo -n umount "$output_root" >/dev/null 2>&1 || true
+            fi
+            sudo -n rm -rf -- "$smoke_root" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          mkdir -p "$workspace_root" "$socket_root"
+          sudo -n chown 10001:10001 "$workspace_root"
+          sudo -n chmod 0700 "$workspace_root"
+          sudo -n chown root:10001 "$socket_root"
+          sudo -n chmod 0711 "$socket_root"
+          sudo -n mkdir "$output_root"
+          sudo -n mount -t tmpfs \
+            -o size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec \
+            tmpfs "$output_root"
+
+          image_id="$(docker image inspect --format '{{.Id}}' "$NATIVE_TAG")"
+
+          diagnose_helper_startup() {
+            printf '%s\n' '--- native helper startup diagnostics ---' >&2
+            printf 'helper_pid=%s\n' "$helper_pid" >&2
+            ps -o pid=,ppid=,stat=,comm= -p "$helper_pid" >&2 || true
+            ps -eo pid=,ppid=,stat=,comm= | awk '$4 == "sudo" || $4 == "python3" || $4 == "python" { print }' >&2 || true
+            printf 'socket_root=' >&2
+            stat -c '%A %u:%g %F' "$socket_root" >&2 || true
+            printf 'workspace_root=' >&2
+            stat -c '%A %u:%g %F' "$workspace_root" >&2 || true
+            printf 'output_root=' >&2
+            stat -c '%A %u:%g %F' "$output_root" >&2 || true
+            findmnt --json --target "$output_root" >&2 || true
+            printf 'helper_log_bytes=' >&2
+            stat -c '%s' "$helper_log" >&2 || true
+            printf '%s\n' '--- end native helper startup diagnostics ---' >&2
+          }
+
+          socket_ready() {
+            sudo -n test -S "$socket_path"
+          }
+
+          # The checkout path is runner-owned and intentionally not traversable
+          # by the numeric worker identity. Copy only the smoke harness and its
+          # application package into the worker-owned workspace before dropping
+          # privileges; the helper itself still runs from the reviewed checkout
+          # as root and the smoke keeps the real peer UID/GID contract.
+          smoke_python_root="$workspace_root/python"
+          sudo -n mkdir "$smoke_python_root"
+          sudo -n cp -a "$GITHUB_WORKSPACE/packages/python/ac_platform" "$smoke_python_root/"
+          sudo -n chown -R 10001:10001 "$smoke_python_root"
+          sudo -n stat -c '%A %u:%g %F %n' "$smoke_python_root" "$smoke_python_root/ac_platform" >&2
+          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
+            PATH=/usr/local/bin:/usr/bin:/bin \
+            sh -c 'cd "$1" && exec python3 -c '\''import ac_platform; print("native_smoke_import_ok")'\''' \
+            native-smoke "$smoke_python_root"
+
+          sudo -n env -i \
+            PATH=/usr/local/bin:/usr/bin:/bin \
+            HOME=/nonexistent \
+            PYTHONDONTWRITEBYTECODE=1 \
+            PYTHONUNBUFFERED=1 \
+            AC_NATIVE_STARTUP_DIAGNOSTICS=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE/packages/python" \
+            python3 "$GITHUB_WORKSPACE/scripts/native_runtime_helper.py" \
+              --socket "$socket_path" \
+              --workspace-root "$workspace_root" \
+              --output-root "$output_root" \
+              --image-ref "$image_id" \
+              --peer-uid 10001 \
+              --peer-gid 10001 \
+            >"$helper_log" 2>&1 &
+          helper_pid=$!
+
+          for _ in $(seq 1 100); do
+            socket_ready && break
+            if ! kill -0 "$helper_pid" 2>/dev/null; then
+              cat "$helper_log"
+              diagnose_helper_startup
+              exit 1
+            fi
+            sleep 0.1
+          done
+          socket_ready || {
+            cat "$helper_log"
+            diagnose_helper_startup
+            if kill -0 "$helper_pid" 2>/dev/null; then
+              sudo -n kill -TERM "$helper_pid" >/dev/null 2>&1 || true
+              wait "$helper_pid" >/dev/null 2>&1 || true
+              cat "$helper_log"
+            fi
+            printf 'Native helper socket did not become ready.\n' >&2
+            exit 1
+          }
+
+          cat "$GITHUB_WORKSPACE/scripts/test_hosted_native_linux.py" | \
+            sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups env -i \
+              PATH=/usr/local/bin:/usr/bin:/bin \
+              HOME=/nonexistent \
+              PYTHONDONTWRITEBYTECODE=1 \
+              PYTHONUNBUFFERED=1 \
+              sh -c 'cd "$1" && shift && exec python3 - "$@"' \
+              hosted-native-smoke "$smoke_python_root" \
+                --socket "$socket_path" \
+                --workspace-root "$workspace_root" \
+                --image-ref "$image_id" \
+                --receipt "$receipt"
+          sudo -n setpriv --reuid=10001 --regid=10001 --clear-groups \
+            /usr/bin/cat -- "$receipt" | jq -e '
+            .status == "passed" and
+            .validated == true and
+            .inspected == true and
+            (.upload_preflight_measured == true or .upload_preflight_measured == false) and
+            .wrong_image_rejected == true and
+            .helper_usable_after_rejection == true and
+            .provider_calls == 0 and
+            .database_connections == 0
+          ' >/dev/null
+
       - name: Create and reload the minimal offline transport artifact
         shell: bash
         run: |

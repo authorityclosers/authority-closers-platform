@@ -74,6 +74,7 @@ export type ProcessingPlan = {
   state: "quoted" | "active" | "held" | "completed" | "cancelled";
   cost_label: string;
   max_cost_paise: number;
+  automatic_c5_repair_cost_paise: number;
   max_entitlement_seconds: number;
   expires_at_epoch: number;
   stages: ProcessingPlanStage[];
@@ -189,6 +190,7 @@ export function parseProcessingPlan(
     "state",
     "cost_label",
     "max_cost_paise",
+    "automatic_c5_repair_cost_paise",
     "max_entitlement_seconds",
     "expires_at_epoch",
     "stages",
@@ -224,6 +226,15 @@ export function parseProcessingPlan(
     0,
     2_147_483_647,
   );
+  const automaticRepairCost =
+    plan.automatic_c5_repair_cost_paise === undefined
+      ? 0
+      : planInteger(
+          plan.automatic_c5_repair_cost_paise,
+          "plan_repair_cost_limit",
+          0,
+          2_147_483_647,
+        );
   const costLabel =
     maximumCost === 0
       ? "₹0 · approved allowance"
@@ -317,6 +328,7 @@ export function parseProcessingPlan(
     state,
     cost_label: costLabel,
     max_cost_paise: maximumCost,
+    automatic_c5_repair_cost_paise: automaticRepairCost,
     max_entitlement_seconds: maxEntitlement,
     expires_at_epoch: expires,
     stages,

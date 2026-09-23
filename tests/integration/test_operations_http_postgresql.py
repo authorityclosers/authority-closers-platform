@@ -395,21 +395,20 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                     json={"reason": "provider delivery evidence reviewed"},
                     headers=global_retry_headers,
                 )
-                assert global_retry.status_code == 200
-                assert global_retry.json()["job_id"] == str(seed.global_job_id)
-                assert global_retry.json()["status"] == "held"
+                assert global_retry.status_code == 409
+                assert global_retry.json()["code"] == "job_retry_unavailable"
                 global_retry_replay = await client.post(
                     f"/v1/admin/jobs/{seed.global_job_id}/retry",
                     json={"reason": "provider delivery evidence reviewed"},
                     headers=global_retry_headers,
                 )
-                assert global_retry_replay.status_code == 200
-                assert global_retry_replay.json()["replayed"] is True
+                assert global_retry_replay.status_code == 409
+                assert global_retry_replay.json()["code"] == "job_retry_unavailable"
 
                 reconcile = await client.post(
                     "/v1/admin/recovery/reconcile",
                     json={
-                        "job_ids": [str(seed.job_id), str(seed.global_job_id)],
+                        "job_ids": [str(seed.job_id)],
                         "outbox_event_ids": [str(seed.outbox_event_id)],
                         "reason": "restore review approved",
                     },
@@ -420,7 +419,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 )
                 assert reconcile.status_code == 200
                 assert reconcile.json() == {
-                    "job_ids": sorted([str(seed.job_id), str(seed.global_job_id)]),
+                    "job_ids": [str(seed.job_id)],
                     "outbox_event_ids": [str(seed.outbox_event_id)],
                     "recovery_generation": 1,
                     "recovery_status": RecoveryStatus.READY.value,
@@ -430,7 +429,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 reconcile_replay = await client.post(
                     "/v1/admin/recovery/reconcile",
                     json={
-                        "job_ids": [str(seed.job_id), str(seed.global_job_id)],
+                        "job_ids": [str(seed.job_id)],
                         "outbox_event_ids": [str(seed.outbox_event_id)],
                         "reason": "restore review approved",
                     },
@@ -513,7 +512,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                     )
                 )
                 assert job is not None and job.status == JobStatus.QUEUED.value
-                assert global_job is not None and global_job.status == JobStatus.QUEUED.value
+                assert global_job is not None and global_job.status == JobStatus.DEAD_LETTER.value
                 global_retry_audit = database.scalar(
                     select(AuditEvent).where(
                         AuditEvent.tenant_id == seed.tenant_id,
@@ -521,7 +520,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                         AuditEvent.resource_id == str(seed.global_job_id),
                     )
                 )
-                assert global_retry_audit is not None
+                assert global_retry_audit is None
                 assert event is not None and event.status == "pending"
                 assert inbox is not None and inbox.tenant_id == seed.tenant_id
                 assert (

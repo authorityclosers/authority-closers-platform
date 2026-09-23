@@ -436,6 +436,66 @@ class AsyncIdentityApplication:
             membership=membership,
         )
 
+    async def resolve_actor_read_only(
+        self,
+        token: str,
+        *,
+        require_tenant: bool = False,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
+        now: datetime | None = None,
+    ) -> ResolvedActorContext:
+        """Resolve an actor without updating session activity or taking write locks.
+
+        Read-only surfaces use this while a long-lived source response retains
+        shared identity/recording fences.  This method takes shared Person,
+        Session, Tenant and Membership locks in the canonical order before
+        returning the actor; it avoids the normal authentication write that
+        advances ``last_seen_at``.
+        """
+
+        self._require_transaction()
+        current_time = _now(now)
+        token_hash = self._token_hash(token)
+        candidate = await self._repository.find_session_by_token_hash(token_hash)
+        if candidate is None:
+            raise InvalidSessionTokenError("session token is invalid")
+        # Preserve the canonical Person -> Session lock order used by all
+        # identity mutations.  Plain reads here would allow revocation or
+        # deletion to race with the later membership check.
+        person = await self._repository.get_person_for_share(candidate.person_id)
+        if person is None:
+            raise IdentityResolutionError("canonical person does not exist")
+        if person.status != PersonStatus.ACTIVE.value:
+            raise AccountUnavailableError("suspended or deleted accounts cannot authenticate")
+        require_verified_person(person)
+        session = await self._repository.get_session_for_share(candidate.id)
+        if (
+            session is None
+            or session.person_id != person.id
+            or not hmac.compare_digest(session.token_hash, token_hash)
+            or session.audience != expected_audience.value
+            or (
+                expected_audience is SessionAudience.REVIEWER
+                and session.selected_tenant_id is not None
+            )
+        ):
+            raise InvalidSessionTokenError("session token is invalid")
+        self._validate_session_state(session, current_time)
+        tenant: Tenant | None = None
+        membership: Membership | None = None
+        if session.selected_tenant_id is not None:
+            tenant, membership = await self._lock_active_membership(
+                person.id, session.selected_tenant_id
+            )
+        elif require_tenant:
+            raise TenantScopeDeniedError("an explicit active tenant context is required")
+        return self._resolved_actor(
+            person,
+            session,
+            tenant=tenant,
+            membership=membership,
+        )
+
     async def select_tenant(
         self,
         token: str,

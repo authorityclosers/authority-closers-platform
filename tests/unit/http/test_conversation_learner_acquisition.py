@@ -14,6 +14,8 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+from ac_platform.conversation_intelligence.application import ConversationNotFound
+from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.native_runtime import NativeRuntime
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
@@ -33,7 +35,19 @@ SESSION_ID = UUID("11111111-1111-4111-8111-111111111111")
 
 
 class _Database:
-    pass
+    def begin(self) -> _TransactionScope:
+        return _TransactionScope(self)
+
+
+class _TransactionScope:
+    def __init__(self, database: _Database) -> None:
+        self.database = database
+
+    async def __aenter__(self) -> _Database:
+        return self.database
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
 
 
 class _SessionScope:
@@ -53,10 +67,16 @@ class _Service:
     def __init__(self, database: _Database) -> None:
         self.database = database
         self.allowance_actors: list[ActorContext] = []
+        self.allowance_lock_modes: list[bool] = []
 
     async def allowance(
-        self, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, int]:
+        self.allowance_lock_modes.append(shared_identity_locks)
         if actor is not None:
             self.allowance_actors.append(actor)
         return {
@@ -124,13 +144,16 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
     database = _Database()
     actor = ActorContext(PERSON_ID, SESSION_ID, PUBLIC_TENANT)
     allowance_actors: list[ActorContext] = []
+    allowance_lock_modes: list[bool] = []
 
     async def allowance(
         _self: AcquisitionSessions,
         *,
         token: str | None = None,
         actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, int]:
+        allowance_lock_modes.append(shared_identity_locks)
         if actor is not None:
             allowance_actors.append(actor)
         return {
@@ -229,6 +252,7 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         assert policy.status_code == 200
         assert policy.json()["max_cost_paise"] == 0
         assert allowance_actors == [actor]
+        assert allowance_lock_modes == [True]
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
@@ -237,6 +261,13 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         assert entry.status_code == 200
         assert entry.json()["site_key"] == "site-key-learner-test"
         assert entry.json()["challenge_action"] == "sales_xray_upload"
+        existing_guest = await sales.post(
+            "/v1/conversation/acquisition/session",
+            json={"challenge_token": "already-has-a-guest-session"},
+            headers={"Cookie": "ac_xray_guest=" + "a" * 43},
+        )
+        assert existing_guest.status_code == 200
+        assert allowance_lock_modes == [True, False]
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://other.example.test"
@@ -286,3 +317,55 @@ async def test_learner_submission_routes_do_not_fall_back_to_guest_cookie(
         ):
             response = await client.get(path, headers=headers)
             assert response.status_code == 401, (path, response.text)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "suffix", ["", "/report", "/report.docx", "/transcript", "/waveform", "/source"]
+)
+async def test_unavailable_learner_submission_returns_private_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str
+) -> None:
+    database = _Database()
+    unwound: list[bool] = []
+
+    async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            yield AuthenticatedTransaction(
+                database,  # type: ignore[arg-type]
+                SimpleNamespace(),  # type: ignore[arg-type]
+                ResolvedActorContext(
+                    actor=ActorContext(PERSON_ID, SESSION_ID, PUBLIC_TENANT),
+                    membership_role="learner",
+                    person_revision=1,
+                    session_revision=1,
+                ),
+                "opaque-session",
+            )
+        finally:
+            unwound.append(True)
+
+    async def unavailable(_self: GuestOwnership, *_args: object, **_kwargs: object) -> None:
+        # Expired retention, deletion and unavailable ownership all use this
+        # non-disclosing domain denial; no report or source may be returned.
+        raise ConversationNotFound("This upload is unavailable.")
+
+    monkeypatch.setattr(GuestOwnership, "require_submission_owner", unavailable)
+    app = FastAPI()
+    register_problem_handlers(app)
+    install_acquisition_runtime(
+        app,
+        settings=_settings(),
+        sessions=lambda: _SessionScope(database),  # type: ignore[arg-type]
+        require_actor=require_actor,
+        runtime=_runtime(tmp_path),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="https://learner.example.test",
+    ) as client:
+        response = await client.get(f"/v1/conversation/acquisition/submissions/{uuid4()}{suffix}")
+    assert response.status_code == 404
+    assert "This upload is unavailable." in response.text
+    assert "no-store" in response.headers["cache-control"]
+    assert unwound == [True]

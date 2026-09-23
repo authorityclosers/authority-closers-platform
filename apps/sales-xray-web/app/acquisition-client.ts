@@ -44,6 +44,7 @@ export type SubmissionLibraryPage = {
 export type Progress = {
   state: string;
   local_state: string | null;
+  failure_code: string | null;
   has_report: boolean;
   automatic_progression: boolean;
   stages: { stage: string; state: string }[];
@@ -54,31 +55,47 @@ export class AcquisitionError extends Error {
     readonly status: number,
     readonly reason?:
       | "provider_allowance_used"
+      | "trial_allowance_insufficient"
       | "plan_permission"
       | "plan_stale"
-      | "execution_paused",
+      | "execution_paused"
+      | "source_invalid"
+      | "source_incomplete"
+      | "source_verification"
+      | "source_storage",
+    readonly requestId?: string,
   ) {
-    super(
-      reason === "execution_paused"
-        ? ACQUISITION_PAUSED_MESSAGE
-        : status === 401
-          ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
-          : status === 403
-            ? reason === "provider_allowance_used"
-              ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-              : reason === "plan_stale"
-                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                : reason === "plan_permission"
-                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                  : "This action is not available with your current access. Ask the AC team to check your permission."
-            : status === 404
-              ? "This call is unavailable in your current session. It may have expired or been deleted."
-              : status === 429
-                ? "Another call is uploading. Please try again shortly."
-                : status === 409
-                  ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                  : "This request did not finish. Check your connection and try again.",
-    );
+    const message =
+      reason === "source_verification"
+        ? "We couldn’t verify this recording’s audio. Try again; if this continues, share the request reference with the AC team."
+        : reason === "execution_paused"
+          ? ACQUISITION_PAUSED_MESSAGE
+          : reason === "source_invalid"
+            ? "Choose one bounded audio file and accept the current upload terms."
+            : reason === "source_incomplete"
+              ? "The complete recording was not received. Check your connection and upload again."
+              : reason === "source_storage"
+                ? "The recording could not be verified in private storage. Check your connection and upload again."
+                : status === 401
+                  ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
+                  : status === 403
+                    ? reason === "trial_allowance_insufficient"
+                      ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
+                      : reason === "provider_allowance_used"
+                        ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                        : reason === "plan_stale"
+                          ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                          : reason === "plan_permission"
+                            ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                            : "This action is not available with your current access. Ask the AC team to check your permission."
+                    : status === 404
+                      ? "This call is unavailable in your current session. It may have expired or been deleted."
+                      : status === 429
+                        ? "Another call is uploading. Please try again shortly."
+                        : status === 409
+                          ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                          : "This request did not finish. Check your connection and try again.";
+    super(requestId ? `${message} Request reference: ${requestId}.` : message);
   }
 }
 export async function acquisition(
@@ -93,6 +110,7 @@ export async function acquisition(
     headers: { accept: "application/json", ...init.headers },
   });
   if (!response.ok) {
+    const requestId = response.headers.get("x-request-id") || undefined;
     if (response.status === 503) {
       const body: unknown = await response.json().catch(() => null);
       if (
@@ -101,27 +119,36 @@ export async function acquisition(
         "detail" in body &&
         body.detail === ACQUISITION_PAUSED_MESSAGE
       )
-        throw new AcquisitionError(503, "execution_paused");
+        throw new AcquisitionError(503, "execution_paused", requestId);
     }
-    if (
-      response.status === 403 &&
-      /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)
-    ) {
+    if (response.status === 403) {
       // Translate only an exact, known denial. Never display server/provider
       // bodies, which can contain private context or infrastructure details.
       const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body !== null &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body &&
+        typeof body.detail === "string"
+          ? body.detail
+          : undefined;
+      if (
+        detail ===
+        "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
+      ) {
+        throw new AcquisitionError(
+          response.status,
+          "trial_allowance_insufficient",
+          requestId,
+        );
+      }
+      if (!/^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path))
+        throw new AcquisitionError(response.status, undefined, requestId);
       const allowanceUsed =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "This recording's approved provider allowance is used.";
+        detail === "This recording's approved provider allowance is used.";
       const planStale =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "Approve the current displayed processing plan.";
+        detail === "Approve the current displayed processing plan.";
       throw new AcquisitionError(
         response.status,
         allowanceUsed
@@ -129,9 +156,33 @@ export async function acquisition(
           : planStale
             ? "plan_stale"
             : "plan_permission",
+        requestId,
       );
     }
-    throw new AcquisitionError(response.status);
+    if (response.status === 422) {
+      const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body
+          ? body.detail
+          : undefined;
+      const sourceReason =
+        detail === "The audio length could not be verified. Try another file."
+          ? "source_verification"
+          : detail ===
+              "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
+            ? "source_invalid"
+            : detail === "The complete recording was not received."
+              ? "source_incomplete"
+              : detail ===
+                  "The recording could not be verified in private storage."
+                ? "source_storage"
+                : undefined;
+      throw new AcquisitionError(response.status, sourceReason, requestId);
+    }
+    throw new AcquisitionError(response.status, undefined, requestId);
   }
   return response.json();
 }
@@ -362,6 +413,10 @@ export function parseProgress(
     typeof item.state !== "string" ||
     typeof item.has_report !== "boolean" ||
     typeof item.automatic_progression !== "boolean" ||
+    (item.failure_code !== undefined &&
+      item.failure_code !== null &&
+      (typeof item.failure_code !== "string" ||
+        item.failure_code.length > 128)) ||
     ![null, "queued", "running", "completed", "failed", "cancelled"].includes(
       item.local_state as string | null,
     ) ||
@@ -382,6 +437,7 @@ export function parseProgress(
   return {
     state: item.state,
     local_state: item.local_state as string | null,
+    failure_code: (item.failure_code as string | null | undefined) ?? null,
     has_report: item.has_report,
     automatic_progression: item.automatic_progression,
     stages,

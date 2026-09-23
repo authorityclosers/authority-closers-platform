@@ -553,6 +553,134 @@ it("opens a normally saved call when its session remains valid", async () => {
   expect(container.textContent).not.toContain("Start a new call");
 });
 
+it("desktop and mobile Analyse navigation explicitly starts a new call", async () => {
+  await mount();
+  const desktop = container.querySelector('nav[aria-label="Workspace"] a');
+  const mobile = container.querySelector(
+    'nav[aria-label="Mobile Sales Xray navigation"] a',
+  );
+  expect(desktop?.getAttribute("href")).toBe("/?new=1");
+  expect(mobile?.getAttribute("href")).toBe("/?new=1");
+});
+
+it("explicit new-call entry skips remembered work and claim prompts without mutating either", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  window.history.replaceState(null, "", "/?new=1");
+  await mount();
+  expect(container.querySelector('input[type="file"]')).not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  expect(container.textContent).not.toContain("Save to my account");
+  expect(calls.some(({ path }) => path.includes("/submissions/"))).toBe(false);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+});
+
+it("an explicit saved-call link still restores its call even with a stale new-call marker", async () => {
+  existing = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?new=1&call=${submissionId}`);
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(calls.some(({ path }) => path.endsWith("/report"))).toBe(true);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
+it("generic failed lookup with no parsed submission can escape and remains new after reload", async () => {
+  existing = true;
+  progressOverride = { malformed: true };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  await click("Analyse another call");
+  expect(window.location.search).toBe("?new=1");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  const readCount = calls.filter(({ path }) =>
+    path.includes("/submissions/"),
+  ).length;
+  await act(async () => root.render(null));
+  await mount();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    calls.filter(({ path }) => path.includes("/submissions/")),
+  ).toHaveLength(readCount);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+});
+
+it("consumes new-call intent when a new upload begins so reload can recover that attempt", async () => {
+  existing = true;
+  window.history.replaceState(null, "", "/?new=1");
+  await mount();
+  await select();
+  await consent();
+  await click("Analyse my call");
+  expect(new URLSearchParams(window.location.search).has("new")).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+});
+
+it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
+  existing = true;
+  progressOverride = { malformed: true };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  let releaseEntry!: () => void;
+  let releaseUpload!: () => void;
+  const entryGate = new Promise<void>((resolve) => {
+    releaseEntry = resolve;
+  });
+  const uploadGate = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (String(path).endsWith("/entry")) await entryGate;
+    if (String(path).endsWith("/source") && init?.method === "PUT")
+      await uploadGate;
+    return originalFetch(...args);
+  });
+  progressOverride = undefined;
+  lookupUnavailable = true;
+  await click("Analyse another call");
+  await select();
+  await consent();
+  await click("Analyse my call");
+  expect(window.location.search).toBe("");
+  const savedReads = calls.filter(({ path }) =>
+    path.endsWith(`/submissions/${submissionId}`),
+  ).length;
+  await act(async () => releaseEntry());
+  await flush();
+  expect(
+    calls.filter(({ path }) => path.endsWith(`/submissions/${submissionId}`)),
+  ).toHaveLength(savedReads);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.textContent).not.toContain(
+    "This saved call cannot be opened",
+  );
+  lookupUnavailable = false;
+  await act(async () => releaseUpload());
+  await flush();
+});
+
 it("offers a retry after a saved-call timeout without losing its opaque selector", async () => {
   existing = true;
   savedLookupDelayed = true;
@@ -765,6 +893,30 @@ it("shows saved completed work when an uncertain stage pauses processing", async
   expect(container.textContent).not.toContain("Review and continue analysis");
   expect(container.textContent).not.toContain("Upload the recording again");
   expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
+});
+
+it("explains provider credential pauses without exposing the raw failure", async () => {
+  existing = true;
+  progressOverride = {
+    ...progress,
+    state: "held",
+    local_state: "failed",
+    current_stage: "C2",
+    failure_code: "conversation_broker_service_identity_unavailable",
+    stages: [
+      { stage: "C2", state: "uncertain" },
+      { stage: "C4", state: "not_started" },
+      { stage: "C5", state: "not_started" },
+    ],
+  };
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain(
+    "The approved provider credentials are unavailable.",
+  );
+  expect(container.textContent).not.toContain(
+    "conversation_broker_service_identity_unavailable",
+  );
 });
 
 function reloadHeldCall() {

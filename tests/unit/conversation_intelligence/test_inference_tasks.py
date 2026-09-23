@@ -29,7 +29,12 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     validate_scribe_result,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
-from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
+from ac_platform.conversation_intelligence.reports import (
+    FACT_PROMPT_COMPACT,
+    FACT_PROMPT_COMPACT_MARKER,
+    FactPacket,
+    load_report_profile,
+)
 
 
 def _transcript(*, count: int = 2) -> dict[str, Any]:
@@ -249,6 +254,56 @@ def test_fact_envelopes_cover_complete_chunks_without_profile() -> None:
     covered = [segment_id for item in prepared for segment_id in item.covered_segment_ids]
     assert covered == [segment["id"] for segment in transcript["segments"]]
     assert all("dipak_report_v1" not in item.payload.decode() for item in prepared)
+
+
+def test_compact_fact_prompt_is_versioned_and_legacy_payload_reconstructs() -> None:
+    transcript = _transcript(count=2)
+    legacy = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
+    compact = prepare_fact_inputs(
+        transcript,
+        provider="gemini",
+        model="gemini-3.8-flash",
+        prompt_revision=FACT_PROMPT_COMPACT,
+    )[0]
+
+    assert legacy.input_sha256 != compact.input_sha256
+    assert FACT_PROMPT_COMPACT_MARKER not in legacy.payload.decode()
+    assert FACT_PROMPT_COMPACT_MARKER in compact.payload.decode()
+    assert type(legacy).from_dict(legacy.as_dict(), payload=legacy.payload) == legacy
+    assert type(compact).from_dict(compact.as_dict(), payload=compact.payload) == compact
+
+
+def test_compact_fact_result_rejects_unbounded_observation_count() -> None:
+    transcript = _transcript(count=1)
+    prepared = prepare_fact_inputs(transcript, prompt_revision=FACT_PROMPT_COMPACT)[0]
+    result = _result(
+        {
+            "overview": "A bounded synthetic overview.",
+            "observations": [{"fact": f"Fact {index}", "segment_id": "s1"} for index in range(9)],
+            "uncertainties": [],
+        },
+        provider="groq",
+        model=prepared.model,
+        input_sha256=prepared.input_sha256,
+    )
+
+    with pytest.raises(InferenceTaskError, match="fact_compact_observations_exceeded"):
+        validate_fact_result(result, prepared, transcript)
+
+
+@pytest.mark.parametrize(
+    ("maximum", "observation_limit"),
+    [(256, 1), (512, 3), (768, 4), (1_024, 6), (1_400, 8)],
+)
+def test_compact_fact_prompt_scales_bounds_with_approved_output(
+    maximum: int, observation_limit: int
+) -> None:
+    prepared = prepare_fact_inputs(
+        _transcript(),
+        max_completion_tokens=maximum,
+        prompt_revision=FACT_PROMPT_COMPACT,
+    )[0]
+    assert f"at most {observation_limit} observations" in prepared.payload.decode()
 
 
 def test_fact_result_validates_chunk_evidence_and_returns_fresh_json() -> None:

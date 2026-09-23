@@ -14,6 +14,7 @@ const running: Progress = {
   state: "active",
   local_state: "completed",
   has_report: false,
+  failure_code: null,
   automatic_progression: true,
   stages: [
     { stage: "C2", state: "completed" },
