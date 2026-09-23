@@ -22,6 +22,10 @@ from ac_platform.conversation_intelligence.acquisition_challenge import (
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.acquisition_usage import ALLOWANCE_SECONDS
+from ac_platform.conversation_intelligence.analysis_settings import (
+    DEFAULT_ANALYSIS_SETTINGS,
+    latest_analysis_settings,
+)
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
@@ -164,12 +168,30 @@ def install_acquisition_runtime(
         if host == "learner":
             async with learner_account(request, read_only=True):
                 pass
+        operations_tenant_id = (
+            runtime.intake.authority.operations_tenant_id
+            if runtime is not None and runtime.intake.authority is not None
+            else settings.operations_tenant_id
+        )
+        analysis_settings = DEFAULT_ANALYSIS_SETTINGS
+        if operations_tenant_id is not None:
+            async with sessions() as database:
+                _, analysis_settings = await latest_analysis_settings(
+                    database, operations_tenant_id
+                )
+        report_languages = (
+            ["en"]
+            if analysis_settings.c5_coaching_prompt_revision == "coaching-v3"
+            else ["en", "hi-Deva+en", "mr-Deva+en"]
+        )
         value: dict[str, object] = {
             "enabled": runtime is not None,
             "site_key": runtime.site_key if runtime else None,
             "challenge_action": UPLOAD_ACTION if runtime else None,
             "policy_revision": runtime.policy_revision if runtime else None,
             "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
+            "report_languages": report_languages,
+            "report_language_default": analysis_settings.report_language_default,
         }
         if host == "learner" and runtime is not None:
             # The learner mount uses the existing account session. It never

@@ -10,10 +10,15 @@ import pytest
 from fastapi import FastAPI, Request
 from pydantic import SecretStr
 
+import ac_platform.http.conversation_acquisition_runtime as acquisition_runtime_module
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+from ac_platform.conversation_intelligence.analysis_settings import (
+    DEFAULT_ANALYSIS_SETTINGS,
+    AnalysisSettings,
+)
 from ac_platform.conversation_intelligence.application import ConversationNotFound
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
@@ -142,6 +147,12 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
 ) -> None:
     settings = _settings()
     database = _Database()
+    selected_settings = DEFAULT_ANALYSIS_SETTINGS
+
+    async def current_settings(_database: object, _tenant_id: UUID):
+        return None, selected_settings
+
+    monkeypatch.setattr(acquisition_runtime_module, "latest_analysis_settings", current_settings)
     actor = ActorContext(PERSON_ID, SESSION_ID, PUBLIC_TENANT)
     allowance_actors: list[ActorContext] = []
     allowance_lock_modes: list[bool] = []
@@ -211,6 +222,8 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
             "policy_revision": "learner-account-v1",
             "allowance_seconds": 3600,
             "auth_mode": "account",
+            "report_languages": ["en"],
+            "report_language_default": "en",
         }
 
         wrong_tenant = await learner.get(
@@ -257,10 +270,19 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
     ) as sales:
+        selected_settings = AnalysisSettings.model_validate(
+            {
+                **DEFAULT_ANALYSIS_SETTINGS.effective_values(),
+                "c5_coaching_prompt_revision": "coaching-v4",
+                "report_language_default": "mr-Deva+en",
+            }
+        )
         entry = await sales.get("/v1/conversation/acquisition/entry")
         assert entry.status_code == 200
         assert entry.json()["site_key"] == "site-key-learner-test"
         assert entry.json()["challenge_action"] == "sales_xray_upload"
+        assert entry.json()["report_languages"] == ["en", "hi-Deva+en", "mr-Deva+en"]
+        assert entry.json()["report_language_default"] == "mr-Deva+en"
         existing_guest = await sales.post(
             "/v1/conversation/acquisition/session",
             json={"challenge_token": "already-has-a-guest-session"},

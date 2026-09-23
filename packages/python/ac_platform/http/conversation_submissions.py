@@ -48,7 +48,9 @@ from ac_platform.conversation_intelligence.native_runtime import SocketNativeRun
 from ac_platform.conversation_intelligence.processing_plan import (
     ConversationProcessingPlans,
     PlanAcceptance,
+    parse_report_language_preference,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
@@ -326,6 +328,29 @@ def install_submission_http(
                     submission_id, **retry_owner.arguments
                 )
 
+    async def quote_language_preference(request: Request) -> ReportLanguage | None:
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(10):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 1024:
+                        raise fail(413, "The report preference is too large.")
+                    raw.extend(block)
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The report preference was interrupted. Try again.") from None
+        if not raw:
+            return None
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise fail(415, "Choose a report language using JSON.")
+        try:
+            return parse_report_language_preference(bytes(raw))
+        except ValueError:
+            raise fail(422, "Choose one supported report language.") from None
+
     @router.get("/submissions")
     async def saved_calls(
         request: Request, response: Response, before: UUID | None = None
@@ -563,13 +588,7 @@ def install_submission_http(
         owner: _Owner = dependency,
     ) -> dict[str, Any]:
         guard(request, response, write=True)
-        try:
-            async with asyncio.timeout(10):
-                async for block in request.stream():
-                    if block:
-                        raise fail(422, "The analysis plan comes from the approved configuration.")
-        except (TimeoutError, ClientDisconnect):
-            raise fail(408, "The analysis request was interrupted. Try again.") from None
+        report_language = await quote_language_preference(request)
         if runtime.authority is None:
             raise fail(409, "Your recording is private. Provider analysis is not enabled yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
@@ -584,7 +603,25 @@ def install_submission_http(
             scope.recording_id,
             key=key,
             continuation_grant_id=continuation_grant_id,
+            report_language=report_language,
         )
+
+    @router.get("/submissions/{submission_id}/plan")
+    async def read_plan(
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
+    ) -> dict[str, Any]:
+        guard(request, response)
+        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        try:
+            return await ConversationProcessingPlans.latest_submission_view(
+                owner.ownership.database,
+                tenant_id=scope.tenant_id,
+                person_id=scope.processing_person_id,
+                recording_id=scope.recording_id,
+                processing_lease_id=scope.processing_lease_id,
+            )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
 
     @router.post("/submissions/{submission_id}/plan", status_code=202)
     async def accept_plan(
