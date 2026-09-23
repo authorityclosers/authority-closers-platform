@@ -1168,7 +1168,7 @@ it("describes completed C4 chunks as saved work without claiming the entire stag
   );
 });
 
-it("retry keeps the same submission and source instead of a second charge", async () => {
+it("replays the same upload only after a retry lookup confirms no submission", async () => {
   existing = true;
   failedUpload = true;
   await mount();
@@ -1177,12 +1177,72 @@ it("retry keeps the same submission and source instead of a second charge", asyn
   await click("Analyse my call");
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
   failedUpload = false;
+  lookupUnavailable = true;
+  const retryStart = calls.length;
   await click("Analyse my call");
+  expect(calls[retryStart].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}`,
+  );
   const puts = calls.filter((call) => call.init.method === "PUT");
   expect(puts).toHaveLength(2);
   expect(puts[0].path).toBe(puts[1].path);
   expect(puts[0].init.headers).toEqual(puts[1].init.headers);
 });
+
+it("recovers a committed upload after a lost response and a 31-minute wait without another PUT or plan", async () => {
+  existing = true;
+  failedUpload = true;
+  progressOverride = {
+    ...progress,
+    state: "active",
+    automatic_progression: true,
+    stages: [{ stage: "C2", state: "queued" }],
+  };
+  await mount();
+  await select();
+  await consent();
+  await click("Analyse my call");
+  await act(async () => vi.advanceTimersByTimeAsync(31 * 60_000));
+  const retryStart = calls.length;
+  await click("Analyse my call");
+  expect(calls[retryStart].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}`,
+  );
+  expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
+  expect(calls.some((call) => call.path.endsWith("/plan/quote"))).toBe(false);
+  expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Queued",
+  );
+});
+
+it.each(["mismatch", "denied", "malformed", "unavailable"])(
+  "does not replay upload when retry reconciliation is %s",
+  async (failure) => {
+    existing = true;
+    failedUpload = true;
+    await mount();
+    await select();
+    await consent();
+    await click("Analyse my call");
+    if (failure === "mismatch")
+      progressOverride = { ...progress, source_sha256: "a".repeat(64) };
+    else if (failure === "malformed") progressOverride = { state: "active" };
+    else if (failure === "denied") savedSubmissionUnauthorized = true;
+    else {
+      const original = vi.mocked(fetch).getMockImplementation()!;
+      vi.mocked(fetch).mockImplementation(async (path, init) =>
+        String(path).endsWith(`/submissions/${submissionId}`)
+          ? response({}, 503)
+          : original(path, init),
+      );
+    }
+    await click("Analyse my call");
+    expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
+  },
+);
 
 it("reload fetches the retained call and refuses a mismatched report", async () => {
   existing = true;

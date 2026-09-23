@@ -196,6 +196,7 @@ export function AcquisitionStudio({
   const active = useRef(true);
   const inFlight = useRef(false);
   const chosenId = useRef("");
+  const attemptedUploadId = useRef("");
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
   const stalePlanRefresh = useRef<string | null>(null);
@@ -633,25 +634,49 @@ export function AcquisitionStudio({
       rememberSubmission(id);
       // Once a new upload starts, reload must recover that attempt normally.
       setNewCallRequested(false);
-      const raw = record(
-        await acquisition(`${submissionPath(id)}/source`, {
-          method: "PUT",
-          signal,
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "X-Source-SHA256": sha,
-            "X-Upload-Policy": policy.policy_sha256,
-            "X-Upload-Consent": "accepted",
-          },
-          body: selected,
-        }),
-      );
+      // A failed PUT response does not prove the upload failed to commit. Read
+      // the same opaque submission before replay, even after a long local wait.
+      // Denied, malformed or unavailable reads never authorize another PUT.
+      let raw: Record<string, unknown> | null = null;
+      let recovered = false;
+      if (attemptedUploadId.current === id) {
+        try {
+          raw = record(await acquisition(submissionPath(id), { signal }));
+          recovered = true;
+        } catch (error) {
+          if (!(error instanceof AcquisitionError && error.status === 404))
+            throw error;
+        }
+      }
+      if (!raw) {
+        attemptedUploadId.current = id;
+        raw = record(
+          await acquisition(`${submissionPath(id)}/source`, {
+            method: "PUT",
+            signal,
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "X-Source-SHA256": sha,
+              "X-Upload-Policy": policy.policy_sha256,
+              "X-Upload-Consent": "accepted",
+            },
+            body: selected,
+          }),
+        );
+      }
       const bound = parseSubmission(raw);
       if (bound.id !== id || bound.sha !== sha)
         throw new Error("uploaded_source_mismatch");
+      const recoveredProgress = recovered ? parseProgress(raw, bound) : null;
+      // GET progress does not include allowance. Refresh it from its authority,
+      // never subtract an estimated duration locally or reuse a pre-upload value.
+      const allowanceSource = recovered
+        ? record(await acquisition("/session", { signal }))
+        : raw;
       if (signal.aborted) return;
-      setAllowance(parseAllowance(raw.allowance));
+      setAllowance(parseAllowance(allowanceSource.allowance));
       setAllowanceUnknown(false);
+      if (recoveredProgress) setProgress(recoveredProgress);
       setSubmission(bound);
       setConsent(false);
       setConsentedSubmissionId(bound.id);
