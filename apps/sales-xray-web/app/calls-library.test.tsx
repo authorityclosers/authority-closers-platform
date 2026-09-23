@@ -7,6 +7,9 @@ const { openSelectedCall } = vi.hoisted(() => ({ openSelectedCall: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: openSelectedCall }),
 }));
+// The shell's profile widgets load their own account summary. Keep these
+// library requests isolated from that unrelated fetch sequence.
+vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
 
 import { AccountNavigation } from "./account-navigation";
 import { CallsLibrary } from "./calls-library";
