@@ -1402,7 +1402,34 @@ def install_identity_http(
                 token=token,
             )
 
+    async def require_actor_read_only(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        """Resolve a read actor without a session activity write.
+
+        Read-only Sales Xray navigation may overlap a retained source stream.
+        The resolver takes shared identity locks before returning the actor,
+        while the caller rechecks ownership under shared row fences without
+        changing ``last_seen_at``.
+        """
+
+        token = _session_cookie(request, settings)
+        if token is None:  # pragma: no cover - required session cookie narrows this value
+            raise AuthenticationRequired("A valid Authority Closers session is required.")
+        async with sessions() as database, database.begin():
+            identity = _identity(database)
+            resolved = _with_role_permissions(await identity.resolve_actor_read_only(token))
+            yield AuthenticatedTransaction(
+                database=database,
+                identity=identity,
+                resolved=resolved,
+                token=token,
+            )
+
+    # Keep the established callable return contract while allowing the
+    # bounded Sales Xray composition to opt into read-only authentication.
+    require_actor.read_only = require_actor_read_only  # type: ignore[attr-defined]
+
     actor_dependency = Depends(require_actor)
+    read_actor_dependency = Depends(require_actor_read_only)
 
     async def enqueue_password_email(
         database: AsyncSession,
@@ -2316,7 +2343,7 @@ def install_identity_http(
     async def workspaces(
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = actor_dependency,
+        auth: AuthenticatedTransaction = read_actor_dependency,
     ) -> WorkspacesResponse:
         if request.query_params:
             raise DomainError("Workspaces are resolved only for the authenticated person.")

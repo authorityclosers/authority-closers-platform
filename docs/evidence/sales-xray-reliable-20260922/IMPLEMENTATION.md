@@ -2,7 +2,7 @@
 
 Base: `1a16a4b8defe0f4c36cc4bda5b72ada02c005b17`.
 Candidate branch: `codex/sales-xray-reliable-20260922`.
-Current checkpoint: [06952d76 hour-long report completion](staging-06952d76-long-report.md) records exact passing CI, five successful compact C4 chunks, completed C5, cited playback through the final minute, saved-library reopening, and full reload. Follow-up fixes address the [stereo waveform bound](long-call-waveform-bound.md) and [versioned commercial-state wording](c5-prompt-revision.md). Their deployed acceptance and production acceptance remain pending. [Compact C4 recovery](compact-c4-recovery.md) preserves the versioned repair and [cc88313f](staging-cc88313f-long-call.md) preserves the earlier storage checkpoint. The sections below preserve earlier implementation history.
+Current checkpoint: [fbe5b4ea hour-long waveform and revised coaching acceptance](staging-fbe5b4ea-long-report.md) records passing CI/deployment, the full stereo waveform, unchanged reuse of paid C2/C4 work, revised C5, 55 exact citations, final-minute playback and saved-report reload. The [audio-stream concurrency follow-up](stream-read-concurrency.md) passes local static, unit and PostgreSQL checks, including a failing old-lock baseline, concurrent account reads and retained deletion fences. Its frozen-source CI, staging verification and production acceptance remain pending. [06952d76](staging-06952d76-long-report.md), [compact C4 recovery](compact-c4-recovery.md), and [cc88313f](staging-cc88313f-long-call.md) preserve earlier checkpoints. The sections below preserve implementation history.
 
 The combined follow-up passed 1,158 conversation unit tests (one POSIX ownership
 test skipped on Windows), whole-source/test Ruff, and Mypy for 302 source files.

@@ -82,10 +82,14 @@ class _Owner:
     ownership: GuestOwnership
     token: str | None = field(repr=False)
     actor: ActorContext | None
+    shared_identity_locks: bool = False
 
     @property
     def arguments(self) -> dict[str, Any]:
-        return {"token": self.token, "actor": self.actor}
+        value: dict[str, Any] = {"token": self.token, "actor": self.actor}
+        if self.shared_identity_locks:
+            value["shared_identity_locks"] = True
+        return value
 
 
 def _is_postgres_deadlock(error: DBAPIError) -> bool:
@@ -233,7 +237,65 @@ def install_submission_http(
             raise fail(401, "Your account session is unavailable. Sign in again.") from None
 
     dependency = Depends(current_owner, scope="function")
-    streaming_dependency = Depends(current_owner, scope="request")
+    read_require_actor = getattr(require_actor, "read_only", require_actor)
+
+    @asynccontextmanager
+    async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(read_require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise fail(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise fail(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+            ) from None
+
+    async def read_only_owner(request: Request) -> AsyncIterator[_Owner]:
+        host = guard(request, Response(), write=False)
+        if host == "learner":
+            async with learner_read_account(request) as auth:
+                yield _Owner(
+                    ownership(auth.database),
+                    None,
+                    auth.resolved.actor,
+                    shared_identity_locks=True,
+                )
+            return
+        try:
+            current = _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=False)
+            account = _session_cookie(request, settings, required=False)
+            if account is not None:
+                async with asynccontextmanager(read_require_actor)(request) as auth:
+                    yield _Owner(
+                        ownership(auth.database),
+                        current,
+                        auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
+            else:
+                if current is None:
+                    raise fail(401, "Start an upload session to continue.")
+                async with sessions() as database, database.begin():
+                    yield _Owner(
+                        ownership(database),
+                        current,
+                        None,
+                        shared_identity_locks=True,
+                    )
+        except _InvalidRawCookie:
+            raise fail(401, "This upload session is unavailable.") from None
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Your account session is unavailable. Sign in again.") from None
+
+    read_dependency = Depends(read_only_owner, scope="function")
+    streaming_dependency = Depends(read_only_owner, scope="request")
 
     async def progress_with_deadlock_retry(submission_id: UUID, owner: _Owner) -> dict[str, Any]:
         """Retry one complete progress read after a PostgreSQL deadlock rollback."""
@@ -249,7 +311,12 @@ def install_submission_http(
             # opening the one bounded retry so no failed transaction is reused.
             await owner.ownership.database.rollback()
             async with sessions() as database, database.begin():
-                retry_owner = _Owner(ownership(database), owner.token, owner.actor)
+                retry_owner = _Owner(
+                    ownership(database),
+                    owner.token,
+                    owner.actor,
+                    owner.shared_identity_locks,
+                )
                 return await AcquisitionReports(retry_owner.ownership).progress(
                     submission_id, **retry_owner.arguments
                 )
@@ -261,13 +328,16 @@ def install_submission_http(
         host = guard(request, response, library=True)
         try:
             context = (
-                learner_account(request)
+                learner_read_account(request)
                 if host == "learner"
-                else asynccontextmanager(require_actor)(request)
+                else asynccontextmanager(read_require_actor)(request)
             )
             async with context as auth:
                 return await account_library(
-                    ownership(auth.database), auth.resolved.actor, before=before
+                    ownership(auth.database),
+                    auth.resolved.actor,
+                    before=before,
+                    shared_identity_locks=True,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -278,7 +348,7 @@ def install_submission_http(
     async def policy(request: Request, response: Response) -> dict[str, Any]:
         host = guard(request, response)
         if host == "learner":
-            async with learner_account(request):
+            async with learner_read_account(request):
                 pass
         return upload_policy(runtime.policy)
 
@@ -416,21 +486,21 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}")
     async def progress(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await progress_with_deadlock_retry(submission_id, owner)
 
     @router.get("/submissions/{submission_id}/report")
     async def report(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
 
     @router.get("/submissions/{submission_id}/report.docx")
     async def download_report(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> Response:
         guard(request, response)
         try:
@@ -454,7 +524,7 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}/transcript")
     async def transcript(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).transcript(
@@ -463,7 +533,7 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}/waveform")
     async def waveform(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).waveform(submission_id, **owner.arguments)

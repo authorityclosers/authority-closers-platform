@@ -150,13 +150,21 @@ class AcquisitionReports:
         self.reports = ConversationReports(self.application)
 
     async def recording(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> tuple[SubmissionScope, ConversationRecording]:
         # Root-owned per-visitor read fencing spans this caller transaction.
         # Streaming one call must not take the global acquisition lock or
         # block an unrelated visitor from starting their upload.
         scope = await self.ownership.require_submission_owner(
-            submission_id, token=token, actor=actor
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
         )
         recording = await self.database.scalar(
             select(ConversationRecording)
@@ -173,7 +181,12 @@ class AcquisitionReports:
         if recording is None:
             raise ConversationNotFound("This upload is unavailable.")
         # The recording lock also serializes erasure/permission revocation.
-        await self.ownership.require_submission_owner(submission_id, token=token, actor=actor)
+        await self.ownership.require_submission_owner(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         return scope, recording
 
     async def _draft(self, recording: ConversationRecording) -> ConversationReportDraft | None:
@@ -191,9 +204,19 @@ class AcquisitionReports:
         return result
 
     async def report(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        scope, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -254,9 +277,19 @@ class AcquisitionReports:
         return {"submission_id": str(submission_id), **envelope}
 
     async def transcript(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        _, recording = await self.recording(submission_id, token=token, actor=actor)
+        _, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         recovered = await RetainedC5RecoveryService(self.application).latest_for_recording(
             recording
         )
@@ -312,15 +345,35 @@ class AcquisitionReports:
         }
 
     async def waveform(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        _, recording = await self.recording(submission_id, token=token, actor=actor)
+        _, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         return await ConversationMeasurements(self.application).waveform_from_recording(recording)
 
     async def progress(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, Any]:
-        scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        scope, recording = await self.recording(
+            submission_id,
+            token=token,
+            actor=actor,
+            shared_identity_locks=shared_identity_locks,
+        )
         local_run = await self.database.scalar(
             select(ConversationRun).where(
                 ConversationRun.recording_id == recording.id,

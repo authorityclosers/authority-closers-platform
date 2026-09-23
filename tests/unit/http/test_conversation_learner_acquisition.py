@@ -33,7 +33,19 @@ SESSION_ID = UUID("11111111-1111-4111-8111-111111111111")
 
 
 class _Database:
-    pass
+    def begin(self) -> _TransactionScope:
+        return _TransactionScope(self)
+
+
+class _TransactionScope:
+    def __init__(self, database: _Database) -> None:
+        self.database = database
+
+    async def __aenter__(self) -> _Database:
+        return self.database
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
 
 
 class _SessionScope:
@@ -53,10 +65,16 @@ class _Service:
     def __init__(self, database: _Database) -> None:
         self.database = database
         self.allowance_actors: list[ActorContext] = []
+        self.allowance_lock_modes: list[bool] = []
 
     async def allowance(
-        self, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, int]:
+        self.allowance_lock_modes.append(shared_identity_locks)
         if actor is not None:
             self.allowance_actors.append(actor)
         return {
@@ -124,13 +142,16 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
     database = _Database()
     actor = ActorContext(PERSON_ID, SESSION_ID, PUBLIC_TENANT)
     allowance_actors: list[ActorContext] = []
+    allowance_lock_modes: list[bool] = []
 
     async def allowance(
         _self: AcquisitionSessions,
         *,
         token: str | None = None,
         actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> dict[str, int]:
+        allowance_lock_modes.append(shared_identity_locks)
         if actor is not None:
             allowance_actors.append(actor)
         return {
@@ -229,6 +250,7 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         assert policy.status_code == 200
         assert policy.json()["max_cost_paise"] == 0
         assert allowance_actors == [actor]
+        assert allowance_lock_modes == [True]
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
@@ -237,6 +259,13 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         assert entry.status_code == 200
         assert entry.json()["site_key"] == "site-key-learner-test"
         assert entry.json()["challenge_action"] == "sales_xray_upload"
+        existing_guest = await sales.post(
+            "/v1/conversation/acquisition/session",
+            json={"challenge_token": "already-has-a-guest-session"},
+            headers={"Cookie": "ac_xray_guest=" + "a" * 43},
+        )
+        assert existing_guest.status_code == 200
+        assert allowance_lock_modes == [True, False]
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="https://other.example.test"

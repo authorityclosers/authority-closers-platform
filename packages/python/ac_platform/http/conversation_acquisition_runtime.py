@@ -131,10 +131,15 @@ def install_acquisition_runtime(
             return "learner"
         return None
 
+    read_require_actor = getattr(require_actor, "read_only", require_actor)
+
     @asynccontextmanager
-    async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+    async def learner_account(
+        request: Request, *, read_only: bool = False
+    ) -> AsyncIterator[AuthenticatedTransaction]:
         try:
-            async with asynccontextmanager(require_actor)(request) as auth:
+            dependency = read_require_actor if read_only else require_actor
+            async with asynccontextmanager(dependency)(request) as auth:
                 if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
                     raise HTTPException(
                         403,
@@ -157,7 +162,7 @@ def install_acquisition_runtime(
                 404, "Upload entry not found.", headers={"Cache-Control": "no-store"}
             )
         if host == "learner":
-            async with learner_account(request):
+            async with learner_account(request, read_only=True):
                 pass
         value: dict[str, object] = {
             "enabled": runtime is not None,
