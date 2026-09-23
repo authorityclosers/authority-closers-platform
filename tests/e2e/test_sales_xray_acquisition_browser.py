@@ -299,9 +299,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         and response.request.method == "POST"
                     )
                 ) as request_response:
-                    await target.get_by_role(
-                        "button", name="Send sign-in code", exact=True
-                    ).click()
+                    await target.get_by_role("button", name="Send sign-in code", exact=True).click()
                 requested = await request_response.value
                 assert requested.status == 202
                 request_body = requested.request.post_data_json
@@ -318,9 +316,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # A recently consumed challenge remains inside the actual
                     # resend cooldown. Let the UI-supplied server timer expire,
                     # then perform a real resend through the same browser.
-                    resend = target.get_by_role(
-                        "button", name=re.compile(r"^Resend code")
-                    )
+                    resend = target.get_by_role("button", name=re.compile(r"^Resend code"))
                     await expect(resend).to_be_enabled(timeout=70_000)
                     before = len(mail_adapter.sent_messages)
                     await resend.click()
@@ -405,12 +401,14 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
                     await page.goto(ORIGIN, wait_until="domcontentloaded")
                     await expect(
-                        page.get_by_role("heading", name="Start with your sales call")
+                        page.get_by_role("heading", name="Add a call to review", exact=True)
                     ).to_be_visible()
                     await page.screenshot(path=str(receipt / "upload-desktop.png"), full_page=True)
-                    file_input = page.get_by_label("Choose sales call audio")
-                    await expect(file_input).to_be_enabled(timeout=15_000)
-                    await file_input.set_input_files(
+                    browse = page.get_by_role("button", name="or click to browse", exact=True)
+                    await expect(browse).to_be_enabled(timeout=15_000)
+                    async with page.expect_file_chooser() as chooser:
+                        await browse.click()
+                    await (await chooser.value).set_files(
                         {"name": "Synthetic test call.wav", "mimeType": "audio/wav", "buffer": data}
                     )
                     # The account-first gate may open directly on file select or
@@ -418,9 +416,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # through authentication and profile; this test never selects
                     # another file before the upload.
                     if not await page.get_by_label("Email address").is_visible():
-                        await page.get_by_role(
-                            "button", name="Analyse my call", exact=True
-                        ).click()
+                        await page.get_by_role("button", name="Analyse my call", exact=True).click()
                     await expect(page.get_by_label("Email address")).to_be_visible()
                     await expect(
                         page.get_by_text("Synthetic test call.wav", exact=False).first
@@ -429,14 +425,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
 
                     def source_or_plan_write(item: dict[str, str]) -> bool:
                         path = item["path"].split("?", 1)[0]
-                        return (
-                            item["method"] in {"POST", "PUT", "PATCH"}
-                            and (
-                                path.endswith("/source")
-                                or path.endswith("/plan")
-                                or "/upload" in path
-                                or path.endswith("/submissions")
-                            )
+                        return item["method"] in {"POST", "PUT", "PATCH"} and (
+                            path.endswith("/source")
+                            or path.endswith("/plan")
+                            or "/upload" in path
+                            or path.endswith("/submissions")
                         )
 
                     assert not any(source_or_plan_write(item) for item in requests)
@@ -445,17 +438,19 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         source_or_plan_write(item) for item in requests
                     )
                     journey_checks["pre_auth_provider_calls"] = broker.calls
-                    journey_checks["pre_auth_external_mutations"] = len(
-                        external_mutating_requests
-                    )
+                    journey_checks["pre_auth_external_mutations"] = len(external_mutating_requests)
                     assert source_request_hashes == []
-                    async with setup.sessions() as diagnostic_db:
-                        assert (
-                            await diagnostic_db.scalar(
-                                select(ConversationAcquisitionUsage.id).limit(1)
+
+                    async def assert_no_usage_before_auth():
+                        async with setup.sessions() as diagnostic_db:
+                            assert (
+                                await diagnostic_db.scalar(
+                                    select(ConversationAcquisitionUsage.id).limit(1)
+                                )
+                                is None
                             )
-                            is None
-                        )
+
+                    await db(assert_no_usage_before_auth())
 
                     authenticated = await authenticate_with_email_code(page)
                     assert authenticated["account_created"] is True
@@ -466,14 +461,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         for message in mail_adapter.sent_messages
                     )
                     journey_checks["account_created_before_profile"] = bool(
-                        authenticated["account_created"]
-                        and not authenticated["profile_complete"]
+                        authenticated["account_created"] and not authenticated["profile_complete"]
                     )
                     owner_person_id = UUID(authenticated["person_id"])
                     selected_profile_file = page.get_by_label("Selected audio file")
-                    await expect(selected_profile_file).to_contain_text(
-                        "Synthetic test call.wav"
-                    )
+                    await expect(selected_profile_file).to_contain_text("Synthetic test call.wav")
                     await expect(
                         page.get_by_role(
                             "heading", name="A few details before we review your call."
@@ -484,6 +476,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
 
                     await page.get_by_label("Full name").fill("Synthetic Browser Learner")
+                    await page.get_by_label("Country or region").select_option("US")
                     await page.get_by_label("Mobile number").fill("+12025550123")
                     async with page.expect_response(
                         lambda response: (
@@ -515,25 +508,28 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
                     journey_checks["selected_filename_through_profile"] = True
 
-                    async with setup.sessions() as diagnostic_db:
-                        person = await diagnostic_db.get(Person, owner_person_id)
-                        profile = await diagnostic_db.scalar(
-                            select(SalesXrayProfile).where(
-                                SalesXrayProfile.person_id == owner_person_id
+                    async def assert_verified_account_profile():
+                        async with setup.sessions() as diagnostic_db:
+                            person = await diagnostic_db.get(Person, owner_person_id)
+                            profile = await diagnostic_db.scalar(
+                                select(SalesXrayProfile).where(
+                                    SalesXrayProfile.person_id == owner_person_id
+                                )
                             )
-                        )
-                        assert person is not None and person.email_verified_at is not None
-                        assert person.consent_version == "browser-account-consent-v1"
-                        assert profile is not None
-                        assert profile.phone_number_e164 == "+12025550123"
-                        assert profile.phone_verified_at is None
+                            assert person is not None and person.email_verified_at is not None
+                            assert person.consent_version == "browser-account-consent-v1"
+                            assert profile is not None
+                            assert profile.phone_number_e164 == "+12025550123"
+                            assert profile.phone_verified_at is None
+
+                    await db(assert_verified_account_profile())
 
                     await page.get_by_role("checkbox").last.check()
-                    journey_checks["selected_filename_visible_before_upload"] = (
-                        await page.get_by_text(
-                            "Synthetic test call.wav", exact=True
-                        ).first.is_visible()
-                    )
+                    journey_checks[
+                        "selected_filename_visible_before_upload"
+                    ] = await page.get_by_text(
+                        "Synthetic test call.wav", exact=True
+                    ).first.is_visible()
                     assert journey_checks["selected_filename_visible_before_upload"] is True
                     async with page.expect_response(
                         lambda response: (
@@ -634,31 +630,37 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                             "Lead volume",
                         ],
                     }
-                    async with setup.sessions() as diagnostic_db:
-                        usage_rows = list(
-                            (
-                                await diagnostic_db.scalars(
-                                    select(ConversationAcquisitionUsage).where(
-                                        ConversationAcquisitionUsage.person_id
-                                        == owner_person_id
+
+                    async def assert_single_settlement():
+                        async with setup.sessions() as diagnostic_db:
+                            usage_rows = list(
+                                (
+                                    await diagnostic_db.scalars(
+                                        select(ConversationAcquisitionUsage).where(
+                                            ConversationAcquisitionUsage.person_id
+                                            == owner_person_id
+                                        )
                                     )
-                                )
-                            ).all()
-                        )
-                        assert len(usage_rows) == 1
-                        usage = usage_rows[0]
-                        assert usage.visitor_id is None
-                        assert usage.submission_id == UUID(submission_id)
-                        assert usage.source_sha256 == hashlib.sha256(data).hexdigest()
-                        settlement = await diagnostic_db.get(
-                            ConversationAcquisitionSettlement, usage.id
-                        )
-                        assert settlement is not None
-                        assert settlement.kind == "completed"
-                        assert settlement.charged_seconds == usage.reserved_seconds == 1
-                        journey_checks["acquisition_usage_count"] = len(usage_rows)
-                        journey_checks["settlement_count"] = int(settlement is not None)
-                        journey_checks["charged_seconds"] = settlement.charged_seconds
+                                ).all()
+                            )
+                            assert len(usage_rows) == 1
+                            usage = usage_rows[0]
+                            assert usage.visitor_id is None
+                            assert usage.submission_id == UUID(submission_id)
+                            assert usage.source_sha256 == hashlib.sha256(data).hexdigest()
+                            settlement = await diagnostic_db.get(
+                                ConversationAcquisitionSettlement, usage.id
+                            )
+                            assert settlement is not None
+                            assert settlement.kind == "completed"
+                            assert settlement.charged_seconds == usage.reserved_seconds == 1
+                            return {
+                                "acquisition_usage_count": len(usage_rows),
+                                "settlement_count": int(settlement is not None),
+                                "charged_seconds": settlement.charged_seconds,
+                            }
+
+                    journey_checks.update(await db(assert_single_settlement()))
                     assert broker.routes == ["elevenlabs", "gemini", "gemini"]
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     await page.get_by_role("tab", name="Moments", exact=True).click()
@@ -780,7 +782,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         ).click()
                     assert (await logout.value).status == 204
                     await expect(
-                        library_page.get_by_role("heading", name="Start with your sales call")
+                        library_page.get_by_role("heading", name="Add a call to review", exact=True)
                     ).to_be_visible()
                     assert (
                         await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")

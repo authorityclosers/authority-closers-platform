@@ -24,6 +24,7 @@ import {
   type AccountProfileRecord,
 } from "./account-profile-client";
 import styles from "./account-profile.module.css";
+import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 
 export type SelectedFileMetadata = Readonly<{
   name: string;
@@ -278,6 +279,7 @@ export function AccountProfile({
       );
       if (!active()) return;
       saved = true;
+      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
       setPhase("checking");
       const currentProfile = await readAccountProfile(currentController.signal);
       if (!active()) return;

@@ -51,14 +51,18 @@
 .triggerCopy {
   display: grid;
   min-width: 0;
+  max-width: 11.5rem;
   gap: 0.05rem;
   text-align: left;
 }
 
 .triggerCopy strong {
+  overflow: hidden;
   font-size: 0.73rem;
   font-weight: 750;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .triggerCopy small {
@@ -122,6 +126,7 @@
 }
 
 .summaryCopy strong {
+  overflow-wrap: anywhere;
   font-size: 0.8rem;
 }
 

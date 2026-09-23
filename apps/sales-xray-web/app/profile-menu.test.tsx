@@ -1,13 +1,22 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ProfileMenu } from "./profile-menu";
+import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
+import { WorkspaceAccessProvider } from "./workspace-access";
 
 vi.mock("./live-data-banner", () => ({ LocalSettingsButton: () => null }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root, host: HTMLDivElement;
+const profile = (name: string | null) => ({
+  name,
+  email: "morgan@example.invalid",
+  phone_number_e164: null,
+  phone_verified: false,
+  profile_complete: Boolean(name),
+  revision: 1,
+});
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
@@ -34,6 +43,102 @@ async function signOut() {
       .click(),
   );
 }
+it("shows the canonical profile name in the signed-in menu", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+  );
+  await act(async () =>
+    root.render(<ProfileMenu authenticated accountHref="/calls" />),
+  );
+  const trigger = host.querySelector<HTMLButtonElement>(
+    "button[aria-expanded]",
+  )!;
+  expect(trigger.textContent).toContain("Morgan Lee");
+  expect(trigger.getAttribute("aria-label")).toBe("Open Morgan Lee menu");
+  await act(async () => trigger.click());
+  expect(
+    host.querySelector('[role="region"] > div:first-child > span:first-child')
+      ?.textContent,
+  ).toBe("ML");
+  expect(host.querySelector('[role="region"]')?.textContent).toContain(
+    "Morgan Lee",
+  );
+  expect(fetch).toHaveBeenCalledWith(
+    "/v1/me/sales-xray-profile",
+    expect.objectContaining({ method: "GET", credentials: "same-origin" }),
+  );
+});
+it("keeps a neutral label when the canonical profile has no name", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile(null))),
+  );
+  await act(async () =>
+    root.render(<ProfileMenu authenticated accountHref="/calls" />),
+  );
+  expect(
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent,
+  ).toContain("AC account");
+});
+it("refreshes the name after a confirmed profile update", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(profile("Morgan Lee")))
+      .mockResolvedValueOnce(Response.json(profile("Alex Rivera"))),
+  );
+  await act(async () =>
+    root.render(<ProfileMenu authenticated accountHref="/calls" />),
+  );
+  expect(
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent,
+  ).toContain("Morgan Lee");
+  await act(async () => window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)));
+  expect(
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent,
+  ).toContain("Alex Rivera");
+});
+it("does not fetch an account profile for a guest", async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+  await act(async () =>
+    root.render(<ProfileMenu authenticated={false} accountHref="/login" />),
+  );
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent,
+  ).toContain("Guest workspace");
+});
+it("starts inline account sign-in so a staged file can stay mounted", async () => {
+  const requestAccountSignIn = vi.fn();
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessProvider
+        value={{
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: () => {},
+          requestAccountSignIn,
+        }}
+      >
+        <ProfileMenu authenticated={false} accountHref="/login" />
+      </WorkspaceAccessProvider>,
+    ),
+  );
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+  );
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Sign in to my AC account")!
+      .click(),
+  );
+  expect(requestAccountSignIn).toHaveBeenCalledOnce();
+  expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+});
 it("discards the private document only after confirmed sign out", async () => {
   const assign = vi
     .spyOn(window.location, "assign")

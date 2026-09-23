@@ -1,0 +1,838 @@
+"use client";
+
+import {
+  ArrowLeft,
+  ArrowRight,
+  AudioLines,
+  Check,
+  FileAudio,
+  LoaderCircle,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  emailCodeRequest,
+  isAuthCompleteMessage,
+  maskedEmail,
+  parseAuthenticatedAccount,
+  parseCodeTiming,
+  parseEmailCodeConfig,
+  passwordLogin,
+  readCanonicalSession,
+  type EmailCodeConfig,
+} from "./account-auth-client";
+import styles from "./account-auth.module.css";
+
+export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
+
+const PREVIEW_CONFIG: EmailCodeConfig = {
+  enabled: true,
+  consent_version: "review-only",
+  google_enabled: true,
+  expires_in_seconds: 600,
+  resend_after_seconds: 60,
+};
+
+export function AccountAuth({
+  selectedFile,
+  onAuthenticated,
+  previewState,
+}: {
+  selectedFile?: { name: string; size: number } | null;
+  onAuthenticated: () => void;
+  previewState?: AccountAuthPreviewState;
+}) {
+  const preview = process.env.NODE_ENV !== "production" && !!previewState;
+  const [config, setConfig] = useState<EmailCodeConfig | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [email, setEmail] = useState(
+    previewState === "auth.code" ? "sample@example.test" : "",
+  );
+  const [consent, setConsent] = useState(false);
+  const [step, setStep] = useState<"email" | "code" | "password" | "confirmed">(
+    previewState === "auth.code" ? "code" : "email",
+  );
+  const [pending, setPending] = useState(false);
+  const [popupActive, setPopupActive] = useState(false);
+  const [sessionCheckNeeded, setSessionCheckNeeded] = useState(false);
+  const [error, setError] = useState("");
+  const [configError, setConfigError] = useState(false);
+  const [retryAt, setRetryAt] = useState(0);
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [now, setNow] = useState(0);
+  const controller = useRef<AbortController | null>(null);
+  const inFlight = useRef(false);
+  const popup = useRef<Window | null>(null);
+  const popupFlow = useRef<string | null>(null);
+  const popupPoll = useRef<ReturnType<typeof setInterval> | null>(null);
+  const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
+  const confirmingPopup = useRef(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const verified = useRef(false);
+  const activeConfig = preview ? PREVIEW_CONFIG : config;
+  const displayedStep = preview
+    ? previewState === "auth.code"
+      ? "code"
+      : "email"
+    : step;
+  const displayedEmail =
+    previewState === "auth.code" && preview ? "sample@example.test" : email;
+
+  useEffect(() => {
+    if (preview) return;
+    const request = new AbortController();
+    emailCodeRequest("config", request.signal)
+      .then(parseEmailCodeConfig)
+      .then((value) => {
+        if (!request.signal.aborted) {
+          setConfig(value);
+          setConfigError(false);
+        }
+      })
+      .catch(() => {
+        if (!request.signal.aborted) setConfigError(true);
+      });
+    return () => request.abort();
+  }, [loadAttempt, preview]);
+  useEffect(
+    () => () => {
+      controller.current?.abort();
+      if (popupPoll.current) clearInterval(popupPoll.current);
+      if (popupMessage.current)
+        window.removeEventListener("message", popupMessage.current);
+      popup.current?.close();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (step !== "code") return;
+    codeRef.current?.focus();
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [step]);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
+  function complete() {
+    if (preview || verified.current) return;
+    verified.current = true;
+    setStep("confirmed");
+    onAuthenticated();
+  }
+
+  async function sendCode(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (
+      preview ||
+      !activeConfig?.enabled ||
+      !activeConfig.consent_version ||
+      !consent ||
+      inFlight.current ||
+      Date.now() < retryAt
+    )
+      return;
+    const address = email.trim();
+    if (!address || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return;
+    inFlight.current = true;
+    const request = new AbortController();
+    controller.current = request;
+    setPending(true);
+    setError("");
+    try {
+      const current = parseEmailCodeConfig(
+        await emailCodeRequest("config", request.signal),
+      );
+      if (request.signal.aborted) return;
+      setConfig(current);
+      if (
+        !current.enabled ||
+        current.consent_version !== activeConfig.consent_version
+      ) {
+        setConsent(false);
+        setStep("email");
+        setConfigError(!current.enabled);
+        setError(
+          "The Terms or sign-in settings changed. Review them and request a new code.",
+        );
+        return;
+      }
+      const body = await emailCodeRequest("request", request.signal, {
+        email: address,
+        consent: true,
+        consent_version: activeConfig.consent_version,
+        surface: "sales_xray",
+        return_path: "/",
+      });
+      const timing = parseCodeTiming(body);
+      if (
+        !body ||
+        typeof body !== "object" ||
+        !("accepted" in body) ||
+        body.accepted !== true
+      )
+        throw new Error("not-accepted");
+      if (request.signal.aborted) return;
+      const time = Date.now();
+      setEmail(address);
+      setNow(time);
+      setRetryAt(time + timing.resend_after_seconds * 1000);
+      setExpiresAt(time + timing.expires_in_seconds * 1000);
+      setSessionCheckNeeded(false);
+      setStep("code");
+      if (codeRef.current) codeRef.current.value = "";
+    } catch (failure) {
+      if (
+        !request.signal.aborted &&
+        !(await refreshConsentAfterFailure(request.signal))
+      )
+        setError(
+          failure instanceof Error && failure.message === "rate-limited"
+            ? "Please wait a moment before requesting another code."
+            : "We couldn’t send a code just now. Please try again.",
+        );
+    } finally {
+      inFlight.current = false;
+      if (!request.signal.aborted) setPending(false);
+    }
+  }
+
+  async function refreshConsentAfterFailure(signal: AbortSignal) {
+    try {
+      const current = parseEmailCodeConfig(
+        await emailCodeRequest("config", signal),
+      );
+      if (signal.aborted) return false;
+      setConfig(current);
+      if (
+        !current.enabled ||
+        current.consent_version !== activeConfig?.consent_version
+      ) {
+        setConsent(false);
+        setStep("email");
+        setConfigError(!current.enabled);
+        setError(
+          "The Terms or sign-in settings changed. Review them and request a new code.",
+        );
+        return true;
+      }
+    } catch {
+      // A failed refresh gives no account-existence signal. Keep the safe
+      // retry path on the code screen with the user's selected file intact.
+    }
+    return false;
+  }
+
+  async function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = codeRef.current?.value.replace(/\s/g, "") ?? "";
+    if (preview || inFlight.current || !/^\d{6}$/.test(code)) return;
+    inFlight.current = true;
+    const request = new AbortController();
+    controller.current = request;
+    setPending(true);
+    setError("");
+    let codeAccepted = false;
+    try {
+      parseAuthenticatedAccount(
+        await emailCodeRequest("verify", request.signal, {
+          email,
+          code,
+          surface: "sales_xray",
+          return_path: "/",
+        }),
+      );
+      codeAccepted = true;
+      await readCanonicalSession(request.signal);
+      if (!request.signal.aborted) complete();
+    } catch {
+      if (!request.signal.aborted) {
+        if (codeAccepted) {
+          setSessionCheckNeeded(true);
+          setError(
+            "Your code was accepted, but your account session could not be confirmed. Check again below.",
+          );
+        } else if (!(await refreshConsentAfterFailure(request.signal))) {
+          setError(
+            "That code could not be verified. Check the latest email, or request a new code.",
+          );
+        }
+      }
+    } finally {
+      if (codeRef.current) codeRef.current.value = "";
+      inFlight.current = false;
+      if (!request.signal.aborted) setPending(false);
+    }
+  }
+
+  async function checkVerifiedSession() {
+    if (preview || inFlight.current || !sessionCheckNeeded) return;
+    inFlight.current = true;
+    const request = new AbortController();
+    controller.current = request;
+    setPending(true);
+    setError("");
+    try {
+      await readCanonicalSession(request.signal);
+      if (!request.signal.aborted) complete();
+    } catch {
+      if (!request.signal.aborted)
+        setError(
+          "Your account session still could not be confirmed. Try again or request a new code.",
+        );
+    } finally {
+      inFlight.current = false;
+      if (!request.signal.aborted) setPending(false);
+    }
+  }
+
+  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (preview || inFlight.current) return;
+    const address = email.trim();
+    const password = passwordRef.current?.value ?? "";
+    if (!address || !password) return;
+    inFlight.current = true;
+    const request = new AbortController();
+    controller.current = request;
+    setPending(true);
+    setError("");
+    try {
+      await passwordLogin(address, password, request.signal);
+      if (!request.signal.aborted) complete();
+    } catch {
+      if (!request.signal.aborted)
+        setError(
+          "We couldn’t sign you in. Check your email and password, then try again.",
+        );
+    } finally {
+      if (passwordRef.current) passwordRef.current.value = "";
+      inFlight.current = false;
+      if (!request.signal.aborted) setPending(false);
+    }
+  }
+
+  function clearPopup() {
+    if (popupPoll.current) clearInterval(popupPoll.current);
+    popupPoll.current = null;
+    if (popupMessage.current)
+      window.removeEventListener("message", popupMessage.current);
+    popupMessage.current = null;
+    popup.current?.close();
+    popup.current = null;
+    popupFlow.current = null;
+    setPopupActive(false);
+  }
+
+  function cancelGoogle() {
+    controller.current?.abort();
+    clearPopup();
+    confirmingPopup.current = false;
+    inFlight.current = false;
+    setPending(false);
+    setError("");
+  }
+
+  async function confirmGoogle() {
+    if (
+      preview ||
+      !popup.current ||
+      !popupFlow.current ||
+      confirmingPopup.current
+    )
+      return;
+    confirmingPopup.current = true;
+    const request = new AbortController();
+    controller.current = request;
+    try {
+      await readCanonicalSession(request.signal);
+      if (!request.signal.aborted) {
+        clearPopup();
+        complete();
+        inFlight.current = false;
+        setPending(false);
+      }
+    } catch {
+      if (!request.signal.aborted) {
+        const changed = await refreshConsentAfterFailure(request.signal);
+        if (changed) {
+          clearPopup();
+          inFlight.current = false;
+          setPending(false);
+        } else {
+          setError(
+            "Sign-in isn’t confirmed yet. Finish in the Google window, then check again.",
+          );
+        }
+      }
+    } finally {
+      confirmingPopup.current = false;
+    }
+  }
+
+  function google() {
+    if (
+      preview ||
+      !activeConfig?.google_enabled ||
+      !activeConfig.consent_version ||
+      !consent ||
+      inFlight.current
+    )
+      return;
+    // Open a blank same-origin popup synchronously. Fresh policy is checked
+    // before navigating it to Google, while the File stays in this document.
+    const flow = crypto.randomUUID();
+    const child = window.open(
+      "about:blank",
+      "sales-xray-sign-in",
+      "popup,width=520,height=720",
+    );
+    if (!child) {
+      setError(
+        "Allow the sign-in window, or use an email code. This page stays open.",
+      );
+      return;
+    }
+    popup.current = child;
+    popupFlow.current = flow;
+    setPopupActive(true);
+    inFlight.current = true;
+    setPending(true);
+    setError("");
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== popup.current ||
+        !popupFlow.current ||
+        !isAuthCompleteMessage(event.data, popupFlow.current)
+      )
+        return;
+      void confirmGoogle();
+    };
+    popupMessage.current = handleMessage;
+    window.addEventListener("message", handleMessage);
+    popupPoll.current = setInterval(() => {
+      cancelGoogle();
+      setError("Google sign-in timed out. Try again or use an email code.");
+    }, 5 * 60_000);
+    const request = new AbortController();
+    controller.current = request;
+    void emailCodeRequest("config", request.signal)
+      .then(parseEmailCodeConfig)
+      .then((current) => {
+        if (request.signal.aborted) return;
+        setConfig(current);
+        if (
+          !current.enabled ||
+          !current.consent_version ||
+          current.consent_version !== activeConfig.consent_version
+        ) {
+          setConsent(false);
+          setConfigError(!current.enabled);
+          clearPopup();
+          inFlight.current = false;
+          setPending(false);
+          setError(
+            "The Terms or sign-in settings changed. Review them before continuing.",
+          );
+          return;
+        }
+        const parameters = new URLSearchParams({
+          action: "authenticate",
+          surface: "sales_xray",
+          consent: "true",
+          consent_version: current.consent_version,
+          return_path: `/auth/complete?flow=${flow}`,
+        });
+        child.location.assign(`/v1/auth/google/start?${parameters}`);
+      })
+      .catch(() => {
+        if (request.signal.aborted) return;
+        clearPopup();
+        inFlight.current = false;
+        setPending(false);
+        setError("Sign-in settings could not be checked. Please try again.");
+      });
+  }
+
+  const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
+  const expired = !preview && displayedStep === "code" && now >= expiresAt;
+  const unavailable =
+    configError ||
+    (activeConfig != null && !activeConfig.enabled) ||
+    (preview && previewState === "auth.error");
+  const available =
+    activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  return (
+    <section
+      className={`xray-app ${styles.auth}`}
+      aria-labelledby="account-auth-heading"
+      aria-busy={pending}
+      data-review-preview={preview ? "true" : undefined}
+    >
+      <div className={styles.story}>
+        <Link className={styles.brand} href="/" aria-label="Sales Xray home">
+          <Image
+            src="/brand/ac-v0.1/symbol.svg"
+            alt=""
+            width={38}
+            height={38}
+          />
+          <span>
+            <strong>Sales Xray</strong>
+            <small>by Authority Closers</small>
+          </span>
+        </Link>
+        <div className={styles.storyCopy}>
+          <p className={styles.eyebrow}>
+            A better conversation starts with clarity
+          </p>
+          <h2>
+            Hear the opportunity
+            <br />
+            in every call.
+          </h2>
+          <p>Bring your conversation. Leave with a clearer next step.</p>
+        </div>
+        <div className={styles.wave} aria-hidden="true">
+          <AudioLines strokeWidth={0.65} />
+        </div>
+        <p className={styles.shared}>
+          <ShieldCheck size={17} />
+          One AC account. Your learning, calls and reports.
+        </p>
+      </div>
+      <div className={styles.formColumn}>
+        <div className={styles.card}>
+          <p className={styles.eyebrow}>
+            {displayedStep === "code"
+              ? "One quick check"
+              : displayedStep === "confirmed"
+                ? "You’re signed in"
+                : displayedStep === "password"
+                  ? "Existing AC account"
+                  : "Welcome to Sales Xray"}
+          </p>
+          <h1 id="account-auth-heading">
+            {displayedStep === "code" ? (
+              "Check your email."
+            ) : displayedStep === "confirmed" ? (
+              "Let’s get you ready."
+            ) : displayedStep === "password" ? (
+              "Welcome back."
+            ) : (
+              <>
+                Your next better
+                <br />
+                conversation starts here.
+              </>
+            )}
+          </h1>
+          <p className={styles.lead}>
+            {displayedStep === "code" ? (
+              <>
+                If this address can receive a sign-in code, check the inbox for{" "}
+                <strong>{maskedEmail(displayedEmail)}</strong>.
+              </>
+            ) : displayedStep === "confirmed" ? (
+              "Opening your account securely…"
+            ) : displayedStep === "password" ? (
+              "Sign in with your existing Authority Closers password."
+            ) : (
+              "Sign in or create your account. It only takes a moment."
+            )}
+          </p>
+          {displayedStep === "confirmed" ? (
+            <div className={styles.confirmed}>
+              <Check />
+              Account confirmed
+            </div>
+          ) : (
+            <>
+              {displayedStep !== "password" && unavailable ? (
+                <div role="status" className={styles.notice}>
+                  Sign-in is temporarily unavailable.
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    disabled={preview}
+                    onClick={() => setLoadAttempt((value) => value + 1)}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : displayedStep !== "password" && !activeConfig ? (
+                <p role="status" className={styles.notice}>
+                  <LoaderCircle className={styles.spin} size={18} />
+                  Preparing secure sign-in…
+                </p>
+              ) : null}
+              {displayedStep === "email" ? (
+                <>
+                  {activeConfig?.google_enabled && (
+                    <button
+                      type="button"
+                      className={styles.google}
+                      onClick={google}
+                      disabled={preview || !available || !consent || pending}
+                    >
+                      <span aria-hidden="true" className={styles.googleMark}>
+                        G
+                      </span>
+                      Continue with Google
+                    </button>
+                  )}
+                  {activeConfig?.google_enabled && (
+                    <div className={styles.divider}>
+                      <span>or use email</span>
+                    </div>
+                  )}
+                  <form onSubmit={sendCode} className={styles.form}>
+                    <label htmlFor="account-email">Email address</label>
+                    <div className={styles.inputWrap}>
+                      <Mail size={18} aria-hidden="true" />
+                      <input
+                        id="account-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        maxLength={320}
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="you@company.com"
+                        required
+                        disabled={preview || pending}
+                      />
+                    </div>
+                    <label className={styles.consent}>
+                      <input
+                        type="checkbox"
+                        checked={consent}
+                        onChange={(event) => setConsent(event.target.checked)}
+                        disabled={preview || pending}
+                        required
+                      />
+                      <span>
+                        I agree to the{" "}
+                        <a
+                          href="https://app.authorityclosers.com/terms"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Terms
+                        </a>{" "}
+                        and{" "}
+                        <a
+                          href="https://app.authorityclosers.com/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Privacy Policy
+                        </a>
+                        .
+                      </span>
+                    </label>
+                    <button
+                      type="submit"
+                      className={styles.primary}
+                      disabled={preview || !available || !consent || pending}
+                    >
+                      {pending ? (
+                        <>
+                          <LoaderCircle className={styles.spin} size={18} />
+                          Sending…
+                        </>
+                      ) : (
+                        <>
+                          Send sign-in code
+                          <ArrowRight size={18} />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                  {popupActive && pending && (
+                    <div className={styles.popupActions} role="status">
+                      <p>Finish sign-in in the Google window.</p>
+                      <button
+                        type="button"
+                        onClick={() => void confirmGoogle()}
+                      >
+                        I finished Google sign-in
+                      </button>
+                      <button type="button" onClick={cancelGoogle}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : displayedStep === "password" ? (
+                <form className={styles.form} onSubmit={submitPassword}>
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    disabled={pending}
+                    onClick={() => {
+                      setStep("email");
+                      setError("");
+                    }}
+                  >
+                    <ArrowLeft size={15} /> Other sign-in options
+                  </button>
+                  <label htmlFor="account-password-email">Email address</label>
+                  <div className={styles.inputWrap}>
+                    <Mail size={18} aria-hidden="true" />
+                    <input
+                      id="account-password-email"
+                      type="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      maxLength={320}
+                      required
+                      disabled={pending}
+                    />
+                  </div>
+                  <label htmlFor="account-password">Password</label>
+                  <div className={styles.inputWrap}>
+                    <input
+                      id="account-password"
+                      ref={passwordRef}
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      disabled={pending}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className={styles.primary}
+                    disabled={pending || preview}
+                  >
+                    {pending ? "Signing in…" : "Sign in"}
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
+                </form>
+              ) : (
+                <form className={styles.form} onSubmit={verify}>
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    disabled={pending || preview}
+                    onClick={() => {
+                      setStep("email");
+                      setError("");
+                      setSessionCheckNeeded(false);
+                    }}
+                  >
+                    <ArrowLeft size={15} />
+                    Change email
+                  </button>
+                  <label htmlFor="account-code">Sign-in code</label>
+                  <input
+                    ref={codeRef}
+                    id="account-code"
+                    className={styles.code}
+                    name="code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]{6}"
+                    onInput={(event) => {
+                      event.currentTarget.value = event.currentTarget.value
+                        .replace(/\D/g, "")
+                        .slice(0, 6);
+                    }}
+                    required
+                    disabled={pending || preview}
+                    aria-describedby="code-help"
+                  />
+                  <p id="code-help" className={styles.codeHelp}>
+                    {expired
+                      ? "This code has expired. Request a new one below."
+                      : "You can paste the complete code from your email."}
+                  </p>
+                  <button
+                    type="submit"
+                    className={styles.primary}
+                    disabled={pending || expired || preview}
+                  >
+                    {pending ? (
+                      <>
+                        <LoaderCircle className={styles.spin} size={18} />
+                        Verifying…
+                      </>
+                    ) : (
+                      <>
+                        Verify and continue
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </button>
+                  {sessionCheckNeeded && (
+                    <button
+                      type="button"
+                      className={styles.resend}
+                      disabled={pending || preview}
+                      onClick={() => void checkVerifiedSession()}
+                    >
+                      Check sign-in status
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.resend}
+                    disabled={pending || seconds > 0 || preview}
+                    onClick={() => void sendCode()}
+                  >
+                    {seconds > 0 ? `Resend code in ${seconds}s` : "Resend code"}
+                  </button>
+                </form>
+              )}
+              <p
+                ref={errorRef}
+                tabIndex={-1}
+                role={error ? "alert" : undefined}
+                className={styles.error}
+              >
+                {error}
+              </p>
+            </>
+          )}
+          {selectedFile && (
+            <div className={styles.file}>
+              <FileAudio size={22} aria-hidden="true" />
+              <span>
+                <strong title={selectedFile.name}>{selectedFile.name}</strong>
+                <small>Ready on this device · not uploaded yet</small>
+              </span>
+              <AudioLines size={21} aria-hidden="true" />
+            </div>
+          )}
+          <p className={styles.footnote}>
+            {selectedFile
+              ? "Your recording stays here while you sign in."
+              : "The same account works across Authority Closers."}
+          </p>
+          {displayedStep === "email" && (
+            <button
+              type="button"
+              className={styles.password}
+              disabled={pending || preview}
+              onClick={() => {
+                setStep("password");
+                setError("");
+              }}
+            >
+              Use my existing password
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

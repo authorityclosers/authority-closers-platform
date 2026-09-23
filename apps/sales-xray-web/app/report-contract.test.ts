@@ -167,6 +167,112 @@ describe("CallStudio report contract", () => {
     ).toThrow("report_strength_0_evidence_0_quote_mismatch");
   });
 
+  it("preserves optional dimension evidence separately from legacy citations", () => {
+    const report = validReport();
+    report.dimensions[0] = {
+      ...report.dimensions[0]!,
+      status: "observed",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1_000,
+          end_ms: 2_200,
+        },
+      ],
+    };
+    report.dimensions[1] = {
+      ...report.dimensions[1]!,
+      status: "unknown",
+      evidence: [],
+    };
+
+    const parsed = parseJobResponse(job(report), {
+      sourceSha256,
+      durationMs: transcript.duration_ms,
+      transcript: parseTranscript(transcript, sourceSha256),
+    });
+
+    expect(parsed.report?.dimensions[0]?.evidence).toEqual([
+      {
+        segment_id: "s1",
+        quote: "agree on the next step",
+        start_ms: 1_000,
+        end_ms: 2_200,
+      },
+    ]);
+    expect(parsed.report?.dimensions[0]?.citations).toEqual([citation]);
+    expect(parsed.report?.dimensions[1]?.evidence).toEqual([]);
+    expect(parsed.report?.dimensions[2]).not.toHaveProperty("evidence");
+  });
+
+  it("requires a provided evidence array for observed and conflicted dimensions", () => {
+    const legacy = validReport();
+    legacy.dimensions[0] = { ...legacy.dimensions[0]!, status: "observed" };
+    const legacyParsed = parseJobResponse(job(legacy), binding);
+    expect(legacyParsed.report?.dimensions[0]?.status).toBe("observed");
+    expect(legacyParsed.report?.dimensions[0]).not.toHaveProperty("evidence");
+
+    for (const status of ["observed", "conflicted"]) {
+      const report = validReport();
+      report.dimensions[0] = {
+        ...report.dimensions[0]!,
+        status,
+        evidence: [],
+      };
+      expect(() => parseJobResponse(job(report), binding)).toThrow(
+        "report_dimension_0_evidence_required",
+      );
+    }
+  });
+
+  it("rejects invalid dimension evidence IDs, quotes and non-native timings", () => {
+    const base = validReport();
+    const evidence = {
+      segment_id: "s1",
+      quote: "agree on the next step",
+      start_ms: 1_000,
+      end_ms: 2_200,
+    };
+    const bound = {
+      sourceSha256,
+      durationMs: transcript.duration_ms,
+      transcript: parseTranscript(transcript, sourceSha256),
+    };
+
+    const unknownSegment = structuredClone(base);
+    unknownSegment.dimensions[0]!.evidence = [
+      { ...evidence, segment_id: "missing-segment" },
+    ];
+    expect(() => parseJobResponse(job(unknownSegment), bound)).toThrow(
+      "report_dimension_0_evidence_0_segment_unknown",
+    );
+
+    const invalidId = structuredClone(base);
+    invalidId.dimensions[0]!.evidence = [
+      { ...evidence, segment_id: "../unsafe" },
+    ];
+    expect(() => parseJobResponse(job(invalidId), binding)).toThrow(
+      "report_dimension_0_evidence_0_segment_id_invalid",
+    );
+
+    const invalidQuote = structuredClone(base);
+    invalidQuote.dimensions[0]!.evidence = [
+      { ...evidence, quote: "not in the native segment" },
+    ];
+    expect(() => parseJobResponse(job(invalidQuote), bound)).toThrow(
+      "report_dimension_0_evidence_0_quote_mismatch",
+    );
+
+    const nonNativeTiming = structuredClone(base);
+    nonNativeTiming.dimensions[0]!.evidence = [
+      { ...evidence, start_ms: 1_100, end_ms: 2_100 },
+    ];
+    expect(() => parseJobResponse(job(nonNativeTiming), bound)).toThrow(
+      "report_dimension_0_evidence_0_segment_timing_mismatch",
+    );
+  });
+
   it("parses bounded saved recordings and rejects unsafe path IDs", () => {
     const parsed = parseSavedRecordings({
       recordings: [

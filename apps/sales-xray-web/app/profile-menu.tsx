@@ -5,8 +5,22 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { requestSalesXrayLogout } from "./account-navigation";
+import { readAccountProfile } from "./account-profile-client";
 import { LocalSettingsButton } from "./live-data-banner";
+import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
+
+export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
+
+function initials(name: string | null): string {
+  if (!name) return "AC";
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => Array.from(part)[0])
+    .join("")
+    .toLocaleUpperCase();
+}
 
 export function ProfileMenu({
   authenticated,
@@ -18,9 +32,44 @@ export function ProfileMenu({
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
+  const [profileName, setProfileName] = useState<string | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
+  const access = useWorkspaceAccess();
+
+  useEffect(() => {
+    if (!authenticated) return;
+    let controller: AbortController | null = null;
+    const refresh = () => {
+      controller?.abort();
+      const current = new AbortController();
+      controller = current;
+      void readAccountProfile(current.signal)
+        .then((profile) => {
+          if (!current.signal.aborted)
+            setProfileName(profile.name?.trim() || null);
+        })
+        .catch(() => {
+          // The menu remains usable when a profile read is unavailable.
+        });
+    };
+    const refreshAfterUpdate = () => {
+      setProfileName(null);
+      refresh();
+    };
+    refresh();
+    window.addEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
+    return () => {
+      window.removeEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
+      controller?.abort();
+    };
+  }, [authenticated]);
+
+  const accountName = authenticated ? profileName : null;
+  const accountLabel = authenticated
+    ? accountName || "AC account"
+    : "Guest workspace";
 
   useEffect(() => {
     if (!open) return;
@@ -67,7 +116,7 @@ export function ProfileMenu({
         className={styles.trigger}
         aria-expanded={open}
         aria-label={
-          authenticated ? "Open AC account menu" : "Open profile menu"
+          authenticated ? `Open ${accountLabel} menu` : "Open profile menu"
         }
         onClick={() => setOpen((value) => !value)}
       >
@@ -75,7 +124,7 @@ export function ProfileMenu({
           <CircleUserRound />
         </span>
         <span className={styles.triggerCopy}>
-          <strong>{authenticated ? "AC account" : "Guest workspace"}</strong>
+          <strong title={accountName || undefined}>{accountLabel}</strong>
           <small>
             {authenticated ? "Private workspace" : "Sign in to save calls"}
           </small>
@@ -90,12 +139,12 @@ export function ProfileMenu({
         >
           <div className={styles.summary}>
             <span className={styles.summaryAvatar} aria-hidden="true">
-              {authenticated ? "AC" : "G"}
+              {authenticated ? initials(accountName) : "G"}
             </span>
             <span className={styles.summaryCopy}>
               <strong>
                 {authenticated
-                  ? "Authority Closers account"
+                  ? accountName || "Authority Closers account"
                   : "Guest workspace"}
               </strong>
               <small>
@@ -106,16 +155,30 @@ export function ProfileMenu({
             </span>
           </div>
           <div className={styles.actions}>
-            <Link
-              href={accountHref}
-              className={styles.item}
-              onClick={() => setOpen(false)}
-            >
-              <FolderOpen size={16} aria-hidden="true" />
-              {authenticated
-                ? "Saved calls & account"
-                : "Sign in to my AC account"}
-            </Link>
+            {!authenticated && access?.requestAccountSignIn ? (
+              <button
+                type="button"
+                className={styles.item}
+                onClick={() => {
+                  setOpen(false);
+                  access.requestAccountSignIn?.();
+                }}
+              >
+                <FolderOpen size={16} aria-hidden="true" />
+                Sign in to my AC account
+              </button>
+            ) : (
+              <Link
+                href={accountHref}
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <FolderOpen size={16} aria-hidden="true" />
+                {authenticated
+                  ? "Saved calls & account"
+                  : "Sign in to my AC account"}
+              </Link>
+            )}
             <LocalSettingsButton className={styles.item} />
             {authenticated ? (
               <button

@@ -12,6 +12,10 @@ import Link from "next/link";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
+import { AccountAuth } from "./account-auth";
+import { AccountProfile } from "./account-profile";
+import { readAccountProfileEligibility } from "./account-profile-client";
+import { AcquisitionShell } from "./acquisition-shell";
 import { SalesXrayPreloader } from "./sales-xray-preloader";
 import {
   WorkspaceAccessProvider,
@@ -22,6 +26,7 @@ import {
   usePendingAnalysis,
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
+import { SalesXrayFixturePreview } from "./sales-xray-fixture-preview";
 
 type Workspace = Readonly<{
   tenant_id: string;
@@ -39,7 +44,7 @@ type ViewState =
   | { kind: "loading" }
   | { kind: "unauthenticated" }
   | { kind: "ready"; choices: WorkspaceChoices }
-  | { kind: "empty" }
+  | { kind: "empty"; choices: WorkspaceChoices }
   | { kind: "unavailable"; message: string }
   | {
       kind: "chooser" | "selecting";
@@ -181,9 +186,15 @@ function StandaloneStudioView({
   const Main = embedded ? "div" : "main";
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
+  const [authRequested, setAuthRequested] = useState(false);
+  const [gateIntentId, setGateIntentId] = useState<string | null>(null);
+  const [eligibleReceipt, setEligibleReceipt] = useState<string | null>(null);
+  const eligibleReceiptRef = useRef<string | null>(null);
+  const gateIntentRef = useRef<string | null>(null);
   const generation = useRef(0);
   const activeController = useRef<AbortController | null>(null);
   const pending = usePendingAnalysis();
+  const observeAccount = pending?.observeAccount;
   const review = useProcessingReview(null);
 
   useEffect(() => {
@@ -204,9 +215,14 @@ function StandaloneStudioView({
         )
           return;
         if (choices === null) {
+          observeAccount?.(null);
           setView({ kind: "unauthenticated" });
           return;
         }
+        observeAccount?.({
+          personId: choices.person_id,
+          sessionId: choices.session_id,
+        });
         if (choices.selected_tenant_id !== null) {
           setView({ kind: "ready", choices });
           return;
@@ -214,7 +230,7 @@ function StandaloneStudioView({
         setView(
           choices.workspaces.length
             ? { kind: "chooser", choices }
-            : { kind: "empty" },
+            : { kind: "empty", choices },
         );
       })
       .catch(() => {
@@ -230,7 +246,7 @@ function StandaloneStudioView({
         activeController.current = null;
       if (generation.current === requestGeneration) generation.current += 1;
     };
-  }, [attempt, review.fixtureRequested, review.readOnly]);
+  }, [attempt, observeAccount, review.fixtureRequested, review.readOnly]);
 
   useEffect(
     () => () => {
@@ -277,6 +293,66 @@ function StandaloneStudioView({
       setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };
+  const selected = pending?.selection ?? null;
+  const accountChoices =
+    view.kind === "ready" ||
+    view.kind === "chooser" ||
+    view.kind === "selecting" ||
+    view.kind === "empty"
+      ? view.choices
+      : null;
+  const identityKey = accountChoices
+    ? JSON.stringify([accountChoices.person_id, accountChoices.session_id])
+    : null;
+  const eligibilityKey =
+    review.readOnly === false &&
+    !review.fixtureRequested &&
+    selected &&
+    view.kind === "ready" &&
+    view.choices.selected_tenant_id &&
+    selected.boundContextKey ===
+      JSON.stringify([
+        view.choices.person_id,
+        view.choices.session_id,
+        view.choices.selected_tenant_id,
+      ])
+      ? JSON.stringify([
+          selected.intentId,
+          view.choices.person_id,
+          view.choices.session_id,
+          view.choices.selected_tenant_id,
+        ])
+      : null;
+  const eligibleForSelection = Boolean(
+    eligibilityKey && eligibleReceipt === eligibilityKey,
+  );
+  const openProfileGate = (intentId: string) => {
+    gateIntentRef.current = intentId;
+    setGateIntentId(intentId);
+  };
+  const requestAccountSignIn = () => {
+    if (review.fixtureRequested || review.readOnly !== false) return;
+    if (selected) openProfileGate(selected.intentId);
+    setAuthRequested(true);
+  };
+  const requestAnalysisAccess = () => {
+    if (review.fixtureRequested || review.readOnly !== false || !selected)
+      return false;
+    // Keep the selected File local until shared AC sign-in and profile checks
+    // finish. Opening auth does not grant permission to upload or analyse.
+    if (view.kind === "unauthenticated") {
+      requestAccountSignIn();
+      return false;
+    }
+    if (view.kind !== "ready") {
+      if (accountChoices) openProfileGate(selected.intentId);
+      return false;
+    }
+    if (eligibilityKey && eligibleReceiptRef.current === eligibilityKey)
+      return true;
+    openProfileGate(selected.intentId);
+    return false;
+  };
   useEffect(() => {
     if (view.kind !== "ready" || !view.choices.selected_tenant_id) return;
     pending?.bindContext({
@@ -285,6 +361,31 @@ function StandaloneStudioView({
       tenantId: view.choices.selected_tenant_id,
     });
   }, [view, pending]);
+  useEffect(() => {
+    if (
+      !eligibilityKey ||
+      eligibleReceiptRef.current === eligibilityKey ||
+      gateIntentId === selected?.intentId
+    )
+      return;
+    const controller = new AbortController();
+    const intentId = selected?.intentId;
+    void readAccountProfileEligibility(controller.signal)
+      .then((status) => {
+        if (
+          controller.signal.aborted ||
+          status !== "eligible" ||
+          gateIntentRef.current === intentId
+        )
+          return;
+        eligibleReceiptRef.current = eligibilityKey;
+        setEligibleReceipt(eligibilityKey);
+      })
+      .catch(() => {
+        // A failed read never grants access. The explicit click opens recovery.
+      });
+    return () => controller.abort();
+  }, [eligibilityKey, gateIntentId, selected?.intentId]);
   const accessValue: WorkspaceAccessValue = {
     status: view.kind,
     authenticated:
@@ -297,6 +398,9 @@ function StandaloneStudioView({
           ? false
           : null,
     retry,
+    ...(review.readOnly === false && !review.fixtureRequested
+      ? { requestAccountSignIn, requestAnalysisAccess }
+      : {}),
     context:
       view.kind === "ready" && view.choices.selected_tenant_id
         ? {
@@ -306,6 +410,25 @@ function StandaloneStudioView({
           }
         : null,
   };
+  if (
+    review.fixtureRequested &&
+    (!review.fixtureFrame || review.fixtureFrame.kind === "processing")
+  )
+    return (
+      <WorkspaceAccessProvider
+        value={{
+          status: "unauthenticated",
+          authenticated: false,
+          context: null,
+          retry: () => {},
+        }}
+      >
+        <SalesXrayFixturePreview
+          frame={review.fixtureFrame}
+          message={review.message}
+        />
+      </WorkspaceAccessProvider>
+    );
   if (review.fixtureRequested)
     return (
       <WorkspaceAccessProvider
@@ -319,6 +442,64 @@ function StandaloneStudioView({
         {children}
       </WorkspaceAccessProvider>
     );
+  if (
+    review.readOnly === false &&
+    (authRequested || !!selected) &&
+    view.kind === "unauthenticated"
+  )
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        <AccountAuth
+          selectedFile={selected?.file ?? null}
+          onAuthenticated={() => {
+            if (selected) openProfileGate(selected.intentId);
+            setAuthRequested(false);
+            setView({ kind: "loading" });
+            setAttempt((value) => value + 1);
+          }}
+        />
+      </WorkspaceAccessProvider>
+    );
+  if (
+    review.readOnly === false &&
+    selected &&
+    identityKey &&
+    gateIntentId === selected.intentId &&
+    !eligibleForSelection
+  ) {
+    const profile = (
+      <AccountProfile
+        key={`${identityKey}:${selected.intentId}`}
+        selectedFile={selected.file}
+        onEligible={() => {
+          if (eligibilityKey) {
+            eligibleReceiptRef.current = eligibilityKey;
+            setEligibleReceipt(eligibilityKey);
+          }
+          gateIntentRef.current = null;
+          setGateIntentId((current) =>
+            current === selected.intentId ? null : current,
+          );
+        }}
+        onSignIn={() => {
+          setAuthRequested(true);
+          setView({ kind: "loading" });
+          setAttempt((value) => value + 1);
+        }}
+      />
+    );
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        {embedded ? (
+          <div style={{ ...shellStyle, minHeight: "auto" }}>{profile}</div>
+        ) : (
+          <AcquisitionShell authenticated homeHref="/">
+            {profile}
+          </AcquisitionShell>
+        )}
+      </WorkspaceAccessProvider>
+    );
+  }
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
@@ -401,9 +582,19 @@ function StandaloneStudioView({
                   ? "Sign in with the account that owns this saved call."
                   : "Use your AC account to keep your calls, reports and remaining minutes together."}
               </p>
-              <Link href="/login" className="primary-button">
-                Sign in <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              {review.readOnly === false ? (
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={requestAccountSignIn}
+                >
+                  Sign in <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              ) : (
+                <Link href="/login" className="primary-button">
+                  Sign in <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              )}
             </>
           ) : chooser ? (
             <>
