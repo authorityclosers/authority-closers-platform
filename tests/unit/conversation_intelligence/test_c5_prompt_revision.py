@@ -135,13 +135,35 @@ def test_source_bound_v3_prompt_uses_safe_evidence_and_supported_phrase_guidance
     assert len({legacy.input_sha256, refined.input_sha256, v3.input_sha256}) == 3
     assert COACHING_PROMPT_V3_MARKER in prompt
     assert COACHING_PROMPT_REFINED_MARKER in prompt
-    assert "prefer evidence {segment_id} alone" in prompt
-    assert "zero-based Python Unicode code-point indices" in prompt
-    assert "with an exclusive end" in prompt
-    assert "never milliseconds or audio timestamps" in prompt
-    assert "server resolves the exact quote and native timestamps" in prompt
-    assert "do not invent or assume seller product terms, prices, schedules, features" in prompt
-    assert "ask a neutral question" in prompt
+    assert "Prefer refs:{segment_id}" in prompt
+    assert "Unicode code-point indices:0-based,end-exclusive" in prompt
+    assert "0<=start<end<=len(text),excerpt<=2000 characters" in prompt
+    assert "Never timestamps or mixed formats" in prompt
+    assert "server supplies verbatim quote/native times" in prompt
+    assert "Never invent product claims in advice/phrases" in prompt
+    assert "neutral questions or [confirmed detail]" in prompt
+    assert "declined/refused requires explicit rejection" in prompt
+    assert "considered/pending/postponed/awaiting approval" in prompt
+    assert (
+        "strengths/missed_opportunities/improvements/objection_analysis/closing_analysis:arrays"
+        in prompt
+    )
+
+
+def test_v3_coaching_fits_the_existing_groq_detailed_request_budget() -> None:
+    transcript, packet = _packet()
+    prepared = prepare_coaching_input(
+        transcript,
+        [packet],
+        provider="groq",
+        model="openai/gpt-oss-120b",
+        max_completion_tokens=3_200,
+        coaching_prompt_revision=COACHING_PROMPT_V3,
+    )
+    body = json.loads(prepared.payload)
+    assert body["max_completion_tokens"] == 3_200
+    assert COACHING_PROMPT_V3_MARKER in body["messages"][0]["content"]
+    assert "Never timestamps or mixed formats" in body["messages"][0]["content"]
 
 
 def test_legacy_c5_checkpoint_identity_has_no_revision_key_and_v2_does() -> None:

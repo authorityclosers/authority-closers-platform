@@ -75,18 +75,23 @@ COACHING_PROMPT_REFINED_INSTRUCTION = (
     "follow-up from a floated possibility."
 )
 COACHING_PROMPT_V3_MARKER = "COACHING_EVIDENCE: source-bound-v3."
+COACHING_PROMPT_V3_STATE_INSTRUCTION = (
+    "Do not label a pilot/demo/order/follow-up offered or declined from a possibility. "
+    "Preserve considered/pending/postponed/awaiting approval; declined/refused requires "
+    "explicit rejection. Use unknown/insufficient_evidence without a decision."
+)
 COACHING_PROMPT_V3_INSTRUCTION = (
-    "For each finding, prefer evidence {segment_id} alone when the complete source segment is "
-    "nonblank and at most 2000 characters. Use {segment_id,quote_start,quote_end} only when a "
-    "shorter excerpt is needed. Excerpt offsets are zero-based Python Unicode code-point indices "
-    "into that segment's text, with an exclusive end: 0 <= quote_start < quote_end <= len(text), "
-    "and the excerpt is at most 2000 characters. These are text offsets, never "
-    "milliseconds or audio timestamps. Do not put start_ms/end_ms in quote_start/quote_end. The "
-    "server resolves the exact quote and native timestamps from the transcript. In recommended "
-    "example phrases and coaching advice, do not invent or assume seller product terms, prices, "
-    "schedules, features, durations, results, guarantees or commitments. Use only source-supported "
-    "facts; when a detail is not established, ask a neutral question or use a clear conditional "
-    "placeholder such as [confirmed schedule]."
+    "summary/verdict:string. strengths/missed_opportunities/improvements/objection_analysis/"
+    "closing_analysis:arrays ([] if unsupported). "
+    "status:observed/insufficient_evidence/not_applicable/conflicted/unknown. "
+    "WIRE f:title/explanation/evidence d:dimension_id/status/observation/citations "
+    "root:dimensions. Each finding: action+sample phrase. Prefer refs:{segment_id} for "
+    "nonblank whole text<=2000 characters; else {segment_id,quote_start,quote_end} with "
+    "Unicode code-point "
+    "indices:0-based,end-exclusive,0<=start<end<=len(text),excerpt<=2000 characters. Never "
+    "timestamps or mixed formats; server supplies verbatim quote/native times. Never invent "
+    "product claims in advice/phrases. Use source facts; otherwise neutral questions or "
+    "[confirmed detail]."
 )
 
 
@@ -1891,9 +1896,16 @@ def build_report_groq_prompt(
         + output_fields
         + COACHING_VOICE_INSTRUCTION
         + COACHING_CONTEXT_INSTRUCTION
-        + REPORT_STRUCTURE_INSTRUCTION
+        + (REPORT_STRUCTURE_INSTRUCTION if coaching_prompt_revision != COACHING_PROMPT_V3 else "")
         + (
-            COACHING_PROMPT_REFINED_MARKER + " " + COACHING_PROMPT_REFINED_INSTRUCTION + " "
+            COACHING_PROMPT_REFINED_MARKER
+            + " "
+            + (
+                COACHING_PROMPT_V3_STATE_INSTRUCTION
+                if coaching_prompt_revision == COACHING_PROMPT_V3
+                else COACHING_PROMPT_REFINED_INSTRUCTION
+            )
+            + " "
             if coaching_prompt_revision in {COACHING_PROMPT_REFINED, COACHING_PROMPT_V3}
             else ""
         )

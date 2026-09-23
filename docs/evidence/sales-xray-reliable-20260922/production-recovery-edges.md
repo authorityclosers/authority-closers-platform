@@ -83,7 +83,7 @@ production draft as well as the citation failure.
 The v1 and v2 prompt bytes remain unchanged, verified with hashes captured before
 the edit. Saved plans continue to select their recorded revision. V3 passes
 serialization, checkpoint and retained-input reconstruction checks. Strict
-evidence validation, commercial-state wording and provider limits are unchanged.
+evidence validation, commercial-state rules and provider limits are unchanged.
 Independent read-only review found no blocking compatibility defects.
 
 Validation after these changes: 101 focused unit tests; 27 PostgreSQL HTTP and
@@ -91,3 +91,20 @@ processing-plan tests; three historical retained-recovery PostgreSQL cases;
 Python lint, formatting and types (302 source files); admin formatting, lint,
 types and six execution-control tests. V3 retained recovery is also tested
 against PostgreSQL before freezing the release.
+
+The first follow-up candidate, `15493a09`, was withheld after exact-source CI
+caught the real Chromium/durable-worker probe entering a held state. Its added
+v3 wording exceeded the existing Groq 8,000-token estimate (8,232 in the initial
+unit fixture; a partially shortened browser request still needed 8,040). No
+candidate was deployed and no provider was called. The v3-only instructions
+now combine the root-shape and evidence guidance and shorten repeated commercial
+state wording. All five root finding arrays, status values, reference shapes,
+Unicode offset bounds, verbatim source resolution, action phrases and unsupported
+claim restrictions remain explicit. V1/v2 payload hashes remain unchanged.
+The full Chromium/PostgreSQL/durable-worker probe and ten prompt-version tests
+then passed together; no route, token, cost or retry limit was increased.
+
+The production retained draft additionally has an append-only second correction
+version replacing the unsupported product assertion with a neutral discovery
+question. It renders after reload, and saved audio reaches the end. Both prior
+response and correction versions are preserved, with zero new provider calls.
