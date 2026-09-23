@@ -126,14 +126,18 @@ class ConversationByteTransport:
                         raise HTTPException(422, "The complete recording was not received.")
                     await fenced.run(scratch.seek, 0)
                     async with asynccontextmanager(self.require_actor)(request) as auth:
-                        intake = self.runtime.intake(ConversationApplication(auth.database))
-                        await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
                         if (
                             str(auth.resolved.actor.person_id) != admission["person_id"]
                             or str(auth.resolved.actor.session_id) != admission["session_id"]
                             or str(auth.resolved.actor.tenant_id) != admission["tenant_id"]
                         ):
                             raise HTTPException(403, "The upload session changed.")
+                        await require_sales_xray_write_profile(
+                            auth.database,
+                            auth.resolved.actor,
+                        )
+                        intake = self.runtime.intake(ConversationApplication(auth.database))
+                        await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
                         # Thread completion is joined by store_source before the
                         # transaction, scratch and global storage fence can close.
                         return await intake.application.store_source(
