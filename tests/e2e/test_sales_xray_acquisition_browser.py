@@ -354,6 +354,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     page = await context.new_page()
                     network = []
                     requests = []
+                    external_mutating_requests = []
+                    source_request_hashes = []
                     errors = []
                     plan_posts = []
                     journey_checks: dict[str, Any] = {}
@@ -370,18 +372,25 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                                 }
                             )
 
-                    page.on("response", record_response)
-                    page.on(
-                        "request",
-                        lambda request: requests.append(
+                    def record_request(request):
+                        if not request.url.startswith(ORIGIN + "/v1/"):
+                            if request.method in {"POST", "PUT", "PATCH"}:
+                                external_mutating_requests.append(request.method)
+                            return
+                        path = request.url.split("?", 1)[0]
+                        if path.endswith("/source") and request.method == "PUT":
+                            source_request_hashes.append(
+                                hashlib.sha256(request.post_data_buffer or b"").hexdigest()
+                            )
+                        requests.append(
                             {
                                 "path": request.url.split(ORIGIN)[-1],
                                 "method": request.method,
                             }
-                            if request.url.startswith(ORIGIN + "/v1/")
-                            else None
-                        ),
-                    )
+                        )
+
+                    page.on("response", record_response)
+                    page.on("request", record_request)
                     page.on("pageerror", lambda error: errors.append(type(error).__name__))
                     await page.route(
                         "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
@@ -405,9 +414,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         {"name": "Synthetic test call.wav", "mimeType": "audio/wav", "buffer": data}
                     )
                     # The account-first gate may open directly on file select or
-                    # behind the primary action. In either case, the actual
-                    # selected File remains in this document while the
-                    # authentication and profile steps complete.
+                    # behind the primary action. The filename must remain visible
+                    # through authentication and profile; this test never selects
+                    # another file before the upload.
                     if not await page.get_by_label("Email address").is_visible():
                         await page.get_by_role(
                             "button", name="Analyse my call", exact=True
@@ -416,10 +425,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         page.get_by_text("Synthetic test call.wav", exact=False).first
                     ).to_be_visible()
-                    assert await file_input.evaluate(
-                        "input => input.files?.[0]?.name ?? null"
-                    ) == "Synthetic test call.wav"
-                    journey_checks["same_file_retained_in_auth_modal"] = True
+                    journey_checks["selected_filename_in_auth_modal"] = True
 
                     def source_or_plan_write(item: dict[str, str]) -> bool:
                         path = item["path"].split("?", 1)[0]
@@ -439,6 +445,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         source_or_plan_write(item) for item in requests
                     )
                     journey_checks["pre_auth_provider_calls"] = broker.calls
+                    journey_checks["pre_auth_external_mutations"] = len(
+                        external_mutating_requests
+                    )
+                    assert source_request_hashes == []
                     async with setup.sessions() as diagnostic_db:
                         assert (
                             await diagnostic_db.scalar(
@@ -460,9 +470,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         and not authenticated["profile_complete"]
                     )
                     owner_person_id = UUID(authenticated["person_id"])
-                    assert await file_input.evaluate(
-                        "input => input.files?.[0]?.name ?? null"
-                    ) == "Synthetic test call.wav"
+                    selected_profile_file = page.get_by_label("Selected audio file")
+                    await expect(selected_profile_file).to_contain_text(
+                        "Synthetic test call.wav"
+                    )
                     await expect(
                         page.get_by_role(
                             "heading", name="A few details before we review your call."
@@ -493,18 +504,16 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         page.get_by_role("button", name="Analyse my call", exact=True)
                     ).to_be_visible(timeout=20_000)
-                    assert await file_input.evaluate(
-                        "input => input.files?.[0]?.name ?? null"
-                    ) == "Synthetic test call.wav"
+                    await expect(
+                        page.get_by_text("Synthetic test call.wav", exact=True).first
+                    ).to_be_visible()
                     assert not any(source_or_plan_write(item) for item in requests)
                     assert plan_posts == [] and broker.calls == 0
+                    assert source_request_hashes == []
                     journey_checks["profile_complete_before_upload"] = bool(
                         profile_payload["profile_complete"]
                     )
-                    journey_checks["same_file_retained_through_profile"] = (
-                        await file_input.evaluate("input => input.files?.[0]?.name ?? null")
-                        == "Synthetic test call.wav"
-                    )
+                    journey_checks["selected_filename_through_profile"] = True
 
                     async with setup.sessions() as diagnostic_db:
                         person = await diagnostic_db.get(Person, owner_person_id)
@@ -520,11 +529,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         assert profile.phone_verified_at is None
 
                     await page.get_by_role("checkbox").last.check()
-                    journey_checks["same_file_retained_for_upload"] = (
-                        await file_input.evaluate("input => input.files?.[0]?.name ?? null")
-                        == "Synthetic test call.wav"
+                    journey_checks["selected_filename_visible_before_upload"] = (
+                        await page.get_by_text(
+                            "Synthetic test call.wav", exact=True
+                        ).first.is_visible()
                     )
-                    assert journey_checks["same_file_retained_for_upload"] is True
+                    assert journey_checks["selected_filename_visible_before_upload"] is True
                     async with page.expect_response(
                         lambda response: (
                             response.url.endswith("/source") and response.request.method == "PUT"
@@ -550,9 +560,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         )
                     uploaded = await uploaded_response.json()
                     submission_id = uploaded["submission_id"]
-                    assert await file_input.evaluate(
-                        "input => input.files?.[0]?.name ?? null"
-                    ) == "Synthetic test call.wav"
+                    expected_source_hash = hashlib.sha256(data).hexdigest()
+                    assert source_request_hashes == [expected_source_hash]
+                    journey_checks["uploaded_source_request_hash_matches_selected_bytes"] = (
+                        source_request_hashes == [expected_source_hash]
+                    )
                     await db(_reconcile(setup.sessions, setup.state))
                     local = OfflineConversationWorker(
                         setup.sessions,
@@ -675,17 +687,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     library_page = await fresh.new_page()
                     library_page.on("response", record_response)
                     library_page.on("pageerror", lambda error: errors.append(type(error).__name__))
-                    library_page.on(
-                        "request",
-                        lambda request: requests.append(
-                            {
-                                "path": request.url.split(ORIGIN)[-1],
-                                "method": request.method,
-                            }
-                            if request.url.startswith(ORIGIN + "/v1/")
-                            else None
-                        ),
-                    )
+                    library_page.on("request", record_request)
                     await library_page.goto(ORIGIN + "/login", wait_until="domcontentloaded")
                     reauthenticated = await authenticate_with_email_code(library_page)
                     assert reauthenticated["account_created"] is False
@@ -798,6 +800,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
                     assert denied.status in (401, 404)
                     await stranger.close()
+                    journey_checks["external_mutations"] = len(external_mutating_requests)
+                    assert external_mutating_requests == []
                     assert not errors
                     (receipt / "browser-network.json").write_text(
                         json.dumps(
@@ -820,8 +824,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                                     "new canonical account exists before profile completion",
                                     "required account name and mobile profile completed",
                                     "no source transfer until authenticated profile is complete",
-                                    "the same selected browser File uploads after "
+                                    "originally selected audio bytes upload only after "
                                     "profile completion",
+                                    "selected filename stays visible through email OTP and profile",
+                                    "uploaded source hash matches originally selected audio bytes",
                                     "inline upload consent",
                                     "native C1",
                                     "explicit provider plan after profile and upload consent",
