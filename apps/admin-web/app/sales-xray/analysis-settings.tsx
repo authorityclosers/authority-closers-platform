@@ -70,7 +70,9 @@ export function AnalysisSettingsPanel() {
   async function save() {
     if (!state || !draft || busy) return;
     if (!settingsSchema.safeParse(draft).success) {
-      setError("Use whole numbers within the displayed limits before saving.");
+      setError(
+        "Use whole numbers within the displayed limits. Hindi and Marathi reports require the qualitative v0.2 engine.",
+      );
       return;
     }
     setBusy(true);
@@ -237,6 +239,63 @@ export function AnalysisSettingsPanel() {
               />
               <small>
                 Release approval can lower this value for a specific route.
+              </small>
+            </label>
+            <label className={styles.field}>
+              <span>Report engine</span>
+              <select
+                aria-label="Report engine"
+                value={draft.c5_coaching_prompt_revision}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    c5_coaching_prompt_revision: event.target.value as
+                      | "coaching-v3"
+                      | "coaching-v4",
+                  })
+                }
+              >
+                {bounds.c5_coaching_prompt_revision.values.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "coaching-v4"
+                      ? "Qualitative v0.2 · source-bound rule pack"
+                      : "Current report · v3"}
+                  </option>
+                ))}
+              </select>
+              <small>
+                Saving selects the engine for new plans. Existing reports and
+                accepted plans keep their original version.
+              </small>
+            </label>
+            <label className={styles.field}>
+              <span>Default report language</span>
+              <select
+                aria-label="Default report language"
+                value={draft.report_language_default}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    report_language_default: event.target.value as
+                      | "en"
+                      | "hi-Deva+en"
+                      | "mr-Deva+en",
+                  })
+                }
+              >
+                {bounds.report_language_default.values.map((value) => (
+                  <option key={value} value={value}>
+                    {value === "hi-Deva+en"
+                      ? "Hindi + English"
+                      : value === "mr-Deva+en"
+                        ? "Marathi + English"
+                        : "English"}
+                  </option>
+                ))}
+              </select>
+              <small>
+                The app stays English. Original evidence quotations keep their
+                original wording and script.
               </small>
             </label>
           </div>

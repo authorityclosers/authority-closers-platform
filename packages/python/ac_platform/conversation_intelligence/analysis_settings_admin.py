@@ -117,6 +117,16 @@ class ConversationAnalysisSettingsAdmin:
         current_revision = 0 if row is None else row.revision
         if current_revision != expected_revision:
             raise ConversationConflict("Analysis settings changed. Reload before saving.")
+        if (
+            row is not None
+            and row.c5_coaching_prompt_revision == "coaching-v4"
+            and not {"c5_coaching_prompt_revision", "report_language_default"}.issubset(
+                settings.model_fields_set
+            )
+        ):
+            raise ConversationConflict(
+                "Include the current report engine and language when saving."
+            )
         revision = expected_revision + 1
         now = utc(self.application.clock())
         saved = ConversationAnalysisSettings(
@@ -129,6 +139,8 @@ class ConversationAnalysisSettingsAdmin:
             c4_max_completion_tokens=settings.c4_max_completion_tokens,
             c5_max_completion_tokens=settings.c5_max_completion_tokens,
             c5_output_profile=settings.c5_output_profile,
+            c5_coaching_prompt_revision=settings.c5_coaching_prompt_revision,
+            report_language_default=settings.report_language_default,
             created_at=now,
         )
         self.database.add(saved)

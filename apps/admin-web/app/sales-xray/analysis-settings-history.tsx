@@ -135,6 +135,14 @@ function RevisionHistory() {
                     <dt>Report detail</dt>
                     <dd>{item.settings.c5_output_profile}</dd>
                   </div>
+                  <div>
+                    <dt>Report engine</dt>
+                    <dd>{item.settings.c5_coaching_prompt_revision}</dd>
+                  </div>
+                  <div>
+                    <dt>Report language</dt>
+                    <dd>{item.settings.report_language_default}</dd>
+                  </div>
                 </dl>
               </li>
             ))}

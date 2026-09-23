@@ -52,6 +52,8 @@ def test_default_remains_explicit_production_save() -> None:
     "extra",
     [
         ["--action", "show", "--c4-max-requests", "4"],
+        ["--action", "show", "--report-language-default", "mr-Deva+en"],
+        ["--action", "history", "--c5-coaching-prompt-revision", "coaching-v4"],
         ["--action", "history", "--idempotency-key", "must-not-save"],
         ["--action", "show", "--before-revision", "5"],
         ["--action", "history", "--limit", "51"],

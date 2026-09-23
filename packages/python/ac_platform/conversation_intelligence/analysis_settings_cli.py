@@ -51,6 +51,8 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--c4-max-completion-tokens", type=int)
     command.add_argument("--c5-max-completion-tokens", type=int)
     command.add_argument("--c5-output-profile", choices=("standard", "detailed"))
+    command.add_argument("--c5-coaching-prompt-revision", choices=("coaching-v3", "coaching-v4"))
+    command.add_argument("--report-language-default", choices=("en", "hi-Deva+en", "mr-Deva+en"))
     return command
 
 
@@ -80,7 +82,14 @@ def validate_environment(args: argparse.Namespace) -> str:
             raise CommandError("The idempotency key must be 1 to 128 characters.")
         if args.expected_revision < 0:
             raise CommandError("Use the current nonnegative revision.")
-    elif any(value is not None for value in mutation_values):
+    elif any(
+        value is not None
+        for value in (
+            *mutation_values,
+            args.c5_coaching_prompt_revision,
+            args.report_language_default,
+        )
+    ):
         raise CommandError("Read actions do not accept save arguments.")
     if args.action != "history" and (args.limit != 10 or args.before_revision is not None):
         raise CommandError("History pagination requires --action history.")
@@ -98,11 +107,21 @@ async def save(args: argparse.Namespace) -> dict[str, object]:
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
     values = (
-        AnalysisSettings(
-            c4_max_requests=args.c4_max_requests,
-            c4_max_completion_tokens=args.c4_max_completion_tokens,
-            c5_max_completion_tokens=args.c5_max_completion_tokens,
-            c5_output_profile=args.c5_output_profile,
+        AnalysisSettings.model_validate(
+            {
+                "c4_max_requests": args.c4_max_requests,
+                "c4_max_completion_tokens": args.c4_max_completion_tokens,
+                "c5_max_completion_tokens": args.c5_max_completion_tokens,
+                "c5_output_profile": args.c5_output_profile,
+                **{
+                    key: value
+                    for key, value in {
+                        "c5_coaching_prompt_revision": args.c5_coaching_prompt_revision,
+                        "report_language_default": args.report_language_default,
+                    }.items()
+                    if value is not None
+                },
+            }
         )
         if args.action == "save"
         else None
