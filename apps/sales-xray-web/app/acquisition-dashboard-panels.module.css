@@ -491,9 +491,232 @@
   line-height: 1.4;
 }
 
-@media (max-width: 1120px) {
+@media (min-width: 721px) and (max-width: 1199px) {
+  .rail {
+    gap: 8px;
+  }
+
+  .guide {
+    height: 355px;
+    padding: 9px 10px 8px;
+  }
+
+  .cardHeading {
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .headingIcon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .cardHeading h2 {
+    font-size: 17px;
+  }
+
+  .progressCount {
+    font-size: 12px;
+  }
+
+  .progressTrack {
+    height: 8px;
+  }
+
+  .stepList {
+    margin: 7px 0 3px;
+  }
+
+  .step {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 48px;
+    padding: 3px 1px;
+  }
+
+  .stepMark {
+    width: 23px;
+    height: 23px;
+  }
+
+  .step strong {
+    font-size: 11.5px;
+  }
+
+  .step small {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .helpCard {
+    padding: 7px 8px;
+  }
+
+  .helpIntro {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .helpIntro > svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .helpIntro h3 {
+    font-size: 12px;
+  }
+
+  .helpIntro p {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .cardAction {
+    min-height: 26px;
+    margin-top: 6px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .sampleCard {
+    height: 223px;
+    padding: 8px 9px;
+  }
+
+  .sampleHeading {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .sampleHeading > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sampleHeading h2 {
+    font-size: 13px;
+  }
+
+  .sampleHeading > span {
+    font-size: 9px;
+  }
+
+  .sampleQuote {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .quoteGlyph {
+    width: 22px;
+    height: 22px;
+    font-size: 23px;
+  }
+
+  .sampleQuote p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .sampleMoments {
+    gap: 3px;
+    padding: 5px 7px 0;
+    font-size: 9px;
+  }
+
+  .sampleMoments strong {
+    font-size: 9px;
+  }
+
+  .sampleDisclaimer {
+    margin: 3px 7px 0;
+    font-size: 8px;
+  }
+
   .lowerPanels {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .lowerPanels > .card {
+    height: 284px;
+    padding: 10px;
+  }
+
+  .lowerHeading {
+    gap: 6px;
+  }
+
+  .lowerHeading > svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .lowerHeading h2 {
+    font-size: 13px;
+  }
+
+  .lowerHeading a {
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .lowerHeading a svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .callColumns {
+    grid-template-columns: minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 7px;
+  }
+
+  .callRow {
+    grid-template-columns: 22px minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 8px;
+  }
+
+  .callRow .rowIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .callName strong,
+  .callName a,
+  .activityName strong,
+  .activityName a {
+    font-size: 9px;
+  }
+
+  .callName small,
+  .activityName small,
+  .activityRow time {
+    font-size: 8px;
+  }
+
+  .activityRow {
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+    gap: 5px;
+  }
+
+  .activityRow .rowIcon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .emptyState {
+    min-height: 140px;
+    padding: 12px 5px;
+  }
+
+  .emptyState strong {
+    font-size: 11px;
+  }
+
+  .emptyState p {
+    font-size: 10px;
   }
 }
 
@@ -504,5 +727,248 @@
 
   .lowerPanels {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .rail {
+    gap: 8px;
+  }
+
+  .guide {
+    min-height: 0;
+    height: 330px;
+    padding: 9px 10px 8px;
+  }
+
+  .cardHeading {
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .headingIcon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .cardHeading h2 {
+    font-size: 17px;
+  }
+
+  .progressCount {
+    font-size: 12px;
+  }
+
+  .progressTrack {
+    height: 8px;
+  }
+
+  .stepList {
+    margin: 6px 0 2px;
+  }
+
+  .step {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 43px;
+    padding: 3px 1px;
+  }
+
+  .stepMark {
+    width: 23px;
+    height: 23px;
+  }
+
+  .step strong {
+    font-size: 11.5px;
+  }
+
+  .step small {
+    margin-top: 1px;
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .helpCard {
+    padding: 7px 8px;
+  }
+
+  .helpIntro {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .helpIntro > svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .helpIntro h3 {
+    font-size: 12px;
+  }
+
+  .helpIntro p {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .cardAction {
+    min-height: 26px;
+    margin-top: 6px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .sampleCard {
+    min-height: 0;
+    height: 210px;
+    padding: 8px 9px;
+  }
+
+  .sampleHeading {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .sampleHeading > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sampleHeading h2 {
+    font-size: 13px;
+  }
+
+  .sampleHeading > span {
+    font-size: 9px;
+  }
+
+  .sampleQuote {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .quoteGlyph {
+    width: 22px;
+    height: 22px;
+    font-size: 23px;
+  }
+
+  .sampleQuote p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .sampleMoments {
+    gap: 3px;
+    padding: 5px 7px 0;
+    font-size: 9px;
+  }
+
+  .sampleMoments strong {
+    font-size: 9px;
+  }
+
+  .sampleDisclaimer {
+    margin: 3px 7px 0;
+    font-size: 8px;
+  }
+
+  .lowerPanels {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .lowerPanels > .card {
+    min-height: 0;
+    height: 220px;
+    padding: 9px;
+  }
+
+  .lowerHeading {
+    gap: 6px;
+    min-height: 34px;
+    padding-bottom: 8px;
+  }
+
+  .lowerHeading > svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .lowerHeading h2 {
+    font-size: 13px;
+  }
+
+  .lowerHeading a {
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .lowerHeading a svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .callColumns {
+    grid-template-columns: minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 7px;
+  }
+
+  .callRow {
+    grid-template-columns: 22px minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    min-height: 39px;
+    font-size: 8px;
+  }
+
+  .callRow .rowIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .callName strong,
+  .callName a,
+  .activityName strong,
+  .activityName a {
+    font-size: 9px;
+  }
+
+  .callName small,
+  .activityName small,
+  .activityRow time {
+    font-size: 8px;
+  }
+
+  .activityRow {
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+    gap: 5px;
+    min-height: 39px;
+  }
+
+  .activityRow .rowIcon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .emptyState {
+    min-height: 110px;
+    padding: 9px 5px;
+  }
+
+  .emptyIcon {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 5px;
+  }
+
+  .emptyState strong {
+    font-size: 11px;
+  }
+
+  .emptyState p {
+    font-size: 10px;
   }
 }
