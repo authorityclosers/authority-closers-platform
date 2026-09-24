@@ -24,7 +24,7 @@ import json
 import re
 import sys
 from collections.abc import Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -38,7 +38,12 @@ MAX_REFERENCE_BYTES = 4 * 1024 * 1024
 MAX_MANIFEST_BYTES = 128 * 1024
 ENVIRONMENT_NAMES = frozenset({"staging", "production"})
 OVERLAY = "compose.sales-xray-hosted.yaml"
+OPENAI_OVERLAY = "compose.sales-xray-hosted-openai.yaml"
 PROFILE = "sales-xray-hosted"
+OPENAI_HOST_IDENTITY_DIR = PurePosixPath(
+    "/etc/authority-closers/secrets/sales-xray/identities/openai"
+)
+OPENAI_TOKEN_FILE = "/run/ac-sales-xray/identities/openai/token"  # noqa: S105 - path only
 
 ABSOLUTE_ENV_KEYS = frozenset(
     {
@@ -56,6 +61,7 @@ ABSOLUTE_ENV_KEYS = frozenset(
         "AC_XRAY_INFISICAL_BINARY",
     }
 )
+OPTIONAL_IDENTITY_ENV_KEYS = frozenset({"AC_XRAY_OPENAI_IDENTITY_DIR"})
 ENV_KEYS = ABSOLUTE_ENV_KEYS | frozenset(
     {
         "AC_XRAY_SERVICE_SHA256",
@@ -172,6 +178,15 @@ def _absolute(value: object, field: str) -> Path:
     return path
 
 
+def _openai_identity_dir(value: object) -> PurePosixPath:
+    if not isinstance(value, str):
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    path = PurePosixPath(value)
+    if not path.is_absolute() or ".." in path.parts or path != OPENAI_HOST_IDENTITY_DIR:
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    return path
+
+
 def _uuidish(value: object, field: str) -> None:
     # The hosted validator owns the canonical UUID check.  Keeping this
     # bounded here avoids importing a release-owned module during preparation.
@@ -186,6 +201,29 @@ def _uuidish(value: object, field: str) -> None:
         raise _fail(f"{field} must be a canonical lowercase UUID")
 
 
+def _validate_openai_identity_selection(
+    descriptor: Mapping[str, Any], env: Mapping[str, str], service: Mapping[str, Any]
+) -> None:
+    providers = service.get("providers")
+    if not isinstance(providers, list) or any(not isinstance(item, dict) for item in providers):
+        raise _fail("source service provider entries are invalid")
+    has_openai = any(item.get("provider_id") == "openai" for item in providers)
+    expected_overlay = OPENAI_OVERLAY if has_openai else OVERLAY
+    if descriptor.get("compose_overlay") != expected_overlay:
+        raise _fail("source provider set does not match its hosted compose overlay")
+    if has_openai:
+        if "AC_XRAY_OPENAI_IDENTITY_DIR" not in env:
+            raise _fail("OpenAI provider requires its separately scoped identity directory")
+        _openai_identity_dir(env["AC_XRAY_OPENAI_IDENTITY_DIR"])
+        if any(
+            item.get("provider_id") == "openai" and item.get("token_file_ref") != OPENAI_TOKEN_FILE
+            for item in providers
+        ):
+            raise _fail("OpenAI token file must use its dedicated mounted identity path")
+    elif "AC_XRAY_OPENAI_IDENTITY_DIR" in env:
+        raise _fail("OpenAI identity directory is unexpected without an OpenAI provider")
+
+
 def _parse_env(raw: bytes) -> dict[str, str]:
     try:
         text = raw.decode("utf-8")
@@ -198,14 +236,22 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         if "=" not in line:
             raise _fail("compose environment must use assignment lines")
         key, value = line.split("=", 1)
-        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS:
+        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
             raise _fail("compose environment contains an unapproved key")
         if key in values or not value or ENV_VALUE.fullmatch(value) is None:
             raise _fail("compose environment contains a duplicate or unsafe value")
         values[key] = value
-    if set(values) != ENV_KEYS:
+    if frozenset(values) not in {
+        frozenset(ENV_KEYS),
+        frozenset(ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS),
+    }:
         raise _fail("compose environment is incomplete")
-    for key in ABSOLUTE_ENV_KEYS:
+    for key in ABSOLUTE_ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
+        if key not in values:
+            continue
+        if key == "AC_XRAY_OPENAI_IDENTITY_DIR":
+            _openai_identity_dir(values[key])
+            continue
         _absolute(values[key], key)
     _digest(values["AC_XRAY_SERVICE_SHA256"], "AC_XRAY_SERVICE_SHA256")
     _digest(values["AC_XRAY_APPROVAL_SHA256"], "AC_XRAY_APPROVAL_SHA256")
@@ -234,7 +280,10 @@ def _load_source(
     if environment not in ENVIRONMENT_NAMES:
         raise _fail("source activation environment is invalid")
     _release(descriptor.get("release_id"), "source release_id")
-    if descriptor.get("compose_overlay") != OVERLAY or descriptor.get("compose_profile") != PROFILE:
+    if (
+        descriptor.get("compose_overlay") not in {OVERLAY, OPENAI_OVERLAY}
+        or descriptor.get("compose_profile") != PROFILE
+    ):
         raise _fail("source activation compose binding is invalid")
     if descriptor.get("previous_release_policy") != "exact_target_release":
         raise _fail("source activation release policy is invalid")
@@ -297,6 +346,7 @@ def _load_source(
         raise _fail("bootstrap service must not contain providers")
     if service.get("bootstrap_only") is False and not service.get("providers"):
         raise _fail("active service must contain approved providers")
+    _validate_openai_identity_selection(descriptor, env, service)
     return descriptor, descriptor_raw, env, service, service_raw, approval, approval_raw
 
 

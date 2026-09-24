@@ -19,7 +19,8 @@ import re
 import stat
 import sys
 import uuid
-from pathlib import Path
+from collections.abc import Callable
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 CAPABILITY_RELATIVE = {
@@ -27,6 +28,7 @@ CAPABILITY_RELATIVE = {
     "production": Path("capabilities/sales-xray-hosted-production.json"),
 }
 OVERLAY_RELATIVE = Path("compose.sales-xray-hosted.yaml")
+OPENAI_OVERLAY_RELATIVE = Path("compose.sales-xray-hosted-openai.yaml")
 MAX_CAPABILITY_BYTES = 8192
 MAX_ACTIVATION_BYTES = 64 * 1024
 MAX_ENV_BYTES = 64 * 1024
@@ -63,6 +65,11 @@ ABSOLUTE_ENV_KEYS = {
     "AC_XRAY_CHALLENGE_SECRET_FILE",
     "AC_XRAY_INFISICAL_BINARY",
 }
+OPTIONAL_IDENTITY_ENV_KEYS = {"AC_XRAY_OPENAI_IDENTITY_DIR"}
+OPENAI_HOST_IDENTITY_DIR = "/etc/authority-closers/secrets/sales-xray/identities/openai"
+OPENAI_IDENTITY_TOKEN_NAME = "token"  # noqa: S105 - basename only
+OPENAI_IDENTITY_TOKEN_MODE = 0o400
+OPENAI_TOKEN_FILE = "/run/ac-sales-xray/identities/openai/token"  # noqa: S105 - path only
 ENV_KEYS = ABSOLUTE_ENV_KEYS | {
     "AC_XRAY_SERVICE_SHA256",
     "AC_XRAY_APPROVAL_SHA256",
@@ -154,6 +161,67 @@ def _checked_absolute(value: object, field: str) -> Path:
     if not path.is_absolute() or ".." in path.parts:
         raise _fail(f"{field} must be absolute and traversal-free")
     return path
+
+
+def _checked_openai_identity_dir(value: object) -> PurePosixPath:
+    if not isinstance(value, str) or value != OPENAI_HOST_IDENTITY_DIR:
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    path = PurePosixPath(value)
+    host_absolute = path.is_absolute() if os.name == "posix" else Path(value).is_absolute()
+    if not host_absolute or ".." in path.parts:
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    return path
+
+
+def _validate_openai_identity_metadata(
+    path: Path, *, lstat: Callable[[Path], os.stat_result] | None = None
+) -> None:
+    """Check the dedicated host identity directory without reading its token."""
+
+    inspect = lstat or (lambda candidate: candidate.lstat())
+    for ancestor in (*reversed(path.parents), path):
+        try:
+            info = inspect(ancestor)
+        except FileNotFoundError as exc:
+            raise _fail("OpenAI identity directory or token is missing") from exc
+        except OSError as exc:
+            raise _fail("OpenAI identity metadata is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise _fail("OpenAI identity paths must not contain symbolic links")
+        if not stat.S_ISDIR(info.st_mode):
+            raise _fail("OpenAI identity path ancestor is not a directory")
+        if os.name == "posix":
+            _trusted_metadata(info, file=False)
+        if ancestor == path and os.name == "posix":
+            mode = stat.S_IMODE(info.st_mode)
+            group_traverse = info.st_gid == WORKER_GID and bool(mode & 0o010)
+            other_traverse = bool(mode & 0o001)
+            if not (group_traverse or other_traverse):
+                raise _fail("OpenAI identity directory is not traversable by the worker")
+
+    try:
+        entries = sorted(entry.name for entry in path.iterdir())
+    except OSError as exc:
+        raise _fail("OpenAI identity directory contents are unavailable") from exc
+    if entries != [OPENAI_IDENTITY_TOKEN_NAME]:
+        raise _fail("OpenAI identity directory must contain only its token file")
+    token_path = path / OPENAI_IDENTITY_TOKEN_NAME
+    try:
+        token_info = inspect(token_path)
+    except OSError as exc:
+        raise _fail("OpenAI identity token metadata is unavailable") from exc
+    if (
+        stat.S_ISLNK(token_info.st_mode)
+        or not stat.S_ISREG(token_info.st_mode)
+        or token_info.st_nlink != 1
+        or token_info.st_size <= 0
+    ):
+        raise _fail("OpenAI identity token must be a nonempty regular file")
+    if os.name == "posix" and (
+        token_info.st_uid != WORKER_UID
+        or stat.S_IMODE(token_info.st_mode) != OPENAI_IDENTITY_TOKEN_MODE
+    ):
+        raise _fail("OpenAI identity token ownership or mode is invalid")
 
 
 def _validate_challenge_secret_reference(value: object) -> None:
@@ -333,14 +401,22 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         if "=" not in line:
             raise _fail("compose environment must use assignment lines")
         key, value = line.split("=", 1)
-        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS:
+        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
             raise _fail("compose environment contains an unapproved key")
         if key in result or not value or ENV_VALUE.fullmatch(value) is None:
             raise _fail("compose environment contains a duplicate or unsafe value")
         result[key] = value
-    if set(result) != ENV_KEYS:
+    if frozenset(result) not in {
+        frozenset(ENV_KEYS),
+        frozenset(ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS),
+    }:
         raise _fail("compose environment is incomplete")
-    for key in ABSOLUTE_ENV_KEYS:
+    for key in ABSOLUTE_ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
+        if key not in result:
+            continue
+        if key == "AC_XRAY_OPENAI_IDENTITY_DIR":
+            _checked_openai_identity_dir(result[key])
+            continue
         path = _checked_absolute(result[key], key)
         if ".." in path.parts:
             raise _fail(f"{key} is traversal-prone")
@@ -425,7 +501,11 @@ def _load_activation(
         value["schema_version"] != "ac.sales_xray.hosted_activation/1"
         or value["environment"] != environment
         or value["release_id"] != release_id
-        or value["compose_overlay"] != OVERLAY_RELATIVE.as_posix()
+        or value["compose_overlay"]
+        not in {
+            OVERLAY_RELATIVE.as_posix(),
+            OPENAI_OVERLAY_RELATIVE.as_posix(),
+        }
         or value["compose_profile"] != "sales-xray-hosted"
         or value["previous_release_policy"] != "exact_target_release"
     ):
@@ -446,10 +526,6 @@ def _load_activation(
     ):
         raise _fail("helper_unit must be a fixed systemd service name")
 
-    overlay = release / OVERLAY_RELATIVE
-    expected_overlay = Path(value["compose_overlay"])
-    if expected_overlay != OVERLAY_RELATIVE or not overlay.is_file() or overlay.is_symlink():
-        raise _fail("the source-owned hosted compose overlay is unavailable")
     env_path = _checked_absolute(value["compose_env_file"], "compose_env_file")
     env_raw = _regular_bytes(env_path, MAX_ENV_BYTES, trusted=True)
     if _sha256(env_raw) != _checked_sha(value["compose_env_sha256"], "compose_env_sha256"):
@@ -473,6 +549,30 @@ def _load_activation(
     if env["AC_XRAY_SERVICE_SHA256"] != value["service_config_sha256"]:
         raise _fail("service config compose digest differs from the descriptor")
     service = _json_file(service_path, MAX_REFERENCE_BYTES, trusted=True)
+    providers = service.get("providers")
+    if not isinstance(providers, list) or any(not isinstance(item, dict) for item in providers):
+        raise _fail("service provider entries are invalid")
+    has_openai = any(item.get("provider_id") == "openai" for item in providers)
+    expected_overlay = OPENAI_OVERLAY_RELATIVE if has_openai else OVERLAY_RELATIVE
+    if Path(value["compose_overlay"]) != expected_overlay:
+        raise _fail("service provider set does not match its source-owned compose overlay")
+    openai_identity_dir = env.get("AC_XRAY_OPENAI_IDENTITY_DIR")
+    if has_openai:
+        if openai_identity_dir is None:
+            raise _fail("OpenAI provider requires its separately scoped identity directory")
+        openai_path = _checked_openai_identity_dir(openai_identity_dir)
+        if os.name == "posix":
+            _validate_openai_identity_metadata(Path(str(openai_path)))
+        if any(
+            item.get("provider_id") == "openai" and item.get("token_file_ref") != OPENAI_TOKEN_FILE
+            for item in providers
+        ):
+            raise _fail("OpenAI token file must use its dedicated mounted identity path")
+    elif openai_identity_dir is not None:
+        raise _fail("OpenAI identity directory is unexpected without an OpenAI provider")
+    overlay = release / expected_overlay
+    if not overlay.is_file() or overlay.is_symlink():
+        raise _fail("the source-owned hosted compose overlay is unavailable")
     if (
         service.get("schema_version") != "ac.sales_xray.worker_service/1"
         or service.get("sales_xray_enabled") is not True
