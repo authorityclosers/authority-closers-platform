@@ -94,6 +94,29 @@ from ac_platform.outbox.repository import RecoveryStateRepository
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 C5_AUTO_REPAIR_ATTEMPTS = 1
 NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
+_PROCESSING_DIAGNOSTIC_PHASES = frozenset(
+    {"approval_evaluation", "quote_usage_reservation", "request_stage"}
+)
+
+
+def _processing_failure_diagnostic(phase: str, error: BaseException) -> str | None:
+    """Map known local exception types to bounded, content-free diagnostics."""
+
+    if phase not in _PROCESSING_DIAGNOSTIC_PHASES:
+        return None
+    if isinstance(error, ConversationDenied):
+        category = "authorization_denied"
+    elif isinstance(error, ConversationConflict):
+        category = "state_conflict"
+    elif isinstance(error, ConversationNotFound):
+        category = "resource_unavailable"
+    elif isinstance(error, InferenceTaskError):
+        category = "local_input_invalid"
+    elif isinstance(error, ConversationError):
+        category = "conversation_error"
+    else:
+        return None
+    return f"processing_{phase}_{category}"
 
 
 def planned_c5_requests(stage: StageApproval) -> int:
@@ -528,6 +551,16 @@ class ConversationProcessingPlans:
     ) -> None:
         self.app, self.db, self.authority, self.storage = app, app.database, authority, storage
         self.inference = ConversationInference(app, authority=authority)
+        self.failure_diagnostic_code: str | None = None
+
+    async def _diagnosed_processing_call(self, phase: str, operation: Any) -> Any:
+        """Capture a bounded phase/category code while preserving the original error."""
+
+        try:
+            return await operation()
+        except (ConversationError, InferenceTaskError) as error:
+            self.failure_diagnostic_code = _processing_failure_diagnostic(phase, error)
+            raise
 
     async def _row(
         self, actor: ConversationActor, recording_id: UUID, identifier: UUID | None = None
@@ -949,13 +982,16 @@ class ConversationProcessingPlans:
             for item in value.stages
             if item.stage == stage.checkpoint.stage
         )
-        bundle, stage_approval = await self.authority.approval(
-            self.app,
-            actor,
-            recording,
-            stage,
-            utc(self.app.clock()),
-            configuration_sha256=selected_configuration_sha256,
+        bundle, stage_approval = await self._diagnosed_processing_call(
+            "approval_evaluation",
+            lambda: self.authority.approval(
+                self.app,
+                actor,
+                recording,
+                stage,
+                utc(self.app.clock()),
+                configuration_sha256=selected_configuration_sha256,
+            ),
         )
         existing = await self.db.scalar(
             select(ConversationInferenceTask).where(
@@ -1005,8 +1041,11 @@ class ConversationProcessingPlans:
             if reused is not None:
                 return reused
         key = f"plan:{row.id}:{stage.checkpoint.cache_key}"
-        quote_view = await self.authority.issue(
-            self.app, actor, row.recording_id, key=key, request=request
+        quote_view = await self._diagnosed_processing_call(
+            "quote_usage_reservation",
+            lambda: self.authority.issue(
+                self.app, actor, row.recording_id, key=key, request=request
+            ),
         )
         quote_id = UUID(quote_view["id"])
         link = await self.db.get(ConversationPlanStageAuthorization, quote_id)
@@ -1023,12 +1062,15 @@ class ConversationProcessingPlans:
                 )
             )
             await self.db.flush()
-        run = await self.inference.request_stage(
-            actor,
-            row.recording_id,
-            quote_id,
-            key=f"run:{row.id}:{stage.checkpoint.cache_key}",
-            request=request,
+        run = await self._diagnosed_processing_call(
+            "request_stage",
+            lambda: self.inference.request_stage(
+                actor,
+                row.recording_id,
+                quote_id,
+                key=f"run:{row.id}:{stage.checkpoint.cache_key}",
+                request=request,
+            ),
         )
         task = await self.db.get(ConversationInferenceTask, UUID(run["id"]))
         assert task is not None
@@ -1217,6 +1259,7 @@ class ProcessingPlanScheduler:
                 return False
             identifier, recording_id = candidate.id, candidate.recording_id
             actor = actor_from_row(candidate)
+            plans: ConversationProcessingPlans | None = None
             try:
                 async with db.begin_nested():
                     app = ConversationApplication(db)
@@ -1232,9 +1275,8 @@ class ProcessingPlanScheduler:
                     )
                     if row is None or row.state != "active":
                         return False
-                    await ConversationProcessingPlans(app, self.authority, self.storage).advance(
-                        actor, row
-                    )
+                    plans = ConversationProcessingPlans(app, self.authority, self.storage)
+                    await plans.advance(actor, row)
             except (ConversationError, InferenceTaskError):
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
@@ -1247,4 +1289,6 @@ class ProcessingPlanScheduler:
                 if row is not None and row.state == "active":
                     row.state = "held"
                     row.progress = {"failure_code": "processing_authorization_or_input_unavailable"}
+                    if plans is not None and plans.failure_diagnostic_code is not None:
+                        row.progress["diagnostic_code"] = plans.failure_diagnostic_code
             return True

@@ -1359,6 +1359,158 @@ def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
     run(exercise())
 
 
+@pytest.mark.parametrize(
+    ("boundary", "expected_diagnostic"),
+    [
+        ("approval_evaluation", "processing_approval_evaluation_authorization_denied"),
+        ("quote_usage_reservation", "processing_quote_usage_reservation_state_conflict"),
+        ("request_stage", "processing_request_stage_state_conflict"),
+    ],
+)
+def test_scheduler_persists_bounded_enqueue_diagnostic_and_rolls_back_partial_work(
+    postgres_harness: Any,
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+    expected_diagnostic: str,
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            quote = await _quote(setup, f"processing-diagnostic-{boundary}-quote")
+            await _accept(setup, quote, f"processing-diagnostic-{boundary}-accept")
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == 1
+            plan_id = UUID(quote["id"])
+            await _make_due(setup, plan_id)
+
+            async with setup.sessions() as database:
+                before_budget = (
+                    await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
+                ).snapshot
+                before_minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (setup.actor.tenant_id, setup.actor.person_id),
+                )
+                assert before_minutes is not None
+                before_minutes_snapshot = before_minutes.snapshot
+            before_tasks = await _count(
+                setup,
+                ConversationInferenceTask,
+                ConversationInferenceTask.recording_id == setup.prepared.recording_id,
+            )
+            before_quotes = await _count(
+                setup,
+                ConversationQuote,
+                ConversationQuote.recording_id == setup.prepared.recording_id,
+            )
+            before_links = await _count(
+                setup,
+                ConversationPlanStageAuthorization,
+                ConversationPlanStageAuthorization.plan_id == plan_id,
+            )
+            before_external_jobs = await _count(
+                setup,
+                Job,
+                Job.tenant_id == setup.actor.tenant_id,
+                Job.external_side_effect.is_(True),
+            )
+
+            marker = "fixture-only-sensitive-error-text-must-not-persist"
+            if boundary == "approval_evaluation":
+
+                async def fail_approval(*args: Any, **kwargs: Any) -> Any:
+                    raise ConversationDenied(marker)
+
+                monkeypatch.setattr(setup.authority, "approval", fail_approval)
+            elif boundary == "quote_usage_reservation":
+                original_issue = setup.authority.issue
+
+                async def fail_after_issue(*args: Any, **kwargs: Any) -> Any:
+                    await original_issue(*args, **kwargs)
+                    raise ConversationConflict(marker)
+
+                monkeypatch.setattr(setup.authority, "issue", fail_after_issue)
+            else:
+                original_request_stage = ConversationInference.request_stage
+
+                async def fail_after_request_stage(
+                    service: ConversationInference, *args: Any, **kwargs: Any
+                ) -> Any:
+                    await original_request_stage(service, *args, **kwargs)
+                    raise ConversationConflict(marker)
+
+                monkeypatch.setattr(
+                    ConversationInference, "request_stage", fail_after_request_stage
+                )
+
+            scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+            assert await scheduler.step() is True
+            view = await _view(setup, plan_id)
+            assert view["state"] == "held"
+            assert view["failure_code"] == "processing_authorization_or_input_unavailable"
+            assert "diagnostic_code" not in view
+            async with setup.sessions() as database:
+                stored = await database.get(ConversationProcessingPlan, plan_id)
+                assert stored is not None
+                assert stored.state == "held"
+                assert stored.progress == {
+                    "failure_code": "processing_authorization_or_input_unavailable",
+                    "diagnostic_code": expected_diagnostic,
+                }
+                assert marker not in str(stored.progress)
+                after_budget = (
+                    await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
+                ).snapshot
+                after_minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (setup.actor.tenant_id, setup.actor.person_id),
+                )
+                assert after_minutes is not None
+                assert after_budget == before_budget
+                assert after_minutes.snapshot == before_minutes_snapshot
+
+            assert (
+                await _count(
+                    setup,
+                    ConversationInferenceTask,
+                    ConversationInferenceTask.recording_id == setup.prepared.recording_id,
+                )
+                == before_tasks
+            )
+            assert (
+                await _count(
+                    setup,
+                    ConversationQuote,
+                    ConversationQuote.recording_id == setup.prepared.recording_id,
+                )
+                == before_quotes
+            )
+            assert (
+                await _count(
+                    setup,
+                    ConversationPlanStageAuthorization,
+                    ConversationPlanStageAuthorization.plan_id == plan_id,
+                )
+                == before_links
+            )
+            assert (
+                await _count(
+                    setup,
+                    Job,
+                    Job.tenant_id == setup.actor.tenant_id,
+                    Job.external_side_effect.is_(True),
+                )
+                == before_external_jobs
+            )
+            assert setup.broker.calls == 1
+            assert await scheduler.step() is False
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_processing_plan_rejects_cross_owner_and_session_reads_or_acceptance(
     postgres_harness: Any, tmp_path: Any
 ) -> None:
