@@ -29,6 +29,11 @@ it("keeps fixture frames static, synthetic, and navigable without a report", () 
   expect(stages[6].observation?.file_name).toBeNull();
   expect(stages[7].observation?.file_name).toBe("Example call.wav");
   expect(stages[9].kind).toBe("processing");
+  expect(fixtureFrame("processing.paused").progress?.stages).toEqual([
+    { stage: "C2", state: "completed" },
+    { stage: "C4", state: "completed" },
+    { stage: "C5", state: "uncertain" },
+  ]);
   for (const [index, stage] of stages.entries()) {
     expect(stage.navigation.position).toBe(index + 1);
     expect(stage.navigation.total).toBe(stages.length);

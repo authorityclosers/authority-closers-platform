@@ -2383,9 +2383,9 @@ export function AcquisitionStudio({
                 <AcquisitionLowerPanels compact={displayFileSelected} />
               )}
             </div>
-            {!report && !deletionOnlyId && (
+            {!report && !deletionOnlyId && !submission && (
               <AcquisitionGuideRail
-                stage={submission ? "processing" : displayFileSelected ? "selected" : "empty"}
+                stage={displayFileSelected ? "selected" : "empty"}
                 stagedFiles={stagedFiles}
                 maximumFileBytes={policy?.maximum_file_bytes}
               />
