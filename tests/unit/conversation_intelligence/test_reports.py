@@ -241,7 +241,7 @@ def test_parser_rejects_numeric_and_unbound_evidence_but_keeps_provider_addition
         "prank",
     ],
 )
-def test_numeric_key_guard_does_not_reject_compound_language_tokens(key: str) -> None:
+def test_numeric_key_guard_allows_only_reviewed_exact_language_labels(key: str) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload[key] = "bounded provider annotation"
@@ -278,6 +278,11 @@ def test_numeric_key_guard_does_not_reject_compound_language_tokens(key: str) ->
         "overallgrade",
         "overallratings",
         "scorecard",
+        "customerscore",
+        "coachrating",
+        "prospectrank",
+        "foo_prank",
+        "painful_points",
     ],
 )
 def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: str) -> None:
@@ -290,10 +295,10 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/4"
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/5"
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "720ab1b7181f34c8ff30b5dfd79995574228f7397a969ed23a69e8ca2b757750"
+        "602badc5eb4e367c4f751478e1972c229939328a7337954ea039703b3440543d"
     )
 
 
