@@ -26,9 +26,7 @@ def stage_completion_limit(
         raise ValueError("report_stage_limit_invalid")
     if not 256 <= approved_maximum <= completion_ceiling(provider, model, stage):
         raise ValueError("report_stage_limit_invalid")
-    if approved_maximum > 4_000:
-        return approved_maximum
-    return min(3_200 if stage == "C5" else 1_400, approved_maximum)
+    return approved_maximum
 
 
 class _Strict(BaseModel):

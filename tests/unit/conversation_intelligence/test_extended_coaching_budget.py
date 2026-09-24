@@ -76,10 +76,10 @@ def test_other_stages_and_models_cannot_use_extended_output(kind, route):
         kind.model_validate({**data, **route})
 
 
-def test_allocation_preserves_old_plan_and_only_expands_explicit_flash_approval():
+def test_allocation_preserves_every_route_bounded_approved_cap():
     assert stage_completion_limit("C5", 8000, provider="gemini", model="gemini-3.8-flash") == 8000
     assert stage_completion_limit("C5", 3200, provider="gemini", model="gemini-3.8-flash") == 3200
-    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 3200
+    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 4000
     with pytest.raises(ValueError):
         stage_completion_limit("C5", 8000)
     with pytest.raises(ValueError):

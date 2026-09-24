@@ -164,9 +164,8 @@ REPORT_STRUCTURE_INSTRUCTION = (
     "sample phrase per item. "
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_FORBIDDEN_NUMERIC_KEY = re.compile(
-    r"(?:score|grade|rating|points?|numeric|percent|percentage|rank|overall_score)",
-    re.IGNORECASE,
+_FORBIDDEN_NUMERIC_KEY_TOKENS = frozenset(
+    {"score", "grade", "rating", "numeric", "percent", "percentage", "rank", "point", "points"}
 )
 _ALLOWED_DIMENSION_STATES = frozenset(
     {"observed", "insufficient_evidence", "not_applicable", "conflicted", "unknown"}
@@ -877,12 +876,37 @@ def build_groq_prompt(
 def _reject_numeric_fields(value: Any, path: str = "payload") -> None:
     if isinstance(value, Mapping):
         for key, child in value.items():
-            if isinstance(key, str) and _FORBIDDEN_NUMERIC_KEY.search(key):
+            if isinstance(key, str) and _has_forbidden_numeric_key(key):
                 raise ReportError("report_numeric_field_forbidden")
             _reject_numeric_fields(child, f"{path}.{key}")
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_numeric_fields(child, f"{path}[{index}]")
+
+
+def _has_forbidden_numeric_key(key: str) -> bool:
+    """Reject score-bearing identifier tokens without matching substrings."""
+    split_acronym = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key)
+    split_camel_case = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", split_acronym)
+    tokens = [token.casefold() for token in re.findall(r"[A-Za-z0-9]+", split_camel_case)]
+    for index, token in enumerate(tokens):
+        if token not in _FORBIDDEN_NUMERIC_KEY_TOKENS:
+            continue
+        # Common language labels are not numeric scores. Keep all other
+        # point/points tokens blocked, including fields such as total_points.
+        if (
+            token in {"point", "points"}
+            and index > 0
+            and tokens[index - 1]
+            in {
+                "pain",
+                "talking",
+                "turning",
+            }
+        ):
+            continue
+        return True
+    return False
 
 
 def _provider_extras(
@@ -1521,7 +1545,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/2"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/3"
 
 
 def _adapt_unbound_provider_findings(

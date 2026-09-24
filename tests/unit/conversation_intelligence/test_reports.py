@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+import ac_platform.conversation_intelligence.reports as reports_module
 from ac_platform.conversation_intelligence.reports import (
     GROQ_MODEL,
     MAX_AGGREGATE_OVERVIEW_CHARS,
+    REPORT_VALIDATOR_REVISION,
     AggregateFactPacket,
     ReportError,
     build_fact_groq_prompts,
@@ -223,6 +227,52 @@ def test_parser_rejects_numeric_and_unbound_evidence_but_keeps_provider_addition
     unknown["unexpected"] = "provider expansion"
     output = parse_report_draft(unknown, transcript)
     assert output.provider_extras == {"unexpected": "provider expansion"}
+
+
+@pytest.mark.parametrize("key", ["pain_points", "key_talking_points", "turning_point", "prank"])
+def test_numeric_key_guard_does_not_reject_compound_language_tokens(key: str) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload[key] = "bounded provider annotation"
+
+    result = parse_report_draft(payload, transcript)
+
+    assert result.provider_extras[key] == "bounded provider annotation"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "score",
+        "salesScore",
+        "quality_score",
+        "overall_score",
+        "grade",
+        "rating",
+        "rank",
+        "numeric",
+        "percent",
+        "percentage",
+        "points",
+        "total_points",
+        "earned_points",
+    ],
+)
+def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: str) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload[key] = 1
+
+    with pytest.raises(ReportError, match="report_numeric_field_forbidden"):
+        parse_report_draft(payload, transcript)
+
+
+def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/3"
+    source = Path(reports_module.__file__).read_text(encoding="utf-8")
+    assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
+        "a7e32588dd4b9f4a4477398b63de79a27dd862e9fb5b549e9cbe611ab7eeea7d"
+    )
 
 
 @pytest.mark.parametrize(
