@@ -29,9 +29,9 @@
   background: transparent;
   color: #5d7080;
   font: inherit;
-  font-size: 14px;
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
   line-height: 1.25;
   cursor: pointer;
   transition:
@@ -67,6 +67,7 @@
 
 .tabs button[aria-selected="true"] {
   color: #172b3a;
+  font-weight: 700;
 }
 
 .tabs button[aria-selected="true"]::after {
