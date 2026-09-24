@@ -136,6 +136,10 @@
   padding: 16px;
 }
 
+.snapshot[data-reading="true"] .columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .sourcePanel,
 .hypothesis {
   min-width: 0;

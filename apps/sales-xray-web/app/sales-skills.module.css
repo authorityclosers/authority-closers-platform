@@ -467,3 +467,59 @@
     display: none;
   }
 }
+
+.skills[data-reading="true"] .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.skills[data-reading="true"] .card {
+  display: block;
+  height: auto;
+  max-height: none;
+}
+.skills[data-reading="true"] .observation {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: none;
+  overflow: visible;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.skills[data-reading="true"] .card h3 {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: none;
+  overflow: visible;
+}
+.skills[data-reading="true"] .pagination,
+.skills[data-reading="true"] .open[hidden] {
+  display: none;
+}
+.skills[data-reading="true"] .banner p,
+.skills[data-reading="true"] .tip {
+  display: flex;
+}
+.skills[data-reading="true"] .tip {
+  margin-left: auto;
+}
+.skills[data-reading="true"] .banner p {
+  display: block;
+}
+@media (max-width: 48rem) {
+  .skills[data-reading="true"] .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .skills[data-reading="true"] .banner {
+    align-items: flex-start;
+  }
+
+  .skills[data-reading="true"] .banner > div {
+    min-width: 0;
+  }
+
+  .skills[data-reading="true"] .tip {
+    display: none;
+  }
+}

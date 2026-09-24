@@ -19,6 +19,34 @@
 .overview :where(p, h2, h3, h4) {
   margin-top: 0;
 }
+
+@media screen {
+  .overview[data-reading="true"] > .workspaceLayout > .insightRail,
+  .overview[data-reading="true"] > .workspaceLayout > .aboveFold {
+    display: none;
+  }
+
+  .overview[data-reading="true"] .chapterStack[hidden],
+  .overview[data-reading="true"] .chapter[hidden],
+  .overview[data-reading="true"] .improvementTabPanel[hidden] {
+    display: block;
+  }
+
+  .overview[data-reading="true"] .chapter {
+    margin-bottom: 24px;
+  }
+
+  .overview[data-reading="true"] .improvementTabs {
+    display: grid;
+    gap: 12px;
+  }
+
+  .overview[data-reading="true"] .improvementTabPanel {
+    min-height: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+}
 /* The acquisition route uses the compact dashboard; retain the full source
    body for review sheets, the legacy reader and unabridged print. */
 @media screen {
@@ -1881,6 +1909,9 @@
   flex-wrap: wrap;
   gap: 4px;
   border-bottom: 1px solid var(--line);
+}
+.improvementTabList[hidden] {
+  display: none;
 }
 
 .improvementTabList button {

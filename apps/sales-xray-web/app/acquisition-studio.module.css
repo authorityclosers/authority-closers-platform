@@ -1381,6 +1381,11 @@
 .app[data-stage="report"] :global(.studio-main) {
   padding-bottom: 90px;
 }
+@media (max-width: 760px) {
+  .app[data-stage="report"] :global(.studio-main) {
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+}
 .reportMoreMenu > a {
   padding: 10px 12px;
   color: #007d79;

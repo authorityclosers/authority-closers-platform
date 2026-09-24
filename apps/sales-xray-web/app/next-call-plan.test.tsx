@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { NextCallPlan } from "./next-call-plan";
+import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport } from "./report-contract";
 
 (
@@ -109,4 +110,35 @@ it("does not invent coaching or playback when source fields are absent", async (
   expect(
     container.querySelector('[aria-label^="Play source moment"]'),
   ).toBeNull();
+});
+
+it("renders every plan section and source in reading mode while retaining evidence seeking", async () => {
+  const select = vi.fn();
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading>
+        <NextCallPlan report={report} onSelectEvidence={select} />
+      </ReportReadingProvider>,
+    ),
+  );
+  expect(container.querySelectorAll("article")).toHaveLength(3);
+  expect(
+    container.querySelectorAll('article[data-active="true"]'),
+  ).toHaveLength(1);
+  expect(container.textContent).toContain(
+    report.overview!.next_call_focus!.target,
+  );
+  expect(container.textContent).toContain(
+    report.overview!.practice!.success_condition,
+  );
+  expect(container.querySelectorAll("button[hidden]")).toHaveLength(3);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  const evidence = report.improvements[0].evidence[0];
+  expect(container.textContent).toContain(evidence.quote);
+  await act(async () =>
+    button(
+      `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
+    ).click(),
+  );
+  expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);
 });

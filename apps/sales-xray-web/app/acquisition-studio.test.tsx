@@ -464,11 +464,13 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   expect(details?.querySelector('a[role="menuitem"]')?.textContent).toContain(
     "Sign in to save this call",
   );
+  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
+  await click("Tabbed view");
   expect(
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(5);
+  ).toHaveLength(6);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -1078,6 +1080,8 @@ it("restores an unapproved call without quoting or accepting, including manual s
   await mount();
   await click("Check status");
   expect(container.textContent).toContain("Ready for your approval");
+  expect(container.querySelector('[data-hero-stage="ready"] h1')?.textContent).toBe("Ready to analyse");
+  expect(container.textContent).not.toContain("We're processing your call");
   expect(container.textContent).toContain("approval is not confirmed yet");
   expect(
     calls.filter(({ init }) =>
@@ -1485,7 +1489,7 @@ it("shows delayed-update guidance without changing progress, identity or submitt
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
-  expect(container.querySelector('[role="tab"]')?.textContent).toBe("Overview");
+  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
 });
 
 it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
@@ -2000,10 +2004,14 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
+  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
+  expect(container.querySelectorAll("[data-report-mode-section][hidden]")).toHaveLength(0);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
+  await click("Tabbed view");
   await click("Prospect");
+  expect(container.querySelector('[data-report-mode-section="prospect"]')?.hasAttribute("hidden")).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
@@ -2016,6 +2024,9 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
+  await click("Reading view");
+  expect(container.querySelector('[aria-label="Call audio player"] audio')).toBe(savedAudio);
+  await click("Tabbed view");
   await click("Next-call plan");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),

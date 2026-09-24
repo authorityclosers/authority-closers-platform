@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportFactors } from "./report-factors";
 import { formatTranscriptTime, ReportTranscript } from "./report-transcript";
+import { ReportReadingProvider } from "./report-reading-context";
 import type {
   ReportDimension,
   Transcript,
@@ -44,15 +45,18 @@ async function render(
   transcript: Transcript,
   onSelect = vi.fn<(segment: TranscriptSegment) => void>(),
   language: ReportDisplayLanguage = "en",
+  reading = false,
 ) {
   await act(async () =>
     root.render(
-      <ReportTranscript
-        key={language}
-        transcript={transcript}
-        onSelect={onSelect}
-        language={language}
-      />,
+      <ReportReadingProvider reading={reading}>
+        <ReportTranscript
+          key={language}
+          transcript={transcript}
+          onSelect={onSelect}
+          language={language}
+        />
+      </ReportReadingProvider>,
     ),
   );
   return onSelect;
@@ -70,6 +74,14 @@ afterEach(async () => {
 });
 
 describe("ReportTranscript", () => {
+  it("shows the full transcript in reading mode", async () => {
+    await render(transcriptWithSegments(51), undefined, "en", true);
+
+    expect(container.querySelector("details")?.open).toBe(true);
+    expect(container.querySelectorAll("[data-segment-id]")).toHaveLength(51);
+    expect(container.querySelector(".loadMore")).toBeNull();
+  });
+
   it("expands, searches, filters by unverified speaker label, and returns the source segment", async () => {
     const transcript = transcriptWithSegments(3);
     const onSelect = await render(transcript);

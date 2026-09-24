@@ -32,6 +32,14 @@ function button(label: string) {
 
 it("labels the synthetic report, exposes exact evidence through the real skill reader, and never invents a score or audio", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
+  expect(
+    [
+      ...container.querySelectorAll<HTMLElement>("[data-report-mode-section]"),
+    ].every((section) => !section.hidden),
+  ).toBe(true);
   expect(container.textContent).toContain("Synthetic display only");
   expect(container.textContent).toContain(
     "No recording, account, analysis, or provider call exists here.",
@@ -42,6 +50,7 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
     /\b\d+\s*%|performance score|conversion rate/i,
   );
 
+  await act(async () => button("Tabbed view").click());
   await act(async () => button("Open notes: Human Connection & Trust").click());
   const dialog = container.querySelector('[role="dialog"]');
   expect(dialog?.textContent).toContain(syntheticEvidence.respect.quote);
@@ -60,6 +69,7 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
 
 it("keeps the no-next-action outcome explicit in the production next-call plan and selects its source", async () => {
   await act(async () => root.render(<SyntheticReportPreview />));
+  await act(async () => button("Tabbed view").click());
   await act(async () => button("Next-call plan").click());
   const outcome = container.querySelector('[aria-label="Call outcome"]');
   expect(outcome?.textContent).toContain(

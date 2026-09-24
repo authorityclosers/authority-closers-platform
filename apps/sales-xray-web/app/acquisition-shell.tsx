@@ -39,7 +39,7 @@ export function AcquisitionShell({
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
-  heroStage?: "welcome" | "processing";
+  heroStage?: "welcome" | "ready" | "processing";
   /** A server-confirmed account name, when the caller has one. */
   displayName?: string | null;
   /** Label the explicit local review fixture without implying a real job. */
@@ -238,7 +238,14 @@ export function AcquisitionShell({
           {visibleHero && (
             <div className={styles.welcome}>
               <p className={styles.welcomeKicker}>TURN CALLS INTO CLARITY</p>
-              {visibleHero === "processing" ? (
+              {visibleHero === "ready" ? (
+                <>
+                  <h1>Ready to analyse</h1>
+                  <p className={styles.welcomeDescription}>
+                    Your call is saved. Review the next step to start analysis.
+                  </p>
+                </>
+              ) : visibleHero === "processing" ? (
                 <>
                   <h1>
                     {previewHero
