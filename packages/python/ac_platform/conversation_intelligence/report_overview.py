@@ -237,7 +237,14 @@ def normalize_overview(
 OVERVIEW_INSTRUCTION = (
     " EVIDENCE_ARRAYS: v1. span={segment_id} for ordinary bounded segments; zero-based Python "
     "code-point offsets; Retained legacy full references are exact-only. Every evidence value is "
-    "a nonempty JSON array of span objects, even for one. No invented/duplicate findings. "
+    "a nonempty JSON array of span objects, even for one. Each SourceNote must use 1-3 distinct, "
+    "source-supported spans; select only enough distinct spans to support its text. Rewatch uses "
+    "exactly one span. No invented/duplicate findings. "
+    "For conversation_change, use source timestamps only: max(before.end_ms) <= "
+    "min(change.start_ms) and max(change.end_ms) <= min(after.start_ms). If chronology is unclear "
+    "or spans overlap between these three groups, return null for the entire conversation_change. "
+    "Never invent a pivot, "
+    "reorder source spans, or change timestamps to force the order. "
     "Interpretations are hypotheses; unknown diagnosis/outcome/change:null. Follow-up windows are "
     "not bookings/sales. Business impact:insufficient_data; missing_inputs required. Omit server "
     "fields and dimension labels/citations. "
@@ -247,35 +254,44 @@ OVERVIEW_INSTRUCTION = (
 # validating boundary. Repeating the entire JSON Schema would waste bounded TPM.
 OVERVIEW_FORMAT = {
     "version": OVERVIEW_VERSION,
-    "diagnosis": "{text: sentence <=320 chars,evidence:[span]}|null",
+    "diagnosis": "{text: sentence <=320 chars,evidence:[1-3 distinct supported spans]}|null",
     "outcome": (
         "{kind: closed|follow_up|no_sale|future_date|disqualified|unclear,"
-        "text,evidence:[span]}|null"
+        "text,evidence:[1-3 distinct supported spans]}|null"
     ),
     "strength_details": "[{finding_index, why_it_matters}] per strength",
     "improvement_details": (
-        "[{finding_index, what_happened: {text,evidence:[span]}, why_it_matters, "
+        "[{finding_index, what_happened: {text,evidence:[1-3 distinct supported spans]}, "
+        "why_it_matters, "
         "replacement_behavior: one doable action + sample phrase, "
         "business_impact: {status: insufficient_data, "
         "missing_inputs: [text]}}] per improvement"
     ),
     "golden_moments": "[{strength_index,evidence_index,why_effective}], at most 3",
     "missed_details": (
-        "[{finding_index,prospect_signal:{text,evidence:[span]},closer_response:{text,evidence:[span]},"
+        "[{finding_index,prospect_signal:{text,evidence:[1-3 distinct supported spans]},"
+        "closer_response:{text,evidence:[1-3 distinct supported spans]},"
         "follow_up,potential_impact}]"
     ),
     "prospect_interpretations": (
-        "[{source:{text,evidence:[span]},possible_concern,"
+        "[{source:{text,evidence:[1-3 distinct supported spans]},possible_concern,"
         "interpretation_kind:inference}], at most 3"
     ),
     "rewatch": (
-        "[{text,purpose:must_watch|watch|repeat,evidence:[span]}], at most 3; one span each"
+        "[{text,purpose:must_watch|watch|repeat,evidence:[exactly 1 distinct supported span]}], "
+        "at most 3"
     ),
     "conversation_change": (
-        "{before:{text,evidence:[span]},change:{text,evidence:[span]},after:{text,evidence:[span]},"
-        "possible_effect,interpretation_kind:inference}|null; strictly chronological source spans"
+        "{before:{text,evidence:[1-3 distinct supported spans]},"
+        "change:{text,evidence:[1-3 distinct supported spans]},"
+        "after:{text,evidence:[1-3 distinct supported spans]},"
+        "possible_effect,interpretation_kind:inference}|null; source timestamps must satisfy "
+        "max(before.end_ms) <= min(change.start_ms) <= max(change.end_ms) <= min(after.start_ms); "
+        "if unclear or overlapping between groups, the entire field is null"
     ),
-    "ethics_notes": "[{text,evidence:[span]}], at most 3; observations only",
+    "ethics_notes": (
+        "[{text,evidence:[1-3 distinct supported spans]}], at most 3; observations only"
+    ),
     "next_call_focus": "{improvement_index:0,behavior,target}|null if no improvement",
     "practice": "{improvement_index:0,instructions,success_condition}|null if no improvement",
     "business_impact": "{status:insufficient_data,missing_inputs:[text]}|omitted",

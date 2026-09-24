@@ -36,8 +36,8 @@ EVIDENCE_PATHS = (
 )
 
 
-def full_overview_case() -> tuple[dict[str, Any], dict[str, Any]]:
-    transcript = _transcript()
+def full_overview_case(*, count: int = 3) -> tuple[dict[str, Any], dict[str, Any]]:
+    transcript = _transcript(count=count)
     draft = _payload(transcript)
     overview = overview_for(draft)
 
@@ -79,13 +79,73 @@ def full_overview_case() -> tuple[dict[str, Any], dict[str, Any]]:
 
 def test_all_eleven_nested_paths_have_an_explicit_array_in_the_prompt() -> None:
     shape = json.dumps(OVERVIEW_FORMAT)
-    assert len(re.findall(r"\bevidence:\[span\]", shape)) == len(EVIDENCE_PATHS)
+    assert shape.count("evidence:[1-3 distinct supported spans]") == len(EVIDENCE_PATHS) - 1
+    assert shape.count("evidence:[exactly 1 distinct supported span]") == 1
     assert len(re.findall(r"\bevidence\b", shape)) == len(EVIDENCE_PATHS)
+    assert (
+        "Each SourceNote must use 1-3 distinct, source-supported spans"
+        in reports.OVERVIEW_INSTRUCTION
+    )
+    assert "Rewatch uses exactly one span" in reports.OVERVIEW_INSTRUCTION
+    assert "max(before.end_ms) <= min(change.start_ms)" in reports.OVERVIEW_INSTRUCTION
+    assert "max(change.end_ms) <= min(after.start_ms)" in reports.OVERVIEW_INSTRUCTION
+    assert "return null for the entire conversation_change" in reports.OVERVIEW_INSTRUCTION
+    assert "Never invent a pivot, reorder source spans, or change timestamps" in (
+        reports.OVERVIEW_INSTRUCTION
+    )
     transcript, draft = full_overview_case()
     original = deepcopy(draft)
     parsed = reports.parse_report_draft(draft, transcript)
     assert parsed.overview is not None
     assert parsed.overview.model_dump(mode="json") == draft["overview"]
+    assert draft == original
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("diagnosis",),
+        ("improvement_details", 0, "what_happened"),
+    ],
+)
+def test_four_valid_source_spans_remain_rejected_at_source_note_bound(
+    path: tuple[str | int, ...],
+) -> None:
+    transcript, draft = full_overview_case(count=4)
+    note = draft["overview"]
+    for key in path:
+        note = note[key]
+    note["evidence"] = [_evidence(transcript, index) for index in range(4)]
+
+    with pytest.raises(ValidationError) as exc:
+        DetailedOverview.model_validate(draft["overview"])
+    assert ((*path, "evidence"), "too_long") in {
+        (tuple(error["loc"]), error["type"]) for error in exc.value.errors()
+    }
+    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
+        reports.parse_report_draft(draft, transcript)
+
+
+@pytest.mark.parametrize(
+    ("overlap_index", "start_ms", "end_ms"),
+    [(1, 800, 1_700), (2, 1_800, 2_700)],
+)
+def test_conversation_change_rejects_overlapping_native_source_timestamps(
+    overlap_index: int, start_ms: int, end_ms: int
+) -> None:
+    transcript, draft = full_overview_case()
+    transcript["segments"][overlap_index]["start_ms"] = start_ms
+    transcript["segments"][overlap_index]["end_ms"] = end_ms
+    change = draft["overview"]["conversation_change"]
+    draft["overview"]["missed_details"][0]["closer_response"]["evidence"] = [
+        _evidence(transcript, 1)
+    ]
+    for key, index in (("before", 0), ("change", 1), ("after", 2)):
+        change[key]["evidence"] = [_evidence(transcript, index)]
+    original = deepcopy(draft)
+
+    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
+        reports.parse_report_draft(draft, transcript)
     assert draft == original
 
 
@@ -122,7 +182,13 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
             reports,
             "OVERVIEW_FORMAT",
             {
-                k: v.replace("evidence:[span]", "evidence") if isinstance(v, str) else v
+                k: (
+                    v.replace("evidence:[1-3 distinct supported spans]", "evidence").replace(
+                        "evidence:[exactly 1 distinct supported span]", "evidence"
+                    )
+                    if isinstance(v, str)
+                    else v
+                )
                 for k, v in OVERVIEW_FORMAT.items()
             },
         )
@@ -141,6 +207,11 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
     )
     assert "EVIDENCE_ARRAYS: v1" in system
     assert "nonempty JSON array of span objects, even for one" in system
+    assert "Each SourceNote must use 1-3 distinct, source-supported spans" in system
+    assert "Rewatch uses exactly one span" in system
+    assert "max(before.end_ms) <= min(change.start_ms)" in system
+    assert "max(change.end_ms) <= min(after.start_ms)" in system
+    assert "return null for the entire conversation_change" in system
     assert "span={segment_id} for ordinary bounded segments" in system
     assert "zero-based Python code-point offsets" in system
     assert "Retained legacy full references" in system
