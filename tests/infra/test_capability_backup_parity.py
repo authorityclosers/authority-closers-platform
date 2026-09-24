@@ -51,6 +51,7 @@ ANALYSIS_LANGUAGE = "20260923_0044"
 EMAIL_LOGIN_CODES = "20260923_0045"
 SALES_XRAY_PROFILES = "20260923_0046"
 COACHING_DEPTH = "20260924_0047"
+EMAIL_ACKNOWLEDGEMENT = "20260924_0048"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -82,6 +83,7 @@ HEADS = (
     EMAIL_LOGIN_CODES,
     SALES_XRAY_PROFILES,
     COACHING_DEPTH,
+    EMAIL_ACKNOWLEDGEMENT,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -90,6 +92,7 @@ TABLELESS_VERSIONED_HEADS = (
     COURSE_CREATION,
     ANALYSIS_LANGUAGE,
     COACHING_DEPTH,
+    EMAIL_ACKNOWLEDGEMENT,
 )
 NEW_TABLES = {
     PRACTICE: (
@@ -598,6 +601,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         99,
         100,
         100,
+        100,
     )
     expected_contracts = (
         None,
@@ -630,6 +634,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v25",
         "ac-postgres-parity-v26",
         "ac-postgres-parity-v27",
+        "ac-postgres-parity-v28",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

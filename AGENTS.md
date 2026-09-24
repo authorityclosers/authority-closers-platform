@@ -42,8 +42,8 @@ Use only for context and to verify intent. Controlled docs win.
 
 ## Cloud research orchestration
 
-For expensive, separable research or review, follow the `cloud-chat-orchestration`
-skill at `C:\Users\Suyash\.codex\skills\cloud-chat-orchestration\SKILL.md`.
+For expensive, separable research or review, follow the `ac-orchestra`
+skill at `C:\Users\Suyash\.codex\skills\ac-orchestra\SKILL.md`.
 Codex remains the integration and release owner: pin the source revision, keep
 file ownership separate, reproduce relevant claims locally, run the repository
 gates, and verify the real deployed journey. Use the authorized normal ChatGPT
