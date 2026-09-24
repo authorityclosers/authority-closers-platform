@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import struct
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -29,9 +30,14 @@ from ac_platform.conversation_intelligence.inference_broker import (
     ProcessInferenceBroker,
     _child_execute,
     _decode_frame,
+    _decode_response,
     _encode_frame,
     _request_header,
     _run_subprocess,
+)
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    PROVIDER_FAILURE_OBSERVATION_SCHEMA,
+    ProviderFailureObservation,
 )
 from ac_platform.conversation_intelligence.providers import ProviderError, ProviderResult
 
@@ -90,6 +96,31 @@ def _response(
     }
     header.update(changes)
     return _encode_frame(header, raw_json)
+
+
+def _failure_observation(
+    reservation: Reservation,
+    payload: bytes,
+    **changes: Any,
+) -> ProviderFailureObservation:
+    values: dict[str, Any] = {
+        "reservation_id": reservation.reservation_id,
+        "attempt_id": reservation.attempt_id,
+        "quote_fingerprint": reservation.quote.fingerprint,
+        "provider": reservation.quote.provider_id,
+        "model": reservation.quote.provider_model,
+        "operation": reservation.quote.operation,
+        "input_sha256": hashlib.sha256(payload).hexdigest(),
+        "http_status": 500,
+        "response_body_complete": True,
+        "response_body_observed_bytes": 0,
+        "response_body_sha256": hashlib.sha256(b"").hexdigest(),
+        "provider_request_id_sha256": hashlib.sha256(b"request-123").hexdigest(),
+        "retry_after_seconds": None,
+        "diagnostic_category": None,
+    }
+    values.update(changes)
+    return ProviderFailureObservation(**values)
 
 
 class FakeRunner:
@@ -316,6 +347,160 @@ def test_child_preserves_allowlisted_provider_http_error_code(
     assert payload == b""
     assert header["status"] == "error"
     assert header["error_code"] == code
+
+
+@pytest.mark.asyncio
+async def test_sanitized_failure_observation_crosses_child_and_parent(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    observation = replace(
+        _failure_observation(
+            reservation,
+            body,
+            provider_request_id_sha256=hashlib.sha256(b"sk_live_synthetic_secret").hexdigest(),
+        ),
+        response_body_complete=False,
+        response_body_observed_bytes=16_384,
+        response_body_sha256=None,
+    )
+    frame = _encode_frame(_request_header(reservation, body), body)
+
+    class FailingProviders:
+        def __init__(self, *, credentials, authorize):
+            del credentials, authorize
+
+        def generate(self, current, request_body):
+            del current, request_body
+            raise ProviderError("provider_http_500", failure_observation=observation)
+
+    with monkeypatch.context() as child_scope:
+        child_scope.setattr(
+            "ac_platform.conversation_intelligence.inference_broker.BoundedProviders",
+            FailingProviders,
+        )
+        child_scope.setattr(os, "environ", {"GEMINI_API_KEY": "synthetic-child-key"})
+        child_output = _child_execute(frame)
+
+    child_header, child_payload = _decode_frame(child_output, maximum_payload=4 * 1024 * 1024)
+    assert child_payload == b""
+    assert child_header["error_code"] == "provider_http_500"
+    assert child_header["failure_observation"] == observation.as_dict()
+    assert child_header["failure_observation"]["schema"] == (PROVIDER_FAILURE_OBSERVATION_SCHEMA)
+    assert child_header["failure_observation"]["http_status"] == 500
+    assert child_header["failure_observation"]["response_body_complete"] is False
+    assert b"sk_live_synthetic_secret" not in child_output
+    assert b"synthetic-child-key" not in child_output
+
+    runner = FakeRunner(lambda _header, _payload: child_output)
+    with pytest.raises(InferenceBrokerError, match="^provider_http_500$") as caught:
+        await ProcessInferenceBroker(python_executable=sys.executable, runner=runner).execute(
+            reservation, body
+        )
+    assert caught.value.failure_observation == observation
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("reservation_id", "reservation-other"),
+        ("attempt_id", "attempt-other"),
+        ("quote_fingerprint", "0" * 64),
+        ("provider", "groq"),
+        ("model", "openai/gpt-oss-120b"),
+        ("operation", "transcribe_scribe_v2"),
+        ("input_sha256", "1" * 64),
+        ("http_status", 503),
+    ],
+)
+def test_parent_rejects_mismatched_failure_observation_binding(
+    field: str, replacement: Any
+) -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    observation = replace(_failure_observation(reservation, body), **{field: replacement})
+    frame = _encode_frame(
+        {
+            "schema": BROKER_SCHEMA,
+            "kind": "response",
+            "status": "error",
+            "error_code": "provider_http_500",
+            "payload_len": 0,
+            "failure_observation": observation.as_dict(),
+        },
+        b"",
+    )
+    with pytest.raises(InferenceBrokerError, match="^broker_response_invalid$"):
+        _decode_response(frame, reservation, body, maximum_payload=1024)
+
+
+def test_parent_rejects_extra_or_invalid_failure_observation_fields() -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    observation = _failure_observation(reservation, body).as_dict()
+    observation["private_provider_text"] = "must never be forwarded"
+    frame = _encode_frame(
+        {
+            "schema": BROKER_SCHEMA,
+            "kind": "response",
+            "status": "error",
+            "error_code": "provider_http_500",
+            "payload_len": 0,
+            "failure_observation": observation,
+        },
+        b"",
+    )
+    with pytest.raises(InferenceBrokerError, match="^broker_response_invalid$"):
+        _decode_response(frame, reservation, body, maximum_payload=1024)
+
+    observation = _failure_observation(reservation, body).as_dict()
+    observation["http_status"] = True
+    frame = _encode_frame(
+        {
+            "schema": BROKER_SCHEMA,
+            "kind": "response",
+            "status": "error",
+            "error_code": "provider_http_500",
+            "payload_len": 0,
+            "failure_observation": observation,
+        },
+        b"",
+    )
+    with pytest.raises(InferenceBrokerError, match="^broker_response_invalid$"):
+        _decode_response(frame, reservation, body, maximum_payload=1024)
+
+
+def test_frame_rejects_duplicate_keys_before_header_validation() -> None:
+    raw_header = (
+        b'{"schema":"'
+        + BROKER_SCHEMA.encode()
+        + b'","schema":"'
+        + BROKER_SCHEMA.encode()
+        + b'","kind":"response","status":"error",'
+        + b'"error_code":"provider_http_500","payload_len":0}'
+    )
+    frame = struct.pack(">I", len(raw_header)) + raw_header
+    with pytest.raises(InferenceBrokerError, match="^broker_frame_invalid$"):
+        _decode_frame(frame, maximum_payload=1024)
+
+
+def test_old_error_frame_without_observation_remains_compatible() -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body)
+    frame = _encode_frame(
+        {
+            "schema": BROKER_SCHEMA,
+            "kind": "response",
+            "status": "error",
+            "error_code": "provider_http_500",
+            "payload_len": 0,
+        },
+        b"",
+    )
+    with pytest.raises(InferenceBrokerError, match="^provider_http_500$") as caught:
+        _decode_response(frame, reservation, body, maximum_payload=1024)
+    assert caught.value.failure_observation is None
 
 
 def test_child_collapses_unallowlisted_provider_error_without_echoing_remote_text(

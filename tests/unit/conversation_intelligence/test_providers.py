@@ -14,6 +14,9 @@ from ac_platform.conversation_intelligence.entitlements import (
     Reservation,
 )
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    MAX_ERROR_RESPONSE_BODY_BYTES,
+)
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
@@ -141,6 +144,10 @@ def test_result_and_failures_never_retain_provider_content_or_credentials():
     assert str(caught.value) == "provider_http_403"
     assert sensitive_value not in repr(caught.value)
     assert caught.value.diagnostic == "key_invalid"
+    assert caught.value.failure_observation is not None
+    assert caught.value.failure_observation.http_status == 403
+    assert caught.value.failure_observation.diagnostic_category == "key_invalid"
+    assert sensitive_value not in repr(caught.value.failure_observation)
 
     def success(_):
         return httpx.Response(
@@ -202,6 +209,8 @@ def test_schema_errors_classify_without_disclosing_provider_text(message, diagno
         client(handler).generate(grant(canonical(body())), body())
     assert str(caught.value) == "provider_http_400"
     assert caught.value.diagnostic == diagnostic
+    assert caught.value.failure_observation is not None
+    assert caught.value.failure_observation.diagnostic_category == diagnostic
     assert "secret-private-call" not in repr(caught.value)
 
 
@@ -292,6 +301,119 @@ def test_streaming_response_has_a_whole_execution_deadline():
             transport=httpx.MockTransport(handler),
         ).generate(grant(canonical(body())), body())
     assert ticks
+
+
+def test_http_failure_observation_binds_attempt_and_complete_bounded_body():
+    source = grant(canonical(body()))
+    response_body = b'{"error":"synthetic schema rejection"}'
+
+    def handler(_):
+        return httpx.Response(
+            500,
+            headers={"x-request-id": "request-123", "retry-after": "45"},
+            content=response_body,
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert str(caught.value) == "provider_http_500"
+    assert observation.reservation_id == source.reservation_id
+    assert observation.attempt_id == source.attempt_id
+    assert observation.quote_fingerprint == source.quote.fingerprint
+    assert observation.provider == source.quote.provider_id
+    assert observation.model == source.quote.provider_model
+    assert observation.operation == source.quote.operation
+    assert observation.input_sha256 == source.quote.input_sha256
+    assert observation.http_status == 500
+    assert observation.response_body_complete is True
+    assert observation.response_body_observed_bytes == len(response_body)
+    assert observation.response_body_sha256 == hashlib.sha256(response_body).hexdigest()
+    assert observation.provider_request_id_sha256 == hashlib.sha256(b"request-123").hexdigest()
+    assert observation.retry_after_seconds == 45
+    assert "synthetic schema rejection" not in repr(observation)
+
+
+def test_http_failure_observation_keeps_status_when_body_stream_truncates():
+    source = grant(canonical(body()))
+    first_body_chunk = b'{"error":"schema failed fake-never-real"}' + b"x" * 4_054
+    second_body_chunk = b" and this suffix was not read"
+    ticks = iter((0.0, 0.0, 0.0, 181.0))
+
+    class SlowError(httpx.SyncByteStream):
+        def __iter__(self):
+            yield first_body_chunk
+            yield second_body_chunk
+
+    def handler(_):
+        return httpx.Response(
+            503,
+            headers={"request-id": "request-456", "retry-after": "99999"},
+            stream=SlowError(),
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        BoundedProviders(
+            credentials={"gemini": "fake-never-real"},
+            authorize=lambda _: None,
+            clock=lambda: 200,
+            monotonic=lambda: next(ticks, 181.0),
+            transport=httpx.MockTransport(handler),
+        ).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert str(caught.value) == "provider_http_503"
+    assert observation.http_status == 503
+    assert observation.response_body_complete is False
+    assert observation.response_body_observed_bytes == 4_096
+    assert observation.response_body_sha256 is None
+    assert observation.provider_request_id_sha256 == hashlib.sha256(b"request-456").hexdigest()
+    assert observation.retry_after_seconds is None
+    assert "fake-never-real" not in repr(observation)
+    assert "fake-never-real" not in repr(caught.value)
+
+
+def test_http_failure_observation_caps_oversized_body_and_drops_unsafe_metadata():
+    source = grant(canonical(body()))
+    private_body = b"fake-never-real" + b"x" * (MAX_ERROR_RESPONSE_BODY_BYTES + 1)
+
+    def handler(_):
+        return httpx.Response(
+            429,
+            headers={"x-request-id": "sk_live_synthetic_secret", "retry-after": "1.5"},
+            content=private_body,
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert observation.http_status == 429
+    assert observation.response_body_complete is False
+    assert observation.response_body_observed_bytes == MAX_ERROR_RESPONSE_BODY_BYTES
+    assert observation.response_body_sha256 is None
+    assert (
+        observation.provider_request_id_sha256
+        == hashlib.sha256(b"sk_live_synthetic_secret").hexdigest()
+    )
+    assert b"sk_live_synthetic_secret" not in str(observation.as_dict()).encode()
+    assert "sk_live_synthetic_secret" not in repr(observation)
+    assert observation.retry_after_seconds is None
+    assert "fake-never-real" not in repr(observation)
+
+
+def test_transport_failure_has_no_http_observation():
+    def handler(_):
+        raise httpx.ReadTimeout("no response and no provider details may escape")
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(grant(canonical(body())), body())
+
+    assert caught.value.failure_observation is None
 
 
 def test_response_bound():
