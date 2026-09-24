@@ -4,19 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
+import secrets
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
-from ac_platform.conversation_intelligence.activation_contract import StageCallSupplement
+from ac_platform.conversation_intelligence.activation_contract import (
+    InternalTesterApproval,
+    StageCallSupplement,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -28,6 +33,7 @@ from ac_platform.conversation_intelligence.entitlements import BudgetAccount
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationAnalysisSettings,
     ConversationBudgetAccount,
@@ -55,14 +61,14 @@ from ac_platform.conversation_intelligence.stage_supplements import (
     processing_plan_sha256,
     supplemental_reservations,
 )
+from ac_platform.identity.models import Person
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.sales_xray_profile import get_sales_xray_profile
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_postgresql import (
     postgres_harness as _postgres_harness,
 )
-from tests.database.test_conversation_postgresql import (
-    run,
-)
+from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_processing_plan_postgresql import _make_due
 from tests.database.test_conversation_reporting_pipeline_postgresql import ReportingBroker
 from tests.database.test_conversation_submission_http_postgresql import (
@@ -174,8 +180,9 @@ def _c5_request(manifest: PlanManifest, c2_id: UUID, c4_ids: tuple[UUID, ...]) -
     )
 
 
+@pytest.mark.parametrize("named_tester_scope", [False, True], ids=["ordinary", "named-tester"])
 def test_paid_exact_source_supplement_completes_primary_and_one_repair(
-    postgres_harness: Any, tmp_path: Path
+    postgres_harness: Any, tmp_path: Path, named_tester_scope: bool
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(
@@ -193,15 +200,55 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
         submission = UUID(int=uuid4().int)
         path = f"{PREFIX}/submissions/{submission}"
         worker: ConversationInferenceWorker | None = None
+        owner_state = setup.state
+        owner_token = setup.token
         try:
+            if named_tester_scope:
+                owner_state = await seed(setup.engine, tenant_id=setup.state.tenant_id)
+                owner_token = secrets.token_urlsafe(32)
+                token_pepper = setup.settings.session_token_pepper.get_secret_value().encode(
+                    "utf-8"
+                )
+                tester_scope = InternalTesterApproval(
+                    id=uuid4(),
+                    email="dipak@authorityclosers.com",
+                    authorization_ref="ref:approval:dipak-provider-count-test",
+                    scopes=("provider_stage_request_count",),
+                    reason="Approved internal tester exemption",
+                )
+                initial_bundle = setup.bundle_box["bundle"].model_copy(
+                    update={"internal_tester_accounts": (tester_scope,)}
+                )
+                setup.bundle_box["bundle"] = initial_bundle
+                setup.authority.tester_policy = InternalTesterPolicy(
+                    lambda: setup.bundle_box["bundle"], "test"
+                )
+                async with setup.sessions() as database, database.begin():
+                    await database.execute(
+                        update(Person)
+                        .where(Person.id == owner_state.person_id)
+                        .values(email="dipak@authorityclosers.com")
+                    )
+                    await database.execute(
+                        update(IdentitySession)
+                        .where(IdentitySession.id == owner_state.session_id)
+                        .values(
+                            token_hash=hmac.new(
+                                token_pepper,
+                                owner_token.encode("ascii"),
+                                hashlib.sha256,
+                            ).digest()
+                        )
+                    )
+
             async with setup.sessions() as database:
-                profile = await get_sales_xray_profile(database, person_id=setup.state.person_id)
+                profile = await get_sales_xray_profile(database, person_id=owner_state.person_id)
                 assert profile.profile_complete
 
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                client.cookies.set(setup.settings.session_cookie_name, owner_token)
                 uploaded = await client.put(
                     path + "/source", content=data, headers=await _headers(client, data)
                 )
@@ -219,7 +266,7 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
             async with setup.sessions() as database, database.begin():
                 ownership = GuestOwnership(setup.factory(database))
                 actor = await ownership.resolve_processing_actor(
-                    submission, actor=setup.state.actor
+                    submission, actor=owner_state.actor
                 )
                 assert isinstance(actor, ProcessingActor)
                 await setup.authority.claim_allowance(
@@ -231,12 +278,12 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                     )
                 )
                 assert usage is not None
-                assert usage.person_id == setup.state.person_id
+                assert usage.person_id == owner_state.person_id
                 assert usage.visitor_id is None
                 assert (
                     await database.scalar(
                         select(ConversationVisitorClaim).where(
-                            ConversationVisitorClaim.person_id == setup.state.person_id
+                            ConversationVisitorClaim.person_id == owner_state.person_id
                         )
                     )
                     is None
@@ -246,9 +293,9 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                 database.add(
                     ConversationAnalysisSettings(
                         id=uuid4(),
-                        tenant_id=setup.state.tenant_id,
-                        person_id=setup.state.person_id,
-                        session_id=setup.state.session_id,
+                        tenant_id=owner_state.tenant_id,
+                        person_id=owner_state.person_id,
+                        session_id=owner_state.session_id,
                         revision=1,
                         c4_max_requests=64,
                         c4_max_completion_tokens=1_400,
@@ -317,8 +364,30 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                 assert original is not None and original.state == "uncertain"
                 original_job = await database.get(Job, original.job_id)
                 assert original_job is not None
-                repair = c5_repair_intent(original, original_job)
-                assert repair is not None
+            if named_tester_scope:
+                dispatches_before_replay = broker.c5_requests
+                same_attempt = await _direct_stage(
+                    setup,
+                    actor,
+                    recording_id,
+                    old_c5_request,
+                    key="supplement-old-c5",
+                )
+                assert same_attempt["id"] == old_c5_run["id"]
+                with pytest.raises(
+                    ConversationConflict,
+                    match="previous stage requires explicit recovery",
+                ):
+                    await _direct_stage(
+                        setup,
+                        actor,
+                        recording_id,
+                        old_c5_request,
+                        key="supplement-old-c5-new-attempt",
+                    )
+                assert broker.c5_requests == dispatches_before_replay
+            repair = c5_repair_intent(original, original_job)
+            assert repair is not None
             repair_run = await _direct_stage(
                 setup,
                 actor,
@@ -358,7 +427,7 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                     )
                 )
                 assert usage is not None
-                assert usage.person_id == setup.state.person_id
+                assert usage.person_id == owner_state.person_id
                 assert usage.visitor_id is None
                 owner_id = usage.person_id
 
@@ -436,15 +505,26 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
             # A different prepared C5 input under the active plan cannot use the
             # supplement, even though it names the same source and owner.
             wrong_request = fresh_request.model_copy(update={"report_language": "en"})
-            async with setup.sessions() as database, database.begin():
-                with pytest.raises(ConversationDenied):
-                    await setup.authority.issue(
+            if named_tester_scope:
+                async with setup.sessions() as database, database.begin():
+                    base_quote = await setup.authority.issue(
                         ConversationApplication(database, clock=lambda: setup.clock[0]),
                         actor,
                         recording_id,
-                        key="supplement-changed-language-denied",
+                        key="named-tester-base-c5-other-language",
                         request=wrong_request,
                     )
+                    assert base_quote["max_cost_paise"] == 100
+            else:
+                async with setup.sessions() as database, database.begin():
+                    with pytest.raises(ConversationDenied):
+                        await setup.authority.issue(
+                            ConversationApplication(database, clock=lambda: setup.clock[0]),
+                            actor,
+                            recording_id,
+                            key="supplement-changed-language-denied",
+                            request=wrong_request,
+                        )
 
             async with setup.sessions() as database, database.begin():
                 app = ConversationApplication(database, clock=lambda: setup.clock[0])
@@ -510,7 +590,7 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                 assert admitted[0]["id"] == admitted[1]["id"]
             else:
                 assert len(conflicts) == 1
-                assert isinstance(conflicts[0], (ConversationConflict, ConversationDenied))
+                assert isinstance(conflicts[0], ConversationConflict | ConversationDenied)
 
             async with setup.sessions() as database:
                 duplicate_primary_tasks = list(
@@ -639,6 +719,106 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                 # The retained one-chunk facts checkpoint and C2 task are reused;
                 # only the two new C5 calls dispatch for the Marathi plan.
                 assert broker.routes.count("gemini") == 5
+
+            if named_tester_scope:
+                old_c5_history = {
+                    task.run_id: (task.state, task.checkpoint_id, task.input_sha256)
+                    for task in c5_tasks
+                }
+                old_c5_states = {state for state, _, _ in old_c5_history.values()}
+                assert {"uncertain", "completed"} <= old_c5_states
+                assert len(old_c5_history) >= base_approval.max_requests
+                c5_dispatches_after_first_recording = broker.c5_requests
+
+                second_submission = uuid4()
+                second_path = f"{PREFIX}/submissions/{second_submission}"
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+                ) as client:
+                    client.cookies.set(setup.settings.session_cookie_name, owner_token)
+                    second_upload = await client.put(
+                        second_path + "/source",
+                        content=data,
+                        headers=await _headers(client, data),
+                    )
+                assert second_upload.status_code == 202, second_upload.text
+                second_recording_id = UUID(second_upload.json()["recording_id"])
+                await _reconcile(setup.sessions, setup.state)
+                assert await local.run_once()
+                async with setup.sessions() as database, database.begin():
+                    app = ConversationApplication(database, clock=lambda: setup.clock[0])
+                    second_actor = await GuestOwnership(
+                        setup.factory(database)
+                    ).resolve_processing_actor(second_submission, actor=owner_state.actor)
+                    assert isinstance(second_actor, ProcessingActor)
+                    await setup.authority.claim_allowance(app, second_actor)
+
+                second_c2_run = await _direct_stage(
+                    setup, second_actor, second_recording_id, None, key="named-c5-second-c2"
+                )
+                assert await worker.run_once()
+                async with setup.sessions() as database:
+                    second_c2_task = await database.get(
+                        ConversationInferenceTask, UUID(second_c2_run["id"])
+                    )
+                    assert second_c2_task is not None and second_c2_task.checkpoint_id is not None
+                    second_c2_id = second_c2_task.checkpoint_id
+
+                second_c4_request = c4_request.model_copy(
+                    update={"transcript_checkpoint_id": second_c2_id}
+                )
+                second_c4_run = await _direct_stage(
+                    setup,
+                    second_actor,
+                    second_recording_id,
+                    second_c4_request,
+                    key="named-c5-second-c4",
+                )
+                assert await worker.run_once()
+                async with setup.sessions() as database:
+                    second_c4_task = await database.get(
+                        ConversationInferenceTask, UUID(second_c4_run["id"])
+                    )
+                    assert second_c4_task is not None and second_c4_task.checkpoint_id is not None
+                    second_c4_id = second_c4_task.checkpoint_id
+
+                second_c5_request = old_c5_request.model_copy(
+                    update={
+                        "transcript_checkpoint_id": second_c2_id,
+                        "fact_checkpoint_ids": (second_c4_id,),
+                    }
+                )
+                second_c5_run = await _direct_stage(
+                    setup,
+                    second_actor,
+                    second_recording_id,
+                    second_c5_request,
+                    key="named-c5-second-recording",
+                )
+                assert second_c5_run["state"] == "queued"
+                assert broker.c5_requests == c5_dispatches_after_first_recording
+
+                async with setup.sessions() as database:
+                    new_task = await database.get(
+                        ConversationInferenceTask, UUID(second_c5_run["id"])
+                    )
+                    assert new_task is not None
+                    assert new_task.recording_id == second_recording_id
+                    assert new_task.state == "queued"
+                    retained_history = list(
+                        (
+                            await database.scalars(
+                                select(ConversationInferenceTask).where(
+                                    ConversationInferenceTask.recording_id == recording_id,
+                                    ConversationInferenceTask.stage == "C5",
+                                )
+                            )
+                        ).all()
+                    )
+                    assert {
+                        task.run_id: (task.state, task.checkpoint_id, task.input_sha256)
+                        for task in retained_history
+                    } == old_c5_history
         finally:
             await setup.engine.dispose()
 

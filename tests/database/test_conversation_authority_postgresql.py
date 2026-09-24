@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionStagePolicy,
     AllowanceApproval,
     HostedApprovalBundle,
+    InternalTesterApproval,
     StageApproval,
 )
 from ac_platform.conversation_intelligence.application import (
@@ -54,6 +55,7 @@ from ac_platform.conversation_intelligence.inference import (
 )
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -610,6 +612,19 @@ async def _duplicate_ready_recording(setup: AuthorityFixture, key: str) -> UUID:
     return recording_id
 
 
+def _grant_provider_stage_request_count_scope(setup: AuthorityFixture) -> None:
+    approval = InternalTesterApproval(
+        id=uuid4(),
+        email="dipak@authorityclosers.com",
+        authorization_ref="ref:approval:provider-stage-count-test",
+        scopes=("provider_stage_request_count",),
+        reason="Approved internal tester exemption",
+    )
+    bundle = setup.bundle_box["bundle"].model_copy(update={"internal_tester_accounts": (approval,)})
+    setup.bundle_box["bundle"] = bundle
+    setup.authority.tester_policy = InternalTesterPolicy(lambda: setup.bundle_box["bundle"], "test")
+
+
 async def _seed_transcription_inputs(setup: AuthorityFixture, recording_id: UUID) -> None:
     async with setup.sessions() as database, database.begin():
         recording = await database.get(ConversationRecording, recording_id)
@@ -995,6 +1010,109 @@ def test_authority_stage_max_requests_spans_same_source_on_second_recording(
                     recording_id=second_recording_id,
                 )
             assert setup.broker.calls == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_named_provider_request_scope_keeps_budget_and_uncertain_stage_holds(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The named source owner can exceed count caps, not budget or dispatch holds."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, funded=True)
+        try:
+            async with setup.sessions() as database, database.begin():
+                await database.execute(
+                    update(Person)
+                    .where(Person.id == setup.actor.person_id)
+                    .values(email="dipak@authorityclosers.com")
+                )
+            _grant_provider_stage_request_count_scope(setup)
+
+            first_quote = await _issue(setup, key="named-provider-count-first-quote")
+            assert first_quote["max_cost_paise"] == 50_000
+            first_run = await _start(setup, first_quote, key="named-provider-count-first-run")
+            assert await setup.worker.run_once()
+            assert await completed_checkpoint(setup.sessions, first_run)
+            assert setup.broker.calls == 1
+
+            second_recording_id = await _duplicate_ready_recording(
+                setup, "named-provider-count-second"
+            )
+            await _seed_transcription_inputs(setup, second_recording_id)
+            second_quote = await _issue(
+                setup,
+                key="named-provider-count-second-quote",
+                recording_id=second_recording_id,
+            )
+            assert second_quote["max_cost_paise"] == 50_000
+
+            # An unknown provider outcome remains held. The new count scope
+            # cannot turn the same recording/stage into a second dispatch.
+            setup.broker.mode = "failure"
+            second_run = await _start(
+                setup,
+                second_quote,
+                key="named-provider-count-second-run",
+                recording_id=second_recording_id,
+            )
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == 2
+            async with setup.sessions() as database:
+                uncertain = await database.get(ConversationInferenceTask, UUID(second_run["id"]))
+                assert uncertain is not None and uncertain.state == "uncertain"
+                job = await database.get(Job, uncertain.job_id)
+                assert job is not None and job.dispatch_started_at is not None
+
+            retry_quote = await _issue(
+                setup,
+                key="named-provider-count-same-stage-recheck",
+                recording_id=second_recording_id,
+            )
+            with pytest.raises(
+                ConversationConflict,
+                match="previous stage requires explicit recovery",
+            ):
+                await _start(
+                    setup,
+                    retry_quote,
+                    key="named-provider-count-new-attempt",
+                    recording_id=second_recording_id,
+                )
+            retry_run = await _start(
+                setup,
+                second_quote,
+                key="named-provider-count-second-run",
+                recording_id=second_recording_id,
+            )
+            assert retry_run["id"] == second_run["id"]
+            assert await setup.worker.run_once() is False
+            assert setup.broker.calls == 2
+
+            third_recording_id = await _duplicate_ready_recording(
+                setup, "named-provider-count-third"
+            )
+            await _seed_transcription_inputs(setup, third_recording_id)
+            with pytest.raises(
+                ConversationConflict,
+                match="remaining approved processing allowance",
+            ):
+                await _issue(
+                    setup,
+                    key="named-provider-count-budget-exhausted",
+                    recording_id=third_recording_id,
+                )
+            async with setup.sessions() as database:
+                budget = await database.get(ConversationBudgetAccount, setup.bundle.budget_scope_id)
+                assert budget is not None
+                reservations = BudgetAccount.from_dict(budget.snapshot).reservations
+                assert len(reservations) == 2
+                assert all(item.state == "uncertain" for item in reservations)
+                assert sum(item.committed_paise for item in reservations) == 100_000
+            assert setup.broker.calls == 2
         finally:
             await setup.engine.dispose()
 

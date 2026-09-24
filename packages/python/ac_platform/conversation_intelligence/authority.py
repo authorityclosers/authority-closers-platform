@@ -965,6 +965,44 @@ class ConversationAuthority:
             return None
         return owner_id
 
+    async def _provider_stage_request_count_tester(
+        self,
+        app: ConversationApplication,
+        actor: ConversationActor,
+        recording: ConversationRecording,
+        now: datetime,
+        bundle: HostedApprovalBundle,
+    ) -> bool:
+        """Resolve the named request-count scope through the source owner.
+
+        A processing lease is shared infrastructure, not tester identity. Its
+        exemption is considered only after the immutable usage/submission and
+        current claim rows resolve the recording to a verified human owner.
+        """
+
+        if self.tester_policy is None:
+            return False
+        if isinstance(actor, ProcessingActor):
+            owner_id = await self._human_processing_owner(app, actor, recording, now)
+            if owner_id is None:
+                return False
+            approval = await self.tester_policy.for_human_owner(
+                app.database,
+                tenant_id=recording.tenant_id,
+                person_id=owner_id,
+                scope="provider_stage_request_count",
+                bundle=bundle,
+            )
+            return approval is not None
+        return (
+            await self.tester_policy.for_actor(
+                app.database,
+                actor,
+                "provider_stage_request_count",
+                bundle=bundle,
+            )
+        ) is not None
+
     @staticmethod
     async def _supplement_primary_input_sha256(
         app: ConversationApplication,
@@ -1321,6 +1359,9 @@ class ConversationAuthority:
         entries = BudgetAccount.from_dict(budget.snapshot).reservations
         prefix = f"hosted-stage-v1:{approval.id}:"
         used = [entry for entry in entries if entry.permission.authorization_ref.startswith(prefix)]
+        provider_count_tester = await self._provider_stage_request_count_tester(
+            app, actor, recording, now, bundle
+        )
         already_reserved = any(entry.quote.quote_id == quote.quote_id for entry in used)
         cached = await app.database.scalar(
             select(ConversationInferenceTask).where(
@@ -1359,22 +1400,34 @@ class ConversationAuthority:
                 raise ConversationDenied("This recording's approved provider allowance is used.")
         c2_cache_proven = False
         if (
-            approval.stage == "C2"
+            not provider_count_tester
+            and approval.stage == "C2"
             and cached is not None
             and (len(used) > approval.max_requests or len(used) >= approval.max_requests)
         ):
             c2_cache_proven = await self._completed_c2_cache_proof(
                 app, actor, recording, plan, approval, cached
             )
-        exhausted = len(used) > request_limit or (
-            len(used) >= request_limit
-            and not already_reserved
-            and cached is None
-            and not c2_cache_proven
+        exhausted = (
+            False
+            if provider_count_tester
+            else (
+                len(used) > request_limit
+                or (
+                    len(used) >= request_limit
+                    and not already_reserved
+                    and cached is None
+                    and not c2_cache_proven
+                )
+            )
         )
         # Above the base allowance, only a fully verified completed C2 cache
         # hit can bypass the historical counter; it cannot reach dispatch.
-        if approval.stage == "C2" and len(used) > approval.max_requests:
+        if (
+            not provider_count_tester
+            and approval.stage == "C2"
+            and len(used) > approval.max_requests
+        ):
             exhausted = not c2_cache_proven
         if exhausted:
             raise ConversationDenied("This recording's approved provider allowance is used.")
