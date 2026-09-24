@@ -52,6 +52,9 @@ class VerifiedEmailLogin:
     person: Person | None
     account_created: bool = False
     learner_provisioning_required: bool = False
+    consent_audit_required: bool = False
+    previous_consent_version: str | None = None
+    previous_consented_at: datetime | None = None
 
 
 def _raw_secret(secret: bytes | str) -> bytes:
@@ -175,6 +178,7 @@ class EmailLoginCodeService:
         consent_accepted: bool,
         submitted_consent_version: str | None,
         required_consent_version: str | None,
+        age_attested: bool = False,
         now: datetime | None = None,
     ) -> IssuedEmailLoginCode | None:
         normalized_email = normalize_email(email)
@@ -210,10 +214,12 @@ class EmailLoginCodeService:
             # is the exception: mailbox proof may reclaim its untrusted password
             # only after this challenge binds the current explicit consent.
             account_consent = accepted_consent if person.email_verified_at is None else None
-            if person.email_verified_at is None and account_consent is None:
+            if person.email_verified_at is None and (
+                account_consent is None or age_attested is not True
+            ):
                 return None
         else:
-            if accepted_consent is None:
+            if accepted_consent is None or age_attested is not True:
                 return None
             account_consent = accepted_consent
 
@@ -258,6 +264,7 @@ class EmailLoginCodeService:
                 token_hash=token_hash,
                 encrypted_code=encrypted_code,
                 consent_version=account_consent,
+                age_attested=age_attested is True,
                 issued_at=current,
                 expires_at=current + EMAIL_LOGIN_CODE_TTL,
                 failed_attempts=0,
@@ -284,6 +291,7 @@ class EmailLoginCodeService:
             challenge.token_hash = token_hash
             challenge.encrypted_code = encrypted_code
             challenge.consent_version = account_consent
+            challenge.age_attested = age_attested is True
             challenge.issued_at = current
             challenge.expires_at = current + EMAIL_LOGIN_CODE_TTL
             challenge.consumed_at = None
@@ -341,9 +349,10 @@ class EmailLoginCodeService:
 
         created = False
         if person is None:
-            accepted_consent = _exact_consent(
-                challenge.consent_version,
-                required_consent_version,
+            accepted_consent = (
+                _exact_consent(challenge.consent_version, required_consent_version)
+                if challenge.age_attested is True
+                else None
             )
             if accepted_consent is None:
                 challenge.consumed_at = current
@@ -386,10 +395,13 @@ class EmailLoginCodeService:
             await self.session.flush()
             return VerifiedEmailLogin(person=None)
         first_mailbox_verification = person.email_verified_at is None
+        previous_consent_version = person.consent_version
+        previous_consented_at = person.consented_at
         if first_mailbox_verification:
-            accepted_consent = _exact_consent(
-                challenge.consent_version,
-                required_consent_version,
+            accepted_consent = (
+                _exact_consent(challenge.consent_version, required_consent_version)
+                if challenge.age_attested is True
+                else None
             )
             if accepted_consent is None:
                 challenge.consumed_at = current
@@ -466,6 +478,9 @@ class EmailLoginCodeService:
             person=person,
             account_created=created,
             learner_provisioning_required=created or first_mailbox_verification,
+            consent_audit_required=created or first_mailbox_verification,
+            previous_consent_version=(None if created else previous_consent_version),
+            previous_consented_at=(None if created else previous_consented_at),
         )
 
 

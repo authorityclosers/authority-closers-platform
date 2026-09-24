@@ -25,6 +25,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.auth_transactions import AuthTransaction
 from ac_platform.http.problem import register_problem_handlers
@@ -35,6 +36,8 @@ from ac_platform.identity.email_login import (
     EMAIL_LOGIN_RESEND_AFTER,
     EMAIL_LOGIN_SEND_WINDOW,
     EmailLoginCodeService,
+    _code_hash,
+    _encrypt_code,
     decrypt_email_login_code,
 )
 from ac_platform.identity.models import (
@@ -371,9 +374,30 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 "email": email,
                 "consent": True,
                 "consent_version": consent_version,
+                "age_attested": True,
                 "surface": "sales_xray",
                 "return_path": "/",
             }
+            legacy_request_body = dict(request_body)
+            legacy_request_body.pop("age_attested")
+            no_full_ack = await clients[0].post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json=legacy_request_body,
+            )
+            assert no_full_ack.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                assert database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                ) is None
+                assert database.scalar(
+                    select(func.count()).select_from(Person).where(Person.email == email)
+                ) == 0
+                assert database.scalar(
+                    select(func.count())
+                    .select_from(OutboxEvent)
+                    .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                ) == 0
             requests = await asyncio.gather(
                 clients[0].post(
                     "/v1/auth/email-code/request",
@@ -404,6 +428,7 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 )
                 assert len(challenges) == 1
                 challenge = challenges[0]
+                assert challenge.age_attested is True
                 code = decrypt_email_login_code(
                     settings.email_challenge_secret.get_secret_value(),
                     challenge,
@@ -497,6 +522,24 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 assert person.email_verified_at is not None
                 assert person.consent_version == consent_version
                 assert database.get(Membership, (public_tenant_id, person_id)) is not None
+                consent_audit = database.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.tenant_id == public_tenant_id,
+                        AuditEvent.actor_person_id == person_id,
+                        AuditEvent.action == "identity.learner_consent_accepted.v1",
+                        AuditEvent.resource_type == "person_consent",
+                        AuditEvent.resource_id == str(person_id),
+                    )
+                )
+                assert consent_audit is not None
+                assert consent_audit.occurred_at == person.consented_at
+                assert consent_audit.payload["consent_version"] == consent_version
+                assert consent_audit.payload["previous_consent_version"] is None
+                assert consent_audit.payload["explicit_acceptance"] is True
+                assert consent_audit.payload["age_attestation"] == (
+                    "18_plus_learner_declaration"
+                )
+                assert consent_audit.payload["accepted_via"] == "email_otp"
                 assert (
                     database.scalar(
                         select(func.count())
@@ -536,6 +579,7 @@ def test_email_login_resend_does_not_reset_failure_budget(postgres_harness: _Har
                     consent_accepted=True,
                     submitted_consent_version=consent,
                     required_consent_version=consent,
+                    age_attested=True,
                     now=at,
                 )
 
@@ -599,6 +643,154 @@ def test_email_login_resend_does_not_reset_failure_budget(postgres_harness: _Har
     _run_async(scenario())
 
 
+def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_sign_in(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        secret = "postgres-email-age-secret-long-enough-for-hmac-and-aes"  # noqa: S105
+        consent_version = "email-age-consent-v2"
+        now = datetime.now(UTC)
+        new_email = f"email-age-new-{uuid4().hex}@example.test"
+        pending_person_id = uuid4()
+        pending_email = f"email-age-pending-{pending_person_id.hex}@example.test"
+        verified_person_id = uuid4()
+        verified_email = f"email-age-verified-{verified_person_id.hex}@example.test"
+        previous_consent_time = now - timedelta(days=30)
+        challenge_id = uuid4()
+        generation_id = uuid4()
+        code = "042731"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=pending_person_id,
+                        email=pending_email,
+                        consent_version="email-age-consent-v1",
+                        consented_at=previous_consent_time,
+                    ),
+                    PasswordCredential(
+                        person_id=pending_person_id,
+                        password_hash=hash_password("synthetic pending password phrase"),
+                    ),
+                    Person(
+                        id=verified_person_id,
+                        email=verified_email,
+                        email_verified_at=now - timedelta(days=30),
+                        consent_version="email-age-consent-v1",
+                        consented_at=previous_consent_time,
+                    ),
+                    EmailLoginCode(
+                        id=challenge_id,
+                        generation_id=generation_id,
+                        normalized_email=pending_email,
+                        token_hash=_code_hash(secret, pending_email, code),
+                        encrypted_code=_encrypt_code(
+                            secret,
+                            code,
+                            challenge_id=challenge_id,
+                            generation_id=generation_id,
+                            email=pending_email,
+                        ),
+                        consent_version=consent_version,
+                        issued_at=now,
+                        expires_at=now + EMAIL_LOGIN_CODE_TTL,
+                        send_window_started_at=now,
+                        sends_in_window=1,
+                    ),
+                ]
+            )
+
+        async with sessions() as database, database.begin():
+            denied = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).begin(
+                email=new_email,
+                consent_accepted=True,
+                submitted_consent_version=consent_version,
+                required_consent_version=consent_version,
+            )
+            assert denied is None
+
+        with Session(postgres_harness.engine) as database:
+            assert database.scalar(
+                select(EmailLoginCode).where(EmailLoginCode.normalized_email == new_email)
+            ) is None
+
+        async with sessions() as database, database.begin():
+            denied = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).verify(
+                email=pending_email,
+                code=code,
+                required_consent_version=consent_version,
+                now=now + timedelta(seconds=1),
+            )
+            assert denied.person is None
+
+        with Session(postgres_harness.engine) as database:
+            pending_person = database.get(Person, pending_person_id)
+            assert pending_person is not None
+            assert pending_person.email_verified_at is None
+            assert pending_person.consent_version == "email-age-consent-v1"
+            assert pending_person.consented_at == previous_consent_time
+            assert database.get(PasswordCredential, pending_person_id) is not None
+            legacy_challenge = database.get(EmailLoginCode, challenge_id)
+            assert legacy_challenge is not None
+            assert legacy_challenge.age_attested is False
+            assert legacy_challenge.consumed_at is not None
+
+        async with sessions() as database, database.begin():
+            issued = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).begin(
+                email=verified_email,
+                consent_accepted=False,
+                submitted_consent_version=None,
+                required_consent_version=consent_version,
+                now=now,
+            )
+            assert issued is not None
+            challenge = await database.scalar(
+                select(EmailLoginCode).where(EmailLoginCode.normalized_email == verified_email)
+            )
+            assert challenge is not None
+            verified_code = decrypt_email_login_code(
+                secret,
+                challenge,
+                generation_id=challenge.generation_id,
+            )
+            signed_in = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).verify(
+                email=verified_email,
+                code=verified_code,
+                required_consent_version=consent_version,
+                now=now + timedelta(seconds=1),
+            )
+            assert signed_in.person is not None
+            assert signed_in.person.id == verified_person_id
+            assert signed_in.learner_provisioning_required is False
+            assert signed_in.consent_audit_required is False
+            assert signed_in.previous_consent_version is None
+            assert signed_in.previous_consented_at is None
+
+        with Session(postgres_harness.engine) as database:
+            verified_person = database.get(Person, verified_person_id)
+            assert verified_person is not None
+            assert verified_person.email_verified_at == now - timedelta(days=30)
+            assert verified_person.consent_version == "email-age-consent-v1"
+            assert verified_person.consented_at == previous_consent_time
+        await async_engine.dispose()
+
+    _run_async(scenario())
+
+
 def test_email_login_reclaim_cancels_unverified_password_credentials_and_sessions(
     postgres_harness: _Harness,
 ) -> None:
@@ -608,7 +800,9 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
         person_id = uuid4()
         email = f"email-reclaim-{person_id.hex}@example.test"
         consent_version = "email-reclaim-consent-v1"
+        previous_consent_version = "email-reclaim-consent-v0"
         now = datetime.now(UTC)
+        previous_consent_time = now - timedelta(days=30)
         with Session(postgres_harness.engine) as database, database.begin():
             database.add_all(
                 [
@@ -622,7 +816,13 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                         slug=f"email-reclaim-ops-{operations_tenant_id.hex}",
                         name="Email reclaim operations tenant",
                     ),
-                    Person(id=person_id, email=email, email_verified_at=None),
+                    Person(
+                        id=person_id,
+                        email=email,
+                        email_verified_at=None,
+                        consent_version=previous_consent_version,
+                        consented_at=previous_consent_time,
+                    ),
                 ]
             )
             database.flush()
@@ -669,6 +869,27 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
             consent_version=consent_version,
         )
         async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        async with sessions() as database, database.begin():
+            await AuditRepository(database).append(
+                tenant_id=public_tenant_id,
+                actor_person_id=person_id,
+                action="identity.learner_consent_accepted.v1",
+                resource_type="person_consent",
+                resource_id=person_id,
+                payload={
+                    "consent_version": previous_consent_version,
+                    "previous_consent_version": None,
+                    "previous_consented_at": None,
+                    "explicit_acceptance": True,
+                    "age_attestation": "18_plus_learner_declaration",
+                    "terms_path": "/terms",
+                    "privacy_path": "/privacy",
+                    "accepted_via": "password_registration",
+                },
+                reason="Prior learner consent accepted during synthetic setup.",
+                now=previous_consent_time,
+            )
         application = FastAPI()
         register_problem_handlers(application)
         install_identity_http(
@@ -693,6 +914,7 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                     "email": email,
                     "consent": True,
                     "consent_version": consent_version,
+                    "age_attested": True,
                     "surface": "sales_xray",
                     "return_path": "/",
                 },
@@ -729,6 +951,8 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                 person = database.get(Person, person_id)
                 assert person is not None
                 assert person.email_verified_at is not None
+                assert person.consent_version == consent_version
+                assert person.consented_at is not None
                 membership = database.get(Membership, (public_tenant_id, person_id))
                 assert membership is not None
                 assert membership.role == "learner" and membership.status == "active"
@@ -760,6 +984,35 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                     "email_challenges_consumed": 2,
                     "sessions_revoked": 1,
                 }
+                consent_history = list(
+                    database.scalars(
+                        select(AuditEvent)
+                        .where(
+                            AuditEvent.tenant_id == public_tenant_id,
+                            AuditEvent.actor_person_id == person_id,
+                            AuditEvent.action == "identity.learner_consent_accepted.v1",
+                            AuditEvent.resource_type == "person_consent",
+                            AuditEvent.resource_id == str(person_id),
+                        )
+                        .order_by(AuditEvent.sequence_no)
+                    )
+                )
+                assert len(consent_history) == 2
+                assert consent_history[0].payload["consent_version"] == previous_consent_version
+                assert consent_history[1].occurred_at == person.consented_at
+                assert consent_history[1].payload["consent_version"] == consent_version
+                assert (
+                    consent_history[1].payload["previous_consent_version"]
+                    == previous_consent_version
+                )
+                assert (
+                    consent_history[1].payload["previous_consented_at"]
+                    == previous_consent_time.isoformat()
+                )
+                assert consent_history[1].payload["accepted_via"] == "email_otp"
+                assert consent_history[1].payload["age_attestation"] == (
+                    "18_plus_learner_declaration"
+                )
             async with async_sessionmaker(async_engine)() as database, database.begin():
                 try:
                     await PasswordIdentityService(
