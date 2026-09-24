@@ -5,6 +5,7 @@ import {
   AccountProfileRequestError,
   readAccountProfile,
   readAccountProfileEligibility,
+  normalizeProfilePhoneInput,
   updateAccountProfile,
   validE164Phone,
 } from "./account-profile-client";
@@ -92,4 +93,12 @@ it("accepts only canonical E.164 shape without guessing local numbers", () => {
   expect(validE164Phone("4155550123")).toBe(false);
   expect(validE164Phone("+1 415 555 0123")).toBe(false);
   expect(validE164Phone("+0123456789")).toBe(false);
+});
+
+it("normalizes ordinary Indian mobile input and formatted international input", () => {
+  expect(normalizeProfilePhoneInput("9876543210", "IN")).toBe("+919876543210");
+  expect(normalizeProfilePhoneInput("+1 (415) 555-0123", "US")).toBe(
+    "+14155550123",
+  );
+  expect(normalizeProfilePhoneInput("415 555 0123", "US")).toBe("4155550123");
 });

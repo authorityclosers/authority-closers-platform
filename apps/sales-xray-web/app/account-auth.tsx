@@ -5,6 +5,8 @@ import {
   ArrowRight,
   AudioLines,
   Check,
+  Eye,
+  EyeOff,
   FileAudio,
   LoaderCircle,
   Mail,
@@ -88,6 +90,7 @@ export function AccountAuth({
     previewState === "auth.code" ? "sample@example.test" : "",
   );
   const [consent, setConsent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "password" | "confirmed">(
     previewState === "auth.code" ? "code" : "email",
   );
@@ -356,6 +359,7 @@ export function AccountAuth({
         );
     } finally {
       if (passwordRef.current) passwordRef.current.value = "";
+      setShowPassword(false);
       inFlight.current = false;
       if (!request.signal.aborted) setPending(false);
     }
@@ -895,6 +899,7 @@ export function AccountAuth({
                       disabled={pending}
                       onClick={() => {
                         setStep("email");
+                        setShowPassword(false);
                         setError("");
                       }}
                     >
@@ -921,11 +926,28 @@ export function AccountAuth({
                       <input
                         id="account-password"
                         ref={passwordRef}
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         autoComplete="current-password"
                         required
                         disabled={pending}
                       />
+                      <button
+                        type="button"
+                        className={styles.textButton}
+                        style={{ width: 44, flexShrink: 0, cursor: "pointer" }}
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                        aria-pressed={showPassword}
+                        onClick={() => setShowPassword((visible) => !visible)}
+                        disabled={pending}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={19} aria-hidden="true" />
+                        ) : (
+                          <Eye size={19} aria-hidden="true" />
+                        )}
+                      </button>
                     </div>
                     <button
                       type="submit"

@@ -17,6 +17,7 @@ import {
 
 import {
   AccountProfileRequestError,
+  normalizeProfilePhoneInput,
   readAccountProfile,
   readAccountProfileEligibility,
   updateAccountProfile,
@@ -99,7 +100,7 @@ function previewPhase(
 function phoneError(phone: string, country: CountryChoice): string {
   if (!country) return "Choose your country or region.";
   if (!validE164Phone(phone))
-    return "Enter the full international number: + followed by 7–15 digits, without spaces.";
+    return "Enter the full international number: + followed by 7–15 digits.";
   const callingCode = COUNTRY_CHOICES.find(
     (choice) => choice.value === country,
   )?.callingCode;
@@ -125,7 +126,7 @@ export function AccountProfile({
   );
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState<CountryChoice>("");
+  const [country, setCountry] = useState<CountryChoice>("IN");
   const [notice, setNotice] = useState("");
   const [nameIssue, setNameIssue] = useState("");
   const [phoneIssue, setPhoneIssue] = useState("");
@@ -171,8 +172,14 @@ export function AccountProfile({
         if (!preserveDraft) {
           setName(currentProfile.name ?? "");
           setPhone(currentProfile.phone_number_e164 ?? "");
-          // A stored phone prefix is not proof of the user's country choice.
-          setCountry("");
+          // Keep the easy Indian default for new entries, but ask for an
+          // explicit choice when an existing number uses another prefix.
+          setCountry(
+            currentProfile.phone_number_e164 &&
+              !currentProfile.phone_number_e164.startsWith("+91")
+              ? ""
+              : "IN",
+          );
           setNameIssue("");
           setPhoneIssue("");
         }
@@ -220,7 +227,12 @@ export function AccountProfile({
         setProfile(fixture);
         setName(fixture.name ?? "");
         setPhone(fixture.phone_number_e164 ?? "");
-        setCountry("");
+        setCountry(
+          fixture.phone_number_e164 &&
+            !fixture.phone_number_e164.startsWith("+91")
+            ? ""
+            : "IN",
+        );
         setNotice("");
         setNameIssue("");
         setPhoneIssue("");
@@ -239,7 +251,9 @@ export function AccountProfile({
     event.preventDefault();
     if (saveInFlight.current || !profile) return;
     const normalizedName = name.trim().normalize("NFC");
-    const normalizedPhone = phone.trim();
+    const normalizedPhone = country
+      ? normalizeProfilePhoneInput(phone, country)
+      : "";
     const nextNameIssue = normalizedName ? "" : "Enter your name.";
     const nextPhoneIssue = phoneError(normalizedPhone, country);
     setNameIssue(nextNameIssue);
@@ -450,8 +464,9 @@ export function AccountProfile({
                 }
               />
               <small id="account-profile-phone-help">
-                Include + and the country code, with no spaces. This number is
-                not verified yet.
+                {country === "IN"
+                  ? "Enter a 10-digit Indian mobile number or a full international number. This number is not verified yet."
+                  : "Enter the full international number with + and its country code. This number is not verified yet."}
               </small>
               {phoneIssue ? (
                 <small

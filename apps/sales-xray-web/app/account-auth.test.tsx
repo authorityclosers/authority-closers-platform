@@ -401,6 +401,45 @@ it("signs an existing account in with a password in the same document", async ()
   expect(host.textContent).toContain(file.name);
 });
 
+it("toggles password visibility accessibly without copying the secret into component state", async () => {
+  const fetcher = vi.fn(async (url: string) => {
+    if (url.includes("/config")) return Response.json(config);
+    throw new Error(`Unexpected ${url}`);
+  });
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () =>
+    root.render(<AccountAuth selectedFile={file} onAuthenticated={vi.fn()} />),
+  );
+  await flush();
+  await click("Use my existing password");
+  const password = host.querySelector<HTMLInputElement>("#account-password")!;
+  const toggle = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Show password"]',
+  )!;
+  expect(password.type).toBe("password");
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  await changeInput("#account-password", "synthetic-password");
+  await act(async () => toggle.click());
+  await flush();
+  expect(password.type).toBe("text");
+  expect(password.value).toBe("synthetic-password");
+  expect(
+    host
+      .querySelector('button[aria-label="Hide password"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label="Hide password"]')!
+      .click(),
+  );
+  await flush();
+  expect(password.type).toBe("password");
+  expect(password.value).toBe("synthetic-password");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(host.textContent).not.toContain("synthetic-password");
+});
+
 it("requires popup origin, source and flow before checking the canonical session", async () => {
   const calls: string[] = [];
   vi.stubGlobal(

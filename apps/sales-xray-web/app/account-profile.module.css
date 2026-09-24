@@ -5,6 +5,13 @@
   --profile-action: #007d79;
   box-sizing: border-box;
   width: min(100%, 760px);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 6rem);
+  max-height: calc(100dvh - 3.9rem - max(32px, env(safe-area-inset-bottom)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-padding-block: 24px;
   margin-inline: auto;
   padding: clamp(22px, 4vw, 42px);
   border: 1px solid var(--profile-line);
@@ -279,6 +286,11 @@
 
 @media (max-width: 620px) {
   .panel {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 170px);
+    max-height: calc(
+      100dvh - 68px - 4.9rem - 24px - env(safe-area-inset-bottom)
+    );
     padding: 22px 18px;
     border-radius: 16px;
   }

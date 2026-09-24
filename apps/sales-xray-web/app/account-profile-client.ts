@@ -106,7 +106,16 @@ export async function readAccountProfileEligibility(
   throw new AccountProfileRequestError(response.status);
 }
 
-/** The input is deliberately an E.164 number, not a local number parser. */
 export function validE164Phone(value: string): boolean {
   return /^\+[1-9][0-9]{6,14}$/.test(value);
+}
+
+/** Normalize the supported Indian national format and formatted international numbers. */
+export function normalizeProfilePhoneInput(
+  value: string,
+  country: "IN" | "US" | "CA" | "GB" | "AU" | "AE" | "OTHER",
+): string {
+  const compact = value.trim().replace(/[\s().-]/g, "");
+  if (country === "IN" && /^[0-9]{10}$/.test(compact)) return `+91${compact}`;
+  return compact;
 }
