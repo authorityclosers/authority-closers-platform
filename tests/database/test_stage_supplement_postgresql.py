@@ -37,9 +37,12 @@ from ac_platform.conversation_intelligence.internal_tester import InternalTester
 from ac_platform.conversation_intelligence.models import (
     ConversationAnalysisSettings,
     ConversationBudgetAccount,
+    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationPlanStageAuthorization,
     ConversationProcessingPlan,
+    ConversationRecording,
+    ConversationReportDraft,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.conversation_intelligence.processing_plan import (
@@ -51,6 +54,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
+from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     ReportingPipeline,
@@ -805,6 +809,57 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                     assert new_task is not None
                     assert new_task.recording_id == second_recording_id
                     assert new_task.state == "queued"
+                    retained_history = list(
+                        (
+                            await database.scalars(
+                                select(ConversationInferenceTask).where(
+                                    ConversationInferenceTask.recording_id == recording_id,
+                                    ConversationInferenceTask.stage == "C5",
+                                )
+                            )
+                        ).all()
+                    )
+                    assert {
+                        task.run_id: (task.state, task.checkpoint_id, task.input_sha256)
+                        for task in retained_history
+                    } == old_c5_history
+
+                assert await worker.run_once()
+                assert broker.c5_requests == c5_dispatches_after_first_recording + 1
+                async with setup.sessions() as database, database.begin():
+                    new_task = await database.get(
+                        ConversationInferenceTask, UUID(second_c5_run["id"])
+                    )
+                    assert new_task is not None
+                    assert new_task.state == "completed" and new_task.checkpoint_id is not None
+                    c5_checkpoint = await database.scalar(
+                        select(ConversationCheckpoint).where(
+                            ConversationCheckpoint.recording_id == second_recording_id,
+                            ConversationCheckpoint.stage == "C5",
+                        )
+                    )
+                    c6_checkpoint = await database.scalar(
+                        select(ConversationCheckpoint).where(
+                            ConversationCheckpoint.recording_id == second_recording_id,
+                            ConversationCheckpoint.stage == "C6",
+                        )
+                    )
+                    assert c5_checkpoint is not None and c5_checkpoint.payload is not None
+                    assert c6_checkpoint is not None and c6_checkpoint.payload is not None
+                    draft = await database.scalar(
+                        select(ConversationReportDraft).where(
+                            ConversationReportDraft.run_id == UUID(second_c5_run["id"])
+                        )
+                    )
+                    assert draft is not None and draft.payload is not None
+                    recording = await database.get(ConversationRecording, second_recording_id)
+                    assert recording is not None
+                    reports = ConversationReports(
+                        ConversationApplication(database, clock=lambda: setup.clock[0])
+                    )
+                    validated_report, _ = reports._validated(draft, recording)
+                    await reports._canonical_draft(draft, recording)
+                    assert validated_report.review_status == "draft_not_dipak_adjudicated"
                     retained_history = list(
                         (
                             await database.scalars(

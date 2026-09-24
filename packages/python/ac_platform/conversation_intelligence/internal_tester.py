@@ -147,10 +147,7 @@ class InternalTesterPolicy:
         if type(tenant_id) is not UUID or type(person_id) is not UUID:
             return None
         person = await database.scalar(
-            select(Person)
-            .where(Person.id == person_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            select(Person).where(Person.id == person_id).execution_options(populate_existing=True)
         )
         membership = await database.scalar(
             select(Membership)
@@ -158,7 +155,6 @@ class InternalTesterPolicy:
                 Membership.tenant_id == tenant_id,
                 Membership.person_id == person_id,
             )
-            .with_for_update()
             .execution_options(populate_existing=True)
         )
         if (

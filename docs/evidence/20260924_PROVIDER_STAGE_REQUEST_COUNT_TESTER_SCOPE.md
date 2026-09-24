@@ -50,7 +50,17 @@ provider request or hosted approval mutation was performed.
   1 passed in 54.98 seconds. The exact original key for an uncertain stage
   resolves to the retained task; a different key is rejected for explicit
   recovery, with no provider redispatch.
+- Completed the second recording's queued C5 with the synthetic valid broker
+  response: one C5 dispatch occurred, the task completed with durable C5 and
+  C6 checkpoints, and the canonical draft validation/read path accepted the
+  stored report. Earlier uncertain/completed C5 task rows and their checkpoint
+  and input hashes remained unchanged — 1 passed in 105.40 seconds.
+- Lock-order regression on PostgreSQL: with the prior owner-row `FOR UPDATE`
+  restored temporarily, the account-Person-then-budget and processing-budget-
+  then-owner-read transactions deadlocked. With non-locking `populate_existing`
+  owner reads restored, that same interleaving completed while the verified-
+  owner and revocation assertions remained active — 1 passed in 54.10 seconds.
 - Unit tests: 37 passed. Root independently ran 49 acquisition/hosted-runtime
   tests and full package mypy across 88 source files, all passing.
 - Ruff lint and `ruff format --check` passed on all changed Python files;
-  `git diff --check` passed.
+  mypy passed for the modified internal-tester module; `git diff --check` passed.

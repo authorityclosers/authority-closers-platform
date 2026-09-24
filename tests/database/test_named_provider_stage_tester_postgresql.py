@@ -6,6 +6,7 @@ This test never contacts an external provider or changes a hosted approval.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -29,7 +30,11 @@ from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
-from ac_platform.conversation_intelligence.models import ConversationInferenceTask
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationInferenceTask,
+    ConversationRecording,
+)
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
@@ -245,6 +250,57 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
             assert first["id"] != second["id"]
             assert await worker.run_once()
             assert broker.calls == 2
+
+            # Authenticated owner requests lock Person before budget. Processing
+            # quote validation locks budget first; tester resolution must use
+            # fresh non-locking identity reads to avoid the reverse-order cycle.
+            person_locked = asyncio.Event()
+            budget_locked = asyncio.Event()
+            owner_waiting_on_budget = asyncio.Event()
+            budget_scope_id = granted_bundle.budget_scope_id
+
+            async def owner_person_then_budget() -> None:
+                async with setup.sessions() as database, database.begin():
+                    await database.scalar(
+                        select(Person.id).where(Person.id == tester.person_id).with_for_update()
+                    )
+                    person_locked.set()
+                    await budget_locked.wait()
+                    owner_waiting_on_budget.set()
+                    await database.scalar(
+                        select(ConversationBudgetAccount.scope_id)
+                        .where(ConversationBudgetAccount.scope_id == budget_scope_id)
+                        .with_for_update()
+                    )
+
+            async def processing_budget_then_owner_read() -> None:
+                await person_locked.wait()
+                async with setup.sessions() as database, database.begin():
+                    await database.scalar(
+                        select(ConversationBudgetAccount.scope_id)
+                        .where(ConversationBudgetAccount.scope_id == budget_scope_id)
+                        .with_for_update()
+                    )
+                    budget_locked.set()
+                    await owner_waiting_on_budget.wait()
+                    # Let the owner transaction issue its conflicting budget
+                    # lock request before this path resolves the source owner.
+                    await asyncio.sleep(0.05)
+                    recording = await database.get(ConversationRecording, second_tester_recording)
+                    assert recording is not None
+                    app = ConversationApplication(database, clock=lambda: setup.clock[0])
+                    assert await setup.authority._provider_stage_request_count_tester(
+                        app,
+                        second_tester_actor,
+                        recording,
+                        setup.clock[0],
+                        granted_bundle,
+                    )
+
+            await asyncio.wait_for(
+                asyncio.gather(owner_person_then_budget(), processing_budget_then_owner_read()),
+                timeout=8,
+            )
 
             revoked_submission, revoked_recording = await _upload_as(setup, data, tester_token)
             await _reconcile(setup.sessions, setup.state)
