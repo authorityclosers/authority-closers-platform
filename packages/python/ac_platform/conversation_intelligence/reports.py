@@ -167,6 +167,9 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_NUMERIC_KEY_TOKENS = frozenset(
     {"score", "grade", "rating", "numeric", "percent", "percentage", "rank", "point", "points"}
 )
+_NON_NUMERIC_POINT_LABELS = frozenset(
+    {("pain", "points"), ("key", "talking", "points"), ("turning", "point")}
+)
 _ALLOWED_DIMENSION_STATES = frozenset(
     {"observed", "insufficient_evidence", "not_applicable", "conflicted", "unknown"}
 )
@@ -888,24 +891,15 @@ def _has_forbidden_numeric_key(key: str) -> bool:
     """Reject score-bearing identifier tokens without matching substrings."""
     split_acronym = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key)
     split_camel_case = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", split_acronym)
-    tokens = [token.casefold() for token in re.findall(r"[A-Za-z0-9]+", split_camel_case)]
-    for index, token in enumerate(tokens):
-        if token not in _FORBIDDEN_NUMERIC_KEY_TOKENS:
-            continue
-        # Common language labels are not numeric scores. Keep all other
-        # point/points tokens blocked, including fields such as total_points.
-        if (
-            token in {"point", "points"}
-            and index > 0
-            and tokens[index - 1]
-            in {
-                "pain",
-                "talking",
-                "turning",
-            }
-        ):
-            continue
-        return True
+    tokens = [token.casefold() for token in re.findall(r"[A-Za-z]+|[0-9]+", split_camel_case)]
+    for token in tokens:
+        metric = token.removeprefix("overall") if token.startswith("overall") else token
+        if any(metric.startswith(stem) for stem in _FORBIDDEN_NUMERIC_KEY_TOKENS):
+            # Only these exact language labels are exempt. Numeric modifiers,
+            # suffixes, and other point/points fields remain blocked.
+            if metric in {"point", "points"} and tuple(tokens) in _NON_NUMERIC_POINT_LABELS:
+                continue
+            return True
     return False
 
 
@@ -1545,7 +1539,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/3"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/4"
 
 
 def _adapt_unbound_provider_findings(

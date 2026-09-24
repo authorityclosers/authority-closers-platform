@@ -229,7 +229,18 @@ def test_parser_rejects_numeric_and_unbound_evidence_but_keeps_provider_addition
     assert output.provider_extras == {"unexpected": "provider expansion"}
 
 
-@pytest.mark.parametrize("key", ["pain_points", "key_talking_points", "turning_point", "prank"])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "pain_points",
+        "painPoints",
+        "key_talking_points",
+        "keyTalkingPoints",
+        "turning_point",
+        "turningPoint",
+        "prank",
+    ],
+)
 def test_numeric_key_guard_does_not_reject_compound_language_tokens(key: str) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
@@ -256,6 +267,17 @@ def test_numeric_key_guard_does_not_reject_compound_language_tokens(key: str) ->
         "points",
         "total_points",
         "earned_points",
+        "pain_points_count",
+        "key_talking_points1",
+        "turning_point_total",
+        "sales_scores",
+        "ratings",
+        "rankings",
+        "score1",
+        "score2026",
+        "overallgrade",
+        "overallratings",
+        "scorecard",
     ],
 )
 def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: str) -> None:
@@ -268,10 +290,10 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/3"
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/4"
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "a7e32588dd4b9f4a4477398b63de79a27dd862e9fb5b549e9cbe611ab7eeea7d"
+        "720ab1b7181f34c8ff30b5dfd79995574228f7397a969ed23a69e8ca2b757750"
     )
 
 
