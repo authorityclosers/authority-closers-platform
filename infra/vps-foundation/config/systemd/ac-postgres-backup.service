@@ -31,4 +31,4 @@ RestrictAddressFamilies=AF_INET AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /srv/authority-closers/application /srv/authority-closers/current /etc/systemd/system /usr/local/libexec/authority-closers /usr/local/sbin /var/run/docker.sock
-ReadWritePaths=/srv/authority-closers/backups/application /run/lock
+ReadWritePaths=/srv/authority-closers/backups/application /var/cache/authority-closers-restic /run/lock
