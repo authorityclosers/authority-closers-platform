@@ -160,9 +160,8 @@ it("shows exact skill excerpts and seeks their source, without using coaching ci
   const dialog = container.querySelector('[role="dialog"]');
   expect(dialog?.textContent).toContain(dimensions[0].observation);
   expect(dialog?.textContent).toContain(evidence.quote);
-  expect(dialog?.textContent).toContain(
-    "01:12.000–01:19.000 · Source segment segment-12",
-  );
+  expect(dialog?.textContent).toContain("01:12.000–01:19.000");
+  expect(dialog?.textContent).not.toContain("segment-12");
   expect(dialog?.textContent).toContain("Doc-1");
   expect(dialog?.querySelectorAll('[aria-label^="Listen to"]')).toHaveLength(1);
   await act(async () =>

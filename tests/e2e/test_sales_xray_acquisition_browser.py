@@ -784,8 +784,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         path=str(receipt / "account-library-report-playback.png"), full_page=True
                     )
                     assert broker.calls == 3
-                    await library_page.locator('summary[aria-label="More report actions"]').click()
-                    await library_page.get_by_role(
+                    report_actions = library_page.get_by_role(
+                        "region", name="Sales call report", exact=True
+                    ).get_by_role("group", name="Report actions", exact=True)
+                    await report_actions.get_by_role(
                         "button", name="Request deletion", exact=True
                     ).click()
                     await library_page.get_by_role(

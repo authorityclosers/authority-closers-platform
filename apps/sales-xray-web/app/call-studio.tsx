@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import Link from "next/link";
 import {
   AudioLines,
@@ -21,7 +21,7 @@ import { REPORT_NAVIGATION_COPY } from "./report-navigation-copy";
 import { DipakOverview } from "./dipak-overview";
 import { FindingEvidence } from "./finding-evidence";
 import { ReportFactors } from "./report-factors";
-import { ReportTranscript } from "./report-transcript";
+import { formatTranscriptTime, ReportTranscript } from "./report-transcript";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
 import { parseReportLanguage } from "./report-language";
@@ -58,6 +58,11 @@ const time = (ms: number) =>
     .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
     .toString()
     .padStart(2, "0")}`;
+
+const evidenceTime = (startMs: number, endMs: number) => {
+  const range = `${formatTranscriptTime(startMs)}–${formatTranscriptTime(endMs)}`;
+  return endMs - startMs < 1_000 ? `${range} · under 1 sec` : range;
+};
 type ProcessingPlanStage = {
   stage: "C2" | "C4" | "C5";
   provider: string;
@@ -563,6 +568,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const [momentStatus, setMomentStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const momentEndMs = useRef<number | null>(null);
+  const programmaticSeekTargetMs = useRef<number | null>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
@@ -819,6 +826,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   ]);
 
   function clearAudioPlayback() {
+    momentEndMs.current = null;
+    programmaticSeekTargetMs.current = null;
     try {
       audio.current?.pause();
     } catch {
@@ -1181,9 +1190,13 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
       return;
     }
     try {
+      momentEndMs.current = moment.end_ms;
+      programmaticSeekTargetMs.current = moment.start_ms;
       player.currentTime = moment.start_ms / 1000;
       const playback = player.play();
       if (!playback || typeof playback.then !== "function") {
+        momentEndMs.current = null;
+        programmaticSeekTargetMs.current = null;
         setMomentStatus(copy.playbackBlocked);
         return;
       }
@@ -1191,10 +1204,50 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
         .then(() =>
           setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
         )
-        .catch(() => setMomentStatus(copy.playbackBlocked));
+        .catch(() => {
+          momentEndMs.current = null;
+          programmaticSeekTargetMs.current = null;
+          setMomentStatus(copy.playbackBlocked);
+        });
     } catch {
+      momentEndMs.current = null;
+      programmaticSeekTargetMs.current = null;
       setMomentStatus(copy.playbackUnavailable);
     }
+  }
+  function allowFullCallSeek(event: SyntheticEvent<HTMLAudioElement>) {
+    const player = event.currentTarget;
+    if (audio.current !== player || momentEndMs.current === null) return;
+    const expectedMs = programmaticSeekTargetMs.current;
+    if (
+      expectedMs !== null &&
+      Math.abs(player.currentTime * 1000 - expectedMs) <= 40
+    ) {
+      programmaticSeekTargetMs.current = null;
+      return;
+    }
+    programmaticSeekTargetMs.current = null;
+    momentEndMs.current = null;
+    setSelectedMomentKey(null);
+    setMomentStatus("");
+  }
+  function stopAtMomentEnd(event: SyntheticEvent<HTMLAudioElement>) {
+    const endMs = momentEndMs.current;
+    const player = event.currentTarget;
+    if (
+      endMs === null ||
+      audio.current !== player ||
+      player.currentTime * 1000 < endMs
+    )
+      return;
+    momentEndMs.current = null;
+    try {
+      player.currentTime = endMs / 1000;
+    } catch {
+      // Pause at the best available media position if the browser rejects a final seek.
+    }
+    player.pause();
+    setMomentStatus("");
   }
   function restart() {
     ++attempt.current;
@@ -1242,9 +1295,9 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       }
                     >
                       <Play size={12} aria-hidden="true" />
-                      {time(e.start_ms)}–{time(e.end_ms)}
+                      {evidenceTime(e.start_ms, e.end_ms)}
                     </button>{" "}
-                    <small>{e.segment_id}</small> “{e.quote}”
+                    “{e.quote}”
                   </blockquote>
                 ))}
               </FindingEvidence>
@@ -1364,6 +1417,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Listen here to check you chose the right recording. Selecting
@@ -1406,6 +1461,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Select a timestamp in the report to replay that part of your
@@ -1902,7 +1959,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                             >
                               <span className="studio-moment-time">
                                 <Play size={12} aria-hidden="true" />
-                                {time(moment.start_ms)}–{time(moment.end_ms)}
+                                {evidenceTime(moment.start_ms, moment.end_ms)}
                               </span>
                               <span className="studio-moment-copy">
                                 <strong>{moment.findingTitle}</strong>

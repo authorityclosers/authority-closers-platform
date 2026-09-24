@@ -149,6 +149,70 @@ def test_database_read_uses_only_bounded_external_file_and_redacts_errors(tmp_pa
     assert "synthetic-test-value" not in str(caught.value)
 
 
+def test_five_provider_launcher_manifest_accepts_scoped_openai_reference(tmp_path: Path) -> None:
+    value = manifest(tmp_path)
+    original = value["providers"][0]
+    value["providers"] = []
+    for provider in ("elevenlabs", "deepgram", "groq", "gemini", "openai"):
+        value["providers"].append(
+            {
+                **original,
+                "credential_ref": f"ref:credential/{provider}/synthetic-v1",
+                "provider_id": provider,
+                "secret_path_ref": f"/sales-xray-test/{provider}",
+                "token_file_ref": str(tmp_path / f"{provider}-token"),
+            }
+        )
+
+    config = load_service_config(*write_config(tmp_path, value))
+
+    assert [item.provider_id for item in config.providers] == [
+        "elevenlabs",
+        "deepgram",
+        "groq",
+        "gemini",
+        "openai",
+    ]
+    assert config.providers[-1].secret_path_ref.endswith("/openai")
+
+    from ac_platform.conversation_intelligence.service import configured_launchers
+
+    launchers = configured_launchers(config)
+    assert launchers[config.providers[-1].credential_ref].provider_id == "openai"
+    invalid = dict(value)
+    invalid["providers"] = [dict(item) for item in value["providers"]]
+    mismatched_provider_path = "/sales-xray-test/groq"
+    invalid["providers"][-1]["secret_path_ref"] = mismatched_provider_path
+    mismatched = load_service_config(*write_config(tmp_path, invalid))
+    with pytest.raises(ValueError, match="^provider-specific secret path required$"):
+        configured_launchers(mismatched)
+
+    template_path = (
+        Path(__file__).parents[3]
+        / "infra"
+        / "conversation-worker"
+        / "service.operator-template.json"
+    )
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    openai = [item for item in template["providers"] if item["provider_id"] == "openai"]
+    assert len(openai) == 1
+    assert openai[0]["credential_ref"] == "REPLACE_WITH_APPROVED_OPENAI_CREDENTIAL_REF"
+    assert openai[0]["secret_path_ref"].endswith("/openai")
+    assert not any("api_key" in key.lower() for key in openai[0])
+
+    value["providers"].append(
+        {
+            **original,
+            "credential_ref": "ref:credential/extra/synthetic-v1",
+            "provider_id": "openai",
+            "secret_path_ref": "/sales-xray-test/openai",
+            "token_file_ref": str(tmp_path / "extra-token"),
+        }
+    )
+    with pytest.raises(ValueError, match="^worker_config_invalid$"):
+        load_service_config(*write_config(tmp_path, value))
+
+
 def test_oversized_config_fails_before_parsing(tmp_path: Path) -> None:
     path = tmp_path / "service.json"
     path.write_bytes(b" " * (65536 + 1))

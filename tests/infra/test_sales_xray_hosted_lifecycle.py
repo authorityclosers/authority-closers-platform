@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+import importlib.util
 import json
 import os
 import shlex
@@ -13,14 +15,21 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
 INSTALLER = APPLICATION / "scripts" / "install-application-release.sh"
 VALIDATOR = APPLICATION / "scripts" / "sales-xray-hosted.py"
 WORKER_OVERLAY = ROOT / "infra" / "conversation-worker" / "compose.hosted.yaml"
+OPENAI_WORKER_OVERLAY = ROOT / "infra" / "conversation-worker" / "compose.hosted-openai.yaml"
 RELEASE_ID = "a" * 40
 OPERATIONS_TENANT = "10000000-0000-4000-8000-000000000001"
+_VALIDATOR_SPEC = importlib.util.spec_from_file_location("sales_xray_hosted_validator", VALIDATOR)
+assert _VALIDATOR_SPEC is not None and _VALIDATOR_SPEC.loader is not None
+_VALIDATOR = importlib.util.module_from_spec(_VALIDATOR_SPEC)
+sys.modules[_VALIDATOR_SPEC.name] = _VALIDATOR
+_VALIDATOR_SPEC.loader.exec_module(_VALIDATOR)
 
 
 @pytest.fixture
@@ -74,6 +83,7 @@ def _make_release(
     *,
     release_id: str = RELEASE_ID,
     environment: str = "staging",
+    openai: bool = False,
 ) -> tuple[Path, dict[str, Path]]:
     release = tmp_path / release_id
     (release / "scripts").mkdir(parents=True)
@@ -84,6 +94,9 @@ def _make_release(
     (release / "compose.sales-xray-hosted.yaml").write_bytes(
         (APPLICATION / "compose.sales-xray-hosted.yaml").read_bytes()
     )
+    (release / "compose.sales-xray-hosted-openai.yaml").write_bytes(
+        (APPLICATION / "compose.sales-xray-hosted-openai.yaml").read_bytes()
+    )
     (release / "scripts" / "sales-xray-hosted.py").write_bytes(VALIDATOR.read_bytes())
     (release / "environments" / f"{environment}.env").write_text(
         f"AC_COMPOSE_PROJECT=ac-application-{environment}\n",
@@ -92,15 +105,17 @@ def _make_release(
     (release / "release-images.env").write_text("", encoding="utf-8")
 
     approval = tmp_path / "approval.json"
-    approval.write_bytes(
-        _json_bytes(
-            {
-                "schema": "ac.sales-xray.hosted-approval/1",
-                "environment": environment,
-                "provider_control_tenant_id": OPERATIONS_TENANT,
-            }
-        )
-    )
+    approval_value = {
+        "schema": "ac.sales-xray.hosted-approval/1",
+        "environment": environment,
+        "provider_control_tenant_id": OPERATIONS_TENANT,
+        "stages": (
+            [{"stage": "C5", "provider_id": "openai", "credential_ref": "ref:openai"}]
+            if openai
+            else []
+        ),
+    }
+    approval.write_bytes(_json_bytes(approval_value))
     env_file = tmp_path / "compose.env"
     service = tmp_path / "service.json"
     paths = {
@@ -114,10 +129,43 @@ def _make_release(
         "deepgram": tmp_path / "deepgram",
         "groq": tmp_path / "groq",
         "gemini": tmp_path / "gemini",
+        "openai": tmp_path / "openai",
         "challenge": tmp_path / "challenge-secret",
         "infisical": tmp_path / "infisical",
         "env": env_file,
     }
+    providers = [
+        {
+            "credential_ref": "ref:elevenlabs",
+            "provider_id": "elevenlabs",
+            "executable": "/opt/infisical",
+            "project_ref": "project",
+            "environment_ref": "dev",
+            "secret_path_ref": "/sales-xray-test/elevenlabs",
+            "token_file_ref": "/run/ac-sales-xray/identities/elevenlabs/token",
+        },
+        {
+            "credential_ref": "ref:groq",
+            "provider_id": "groq",
+            "executable": "/opt/infisical",
+            "project_ref": "project",
+            "environment_ref": "dev",
+            "secret_path_ref": "/sales-xray-test/groq",
+            "token_file_ref": "/run/ac-sales-xray/identities/groq/token",
+        },
+    ]
+    if openai:
+        providers.append(
+            {
+                "credential_ref": "ref:openai",
+                "provider_id": "openai",
+                "executable": "/opt/infisical",
+                "project_ref": "project",
+                "environment_ref": "staging",
+                "secret_path_ref": "/sales-xray-staging/openai",
+                "token_file_ref": "/run/ac-sales-xray/identities/openai/token",
+            }
+        )
     service.write_bytes(
         _json_bytes(
             {
@@ -134,26 +182,7 @@ def _make_release(
                 "database_url_file": "/run/ac-sales-xray/database-url",
                 "native_socket_path": _portable(paths["socket"] / "native.sock"),
                 "native_image_ref": "sha256:" + "b" * 64,
-                "providers": [
-                    {
-                        "credential_ref": "ref:elevenlabs",
-                        "provider_id": "elevenlabs",
-                        "executable": "/opt/infisical",
-                        "project_ref": "project",
-                        "environment_ref": "dev",
-                        "secret_path_ref": "/sales-xray-test/elevenlabs",
-                        "token_file_ref": "/run/ac-sales-xray/identities/elevenlabs/token",
-                    },
-                    {
-                        "credential_ref": "ref:groq",
-                        "provider_id": "groq",
-                        "executable": "/opt/infisical",
-                        "project_ref": "project",
-                        "environment_ref": "dev",
-                        "secret_path_ref": "/sales-xray-test/groq",
-                        "token_file_ref": "/run/ac-sales-xray/identities/groq/token",
-                    },
-                ],
+                "providers": providers,
             }
         )
     )
@@ -181,6 +210,10 @@ def _make_release(
         "AC_XRAY_SERVICE_SHA256": hashlib.sha256(service.read_bytes()).hexdigest(),
         "AC_XRAY_STORAGE_ROOT": _portable(paths["storage"]),
     }
+    if openai:
+        env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = (
+            "/etc/authority-closers/secrets/sales-xray/identities/openai"
+        )
     env_file.write_text(
         "".join(f"{key}={env_values[key]}\n" for key in sorted(env_values)), encoding="utf-8"
     )
@@ -188,7 +221,9 @@ def _make_release(
         "schema_version": "ac.sales_xray.hosted_activation/1",
         "environment": environment,
         "release_id": release_id,
-        "compose_overlay": "compose.sales-xray-hosted.yaml",
+        "compose_overlay": (
+            "compose.sales-xray-hosted-openai.yaml" if openai else "compose.sales-xray-hosted.yaml"
+        ),
         "compose_profile": "sales-xray-hosted",
         "compose_env_file": _portable(env_file),
         "compose_env_sha256": hashlib.sha256(env_file.read_bytes()).hexdigest(),
@@ -275,6 +310,47 @@ def _refresh_activation_inputs(paths: dict[str, Path]) -> None:
 def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() -> None:
     overlay = APPLICATION / "compose.sales-xray-hosted.yaml"
     assert overlay.read_bytes() == WORKER_OVERLAY.read_bytes()
+    openai_overlay = APPLICATION / "compose.sales-xray-hosted-openai.yaml"
+    openai_text = openai_overlay.read_text(encoding="utf-8")
+    assert openai_overlay.read_bytes() == OPENAI_WORKER_OVERLAY.read_bytes()
+    assert "AC_XRAY_OPENAI_IDENTITY_DIR" not in overlay.read_text(encoding="utf-8")
+    assert openai_text.count("AC_XRAY_OPENAI_IDENTITY_DIR") == 1
+    assert openai_text.count("/run/ac-sales-xray/identities/openai") == 1
+    assert "create_host_path: false" in openai_text
+    assert "read_only: true" in openai_text
+
+
+def test_openai_overlays_only_add_the_scoped_readonly_identity_mount() -> None:
+    expected_mount = {
+        "type": "bind",
+        "source": (
+            "${AC_XRAY_OPENAI_IDENTITY_DIR:?directory containing only OpenAI identity "
+            "required by the OpenAI activation}"
+        ),
+        "target": "/run/ac-sales-xray/identities/openai",
+        "read_only": True,
+        "bind": {"create_host_path": False},
+    }
+    overlay_pairs = (
+        (
+            APPLICATION / "compose.sales-xray-hosted.yaml",
+            APPLICATION / "compose.sales-xray-hosted-openai.yaml",
+        ),
+        (WORKER_OVERLAY, OPENAI_WORKER_OVERLAY),
+    )
+    for base_path, openai_path in overlay_pairs:
+        base = yaml.safe_load(base_path.read_text(encoding="utf-8"))
+        openai = yaml.safe_load(openai_path.read_text(encoding="utf-8"))
+        assert openai.keys() == base.keys()
+        assert openai.keys() == {"services"}
+        openai_services = copy.deepcopy(openai["services"])
+        openai_volumes = openai_services["sales-xray-worker"]["volumes"]
+        mounts = [
+            volume for volume in openai_volumes if volume.get("target") == expected_mount["target"]
+        ]
+        assert mounts == [expected_mount]
+        openai_volumes.remove(expected_mount)
+        assert openai_services == base["services"]
     for environment in ("staging", "production"):
         capability_path = APPLICATION / "capabilities" / f"sales-xray-hosted-{environment}.json"
         capability = json.loads(capability_path.read_text(encoding="utf-8"))
@@ -302,6 +378,14 @@ def test_installer_repairs_worker_manifest_metadata_before_compose() -> None:
     assert 'if python3 "$1" --help' in installer
 
 
+def test_compose_caller_uses_the_validators_overlay_selection() -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    compose_for = installer.split("compose_for() {", maxsplit=1)[1].split("\n}\n", maxsplit=1)[0]
+    assert 'hosted_compose_files=(--file "${sales_xray_hosted_inputs[0]}")' in compose_for
+    assert '"${hosted_compose_files[@]}"' in compose_for
+    assert "-u AC_XRAY_OPENAI_IDENTITY_DIR" in compose_for
+
+
 def test_hosted_validator_projects_only_target_release_inputs(activation_root: Path) -> None:
     release, paths = _make_release(activation_root)
 
@@ -313,6 +397,149 @@ def test_hosted_validator_projects_only_target_release_inputs(activation_root: P
         str(paths["env"]),
         "sales-xray-hosted",
     ]
+
+
+def test_openai_provider_selects_dedicated_overlay_only_with_identity_path(
+    activation_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release, paths = _make_release(activation_root, openai=True)
+    identity_dir = paths["openai"]
+    identity_dir.mkdir()
+    token_file = identity_dir / "token"
+    token_file.write_bytes(b"synthetic-test-only")
+    if os.name == "posix":
+        os.chown(identity_dir, 0, 0)
+        identity_dir.chmod(0o755)
+        os.chown(token_file, _VALIDATOR.WORKER_UID, _VALIDATOR.WORKER_GID)
+        token_file.chmod(0o400)
+    openai_identity_path = _portable(identity_dir)
+    monkeypatch.setattr(_VALIDATOR, "OPENAI_HOST_IDENTITY_DIR", openai_identity_path)
+    env_values = dict(
+        line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
+    )
+    env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = openai_identity_path
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
+        encoding="utf-8",
+    )
+    _refresh_activation_inputs(paths)
+
+    result = _VALIDATOR.compose_inputs(release, "staging", OPERATIONS_TENANT)
+
+    assert result == (
+        release / "compose.sales-xray-hosted-openai.yaml",
+        paths["env"],
+        "sales-xray-hosted",
+    )
+
+    env_values = dict(
+        line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
+    )
+    del env_values["AC_XRAY_OPENAI_IDENTITY_DIR"]
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
+        encoding="utf-8",
+    )
+    _refresh_activation_inputs(paths)
+    with pytest.raises(_VALIDATOR.ActivationError):
+        _VALIDATOR.compose_inputs(release, "staging", OPERATIONS_TENANT)
+
+
+def test_hosted_validator_rejects_openai_mount_without_openai_provider(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root)
+    env_values = dict(
+        line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
+    )
+    env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = (
+        "/etc/authority-closers/secrets/sales-xray/identities/openai"
+    )
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
+        encoding="utf-8",
+    )
+    _refresh_activation_inputs(paths)
+
+    result = _validator_result(release)
+
+    assert result.returncode != 0
+
+
+def test_hosted_validator_rejects_openai_provider_on_legacy_overlay(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root, openai=True)
+    descriptor = json.loads(paths["descriptor"].read_bytes())
+    descriptor["compose_overlay"] = "compose.sales-xray-hosted.yaml"
+    paths["descriptor"].write_bytes(_json_bytes(descriptor))
+    paths["digest"].write_bytes(
+        (hashlib.sha256(paths["descriptor"].read_bytes()).hexdigest() + "\n").encode("ascii")
+    )
+
+    result = _validator_result(release)
+
+    assert result.returncode != 0
+
+
+def test_hosted_validator_rejects_broad_openai_identity_parent(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root, openai=True)
+    env_values = dict(
+        line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
+    )
+    env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = (
+        "/etc/authority-closers/secrets/sales-xray/identities"
+    )
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
+        encoding="utf-8",
+    )
+    _refresh_activation_inputs(paths)
+
+    result = _validator_result(release)
+
+    assert result.returncode != 0
+    with pytest.raises(
+        _VALIDATOR.ActivationError,
+        match="OpenAI identity directory must use its dedicated host path",
+    ):
+        _VALIDATOR._checked_openai_identity_dir(env_values["AC_XRAY_OPENAI_IDENTITY_DIR"])
+
+
+def test_openai_identity_metadata_rejects_missing_directory(activation_root: Path) -> None:
+    with pytest.raises(_VALIDATOR.ActivationError, match="missing"):
+        _VALIDATOR._validate_openai_identity_metadata(activation_root / "missing-openai")
+
+
+def test_openai_identity_metadata_rejects_symlinked_directory(activation_root: Path) -> None:
+    identity_dir = activation_root / "openai-link"
+
+    def lstat(path: Path) -> os.stat_result:
+        if path == identity_dir:
+            return os.stat_result((stat.S_IFLNK | 0o777, 1, 0, 1, 0, 0, 0, 0, 0, 0))
+        return path.lstat()
+
+    with pytest.raises(_VALIDATOR.ActivationError, match="symbolic links"):
+        _VALIDATOR._validate_openai_identity_metadata(identity_dir, lstat=lstat)
+
+
+def test_openai_identity_metadata_requires_a_token_only_leaf(activation_root: Path) -> None:
+    identity_dir = activation_root / "openai-identity"
+    identity_dir.mkdir()
+    token_file = identity_dir / "token"
+    token_file.write_bytes(b"synthetic-test-only")
+    if os.name == "posix":
+        os.chown(identity_dir, 0, 0)
+        identity_dir.chmod(0o755)
+        os.chown(token_file, _VALIDATOR.WORKER_UID, _VALIDATOR.WORKER_GID)
+        token_file.chmod(0o400)
+
+    _VALIDATOR._validate_openai_identity_metadata(identity_dir)
+
+    (identity_dir / "unexpected-sibling").write_bytes(b"synthetic")
+    with pytest.raises(_VALIDATOR.ActivationError, match="only its token file"):
+        _VALIDATOR._validate_openai_identity_metadata(identity_dir)
 
 
 def test_hosted_projection_repairs_worker_manifest_readability(

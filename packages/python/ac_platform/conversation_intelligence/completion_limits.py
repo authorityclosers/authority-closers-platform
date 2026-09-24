@@ -4,6 +4,12 @@
 def completion_ceiling(provider: str, model: str, stage: str) -> int:
     if (provider, model, stage) == ("gemini", "gemini-3.8-flash", "C5"):
         return 8_000
+    if (provider, model, stage) in {
+        ("openai", "gpt-6-luna", "C5"),
+        ("openai", "gpt-6-sol", "C5"),
+        ("openai", "gpt-6-astra", "C5"),
+    }:
+        return 8_000
     return 4_000
 
 

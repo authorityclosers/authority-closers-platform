@@ -274,7 +274,15 @@ export function AcquisitionProcessingPanel({
                 ? "Completed work remains saved. Review the available recovery action before continuing."
                 : guidance}
           </p>
-          {!staticPreview && <div className={styles.actions}>{children}</div>}
+          {!staticPreview && (
+            <div
+              className={styles.actions}
+              role="group"
+              aria-label="Recovery actions"
+            >
+              {children}
+            </div>
+          )}
         </footer>
       </div>
 

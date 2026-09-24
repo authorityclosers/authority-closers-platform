@@ -28,7 +28,10 @@ import { SourceWaveform } from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
 import { OverviewDashboard } from "./overview-dashboard";
 import { countReportMoments } from "./report-moments";
-import { useReportReading } from "./report-reading-context";
+import {
+  useReportNavigation,
+  useReportReading,
+} from "./report-reading-context";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
@@ -243,6 +246,7 @@ export function DipakOverview({
   showHeading = true,
 }: Props) {
   const reading = useReportReading();
+  const navigateToReport = useReportNavigation();
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -393,7 +397,10 @@ export function DipakOverview({
   function focusInsight(number: string, chapter: ChapterId) {
     setActiveReviewNumber(number);
     setActiveChapter(chapter);
-    if (!showHeading) return; // The focused dialog owns focus, never page scroll.
+    if (!showHeading && navigateToReport) {
+      navigateToReport("overview", number);
+      return;
+    }
     window.setTimeout(() => {
       const item = overview.current?.querySelector<HTMLElement>(
         `[data-review-point="${number}"]`,
@@ -515,7 +522,6 @@ export function DipakOverview({
           report={report}
           durationMs={durationMs}
           momentCount={countReportMoments(report)}
-          reviewPoints={insightRailItems}
           onSelectEvidence={onSelectEvidence}
           onOpenReview={(number) => {
             const item = insightRailItems.find(
@@ -542,24 +548,22 @@ export function DipakOverview({
           <p className={styles.heroSubcopy}>{report.summary}</p>
           <span className={styles.visuallyHidden}>{report.verdict}</span>
         </div>
-        <div className={styles.reportMetrics} aria-label="Call metrics">
-          <div className={styles.metric}>
-            <span>Call duration</span>
-            <strong>{durationMs ? time(durationMs) : "Not supplied"}</strong>
+        {showHeading && (
+          <div className={styles.reportMetrics} aria-label="Call metrics">
+            <div className={styles.metric}>
+              <span>Call duration</span>
+              <strong>{durationMs ? time(durationMs) : "Not supplied"}</strong>
+            </div>
+            <div className={styles.metric}>
+              <span>Highlights</span>
+              <strong>{countReportMoments(report)}</strong>
+            </div>
+            <div className={`${styles.metric} ${styles.metricAction}`}>
+              <span>Suggested actions</span>
+              <strong>{report.improvements.length}</strong>
+            </div>
           </div>
-          <div className={styles.metric}>
-            <span>Source-linked moments</span>
-            <strong>{rewatch.length}</strong>
-          </div>
-          <div className={styles.metric}>
-            <span>Review points</span>
-            <strong>{insightRailItems.length}</strong>
-          </div>
-          <div className={`${styles.metric} ${styles.metricAction}`}>
-            <span>Suggested actions</span>
-            <strong>{report.improvements.length}</strong>
-          </div>
-        </div>
+        )}
         <div className={styles.heroMeta} aria-label="Report status">
           <span className={styles.statusPill}>Draft report</span>
         </div>
@@ -612,6 +616,13 @@ export function DipakOverview({
             {report.strengths[0]?.explanation ??
               "The saved report does not include a supported strength yet."}
           </p>
+          <button
+            className={styles.inlineAction}
+            type="button"
+            onClick={() => focusInsight("01", "start")}
+          >
+            Open review <ArrowUpRight size={15} aria-hidden="true" />
+          </button>
         </article>
         <article
           className={`${styles.takeawayCard} ${styles.takeawayCardOrange}`}
@@ -650,6 +661,13 @@ export function DipakOverview({
               ? "Observed outcome from this call."
               : "No separate outcome statement was supplied."}
           </p>
+          <button
+            className={styles.inlineAction}
+            type="button"
+            onClick={() => focusInsight("14", "close")}
+          >
+            Open review <ArrowUpRight size={15} aria-hidden="true" />
+          </button>
         </article>
         <article
           className={`${styles.takeawayCard} ${styles.takeawayCardViolet}`}
@@ -669,7 +687,11 @@ export function DipakOverview({
           <button
             className={styles.inlineAction}
             type="button"
-            onClick={() => focusInsight("11", "practice")}
+            onClick={() =>
+              navigateToReport
+                ? navigateToReport("next-call-plan")
+                : focusInsight("11", "practice")
+            }
           >
             Open plan <ArrowUpRight size={15} aria-hidden="true" />
           </button>

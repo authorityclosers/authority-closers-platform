@@ -1,0 +1,8 @@
+{
+  "schema": "ac.sales_xray.acquisition-browser-gate-proof.v1",
+  "status": "failed",
+  "test": "tests/e2e/test_sales_xray_acquisition_browser.py::test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion",
+  "provider_acceptance": false,
+  "node_version": "v24.19.0",
+  "reason": "The required Sales Xray browser case failed"
+}

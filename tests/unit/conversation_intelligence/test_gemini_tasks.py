@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 )
 from ac_platform.conversation_intelligence.provider_registry import resolve_dispatch
 from ac_platform.conversation_intelligence.providers import BoundedProviders, ProviderResult
+from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.conversation_intelligence.reports import (
     FACT_PROMPT_COMPACT,
@@ -90,7 +91,7 @@ def facts(transcript: Any) -> dict[str, Any]:
     }
 
 
-def coaching_case() -> tuple[Any, Any, Any]:
+def coaching_case(max_completion_tokens: int = 3200) -> tuple[Any, Any, Any]:
     transcript = _transcript()
     prepared = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
     packet = FactPacket.model_validate(
@@ -103,11 +104,33 @@ def coaching_case() -> tuple[Any, Any, Any]:
         [packet],
         provider="gemini",
         model="gemini-3.8-flash",
-        max_completion_tokens=3200,
+        max_completion_tokens=max_completion_tokens,
     )
     draft = _payload(transcript)
     draft["overview"] = overview_for(deepcopy(draft))
     return transcript, request, draft
+
+
+def test_approved_c5_completion_cap_reaches_native_gemini_request_unchanged() -> None:
+    maximum = stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash")
+    _, task, _ = coaching_case(max_completion_tokens=maximum)
+    body = task.as_provider_body()
+    assert task.max_completion_tokens == 4000
+    assert body["generationConfig"]["maxOutputTokens"] == 4000
+
+
+def test_approved_c4_completion_cap_reaches_native_gemini_request_unchanged() -> None:
+    maximum = stage_completion_limit("C4", 3000, provider="gemini", model="gemini-3.8-flash")
+    task = prepare_fact_inputs(
+        _transcript(),
+        provider="gemini",
+        model="gemini-3.8-flash",
+        max_completion_tokens=maximum,
+    )[0]
+    body = task.as_provider_body()
+
+    assert task.max_completion_tokens == 3000
+    assert body["generationConfig"]["maxOutputTokens"] == 3000
 
 
 @pytest.mark.parametrize("model", sorted(GEMINI_TASK_MODELS))

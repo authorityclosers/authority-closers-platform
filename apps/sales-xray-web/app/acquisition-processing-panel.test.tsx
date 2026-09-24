@@ -107,6 +107,53 @@ it("puts the confirmed status and recovery actions before stage and file details
   expect(markup.match(/Review analysis plan/g)).toHaveLength(1);
 });
 
+it("keeps paused C5 recovery actions and the uploaded-file card in distinct flow sections", () => {
+  const markup = renderToStaticMarkup(
+    <AcquisitionProcessingPanel
+      stageRows={[
+        { stage: "C2", state: "completed", label: "Complete" },
+        { stage: "C4", state: "completed", label: "Complete" },
+        { stage: "C5", state: "uncertain", label: "Paused · needs attention" },
+      ]}
+      statusText="Analysis paused"
+      paused
+      fileName="Discovery call.m4a"
+      fileMeta="42 min · 28.4 MB"
+      submissionId="call-c5"
+      progress={{
+        state: "held",
+        local_state: "completed",
+        failure_code: null,
+        has_report: false,
+        automatic_progression: true,
+        stages: [
+          { stage: "C2", state: "completed" },
+          { stage: "C4", state: "completed" },
+          { stage: "C5", state: "uncertain" },
+        ],
+      }}
+    >
+      <button type="button">Check status</button>
+      <button type="button">Review and continue analysis</button>
+    </AcquisitionProcessingPanel>,
+  );
+
+  expect(markup).toContain(
+    'aria-label="Writing your coaching report: Paused · needs attention"',
+  );
+  expect(markup).toContain("Uploaded file");
+  expect(markup).toContain("Discovery call.m4a");
+  expect(markup).toContain("Check status");
+  expect(markup).toContain("Review and continue analysis");
+  expect(markup).toContain('role="group" aria-label="Recovery actions"');
+  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
+    markup.indexOf("Uploaded file"),
+  );
+  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
+    markup.indexOf("Review and continue analysis"),
+  );
+});
+
 it("renders a static fixture with no live-call timer, saved-work claim, or action", () => {
   const markup = renderToStaticMarkup(
     <AcquisitionProcessingPanel

@@ -16,7 +16,6 @@ import {
   FolderOpen,
   HardDrive,
   LoaderCircle,
-  MoreHorizontal,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -1705,68 +1704,6 @@ export function AcquisitionStudio({
               </button>
             </aside>
           )}
-          {visibleError && !savedCallNeedsSession && (
-            <div className={`notice error ${styles.error}`} role="alert">
-              {statusIssue && !error && (
-                <p>
-                  Status could not be refreshed. This does not mean analysis
-                  failed.
-                </p>
-              )}
-              <p>
-                {visibleError instanceof AcquisitionError
-                  ? visibleError.message
-                  : visibleError}
-              </p>
-              <div className={styles.errorActions}>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => {
-                    setError("");
-                    if (submission) {
-                      setConsentedSubmissionId(null);
-                      setPollAttempt((n) => n + 1);
-                    } else setAttempt((n) => n + 1);
-                  }}
-                >
-                  Check again
-                </button>
-                {error &&
-                  submission &&
-                  progress?.local_state === "completed" && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={
-                        !!busy || analysisPaused || analysisWriteBlocked
-                      }
-                      onClick={() => void freshPlan()}
-                    >
-                      Request a fresh plan
-                    </button>
-                  )}
-                {(!submission || !progress || (plan && !plan.accepted)) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={startAnotherCall}
-                  >
-                    <ArrowRight size={16} aria-hidden="true" />
-                    Analyse another call
-                  </button>
-                )}
-                {visibleError instanceof AcquisitionError &&
-                  visibleError.status === 401 && (
-                    <Link className="text-button" href="/login">
-                      Sign in
-                    </Link>
-                  )}
-              </div>
-            </div>
-          )}
           {savedCallRecovery}
           <div
             className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
@@ -2542,6 +2479,68 @@ export function AcquisitionStudio({
               />
             )}
           </div>
+          {visibleError && !savedCallNeedsSession && (
+            <div className={`notice error ${styles.error}`} role="alert">
+              {statusIssue && !error && (
+                <p>
+                  Status could not be refreshed. This does not mean analysis
+                  failed.
+                </p>
+              )}
+              <p>
+                {visibleError instanceof AcquisitionError
+                  ? visibleError.message
+                  : visibleError}
+              </p>
+              <div className={styles.errorActions}>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setError("");
+                    if (submission) {
+                      setConsentedSubmissionId(null);
+                      setPollAttempt((n) => n + 1);
+                    } else setAttempt((n) => n + 1);
+                  }}
+                >
+                  Check again
+                </button>
+                {error &&
+                  submission &&
+                  progress?.local_state === "completed" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
+                      onClick={() => void freshPlan()}
+                    >
+                      Request a fresh plan
+                    </button>
+                  )}
+                {(!submission || !progress || (plan && !plan.accepted)) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={startAnotherCall}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" />
+                    Analyse another call
+                  </button>
+                )}
+                {visibleError instanceof AcquisitionError &&
+                  visibleError.status === 401 && (
+                    <Link className="text-button" href="/login">
+                      Sign in
+                    </Link>
+                  )}
+              </div>
+            </div>
+          )}
           {result && report && (
             <SourceWaveformProvider
               submissionId={submission?.id}
@@ -2566,89 +2565,80 @@ export function AcquisitionStudio({
                         </p>
                       )}
                   </div>
-                  <details className={styles.reportMoreActions}>
-                    <summary
-                      aria-label="More report actions"
-                      title="More report actions"
+                  <div
+                    className={styles.reportActions}
+                    role="group"
+                    aria-label="Report actions"
+                  >
+                    {!result.claimed && (
+                      <Link className={styles.reportAction} href="/login">
+                        Sign in to save
+                      </Link>
+                    )}
+                    <button
+                      className={`${styles.reportAction} ${styles.reportActionPrimary}`}
+                      type="button"
+                      disabled={!!busy || !submission}
+                      onClick={() => void downloadReport()}
                     >
-                      <MoreHorizontal size={19} aria-hidden="true" />
-                    </summary>
-                    <div className={styles.reportMoreMenu} role="menu">
-                      {!result.claimed && (
-                        <Link href="/login" role="menuitem">
-                          Sign in to save this call
-                        </Link>
-                      )}
+                      <Download size={16} aria-hidden="true" />
+                      Download report
+                    </button>
+                    <button
+                      className={styles.reportAction}
+                      type="button"
+                      disabled={!!busy}
+                      onClick={startAnotherCall}
+                    >
+                      <ArrowRight size={16} aria-hidden="true" />
+                      Analyse another call
+                    </button>
+                    {submission && (
                       <button
+                        className={`${styles.reportAction} ${styles.reportActionSupport}`}
                         type="button"
-                        role="menuitem"
-                        disabled={!!busy || !submission}
-                        onClick={() => void downloadReport()}
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => setDeleteConfirm(true)}
                       >
-                        <Download size={16} aria-hidden="true" />
-                        Download report
+                        Request deletion
                       </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        disabled={!!busy}
-                        onClick={startAnotherCall}
-                      >
-                        <ArrowRight size={16} aria-hidden="true" />
-                        Analyse another call
-                      </button>
-                      <p className={styles.reportMetadata}>
-                        Draft coaching; not adjudicated by Dipak. Speaker labels
-                        are unverified.
-                        {` Source: ${report.source_label}. Duration: ${time(result.transcript.duration_ms)}.`}
-                      </p>
-                      {submission && (
-                        <div className={styles.reportPrivacyMenu}>
-                          <strong>Privacy &amp; support</strong>
-                          <p>
-                            Need this call removed?{" "}
-                            <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
-                              Email the AC team
-                            </a>{" "}
-                            or request deletion here.
-                          </p>
-                          {!deleteConfirm ? (
-                            <button
-                              className={styles.reportMenuTextButton}
-                              type="button"
-                              disabled={!!busy || analysisWriteBlocked}
-                              onClick={() => setDeleteConfirm(true)}
-                            >
-                              Request deletion
-                            </button>
-                          ) : (
-                            <>
-                              <p>
-                                Remove this recording and its report? This
-                                cannot be undone.
-                              </p>
-                              <button
-                                type="button"
-                                disabled={!!busy || analysisWriteBlocked}
-                                onClick={() => void erase()}
-                              >
-                                Request recording deletion
-                              </button>
-                              <button
-                                className={styles.reportMenuTextButton}
-                                type="button"
-                                disabled={!!busy}
-                                onClick={() => setDeleteConfirm(false)}
-                              >
-                                Keep call
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </details>
+                    )}
+                  </div>
                 </div>
+                <p className={styles.reportDisclosure}>
+                  Draft coaching; not adjudicated by Dipak. Speaker labels are
+                  unverified. Source: {report.source_label}. Duration:{" "}
+                  {time(result.transcript.duration_ms)}. Need the call removed?{" "}
+                  <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
+                    Contact the AC team.
+                  </a>
+                </p>
+                {submission && deleteConfirm && (
+                  <div className={styles.reportDeleteConfirm} role="alert">
+                    <p>
+                      Remove this recording and its report? This cannot be
+                      undone.
+                    </p>
+                    <div>
+                      <button
+                        className={`${styles.reportAction} ${styles.reportActionDanger}`}
+                        type="button"
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => void erase()}
+                      >
+                        Request recording deletion
+                      </button>
+                      <button
+                        className={styles.reportAction}
+                        type="button"
+                        disabled={!!busy}
+                        onClick={() => setDeleteConfirm(false)}
+                      >
+                        Keep call
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <ReportModes
                   label="Explore your sales report"
                   boundCallId={submission?.id}
@@ -2737,6 +2727,7 @@ export function AcquisitionStudio({
                 durationMs={result.transcript.duration_ms}
                 title={file?.name ?? "Your saved sales call"}
                 embedded={embedded}
+                onPlay={() => setMoment(null)}
                 onTimeUpdate={() => {
                   if (
                     moment &&

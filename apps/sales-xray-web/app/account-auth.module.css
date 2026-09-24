@@ -447,20 +447,20 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 44px;
+  min-height: 38px;
   padding: 0 12px;
-  border: 1px solid var(--action);
+  border: 1px solid #0d5968;
   border-radius: 7px;
-  background: var(--action);
-  color: var(--action-text);
+  background: #0d5968;
+  color: #fff;
   font-size: 12px;
   font-weight: 650;
 }
 .noticePrimary:hover:not(:disabled) {
-  filter: brightness(0.94);
+  background: #176b72;
 }
 .noticeActions .textButton {
-  color: var(--action);
+  color: #245575;
 }
 .textButton,
 .resend,
@@ -620,85 +620,84 @@
 @media (max-width: 760px) {
   .auth {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: max-content minmax(0, 1fr);
     height: auto;
     min-height: 100dvh;
     overflow: visible;
   }
   .story {
-    min-height: 72px;
-    flex-direction: row;
-    align-items: center;
-    padding: 10px 20px;
+    padding: 22px 24px 18px;
     border-right: 0;
     border-bottom: 1px solid #153b4b;
   }
   .brand img:first-child {
-    width: 38px;
-    height: 38px;
-    padding: 6px;
+    width: 42px;
+    height: 42px;
+    padding: 7px;
   }
   .brand img:last-child {
-    width: 124px;
-    height: 44px;
+    width: 132px;
+    height: 47px;
   }
   .shared {
     display: none;
   }
   .storyCopy {
+    display: block;
+    margin: 12px 0 0;
+    padding: 0;
+  }
+  .storyCopy .eyebrow,
+  .storyCopy > p:last-child {
     display: none;
   }
+  .storyCopy h2 {
+    font-size: clamp(28px, 7.8vw, 39px);
+    margin: 0;
+  }
   .wave {
-    width: clamp(96px, 33vw, 142px);
-    height: 48px;
-    margin: 0 -9px 0 auto;
-    background: none;
+    height: 60px;
+    margin: 1px -24px 0;
   }
   .waveBars {
-    height: 72%;
-    padding-inline: 9%;
+    height: 60%;
   }
   .waveRibbon {
     height: 100%;
     width: 100%;
   }
   .formColumn {
-    padding: 17px 20px 20px;
+    padding: 27px 24px 30px;
     display: block;
   }
   .returnLink {
     position: static;
-    margin-bottom: 10px;
+    margin-bottom: 18px;
   }
   .card {
     margin: 0 auto;
   }
   .card h1 {
-    font-size: 28px;
+    font-size: 32px;
   }
   .lead {
     font-size: 13px;
-    margin-bottom: 12px;
+    margin-bottom: 18px;
   }
   .eyebrow {
     font-size: 9px;
-    margin-bottom: 7px;
+    margin-bottom: 10px;
   }
   .divider {
-    margin: 10px 0;
+    margin: 15px 0;
   }
   .error {
-    margin-top: 6px;
-  }
-  .error:empty {
-    min-height: 0;
-    margin: 0;
+    margin-top: 9px;
   }
   .file {
     margin-top: 4px;
   }
   .footnote {
-    margin-top: 7px;
+    margin-top: 10px;
   }
 }
 @media (max-height: 720px) and (max-width: 760px) {

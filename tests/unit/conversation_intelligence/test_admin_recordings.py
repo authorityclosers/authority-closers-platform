@@ -149,6 +149,40 @@ def test_provider_receipt_exposes_allowlisted_usage_without_invoice_claim() -> N
     }
 
 
+@pytest.mark.parametrize("reported", ["gpt-6-luna", "gpt-6-sol", None])
+def test_openai_estimate_requires_verified_model_and_preserves_usage_categories(reported) -> None:
+    usage = {
+        "input_tokens": 100_000,
+        "cached_tokens": 20_000,
+        "cache_write_tokens": 10_000,
+        "output_tokens": 8_000,
+        "reasoning_tokens": 3_000,
+        "total_tokens": 108_000,
+    }
+    task = SimpleNamespace(stage="C5", state="uncertain", run_id=uuid4())
+    job = SimpleNamespace(
+        provider_receipt={
+            "provider": "openai",
+            "model": "gpt-6-luna",
+            "reported_model": reported,
+            "model_verified": reported == "gpt-6-luna",
+            "usage": usage,
+            "cost_state": "reconciliation_required",
+        }
+    )
+    view = _provider_stage_view(task, job)
+    assert view["usage"] == usage
+    assert view["cost_state"] == "reconciliation_required"
+    if reported == "gpt-6-luna":
+        assert view["usage_estimate_paise"] == 125
+        assert view["usage_estimate_state"] == "available"
+    else:
+        assert view["usage_estimate_paise"] is None
+        assert view["usage_estimate_state"] == "usage_unavailable"
+        assert view["usage_estimate_basis"] == "provider_model_unverified"
+        assert view["pricing_snapshot"] is None
+
+
 def test_provider_returned_receipt_exposes_usage_without_invoice_claim() -> None:
     task = SimpleNamespace(
         stage="C5",

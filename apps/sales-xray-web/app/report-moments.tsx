@@ -46,13 +46,12 @@ type Moment = {
   purpose?: "must_watch" | "watch" | "repeat";
   evidence: ReportEvidence;
 };
-type MomentGroup = Moment & { contextId: string; contexts: Moment[] };
 const purposes = { must_watch: "Must watch", watch: "Watch", repeat: "Repeat" };
 
-/** Group exact excerpts, preserving shortlist order and every supplied context. */
-function suppliedMoments(report: SalesReport): MomentGroup[] {
-  const rewatch: Moment[] = (report.overview?.rewatch ?? []).flatMap(
-    (note, index) =>
+/** Preserve report order and each finding's provenance, including shared clips. */
+function suppliedMoments(report: SalesReport): Moment[] {
+  if (report.overview) {
+    return report.overview.rewatch.flatMap((note, index) =>
       note.evidence.map((evidence, excerpt) => ({
         id: `rewatch:${index}:${excerpt}`,
         kind: "rewatch" as const,
@@ -60,7 +59,8 @@ function suppliedMoments(report: SalesReport): MomentGroup[] {
         purpose: note.purpose,
         evidence,
       })),
-  );
+    );
+  }
   const collections: [Exclude<SourceKind, "rewatch">, Finding[]][] = [
     ["strengths", report.strengths],
     ["improvements", report.improvements],
@@ -68,7 +68,7 @@ function suppliedMoments(report: SalesReport): MomentGroup[] {
     ["objection_analysis", report.objection_analysis],
     ["closing_analysis", report.closing_analysis],
   ];
-  const findings = collections.flatMap(([kind, findings]) =>
+  return collections.flatMap(([kind, findings]) =>
     findings.flatMap((finding, index) =>
       finding.evidence.map((evidence, excerpt) => ({
         id: `${kind}:${index}:${excerpt}`,
@@ -79,49 +79,23 @@ function suppliedMoments(report: SalesReport): MomentGroup[] {
       })),
     ),
   );
-  const groups = new Map<string, MomentGroup>();
-  for (const context of [...rewatch, ...findings]) {
-    const { segment_id, start_ms, end_ms, quote } = context.evidence;
-    const key = JSON.stringify([segment_id, start_ms, end_ms, quote]);
-    const group = groups.get(key);
-    if (group) group.contexts.push(context);
-    else
-      groups.set(key, {
-        ...context,
-        contextId: context.id,
-        contexts: [context],
-      });
-  }
-  return [...groups.values()];
 }
 
-/** Exact excerpt count, not a score or a count of independent sales insights. */
+/** Same supplied dataset as the browser; repeated citations retain their contexts. */
 export function countReportMoments(report: SalesReport): number {
-  return suppliedMoments(report).length;
-}
-
-function RelatedObservations({ moment }: { moment: MomentGroup }) {
-  const related = moment.contexts.filter(
-    (context) => context.id !== moment.contextId,
-  );
-  if (!related.length) return null;
-  return (
-    <section aria-label="Other report observations for this excerpt">
-      {related.map((context) => (
-        <div key={context.id}>
-          <h4>
-            {sources[context.kind].label} · {context.title}
-            {context.purpose ? ` · ${purposes[context.purpose]}` : ""}
-          </h4>
-          {context.explanation && <p>{context.explanation}</p>}
-        </div>
-      ))}
-    </section>
-  );
+  return new Set(
+    suppliedMoments(report).map(
+      ({ evidence }) =>
+        `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`,
+    ),
+  ).size;
 }
 
 function timeRange(evidence: ReportEvidence) {
-  return `${formatTranscriptTime(evidence.start_ms)} – ${formatTranscriptTime(evidence.end_ms)}`;
+  const start = formatTranscriptTime(evidence.start_ms);
+  const end = formatTranscriptTime(evidence.end_ms);
+  const shortSpan = evidence.end_ms - evidence.start_ms < 1_000;
+  return shortSpan ? `${start}–${end} · under 1 sec` : `${start} – ${end}`;
 }
 
 function MomentIcon({ kind }: { kind: SourceKind }) {
@@ -237,22 +211,12 @@ function MomentsBrowser({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const kinds = [
-    ...new Set(
-      moments.flatMap((moment) =>
-        moment.contexts.map((context) => context.kind),
-      ),
-    ),
-  ];
+  const kinds = [...new Set(moments.map((moment) => moment.kind))];
   const activeFilter =
     filter === "all" || kinds.includes(filter) ? filter : "all";
-  const filtered = moments.flatMap((moment) => {
-    if (activeFilter === "all") return [moment];
-    const context = moment.contexts.find((item) => item.kind === activeFilter);
-    return context
-      ? [{ ...moment, ...context, id: moment.id, contextId: context.id }]
-      : [];
-  });
+  const filtered = moments.filter(
+    (moment) => activeFilter === "all" || moment.kind === activeFilter,
+  );
   const index = Math.max(
     0,
     filtered.findIndex((moment) => moment.id === selectedId),
@@ -422,9 +386,6 @@ function MomentsBrowser({
                   <h3 id={`${id}-title`}>{moment.title}</h3>
                   <span className={styles.time}>
                     {timeRange(moment.evidence)}
-                    {moment.contexts.length > 1
-                      ? ` · ${moment.contexts.length} linked observations`
-                      : ""}
                   </span>
                 </div>
               </div>
@@ -440,12 +401,7 @@ function MomentsBrowser({
                   </div>
                 )}
               </div>
-              <p
-                className={styles.provenance}
-                title={`Source: ${report.source_label}`}
-              >
-                Source: {report.source_label}
-              </p>
+              <p className={styles.provenance}>From this call</p>
               <div className={styles.actions}>
                 <button
                   type="button"
@@ -470,8 +426,9 @@ function MomentsBrowser({
             <FileText size={28} aria-hidden="true" />
             <h3>No source moments supplied</h3>
             <p>
-              No linked source excerpts were supplied for the report findings or
-              rewatch notes.
+              {report.overview
+                ? "No rewatch moments were selected for this report."
+                : "No linked source excerpts were supplied for the report findings."}
               {hasTranscript
                 ? " You can still search the full transcript."
                 : " A transcript has not been provided in this view."}
@@ -502,17 +459,7 @@ function MomentsBrowser({
                 <p>{moment.explanation}</p>
               </>
             )}
-            <RelatedObservations moment={moment} />
-            <dl className={styles.sourceDetails}>
-              <dt>Source</dt>
-              <dd>{report.source_label}</dd>
-              <dt>Transcript revision</dt>
-              <dd>{report.transcript_revision}</dd>
-              <dt>Source segment</dt>
-              <dd>{moment.evidence.segment_id}</dd>
-              <dt>Source fingerprint</dt>
-              <dd>{report.source_sha256}</dd>
-            </dl>
+            <p className={styles.provenance}>From this call</p>
             <button type="button" className={styles.listen} onClick={listen}>
               <Play size={17} aria-hidden="true" /> Listen to this excerpt
             </button>
@@ -532,11 +479,6 @@ function MomentsBrowser({
       {/* Independent of interactive filters/pages, so printing retains every supplied item. */}
       <div className={styles.print} data-moments-print>
         <h2>Source moments</h2>
-        <p>
-          Source: {report.source_label} · Transcript revision:{" "}
-          {report.transcript_revision}
-        </p>
-        <p>Source fingerprint: {report.source_sha256}</p>
         {!moments.length && <p>No source moments supplied.</p>}
         {moments.map((item, position) => (
           <article key={item.id}>
@@ -544,12 +486,9 @@ function MomentsBrowser({
               {position + 1}. {sources[item.kind].label}: {item.title}
             </h3>
             {item.purpose && <p>{purposes[item.purpose]}</p>}
-            <p>
-              {timeRange(item.evidence)} · Segment: {item.evidence.segment_id}
-            </p>
+            <p>{timeRange(item.evidence)} · From this call</p>
             <blockquote>{item.evidence.quote}</blockquote>
             {item.explanation && <p>{item.explanation}</p>}
-            <RelatedObservations moment={item} />
             <button
               type="button"
               className={styles.readingListen}

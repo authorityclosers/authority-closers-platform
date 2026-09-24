@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { useReportReading } from "./report-reading-context";
 
 /** Keep full source quotations available without crowding the finding itself. */
 export function FindingEvidence({
@@ -10,7 +11,11 @@ export function FindingEvidence({
   count: number;
   children: ReactNode;
 }) {
+  const reading = useReportReading();
   const details = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (details.current) details.current.open = reading;
+  }, [reading]);
   useEffect(() => {
     let previous: boolean | null = null;
     const beforePrint = () => {

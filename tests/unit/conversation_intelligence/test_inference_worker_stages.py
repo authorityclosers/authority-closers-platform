@@ -19,6 +19,8 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 from ac_platform.conversation_intelligence.inference_worker import (
     ConversationInferenceWorker,
     Scope,
+    _provider_returned_receipt,
+    _safe_receipt_usage,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
@@ -28,6 +30,27 @@ from ac_platform.conversation_intelligence.storage import (
     ObjectKind,
     PrivateLocalRecordingStorage,
 )
+
+
+@pytest.mark.parametrize("reported", ["gpt-6-luna", "gpt-6-sol", None, "unsafe model text"])
+def test_openai_returned_receipt_distinguishes_requested_and_reported_model(reported) -> None:
+    result = _result(
+        {"model": reported},
+        provider="openai",
+        model="gpt-6-luna",
+        input_sha256="a" * 64,
+    )
+    receipt = _provider_returned_receipt(
+        result, idempotency_key="synthetic-key", run_id=uuid4(), stage="C5"
+    )
+    assert receipt["model"] == "gpt-6-luna"
+    assert receipt["reported_model"] == (
+        reported if reported in {"gpt-6-luna", "gpt-6-sol"} else None
+    )
+    assert receipt["model_verified"] is (reported == "gpt-6-luna")
+    assert receipt["validation_state"] == "provider_returned"
+    assert receipt["actual_cost_paise"] is None
+    assert receipt["response_sha256"] == hashlib.sha256(result.raw_json).hexdigest()
 
 
 def _transcript() -> dict[str, Any]:
@@ -92,6 +115,27 @@ def _scope(
             plan=plan,
         ),
     )
+
+
+def test_openai_usage_receipt_preserves_cache_and_reasoning_breakdown() -> None:
+    assert _safe_receipt_usage(
+        {
+            "input_tokens": 100,
+            "output_tokens": 30,
+            "total_tokens": 130,
+            "cached_tokens": 20,
+            "cache_write_tokens": 10,
+            "reasoning_tokens": 5,
+            "unrecognized": 999,
+        }
+    ) == {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130,
+        "cached_tokens": 20,
+        "cache_write_tokens": 10,
+        "reasoning_tokens": 5,
+    }
 
 
 def test_text_stages_send_prepared_bytes_without_reading_audio() -> None:

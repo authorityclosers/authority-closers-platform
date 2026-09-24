@@ -19,6 +19,7 @@ export function CallAudioDock({
   durationMs,
   title = "Your saved sales call",
   embedded = false,
+  onPlay,
   onTimeUpdate,
   onSeek,
   onError,
@@ -28,6 +29,8 @@ export function CallAudioDock({
   durationMs: number;
   title?: string;
   embedded?: boolean;
+  /** Called only when the full-player Play control starts the recording. */
+  onPlay?: () => void;
   onTimeUpdate?: () => void;
   onSeek?: () => void;
   onError?: () => void;
@@ -49,6 +52,7 @@ export function CallAudioDock({
       return;
     }
     try {
+      onPlay?.();
       await player.play();
       setMessage("");
     } catch {

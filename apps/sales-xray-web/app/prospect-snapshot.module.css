@@ -8,6 +8,8 @@
   --violet-soft: #f6f3ff;
   --canvas: #f7f9fa;
   display: grid;
+  container-type: inline-size;
+  container-name: prospect-snapshot;
   gap: 16px;
   min-width: 0;
   color: var(--ink);
@@ -483,5 +485,37 @@
   .unlock {
     scroll-behavior: auto;
     transition: none;
+  }
+}
+
+@container prospect-snapshot (max-width: 660px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+}
+
+@container prospect-snapshot (max-width: 520px) {
+  .header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .headerIcon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .locked {
+    flex-wrap: wrap;
+  }
+
+  .lockCopy {
+    flex-basis: calc(100% - 54px);
+  }
+
+  .unlock {
+    width: 100%;
   }
 }

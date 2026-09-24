@@ -69,6 +69,9 @@ _PROVIDER_USAGE_KEYS = frozenset(
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
     }
 )
 
@@ -177,6 +180,15 @@ def _provider_stage_view(
         safe_usage,
         duration_ms=duration_ms if task.stage == "C2" else None,
     )
+    if safe_provider == "openai" and (
+        receipt.get("model_verified") is not True or receipt.get("reported_model") != safe_model
+    ):
+        usage_estimate = {
+            "paise": None,
+            "state": "usage_unavailable",
+            "basis": "provider_model_unverified",
+            "pricing_snapshot": None,
+        }
     return {
         "stage": task.stage,
         "run_id": str(task.run_id),

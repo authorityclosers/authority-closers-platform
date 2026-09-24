@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_V5,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_COMPACT_MARKER,
     FactPacket,
@@ -62,6 +63,7 @@ def _result(
     provider: str,
     model: str,
     input_sha256: str,
+    usage: dict[str, int] | None = None,
 ) -> ProviderResult:
     raw = canonical(data)
     return ProviderResult(
@@ -71,7 +73,7 @@ def _result(
         response_sha256=hashlib.sha256(raw).hexdigest(),
         raw_json=raw,
         data=data,
-        usage={"total_tokens": 12},
+        usage={"total_tokens": 12} if usage is None else usage,
         input_sha256=input_sha256,
     )
 
@@ -447,6 +449,43 @@ def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() 
     )
     facts = validate_fact_result(fact_result, fact_input, transcript)
     profile = load_report_profile()
+    from ac_platform.conversation_intelligence.qualitative_pack import (
+        load_qualitative_pack_for_revision,
+    )
+
+    openai_pack = load_qualitative_pack_for_revision(COACHING_PROMPT_V5)
+    openai_coaching = prepare_coaching_input(
+        transcript,
+        [facts_to_packet(facts)],
+        provider="openai",
+        profile=profile,
+        model="gpt-6-luna",
+        max_completion_tokens=8_000,
+        coaching_prompt_revision=COACHING_PROMPT_V5,
+        report_language="en",
+        qualitative_pack_sha256=openai_pack.sha256,
+        reasoning_effort="low",
+    )
+    openai_body = openai_coaching.as_provider_body()
+    assert openai_coaching.payload_kind == "openai_json"
+    assert openai_body["store"] is False
+    assert openai_body["reasoning"] == {"effort": "low"}
+    assert openai_body["max_output_tokens"] == 8_000
+    assert openai_body["model"] == "gpt-6-luna"
+    assert transcript["source_sha256"] in openai_body["input"]
+    medium = prepare_coaching_input(
+        transcript,
+        [facts_to_packet(facts)],
+        provider="openai",
+        profile=profile,
+        model="gpt-6-luna",
+        max_completion_tokens=8_000,
+        coaching_prompt_revision=COACHING_PROMPT_V5,
+        report_language="en",
+        qualitative_pack_sha256=openai_pack.sha256,
+        reasoning_effort="medium",
+    )
+    assert openai_coaching.input_sha256 != medium.input_sha256
     coaching = prepare_coaching_input(
         transcript,
         [facts_to_packet(facts)],
@@ -459,6 +498,9 @@ def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() 
     assert coaching.transcript_revision == transcript["revision"]
     assert coaching.input_sha256 == coaching.payload_sha256
     assert "Do not score" in coaching.payload.decode()
+
+    with pytest.raises(InferenceTaskError, match="openai_task_model_not_supported"):
+        prepare_fact_inputs(transcript, provider="openai", model="gpt-6-luna")
 
     payload: dict[str, Any] = {
         "summary": "Qualitative draft.",
@@ -497,6 +539,56 @@ def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() 
     assert normalized.profile_revision == profile["revision"]
     assert normalized.data()["source_sha256"] == transcript["source_sha256"]
     assert normalized.data()["review_status"] == "draft_not_dipak_adjudicated"
+
+    openai_payload = {key: value for key, value in payload.items() if key != "source_label"}
+    openai_payload["dimensions"] = [
+        {
+            "dimension_id": item["id"],
+            "status": "insufficient_evidence",
+            "observation": "The supplied source does not establish this dimension.",
+            "evidence": [],
+        }
+        for item in profile["dimensions"]
+    ]
+    openai_response = {
+        "object": "response",
+        "model": openai_coaching.model,
+        "status": "completed",
+        "incomplete_details": None,
+        "error": None,
+        "store": False,
+        "service_tier": "default",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(openai_payload, ensure_ascii=False),
+                    }
+                ],
+            }
+        ],
+    }
+    openai_result = _result(
+        openai_response,
+        provider="openai",
+        model=openai_coaching.model,
+        input_sha256=openai_coaching.input_sha256,
+        usage={},
+    )
+    openai_normalized = validate_coaching_result(
+        openai_result,
+        openai_coaching,
+        transcript,
+        profile=profile,
+    )
+    assert openai_normalized.source_sha256 == transcript["source_sha256"]
+    assert openai_normalized.data()["review_status"] == "draft_not_dipak_adjudicated"
+    assert openai_normalized.usage == ()
+    assert openai_normalized.raw_json == openai_result.raw_json
 
     bad = deepcopy(payload)
     bad["score"] = 4

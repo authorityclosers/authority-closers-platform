@@ -103,6 +103,9 @@ _RECEIPT_USAGE_KEYS = frozenset(
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
     }
 )
 
@@ -153,6 +156,16 @@ def _is_provisional_receipt(value: Any) -> bool:
     return isinstance(value, Mapping) and value.get("validation_state") == "provider_returned"
 
 
+def _response_model_receipt(result: ProviderResult) -> dict[str, Any]:
+    if result.provider != "openai":
+        return {}
+    reported = _safe_receipt_identifier(result.data.get("model"))
+    return {
+        "reported_model": reported,
+        "model_verified": reported is not None and reported == result.model,
+    }
+
+
 def _provider_returned_receipt(
     result: ProviderResult,
     *,
@@ -167,6 +180,7 @@ def _provider_returned_receipt(
         "idempotency_key": idempotency_key,
         "provider": _safe_receipt_identifier(result.provider),
         "model": _safe_receipt_identifier(result.model),
+        **_response_model_receipt(result),
         "input_sha256": _safe_receipt_digest(result.input_sha256),
         "response_sha256": _safe_receipt_digest(result.response_sha256),
         "provider_request_id": _safe_receipt_request_id(result.request_id),
@@ -205,6 +219,14 @@ _VALIDATION_FAILURES = frozenset(
         "gemini_response_blocked",
         "gemini_response_incomplete",
         "gemini_response_json_invalid",
+        "openai_response_incomplete",
+        "openai_response_model_mismatch",
+        "openai_response_incomplete_or_stored",
+        "openai_response_invalid",
+        "openai_response_json_invalid",
+        "openai_response_refused",
+        "openai_response_tool_or_message_invalid",
+        "openai_response_empty_or_oversized",
     }
 )
 
@@ -682,6 +704,7 @@ class ConversationInferenceWorker:
                     "idempotency_key": key,
                     "provider": result.provider,
                     "model": result.model,
+                    **_response_model_receipt(result),
                     "input_sha256": result.input_sha256,
                     "response_sha256": result.response_sha256,
                     "provider_request_id": output.request_id,

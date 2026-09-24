@@ -1,6 +1,8 @@
 .plan {
   display: grid;
   min-width: 0;
+  container-type: inline-size;
+  container-name: next-call-plan;
   gap: 14px;
   color: #10243d;
   font-family: var(--report-font);
@@ -96,7 +98,7 @@
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 14px;
 }
 .plan .card {
@@ -524,6 +526,11 @@
   height: auto;
   max-height: none;
   min-height: 0;
+  padding-inline: 0;
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  border-radius: 0;
+  background: transparent;
 }
 .plan[data-reading="true"] .card:not([data-active="true"]) {
   display: block;
@@ -552,6 +559,47 @@
   overflow: visible;
   -webkit-line-clamp: unset;
   white-space: pre-wrap;
+}
+
+.plan[data-reading="true"] .outcome,
+.plan[data-reading="true"] .source {
+  border-inline: 0;
+  border-top: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.plan[data-reading="true"] .source {
+  padding-inline: 0;
+}
+
+@container next-call-plan (max-width: 520px) {
+  .header {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .header p {
+    overflow-wrap: anywhere;
+  }
+
+  .header small {
+    display: none;
+  }
+
+  .outcome {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .outcomeSources {
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  .source {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .plan[data-reading="true"] .fullSource blockquote {
   margin: 12px 0 0;

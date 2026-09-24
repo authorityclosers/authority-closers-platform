@@ -733,6 +733,7 @@ def test_compose_for_clears_all_sales_xray_identity_overrides() -> None:
         "AC_XRAY_DEEPGRAM_IDENTITY_DIR",
         "AC_XRAY_GROQ_IDENTITY_DIR",
         "AC_XRAY_GEMINI_IDENTITY_DIR",
+        "AC_XRAY_OPENAI_IDENTITY_DIR",
     ):
         assert f"-u {identity_dir}" in compose_for
 

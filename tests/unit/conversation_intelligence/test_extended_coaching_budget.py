@@ -76,10 +76,10 @@ def test_other_stages_and_models_cannot_use_extended_output(kind, route):
         kind.model_validate({**data, **route})
 
 
-def test_allocation_preserves_old_plan_and_only_expands_explicit_flash_approval():
+def test_allocation_preserves_every_route_bounded_approved_cap():
     assert stage_completion_limit("C5", 8000, provider="gemini", model="gemini-3.8-flash") == 8000
     assert stage_completion_limit("C5", 3200, provider="gemini", model="gemini-3.8-flash") == 3200
-    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 3200
+    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 4000
     with pytest.raises(ValueError):
         stage_completion_limit("C5", 8000)
     with pytest.raises(ValueError):
@@ -156,6 +156,30 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction(f
         original_body["messages"][0]["content"].split("Profile:\n", 1)[1]
     )
     assert repaired.input_sha256 != original.input_sha256
+
+
+def test_openai_stage_request_is_c5_only_and_disallows_paid_repair():
+    base = dict(
+        transcript_checkpoint_id=uuid4(),
+        fact_checkpoint_ids=(uuid4(),),
+        provider="openai",
+        model="gpt-6-luna",
+        max_completion_tokens=1800,
+    )
+    assert StageRequest(stage="C5", **base).provider == "openai"
+    with pytest.raises(ValidationError):
+        StageRequest(
+            stage="C4",
+            fact_checkpoint_ids=(),
+            **{key: value for key, value in base.items() if key != "fact_checkpoint_ids"},
+        )
+    repair = C5RepairIntent(
+        failure_code="conversation_report_overview_invalid",
+        original_run_id=uuid4(),
+        original_response_sha256="a" * 64,
+    )
+    with pytest.raises(ValidationError):
+        StageRequest(stage="C5", **base, repair=repair)
 
 
 @pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 96000)])

@@ -668,6 +668,7 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
         challenge_id = uuid4()
         generation_id = uuid4()
         code = "042731"
+        pending_password_hash = hash_password("synthetic pending password phrase")
         with Session(postgres_harness.engine) as database, database.begin():
             database.add_all(
                 [
@@ -679,7 +680,7 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
                     ),
                     PasswordCredential(
                         person_id=pending_person_id,
-                        password_hash=hash_password("synthetic pending password phrase"),
+                        password_hash=pending_password_hash,
                     ),
                     Person(
                         id=verified_person_id,
@@ -728,6 +729,12 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
                 )
                 is None
             )
+            credential_before = database.scalar(
+                select(PasswordCredential).where(PasswordCredential.person_id == pending_person_id)
+            )
+            assert credential_before is not None
+            assert credential_before.password_hash == pending_password_hash
+            pending_credential_id = credential_before.id
 
         async with sessions() as database, database.begin():
             denied = await EmailLoginCodeService(
@@ -747,14 +754,10 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
             assert pending_person.email_verified_at is None
             assert pending_person.consent_version == "email-age-consent-v1"
             assert pending_person.consented_at == previous_consent_time
-            assert (
-                database.scalar(
-                    select(PasswordCredential).where(
-                        PasswordCredential.person_id == pending_person_id
-                    )
-                )
-                is not None
-            )
+            credential_after = database.get(PasswordCredential, pending_credential_id)
+            assert credential_after is not None
+            assert credential_after.person_id == pending_person_id
+            assert credential_after.password_hash == pending_password_hash
             legacy_challenge = database.get(EmailLoginCode, challenge_id)
             assert legacy_challenge is not None
             assert legacy_challenge.age_attested is False
@@ -794,8 +797,8 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
             assert signed_in.person.id == verified_person_id
             assert signed_in.learner_provisioning_required is False
             assert signed_in.consent_audit_required is False
-            assert signed_in.previous_consent_version == "email-age-consent-v1"
-            assert signed_in.previous_consented_at == previous_consent_time
+            assert signed_in.previous_consent_version is None
+            assert signed_in.previous_consented_at is None
 
         with Session(postgres_harness.engine) as database:
             verified_person = database.get(Person, verified_person_id)
@@ -1028,8 +1031,8 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                     == previous_consent_version
                 )
                 assert (
-                    datetime.fromisoformat(consent_history[1].payload["previous_consented_at"])
-                    == previous_consent_time
+                    consent_history[1].payload["previous_consented_at"]
+                    == previous_consent_time.isoformat()
                 )
                 assert consent_history[1].payload["accepted_via"] == "email_otp"
                 assert consent_history[1].payload["age_attestation"] == (

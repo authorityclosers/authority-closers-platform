@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -19,13 +20,34 @@ import httpx
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES as MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.openai_tasks import (
+    OPENAI_TASK_MODELS,
+    OpenAITaskError,
+    openai_prompt_view,
+)
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    MAX_ERROR_RESPONSE_BODY_BYTES,
+    MAX_RETRY_AFTER_SECONDS,
+    ProviderFailureObservation,
+)
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_STREAM_SECONDS = 180
+_PROVIDER_REQUEST_ID = re.compile(r"^[!-~]{1,128}$", re.ASCII)
+_RETRY_AFTER_SECONDS = re.compile(r"^[0-9]{1,5}$", re.ASCII)
 
 
 class ProviderError(ValueError):
-    """Stable failure code only: remote errors may contain source text or secrets."""
+    """Stable failure code and optional sanitized observation; never remote text."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        failure_observation: ProviderFailureObservation | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.failure_observation = failure_observation
 
     diagnostic: str | None = None
     diagnostic_markers: tuple[str, ...] = ()
@@ -41,6 +63,25 @@ class ProviderResult:
     data: dict[str, Any] = field(repr=False)
     usage: dict[str, int] = field(default_factory=dict)
     input_sha256: str = ""
+
+
+def _provider_request_id_sha256(headers: httpx.Headers) -> str | None:
+    values = [
+        value
+        for name in ("request-id", "x-request-id", "dg-request-id", "x-dg-request-id")
+        for value in headers.get_list(name)
+    ]
+    if len(values) != 1 or _PROVIDER_REQUEST_ID.fullmatch(values[0]) is None:
+        return None
+    return hashlib.sha256(values[0].encode("ascii")).hexdigest()
+
+
+def _safe_retry_after(headers: httpx.Headers) -> int | None:
+    value = headers.get("retry-after")
+    if value is None or _RETRY_AFTER_SECONDS.fullmatch(value) is None:
+        return None
+    seconds = int(value)
+    return seconds if seconds <= MAX_RETRY_AFTER_SECONDS else None
 
 
 class BoundedProviders:
@@ -82,6 +123,7 @@ class BoundedProviders:
         model: str,
         url: str,
         *,
+        reservation: Reservation,
         headers: dict[str, str],
         json_body: dict[str, Any] | None = None,
         audio: bytes | None = None,
@@ -120,20 +162,36 @@ class BoundedProviders:
                     ),
                 ) as response,
             ):
-                if self._monotonic() > deadline:
+                response_arrived_late = self._monotonic() > deadline
+                if response_arrived_late and response.status_code == 200:
                     raise ProviderError("provider_execution_deadline")
                 if response.status_code != 200:
-                    failure = ProviderError(f"provider_http_{response.status_code}")
+                    status_code = response.status_code
+                    failure = ProviderError(f"provider_http_{status_code}")
                     # Classify a bounded error without retaining or surfacing its
                     # free text: authentication errors can echo credential values.
                     raw_error = bytearray()
-                    for block in response.iter_bytes(4096):
-                        if self._monotonic() > deadline:
-                            raise ProviderError("provider_execution_deadline")
-                        raw_error.extend(block)
-                        if len(raw_error) > 16384:
-                            break
-                    lowered = bytes(raw_error[:16384]).lower()
+                    response_body_complete = not response_arrived_late
+                    if response_arrived_late:
+                        response_body_complete = False
+                    else:
+                        try:
+                            for block in response.iter_bytes(4096):
+                                if self._monotonic() > deadline:
+                                    response_body_complete = False
+                                    break
+                                remaining = MAX_ERROR_RESPONSE_BODY_BYTES + 1 - len(raw_error)
+                                raw_error.extend(block[:remaining])
+                                if len(raw_error) > MAX_ERROR_RESPONSE_BODY_BYTES:
+                                    response_body_complete = False
+                                    break
+                        except Exception:
+                            # The status line is still a direct provider observation;
+                            # a body-stream error only makes body completeness unknown.
+                            response_body_complete = False
+                    if len(raw_error) > MAX_ERROR_RESPONSE_BODY_BYTES:
+                        del raw_error[MAX_ERROR_RESPONSE_BODY_BYTES:]
+                    lowered = bytes(raw_error).lower()
                     # Emit only fixed vocabulary, never remote text. This keeps
                     # otherwise generic schema rejections diagnosable without
                     # retaining a provider message that could echo a secret.
@@ -206,6 +264,28 @@ class BoundedProviders:
                         if needle in lowered:
                             failure.diagnostic = category
                             break
+                    response_body_sha256 = (
+                        hashlib.sha256(raw_error).hexdigest() if response_body_complete else None
+                    )
+                    if not reservation.attempt_id:
+                        raise ProviderError("provider_dispatch_not_authorized")
+                    observation = ProviderFailureObservation(
+                        reservation_id=reservation.reservation_id,
+                        attempt_id=reservation.attempt_id,
+                        quote_fingerprint=reservation.quote.fingerprint,
+                        provider=provider,
+                        model=model,
+                        operation=reservation.quote.operation,
+                        input_sha256=input_sha256,
+                        http_status=status_code,
+                        response_body_complete=response_body_complete,
+                        response_body_observed_bytes=len(raw_error),
+                        response_body_sha256=response_body_sha256,
+                        provider_request_id_sha256=_provider_request_id_sha256(response.headers),
+                        retry_after_seconds=_safe_retry_after(response.headers),
+                        diagnostic_category=failure.diagnostic,
+                    )
+                    failure.failure_observation = observation
                     raise failure
                 raw = bytearray()
                 for block in response.iter_bytes(65536):
@@ -236,7 +316,9 @@ class BoundedProviders:
                     request_id = None
                 usage: dict[str, int] = {}
                 native_usage = payload.get("usageMetadata", payload.get("usage", {}))
-                if isinstance(native_usage, dict):
+                if provider == "openai":
+                    usage = _openai_usage(native_usage)
+                elif isinstance(native_usage, dict):
                     for key in (
                         "promptTokenCount",
                         "candidatesTokenCount",
@@ -277,6 +359,7 @@ class BoundedProviders:
                 provider,
                 model,
                 "https://api.elevenlabs.io/v1/speech-to-text",
+                reservation=reservation,
                 headers={"xi-api-key": self._credentials[provider]},
                 audio=audio,
                 input_sha256=reservation.quote.input_sha256,
@@ -287,6 +370,7 @@ class BoundedProviders:
                 provider,
                 model,
                 "https://api.deepgram.com/v1/listen",
+                reservation=reservation,
                 headers={
                     "Authorization": "Token " + self._credentials[provider],
                     "Content-Type": "application/octet-stream",
@@ -333,6 +417,16 @@ class BoundedProviders:
                 raise ProviderError("provider_output_budget_required")
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": "Bearer " + self._credentials.get("groq", "")}
+        elif provider == "openai" and model in OPENAI_TASK_MODELS:
+            maximum = body.get("max_output_tokens")
+            if type(maximum) is not int or not 256 <= maximum <= 8_000:
+                raise ProviderError("provider_output_budget_required")
+            try:
+                openai_prompt_view(body, model=model, maximum=maximum, task="coaching")
+            except OpenAITaskError:
+                raise ProviderError("provider_payload_invalid") from None
+            url = "https://api.openai.com/v1/responses"
+            headers = {"Authorization": "Bearer " + self._credentials.get("openai", "")}
         else:
             raise ProviderError("provider_model_not_supported")
         self._admit(reservation, provider, "extract_context_evidence", encoded)
@@ -340,10 +434,48 @@ class BoundedProviders:
             provider,
             model,
             url,
+            reservation=reservation,
             headers=headers,
             json_body=body,
             input_sha256=reservation.quote.input_sha256,
         )
+
+
+def _openai_usage(value: object) -> dict[str, int]:
+    """Preserve complete typed usage, otherwise mark usage unknown without losing raw receipt."""
+
+    if not isinstance(value, dict):
+        return {}
+    input_details = value.get("input_tokens_details")
+    output_details = value.get("output_tokens_details")
+    counters = {
+        "input_tokens": value.get("input_tokens"),
+        "output_tokens": value.get("output_tokens"),
+        "total_tokens": value.get("total_tokens"),
+        "cached_tokens": input_details.get("cached_tokens")
+        if isinstance(input_details, dict)
+        else None,
+        "cache_write_tokens": (
+            input_details.get("cache_write_tokens") if isinstance(input_details, dict) else None
+        ),
+        "reasoning_tokens": (
+            output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
+        ),
+    }
+    validated: dict[str, int] = {}
+    for key, counter in counters.items():
+        if type(counter) is not int or not 0 <= counter <= 1_000_000_000:
+            return {}
+        validated[key] = counter
+    input_tokens = validated["input_tokens"]
+    output_tokens = validated["output_tokens"]
+    if (
+        validated["total_tokens"] != input_tokens + output_tokens
+        or validated["cached_tokens"] + validated["cache_write_tokens"] > input_tokens
+        or validated["reasoning_tokens"] > output_tokens
+    ):
+        return {}
+    return validated
 
 
 def scribe_transcript(
