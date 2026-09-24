@@ -230,13 +230,74 @@ it("focuses missing details and never sends an invalid phone number", async () =
   await changeInput("full_name", "Morgan Lee");
   await submit();
   expect(document.activeElement).toBe(
-    host.querySelector('select[name="phone_country"]'),
+    host.querySelector('input[name="phone_number_e164"]'),
   );
   await changeCountry("US");
   await changeInput("phone_number_e164", "415 555 0123");
   await submit();
   expect(document.activeElement).toBe(
     host.querySelector('input[name="phone_number_e164"]'),
+  );
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("saves a 10-digit Indian mobile as canonical E.164 under the default +91 choice", async () => {
+  const requests: Array<{ path: string; init: RequestInit }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string, init: RequestInit) => {
+      requests.push({ path, init });
+      if (path === ACCOUNT_PROFILE_ELIGIBILITY_PATH)
+        return new Response(null, { status: 403 });
+      if (init.method === "PUT") return new Response(null, { status: 204 });
+      return json(baseProfile);
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <AccountProfile selectedFile={selectedFile} onEligible={vi.fn()} />,
+    ),
+  );
+  await flush();
+  expect(
+    host.querySelector<HTMLSelectElement>('select[name="phone_country"]')
+      ?.value,
+  ).toBe("IN");
+  await changeInput("full_name", "Morgan Lee");
+  await changeInput("phone_number_e164", "9876543210");
+  await submit();
+  const put = requests.find((request) => request.init.method === "PUT")!;
+  expect(JSON.parse(String(put.init.body))).toEqual({
+    full_name: "Morgan Lee",
+    phone_number_e164: "+919876543210",
+    expected_revision: 0,
+  });
+});
+
+it("requires an explicit country choice for a previously stored non-Indian number", async () => {
+  const fetcher = vi.fn(async (path: string) =>
+    path === ACCOUNT_PROFILE_PATH
+      ? json({
+          ...baseProfile,
+          name: "Morgan Lee",
+          phone_number_e164: "+14155550123",
+        })
+      : new Response(null, { status: 403 }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () =>
+    root.render(
+      <AccountProfile selectedFile={selectedFile} onEligible={vi.fn()} />,
+    ),
+  );
+  await flush();
+  expect(
+    host.querySelector<HTMLSelectElement>('select[name="phone_country"]')
+      ?.value,
+  ).toBe("");
+  await submit();
+  expect(document.activeElement).toBe(
+    host.querySelector('select[name="phone_country"]'),
   );
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
