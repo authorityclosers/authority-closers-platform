@@ -1,15 +1,15 @@
 .root {
   min-width: 0;
+  container-type: inline-size;
+  container-name: report-moments;
   color: #132a42;
   font-family: inherit;
 }
 
 .screen {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
   gap: 12px;
-  /* The shell, section tabs and audio dock own the remaining viewport space. */
-  height: min(600px, calc(100dvh - var(--report-moments-chrome, 320px)));
   min-height: 0;
 }
 
@@ -83,15 +83,14 @@
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(230px, 0.85fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.25fr);
   gap: 14px;
-  min-height: 0;
+  min-width: 0;
 }
 
 .listPanel,
 .detail {
   min-width: 0;
-  min-height: 0;
   border: 1px solid #dfe7ef;
   border-radius: 14px;
   background: #fff;
@@ -99,7 +98,7 @@
 
 .listPanel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   gap: 10px;
   padding: 14px;
 }
@@ -129,12 +128,11 @@
 }
 
 .list {
-  min-height: 0;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
 }
 
 .list li + li {
@@ -272,12 +270,9 @@
 }
 
 .momentHeading h3 {
-  display: -webkit-box;
   margin: 0 0 6px;
-  overflow: hidden;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  hyphens: auto;
   color: #132a42;
   font-size: clamp(18px, 1.8vw, 25px);
   font-weight: 750;
@@ -293,8 +288,8 @@
 }
 
 .preview {
-  min-height: 0;
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
 }
 
 .detail .quote {
@@ -316,12 +311,9 @@
 }
 .root .quote p,
 .root .observation p {
-  display: -webkit-box;
   margin: 0;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  overflow: hidden;
   overflow-wrap: anywhere;
+  hyphens: auto;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -339,16 +331,12 @@
 .root .observation p {
   color: #596f88;
   font-size: 13px;
-  -webkit-line-clamp: 3;
 }
 .root .provenance {
-  overflow: hidden;
   margin: 0;
   color: #61748b;
   font-size: 11px;
   line-height: 1.4;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 .actions {
   display: flex;
@@ -500,11 +488,13 @@
 .root[data-reading="true"] .print {
   display: block;
   height: auto;
+  min-width: 0;
   color: #132a42;
 }
 
 .root[data-reading="true"] .print article {
   margin: 20px 0;
+  min-width: 0;
   padding: 0 0 20px;
   border-bottom: 1px solid #dfe7ef;
   break-inside: avoid;
@@ -540,13 +530,37 @@
 .root[data-reading="true"] .print h3,
 .root[data-reading="true"] .print p,
 .root[data-reading="true"] .print blockquote {
+  max-width: 100%;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
+.root[data-reading="true"] .print h3 {
+  margin: 0 0 6px;
+  color: #14213c;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.root[data-reading="true"] .print p {
+  margin-block: 7px;
+  color: #536783;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.root[data-reading="true"] .print blockquote {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border-left: 3px solid #b9ddd5;
+  background: #f5faf9;
+  color: #243d55;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
 @media (max-width: 760px) {
   .screen {
-    --report-moments-chrome: 340px;
     gap: 8px;
   }
   .toolbarTitle {
@@ -572,7 +586,6 @@
     display: none;
   }
   .root .detail {
-    height: 100%;
     box-sizing: border-box;
     padding: 12px;
     gap: 8px;
@@ -596,7 +609,6 @@
   }
   .root .quote p {
     font-size: 13px;
-    -webkit-line-clamp: 3;
   }
   .quote > svg {
     width: 17px;
@@ -611,7 +623,6 @@
   }
   .root .observation p {
     font-size: 12px;
-    -webkit-line-clamp: 2;
   }
   .actions {
     gap: 8px;
@@ -642,6 +653,28 @@
   }
   .sourceDetails dd {
     margin-bottom: 8px;
+  }
+}
+
+@container report-moments (max-width: 700px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container report-moments (max-width: 480px) {
+  .toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .toolbarTitle {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .root .detail {
+    padding: 14px;
   }
 }
 

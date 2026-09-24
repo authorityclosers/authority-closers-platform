@@ -21,7 +21,7 @@ import { REPORT_NAVIGATION_COPY } from "./report-navigation-copy";
 import { DipakOverview } from "./dipak-overview";
 import { FindingEvidence } from "./finding-evidence";
 import { ReportFactors } from "./report-factors";
-import { ReportTranscript } from "./report-transcript";
+import { formatTranscriptTime, ReportTranscript } from "./report-transcript";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
 import { parseReportLanguage } from "./report-language";
@@ -58,6 +58,11 @@ const time = (ms: number) =>
     .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
     .toString()
     .padStart(2, "0")}`;
+
+const evidenceTime = (startMs: number, endMs: number) => {
+  const range = `${formatTranscriptTime(startMs)}–${formatTranscriptTime(endMs)}`;
+  return endMs - startMs < 1_000 ? `${range} · under 1 sec` : range;
+};
 type ProcessingPlanStage = {
   stage: "C2" | "C4" | "C5";
   provider: string;
@@ -1232,9 +1237,9 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       }
                     >
                       <Play size={12} aria-hidden="true" />
-                      {time(e.start_ms)}–{time(e.end_ms)}
+                      {evidenceTime(e.start_ms, e.end_ms)}
                     </button>{" "}
-                    <small>{e.segment_id}</small> “{e.quote}”
+                    “{e.quote}”
                   </blockquote>
                 ))}
               </FindingEvidence>
@@ -1877,7 +1882,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                             >
                               <span className="studio-moment-time">
                                 <Play size={12} aria-hidden="true" />
-                                {time(moment.start_ms)}–{time(moment.end_ms)}
+                                {evidenceTime(moment.start_ms, moment.end_ms)}
                               </span>
                               <span className="studio-moment-copy">
                                 <strong>{moment.findingTitle}</strong>

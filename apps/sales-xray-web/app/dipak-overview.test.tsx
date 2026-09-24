@@ -107,7 +107,9 @@ it("keeps compact cards tied to the full source reader without showing an entire
   const dashboard = container.querySelector(
     'section[aria-label="Call overview"]',
   )!;
-  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(6);
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+  expect(dashboard.querySelector('[aria-label="Overview pages"]')).toBeNull();
+  expect(dashboard.querySelector('[aria-label="Overview cards"]')).toBeNull();
   const opener = dashboard.querySelector<HTMLButtonElement>(
     '[aria-label="Open review: Key takeaway"]',
   )!;
@@ -131,7 +133,7 @@ it("keeps compact cards tied to the full source reader without showing an entire
   expect(document.activeElement).toBe(opener);
 });
 
-it("keeps all actual review points reachable through compact pagination and next/previous", async () => {
+it("keeps the compact overview focused on five useful actions without a review pager", async () => {
   await act(async () =>
     root.render(
       <DipakOverview
@@ -144,34 +146,10 @@ it("keeps all actual review points reachable through compact pagination and next
   const dashboard = container.querySelector(
     'section[aria-label="Call overview"]',
   )!;
-  const nextPage = dashboard.querySelector<HTMLButtonElement>(
-    '[aria-label="Next review points"]',
-  )!;
-  const seen: string[] = [];
-  do {
-    for (const item of dashboard.querySelectorAll(
-      "li:not([hidden]) [data-insight-number]",
-    ))
-      seen.push(item.getAttribute("data-insight-number")!);
-    if (nextPage.disabled) break;
-    await act(async () => nextPage.click());
-  } while (true);
-  expect(seen).toEqual([
-    "01",
-    "02",
-    "03",
-    "04",
-    "05",
-    "06",
-    "07",
-    "08",
-    "09",
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-  ]);
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+  expect(
+    dashboard.querySelector('[aria-label="Review point pages"]'),
+  ).toBeNull();
   await act(async () =>
     dashboard
       .querySelector<HTMLButtonElement>(
@@ -179,22 +157,34 @@ it("keeps all actual review points reachable through compact pagination and next
       )!
       .click(),
   );
-  for (let index = 0; index < seen.length; index++) {
-    expect(
-      container
-        .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
-        ?.getAttribute("data-review-point"),
-    ).toBe(seen[index]);
-    if (index < seen.length - 1)
-      await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>("[data-review-next]")!
-          .click(),
-      );
-  }
   expect(
-    container.querySelector<HTMLButtonElement>("[data-review-next]")!.disabled,
-  ).toBe(true);
+    container
+      .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
+      ?.getAttribute("data-review-point"),
+  ).toBe("01");
+});
+
+it("shows one overview metrics row with a deduplicated playable highlight count", async () => {
+  const value = report();
+  value.strengths[0].evidence[0] = value.improvements[0].evidence[0];
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+
+  expect(container.querySelectorAll('[aria-label="Call metrics"]')).toHaveLength(
+    1,
+  );
+  const dashboardMetrics = container.querySelector(
+    'section[aria-label="Call overview"] [aria-label="Call metrics"]',
+  );
+  expect(dashboardMetrics?.textContent).toContain("Highlights5");
+  expect(container.textContent).not.toContain("Source moments");
 });
 
 it("plays only the exact supported strength from the compact Keep card", async () => {

@@ -83,11 +83,19 @@ function suppliedMoments(report: SalesReport): Moment[] {
 
 /** Same supplied dataset as the browser; repeated citations retain their contexts. */
 export function countReportMoments(report: SalesReport): number {
-  return suppliedMoments(report).length;
+  return new Set(
+    suppliedMoments(report).map(
+      ({ evidence }) =>
+        `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`,
+    ),
+  ).size;
 }
 
 function timeRange(evidence: ReportEvidence) {
-  return `${formatTranscriptTime(evidence.start_ms)} – ${formatTranscriptTime(evidence.end_ms)}`;
+  const start = formatTranscriptTime(evidence.start_ms);
+  const end = formatTranscriptTime(evidence.end_ms);
+  const shortSpan = evidence.end_ms - evidence.start_ms < 1_000;
+  return shortSpan ? `${start}–${end} · under 1 sec` : `${start} – ${end}`;
 }
 
 function MomentIcon({ kind }: { kind: SourceKind }) {
@@ -393,12 +401,7 @@ function MomentsBrowser({
                   </div>
                 )}
               </div>
-              <p
-                className={styles.provenance}
-                title={`Source: ${report.source_label}`}
-              >
-                Source: {report.source_label}
-              </p>
+              <p className={styles.provenance}>From this call</p>
               <div className={styles.actions}>
                 <button
                   type="button"
@@ -456,16 +459,7 @@ function MomentsBrowser({
                 <p>{moment.explanation}</p>
               </>
             )}
-            <dl className={styles.sourceDetails}>
-              <dt>Source</dt>
-              <dd>{report.source_label}</dd>
-              <dt>Transcript revision</dt>
-              <dd>{report.transcript_revision}</dd>
-              <dt>Source segment</dt>
-              <dd>{moment.evidence.segment_id}</dd>
-              <dt>Source fingerprint</dt>
-              <dd>{report.source_sha256}</dd>
-            </dl>
+            <p className={styles.provenance}>From this call</p>
             <button type="button" className={styles.listen} onClick={listen}>
               <Play size={17} aria-hidden="true" /> Listen to this excerpt
             </button>
@@ -485,11 +479,6 @@ function MomentsBrowser({
       {/* Independent of interactive filters/pages, so printing retains every supplied item. */}
       <div className={styles.print} data-moments-print>
         <h2>Source moments</h2>
-        <p>
-          Source: {report.source_label} · Transcript revision:{" "}
-          {report.transcript_revision}
-        </p>
-        <p>Source fingerprint: {report.source_sha256}</p>
         {!moments.length && <p>No source moments supplied.</p>}
         {moments.map((item, position) => (
           <article key={item.id}>
@@ -497,9 +486,7 @@ function MomentsBrowser({
               {position + 1}. {sources[item.kind].label}: {item.title}
             </h3>
             {item.purpose && <p>{purposes[item.purpose]}</p>}
-            <p>
-              {timeRange(item.evidence)} · Segment: {item.evidence.segment_id}
-            </p>
+            <p>{timeRange(item.evidence)} · From this call</p>
             <blockquote>{item.evidence.quote}</blockquote>
             {item.explanation && <p>{item.explanation}</p>}
             <button

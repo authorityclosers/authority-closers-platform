@@ -216,8 +216,7 @@ function SkillSources({
               <li key={`${evidence.segment_id}-${index}`}>
                 <span className={styles.sourceTime}>
                   {formatTranscriptTime(evidence.start_ms)}–
-                  {formatTranscriptTime(evidence.end_ms)} · Source segment{" "}
-                  {evidence.segment_id}
+                  {formatTranscriptTime(evidence.end_ms)}
                 </span>
                 <blockquote>{evidence.quote}</blockquote>
                 {onSelectEvidence && (

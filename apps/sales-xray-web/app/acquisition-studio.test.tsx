@@ -84,6 +84,14 @@ async function click(text: string) {
   await act(async () => button(text).click());
   await flush();
 }
+async function clickReportSection(text: string) {
+  const found = container.querySelector<HTMLAnchorElement>(
+    `[aria-label="Explore your sales report"] a[aria-label="${text}"]`,
+  );
+  expect(found, text).toBeDefined();
+  await act(async () => found!.click());
+  await flush();
+}
 async function mount() {
   const calls = new URLSearchParams(window.location.search).getAll("call");
   const page = await Page({
@@ -343,12 +351,24 @@ it("opens account access on guest file selection and keeps Analyze gated without
   await mount();
   await select();
   expect(container.textContent).toContain("Sales call.wav");
-  expect(container.querySelector('[aria-label="Back to your call"]')).not.toBeNull();
-  expect(calls.some(({ path, init }) => path.endsWith("/source") && init.method === "PUT")).toBe(false);
-  expect(calls.some(({ path, init }) => path.endsWith("/session") && init.method === "POST")).toBe(false);
+  expect(
+    container.querySelector('[aria-label="Back to your call"]'),
+  ).not.toBeNull();
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toBe(false);
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toBe(false);
 
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-label="Back to your call"]')?.click(),
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Back to your call"]')
+      ?.click(),
   );
   await flush();
   expect(container.textContent).toContain("Sales call.wav");
@@ -356,9 +376,19 @@ it("opens account access on guest file selection and keeps Analyze gated without
   await consent();
   expect(button("Analyse my call").disabled).toBe(false);
   await click("Analyse my call");
-  expect(container.querySelector('[aria-label="Back to your call"]')).not.toBeNull();
-  expect(calls.some(({ path, init }) => path.endsWith("/source") && init.method === "PUT")).toBe(false);
-  expect(calls.some(({ path, init }) => path.endsWith("/session") && init.method === "POST")).toBe(false);
+  expect(
+    container.querySelector('[aria-label="Back to your call"]'),
+  ).not.toBeNull();
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toBe(false);
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toBe(false);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
@@ -430,31 +460,32 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "Draft coaching; not adjudicated by Dipak.",
   );
   expect(container.textContent).toContain(`Source: ${envelope.source_label}.`);
-  const details = container.querySelector<HTMLDetailsElement>(
-    ".studio-report details",
-  );
-  expect(details).not.toBeNull();
-  expect(details?.open).toBe(false);
-  await act(async () => details?.querySelector("summary")?.click());
-  expect(details?.open).toBe(true);
-  expect(details?.textContent).toContain("Source:");
-  expect(details?.textContent).toContain("Speaker labels");
-  expect(details?.querySelector('a[role="menuitem"]')?.textContent).toContain(
-    "Sign in to save this call",
-  );
-  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
-  await click("Tabbed view");
   expect(
-    container.querySelectorAll(
-      '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
-    ),
+    container.querySelector('[aria-label="More report actions"]'),
+  ).toBeNull();
+  expect(
+    container.querySelector('[role="group"][aria-label="Report actions"]'),
+  ).not.toBeNull();
+  expect(container.querySelector(".studio-report")?.textContent).toContain(
+    "Source:",
+  );
+  expect(container.querySelector(".studio-report")?.textContent).toContain(
+    "Speaker labels",
+  );
+  expect(container.textContent).toContain("Sign in to save");
+  expect(container.textContent).toContain("Download report");
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
+  expect(
+    container.querySelectorAll('[aria-label="Explore your sales report"] a'),
   ).toHaveLength(6);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
     expect(call.init.redirect).toBe("error");
   }
-  await click("Moments");
+  await clickReportSection("Moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
 
@@ -806,7 +837,8 @@ it("consumes new-call intent when a new upload begins so reload can recover that
 it("keeps the next staged file ready after starting another call", async () => {
   existing = true;
   await mount();
-  const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const input =
+    container.querySelector<HTMLInputElement>('input[type="file"]')!;
   const first = new File(["first"], "Discovery.wav", { type: "audio/wav" });
   const second = new File(["second"], "Follow-up.m4a", { type: "audio/mp4" });
   Object.defineProperty(first, "arrayBuffer", {
@@ -821,16 +853,17 @@ it("keeps the next staged file ready after starting another call", async () => {
   );
   await flush();
   expect(container.textContent).toContain("2 files added");
-  expect(container.textContent).toContain("Discovery.wav selected for analysis");
+  expect(container.textContent).toContain(
+    "Discovery.wav selected for analysis",
+  );
   await consent();
   await click("Analyse my call");
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
-  await act(async () =>
-    container.querySelector<HTMLElement>('summary[aria-label="More report actions"]')!.click(),
-  );
   await click("Analyse another call");
   expect(container.textContent).toContain("1 file added");
-  expect(container.textContent).toContain("Follow-up.m4a selected for analysis");
+  expect(container.textContent).toContain(
+    "Follow-up.m4a selected for analysis",
+  );
 });
 
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
@@ -1051,7 +1084,9 @@ it("restores an unapproved call without quoting or accepting, including manual s
   await mount();
   await click("Check status");
   expect(container.textContent).toContain("Ready for your approval");
-  expect(container.querySelector('[data-hero-stage="ready"] h1')?.textContent).toBe("Ready to analyse");
+  expect(
+    container.querySelector('[data-hero-stage="ready"] h1')?.textContent,
+  ).toBe("Ready to analyse");
   expect(container.textContent).not.toContain("We're processing your call");
   expect(container.textContent).toContain("approval is not confirmed yet");
   expect(
@@ -1460,7 +1495,9 @@ it("shows delayed-update guidance without changing progress, identity or submitt
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
-  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
 });
 
 it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
@@ -1975,14 +2012,36 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
-  expect(container.querySelector("[data-report-modes]")?.getAttribute("data-view")).toBe("reading");
-  expect(container.querySelectorAll("[data-report-mode-section][hidden]")).toHaveLength(0);
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
+  expect(
+    container.querySelectorAll("[data-report-mode-section][hidden]"),
+  ).toHaveLength(0);
+  const reportSections = [
+    "Overview",
+    "Prospect",
+    "Moments",
+    "Sales skills",
+    "Next-call plan",
+    "Transcript",
+  ];
+  expect(
+    [
+      ...container.querySelectorAll<HTMLAnchorElement>(
+        '[aria-label="Explore your sales report"] a',
+      ),
+    ].map((link) => link.getAttribute("aria-label")),
+  ).toEqual(reportSections);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
-  await click("Tabbed view");
-  await click("Prospect");
-  expect(container.querySelector('[data-report-mode-section="prospect"]')?.hasAttribute("hidden")).toBe(false);
+  await clickReportSection("Prospect");
+  expect(
+    container
+      .querySelector('[data-report-mode-section="prospect"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
@@ -1995,16 +2054,79 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
-  await click("Reading view");
-  expect(container.querySelector('[aria-label="Call audio player"] audio')).toBe(savedAudio);
-  await click("Tabbed view");
-  await click("Next-call plan");
+  await clickReportSection("Next-call plan");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).toBe(savedAudio);
   expect(savedAudio?.getAttribute("src")).toBe(source);
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
   expect(calls.some((call) => call.path.endsWith("/accept"))).toBe(false);
+});
+
+it("stops an excerpt at its cited end and lets the dock resume the full call", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  const audio = container.querySelector<HTMLAudioElement>(
+    '[aria-label="Call audio player"] audio',
+  )!;
+  let paused = true;
+  let currentTime = 0;
+  Object.defineProperty(audio, "paused", {
+    configurable: true,
+    get: () => paused,
+  });
+  Object.defineProperty(audio, "currentTime", {
+    configurable: true,
+    get: () => currentTime,
+    set: (value: number) => {
+      currentTime = value;
+    },
+  });
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockImplementation(async () => {
+      paused = false;
+      audio.dispatchEvent(new Event("play"));
+    });
+  const pause = vi
+    .spyOn(HTMLMediaElement.prototype, "pause")
+    .mockImplementation(() => {
+      paused = true;
+      audio.dispatchEvent(new Event("pause"));
+    });
+  const evidence = envelope.report.content.strengths[0].evidence[0];
+  const excerpt = container.querySelector<HTMLButtonElement>(
+    `[aria-label="Play source moment, ${evidence.start_ms} to ${evidence.end_ms}"]`,
+  )!;
+
+  await act(async () => excerpt.click());
+  await flush();
+  expect(currentTime).toBe(evidence.start_ms / 1000);
+  expect(paused).toBe(false);
+  expect(play).toHaveBeenCalledOnce();
+
+  currentTime = evidence.end_ms / 1000;
+  await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+  await flush();
+  expect(paused).toBe(true);
+  expect(pause).toHaveBeenCalledOnce();
+
+  const fullCallPlay = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Play recording"]',
+  )!;
+  await act(async () => fullCallPlay.click());
+  await flush();
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(paused).toBe(false);
+
+  currentTime = evidence.end_ms / 1000 + 1;
+  await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+  await flush();
+  expect(paused).toBe(false);
+  expect(pause).toHaveBeenCalledOnce();
 });
 
 it("does not expose a report when an explicit call selector is denied", async () => {

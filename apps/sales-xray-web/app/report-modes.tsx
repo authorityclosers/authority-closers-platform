@@ -1,6 +1,16 @@
 "use client";
 
 import {
+  AudioLines,
+  BookOpen,
+  ChartNoAxesColumnIncreasing,
+  FileText,
+  Lightbulb,
+  PanelsTopLeft,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
+import {
   useEffect,
   useId,
   useRef,
@@ -22,6 +32,19 @@ type View = "reading" | "tabs";
 type Address = { view: View; section: string };
 const CHANGE = "ac:report-mode-change";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const sectionIcons: Record<string, LucideIcon> = {
+  overview: FileText,
+  prospect: UserRound,
+  moments: AudioLines,
+  skills: ChartNoAxesColumnIncreasing,
+  "next-call-plan": Lightbulb,
+  transcript: BookOpen,
+};
+
+function SectionIcon({ id }: { id: string }) {
+  const Icon = sectionIcons[id] ?? FileText;
+  return <Icon className={styles.sectionIcon} aria-hidden="true" />;
+}
 
 function subscribe(notify: () => void) {
   window.addEventListener("popstate", notify);
@@ -39,11 +62,11 @@ function addressFromSearch(
 ): Address | null {
   const query = new URLSearchParams(search);
   const calls = query.getAll("call");
+  const sections = query.getAll("section");
+  const views = query.getAll("view");
   if (!UUID.test(boundCallId) || calls.length !== 1 || calls[0] !== boundCallId)
     return null;
-  const views = query.getAll("view");
-  const sections = query.getAll("section");
-  const view =
+  const view: View =
     views.length === 1 && (views[0] === "reading" || views[0] === "tabs")
       ? views[0]
       : "reading";
@@ -62,7 +85,7 @@ function serverSearch() {
   return "";
 }
 
-/** Keeps every report section mounted while switching between continuous reading and tabs. */
+/** Keeps all real report sections available in a bookmarkable reading or tabbed view. */
 export function ReportModes({
   label = "Report sections",
   panels,
@@ -70,11 +93,12 @@ export function ReportModes({
 }: {
   label?: string;
   panels: ReportPanel[];
-  /** Enables bookmarkable view and section state for this already-bound report. */
+  /** Enables view and section bookmarks for this already-bound report. */
   boundCallId?: string;
 }) {
   const id = useId();
-  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
+  const skipBookmarkScroll = useRef(false);
   const [local, setLocal] = useState<Address>({
     view: "reading",
     section: panels[0]?.id ?? "",
@@ -86,27 +110,30 @@ export function ReportModes({
     ? addressFromSearch(search, boundCallId, panels)
     : null;
   const address = linked ?? local;
-  const view = address.view;
   const selected = panels.some((panel) => panel.id === address.section)
     ? address.section
     : panels[0]?.id;
-  const currentReadingSection = panels.some(
-    (panel) => panel.id === readingSection,
-  )
-    ? readingSection
+  const view = linked?.view ?? local.view;
+  const currentSection = panels.some((panel) => panel.id === readingSection)
+    ? view === "tabs"
+      ? selected
+      : readingSection
     : selected;
 
   useEffect(() => {
-    if (view !== "reading" || !selected) return;
+    if (!selected) return;
     const update = () => {
       const readingLine = Math.min(180, window.innerHeight * 0.4);
       let current = panels[0]?.id ?? "";
+      let foundHeading = false;
       for (const panel of panels) {
         const heading = document.getElementById(`${id}-heading-${panel.id}`);
         const bounds = heading?.getBoundingClientRect();
+        if (bounds && bounds.height > 0) foundHeading = true;
         if (bounds && bounds.height > 0 && bounds.top <= readingLine)
           current = panel.id;
       }
+      if (!foundHeading) return;
       setReadingSection((previous) =>
         previous === current ? previous : current,
       );
@@ -118,26 +145,27 @@ export function ReportModes({
       document.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [id, panels, selected, view]);
+  }, [id, panels, selected]);
 
   useEffect(() => {
-    if (
-      linked?.view !== "reading" ||
-      !new URLSearchParams(search).has("section")
-    )
+    if (!linked?.section || !new URLSearchParams(search).has("section")) return;
+    if (skipBookmarkScroll.current) {
+      skipBookmarkScroll.current = false;
       return;
-    setReadingSection(linked.section);
+    }
     const frame = requestAnimationFrame(() => {
+      setReadingSection(linked.section);
       document
         .getElementById(`${id}-heading-${linked.section}`)
         ?.scrollIntoView?.({ block: "start" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [id, linked?.section, linked?.view, search]);
+  }, [id, linked?.section, search]);
 
   if (!panels.length) return null;
 
-  function navigate(next: Address, focus = false) {
+  function navigate(section: string, nextView: View = view, focus = false) {
+    if (!panels.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
       const current = new URL(window.location.href);
@@ -146,29 +174,45 @@ export function ReportModes({
         return;
       current.searchParams.set("call", boundCallId);
       current.searchParams.delete("new");
-      current.searchParams.set("view", next.view);
-      current.searchParams.set("section", next.section);
+      current.searchParams.set("view", nextView);
+      current.searchParams.set("section", section);
       const target = `${current.pathname}?${current.searchParams.toString()}${current.hash}`;
       const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (target !== here)
+      const changesLocation = target !== here;
+      if (changesLocation)
         window.history.replaceState(window.history.state, "", target);
+      skipBookmarkScroll.current = changesLocation;
       window.dispatchEvent(new Event(CHANGE));
-    } else setLocal(next);
-    setReadingSection(next.section);
+    } else setLocal({ view: nextView, section });
+    setReadingSection(section);
     if (focus) {
       requestAnimationFrame(() => {
-        const index = panels.findIndex((panel) => panel.id === next.section);
-        if (next.view === "tabs")
-          buttons.current[index]?.focus({ preventScroll: true });
-        else {
-          const heading = document.getElementById(
-            `${id}-heading-${next.section}`,
-          );
-          heading?.focus({ preventScroll: true });
-          heading?.scrollIntoView?.({ block: "start" });
-        }
+        const heading = document.getElementById(`${id}-heading-${section}`);
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView?.({ block: "start" });
       });
     }
+  }
+
+  function navigateToReport(section: string, reviewPoint?: string) {
+    navigate(section, "reading");
+    requestAnimationFrame(() => {
+      const target = reviewPoint
+        ? Array.from(
+            document.querySelectorAll<HTMLElement>("[data-review-point]"),
+          ).find((element) => element.dataset.reviewPoint === reviewPoint)
+        : null;
+      if (target instanceof HTMLDetailsElement) target.open = true;
+      const destination =
+        target ?? document.getElementById(`${id}-heading-${section}`);
+      destination?.focus({ preventScroll: true });
+      destination?.scrollIntoView?.({ block: "start" });
+    });
+  }
+
+  function changeView(nextView: View) {
+    const section = selected ?? panels[0]?.id;
+    if (section) navigate(section, nextView);
   }
 
   return (
@@ -176,44 +220,40 @@ export function ReportModes({
       className={styles.workspace}
       data-report-modes
       data-view={view}
-      data-report-section={
-        view === "reading" ? currentReadingSection : selected
-      }
+      data-report-section={currentSection}
     >
       <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
         <button
           type="button"
           aria-pressed={view === "reading"}
-          onClick={() => navigate({ view: "reading", section: selected })}
+          onClick={() => changeView("reading")}
         >
-          Reading view
+          <BookOpen aria-hidden="true" /> Reading
         </button>
         <button
           type="button"
           aria-pressed={view === "tabs"}
-          onClick={() =>
-            navigate({ view: "tabs", section: currentReadingSection })
-          }
+          onClick={() => changeView("tabs")}
         >
-          Tabbed view
+          <PanelsTopLeft aria-hidden="true" /> Tabs
         </button>
       </div>
-
       {view === "tabs" && (
-        <div className={styles.tabs} role="tablist" aria-label={label}>
+        <nav className={styles.tabNavigation} role="tablist" aria-label={label}>
           {panels.map((panel, index) => (
             <button
               key={panel.id}
               ref={(element) => {
-                buttons.current[index] = element;
+                tabButtons.current[index] = element;
               }}
               type="button"
               role="tab"
               id={`${id}-tab-${panel.id}`}
               aria-controls={`${id}-section-${panel.id}`}
+              aria-label={panel.label}
               aria-selected={selected === panel.id}
               tabIndex={selected === panel.id ? 0 : -1}
-              onClick={() => navigate({ view, section: panel.id })}
+              onClick={() => navigate(panel.id, "tabs")}
               onKeyDown={(event) => {
                 const next =
                   event.key === "ArrowRight"
@@ -227,16 +267,16 @@ export function ReportModes({
                           : null;
                 if (next === null) return;
                 event.preventDefault();
-                navigate({ view, section: panels[next].id });
-                buttons.current[next]?.focus();
+                navigate(panels[next].id, "tabs");
+                tabButtons.current[next]?.focus();
               }}
             >
-              {panel.label}
+              <SectionIcon id={panel.id} />
+              <span>{panel.compactLabel ?? panel.label}</span>
             </button>
           ))}
-        </div>
+        </nav>
       )}
-
       <div className={styles.layout}>
         {view === "reading" && (
           <nav className={styles.contents} aria-label={label}>
@@ -249,8 +289,10 @@ export function ReportModes({
                     : `#${id}-section-${panel.id}`
                 }
                 aria-current={
-                  currentReadingSection === panel.id ? "location" : undefined
+                  currentSection === panel.id ? "location" : undefined
                 }
+                aria-label={panel.label}
+                title={panel.label}
                 onClick={(event) => {
                   if (
                     event.metaKey ||
@@ -260,16 +302,23 @@ export function ReportModes({
                   )
                     return;
                   event.preventDefault();
-                  navigate({ view, section: panel.id }, true);
+                  navigate(panel.id, "reading", true);
                 }}
               >
-                {panel.label}
+                <SectionIcon id={panel.id} />
+                <span className={styles.fullLabel}>{panel.label}</span>
+                <span className={styles.compactLabel}>
+                  {panel.compactLabel ?? panel.label}
+                </span>
               </a>
             ))}
           </nav>
         )}
 
-        <ReportReadingProvider reading={view === "reading"}>
+        <ReportReadingProvider
+          reading={view === "reading"}
+          navigate={navigateToReport}
+        >
           <div className={styles.sections}>
             {panels.map((panel) => (
               <section

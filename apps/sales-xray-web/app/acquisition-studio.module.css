@@ -1325,7 +1325,7 @@
 }
 .reportHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   min-height: 42px;
@@ -1351,8 +1351,9 @@
 }
 @media (max-width: 620px) {
   .app[data-stage="report"] .reportHeader {
-    flex-wrap: nowrap;
-    margin-bottom: 4px;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
   }
   .reportHeading p:not(.reportMetadata) {
     display: none;
@@ -1372,163 +1373,121 @@
   display: none;
 }
 
-.reportMoreActions {
-  position: relative;
-}
-.app[data-stage="report"] .reportMoreActions {
-  margin: 0;
-}
 .app[data-stage="report"] :global(.studio-main) {
-  padding-bottom: 90px;
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
 }
 @media (max-width: 760px) {
   .app[data-stage="report"] :global(.studio-main) {
     padding-bottom: calc(160px + env(safe-area-inset-bottom));
   }
 }
-.reportMoreMenu > a {
-  padding: 10px 12px;
-  color: #007d79;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-}
-.reportMoreMenu .reportMetadata {
-  margin: 0;
-  padding: 10px 12px;
-  font-size: 11px;
-  color: #60738f;
+.reportActions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
 }
 @media (max-width: 620px) {
   .app[data-stage="report"][data-variant="standalone"] :global(.studio-main) {
-    padding: 6px 16px 80px;
+    padding: 6px 16px calc(160px + env(safe-area-inset-bottom));
   }
 }
 
-.reportMoreActions summary {
-  display: grid;
-  width: 2.55rem;
-  height: 2.55rem;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--surface);
-  color: var(--muted);
+.reportAction {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #405778;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.reportMoreActions summary:hover,
-.reportMoreActions[open] summary {
-  border-color: #b8c9e4;
-  background: #f8fbfd;
-  color: var(--action);
+.reportAction:hover:not(:disabled) {
+  border-color: #9bb6d2;
+  background: #f7f9fc;
+  color: #183d68;
 }
 
-.reportMoreActions summary:focus-visible,
-.reportMoreMenu button:focus-visible {
+.reportActionPrimary {
+  border-color: #087e79;
+  background: #087e79;
+  color: #fff;
+}
+
+.reportActionPrimary:hover:not(:disabled) {
+  border-color: #066c67;
+  background: #066c67;
+  color: #fff;
+}
+
+.reportActionSupport {
+  color: #7a4b3f;
+}
+
+.reportActionDanger {
+  border-color: #b94336;
+  background: #b94336;
+  color: #fff;
+}
+
+.reportAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.reportAction:focus-visible {
   outline: 3px solid #aebff6;
   outline-offset: 3px;
 }
 
-.reportMoreActions summary::-webkit-details-marker {
-  display: none;
-}
-
-.reportMoreMenu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.55rem);
-  right: 0;
-  display: grid;
-  width: min(260px, calc(100vw - 2rem));
-  gap: 0.15rem;
-  padding: 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 0.95rem;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 18px 44px rgb(16 35 58 / 15%);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-}
-
-.reportMoreMenu > button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.35rem;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 0.6rem;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.reportMoreMenu > button:hover:not(:disabled) {
-  border-color: #d3ebe5;
-  background: #ecf8f4;
-  color: var(--action);
-}
-
-.reportMoreMenu > button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.reportPrivacyMenu {
-  margin-top: 0.35rem;
-  padding: 0.7rem 0.6rem 0.35rem;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
-.reportPrivacyMenu > strong {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--ink);
-  font-size: 0.76rem;
-}
-
-.reportPrivacyMenu p {
-  margin: 0 0 0.55rem;
+.reportDisclosure {
+  margin: -3px 0 12px;
+  color: #687b94;
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.reportPrivacyMenu a {
-  color: var(--action);
+.reportDisclosure a {
+  color: #2754bd;
   text-underline-offset: 2px;
 }
 
-.reportPrivacyMenu button {
-  min-height: 2rem;
-  margin: 0 0.35rem 0.35rem 0;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface);
-  color: var(--action);
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  cursor: pointer;
+.reportDeleteConfirm {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #ecd6c1;
+  border-left: 3px solid #b94336;
+  border-radius: 8px;
+  background: #fff9f3;
+  color: #563f35;
 }
 
-.reportPrivacyMenu button:hover:not(:disabled) {
-  border-color: var(--action);
+.reportDeleteConfirm p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.reportPrivacyMenu .reportMenuTextButton {
-  padding: 0.25rem 0;
-  border-color: transparent;
-  background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.reportDeleteConfirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 .loading {
   display: flex;
@@ -1615,7 +1574,8 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .app[data-variant="standalone"] :global(.studio-main) {
+  .app[data-variant="standalone"]:not([data-stage="report"])
+    :global(.studio-main) {
     padding: 18px 16px 12px;
   }
   .app[data-variant="standalone"] :global(.studio-steps) {
@@ -1936,7 +1896,9 @@
   gap: 8px 20px;
   font-size: 13px;
 }
-.app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+.app[data-stage="upload"][data-selected="false"]
+  .dropZone
+  :global(.studio-upload-icon) {
   width: 82px;
   height: 82px;
   background: #ddf8f0;
@@ -2384,7 +2346,9 @@ a.overviewCard:hover {
     min-height: 214px;
     padding: 14px;
   }
-  .app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+  .app[data-stage="upload"][data-selected="false"]
+    .dropZone
+    :global(.studio-upload-icon) {
     width: 62px;
     height: 62px;
     margin-bottom: 7px;
@@ -2426,7 +2390,9 @@ a.overviewCard:hover {
     margin-bottom: 2px;
     padding: 7px;
   }
-  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) > :global(.secondary-button) {
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-file)
+    > :global(.secondary-button) {
     min-height: 32px;
     padding: 5px 8px;
   }
@@ -2437,13 +2403,17 @@ a.overviewCard:hover {
   .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
     min-height: 20px;
   }
-  .app[data-stage="upload"][data-selected="true"] :global(.studio-consent) .consentLabel {
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
     min-height: 29px;
     margin: 0;
     padding: 2px 0;
     font-size: 11px;
   }
-  .app[data-stage="upload"][data-selected="true"] .uploadActions :global(.studio-wide) {
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
     min-height: 36px;
     font-size: 13px;
   }
@@ -2479,7 +2449,9 @@ a.overviewCard:hover {
     min-height: 204px;
     padding: 12px;
   }
-  .app[data-stage="upload"][data-selected="false"] .dropZone :global(.studio-upload-icon) {
+  .app[data-stage="upload"][data-selected="false"]
+    .dropZone
+    :global(.studio-upload-icon) {
     width: 62px;
     height: 62px;
     margin-bottom: 6px;
@@ -2509,11 +2481,21 @@ a.overviewCard:hover {
   transform-origin: center;
   animation: wave-breathe 2.4s ease-in-out infinite;
 }
-.waveBars rect:nth-child(2) { animation-delay: -1.8s; }
-.waveBars rect:nth-child(3) { animation-delay: -1.25s; }
-.waveBars rect:nth-child(4) { animation-delay: -.6s; }
-.waveBars rect:nth-child(5) { animation-delay: -1.55s; }
-.waveBars rect:nth-child(6) { animation-delay: -.95s; }
+.waveBars rect:nth-child(2) {
+  animation-delay: -1.8s;
+}
+.waveBars rect:nth-child(3) {
+  animation-delay: -1.25s;
+}
+.waveBars rect:nth-child(4) {
+  animation-delay: -0.6s;
+}
+.waveBars rect:nth-child(5) {
+  animation-delay: -1.55s;
+}
+.waveBars rect:nth-child(6) {
+  animation-delay: -0.95s;
+}
 .animatedUploadMark {
   width: 52px;
   height: 52px;
@@ -2539,23 +2521,49 @@ a.overviewCard:hover {
   pointer-events: none;
 }
 @keyframes wave-breathe {
-  0%, 100% { transform: scaleY(.72); opacity: .7; }
-  50% { transform: scaleY(1); opacity: 1; }
+  0%,
+  100% {
+    transform: scaleY(0.72);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 @keyframes upload-orbit {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @keyframes cloud-breathe {
-  0%, 100% { opacity: .82; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 @keyframes arrow-rise {
-  0%, 100% { transform: translateY(2px); }
-  50% { transform: translateY(-2px); }
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 @keyframes upload-halo {
-  0% { opacity: .45; transform: scale(.87); }
-  70%, 100% { opacity: 0; transform: scale(1.16); }
+  0% {
+    opacity: 0.45;
+    transform: scale(0.87);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .waveBars rect,
@@ -2587,7 +2595,9 @@ a.overviewCard:hover {
     margin-bottom: 4px;
     padding: 8px;
   }
-  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) > :global(.secondary-button) {
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-file)
+    > :global(.secondary-button) {
     min-height: 34px;
     padding: 5px 9px;
   }
@@ -2598,13 +2608,17 @@ a.overviewCard:hover {
   .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
     min-height: 23px;
   }
-  .app[data-stage="upload"][data-selected="true"] :global(.studio-consent) .consentLabel {
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
     min-height: 35px;
     margin: 0;
     padding: 3px 0;
     font-size: 12px;
   }
-  .app[data-stage="upload"][data-selected="true"] .uploadActions :global(.studio-wide) {
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
     min-height: 42px;
     font-size: 14px;
   }
@@ -2623,12 +2637,16 @@ a.overviewCard:hover {
   .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
     min-height: 20px;
   }
-  .app[data-stage="upload"][data-selected="true"] :global(.studio-consent) .consentLabel {
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
     min-height: 29px;
     padding: 2px 0;
     font-size: 11px;
   }
-  .app[data-stage="upload"][data-selected="true"] .uploadActions :global(.studio-wide) {
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
     min-height: 36px;
     font-size: 13px;
   }

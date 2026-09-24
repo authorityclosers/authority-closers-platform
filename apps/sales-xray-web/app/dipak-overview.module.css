@@ -11,6 +11,9 @@
   --line-strong: #b9cdcc;
   --surface: #ffffff;
   --canvas: #f5f8f8;
+  container-type: inline-size;
+  container-name: report-overview;
+  min-width: 0;
   color: var(--ink);
   font-size: 15px;
   line-height: 1.65;
@@ -2072,5 +2075,125 @@
   .takeawayPills button[aria-selected="true"] {
     background: var(--positive);
     color: #fff;
+  }
+}
+
+/* The live report already has its own section navigation. In reading mode,
+   keep one summary and lay it out as report content instead of a second card
+   dashboard with its own pager. */
+.overview[data-reading="true"] > .dashboard {
+  display: none;
+}
+
+.overview[data-reading="true"] .reportMetrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-block: 1px solid var(--line);
+}
+
+.overview[data-reading="true"] .metric {
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.overview[data-reading="true"] .metric + .metric {
+  border-left: 1px solid var(--line);
+}
+
+.overview[data-reading="true"] .metricAction {
+  background: transparent;
+}
+
+.overview[data-reading="true"] .takeawayGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-block: 1px solid var(--line);
+}
+
+.overview[data-reading="true"] .takeawayCard,
+.overview[data-reading="true"] .takeawayCardLead,
+.overview[data-reading="true"] .takeawayCardMint,
+.overview[data-reading="true"] .takeawayCardOrange,
+.overview[data-reading="true"] .takeawayCardBlue,
+.overview[data-reading="true"] .takeawayCardViolet {
+  grid-column: auto;
+  min-height: 0;
+  padding: 16px 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.overview[data-reading="true"] .takeawayCard h2,
+.overview[data-reading="true"] .takeawayCardLead h2 {
+  font-size: clamp(17px, 1.6vw, 22px);
+  line-height: 1.3;
+}
+
+@media (max-width: 680px) {
+  .overview[data-reading="true"] .reportMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview[data-reading="true"] .metric {
+    min-height: 56px;
+    padding: 9px 10px;
+  }
+
+  .overview[data-reading="true"] .metric:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .overview[data-reading="true"] .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+
+  .overview[data-reading="true"] .takeawayCard,
+  .overview[data-reading="true"] .takeawayCard:not([data-active="true"]) {
+    display: grid;
+    padding: 14px 2px;
+  }
+
+  .overview[data-reading="true"] .takeawayCard h2,
+  .overview[data-reading="true"] .takeawayCardLead h2 {
+    font-size: 19px;
+  }
+
+  .overview[data-reading="true"] .takeawayCard p:not(.eyebrow) {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .overview[data-reading="true"] .takeawayControls,
+  .overview[data-reading="true"] .takeawayPills {
+    display: none;
+  }
+}
+
+@container report-overview (max-width: 900px) {
+  .overview[data-reading="true"] .takeawayGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container report-overview (max-width: 560px) {
+  .overview[data-reading="true"] .reportMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview[data-reading="true"] .metric:nth-child(3) {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .overview[data-reading="true"] .takeawayGrid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 18px;
   }
 }

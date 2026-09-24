@@ -263,7 +263,15 @@ it("preserves an intentional empty rewatch selection even when detailed findings
 
 it("exports a pure count of the same supplied evidence dataset, excluding missing excerpts", () => {
   const detailed = suppliedReport();
-  expect(countReportMoments(detailed)).toBe(detailed.overview!.rewatch.length);
+  const uniqueRanges = new Set(
+    detailed.overview!.rewatch.flatMap((moment) =>
+      moment.evidence.map(
+        ({ segment_id, start_ms, end_ms }) =>
+          `${segment_id}:${start_ms}:${end_ms}`,
+      ),
+    ),
+  );
+  expect(countReportMoments(detailed)).toBe(uniqueRanges.size);
   const report = {
     ...manyMoments(),
     improvements: [
@@ -304,7 +312,7 @@ it("keeps duplicate source ranges attached to each original finding and quote", 
     ],
   };
   const onSelect = await render(report);
-  expect(countReportMoments(report)).toBe(3);
+  expect(countReportMoments(report)).toBe(1);
   expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(3);
   await click("Listen");
   await click("Next moment");
@@ -396,7 +404,7 @@ it("filters by supplied source kind and keeps the full print collection independ
   expect(printed.querySelectorAll("blockquote")[8].textContent).toBe(
     report.strengths[1].evidence[3].quote,
   );
-  expect(printed.textContent).toContain(report.source_sha256);
+  expect(printed.textContent).not.toContain(report.source_sha256);
   await filter("all");
   expect(focused().dataset.focusedMoment).toBe("strengths:0:0");
 });
@@ -424,14 +432,15 @@ it("opens complete long text and provenance in a focused review, then restores t
     evidence.quote,
   );
   expect(dialog().textContent).toContain(explanation);
-  expect(dialog().textContent).toContain("01:01.123 – 01:01.987");
+  expect(dialog().textContent).toContain("01:01.123–01:01.987 · under 1 sec");
   for (const value of [
     report.source_label,
     report.source_sha256,
     report.transcript_revision,
     evidence.segment_id,
   ])
-    expect(dialog().textContent).toContain(value);
+    expect(dialog().textContent).not.toContain(value);
+  expect(dialog().textContent).toContain("From this call");
   await act(async () =>
     dialog().dispatchEvent(new Event("cancel", { cancelable: true })),
   );
