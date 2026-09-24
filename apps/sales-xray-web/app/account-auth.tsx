@@ -26,8 +26,11 @@ import {
   parseAuthenticatedAccount,
   parseCodeTiming,
   parseEmailCodeConfig,
+  parseAuthCompletionUrl,
   passwordLogin,
   readCanonicalSession,
+  readGoogleCompletion,
+  type AuthCompletionResult,
   type EmailCodeConfig,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
@@ -102,6 +105,7 @@ export function AccountAuth({
   const popupFlow = useRef<string | null>(null);
   const popupPoll = useRef<ReturnType<typeof setInterval> | null>(null);
   const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
+  const popupOutcome = useRef<AuthCompletionResult | null>(null);
   const confirmingPopup = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -195,7 +199,7 @@ export function AccountAuth({
       ) {
         setConsent(false);
         setStep("email");
-        setConfigError(!current.enabled);
+        setConfigError(false);
         setError(
           "The Terms or sign-in settings changed. Review them and request a new code.",
         );
@@ -204,6 +208,7 @@ export function AccountAuth({
       const body = await emailCodeRequest("request", request.signal, {
         email: address,
         consent: true,
+        age_attested: true,
         consent_version: activeConfig.consent_version,
         surface: "sales_xray",
         return_path: "/",
@@ -254,7 +259,7 @@ export function AccountAuth({
       ) {
         setConsent(false);
         setStep("email");
-        setConfigError(!current.enabled);
+        setConfigError(false);
         setError(
           "The Terms or sign-in settings changed. Review them and request a new code.",
         );
@@ -365,6 +370,7 @@ export function AccountAuth({
     popup.current?.close();
     popup.current = null;
     popupFlow.current = null;
+    popupOutcome.current = null;
     setPopupActive(false);
   }
 
@@ -382,6 +388,7 @@ export function AccountAuth({
       preview ||
       !popup.current ||
       !popupFlow.current ||
+      popupOutcome.current !== "success" ||
       confirmingPopup.current
     )
       return;
@@ -389,6 +396,8 @@ export function AccountAuth({
     const request = new AbortController();
     controller.current = request;
     try {
+      await readGoogleCompletion(popupFlow.current, request.signal);
+      if (request.signal.aborted) return;
       await readCanonicalSession(request.signal);
       if (!request.signal.aborted) {
         clearPopup();
@@ -398,20 +407,74 @@ export function AccountAuth({
       }
     } catch {
       if (!request.signal.aborted) {
-        const changed = await refreshConsentAfterFailure(request.signal);
-        if (changed) {
-          clearPopup();
-          inFlight.current = false;
-          setPending(false);
-        } else {
-          setError(
-            "Sign-in isn’t confirmed yet. Finish in the Google window, then check again.",
-          );
-        }
+        clearPopup();
+        inFlight.current = false;
+        setPending(false);
+        setError(
+          "Google sign-in could not be confirmed. Try again or use an email code.",
+        );
       }
     } finally {
       confirmingPopup.current = false;
     }
+  }
+
+  function receiveGoogleResult(result: AuthCompletionResult) {
+    if (!popup.current || !popupFlow.current || popupOutcome.current) return;
+    popupOutcome.current = result;
+    if (result === "success") {
+      void confirmGoogle();
+      return;
+    }
+    controller.current?.abort();
+    clearPopup();
+    inFlight.current = false;
+    setPending(false);
+    if (result === "review_terms") {
+      setConsent(false);
+      setLoadAttempt((attempt) => attempt + 1);
+      setError(
+        "Review the current Terms and Privacy notice, then try signing in again.",
+      );
+    } else if (result === "unavailable") {
+      setError(
+        "Google sign-in is unavailable right now. Try again or use an email code.",
+      );
+    } else {
+      setError(
+        "Google sign-in could not be completed. Try again or use an email code.",
+      );
+    }
+  }
+
+  function checkGoogleWindow() {
+    const child = popup.current;
+    const flow = popupFlow.current;
+    if (!child || !flow) return;
+    try {
+      const url = child.location.href;
+      const result = parseAuthCompletionUrl(url, window.location.origin, flow);
+      if (result) {
+        receiveGoogleResult(result);
+        return;
+      }
+      const location = new URL(url);
+      if (
+        location.origin === window.location.origin &&
+        location.pathname === "/auth/complete"
+      ) {
+        clearPopup();
+        inFlight.current = false;
+        setPending(false);
+        setError(
+          "Google sign-in could not be confirmed. Try again or use an email code.",
+        );
+        return;
+      }
+    } catch {
+      // The provider page remains cross-origin until it returns here.
+    }
+    setError("Finish sign-in in the Google window, then check again.");
   }
 
   function google() {
@@ -419,6 +482,7 @@ export function AccountAuth({
       preview ||
       !activeConfig?.google_enabled ||
       !activeConfig.consent_version ||
+      configError ||
       !consent ||
       inFlight.current
     )
@@ -439,6 +503,7 @@ export function AccountAuth({
     }
     popup.current = child;
     popupFlow.current = flow;
+    popupOutcome.current = null;
     setPopupActive(true);
     inFlight.current = true;
     setPending(true);
@@ -451,7 +516,7 @@ export function AccountAuth({
         !isAuthCompleteMessage(event.data, popupFlow.current)
       )
         return;
-      void confirmGoogle();
+      receiveGoogleResult(event.data.auth_result);
     };
     popupMessage.current = handleMessage;
     window.addEventListener("message", handleMessage);
@@ -467,12 +532,12 @@ export function AccountAuth({
         if (request.signal.aborted) return;
         setConfig(current);
         if (
-          !current.enabled ||
+          !current.google_enabled ||
           !current.consent_version ||
           current.consent_version !== activeConfig.consent_version
         ) {
           setConsent(false);
-          setConfigError(!current.enabled);
+          setConfigError(false);
           clearPopup();
           inFlight.current = false;
           setPending(false);
@@ -485,6 +550,7 @@ export function AccountAuth({
           action: "authenticate",
           surface: "sales_xray",
           consent: "true",
+          age_attested: "true",
           consent_version: current.consent_version,
           return_path: `/auth/complete?flow=${flow}`,
         });
@@ -507,6 +573,11 @@ export function AccountAuth({
     (preview && previewState === "auth.error");
   const available =
     activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const googleAvailable =
+    !!activeConfig?.google_enabled &&
+    !!activeConfig.consent_version &&
+    !configError &&
+    !(preview && previewState === "auth.error");
   const brandContent = (
     <>
       <Image src="/brand/ac-v0.1/symbol.svg" alt="" width={48} height={48} />
@@ -654,7 +725,7 @@ export function AccountAuth({
               "Opening your account securely…"
             ) : displayedStep === "password" ? (
               "Sign in with your existing Authority Closers password."
-            ) : unavailable ? (
+            ) : unavailable && !googleAvailable ? (
               "Sign in with your existing Authority Closers account."
             ) : (
               "Sign in or create your account. It only takes a moment."
@@ -675,9 +746,13 @@ export function AccountAuth({
                       type="button"
                       className={styles.noticePrimary}
                       disabled={preview}
-                      onClick={() => { setStep("password"); setError(""); }}
+                      onClick={() => {
+                        setStep("password");
+                        setError("");
+                      }}
                     >
-                      Use my existing password <ArrowRight size={16} aria-hidden="true" />
+                      Use my existing password{" "}
+                      <ArrowRight size={16} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
@@ -695,18 +770,18 @@ export function AccountAuth({
                   Preparing secure sign-in…
                 </p>
               ) : null}
-              {displayedStep === "email" && unavailable ? null : displayedStep === "email" ? (
+              {displayedStep === "email" &&
+              unavailable &&
+              !googleAvailable ? null : displayedStep === "email" ? (
                 <>
-                  {activeConfig?.google_enabled && (
+                  {googleAvailable && (
                     <button
                       type="button"
                       className={styles.google}
                       onClick={google}
-                      disabled={preview || !available || !consent || pending}
+                      disabled={preview || !consent || pending}
                       aria-describedby={
-                        !consent && available
-                          ? "account-google-consent-hint"
-                          : undefined
+                        !consent ? "account-google-consent-hint" : undefined
                       }
                     >
                       <span aria-hidden="true" className={styles.googleMark}>
@@ -715,37 +790,41 @@ export function AccountAuth({
                       Continue with Google
                     </button>
                   )}
-                  {activeConfig?.google_enabled && available && !consent && (
+                  {googleAvailable && !consent && (
                     <p
                       id="account-google-consent-hint"
                       className={styles.consentHint}
                     >
-                      Agree to the Terms and Privacy Policy below to continue
-                      with Google.
+                      Confirm your age and accept the Terms and Privacy notice
+                      below to continue with Google.
                     </p>
                   )}
-                  {activeConfig?.google_enabled && (
+                  {googleAvailable && available && (
                     <div className={styles.divider}>
                       <span>or use email</span>
                     </div>
                   )}
                   <form onSubmit={sendCode} className={styles.form}>
-                    <label htmlFor="account-email">Email address</label>
-                    <div className={styles.inputWrap}>
-                      <Mail size={18} aria-hidden="true" />
-                      <input
-                        id="account-email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        maxLength={320}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@company.com"
-                        required
-                        disabled={preview || pending}
-                      />
-                    </div>
+                    {available && (
+                      <>
+                        <label htmlFor="account-email">Email address</label>
+                        <div className={styles.inputWrap}>
+                          <Mail size={18} aria-hidden="true" />
+                          <input
+                            id="account-email"
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            maxLength={320}
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="you@company.com"
+                            required
+                            disabled={preview || pending}
+                          />
+                        </div>
+                      </>
+                    )}
                     <label className={styles.consent}>
                       <input
                         type="checkbox"
@@ -755,7 +834,8 @@ export function AccountAuth({
                         required
                       />
                       <span>
-                        I agree to the{" "}
+                        I confirm that I am 18 or older and accept the current
+                        Authority Closers{" "}
                         <a
                           href="https://app.authorityclosers.com/terms"
                           target="_blank"
@@ -769,36 +849,35 @@ export function AccountAuth({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Privacy Policy
-                        </a>
-                        .
+                          Privacy notice
+                        </a>{" "}
+                        for my learner account.
                       </span>
                     </label>
-                    <button
-                      type="submit"
-                      className={styles.primary}
-                      disabled={preview || !available || !consent || pending}
-                    >
-                      {pending ? (
-                        <>
-                          <LoaderCircle className={styles.spin} size={18} />
-                          Sending…
-                        </>
-                      ) : (
-                        <>
-                          Send sign-in code
-                          <ArrowRight size={18} />
-                        </>
-                      )}
-                    </button>
+                    {available && (
+                      <button
+                        type="submit"
+                        className={styles.primary}
+                        disabled={preview || !available || !consent || pending}
+                      >
+                        {pending ? (
+                          <>
+                            <LoaderCircle className={styles.spin} size={18} />
+                            Sending…
+                          </>
+                        ) : (
+                          <>
+                            Send sign-in code
+                            <ArrowRight size={18} />
+                          </>
+                        )}
+                      </button>
+                    )}
                   </form>
                   {popupActive && pending && (
                     <div className={styles.popupActions} role="status">
                       <p>Finish sign-in in the Google window.</p>
-                      <button
-                        type="button"
-                        onClick={() => void confirmGoogle()}
-                      >
+                      <button type="button" onClick={checkGoogleWindow}>
                         I finished Google sign-in
                       </button>
                       <button type="button" onClick={cancelGoogle}>
@@ -970,12 +1049,22 @@ export function AccountAuth({
           )}
           {selectedFile && (
             <div className={styles.file}>
-              <FileAudio className={styles.fileIcon} size={22} aria-hidden="true" />
+              <FileAudio
+                className={styles.fileIcon}
+                size={22}
+                aria-hidden="true"
+              />
               <span className={styles.fileDetails}>
                 <strong title={selectedFile.name}>{selectedFile.name}</strong>
-                <small className={styles.fileStatus}>Ready on this device · not uploaded yet</small>
+                <small className={styles.fileStatus}>
+                  Ready on this device · not uploaded yet
+                </small>
               </span>
-              <AudioLines className={styles.fileWave} size={21} aria-hidden="true" />
+              <AudioLines
+                className={styles.fileWave}
+                size={21}
+                aria-hidden="true"
+              />
             </div>
           )}
           <p className={styles.footnote}>

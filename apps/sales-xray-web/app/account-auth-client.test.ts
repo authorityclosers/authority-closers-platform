@@ -3,6 +3,9 @@ import {
   AUTH_COMPLETE_MESSAGE,
   emailCodeRequest,
   isAuthCompleteMessage,
+  parseAuthCompletionQuery,
+  parseAuthCompletionUrl,
+  readGoogleCompletion,
   maskedEmail,
   parseAuthenticatedAccount,
   parseCanonicalSession,
@@ -25,8 +28,21 @@ const config = {
 it("accepts server policy timing, never inventing account existence or accepting malformed capabilities", () => {
   expect(parseEmailCodeConfig(config)).toEqual(config);
   expect(
+    parseEmailCodeConfig({
+      ...config,
+      enabled: false,
+      google_enabled: false,
+      consent_version: null,
+    }),
+  ).toEqual({
+    ...config,
+    enabled: false,
+    google_enabled: false,
+    consent_version: null,
+  });
+  expect(() =>
     parseEmailCodeConfig({ ...config, enabled: false, consent_version: null }),
-  ).toEqual({ ...config, enabled: false, consent_version: null });
+  ).toThrow();
   for (const value of [
     null,
     {},
@@ -46,7 +62,10 @@ it("rejects a popup signal unless its exact flow matches", () => {
   expect(validAuthFlow(flow)).toBe(true);
   expect(validAuthFlow("../../../login")).toBe(false);
   expect(
-    isAuthCompleteMessage({ type: AUTH_COMPLETE_MESSAGE, flow }, flow),
+    isAuthCompleteMessage(
+      { type: AUTH_COMPLETE_MESSAGE, flow, auth_result: "success" },
+      flow,
+    ),
   ).toBe(true);
   for (const candidate of [
     {
@@ -54,9 +73,80 @@ it("rejects a popup signal unless its exact flow matches", () => {
       flow: "6d5be9d7-bce6-49c0-9f67-3e68e5de9b45",
     },
     { type: AUTH_COMPLETE_MESSAGE, flow, token: "synthetic" },
+    { type: AUTH_COMPLETE_MESSAGE, flow },
+    { type: AUTH_COMPLETE_MESSAGE, flow, auth_result: "success", extra: true },
+    { type: AUTH_COMPLETE_MESSAGE, flow, auth_result: "pending" },
     { type: "other", flow },
   ])
     expect(isAuthCompleteMessage(candidate, flow)).toBe(false);
+});
+
+it("parses only exact, unambiguous completion query and URL shapes", () => {
+  const flow = "eaed7960-d4d0-4675-bd34-5b6a7d9c598d";
+  expect(parseAuthCompletionQuery({ flow, auth_result: "success" })).toEqual({
+    flow,
+    result: "success",
+  });
+  for (const query of [
+    { flow: [flow], auth_result: "success" },
+    { flow, auth_result: ["success", "failed"] },
+    { flow, auth_result: "unknown" },
+    { flow, auth_result: "success", extra: "x" },
+    { flow: "bad", auth_result: "success" },
+  ])
+    expect(parseAuthCompletionQuery(query)).toBeNull();
+  const origin = "https://sales.example.test";
+  expect(
+    parseAuthCompletionUrl(
+      `${origin}/auth/complete?flow=${flow}&auth_result=failed`,
+      origin,
+      flow,
+    ),
+  ).toBe("failed");
+  const invalidUrls = [
+    [
+      `${origin}/auth/complete?flow=${flow}&flow=${flow}&auth_result=success`,
+      flow,
+    ],
+    [`${origin}/auth/complete?flow=${flow}&auth_result=success&extra=x`, flow],
+    [`${origin}/auth/complete?flow=${flow}&auth_result=success#fragment`, flow],
+    [`${origin}/other?flow=${flow}&auth_result=success`, flow],
+    [
+      `https://evil.example.test/auth/complete?flow=${flow}&auth_result=success`,
+      flow,
+    ],
+    [
+      `${origin}/auth/complete?flow=${flow}&auth_result=success`,
+      "6d5be9d7-bce6-49c0-9f67-3e68e5de9b45",
+    ],
+  ] as const;
+  for (const [url, candidateFlow] of invalidUrls)
+    expect(parseAuthCompletionUrl(url, origin, candidateFlow)).toBeNull();
+});
+
+it("requires an exact matched response from the Google completion endpoint", async () => {
+  const flow = "eaed7960-d4d0-4675-bd34-5b6a7d9c598d";
+  const fetcher = vi.fn().mockResolvedValue(Response.json({ matched: true }));
+  vi.stubGlobal("fetch", fetcher);
+  await expect(
+    readGoogleCompletion(flow, new AbortController().signal),
+  ).resolves.toBe(true);
+  expect(fetcher).toHaveBeenCalledWith(
+    "/v1/auth/google/completion",
+    expect.objectContaining({
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      body: JSON.stringify({ flow_id: flow }),
+    }),
+  );
+  fetcher.mockResolvedValueOnce(
+    Response.json({ matched: true, person_id: "private" }),
+  );
+  await expect(
+    readGoogleCompletion(flow, new AbortController().signal),
+  ).rejects.toThrow();
 });
 
 it("requires canonical person and session values before reporting login", async () => {

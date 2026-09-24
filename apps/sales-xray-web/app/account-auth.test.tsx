@@ -106,7 +106,9 @@ it("renders all three local preview states without auth traffic or success callb
     if (previewState === "auth.code")
       expect(host.textContent).toContain("Check your email.");
     if (previewState === "auth.error")
-      expect(host.textContent).toContain("Email code sign-in isn’t available right now.");
+      expect(host.textContent).toContain(
+        "Email code sign-in isn’t available right now.",
+      );
   }
   expect(fetcher).not.toHaveBeenCalled();
   expect(onAuthenticated).not.toHaveBeenCalled();
@@ -163,6 +165,14 @@ it("keeps the local file through explicit consent, neutral code request and veri
   );
   await flush();
   expect(host.textContent).toContain(file.name);
+  expect(
+    host
+      .querySelector('label input[type="checkbox"]')
+      ?.parentElement?.textContent?.replace(/\s+/g, " ")
+      .trim(),
+  ).toBe(
+    "I confirm that I am 18 or older and accept the current Authority Closers Terms and Privacy notice for my learner account.",
+  );
   await changeInput("#account-email", "first@example.test");
   await act(async () =>
     host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
@@ -177,6 +187,7 @@ it("keeps the local file through explicit consent, neutral code request and veri
   expect(JSON.parse(String(request.init.body))).toEqual({
     email: "first@example.test",
     consent: true,
+    age_attested: true,
     consent_version: "terms-v1",
     surface: "sales_xray",
     return_path: "/",
@@ -331,14 +342,19 @@ it("keeps Google in a blank popup until fresh consent policy is confirmed", asyn
   );
   const assign = vi.fn();
   const close = vi.fn();
-  vi.stubGlobal(
-    "open",
-    vi.fn().mockReturnValue({ close, location: { assign } }),
-  );
+  const open = vi.fn().mockReturnValue({ close, location: { assign } });
+  vi.stubGlobal("open", open);
   await act(async () =>
     root.render(<AccountAuth selectedFile={file} onAuthenticated={vi.fn()} />),
   );
   await flush();
+  expect(
+    Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Continue with Google"),
+    )?.disabled,
+  ).toBe(true);
+  await click("Continue with Google");
+  expect(open).not.toHaveBeenCalled();
   await act(async () =>
     host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
   );
@@ -392,6 +408,8 @@ it("requires popup origin, source and flow before checking the canonical session
     vi.fn(async (url: string) => {
       calls.push(url);
       if (url.includes("/config")) return Response.json(config);
+      if (url === "/v1/auth/google/completion")
+        return Response.json({ matched: true });
       if (url === "/v1/me/workspaces") return Response.json(session);
       throw new Error(`Unexpected ${url}`);
     }),
@@ -420,13 +438,21 @@ it("requires popup origin, source and flow before checking the canonical session
   const flow = new URLSearchParams(
     url.searchParams.get("return_path")?.split("?")[1],
   ).get("flow")!;
+  expect(url.searchParams.get("consent")).toBe("true");
+  expect(url.searchParams.get("age_attested")).toBe("true");
+  expect(url.searchParams.get("consent_version")).toBe("terms-v1");
+  expect(url.searchParams.get("action")).toBe("authenticate");
   const send = async (origin: string, source: Window, candidate: string) => {
     await act(async () =>
       window.dispatchEvent(
         new MessageEvent("message", {
           origin,
           source,
-          data: { type: AUTH_COMPLETE_MESSAGE, flow: candidate },
+          data: {
+            type: AUTH_COMPLETE_MESSAGE,
+            flow: candidate,
+            auth_result: "success",
+          },
         }),
       ),
     );
@@ -444,6 +470,202 @@ it("requires popup origin, source and flow before checking the canonical session
     "/v1/auth/email-code/config?surface=sales_xray",
   ]);
   await send(window.location.origin, child, flow);
-  expect(calls).toContain("/v1/me/workspaces");
+  expect(calls.slice(-2)).toEqual([
+    "/v1/auth/google/completion",
+    "/v1/me/workspaces",
+  ]);
+  expect(onAuthenticated).toHaveBeenCalledOnce();
+});
+
+it("keeps Google available when email codes are independently disabled", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/config"))
+        return Response.json({ ...config, enabled: false });
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  const assign = vi.fn();
+  vi.stubGlobal(
+    "open",
+    vi.fn().mockReturnValue({ close: vi.fn(), location: { assign } }),
+  );
+  await act(async () =>
+    root.render(<AccountAuth selectedFile={file} onAuthenticated={vi.fn()} />),
+  );
+  await flush();
+  expect(host.textContent).toContain(
+    "Email code sign-in isn’t available right now.",
+  );
+  expect(host.textContent).toContain("Continue with Google");
+  expect(host.textContent).toContain("Use my existing password");
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Continue with Google");
+  expect(assign).toHaveBeenCalledOnce();
+  expect(calls).not.toContain("/v1/auth/email-code/request");
+});
+
+it("does not complete Google from an old session when the receipt is unmatched", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/config")) return Response.json(config);
+      if (url === "/v1/auth/google/completion")
+        return Response.json({ matched: false });
+      if (url === "/v1/me/workspaces") return Response.json(session);
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  const child = {
+    close: vi.fn(),
+    location: { assign: vi.fn() },
+  } as unknown as Window;
+  vi.stubGlobal("open", vi.fn().mockReturnValue(child));
+  const onAuthenticated = vi.fn();
+  await act(async () =>
+    root.render(
+      <AccountAuth selectedFile={file} onAuthenticated={onAuthenticated} />,
+    ),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Continue with Google");
+  const started = new URL(
+    vi.mocked(child.location.assign).mock.calls[0][0],
+    window.location.origin,
+  );
+  const flow = new URLSearchParams(
+    started.searchParams.get("return_path")!.split("?")[1],
+  ).get("flow")!;
+  await act(async () =>
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        source: child,
+        data: { type: AUTH_COMPLETE_MESSAGE, flow, auth_result: "success" },
+      }),
+    ),
+  );
+  await flush();
+  expect(calls).toContain("/v1/auth/google/completion");
+  expect(calls).not.toContain("/v1/me/workspaces");
+  expect(onAuthenticated).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("could not be confirmed");
+});
+
+it("treats review_terms as terminal and clears the acknowledgement without reading an old session", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/config")) return Response.json(config);
+      if (url === "/v1/me/workspaces") return Response.json(session);
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  const child = {
+    close: vi.fn(),
+    location: { assign: vi.fn() },
+  } as unknown as Window;
+  vi.stubGlobal("open", vi.fn().mockReturnValue(child));
+  const onAuthenticated = vi.fn();
+  await act(async () =>
+    root.render(
+      <AccountAuth selectedFile={file} onAuthenticated={onAuthenticated} />,
+    ),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Continue with Google");
+  const started = new URL(
+    vi.mocked(child.location.assign).mock.calls[0][0],
+    window.location.origin,
+  );
+  const flow = new URLSearchParams(
+    started.searchParams.get("return_path")!.split("?")[1],
+  ).get("flow")!;
+  await act(async () =>
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        source: child,
+        data: {
+          type: AUTH_COMPLETE_MESSAGE,
+          flow,
+          auth_result: "review_terms",
+        },
+      }),
+    ),
+  );
+  await flush();
+  expect(
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked,
+  ).toBe(false);
+  expect(host.textContent).toContain(
+    "Review the current Terms and Privacy notice",
+  );
+  expect(calls).not.toContain("/v1/me/workspaces");
+  expect(calls).not.toContain("/v1/auth/google/completion");
+  expect(onAuthenticated).not.toHaveBeenCalled();
+});
+
+it("manual Google recovery waits for the exact callback and the matching receipt", async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/config")) return Response.json(config);
+      if (url === "/v1/auth/google/completion")
+        return Response.json({ matched: true });
+      if (url === "/v1/me/workspaces") return Response.json(session);
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  const child = {
+    close: vi.fn(),
+    location: { href: "about:blank", assign: vi.fn() },
+  };
+  vi.stubGlobal("open", vi.fn().mockReturnValue(child));
+  const onAuthenticated = vi.fn();
+  await act(async () =>
+    root.render(
+      <AccountAuth selectedFile={file} onAuthenticated={onAuthenticated} />,
+    ),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Continue with Google");
+  const started = new URL(
+    child.location.assign.mock.calls[0][0],
+    window.location.origin,
+  );
+  const flow = new URLSearchParams(
+    started.searchParams.get("return_path")!.split("?")[1],
+  ).get("flow")!;
+  await click("I finished Google sign-in");
+  expect(calls).not.toContain("/v1/auth/google/completion");
+  expect(calls).not.toContain("/v1/me/workspaces");
+  expect(onAuthenticated).not.toHaveBeenCalled();
+  child.location.href = `${window.location.origin}/auth/complete?flow=${flow}&auth_result=success`;
+  await click("I finished Google sign-in");
+  expect(calls.slice(-2)).toEqual([
+    "/v1/auth/google/completion",
+    "/v1/me/workspaces",
+  ]);
   expect(onAuthenticated).toHaveBeenCalledOnce();
 });
