@@ -35,6 +35,7 @@ from ac_platform.media.local_avatar_processing import (
 from ac_platform.media.local_avatar_runtime import LocalAvatarMediaService, LocalAvatarRuntime
 from ac_platform.media.local_avatar_storage import (
     LOCAL_AVATAR_ORIGIN,
+    MAX_AVATAR_BYTES,
     FilesystemAvatarStorage,
     LocalAvatarStorage,
 )
@@ -274,6 +275,203 @@ def test_filesystem_avatar_store_uses_deployment_contract_and_marker(tmp_path):
         hashlib.sha256(body).hexdigest()
     )
     assert storage.read(key) == body
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://learner-staging.authorityclosers.com",
+        "https://salesxray-staging.authorityclosers.com",
+    ],
+)
+def test_filesystem_avatar_uploads_are_bound_to_one_configured_app_origin(
+    harness, tmp_path, origin
+):
+    database, actor, local_runtime, fallback = harness
+    learner_origin = "https://learner-staging.authorityclosers.com"
+    sales_xray_origin = "https://salesxray-staging.authorityclosers.com"
+    signer = local_runtime.storage.signer
+    storage = FilesystemAvatarStorage(
+        root=tmp_path / "filesystem" / "avatar-objects",
+        signer=signer,
+        fallback=fallback,
+        origin=learner_origin,
+        upload_origins=(learner_origin, sales_xray_origin),
+    )
+    service = LocalAvatarMediaService(
+        storage=storage,
+        signer=local_runtime.service.signer,
+        webhook_secret=local_runtime.service.webhook_secret,
+        scanner=LocalAvatarScanner(),
+        processor=LocalAvatarProcessor(),
+        delivery_port=local_runtime.service.delivery_port,
+        max_upload_bytes=MAX_AVATAR_BYTES,
+    )
+    runtime = LocalAvatarRuntime(storage, service)
+    body = picture()
+    request = UploadIntentRequest(
+        purpose=MediaPurpose.AVATAR,
+        filename="photo.png",
+        content_type="image/png",
+        content_length=len(body),
+        checksum_sha256=hashlib.sha256(body).hexdigest(),
+    )
+
+    upload = service.create_upload_intent(
+        database,
+        actor,
+        request,
+        idempotency_key=f"origin-{origin}",
+        upload_origin=origin,
+    )
+    token = parse_qs(urlsplit(upload.upload_url).query)["token"][0]
+    claims = signer.verify(token, now=datetime.now(UTC), token_type="filesystem-avatar-upload")  # noqa: S106
+    assert urlsplit(upload.upload_url).scheme + "://" + urlsplit(upload.upload_url).netloc == origin
+    assert claims["origin"] == origin
+    assert claims["key"] == upload.object_key
+    assert claims["bytes"] == len(body)
+    assert claims["checksum"] == hashlib.sha256(body).hexdigest()
+    assert storage.origin == learner_origin  # A Sales Xray request never mutates shared storage.
+
+    other_origin = sales_xray_origin if origin == learner_origin else learner_origin
+    with pytest.raises(MediaForbidden):
+        runtime.accept_upload(
+            database,
+            actor,
+            key=upload.object_key,
+            token=token,
+            body=body,
+            content_type="image/png",
+            declared_length=str(len(body)),
+            checksum=hashlib.sha256(body).hexdigest(),
+            origin=other_origin,
+        )
+    assert storage.head(upload.object_key) is None
+
+    legacy_token = signer.sign(
+        {
+            "key": upload.object_key,
+            "bytes": len(body),
+            "mime": "image/png",
+            "checksum": hashlib.sha256(body).hexdigest(),
+        },
+        now=datetime.now(UTC),
+        lifetime=timedelta(minutes=5),
+        token_type="filesystem-avatar-upload",  # noqa: S106 - bounded token kind
+    )
+    with pytest.raises(MediaForbidden):
+        runtime.accept_upload(
+            database,
+            actor,
+            key=upload.object_key,
+            token=legacy_token,
+            body=body,
+            content_type="image/png",
+            declared_length=str(len(body)),
+            checksum=hashlib.sha256(body).hexdigest(),
+            origin=origin,
+        )
+    assert storage.head(upload.object_key) is None
+
+    version_id = runtime.accept_upload(
+        database,
+        actor,
+        key=upload.object_key,
+        token=token,
+        body=body,
+        content_type="image/png",
+        declared_length=str(len(body)),
+        checksum=hashlib.sha256(body).hexdigest(),
+        origin=origin,
+    )
+    assert version_id == upload.media_version_id
+    assert storage.read(upload.object_key) == body
+
+    with pytest.raises(MediaStorageUnavailable):
+        storage.for_upload_origin("https://attacker.example")
+
+
+def test_filesystem_avatar_read_urls_follow_each_app_surface_and_revalidate_session(
+    harness, tmp_path
+):
+    database, actor, local_runtime, fallback = harness
+    learner_origin = "https://learner-staging.authorityclosers.com"
+    sales_xray_origin = "https://salesxray-staging.authorityclosers.com"
+    storage = FilesystemAvatarStorage(
+        root=tmp_path / "surface-read" / "avatar-objects",
+        signer=local_runtime.storage.signer,
+        fallback=fallback,
+        origin=learner_origin,
+        upload_origins=(learner_origin, sales_xray_origin),
+    )
+    service = LocalAvatarMediaService(
+        storage=storage,
+        signer=local_runtime.service.signer,
+        webhook_secret=local_runtime.service.webhook_secret,
+        scanner=LocalAvatarScanner(),
+        processor=LocalAvatarProcessor(),
+        delivery_port=local_runtime.service.delivery_port,
+        max_upload_bytes=MAX_AVATAR_BYTES,
+    )
+    runtime = LocalAvatarRuntime(storage, service)
+    body = picture()
+    upload_request = UploadIntentRequest(
+        purpose=MediaPurpose.AVATAR,
+        filename="surface-read.png",
+        content_type="image/png",
+        content_length=len(body),
+        checksum_sha256=hashlib.sha256(body).hexdigest(),
+    )
+    upload = service.create_upload_intent(
+        database,
+        actor,
+        upload_request,
+        idempotency_key="surface-read-upload",
+        upload_origin=sales_xray_origin,
+    )
+    token = parse_qs(urlsplit(upload.upload_url).query)["token"][0]
+    runtime.accept_upload(
+        database,
+        actor,
+        key=upload.object_key,
+        token=token,
+        body=body,
+        content_type="image/png",
+        declared_length=str(len(body)),
+        checksum=hashlib.sha256(body).hexdigest(),
+        origin=sales_xray_origin,
+    )
+    service.complete_upload(
+        database,
+        actor,
+        upload.upload_id,
+        UploadCompleteRequest(
+            actual_bytes=len(body), checksum_sha256=hashlib.sha256(body).hexdigest()
+        ),
+        idempotency_key="surface-read-complete",
+        expected_purpose=MediaPurpose.AVATAR,
+    )
+    runtime.finish(database, actor, upload.upload_id)
+
+    learner_result = service.get_profile_avatar_for_origin(database, actor, origin=learner_origin)
+    sales_result = service.get_profile_avatar_for_origin(database, actor, origin=sales_xray_origin)
+    assert learner_result.avatar is not None and learner_result.avatar.delivery_url is not None
+    assert sales_result.avatar is not None and sales_result.avatar.delivery_url is not None
+    assert urlsplit(learner_result.avatar.delivery_url).netloc == urlsplit(learner_origin).netloc
+    assert urlsplit(sales_result.avatar.delivery_url).netloc == urlsplit(sales_xray_origin).netloc
+    assert service.delivery_port.delivery_origin == LOCAL_AVATAR_ORIGIN
+
+    read_token = parse_qs(urlsplit(sales_result.avatar.delivery_url).query)["token"][0]
+    claims = service.delivery_port.signer.verify(
+        read_token,
+        now=datetime.now(UTC),
+        token_type="read",  # noqa: S106 - bounded token kind
+    )
+    assert "origin" not in claims
+    assert runtime.authorize_read(database, actor, claims)
+    assert not runtime.authorize_read(database, replace(actor, session_id=uuid4()), claims)
+    with pytest.raises(MediaForbidden):
+        service.get_profile_avatar_for_origin(database, actor, origin="https://attacker.example")
 
 
 def test_signed_read_requires_current_own_session_and_replacement_supersedes(harness):

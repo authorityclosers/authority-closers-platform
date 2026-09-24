@@ -323,6 +323,11 @@ const AVATAR_STATUS_MAX_ATTEMPTS = 12;
 const AVATAR_STATUS_INITIAL_DELAY_MS = 750;
 const AVATAR_STATUS_MAX_DELAY_MS = 5_000;
 export const AVATAR_HASH_CHUNK_BYTES = BLOB_HASH_CHUNK_BYTES;
+const FILESYSTEM_AVATAR_UPLOAD_PREFIX =
+  "/v1/media/filesystem-avatar-upload/";
+const FILESYSTEM_AVATAR_OBJECT_KEY =
+  /^tenants\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/media\/avatar\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/original$/;
+const MEDIA_TOKEN = /^AC-MEDIA\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/;
 
 class AvatarTimeoutError extends Error {
   constructor() {
@@ -393,6 +398,117 @@ async function checksumSha256(
     if (signal?.aborted) throw error;
     return undefined;
   }
+}
+
+type AvatarDirectUploadIntent = {
+  upload_url: string;
+  object_key: string;
+  upload_headers: Record<string, string>;
+};
+
+type AvatarDirectUploadOptions = Pick<
+  RequestInit,
+  | "headers"
+  | "credentials"
+  | "mode"
+  | "cache"
+  | "redirect"
+  | "referrerPolicy"
+>;
+
+function browserSafeUploadHeaders(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const normalized = name.toLowerCase();
+    if (
+      normalized === "content-length" ||
+      normalized === "origin" ||
+      normalized === "cookie" ||
+      normalized === "host"
+    ) {
+      continue;
+    }
+    safe[name] = value;
+  }
+  return safe;
+}
+
+function avatarDirectUploadOptions(
+  intent: AvatarDirectUploadIntent,
+  file: File,
+  contentType: AvatarAcceptedMimeType,
+  checksum: string,
+  browserOrigin: string | null =
+    typeof window === "undefined" ? null : window.location.origin,
+): AvatarDirectUploadOptions | null {
+  let uploadUrl: URL;
+  try {
+    uploadUrl = new URL(intent.upload_url);
+  } catch {
+    return null;
+  }
+
+  if (uploadUrl.pathname.startsWith(FILESYSTEM_AVATAR_UPLOAD_PREFIX)) {
+    const normalized = new Map<string, string>();
+    for (const [name, value] of Object.entries(intent.upload_headers)) {
+      const key = name.toLowerCase();
+      if (normalized.has(key)) return null;
+      normalized.set(key, value);
+    }
+    const tokenEntries = Array.from(uploadUrl.searchParams.entries());
+    const encodedKey = intent.object_key.replaceAll("/", "%2F");
+    if (
+      !browserOrigin ||
+      uploadUrl.protocol !== "https:" ||
+      uploadUrl.origin !== browserOrigin ||
+      uploadUrl.username ||
+      uploadUrl.password ||
+      uploadUrl.hash ||
+      !FILESYSTEM_AVATAR_OBJECT_KEY.test(intent.object_key) ||
+      uploadUrl.pathname !== `${FILESYSTEM_AVATAR_UPLOAD_PREFIX}${encodedKey}` ||
+      tokenEntries.length !== 1 ||
+      tokenEntries[0]?.[0] !== "token" ||
+      uploadUrl.search !== `?token=${tokenEntries[0]?.[1]}` ||
+      !MEDIA_TOKEN.test(tokenEntries[0]?.[1] ?? "") ||
+      normalized.size !== 3 ||
+      normalized.get("content-type") !== contentType ||
+      normalized.get("content-length") !== String(file.size) ||
+      normalized.get("x-content-sha256") !== checksum
+    ) {
+      return null;
+    }
+    return {
+      headers: {
+        "content-type": contentType,
+        "x-content-sha256": checksum,
+      },
+      credentials: "same-origin",
+      mode: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    };
+  }
+
+  const localSandbox = isLocalSandboxAvatarUploadUrl(uploadUrl, browserOrigin);
+  if (
+    (!localSandbox && uploadUrl.protocol !== "https:") ||
+    uploadUrl.username ||
+    uploadUrl.password ||
+    uploadUrl.hash
+  ) {
+    return null;
+  }
+  return {
+    headers: browserSafeUploadHeaders(intent.upload_headers),
+    credentials: localSandbox ? "same-origin" : "omit",
+    ...(localSandbox ? { mode: "same-origin" as const } : {}),
+    cache: "no-store",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+  };
 }
 
 type AvatarUploadApi = Pick<
@@ -495,6 +611,19 @@ export function createApiAvatarUploadPort(
               "The avatar upload window expired before it started. Your current avatar is unchanged; try again.",
           };
         }
+        const uploadOptions = avatarDirectUploadOptions(
+          intent,
+          input.file,
+          validation.mimeType,
+          checksum,
+        );
+        if (!uploadOptions) {
+          return {
+            status: "terminal_error",
+            message:
+              "The profile service returned an invalid upload target. Your current avatar is unchanged.",
+          };
+        }
 
         let uploadResponse: Response;
         try {
@@ -504,15 +633,8 @@ export function createApiAvatarUploadPort(
             (requestSignal) =>
               fetch(intent.upload_url, {
                 method: "PUT",
-                headers: intent.upload_headers,
+                ...uploadOptions,
                 body: input.file,
-                credentials: isLocalSandboxAvatarUploadUrl(
-                  new URL(intent.upload_url),
-                )
-                  ? "same-origin"
-                  : "omit",
-                cache: "no-store",
-                redirect: "error",
                 signal: requestSignal,
               }),
           );
