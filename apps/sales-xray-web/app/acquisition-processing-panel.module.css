@@ -71,9 +71,9 @@
 .journey {
   display: flex;
   min-height: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: clamp(12px, 1.5vh, 18px);
   padding: clamp(13px, 1.6vw, 20px) clamp(13px, 1.7vw, 20px);
   border: 1px solid #dce6fa;
@@ -471,6 +471,9 @@
     height: min(100%, calc(100dvh - 174px));
     gap: 9px;
     padding: 11px;
+  }
+  .panel[data-paused="true"] {
+    height: auto;
   }
   .journey {
     gap: 13px;

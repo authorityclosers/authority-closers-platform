@@ -223,7 +223,6 @@ export function SalesXrayFixturePreview({
                 fileMeta="Synthetic audio · no file stored"
               />
             </div>
-            <AcquisitionGuideRail stage="empty" staticPreview />
           </div>
         </div>
       </div>

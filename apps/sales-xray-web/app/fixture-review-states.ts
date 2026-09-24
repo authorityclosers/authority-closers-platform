@@ -107,10 +107,16 @@ function processingProgress(id: FixtureStateId): Progress | null {
                 { stage: "C4", state: "completed" },
                 { stage: "C5", state: "running" },
               ]
-            : [
-                { stage: "C2", state: "completed" },
-                { stage: "C4", state: paused ? "uncertain" : "failed" },
-              ],
+            : paused
+              ? [
+                  { stage: "C2", state: "completed" },
+                  { stage: "C4", state: "completed" },
+                  { stage: "C5", state: "uncertain" },
+                ]
+              : [
+                  { stage: "C2", state: "completed" },
+                  { stage: "C4", state: "failed" },
+                ],
   };
 }
 
