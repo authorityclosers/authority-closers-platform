@@ -33,3 +33,5 @@ The workspace runtime is Node 22.17.0, below the package's declared Node 24 requ
 Integrated from UI checkpoint `5bed485246119314f2b755a3d6dcc5ca66e0506c` onto release candidate `0b3f031e23985770519b45c305517489e23be50f`. The release keeps its existing compact spacing and recovery actions before the stage list and uploaded file. The conflicting upstream test asserting file-before-actions was not adopted; the release regression asserts the earlier recovery-action order.
 
 The three focused suites pass together: 77 tests using Node 24.19.0. The screenshots above belong to the UI checkpoint, not the combined release candidate; they do not establish browser acceptance of the merged candidate.
+
+Full CI on `7b3206af` caught one stale mounted-fixture assertion that still required the removed onboarding rail. The fixture test now asserts its absence while retaining the no-operational-request, production-component, and source-audio isolation checks. The separate acquisition browser check passed on that candidate. The corrected source requires fresh CI.

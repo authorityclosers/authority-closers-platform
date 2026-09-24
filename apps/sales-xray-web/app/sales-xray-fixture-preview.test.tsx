@@ -84,8 +84,7 @@ it("mounts the real static processing panel after local health with no operation
   const rail = container.querySelector(
     '[aria-label="Getting started and help"]',
   );
-  expect(rail?.getAttribute("data-static-preview")).toBe("true");
-  expect(rail?.querySelector("details")).toBeNull();
+  expect(rail).toBeNull();
   expect(container.textContent).not.toContain("Check status");
   expect(
     container.querySelector('a[href="/?new=1&sx-fixture=processing.report"]'),
