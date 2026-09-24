@@ -177,9 +177,9 @@ it("shows one overview metrics row with a deduplicated playable highlight count"
     ),
   );
 
-  expect(container.querySelectorAll('[aria-label="Call metrics"]')).toHaveLength(
-    1,
-  );
+  expect(
+    container.querySelectorAll('[aria-label="Call metrics"]'),
+  ).toHaveLength(1);
   const dashboardMetrics = container.querySelector(
     'section[aria-label="Call overview"] [aria-label="Call metrics"]',
   );

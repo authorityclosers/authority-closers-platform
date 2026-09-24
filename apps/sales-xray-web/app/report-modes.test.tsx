@@ -188,7 +188,9 @@ it("keeps a bookmarked tab when its already-selected view is clicked again", asy
   window.history.replaceState(null, "", `/${query}`);
   await render(call);
   await act(async () =>
-    container.querySelector<HTMLButtonElement>('[aria-pressed="true"]')!.click(),
+    container
+      .querySelector<HTMLButtonElement>('[aria-pressed="true"]')!
+      .click(),
   );
   expect(mode().dataset.reportSection).toBe("transcript");
   expect(window.location.search).toBe(query);

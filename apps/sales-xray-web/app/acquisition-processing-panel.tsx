@@ -275,7 +275,11 @@ export function AcquisitionProcessingPanel({
                 : guidance}
           </p>
           {!staticPreview && (
-            <div className={styles.actions} role="group" aria-label="Recovery actions">
+            <div
+              className={styles.actions}
+              role="group"
+              aria-label="Recovery actions"
+            >
               {children}
             </div>
           )}
