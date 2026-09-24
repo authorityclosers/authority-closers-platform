@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import Link from "next/link";
 import {
   AudioLines,
@@ -559,6 +559,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const [momentStatus, setMomentStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const momentEndMs = useRef<number | null>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
@@ -814,6 +815,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   ]);
 
   function clearAudioPlayback() {
+    momentEndMs.current = null;
     try {
       audio.current?.pause();
     } catch {
@@ -1176,9 +1178,11 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
       return;
     }
     try {
+      momentEndMs.current = moment.end_ms;
       player.currentTime = moment.start_ms / 1000;
       const playback = player.play();
       if (!playback || typeof playback.then !== "function") {
+        momentEndMs.current = null;
         setMomentStatus(copy.playbackBlocked);
         return;
       }
@@ -1186,10 +1190,32 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
         .then(() =>
           setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
         )
-        .catch(() => setMomentStatus(copy.playbackBlocked));
+        .catch(() => {
+          momentEndMs.current = null;
+          setMomentStatus(copy.playbackBlocked);
+        });
     } catch {
+      momentEndMs.current = null;
       setMomentStatus(copy.playbackUnavailable);
     }
+  }
+  function stopAtMomentEnd(event: SyntheticEvent<HTMLAudioElement>) {
+    const endMs = momentEndMs.current;
+    const player = event.currentTarget;
+    if (
+      endMs === null ||
+      audio.current !== player ||
+      player.currentTime * 1000 < endMs
+    )
+      return;
+    momentEndMs.current = null;
+    try {
+      player.currentTime = endMs / 1000;
+    } catch {
+      // Pause at the best available media position if the browser rejects a final seek.
+    }
+    player.pause();
+    setMomentStatus("");
   }
   function restart() {
     ++attempt.current;
@@ -1359,6 +1385,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Listen here to check you chose the right recording. Selecting
@@ -1401,6 +1428,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Select a timestamp in the report to replay that part of your

@@ -224,6 +224,33 @@ it("tracks the section in view and marks its navigation link", async () => {
   ).toBe("location");
 });
 
+it("preserves the section in view when switching from Reading to Tabs", async () => {
+  await render(call);
+  const positions = [-500, -300, -100, -80, 90, 900];
+  sections().forEach((section, index) => {
+    vi.spyOn(
+      section.querySelector("h2")!,
+      "getBoundingClientRect",
+    ).mockReturnValue({ top: positions[index], height: 24 } as DOMRect);
+  });
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  expect(mode().dataset.reportSection).toBe("next-call-plan");
+
+  const tabsButton = container.querySelector<HTMLButtonElement>(
+    '[role="group"] button[aria-pressed="false"]',
+  )!;
+  await act(async () => tabsButton.click());
+
+  expect(mode().dataset.view).toBe("tabs");
+  expect(mode().dataset.reportSection).toBe("next-call-plan");
+  expect(window.location.search).toContain("section=next-call-plan");
+  expect(
+    sections()
+      .filter((section) => !section.hidden)
+      .map((section) => section.id),
+  ).toEqual([expect.stringContaining("section-next-call-plan")]);
+});
+
 it("reads a tab bookmark only for its bound call", async () => {
   window.history.replaceState(
     null,

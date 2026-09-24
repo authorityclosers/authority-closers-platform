@@ -211,7 +211,10 @@ export function ReportModes({
   }
 
   function changeView(nextView: View) {
-    const section = selected ?? panels[0]?.id;
+    const section =
+      view === "reading" && nextView === "tabs"
+        ? currentSection
+        : (selected ?? panels[0]?.id);
     if (section) navigate(section, nextView);
   }
 
