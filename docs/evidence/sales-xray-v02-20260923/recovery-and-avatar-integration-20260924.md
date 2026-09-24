@@ -11,7 +11,11 @@ The shared avatar repair is documented in
 `../20260924_HOSTED_AVATAR_UPLOAD_TRANSPORT.md`. It was integrated from the isolated
 transport worktree without conflicts. Its 68 Python tests and 20 client tests,
 targeted lint/type checks passed before integration. Root reviewed the origin,
-session and request-scoped adapter changes. An independent review is pending.
+session and request-scoped adapter changes. An independent Luna source review
+found no high/medium blockers. It caught an inaccurate comment claiming the
+server disables Uvicorn proxy handling; the comment now accurately states that
+this selector uses raw Host and configured origins independently of proxy
+handling. Runtime behavior is unchanged.
 
 Root's integration format check caught Prettier differences in the two avatar
 client files and the processing panel; applying the pinned formatter corrected

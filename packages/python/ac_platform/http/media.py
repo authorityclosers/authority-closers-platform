@@ -67,8 +67,8 @@ def _filesystem_avatar_surface_origin(
 
     Writes require an exact Origin header. Same-surface reads commonly omit
     Origin, so they bind to the exact configured HTTPS origin selected by Host.
-    This service runs with Uvicorn proxy-header processing disabled; forwarded
-    host/proto headers are deliberately not used as authority.
+    Raw Host and configured origins are used independently of Uvicorn's proxy
+    handling; forwarded host/proto headers are not used as authority here.
     """
 
     origins = request.headers.getlist("origin")
