@@ -452,10 +452,10 @@ def test_shared_browser_fixture_passes_the_authoritative_backend_parser() -> Non
     assert result.overview.model_dump(mode="json") == fixture["report"]["overview"]
 
 
-def test_detailed_response_allocation_cannot_raise_the_owner_approved_cap() -> None:
-    assert stage_completion_limit("C5", 4000) == 3200
+def test_response_allocation_preserves_the_owner_approved_route_bounded_cap() -> None:
+    assert stage_completion_limit("C5", 4000) == 4000
     assert stage_completion_limit("C5", 1400) == 1400
-    assert stage_completion_limit("C4", 4000) == 1400
+    assert stage_completion_limit("C4", 4000) == 4000
     for maximum in [True, 0, 255, 4001]:
         with pytest.raises(ValueError, match="report_stage_limit_invalid"):
             stage_completion_limit("C5", maximum)

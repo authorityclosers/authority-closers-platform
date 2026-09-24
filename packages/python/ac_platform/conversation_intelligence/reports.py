@@ -168,6 +168,17 @@ _FORBIDDEN_NUMERIC_KEY = re.compile(
     r"(?:score|grade|rating|points?|numeric|percent|percentage|rank|overall_score)",
     re.IGNORECASE,
 )
+_NON_NUMERIC_KEY_LABELS = frozenset(
+    {
+        "pain_points",
+        "painpoints",
+        "key_talking_points",
+        "keytalkingpoints",
+        "turning_point",
+        "turningpoint",
+        "prank",
+    }
+)
 _ALLOWED_DIMENSION_STATES = frozenset(
     {"observed", "insufficient_evidence", "not_applicable", "conflicted", "unknown"}
 )
@@ -877,12 +888,19 @@ def build_groq_prompt(
 def _reject_numeric_fields(value: Any, path: str = "payload") -> None:
     if isinstance(value, Mapping):
         for key, child in value.items():
-            if isinstance(key, str) and _FORBIDDEN_NUMERIC_KEY.search(key):
+            if isinstance(key, str) and _has_forbidden_numeric_key(key):
                 raise ReportError("report_numeric_field_forbidden")
             _reject_numeric_fields(child, f"{path}.{key}")
     elif isinstance(value, list):
         for index, child in enumerate(value):
             _reject_numeric_fields(child, f"{path}[{index}]")
+
+
+def _has_forbidden_numeric_key(key: str) -> bool:
+    """Retain legacy denials except for explicitly reviewed language labels."""
+    if key.casefold() in _NON_NUMERIC_KEY_LABELS:
+        return False
+    return _FORBIDDEN_NUMERIC_KEY.search(key) is not None
 
 
 def _provider_extras(
@@ -1521,7 +1539,7 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/2"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/5"
 
 
 def _adapt_unbound_provider_findings(
