@@ -560,6 +560,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const momentEndMs = useRef<number | null>(null);
+  const programmaticSeekTargetMs = useRef<number | null>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
@@ -816,6 +817,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
 
   function clearAudioPlayback() {
     momentEndMs.current = null;
+    programmaticSeekTargetMs.current = null;
     try {
       audio.current?.pause();
     } catch {
@@ -1179,10 +1181,12 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     }
     try {
       momentEndMs.current = moment.end_ms;
+      programmaticSeekTargetMs.current = moment.start_ms;
       player.currentTime = moment.start_ms / 1000;
       const playback = player.play();
       if (!playback || typeof playback.then !== "function") {
         momentEndMs.current = null;
+        programmaticSeekTargetMs.current = null;
         setMomentStatus(copy.playbackBlocked);
         return;
       }
@@ -1192,12 +1196,30 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
         )
         .catch(() => {
           momentEndMs.current = null;
+          programmaticSeekTargetMs.current = null;
           setMomentStatus(copy.playbackBlocked);
         });
     } catch {
       momentEndMs.current = null;
+      programmaticSeekTargetMs.current = null;
       setMomentStatus(copy.playbackUnavailable);
     }
+  }
+  function allowFullCallSeek(event: SyntheticEvent<HTMLAudioElement>) {
+    const player = event.currentTarget;
+    if (audio.current !== player || momentEndMs.current === null) return;
+    const expectedMs = programmaticSeekTargetMs.current;
+    if (
+      expectedMs !== null &&
+      Math.abs(player.currentTime * 1000 - expectedMs) <= 40
+    ) {
+      programmaticSeekTargetMs.current = null;
+      return;
+    }
+    programmaticSeekTargetMs.current = null;
+    momentEndMs.current = null;
+    setSelectedMomentKey(null);
+    setMomentStatus("");
   }
   function stopAtMomentEnd(event: SyntheticEvent<HTMLAudioElement>) {
     const endMs = momentEndMs.current;
@@ -1385,6 +1407,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
                   onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
@@ -1428,6 +1451,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
                   onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">

@@ -559,9 +559,22 @@ describe("CallStudio", () => {
     vi.spyOn(audio, "play").mockResolvedValue();
     await act(async () => getButton("00:01").click());
     expect(audio.currentTime).toBe(1.5);
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
     audio.currentTime = 2.4;
     await act(async () => audio.dispatchEvent(new Event("timeupdate")));
     expect(audio.currentTime).toBe(2.2);
+    expect(pause).toHaveBeenCalledOnce();
+
+    const moment = container.querySelector<HTMLButtonElement>(".studio-moment");
+    expect(moment).not.toBeNull();
+    await act(async () => moment?.click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    expect(moment?.getAttribute("aria-pressed")).toBe("true");
+    audio.currentTime = 3.1;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.1);
+    expect(moment?.getAttribute("aria-pressed")).toBe("false");
     expect(pause).toHaveBeenCalledOnce();
   });
 
