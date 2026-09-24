@@ -1705,6 +1705,68 @@ export function AcquisitionStudio({
               </button>
             </aside>
           )}
+          {visibleError && !savedCallNeedsSession && (
+            <div className={`notice error ${styles.error}`} role="alert">
+              {statusIssue && !error && (
+                <p>
+                  Status could not be refreshed. This does not mean analysis
+                  failed.
+                </p>
+              )}
+              <p>
+                {visibleError instanceof AcquisitionError
+                  ? visibleError.message
+                  : visibleError}
+              </p>
+              <div className={styles.errorActions}>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setError("");
+                    if (submission) {
+                      setConsentedSubmissionId(null);
+                      setPollAttempt((n) => n + 1);
+                    } else setAttempt((n) => n + 1);
+                  }}
+                >
+                  Check again
+                </button>
+                {error &&
+                  submission &&
+                  progress?.local_state === "completed" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
+                      onClick={() => void freshPlan()}
+                    >
+                      Request a fresh plan
+                    </button>
+                  )}
+                {(!submission || !progress || (plan && !plan.accepted)) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={startAnotherCall}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" />
+                    Analyse another call
+                  </button>
+                )}
+                {visibleError instanceof AcquisitionError &&
+                  visibleError.status === 401 && (
+                    <Link className="text-button" href="/login">
+                      Sign in
+                    </Link>
+                  )}
+              </div>
+            </div>
+          )}
           {savedCallRecovery}
           <div
             className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
@@ -2486,68 +2548,6 @@ export function AcquisitionStudio({
               />
             )}
           </div>
-          {visibleError && !savedCallNeedsSession && (
-            <div className={`notice error ${styles.error}`} role="alert">
-              {statusIssue && !error && (
-                <p>
-                  Status could not be refreshed. This does not mean analysis
-                  failed.
-                </p>
-              )}
-              <p>
-                {visibleError instanceof AcquisitionError
-                  ? visibleError.message
-                  : visibleError}
-              </p>
-              <div className={styles.errorActions}>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => {
-                    setError("");
-                    if (submission) {
-                      setConsentedSubmissionId(null);
-                      setPollAttempt((n) => n + 1);
-                    } else setAttempt((n) => n + 1);
-                  }}
-                >
-                  Check again
-                </button>
-                {error &&
-                  submission &&
-                  progress?.local_state === "completed" && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={
-                        !!busy || analysisPaused || analysisWriteBlocked
-                      }
-                      onClick={() => void freshPlan()}
-                    >
-                      Request a fresh plan
-                    </button>
-                  )}
-                {(!submission || !progress || (plan && !plan.accepted)) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={startAnotherCall}
-                  >
-                    <ArrowRight size={16} aria-hidden="true" />
-                    Analyse another call
-                  </button>
-                )}
-                {visibleError instanceof AcquisitionError &&
-                  visibleError.status === 401 && (
-                    <Link className="text-button" href="/login">
-                      Sign in
-                    </Link>
-                  )}
-              </div>
-            </div>
-          )}
           {result && report && (
             <SourceWaveformProvider
               submissionId={submission?.id}

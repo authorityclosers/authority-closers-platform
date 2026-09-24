@@ -31,3 +31,25 @@ Private identifiers and the fingerprint receipt remain outside Git.
 No application deployment, recording processing, paid provider request or
 production change was performed for this checkpoint. Live auth, avatar and report
 acceptance remain required.
+# Final report integration and recovery placement
+
+Integrated the UI studio report handoff `e57c1084749dc25e1494f4b6ca989eb6397d1983`
+as `4fc17e25`, preserving the root's deduplicated moment groups and related
+observations alongside inline playback actions. Continuous reading and tabs use
+the same report content and audio controller. Moved the existing error/recovery
+block above the content grid without changing retry or paid-plan handlers.
+
+The combined acquisition, report modes, moments and skills suite passed 99 tests
+with one worker. The lost-quote test additionally asserts that recovery precedes
+the call panel and retains the separate read-only status/review/accept actions.
+These checks do not establish hosted layout, login delivery, or report quality;
+those require exact-release staging and production evidence.
+
+Final lint identified synchronous effect state updates in the new report modes
+and skills components. The reading bookmark now synchronizes with the scheduled
+DOM scroll; switching modes resets the selected skill before committing its
+render. Thirteen focused follow-up tests pass, including a stale-dialog
+regression, and final focused ESLint passes. The whole frontend formatting
+check and Sales Xray TypeScript check passed. A transient local module-resolution
+failure during lint was not counted as a pass; the successful rerun used the
+same installed ESLint and source files.

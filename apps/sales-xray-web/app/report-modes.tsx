@@ -111,10 +111,11 @@ export function ReportModes({
         previous === current ? previous : current,
       );
     };
-    update();
+    const frame = requestAnimationFrame(update);
     document.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
+      cancelAnimationFrame(frame);
       document.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
@@ -126,8 +127,8 @@ export function ReportModes({
       !new URLSearchParams(search).has("section")
     )
       return;
-    setReadingSection(linked.section);
     const frame = requestAnimationFrame(() => {
+      setReadingSection(linked.section);
       document
         .getElementById(`${id}-heading-${linked.section}`)
         ?.scrollIntoView?.({ block: "start" });

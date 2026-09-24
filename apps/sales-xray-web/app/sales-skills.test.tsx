@@ -172,6 +172,25 @@ it("shows exact skill excerpts and seeks their source, without using coaching ci
   expect(container.querySelector('[role="dialog"]')).toBeNull();
 });
 
+it("closes an open skill when changing modes without reopening a stale dialog", async () => {
+  const renderMode = async (reading: boolean) => {
+    await act(async () =>
+      root.render(
+        <ReportReadingProvider reading={reading}>
+          <SalesSkills dimensions={dimensions} />
+        </ReportReadingProvider>,
+      ),
+    );
+  };
+  await renderMode(false);
+  await act(async () => button(`Open notes: ${dimensions[0].label}`).click());
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  await renderMode(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await renderMode(false);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+});
+
 it("shows every skill observation, source excerpt, and citation in reading mode", async () => {
   const evidence = {
     segment_id: "segment-reading",

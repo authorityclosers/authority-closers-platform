@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -49,9 +49,11 @@ export function SalesSkills({
   const reading = useReportReading();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  useEffect(() => {
-    if (reading) setSelectedId(null);
-  }, [reading]);
+  const [previousReading, setPreviousReading] = useState(reading);
+  if (previousReading !== reading) {
+    setPreviousReading(reading);
+    setSelectedId(null);
+  }
   const selectedIndex = dimensions.findIndex(
     (item) => item.dimension_id === selectedId,
   );

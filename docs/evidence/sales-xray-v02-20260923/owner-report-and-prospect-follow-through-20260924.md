@@ -88,3 +88,17 @@ The initial library architecture does not authorize ingesting unspecified Drive
 folders or running transcription before the recordings, permissions and cost
 controls are supplied. It also does not authorize replacing working engines
 with speculative C++ components without equivalence and performance evidence.
+
+## Subsequent owner priority and collaboration scope
+
+The owner reaffirmed the immediate priority: a completed, detailed new-engine
+report on production, with actual end-to-end evidence. The following additions
+remain tracked after that emergency release rather than extending its scope:
+shared AC username selection, opt-in member discovery, connection invitations
+and acceptance, and explicit call/report sharing from the Calls action menu.
+Sharing must grant access to the intended recording/report without transferring
+ownership or generating another billable analysis. Email/name searches must
+not expose a public account directory or become an account enumeration route.
+AC and Sales Xray notifications, including email, need a defined shared account
+contract and preferences. Existing community connections do not themselves
+authorize access to private recordings.
