@@ -818,7 +818,8 @@ def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:
         "ProtectHome=true",
         "RestrictAddressFamilies=AF_INET AF_UNIX",
         "CapabilityBoundingSet=",
-        "ReadWritePaths=/srv/authority-closers/backups/application /run/lock",
+        "ReadWritePaths=/srv/authority-closers/backups/application "
+        "/var/cache/authority-closers-restic /run/lock",
         "TimeoutStartSec=60min",
         "TimeoutStopSec=30s",
         "Environment=AC_IPV4_ONLY=1",
@@ -834,6 +835,28 @@ def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:
     assert (
         backup.worst_case_two_environment_backup_seconds() <= backup.BACKUP_SERVICE_TIMEOUT_SECONDS
     )
+
+
+def test_every_restic_unit_can_write_the_shared_restic_cache() -> None:
+    # Without a writable cache, ProtectSystem=strict silently forces Restic to
+    # re-download every snapshot and index object on each run. At a five-minute
+    # cadence that exhausted the R2 Class B allowance in September 2026.
+    cache = "/var/cache/authority-closers-restic"
+    for unit in (
+        "ac-postgres-backup.service",
+        "ac-restic-backup.service",
+        "ac-restic-restore-check.service",
+        "ac-restic-postgres-restore-proof@.service",
+    ):
+        text = (FOUNDATION / "config" / "systemd" / unit).read_text(encoding="utf-8")
+        writable = [
+            path
+            for line in text.splitlines()
+            if line.strip().startswith("ReadWritePaths=")
+            for path in line.split("=", 1)[1].split()
+        ]
+        assert "ProtectSystem=strict" in text, unit
+        assert cache in writable, unit
 
 
 def test_r2_guard_retry_and_transient_unit_bounds_are_aligned() -> None:
