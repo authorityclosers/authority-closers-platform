@@ -137,9 +137,15 @@ class InternalTesterApproval(_StrictFrozenModel):
     id: UUID
     email: str = Field(min_length=3, max_length=320)
     authorization_ref: str = Field(min_length=6, max_length=256)
-    scopes: tuple[Literal["account_minutes", "analysis_count", "ip_session_issuance"], ...] = Field(
-        min_length=1, max_length=3
-    )
+    scopes: tuple[
+        Literal[
+            "account_minutes",
+            "analysis_count",
+            "ip_session_issuance",
+            "provider_stage_request_count",
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=4)
     reason: Literal["Approved internal tester exemption"]
 
     _authorization_ref = field_validator("authorization_ref")(_validate_reference)

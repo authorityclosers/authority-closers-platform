@@ -125,6 +125,90 @@ async def test_processing_membership_does_not_receive_human_tester_exemption() -
     ) is None
 
 
+@pytest.mark.asyncio
+async def test_provider_request_count_scope_requires_exact_live_human_owner() -> None:
+    bundle = _live_bundle(
+        _approval(
+            "dipak@authorityclosers.com",
+            scopes=("provider_stage_request_count",),
+        )
+    )
+    policy = InternalTesterPolicy(lambda: bundle, "test")
+    person, member = _identity("dipak@authorityclosers.com")
+
+    allowed = await policy.for_human_owner(
+        _ScalarDatabase(person, member),
+        tenant_id=TENANT_ID,
+        person_id=PERSON_ID,
+        scope="provider_stage_request_count",
+        bundle=bundle,
+    )
+    assert allowed is not None
+
+    ordinary, ordinary_member = _identity("ordinary@example.com")
+    unverified, unverified_member = _identity("dipak@authorityclosers.com", verified=False)
+    rejected_identities = (
+        (ordinary, ordinary_member),
+        (unverified, unverified_member),
+        (
+            person,
+            SimpleNamespace(status="active", role="processing", ended_at=None),
+        ),
+        (
+            person,
+            SimpleNamespace(status="ended", role="learner", ended_at=datetime.now(UTC)),
+        ),
+    )
+    for other_person, other_member in rejected_identities:
+        result = await policy.for_human_owner(
+            _ScalarDatabase(other_person, other_member),
+            tenant_id=TENANT_ID,
+            person_id=PERSON_ID,
+            scope="provider_stage_request_count",
+            bundle=bundle,
+        )
+        assert result is None
+
+    direct_actor = ActorContext(PERSON_ID, uuid4(), TENANT_ID)
+    assert (
+        await policy.for_actor(
+            _ScalarDatabase(person, member),
+            direct_actor,
+            "provider_stage_request_count",
+            bundle=bundle,
+        )
+    ) is not None
+    assert (
+        await policy.for_actor(
+            _ScalarDatabase(person, member),
+            direct_actor,
+            "analysis_count",
+            bundle=bundle,
+        )
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_provider_request_count_scope_expires_with_pinned_bundle() -> None:
+    bundle = _live_bundle(
+        _approval(
+            "dipak@authorityclosers.com",
+            scopes=("provider_stage_request_count",),
+        )
+    )
+    expired = bundle.model_copy(update={"expires_at_epoch": int(datetime.now(UTC).timestamp()) - 1})
+    person, member = _identity("dipak@authorityclosers.com")
+
+    result = await InternalTesterPolicy(lambda: expired, "test").for_human_owner(
+        _ScalarDatabase(person, member),
+        tenant_id=TENANT_ID,
+        person_id=PERSON_ID,
+        scope="provider_stage_request_count",
+    )
+
+    assert result is None
+
+
 def test_admin_projection_exposes_scopes_without_authorization_references() -> None:
     bundle = _live_bundle(_approval("admin@authorityclosers.com"))
 
