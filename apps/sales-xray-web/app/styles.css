@@ -3,6 +3,7 @@
 /* The body class is applied only by the standalone document layout. */
 .sales-xray-document {
   margin: 0;
+  --report-font: "Plus Jakarta Sans Variable", "Segoe UI Variable", "Segoe UI", sans-serif;
 }
 
 .sales-xray-live-data-banner {

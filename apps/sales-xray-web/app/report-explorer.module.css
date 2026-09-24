@@ -1,6 +1,7 @@
 .explorer {
   min-width: 0;
   margin-block: 0;
+  font-family: var(--report-font);
 }
 
 .tabs {
@@ -28,8 +29,9 @@
   background: transparent;
   color: #5d7080;
   font: inherit;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
   line-height: 1.25;
   cursor: pointer;
   transition:
