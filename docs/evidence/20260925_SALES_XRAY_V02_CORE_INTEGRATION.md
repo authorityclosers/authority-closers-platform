@@ -178,3 +178,20 @@ worker pass causes no provider redispatch. This case passed in 19.68 seconds;
 the matching-model case passed in the preceding parameterized run. The first
 mismatch assertion omitted the standard `conversation_` error prefix; correcting
 that test expectation required no product change. Its failed receipt is retained.
+
+## Optional hosted OpenAI identity
+
+The integration includes leaf `802584af7d3517b7649df9688a4ba0347cf93bb2`.
+Existing hosted activations keep their four-provider overlay. An OpenAI worker
+entry requires the separate source-owned overlay and dedicated identity leaf.
+The installer clears inherited optional identity environment before Compose.
+Runtime checks inspect directory and token metadata without reading token
+contents, reject symlinks and unsafe ownership/modes, and prevent mounting a
+broader secrets directory. The source archive includes both overlays.
+
+The leaf's four focused suites passed 195 tests, with 23 platform-specific skips
+on Windows. On the combined source at `6de26075`, the hosted lifecycle and native
+activation preparer suites passed 42 tests with 18 POSIX-specific skips. Ruff,
+whitespace and the changed Admin files' Prettier checks passed. Linux CI must
+exercise the POSIX cases before release. No hosted credential activation or paid
+provider generation is established by these local checks.
