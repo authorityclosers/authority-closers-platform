@@ -387,17 +387,26 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
             )
             assert no_full_ack.status_code == 202
             with Session(postgres_harness.engine) as database:
-                assert database.scalar(
-                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
-                ) is None
-                assert database.scalar(
-                    select(func.count()).select_from(Person).where(Person.email == email)
-                ) == 0
-                assert database.scalar(
-                    select(func.count())
-                    .select_from(OutboxEvent)
-                    .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
-                ) == 0
+                assert (
+                    database.scalar(
+                        select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                    )
+                    is None
+                )
+                assert (
+                    database.scalar(
+                        select(func.count()).select_from(Person).where(Person.email == email)
+                    )
+                    == 0
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(OutboxEvent)
+                        .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                    )
+                    == 0
+                )
             requests = await asyncio.gather(
                 clients[0].post(
                     "/v1/auth/email-code/request",
@@ -536,9 +545,7 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 assert consent_audit.payload["consent_version"] == consent_version
                 assert consent_audit.payload["previous_consent_version"] is None
                 assert consent_audit.payload["explicit_acceptance"] is True
-                assert consent_audit.payload["age_attestation"] == (
-                    "18_plus_learner_declaration"
-                )
+                assert consent_audit.payload["age_attestation"] == ("18_plus_learner_declaration")
                 assert consent_audit.payload["accepted_via"] == "email_otp"
                 assert (
                     database.scalar(
@@ -716,9 +723,12 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
             assert denied is None
 
         with Session(postgres_harness.engine) as database:
-            assert database.scalar(
-                select(EmailLoginCode).where(EmailLoginCode.normalized_email == new_email)
-            ) is None
+            assert (
+                database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == new_email)
+                )
+                is None
+            )
             credential_before = database.scalar(
                 select(PasswordCredential).where(PasswordCredential.person_id == pending_person_id)
             )
@@ -966,9 +976,12 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                 membership = database.get(Membership, (public_tenant_id, person_id))
                 assert membership is not None
                 assert membership.role == "learner" and membership.status == "active"
-                assert database.scalar(
-                    select(PasswordCredential).where(PasswordCredential.person_id == person_id)
-                ) is None
+                assert (
+                    database.scalar(
+                        select(PasswordCredential).where(PasswordCredential.person_id == person_id)
+                    )
+                    is None
+                )
                 old_challenges = list(
                     database.scalars(
                         select(EmailChallenge).where(EmailChallenge.person_id == person_id)
@@ -1964,9 +1977,14 @@ def test_existing_google_registration_records_first_consent_and_enables_password
                     assert person.consent_version == consent_version
                     assert person.consented_at is not None
                     assert database.get(Membership, (public_tenant_id, person_id)) is not None
-                    assert database.scalar(
-                        select(PasswordCredential).where(PasswordCredential.person_id == person_id)
-                    ) is None
+                    assert (
+                        database.scalar(
+                            select(PasswordCredential).where(
+                                PasswordCredential.person_id == person_id
+                            )
+                        )
+                        is None
+                    )
 
                 recovery = await client.post(
                     "/v1/auth/password/recovery",

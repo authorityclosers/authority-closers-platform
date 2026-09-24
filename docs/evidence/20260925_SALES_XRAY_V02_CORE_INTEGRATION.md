@@ -55,6 +55,11 @@ CI, compiled browser acceptance, image packaging, staging and production verific
 remain required. The inherited UI integration has earlier evidence; that evidence
 does not establish the new Lightbox design or this combined release in production.
 
+The first PR CI run (`36050342019`) exposed a formatting failure in the inherited
+email-login regression file. Applying the pinned formatter changed no Python AST.
+The full local Ruff lint and format checks then passed (713 files formatted).
+The failed CI receipt is retained; a new exact-source run is required for the fix.
+
 Provider failure observations do not yet implement durable retry coordination or
 settlement. A post-dispatch unknown outcome must still prevent a repeat paid effect.
 OpenAI C5 runtime integration and a real, matched report comparison are separate
