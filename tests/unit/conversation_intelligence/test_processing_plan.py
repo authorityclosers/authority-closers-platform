@@ -6,14 +6,20 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.inference import DEEPGRAM_TRANSCRIPT_RECIPE
+from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
     PlanAcceptance,
     PlanManifest,
+    _processing_failure_diagnostic,
     automatic_c5_repair_cost,
     c5_repair_intent,
     manifest_for,
@@ -106,6 +112,41 @@ def test_optional_report_language_body_is_exact_and_legacy_empty_body_defaults()
     ):
         with pytest.raises(ValueError, match="report language preference"):
             parse_report_language_preference(raw)
+
+
+@pytest.mark.parametrize(
+    ("phase", "error", "expected"),
+    [
+        (
+            "approval_evaluation",
+            ConversationDenied("private denial detail"),
+            "processing_approval_evaluation_authorization_denied",
+        ),
+        (
+            "quote_usage_reservation",
+            ConversationConflict("private conflict detail"),
+            "processing_quote_usage_reservation_state_conflict",
+        ),
+        (
+            "request_stage",
+            ConversationNotFound("private resource detail"),
+            "processing_request_stage_resource_unavailable",
+        ),
+        (
+            "request_stage",
+            InferenceTaskError("private local validation detail"),
+            "processing_request_stage_local_input_invalid",
+        ),
+    ],
+)
+def test_enqueue_diagnostics_are_phase_bounded_and_content_free(
+    phase: str, error: BaseException, expected: str
+) -> None:
+    diagnostic = _processing_failure_diagnostic(phase, error)
+    assert diagnostic == expected
+    assert "private" not in diagnostic
+    assert _processing_failure_diagnostic("unexpected_phase", error) is None
+    assert _processing_failure_diagnostic(phase, RuntimeError("arbitrary error")) is None
 
 
 @pytest.mark.parametrize("field", ["provider", "model", "max_cost_paise", "profile"])
