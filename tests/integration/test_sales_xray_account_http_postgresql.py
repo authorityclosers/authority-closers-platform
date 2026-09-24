@@ -265,17 +265,20 @@ def test_email_account_profile_eligibility_and_repeat_login_share_one_identity(
                         )
                         == 1
                     )
-                    assert database.scalar(
-                        select(func.count())
-                        .select_from(AuditEvent)
-                        .where(
-                            AuditEvent.tenant_id == public_tenant,
-                            AuditEvent.actor_person_id == person_id,
-                            AuditEvent.action == "identity.learner_consent_accepted.v1",
-                            AuditEvent.resource_type == "person_consent",
-                            AuditEvent.resource_id == str(person_id),
+                    assert (
+                        database.scalar(
+                            select(func.count())
+                            .select_from(AuditEvent)
+                            .where(
+                                AuditEvent.tenant_id == public_tenant,
+                                AuditEvent.actor_person_id == person_id,
+                                AuditEvent.action == "identity.learner_consent_accepted.v1",
+                                AuditEvent.resource_type == "person_consent",
+                                AuditEvent.resource_id == str(person_id),
+                            )
                         )
-                    ) == 1
+                        == 1
+                    )
                     database.get(Person, person_id).status = "suspended"
                 assert (await client.get(ELIGIBILITY)).status_code in (401, 403)
         finally:

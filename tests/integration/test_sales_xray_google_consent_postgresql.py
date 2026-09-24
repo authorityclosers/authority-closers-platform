@@ -279,9 +279,7 @@ def test_sales_xray_google_full_ack_supersession_is_audited_and_transactional(
                     }
                     assert database.get(Membership, (tenant_id, person_id)) is not None
                     sales_xray_profile = database.scalar(
-                        select(SalesXrayProfile).where(
-                            SalesXrayProfile.person_id == person_id
-                        )
+                        select(SalesXrayProfile).where(SalesXrayProfile.person_id == person_id)
                     )
                     assert sales_xray_profile is not None
                     assert sales_xray_profile.phone_number_e164 is None

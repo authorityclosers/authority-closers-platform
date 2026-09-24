@@ -27,6 +27,13 @@ Validation on 2026-09-24:
   consent. Profile existence, absent phone verification and no unintended consent
   changes remain asserted. A transient Windows resource error on an earlier run
   did not recur in the complete serial run (84.55 seconds).
+- All 50 Sales Xray frontend test files passed (434 tests) with two local workers;
+  typecheck and ESLint passed. An earlier unrestricted local run exhausted Windows
+  resources and did not pass; reducing worker concurrency resolved that run.
+- The first successor CI run found formatter differences in three integration
+  tests. They were normalized with the repository Ruff formatter; assertions and
+  behavior were unchanged. Full Python lint passed after formatting. CI must run
+  on the resulting successor SHA before release; f7e580e9 is not deployable.
 - These are local application checks. No provider request was made and no
   production or staging release was performed by these checks. Actual hosted
   login, full viewport fit and completed v5 report quality remain release checks.
