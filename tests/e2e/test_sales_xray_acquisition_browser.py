@@ -416,9 +416,16 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # behind the primary action. The filename must remain visible
                     # through authentication and profile; this test never selects
                     # another file before the upload.
-                    if not await page.get_by_label("Email address").is_visible():
-                        await page.get_by_role("button", name="Analyse my call", exact=True).click()
-                    await expect(page.get_by_label("Email address")).to_be_visible()
+                    email_input = page.get_by_label("Email address", exact=True)
+                    analyse_button = page.get_by_role("button", name="Analyse my call", exact=True)
+                    # File selection crosses React state and the asynchronous
+                    # workspace check. Wait for the account-first gate or the
+                    # ready-page action before deciding which path is active;
+                    # an immediate is_visible() can observe the loading shell.
+                    await expect(email_input.or_(analyse_button)).to_be_visible(timeout=15_000)
+                    if not await email_input.is_visible():
+                        await analyse_button.click()
+                    await expect(email_input).to_be_visible()
                     await expect(
                         page.get_by_text("Synthetic test call.wav", exact=False).first
                     ).to_be_visible()

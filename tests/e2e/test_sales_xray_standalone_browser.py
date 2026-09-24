@@ -506,7 +506,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 expect(page.get_by_role("heading", name="Welcome back.")).to_be_visible()
             page.screenshot(path=str(evidence / "login.png"), full_page=True)
             page.get_by_label("Email address").fill(backend.account.email)
-            page.get_by_label("Password").fill(backend.account.password)
+            password_input = page.get_by_label("Password", exact=True)
+            expect(page.get_by_role("button", name="Show password", exact=True)).to_be_visible()
+            password_input.fill(backend.account.password)
             with _navigation_window(page, navigation_windows):
                 page.get_by_role("button", name="Sign in").click()
                 expect(page).to_have_url(f"{backend.origin}/")
