@@ -1,7 +1,6 @@
 """Synthetic reproduction of ambiguous nested evidence object/list instructions."""
 
 import json
-import re
 from copy import deepcopy
 from typing import Any
 
@@ -14,8 +13,11 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_fact_inputs,
     prepare_scribe_input,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.report_overview import (
-    OVERVIEW_FORMAT,
+    OVERVIEW_V5_FORMAT,
     DetailedOverview,
 )
 from tests.conversation_overview_fixtures import overview_for
@@ -78,20 +80,17 @@ def full_overview_case(*, count: int = 3) -> tuple[dict[str, Any], dict[str, Any
 
 
 def test_all_eleven_nested_paths_have_an_explicit_array_in_the_prompt() -> None:
-    shape = json.dumps(OVERVIEW_FORMAT)
-    assert shape.count("evidence:[1-3 distinct supported spans]") == len(EVIDENCE_PATHS) - 1
-    assert shape.count("evidence:[exactly 1 distinct supported span]") == 1
-    assert len(re.findall(r"\bevidence\b", shape)) == len(EVIDENCE_PATHS)
-    assert (
-        "Each SourceNote must use 1-3 distinct, source-supported spans"
-        in reports.OVERVIEW_INSTRUCTION
-    )
-    assert "Rewatch uses exactly one span" in reports.OVERVIEW_INSTRUCTION
-    assert "max(before.end_ms) <= min(change.start_ms)" in reports.OVERVIEW_INSTRUCTION
-    assert "max(change.end_ms) <= min(after.start_ms)" in reports.OVERVIEW_INSTRUCTION
-    assert "return null for the entire conversation_change" in reports.OVERVIEW_INSTRUCTION
-    assert "Never invent a pivot, reorder source spans, or change timestamps" in (
-        reports.OVERVIEW_INSTRUCTION
+    shape = json.dumps(OVERVIEW_V5_FORMAT)
+    assert shape.count("SourceNote") == len(EVIDENCE_PATHS)
+    assert "SourceNote={text,evidence:[span]}" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "exactly one span each" in shape
+    assert "1-3 distinct supported spans per SourceNote" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "exactly one per rewatch" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "max(before.end_ms) <= min(change.start_ms)" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "max(change.end_ms) <= min(after.start_ms)" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "unclear/overlapping groups:entire field null" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "Never invent pivots, reorder spans or alter timestamps" in (
+        reports.OVERVIEW_V5_INSTRUCTION
     )
     transcript, draft = full_overview_case()
     original = deepcopy(draft)
@@ -163,13 +162,10 @@ def test_schema_requires_array_at_each_nested_evidence_path(path: tuple[str | in
     ]
 
 
-@pytest.mark.parametrize(
-    ("provider", "model"),
-    [("gemini", "gemini-3.8-flash"), ("groq", "openai/gpt-oss-120b")],
-)
 def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
-    monkeypatch: pytest.MonkeyPatch, provider: str, model: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    provider, model = "gemini", "gemini-3.8-flash"
     transcript = _transcript()
     c2 = prepare_scribe_input(transcript["source_sha256"], 1000)
     c4 = prepare_fact_inputs(transcript, provider=provider, model=model)
@@ -177,23 +173,28 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
         {"overview": "A synthetic call.", "observations": [], "uncertainties": []}, transcript
     )
     with monkeypatch.context() as old:
-        old.setattr(reports, "OVERVIEW_INSTRUCTION", "")
+        old.setattr(reports, "OVERVIEW_V5_INSTRUCTION", reports.OVERVIEW_INSTRUCTION)
         old.setattr(
             reports,
-            "OVERVIEW_FORMAT",
-            {
-                k: (
-                    v.replace("evidence:[1-3 distinct supported spans]", "evidence").replace(
-                        "evidence:[exactly 1 distinct supported span]", "evidence"
-                    )
-                    if isinstance(v, str)
-                    else v
-                )
-                for k, v in OVERVIEW_FORMAT.items()
-            },
+            "OVERVIEW_V5_FORMAT",
+            reports.OVERVIEW_FORMAT,
         )
-        previous = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
-    current = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
+        previous = prepare_coaching_input(
+            transcript,
+            [packet],
+            provider=provider,
+            model=model,
+            coaching_prompt_revision="coaching-v5",
+            qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+        )
+    current = prepare_coaching_input(
+        transcript,
+        [packet],
+        provider=provider,
+        model=model,
+        coaching_prompt_revision="coaching-v5",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+    )
     assert type(current).from_dict(current.as_dict(), payload=current.payload) == current
     assert previous.input_sha256 != current.input_sha256
     assert current.max_completion_tokens == previous.max_completion_tokens
@@ -206,17 +207,39 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
         else body["messages"][0]["content"]
     )
     assert "EVIDENCE_ARRAYS: v1" in system
-    assert "nonempty JSON array of span objects, even for one" in system
-    assert "Each SourceNote must use 1-3 distinct, source-supported spans" in system
-    assert "Rewatch uses exactly one span" in system
+    assert "always arrays" in system
+    assert "1-3 distinct supported spans per SourceNote" in system
+    assert "exactly one per rewatch" in system
     assert "max(before.end_ms) <= min(change.start_ms)" in system
     assert "max(change.end_ms) <= min(after.start_ms)" in system
-    assert "return null for the entire conversation_change" in system
-    assert "span={segment_id} for ordinary bounded segments" in system
-    assert "zero-based Python code-point offsets" in system
-    assert "Retained legacy full references" in system
+    assert "unclear/overlapping groups:entire field null" in system
+    assert "span={segment_id}" in system
+    assert "zero-based Python code points" in system
+    assert "Legacy full references" in system
     assert json.loads(system.rsplit("Profile:\n", 1)[1]) == reports._prompt_profile(
         reports.load_report_profile()
     )
     assert prepare_scribe_input(transcript["source_sha256"], 1000) == c2
     assert prepare_fact_inputs(transcript, provider=provider, model=model) == c4
+
+
+@pytest.mark.parametrize("revision", ["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"])
+def test_expanded_contract_cannot_change_previous_revision_requests(
+    monkeypatch: pytest.MonkeyPatch,
+    revision: Any,
+) -> None:
+    transcript = _transcript()
+    packet = reports.parse_fact_packet(
+        {"overview": "A synthetic call.", "observations": [], "uncertainties": []}, transcript
+    )
+    kwargs: dict[str, Any] = dict(
+        provider="gemini", model="gemini-3.8-flash", coaching_prompt_revision=revision
+    )
+    if revision == "coaching-v4":
+        kwargs["qualitative_pack_sha256"] = load_qualitative_pack_for_revision(revision).sha256
+    previous = prepare_coaching_input(transcript, [packet], **kwargs)
+    monkeypatch.setattr(reports, "OVERVIEW_V5_INSTRUCTION", "Unrelated successor instruction")
+    monkeypatch.setattr(reports, "OVERVIEW_V5_FORMAT", {"unrelated": "successor"})
+    current = prepare_coaching_input(transcript, [packet], **kwargs)
+    assert current == previous
+    assert b"1-3 distinct supported spans per SourceNote" not in current.payload

@@ -34,3 +34,18 @@ request; browser reload, reading/tabbed view and transcript excerpt playback
 were verified on staging. That draft is not a fresh automatic completion or
 evidence of improved report quality. Exact-successor CI and real acceptance
 remain required before any production readiness claim.
+
+## Successor compatibility correction
+
+Full CI for e16d9f4b exposed a regression missed by the original focused set:
+the expanded overview constants also changed historical coaching-v1 through v4
+requests and exceeded small provider envelopes. The correction preserves the
+previous constants byte-for-byte, selects the new contract only for coaching-v5,
+and defines the repeated SourceNote shape once to fit the existing Groq bound.
+No provider ceiling, output schema, evidence timestamp or approval is relaxed.
+
+113 focused tests passed, including frozen historical request hashes, supported
+route allocations, v5 prompt depth, overview constraints, native context and
+retained-response recovery. Four new revision-isolation cases prove successor
+instruction changes cannot alter v1-v4 prepared payloads. Full CI must run again;
+this local result is not a deployment or fresh provider-completion receipt.

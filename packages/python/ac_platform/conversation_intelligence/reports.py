@@ -32,6 +32,8 @@ from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
     OVERVIEW_INSTRUCTION,
     OVERVIEW_MARKER,
+    OVERVIEW_V5_FORMAT,
+    OVERVIEW_V5_INSTRUCTION,
     OVERVIEW_VERSION,
     DetailedOverview,
     normalize_overview,
@@ -2043,16 +2045,26 @@ def build_report_groq_prompt(
     if type(detailed_overview) is not bool:
         raise ReportError("report_format_invalid")
     if detailed_overview:
+        overview_instruction = (
+            OVERVIEW_V5_INSTRUCTION
+            if coaching_prompt_revision == COACHING_PROMPT_V5
+            else OVERVIEW_INSTRUCTION
+        )
+        overview_format = (
+            OVERVIEW_V5_FORMAT
+            if coaching_prompt_revision == COACHING_PROMPT_V5
+            else OVERVIEW_FORMAT
+        )
         overview_prompt = (
             "\n"
             + OVERVIEW_MARKER
-            + OVERVIEW_INSTRUCTION
+            + overview_instruction
             + " All overview keys are required except optional business_impact (insufficient_data "
             "when "
             "present); use objects/arrays/null, not shape strings. "
             "Use listed enums, zero-based indices. "
             + "\nRequired overview shape:\n"
-            + json.dumps(OVERVIEW_FORMAT, ensure_ascii=False, separators=(",", ":"))
+            + json.dumps(overview_format, ensure_ascii=False, separators=(",", ":"))
         )
         # The broker validates the trailing Profile JSON against the approved
         # revision. Keep it as the final object rather than relaxing that parser.
