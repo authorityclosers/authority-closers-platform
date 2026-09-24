@@ -1325,7 +1325,7 @@
 }
 .reportHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   min-height: 42px;
@@ -1351,8 +1351,9 @@
 }
 @media (max-width: 620px) {
   .app[data-stage="report"] .reportHeader {
-    flex-wrap: nowrap;
-    margin-bottom: 4px;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
   }
   .reportHeading p:not(.reportMetadata) {
     display: none;
@@ -1372,163 +1373,121 @@
   display: none;
 }
 
-.reportMoreActions {
-  position: relative;
-}
-.app[data-stage="report"] .reportMoreActions {
-  margin: 0;
-}
 .app[data-stage="report"] :global(.studio-main) {
-  padding-bottom: 90px;
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
 }
 @media (max-width: 760px) {
   .app[data-stage="report"] :global(.studio-main) {
     padding-bottom: calc(160px + env(safe-area-inset-bottom));
   }
 }
-.reportMoreMenu > a {
-  padding: 10px 12px;
-  color: #007d79;
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-}
-.reportMoreMenu .reportMetadata {
-  margin: 0;
-  padding: 10px 12px;
-  font-size: 11px;
-  color: #60738f;
+.reportActions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
 }
 @media (max-width: 620px) {
   .app[data-stage="report"][data-variant="standalone"] :global(.studio-main) {
-    padding: 6px 16px 80px;
+    padding: 6px 16px calc(160px + env(safe-area-inset-bottom));
   }
 }
 
-.reportMoreActions summary {
-  display: grid;
-  width: 2.55rem;
-  height: 2.55rem;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--surface);
-  color: var(--muted);
+.reportAction {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #405778;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.reportMoreActions summary:hover,
-.reportMoreActions[open] summary {
-  border-color: #b8c9e4;
-  background: #f8fbfd;
-  color: var(--action);
+.reportAction:hover:not(:disabled) {
+  border-color: #9bb6d2;
+  background: #f7f9fc;
+  color: #183d68;
 }
 
-.reportMoreActions summary:focus-visible,
-.reportMoreMenu button:focus-visible {
+.reportActionPrimary {
+  border-color: #087e79;
+  background: #087e79;
+  color: #fff;
+}
+
+.reportActionPrimary:hover:not(:disabled) {
+  border-color: #066c67;
+  background: #066c67;
+  color: #fff;
+}
+
+.reportActionSupport {
+  color: #7a4b3f;
+}
+
+.reportActionDanger {
+  border-color: #b94336;
+  background: #b94336;
+  color: #fff;
+}
+
+.reportAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.reportAction:focus-visible {
   outline: 3px solid #aebff6;
   outline-offset: 3px;
 }
 
-.reportMoreActions summary::-webkit-details-marker {
-  display: none;
-}
-
-.reportMoreMenu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 0.55rem);
-  right: 0;
-  display: grid;
-  width: min(260px, calc(100vw - 2rem));
-  gap: 0.15rem;
-  padding: 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 0.95rem;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 18px 44px rgb(16 35 58 / 15%);
-  backdrop-filter: blur(18px) saturate(130%);
-  -webkit-backdrop-filter: blur(18px) saturate(130%);
-}
-
-.reportMoreMenu > button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 2.35rem;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: 0.6rem;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-.reportMoreMenu > button:hover:not(:disabled) {
-  border-color: #d3ebe5;
-  background: #ecf8f4;
-  color: var(--action);
-}
-
-.reportMoreMenu > button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.reportPrivacyMenu {
-  margin-top: 0.35rem;
-  padding: 0.7rem 0.6rem 0.35rem;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
-.reportPrivacyMenu > strong {
-  display: block;
-  margin-bottom: 0.35rem;
-  color: var(--ink);
-  font-size: 0.76rem;
-}
-
-.reportPrivacyMenu p {
-  margin: 0 0 0.55rem;
+.reportDisclosure {
+  margin: -3px 0 12px;
+  color: #687b94;
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.reportPrivacyMenu a {
-  color: var(--action);
+.reportDisclosure a {
+  color: #2754bd;
   text-underline-offset: 2px;
 }
 
-.reportPrivacyMenu button {
-  min-height: 2rem;
-  margin: 0 0.35rem 0.35rem 0;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface);
-  color: var(--action);
-  font: inherit;
-  font-size: 0.68rem;
-  font-weight: 700;
-  cursor: pointer;
+.reportDeleteConfirm {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #ecd6c1;
+  border-left: 3px solid #b94336;
+  border-radius: 8px;
+  background: #fff9f3;
+  color: #563f35;
 }
 
-.reportPrivacyMenu button:hover:not(:disabled) {
-  border-color: var(--action);
+.reportDeleteConfirm p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.reportPrivacyMenu .reportMenuTextButton {
-  padding: 0.25rem 0;
-  border-color: transparent;
-  background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.reportDeleteConfirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 .loading {
   display: flex;
@@ -1615,7 +1574,8 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .app[data-variant="standalone"] :global(.studio-main) {
+  .app[data-variant="standalone"]:not([data-stage="report"])
+    :global(.studio-main) {
     padding: 18px 16px 12px;
   }
   .app[data-variant="standalone"] :global(.studio-steps) {

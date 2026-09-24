@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -49,11 +49,9 @@ export function SalesSkills({
   const reading = useReportReading();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previousReading, setPreviousReading] = useState(reading);
-  if (previousReading !== reading) {
-    setPreviousReading(reading);
-    setSelectedId(null);
-  }
+  useEffect(() => {
+    if (reading) setSelectedId(null);
+  }, [reading]);
   const selectedIndex = dimensions.findIndex(
     (item) => item.dimension_id === selectedId,
   );
@@ -218,8 +216,7 @@ function SkillSources({
               <li key={`${evidence.segment_id}-${index}`}>
                 <span className={styles.sourceTime}>
                   {formatTranscriptTime(evidence.start_ms)}–
-                  {formatTranscriptTime(evidence.end_ms)} · Source segment{" "}
-                  {evidence.segment_id}
+                  {formatTranscriptTime(evidence.end_ms)}
                 </span>
                 <blockquote>{evidence.quote}</blockquote>
                 {onSelectEvidence && (

@@ -514,7 +514,7 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain("Your call is being processed");
   });
 
-  it("polls for the report, renders evidence, and seeks the local audio", async () => {
+  it("polls for the report and bounds evidence playback to its cited interval", async () => {
     vi.useFakeTimers();
     await render();
     const file = await selectAudio("seekable.wav");
@@ -583,14 +583,33 @@ describe("CallStudio", () => {
     expect(container.textContent).not.toContain("Practise:");
     const audio = container.querySelector<HTMLAudioElement>("audio");
     expect(audio).not.toBeNull();
-    if (audio)
-      Object.defineProperty(audio, "currentTime", {
-        configurable: true,
-        writable: true,
-        value: 0,
-      });
+    if (!audio) throw new Error("Missing report audio player");
+    const pause = vi.spyOn(audio, "pause").mockImplementation(() => {});
+    Object.defineProperty(audio, "currentTime", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+    vi.spyOn(audio, "play").mockResolvedValue();
     await act(async () => getButton("00:01").click());
-    expect(audio?.currentTime).toBe(1.5);
+    expect(audio.currentTime).toBe(1.5);
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    audio.currentTime = 2.4;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(2.2);
+    expect(pause).toHaveBeenCalledOnce();
+
+    const moment = container.querySelector<HTMLButtonElement>(".studio-moment");
+    expect(moment).not.toBeNull();
+    await act(async () => moment?.click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    expect(moment?.getAttribute("aria-pressed")).toBe("true");
+    audio.currentTime = 3.1;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.1);
+    expect(moment?.getAttribute("aria-pressed")).toBe("false");
+    expect(pause).toHaveBeenCalledOnce();
   });
 
   it("keeps source exploration available without technical report measurement cards", async () => {

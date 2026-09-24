@@ -5,9 +5,7 @@
 }
 
 .tabs {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: relative;
   display: flex;
   gap: 24px;
   max-width: 100%;
@@ -99,7 +97,6 @@
 
 @media (max-width: 640px) {
   .tabs {
-    top: 0;
     gap: 0;
     justify-content: space-between;
   }
