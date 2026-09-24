@@ -366,12 +366,12 @@
   align-items: flex-start;
   gap: 13px;
   padding: 15px 16px;
-  background: #e9f8f8;
-  color: #126b70;
-  border: 1px solid #7fc9c9;
+  background: var(--mint-bg);
+  color: var(--mint);
+  border: 1px solid color-mix(in srgb, var(--mint) 38%, var(--border));
   border-radius: 12px;
   margin-top: 10px;
-  box-shadow: 0 5px 16px #0c68650f;
+  box-shadow: var(--shadow);
 }
 .fileDetails {
   min-width: 0;
@@ -382,12 +382,12 @@
   overflow-wrap: anywhere;
   font-size: 14px;
   line-height: 1.4;
-  color: #102b45;
+  color: var(--text);
 }
 .fileStatus {
   display: block;
   margin-top: 6px;
-  color: #28575c;
+  color: var(--mint);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
@@ -403,10 +403,10 @@
   height: 25px;
   padding: 3px;
   border-radius: 7px;
-  background: #d2eeee;
+  background: color-mix(in srgb, var(--mint) 14%, var(--mint-bg));
 }
 .fileWave {
-  color: #317e81;
+  color: var(--mint);
 }
 .footnote {
   font-size: 11px;
