@@ -164,6 +164,9 @@ class RegisteredIdentity:
 
     person: PersonSnapshot
     session: IssuedSession
+    consent_changed: bool = False
+    previous_consent_version: str | None = None
+    previous_consented_at: datetime | None = None
 
 
 class AsyncIdentityApplication:
@@ -732,6 +735,7 @@ class AsyncIdentityApplication:
         *,
         pkce_verifier: str,
         consent_version: str,
+        allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
@@ -769,14 +773,22 @@ class AsyncIdentityApplication:
             if not matches or matches[0].person_id != person.id:
                 raise IdentityResolutionError("provider identity changed during registration")
             identity = matches[0]
-            if person.consent_version not in {None, normalized_consent_version}:
+            if (
+                person.consent_version not in {None, normalized_consent_version}
+                and not allow_consent_supersession
+            ):
                 raise ProviderConsentVersionConflictError(
                     "provider identity has a different recorded consent version"
                 )
             await self._consume_authorization_callback(
                 transaction_id, validated, current_time=current_time
             )
-            if person.consent_version is None or person.consented_at is None:
+            previous_consent_version = person.consent_version
+            previous_consented_at = person.consented_at
+            consent_changed = person.consent_version != normalized_consent_version or (
+                person.consented_at is None
+            )
+            if consent_changed:
                 person = replace(
                     person,
                     consent_version=normalized_consent_version,
@@ -797,7 +809,13 @@ class AsyncIdentityApplication:
                 user_agent=user_agent,
                 ip_address=ip_address,
             )
-            return RegisteredIdentity(person=person, session=issued)
+            return RegisteredIdentity(
+                person=person,
+                session=issued,
+                consent_changed=consent_changed,
+                previous_consent_version=previous_consent_version,
+                previous_consented_at=previous_consented_at,
+            )
         await self._consume_authorization_callback(
             transaction_id, validated, current_time=current_time
         )
@@ -821,7 +839,13 @@ class AsyncIdentityApplication:
             user_agent=user_agent,
             ip_address=ip_address,
         )
-        return RegisteredIdentity(person=person, session=issued)
+        return RegisteredIdentity(
+            person=person,
+            session=issued,
+            consent_changed=True,
+            previous_consent_version=None,
+            previous_consented_at=None,
+        )
 
     async def authenticate_provider(
         self,
