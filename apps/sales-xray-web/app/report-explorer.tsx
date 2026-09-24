@@ -1,5 +1,6 @@
 "use client";
 
+import "@fontsource-variable/source-sans-3/wght.css";
 import {
   useId,
   useRef,

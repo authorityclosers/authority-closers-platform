@@ -5,8 +5,8 @@
   background: linear-gradient(145deg, #f2f7ff, #f8fffd 65%, #fff);
   color: #10243d;
   font-family: var(--report-font);
-  font-size: 15px;
-  font-weight: 450;
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.6;
 }
 .frame {
@@ -30,23 +30,23 @@
   margin: 0 0 5px;
   color: #087b79;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .heading h1 {
   margin: 0;
-  font-size: clamp(30px, 3vw, 38px);
-  font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.045em;
+  font-size: clamp(32px, 3vw, 38px);
+  font-weight: 720;
+  line-height: 1.13;
+  letter-spacing: -0.025em;
 }
 .heading p:not(.eyebrow) {
   max-width: 78ch;
   margin: 6px 0 0;
   color: #48617b;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.55;
 }
 .badge {
   flex: 0 0 auto;
@@ -55,8 +55,8 @@
   border-radius: 999px;
   background: #e8faf6;
   color: #006f67;
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 650;
 }
 .disclaimer {
   margin-bottom: 10px;
@@ -65,8 +65,8 @@
   border-radius: 8px;
   background: #f5f3ff;
   color: #544b87;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .source {
   margin-top: 20px;
@@ -81,17 +81,17 @@
   display: block;
 }
 .source strong {
-  font-size: 15px;
-  font-weight: 750;
+  font-size: 16px;
+  font-weight: 700;
 }
 .source p {
   margin: 7px 0;
   overflow-wrap: anywhere;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 .source small {
   color: #527080;
-  font-size: 12px;
+  font-size: 13px;
 }
 @media (max-width: 620px) {
   .page {
