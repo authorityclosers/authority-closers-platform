@@ -1538,6 +1538,7 @@ export function AcquisitionStudio({
           authenticated={access?.authenticated === true}
           homeHref={homeHref}
           mobileFit
+          allowance={allowance}
         >
           {entryView}
         </AcquisitionShell>
@@ -2756,6 +2757,7 @@ export function AcquisitionStudio({
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
         mobileFit
+        allowance={allowance}
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission

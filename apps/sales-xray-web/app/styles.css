@@ -1,10 +1,167 @@
 /* AC's existing Clarity Grid geometry, cobalt/academy tokens and editorial
    headings, scoped to this standalone app. No remote font or media request. */
+
+/* lightbox-embed-tokens:start
+   Light Lightbox tokens for documents that embed Sales Xray without its root
+   layout (learner-web). The standalone <html data-lx-root> skips this block, so
+   its System/Light/Dark theme comes from lightbox/tokens.css alone. Values mirror
+   the light tokens in lightbox/tokens.css (asserted by lightbox/tokens.test.ts). */
+:where(html:not([data-lx-root])) .xray-app {
+  --lx-ink: #0b1424;
+  --lx-ink-2: #1e2b40;
+  --lx-ink-3: #334158;
+  --lx-muted: #56637a;
+  --lx-muted-2: #646d7f;
+  --lx-line: #e6e3da;
+  --lx-line-soft: #ece9e1;
+  --lx-line-strong: #cfcabe;
+  --lx-paper: #f6f5f1;
+  --lx-paper-2: #fbfaf7;
+  --lx-surface: #ffffff;
+  --lx-sunken: #ece9e1;
+  --lx-film: #0a1220;
+  --lx-film-2: #16233a;
+  --lx-film-line: rgba(255, 255, 255, 0.06);
+  --lx-film-grid: rgba(255, 255, 255, 0.045);
+  --lx-film-text: #ffffff;
+  --lx-film-text-2: #c9d4e3;
+  --lx-film-text-3: #9fb0c8;
+  --lx-film-wave: #3a4c66;
+  --lx-film-lens-outline: #e8edf5;
+  --lx-film-lens-fill: #ffffff;
+  --lx-teal: #087e79;
+  --lx-teal-hover: #06635f;
+  --lx-teal-2: #24b5a8;
+  --lx-teal-soft: #e6f5f2;
+  --lx-teal-tint: #f2faf8;
+  --lx-teal-edge: #d5ece8;
+  --lx-glow: #2dd4bf;
+  --lx-glow-ink: #0f8b7e;
+  --lx-on-teal: #ffffff;
+  --lx-strength: #087e79;
+  --lx-strength-soft: #e6f5f2;
+  --lx-strength-edge: #cde8e3;
+  --lx-strength-on-film: #2dd4bf;
+  --lx-strength-ink: #06736f;
+  --lx-focus: #b45309;
+  --lx-focus-soft: #fef3e2;
+  --lx-focus-edge: #f2c27a;
+  --lx-focus-on-film: #f59e0b;
+  --lx-focus-ink: #92400e;
+  --lx-missed: #5b3fd6;
+  --lx-missed-soft: #efebff;
+  --lx-missed-edge: #ddd5ff;
+  --lx-missed-on-film: #8b74ff;
+  --lx-missed-ink: #4a31b8;
+  --lx-objection: #be2a55;
+  --lx-objection-soft: #fdecf1;
+  --lx-objection-edge: #f3c9d5;
+  --lx-objection-on-film: #f0527f;
+  --lx-objection-ink: #be2a55;
+  --lx-closing: #2453d6;
+  --lx-closing-soft: #eaf0ff;
+  --lx-closing-ink: #1f4fb8;
+  --lx-hypothesis: #56637a;
+  --lx-hypothesis-edge: #aeb6c4;
+  --lx-success: var(--lx-teal);
+  --lx-info: #2453d6;
+  --lx-info-soft: #eaf0ff;
+  --lx-warning: #b45309;
+  --lx-warning-soft: #fef3e2;
+  --lx-danger: #b42318;
+  --lx-danger-soft: #fdecea;
+  --lx-danger-edge: #f1c7c2;
+  --lx-font-display:
+    "Bricolage Grotesque Variable", "Bricolage Grotesque",
+    "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --lx-font-ui:
+    "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
+    "Noto Sans Devanagari Variable", "Noto Sans Devanagari", system-ui,
+    sans-serif;
+  --lx-font-quote:
+    "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable",
+    "Noto Serif Devanagari", Georgia, serif;
+  --lx-text-display-xl: 700 76px/0.98 var(--lx-font-display);
+  --lx-text-display: 800 46px/1.04 var(--lx-font-display);
+  --lx-text-h1: 800 42px/1.04 var(--lx-font-display);
+  --lx-text-h2: 800 30px/1.1 var(--lx-font-display);
+  --lx-text-verdict: 400 34px/1.28 var(--lx-font-quote);
+  --lx-text-quote-lg: 400 22px/1.42 var(--lx-font-quote);
+  --lx-text-quote: 400 15px/1.4 var(--lx-font-quote);
+  --lx-text-body: 500 15px/1.65 var(--lx-font-ui);
+  --lx-text-ui: 600 14px/1.45 var(--lx-font-ui);
+  --lx-text-meta: 600 12.5px/1.45 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 12px/1.2 var(--lx-font-ui);
+  --lx-tracking-display: -0.035em;
+  --lx-tracking-eyebrow: 0.14em;
+  --lx-leading-devanagari: 1.65;
+  --lx-space-1: 4px;
+  --lx-space-2: 8px;
+  --lx-space-3: 12px;
+  --lx-space-4: 16px;
+  --lx-space-5: 20px;
+  --lx-space-6: 24px;
+  --lx-space-8: 32px;
+  --lx-space-10: 40px;
+  --lx-space-12: 48px;
+  --lx-space-14: 56px;
+  --lx-space-18: 72px;
+  --lx-radius-xs: 6px;
+  --lx-radius-sm: 10px;
+  --lx-radius-md: 14px;
+  --lx-radius-lg: 20px;
+  --lx-radius-xl: 26px;
+  --lx-radius-pill: 999px;
+  --lx-shadow-1: 0 1px 2px rgba(11, 20, 36, 0.05);
+  --lx-shadow-2: 0 10px 26px -18px rgba(11, 20, 36, 0.45);
+  --lx-shadow-film: 0 30px 60px -32px rgba(10, 18, 32, 0.65);
+  --lx-shadow-cta: 0 14px 30px -14px rgba(8, 126, 121, 0.8);
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+  --lx-ease-quick: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --lx-ease-move: cubic-bezier(0.16, 1, 0.3, 1);
+  --lx-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lx-ease-scan: cubic-bezier(0.65, 0, 0.35, 1);
+  --lx-dur-quick: 120ms;
+  --lx-dur-move: 240ms;
+  --lx-dur-reveal: 420ms;
+  --lx-dur-develop: 700ms;
+  --lx-stagger: 60ms;
+  --lx-rail-w: 248px;
+  --lx-rail-w-collapsed: 72px;
+  --lx-topbar-h: 64px;
+  --lx-content-max: 880px;
+  --lx-chapter-rail-w: 196px;
+  --lx-bottom-nav-h: 76px;
+  --lx-mini-player-h: 62px;
+}
+
+:where(html:not([data-lx-root]))
+  .xray-app
+  :is(:lang(hi), :lang(mr), [data-script="deva"]) {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(html:not([data-lx-root])) .xray-app {
+    --lx-dur-move: 120ms;
+    --lx-dur-reveal: 120ms;
+    --lx-dur-develop: 120ms;
+    --lx-stagger: 0ms;
+  }
+}
+/* lightbox-embed-tokens:end */
+
 /* The body class is applied only by the standalone document layout. */
 .sales-xray-document {
   margin: 0;
-  --report-font:
-    "Source Sans 3 Variable", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-sans: var(--lx-font-ui);
+  --font-plus-jakarta: var(--lx-font-ui);
+  --report-font: var(--lx-font-ui);
+  background: var(--lx-paper);
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
 }
 
 .sales-xray-live-data-banner {

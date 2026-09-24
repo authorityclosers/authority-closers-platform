@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { requestSalesXrayLogout } from "./account-navigation";
 import { readAccountProfile } from "./account-profile-client";
+import { ThemeControl } from "./lightbox/theme-provider";
 import { LocalSettingsButton } from "./live-data-banner";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
@@ -25,9 +26,15 @@ function initials(name: string | null): string {
 export function ProfileMenu({
   authenticated,
   accountHref,
+  placement = "below",
+  compact = false,
 }: {
   authenticated: boolean;
   accountHref: string;
+  /** "above" opens from the account row at the foot of the rail. */
+  placement?: "below" | "above";
+  /** Avatar only, for the collapsed rail. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -109,7 +116,12 @@ export function ProfileMenu({
   }
 
   return (
-    <div ref={menu} className={styles.menu}>
+    <div
+      ref={menu}
+      className={styles.menu}
+      data-placement={placement}
+      data-compact={compact || undefined}
+    >
       <button
         ref={trigger}
         type="button"
@@ -192,6 +204,7 @@ export function ProfileMenu({
               </button>
             ) : null}
           </div>
+          <ThemeControl className={styles.theme} />
           {error ? (
             <p className={styles.error} role="alert">
               {error}
