@@ -1,10 +1,16 @@
 import { AuthCompleteClient } from "./auth-complete-client";
+import { parseAuthCompletionQuery } from "../../account-auth-client";
 
 export default async function AuthCompletePage({
   searchParams,
 }: {
-  searchParams: Promise<{ flow?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const flow = (await searchParams).flow;
-  return <AuthCompleteClient flow={typeof flow === "string" ? flow : null} />;
+  const completion = parseAuthCompletionQuery(await searchParams);
+  return (
+    <AuthCompleteClient
+      flow={completion?.flow ?? null}
+      result={completion?.result ?? null}
+    />
+  );
 }

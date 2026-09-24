@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import {
   emailCodeRequest,
   isAuthCompleteMessage,
@@ -20,16 +26,16 @@ import {
   parseAuthenticatedAccount,
   parseCodeTiming,
   parseEmailCodeConfig,
+  parseAuthCompletionUrl,
   passwordLogin,
   readCanonicalSession,
+  readGoogleCompletion,
+  type AuthCompletionResult,
   type EmailCodeConfig,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
 
-export type AccountAuthPreviewState =
-  | "auth.email"
-  | "auth.code"
-  | "auth.error";
+export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
 
 const PREVIEW_CONFIG: EmailCodeConfig = {
   enabled: true,
@@ -39,23 +45,28 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   resend_after_seconds: 60,
 };
 const AUTH_WAVE_HEIGHTS = [
-  17, 25, 19, 37, 52, 34, 59, 73, 46, 28, 64, 82, 56, 36, 67, 88,
-  62, 40, 74, 54, 82, 59, 35, 64, 45, 71, 39, 25, 49, 28, 17,
+  17, 25, 19, 37, 52, 34, 59, 73, 46, 28, 64, 82, 56, 36, 67, 88, 62, 40, 74,
+  54, 82, 59, 35, 64, 45, 71, 39, 25, 49, 28, 17,
 ] as const;
 const subscribeHostname = () => () => {};
 const serverHostname = () => "";
 const LEARNER_ORIGINS_BY_SOURCE_HOST = {
-  "salesxray-staging.authorityclosers.com": "https://learner-staging.authorityclosers.com",
+  "salesxray-staging.authorityclosers.com":
+    "https://learner-staging.authorityclosers.com",
   "salesxray.authorityclosers.com": "https://learner.authorityclosers.com",
 } as const;
 
 /** Only source-owned hosts may provide a learner recovery destination. */
 export function learnerAuthLinksForHost(hostname: string) {
-  const origin = LEARNER_ORIGINS_BY_SOURCE_HOST[
-    hostname.toLowerCase() as keyof typeof LEARNER_ORIGINS_BY_SOURCE_HOST
-  ];
+  const origin =
+    LEARNER_ORIGINS_BY_SOURCE_HOST[
+      hostname.toLowerCase() as keyof typeof LEARNER_ORIGINS_BY_SOURCE_HOST
+    ];
   return origin
-    ? { registerHref: `${origin}/register`, forgotPasswordHref: `${origin}/forgot-password` }
+    ? {
+        registerHref: `${origin}/register`,
+        forgotPasswordHref: `${origin}/forgot-password`,
+      }
     : { registerHref: null, forgotPasswordHref: null };
 }
 
@@ -94,6 +105,7 @@ export function AccountAuth({
   const popupFlow = useRef<string | null>(null);
   const popupPoll = useRef<ReturnType<typeof setInterval> | null>(null);
   const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
+  const popupOutcome = useRef<AuthCompletionResult | null>(null);
   const confirmingPopup = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -107,11 +119,12 @@ export function AccountAuth({
   const learnerLinks = learnerAuthLinksForHost(hostname);
   const activeConfig = preview ? PREVIEW_CONFIG : config;
   const displayedStep = preview
-    ? previewState === "auth.code" ? "code" : "email"
+    ? previewState === "auth.code"
+      ? "code"
+      : "email"
     : step;
-  const displayedEmail = previewState === "auth.code" && preview
-    ? "sample@example.test"
-    : email;
+  const displayedEmail =
+    previewState === "auth.code" && preview ? "sample@example.test" : email;
 
   useEffect(() => {
     if (preview) return;
@@ -186,7 +199,7 @@ export function AccountAuth({
       ) {
         setConsent(false);
         setStep("email");
-        setConfigError(!current.enabled);
+        setConfigError(false);
         setError(
           "The Terms or sign-in settings changed. Review them and request a new code.",
         );
@@ -195,6 +208,7 @@ export function AccountAuth({
       const body = await emailCodeRequest("request", request.signal, {
         email: address,
         consent: true,
+        age_attested: true,
         consent_version: activeConfig.consent_version,
         surface: "sales_xray",
         return_path: "/",
@@ -245,7 +259,7 @@ export function AccountAuth({
       ) {
         setConsent(false);
         setStep("email");
-        setConfigError(!current.enabled);
+        setConfigError(false);
         setError(
           "The Terms or sign-in settings changed. Review them and request a new code.",
         );
@@ -284,7 +298,9 @@ export function AccountAuth({
       if (!request.signal.aborted) {
         if (codeAccepted) {
           setSessionCheckNeeded(true);
-          setError("Your code was accepted, but your account session could not be confirmed. Check again below.");
+          setError(
+            "Your code was accepted, but your account session could not be confirmed. Check again below.",
+          );
         } else if (!(await refreshConsentAfterFailure(request.signal))) {
           setError(
             "That code could not be verified. Check the latest email, or request a new code.",
@@ -310,7 +326,9 @@ export function AccountAuth({
       if (!request.signal.aborted) complete();
     } catch {
       if (!request.signal.aborted)
-        setError("Your account session still could not be confirmed. Try again or request a new code.");
+        setError(
+          "Your account session still could not be confirmed. Try again or request a new code.",
+        );
     } finally {
       inFlight.current = false;
       if (!request.signal.aborted) setPending(false);
@@ -333,7 +351,9 @@ export function AccountAuth({
       if (!request.signal.aborted) complete();
     } catch {
       if (!request.signal.aborted)
-        setError("We couldn’t complete password sign-in. Check your details or try again later.");
+        setError(
+          "We couldn’t complete password sign-in. Check your details or try again later.",
+        );
     } finally {
       if (passwordRef.current) passwordRef.current.value = "";
       inFlight.current = false;
@@ -350,6 +370,7 @@ export function AccountAuth({
     popup.current?.close();
     popup.current = null;
     popupFlow.current = null;
+    popupOutcome.current = null;
     setPopupActive(false);
   }
 
@@ -363,12 +384,20 @@ export function AccountAuth({
   }
 
   async function confirmGoogle() {
-    if (preview || !popup.current || !popupFlow.current || confirmingPopup.current)
+    if (
+      preview ||
+      !popup.current ||
+      !popupFlow.current ||
+      popupOutcome.current !== "success" ||
+      confirmingPopup.current
+    )
       return;
     confirmingPopup.current = true;
     const request = new AbortController();
     controller.current = request;
     try {
+      await readGoogleCompletion(popupFlow.current, request.signal);
+      if (request.signal.aborted) return;
       await readCanonicalSession(request.signal);
       if (!request.signal.aborted) {
         clearPopup();
@@ -378,20 +407,74 @@ export function AccountAuth({
       }
     } catch {
       if (!request.signal.aborted) {
-        const changed = await refreshConsentAfterFailure(request.signal);
-        if (changed) {
-          clearPopup();
-          inFlight.current = false;
-          setPending(false);
-        } else {
-          setError(
-            "Sign-in isn’t confirmed yet. Finish in the Google window, then check again.",
-          );
-        }
+        clearPopup();
+        inFlight.current = false;
+        setPending(false);
+        setError(
+          "Google sign-in could not be confirmed. Try again or use an email code.",
+        );
       }
     } finally {
       confirmingPopup.current = false;
     }
+  }
+
+  function receiveGoogleResult(result: AuthCompletionResult) {
+    if (!popup.current || !popupFlow.current || popupOutcome.current) return;
+    popupOutcome.current = result;
+    if (result === "success") {
+      void confirmGoogle();
+      return;
+    }
+    controller.current?.abort();
+    clearPopup();
+    inFlight.current = false;
+    setPending(false);
+    if (result === "review_terms") {
+      setConsent(false);
+      setLoadAttempt((attempt) => attempt + 1);
+      setError(
+        "Review the current Terms and Privacy notice, then try signing in again.",
+      );
+    } else if (result === "unavailable") {
+      setError(
+        "Google sign-in is unavailable right now. Try again or use an email code.",
+      );
+    } else {
+      setError(
+        "Google sign-in could not be completed. Try again or use an email code.",
+      );
+    }
+  }
+
+  function checkGoogleWindow() {
+    const child = popup.current;
+    const flow = popupFlow.current;
+    if (!child || !flow) return;
+    try {
+      const url = child.location.href;
+      const result = parseAuthCompletionUrl(url, window.location.origin, flow);
+      if (result) {
+        receiveGoogleResult(result);
+        return;
+      }
+      const location = new URL(url);
+      if (
+        location.origin === window.location.origin &&
+        location.pathname === "/auth/complete"
+      ) {
+        clearPopup();
+        inFlight.current = false;
+        setPending(false);
+        setError(
+          "Google sign-in could not be confirmed. Try again or use an email code.",
+        );
+        return;
+      }
+    } catch {
+      // The provider page remains cross-origin until it returns here.
+    }
+    setError("Finish sign-in in the Google window, then check again.");
   }
 
   function google() {
@@ -399,9 +482,11 @@ export function AccountAuth({
       preview ||
       !activeConfig?.google_enabled ||
       !activeConfig.consent_version ||
+      configError ||
       !consent ||
       inFlight.current
-    ) return;
+    )
+      return;
     // Open a blank same-origin popup synchronously. Fresh policy is checked
     // before navigating it to Google, while the File stays in this document.
     const flow = crypto.randomUUID();
@@ -418,6 +503,7 @@ export function AccountAuth({
     }
     popup.current = child;
     popupFlow.current = flow;
+    popupOutcome.current = null;
     setPopupActive(true);
     inFlight.current = true;
     setPending(true);
@@ -428,8 +514,9 @@ export function AccountAuth({
         event.source !== popup.current ||
         !popupFlow.current ||
         !isAuthCompleteMessage(event.data, popupFlow.current)
-      ) return;
-      void confirmGoogle();
+      )
+        return;
+      receiveGoogleResult(event.data.auth_result);
     };
     popupMessage.current = handleMessage;
     window.addEventListener("message", handleMessage);
@@ -445,12 +532,12 @@ export function AccountAuth({
         if (request.signal.aborted) return;
         setConfig(current);
         if (
-          !current.enabled ||
+          !current.google_enabled ||
           !current.consent_version ||
           current.consent_version !== activeConfig.consent_version
         ) {
           setConsent(false);
-          setConfigError(!current.enabled);
+          setConfigError(false);
           clearPopup();
           inFlight.current = false;
           setPending(false);
@@ -463,6 +550,7 @@ export function AccountAuth({
           action: "authenticate",
           surface: "sales_xray",
           consent: "true",
+          age_attested: "true",
           consent_version: current.consent_version,
           return_path: `/auth/complete?flow=${flow}`,
         });
@@ -480,13 +568,25 @@ export function AccountAuth({
   const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
   const expired = !preview && displayedStep === "code" && now >= expiresAt;
   const unavailable =
-    configError || (activeConfig != null && !activeConfig.enabled) ||
+    configError ||
+    (activeConfig != null && !activeConfig.enabled) ||
     (preview && previewState === "auth.error");
-  const available = activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const available =
+    activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const googleAvailable =
+    !!activeConfig?.google_enabled &&
+    !!activeConfig.consent_version &&
+    !configError &&
+    !(preview && previewState === "auth.error");
   const brandContent = (
     <>
       <Image src="/brand/ac-v0.1/symbol.svg" alt="" width={48} height={48} />
-      <Image src="/brand/ac-v0.1/sales-xray-wordmark.svg" alt="" width={147} height={52} />
+      <Image
+        src="/brand/ac-v0.1/sales-xray-wordmark.svg"
+        alt=""
+        width={147}
+        height={52}
+      />
     </>
   );
   return (
@@ -499,19 +599,26 @@ export function AccountAuth({
       <div className={styles.story}>
         {selectedFile ? (
           onCancel ? (
-            <button type="button" className={styles.brand} aria-label="Back to your call" onClick={() => onCancel(selectedFile)}>
+            <button
+              type="button"
+              className={styles.brand}
+              aria-label="Back to your call"
+              onClick={() => onCancel(selectedFile)}
+            >
               {brandContent}
             </button>
           ) : (
-            <div className={styles.brand} aria-label="Sales Xray">{brandContent}</div>
+            <div className={styles.brand} aria-label="Sales Xray">
+              {brandContent}
+            </div>
           )
         ) : (
-          <Link className={styles.brand} href="/" aria-label="Sales Xray home">{brandContent}</Link>
+          <Link className={styles.brand} href="/" aria-label="Sales Xray home">
+            {brandContent}
+          </Link>
         )}
         <div className={styles.storyCopy}>
-          <p className={styles.eyebrow}>
-            TURN CALLS INTO CLARITY
-          </p>
+          <p className={styles.eyebrow}>TURN CALLS INTO CLARITY</p>
           <h2>
             Hear the opportunity
             <br />
@@ -520,9 +627,19 @@ export function AccountAuth({
           <p>Bring your conversation. Leave with a clearer next step.</p>
         </div>
         <div className={styles.wave} aria-hidden="true">
-          <svg className={styles.waveRibbon} viewBox="0 0 640 220" preserveAspectRatio="none">
+          <svg
+            className={styles.waveRibbon}
+            viewBox="0 0 640 220"
+            preserveAspectRatio="none"
+          >
             <defs>
-              <linearGradient id="account-auth-ribbon" x1="0" x2="1" y1="0" y2="0">
+              <linearGradient
+                id="account-auth-ribbon"
+                x1="0"
+                x2="1"
+                y1="0"
+                y2="0"
+              >
                 <stop offset="0" stopColor="#66cced" stopOpacity=".38" />
                 <stop offset=".22" stopColor="#c1ffff" stopOpacity=".9" />
                 <stop offset=".55" stopColor="#7af2ed" stopOpacity=".62" />
@@ -544,7 +661,13 @@ export function AccountAuth({
           </svg>
           <div className={styles.waveBars}>
             {AUTH_WAVE_HEIGHTS.map((height, index) => (
-              <span key={index} style={{ height: `${height}%`, animationDelay: `${-index * 64}ms` }} />
+              <span
+                key={index}
+                style={{
+                  height: `${height}%`,
+                  animationDelay: `${-index * 64}ms`,
+                }}
+              />
             ))}
           </div>
         </div>
@@ -555,11 +678,17 @@ export function AccountAuth({
       </div>
       <div className={styles.formColumn}>
         {selectedFile && onCancel ? (
-          <button type="button" className={styles.returnLink} onClick={() => onCancel(selectedFile)}>
+          <button
+            type="button"
+            className={styles.returnLink}
+            onClick={() => onCancel(selectedFile)}
+          >
             <ArrowLeft size={17} aria-hidden="true" /> Back to your call
           </button>
         ) : !selectedFile ? (
-          <Link className={styles.returnLink} href="/"><ArrowLeft size={17} aria-hidden="true" /> Return to app</Link>
+          <Link className={styles.returnLink} href="/">
+            <ArrowLeft size={17} aria-hidden="true" /> Return to app
+          </Link>
         ) : null}
         <div className={styles.card}>
           <p className={styles.eyebrow}>
@@ -569,7 +698,7 @@ export function AccountAuth({
                 ? "You’re signed in"
                 : displayedStep === "password"
                   ? "Existing AC account"
-                : "Welcome to Sales Xray"}
+                  : "Welcome to Sales Xray"}
           </p>
           <h1 id="account-auth-heading">
             {displayedStep === "code" ? (
@@ -596,7 +725,7 @@ export function AccountAuth({
               "Opening your account securely…"
             ) : displayedStep === "password" ? (
               "Sign in with your existing Authority Closers password."
-            ) : unavailable ? (
+            ) : unavailable && !googleAvailable ? (
               "Sign in with your existing Authority Closers account."
             ) : (
               "Sign in or create your account. It only takes a moment."
@@ -617,9 +746,13 @@ export function AccountAuth({
                       type="button"
                       className={styles.noticePrimary}
                       disabled={preview}
-                      onClick={() => { setStep("password"); setError(""); }}
+                      onClick={() => {
+                        setStep("password");
+                        setError("");
+                      }}
                     >
-                      Use my existing password <ArrowRight size={16} aria-hidden="true" />
+                      Use my existing password{" "}
+                      <ArrowRight size={16} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
@@ -637,15 +770,19 @@ export function AccountAuth({
                   Preparing secure sign-in…
                 </p>
               ) : null}
-              {displayedStep === "email" && unavailable ? null : displayedStep === "email" ? (
+              {displayedStep === "email" &&
+              unavailable &&
+              !googleAvailable ? null : displayedStep === "email" ? (
                 <>
-                  {activeConfig?.google_enabled && (
+                  {googleAvailable && (
                     <button
                       type="button"
                       className={styles.google}
                       onClick={google}
-                      disabled={preview || !available || !consent || pending}
-                      aria-describedby={!consent && available ? "account-google-consent-hint" : undefined}
+                      disabled={preview || !consent || pending}
+                      aria-describedby={
+                        !consent ? "account-google-consent-hint" : undefined
+                      }
                     >
                       <span aria-hidden="true" className={styles.googleMark}>
                         G
@@ -653,33 +790,41 @@ export function AccountAuth({
                       Continue with Google
                     </button>
                   )}
-                  {activeConfig?.google_enabled && available && !consent && (
-                    <p id="account-google-consent-hint" className={styles.consentHint}>
-                      Agree to the Terms and Privacy Policy below to continue with Google.
+                  {googleAvailable && !consent && (
+                    <p
+                      id="account-google-consent-hint"
+                      className={styles.consentHint}
+                    >
+                      Confirm your age and accept the Terms and Privacy notice
+                      below to continue with Google.
                     </p>
                   )}
-                  {activeConfig?.google_enabled && (
+                  {googleAvailable && available && (
                     <div className={styles.divider}>
                       <span>or use email</span>
                     </div>
                   )}
                   <form onSubmit={sendCode} className={styles.form}>
-                    <label htmlFor="account-email">Email address</label>
-                    <div className={styles.inputWrap}>
-                      <Mail size={18} aria-hidden="true" />
-                      <input
-                        id="account-email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        maxLength={320}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@company.com"
-                        required
-                        disabled={preview || pending}
-                      />
-                    </div>
+                    {available && (
+                      <>
+                        <label htmlFor="account-email">Email address</label>
+                        <div className={styles.inputWrap}>
+                          <Mail size={18} aria-hidden="true" />
+                          <input
+                            id="account-email"
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            maxLength={320}
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="you@company.com"
+                            required
+                            disabled={preview || pending}
+                          />
+                        </div>
+                      </>
+                    )}
                     <label className={styles.consent}>
                       <input
                         type="checkbox"
@@ -689,7 +834,8 @@ export function AccountAuth({
                         required
                       />
                       <span>
-                        I agree to the{" "}
+                        I confirm that I am 18 or older and accept the current
+                        Authority Closers{" "}
                         <a
                           href="https://app.authorityclosers.com/terms"
                           target="_blank"
@@ -703,33 +849,35 @@ export function AccountAuth({
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Privacy Policy
-                        </a>
-                        .
+                          Privacy notice
+                        </a>{" "}
+                        for my learner account.
                       </span>
                     </label>
-                    <button
-                      type="submit"
-                      className={styles.primary}
-                      disabled={preview || !available || !consent || pending}
-                    >
-                      {pending ? (
-                        <>
-                          <LoaderCircle className={styles.spin} size={18} />
-                          Sending…
-                        </>
-                      ) : (
-                        <>
-                          Send sign-in code
-                          <ArrowRight size={18} />
-                        </>
-                      )}
-                    </button>
+                    {available && (
+                      <button
+                        type="submit"
+                        className={styles.primary}
+                        disabled={preview || !available || !consent || pending}
+                      >
+                        {pending ? (
+                          <>
+                            <LoaderCircle className={styles.spin} size={18} />
+                            Sending…
+                          </>
+                        ) : (
+                          <>
+                            Send sign-in code
+                            <ArrowRight size={18} />
+                          </>
+                        )}
+                      </button>
+                    )}
                   </form>
                   {popupActive && pending && (
                     <div className={styles.popupActions} role="status">
                       <p>Finish sign-in in the Google window.</p>
-                      <button type="button" onClick={() => void confirmGoogle()}>
+                      <button type="button" onClick={checkGoogleWindow}>
                         I finished Google sign-in
                       </button>
                       <button type="button" onClick={cancelGoogle}>
@@ -740,59 +888,78 @@ export function AccountAuth({
                 </>
               ) : displayedStep === "password" ? (
                 <>
-                <form className={styles.form} onSubmit={submitPassword}>
-                  <button
-                    type="button"
-                    className={styles.textButton}
-                    disabled={pending}
-                    onClick={() => { setStep("email"); setError(""); }}
-                  >
-                    <ArrowLeft size={15} /> Other sign-in options
-                  </button>
-                  <label htmlFor="account-password-email">Email address</label>
-                  <div className={styles.inputWrap}>
-                    <Mail size={18} aria-hidden="true" />
-                    <input
-                      id="account-password-email"
-                      type="email"
-                      autoComplete="username"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      maxLength={320}
-                      required
+                  <form className={styles.form} onSubmit={submitPassword}>
+                    <button
+                      type="button"
+                      className={styles.textButton}
                       disabled={pending}
-                    />
-                  </div>
-                  <label htmlFor="account-password">Password</label>
-                  <div className={styles.inputWrap}>
-                    <input
-                      id="account-password"
-                      ref={passwordRef}
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      disabled={pending}
-                    />
-                  </div>
-                  <button type="submit" className={styles.primary} disabled={pending || preview}>
-                    {pending ? "Signing in…" : "Sign in"}
-                    <ArrowRight size={18} aria-hidden="true" />
-                  </button>
-                </form>
-                {!selectedFile && (
-                  <div className={styles.passwordLinks}>
-                    {learnerLinks.forgotPasswordHref ? (
-                      <a href={learnerLinks.forgotPasswordHref}>Forgot your password?</a>
-                    ) : (
-                      <p>Reset your password in the Authority Closers learning app.</p>
-                    )}
-                    {learnerLinks.registerHref ? (
-                      <a href={learnerLinks.registerHref}>Create a learner account</a>
-                    ) : (
-                      <p>Create your learner account in the Authority Closers learning app.</p>
-                    )}
-                  </div>
-                )}
+                      onClick={() => {
+                        setStep("email");
+                        setError("");
+                      }}
+                    >
+                      <ArrowLeft size={15} /> Other sign-in options
+                    </button>
+                    <label htmlFor="account-password-email">
+                      Email address
+                    </label>
+                    <div className={styles.inputWrap}>
+                      <Mail size={18} aria-hidden="true" />
+                      <input
+                        id="account-password-email"
+                        type="email"
+                        autoComplete="username"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        maxLength={320}
+                        required
+                        disabled={pending}
+                      />
+                    </div>
+                    <label htmlFor="account-password">Password</label>
+                    <div className={styles.inputWrap}>
+                      <input
+                        id="account-password"
+                        ref={passwordRef}
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        disabled={pending}
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className={styles.primary}
+                      disabled={pending || preview}
+                    >
+                      {pending ? "Signing in…" : "Sign in"}
+                      <ArrowRight size={18} aria-hidden="true" />
+                    </button>
+                  </form>
+                  {!selectedFile && (
+                    <div className={styles.passwordLinks}>
+                      {learnerLinks.forgotPasswordHref ? (
+                        <a href={learnerLinks.forgotPasswordHref}>
+                          Forgot your password?
+                        </a>
+                      ) : (
+                        <p>
+                          Reset your password in the Authority Closers learning
+                          app.
+                        </p>
+                      )}
+                      {learnerLinks.registerHref ? (
+                        <a href={learnerLinks.registerHref}>
+                          Create a learner account
+                        </a>
+                      ) : (
+                        <p>
+                          Create your learner account in the Authority Closers
+                          learning app.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <form className={styles.form} onSubmit={verify}>
@@ -882,12 +1049,22 @@ export function AccountAuth({
           )}
           {selectedFile && (
             <div className={styles.file}>
-              <FileAudio className={styles.fileIcon} size={22} aria-hidden="true" />
+              <FileAudio
+                className={styles.fileIcon}
+                size={22}
+                aria-hidden="true"
+              />
               <span className={styles.fileDetails}>
                 <strong title={selectedFile.name}>{selectedFile.name}</strong>
-                <small className={styles.fileStatus}>Ready on this device · not uploaded yet</small>
+                <small className={styles.fileStatus}>
+                  Ready on this device · not uploaded yet
+                </small>
               </span>
-              <AudioLines className={styles.fileWave} size={21} aria-hidden="true" />
+              <AudioLines
+                className={styles.fileWave}
+                size={21}
+                aria-hidden="true"
+              />
             </div>
           )}
           <p className={styles.footnote}>
@@ -900,7 +1077,10 @@ export function AccountAuth({
               type="button"
               className={styles.password}
               disabled={pending || preview}
-              onClick={() => { setStep("password"); setError(""); }}
+              onClick={() => {
+                setStep("password");
+                setError("");
+              }}
             >
               Use my existing password
             </button>
