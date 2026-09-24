@@ -23,6 +23,12 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
     gemini_prompt_view,
     prepare_gemini_body,
 )
+from ac_platform.conversation_intelligence.openai_tasks import (
+    OpenAITaskError,
+    decode_openai_object,
+    openai_prompt_view,
+    prepare_openai_body,
+)
 from ac_platform.conversation_intelligence.providers import (
     MAX_JSON_BYTES,
     ProviderError,
@@ -57,7 +63,7 @@ from ac_platform.conversation_intelligence.reports import (
 
 TaskName = Literal["asr", "facts", "coaching"]
 Checkpoint = Literal["C2", "C4", "C5"]
-PayloadKind = Literal["source_reference", "groq_json", "gemini_json"]
+PayloadKind = Literal["source_reference", "groq_json", "gemini_json", "openai_json"]
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
@@ -132,6 +138,11 @@ def _text_prompt_view(
 ) -> Mapping[str, Any]:
     if provider == "groq":
         return body
+    if provider == "openai":
+        try:
+            return openai_prompt_view(body, model=model, maximum=maximum, task=task)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
@@ -141,10 +152,15 @@ def _text_prompt_view(
 
 
 def _text_provider_body(
-    prompt: Mapping[str, Any], provider: str, *, task: str
+    prompt: Mapping[str, Any], provider: str, *, task: str, reasoning_effort: str = "low"
 ) -> Mapping[str, Any]:
     if provider == "groq":
         return prompt
+    if provider == "openai":
+        try:
+            return prepare_openai_body(prompt, task=task, reasoning_effort=reasoning_effort)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
@@ -174,6 +190,11 @@ def _compact_fact_input(task_input: PreparedTaskInput) -> bool:
 def _text_response(result: ProviderResult) -> Mapping[str, Any]:
     if result.provider == "groq":
         return result.data
+    if result.provider == "openai":
+        try:
+            return decode_openai_object(result.data)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     try:
         return decode_gemini_object(result.data)
     except GeminiTaskError as exc:
@@ -319,6 +340,7 @@ class PreparedTaskInput:
             "source_reference",
             "groq_json",
             "gemini_json",
+            "openai_json",
         }:
             _fail("invalid_payload_kind")
         payload_limit = (
@@ -369,6 +391,7 @@ class PreparedTaskInput:
             if (self.provider, self.payload_kind) not in {
                 ("groq", "groq_json"),
                 ("gemini", "gemini_json"),
+                ("openai", "openai_json"),
             }:
                 _fail("text_input_invalid")
             if self.operation != _TEXT_OPERATION or not self.transcript_revision:
@@ -442,7 +465,7 @@ class PreparedTaskInput:
     def as_provider_body(self) -> dict[str, Any]:
         """Return a fresh native provider body; retain the exact canonical bytes."""
 
-        if self.payload_kind not in {"groq_json", "gemini_json"}:
+        if self.payload_kind not in {"groq_json", "gemini_json", "openai_json"}:
             _fail("provider_body_not_json")
         try:
             body = json.loads(self.payload)
@@ -973,6 +996,7 @@ def prepare_coaching_input(
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
     report_language: ReportLanguage = "en",
     qualitative_pack_sha256: str | None = None,
+    reasoning_effort: str = "low",
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -999,7 +1023,13 @@ def prepare_coaching_input(
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     payload = _canonical_json(
-        _text_provider_body(prompt, provider, task="coaching"), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+        _text_provider_body(
+            prompt,
+            provider,
+            task="coaching",
+            reasoning_effort=reasoning_effort,
+        ),
+        max_bytes=_MAX_TEXT_PAYLOAD_BYTES,
     )
     return PreparedTaskInput(
         task="coaching",
@@ -1011,7 +1041,13 @@ def prepare_coaching_input(
         transcript_revision=str(validated["transcript_revision"]),
         profile_revision=profile_revision,
         input_sha256=hashlib.sha256(payload).hexdigest(),
-        payload_kind="gemini_json" if provider == "gemini" else "groq_json",
+        payload_kind=(
+            "gemini_json"
+            if provider == "gemini"
+            else "openai_json"
+            if provider == "openai"
+            else "groq_json"
+        ),
         payload=payload,
         max_completion_tokens=max_completion_tokens,
     )

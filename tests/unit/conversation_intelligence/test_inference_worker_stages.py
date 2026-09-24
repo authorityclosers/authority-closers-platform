@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 from ac_platform.conversation_intelligence.inference_worker import (
     ConversationInferenceWorker,
     Scope,
+    _safe_receipt_usage,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
@@ -92,6 +93,27 @@ def _scope(
             plan=plan,
         ),
     )
+
+
+def test_openai_usage_receipt_preserves_cache_and_reasoning_breakdown() -> None:
+    assert _safe_receipt_usage(
+        {
+            "input_tokens": 100,
+            "output_tokens": 30,
+            "total_tokens": 130,
+            "cached_tokens": 20,
+            "cache_write_tokens": 10,
+            "reasoning_tokens": 5,
+            "unrecognized": 999,
+        }
+    ) == {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130,
+        "cached_tokens": 20,
+        "cache_write_tokens": 10,
+        "reasoning_tokens": 5,
+    }
 
 
 def test_text_stages_send_prepared_bytes_without_reading_audio() -> None:

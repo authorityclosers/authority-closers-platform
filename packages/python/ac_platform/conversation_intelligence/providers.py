@@ -19,6 +19,11 @@ import httpx
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES as MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.openai_tasks import (
+    OPENAI_TASK_MODELS,
+    OpenAITaskError,
+    openai_prompt_view,
+)
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_STREAM_SECONDS = 180
@@ -236,7 +241,9 @@ class BoundedProviders:
                     request_id = None
                 usage: dict[str, int] = {}
                 native_usage = payload.get("usageMetadata", payload.get("usage", {}))
-                if isinstance(native_usage, dict):
+                if provider == "openai":
+                    usage = _openai_usage(native_usage)
+                elif isinstance(native_usage, dict):
                     for key in (
                         "promptTokenCount",
                         "candidatesTokenCount",
@@ -333,6 +340,16 @@ class BoundedProviders:
                 raise ProviderError("provider_output_budget_required")
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": "Bearer " + self._credentials.get("groq", "")}
+        elif provider == "openai" and model in OPENAI_TASK_MODELS:
+            maximum = body.get("max_output_tokens")
+            if type(maximum) is not int or not 256 <= maximum <= 8_000:
+                raise ProviderError("provider_output_budget_required")
+            try:
+                openai_prompt_view(body, model=model, maximum=maximum, task="coaching")
+            except OpenAITaskError:
+                raise ProviderError("provider_payload_invalid") from None
+            url = "https://api.openai.com/v1/responses"
+            headers = {"Authorization": "Bearer " + self._credentials.get("openai", "")}
         else:
             raise ProviderError("provider_model_not_supported")
         self._admit(reservation, provider, "extract_context_evidence", encoded)
@@ -344,6 +361,43 @@ class BoundedProviders:
             json_body=body,
             input_sha256=reservation.quote.input_sha256,
         )
+
+
+def _openai_usage(value: object) -> dict[str, int]:
+    """Preserve complete typed usage, otherwise mark usage unknown without losing raw receipt."""
+
+    if not isinstance(value, dict):
+        return {}
+    input_details = value.get("input_tokens_details")
+    output_details = value.get("output_tokens_details")
+    counters = {
+        "input_tokens": value.get("input_tokens"),
+        "output_tokens": value.get("output_tokens"),
+        "total_tokens": value.get("total_tokens"),
+        "cached_tokens": input_details.get("cached_tokens")
+        if isinstance(input_details, dict)
+        else None,
+        "cache_write_tokens": (
+            input_details.get("cache_write_tokens") if isinstance(input_details, dict) else None
+        ),
+        "reasoning_tokens": (
+            output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
+        ),
+    }
+    if any(
+        type(counter) is not int or not 0 <= counter <= 1_000_000_000
+        for counter in counters.values()
+    ):
+        return {}
+    input_tokens = counters["input_tokens"]
+    output_tokens = counters["output_tokens"]
+    if (
+        counters["total_tokens"] != input_tokens + output_tokens
+        or counters["cached_tokens"] + counters["cache_write_tokens"] > input_tokens
+        or counters["reasoning_tokens"] > output_tokens
+    ):
+        return {}
+    return {key: int(counter) for key, counter in counters.items()}
 
 
 def scribe_transcript(

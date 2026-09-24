@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Reservation,
 )
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.openai_tasks import prepare_openai_body
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
@@ -21,6 +22,7 @@ from ac_platform.conversation_intelligence.providers import (
     deepgram_transcript,
     scribe_transcript,
 )
+from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
 
 def grant(
@@ -68,6 +70,7 @@ def client(handler, authorize=lambda _: None):
     return BoundedProviders(
         credentials={
             "gemini": "fake-never-real",
+            "openai": "fake-never-real",
             "elevenlabs": "fake-never-real",
             "deepgram": "fake-never-real",
         },
@@ -75,6 +78,14 @@ def client(handler, authorize=lambda _: None):
         clock=lambda: 200,
         transport=httpx.MockTransport(handler),
     )
+
+
+def _record_response(seen, raw_response):
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, content=raw_response)
+
+    return handler
 
 
 def test_generation_fixed_endpoint_bound_output_and_usage():
@@ -118,6 +129,106 @@ def test_groq_generation_uses_the_fixed_endpoint_and_declared_model():
     )
     assert str(seen[0].url) == "https://api.groq.com/openai/v1/chat/completions"
     assert result.usage == {"total_tokens": 4}
+
+
+def test_openai_responses_is_fixed_stateless_no_tools_and_usage_bound():
+    request_body = prepare_openai_body(
+        {
+            "model": "gpt-6-luna",
+            "max_completion_tokens": 256,
+            "messages": [
+                {"role": "system", "content": OVERVIEW_MARKER + " synthetic"},
+                {"role": "user", "content": "Synthetic-only input"},
+            ],
+        },
+        task="coaching",
+        reasoning_effort="low",
+    )
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        assert request.headers["authorization"] == "Bearer fake-never-real"
+        assert json.loads(request.content)["store"] is False
+        return httpx.Response(
+            200,
+            headers={"x-request-id": "req_synthetic"},
+            json={
+                "usage": {
+                    "input_tokens": 100,
+                    "input_tokens_details": {"cached_tokens": 20, "cache_write_tokens": 10},
+                    "output_tokens": 30,
+                    "output_tokens_details": {"reasoning_tokens": 5},
+                    "total_tokens": 130,
+                },
+                "output": [],
+            },
+        )
+
+    provider = BoundedProviders(
+        credentials={"openai": "fake-never-real"},
+        authorize=lambda _: None,
+        clock=lambda: 200,
+        transport=httpx.MockTransport(handler),
+    )
+    result = provider.generate(
+        grant(canonical(request_body), provider="openai", model="gpt-6-luna"), request_body
+    )
+    assert len(seen) == 1
+    assert str(seen[0].url) == "https://api.openai.com/v1/responses"
+    assert result.usage == {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130,
+        "cached_tokens": 20,
+        "cache_write_tokens": 10,
+        "reasoning_tokens": 5,
+    }
+
+
+def test_openai_responses_preserves_raw_receipt_when_usage_is_unknown():
+    request_body = prepare_openai_body(
+        {
+            "model": "gpt-6-luna",
+            "max_completion_tokens": 256,
+            "messages": [
+                {"role": "system", "content": OVERVIEW_MARKER + " synthetic"},
+                {"role": "user", "content": "Synthetic-only input"},
+            ],
+        },
+        task="coaching",
+    )
+
+    invalid_usages = (
+        None,
+        {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+            "output_tokens": 30,
+            "output_tokens_details": {"reasoning_tokens": 31},
+            "total_tokens": 130,
+        },
+    )
+    for usage in invalid_usages:
+        seen = []
+        raw_response = json.dumps({"usage": usage, "output": []}, separators=(",", ":")).encode(
+            "utf-8"
+        )
+
+        provider = BoundedProviders(
+            credentials={"openai": "fake-never-real"},
+            authorize=lambda _: None,
+            clock=lambda: 200,
+            transport=httpx.MockTransport(_record_response(seen, raw_response)),
+        )
+        result = provider.generate(
+            grant(canonical(request_body), provider="openai", model="gpt-6-luna"),
+            request_body,
+        )
+        assert result.usage == {}
+        assert result.data["usage"] == usage
+        assert result.raw_json == raw_response
+        assert len(seen) == 1
 
 
 def test_result_and_failures_never_retain_provider_content_or_credentials():

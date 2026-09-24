@@ -97,6 +97,7 @@ _STABLE_ERROR_CODES = frozenset(
         "provider_response_too_large",
         "provider_source_binding_mismatch",
         "provider_transport_or_response_failed",
+        "provider_usage_invalid",
     }
 )
 
@@ -107,6 +108,7 @@ _CREDENTIAL_ENV = {
     "deepgram": "DEEPGRAM_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
 }
 _PROVIDER_ENV_NAMES = frozenset(_CREDENTIAL_ENV.values())
 _RUNTIME_ENV_NAMES = frozenset(
