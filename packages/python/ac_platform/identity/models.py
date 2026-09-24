@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -366,9 +367,10 @@ class EmailLoginCode(Base):
     """Current numeric sign-in challenge and durable per-email send window.
 
     A row may exist before a canonical person: account creation is deferred
-    until the mailbox code is consumed with the current explicit consent.
-    ``generation_id`` fences already-enqueued mail when a resend supersedes
-    the current code.
+    until the mailbox code is consumed with the current explicit age and Terms
+    acknowledgement. Legacy rows default to an unattested state and cannot
+    create or first-verify a learner. ``generation_id`` fences already-enqueued
+    mail when a resend supersedes the current code.
     """
 
     __tablename__ = "email_login_codes"
@@ -394,6 +396,12 @@ class EmailLoginCode(Base):
     token_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32), nullable=False)
     encrypted_code: Mapped[str] = mapped_column(String(256), nullable=False)
     consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    age_attested: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     issued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
     )

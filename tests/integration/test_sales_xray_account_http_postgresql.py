@@ -97,6 +97,7 @@ def test_email_account_profile_eligibility_and_repeat_login_share_one_identity(
                         "email": email,
                         "consent": True,
                         "consent_version": "अमान्य",
+                        "age_attested": True,
                         "surface": "sales_xray",
                         "return_path": "/",
                     },
@@ -118,6 +119,7 @@ def test_email_account_profile_eligibility_and_repeat_login_share_one_identity(
                         "email": email.upper(),
                         "consent": True,
                         "consent_version": consent,
+                        "age_attested": True,
                         "surface": "sales_xray",
                         "return_path": "/",
                     },
@@ -168,6 +170,23 @@ def test_email_account_profile_eligibility_and_repeat_login_share_one_identity(
                 assert (await client.put(PROFILE, json=fields)).status_code == 409
 
                 with Session(postgres_harness.engine) as database:
+                    consent_events = list(
+                        database.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.tenant_id == public_tenant,
+                                AuditEvent.actor_person_id == person_id,
+                                AuditEvent.action == "identity.learner_consent_accepted.v1",
+                                AuditEvent.resource_type == "person_consent",
+                                AuditEvent.resource_id == str(person_id),
+                            )
+                        )
+                    )
+                    assert len(consent_events) == 1
+                    assert consent_events[0].payload["consent_version"] == consent
+                    assert consent_events[0].payload["accepted_via"] == "email_otp"
+                    assert consent_events[0].payload["age_attestation"] == (
+                        "18_plus_learner_declaration"
+                    )
                     session_row = database.scalar(
                         select(IdentitySession).where(IdentitySession.person_id == person_id)
                     )
@@ -246,6 +265,17 @@ def test_email_account_profile_eligibility_and_repeat_login_share_one_identity(
                         )
                         == 1
                     )
+                    assert database.scalar(
+                        select(func.count())
+                        .select_from(AuditEvent)
+                        .where(
+                            AuditEvent.tenant_id == public_tenant,
+                            AuditEvent.actor_person_id == person_id,
+                            AuditEvent.action == "identity.learner_consent_accepted.v1",
+                            AuditEvent.resource_type == "person_consent",
+                            AuditEvent.resource_id == str(person_id),
+                        )
+                    ) == 1
                     database.get(Person, person_id).status = "suspended"
                 assert (await client.get(ELIGIBILITY)).status_code in (401, 403)
         finally:

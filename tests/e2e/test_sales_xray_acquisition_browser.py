@@ -307,6 +307,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                 assert request_body["return_path"] == "/"
                 assert request_body["consent"] is True
                 assert request_body["consent_version"] == "browser-account-consent-v1"
+                assert request_body["age_attested"] is True
                 await expect(
                     target.get_by_role("heading", name="Check your email.", exact=True)
                 ).to_be_visible()
