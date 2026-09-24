@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DipakOverview } from "./dipak-overview";
+import { ReportReadingProvider } from "./report-reading-context";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { parseJobResponse } from "./report-contract";
 import type {
@@ -74,6 +75,22 @@ async function render(value = report()) {
     root.render(<DipakOverview report={value} onSelectEvidence={select} />),
   );
 }
+
+it("shows all report chapters as one expanded document in reading mode", async () => {
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading>
+        <DipakOverview report={report()} onSelectEvidence={select} />
+      </ReportReadingProvider>,
+    ),
+  );
+
+  expect(
+    container.querySelectorAll("[data-chapter]:not([hidden])"),
+  ).toHaveLength(4);
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
+  expect(container.querySelectorAll("[data-review-fold]")).toHaveLength(0);
+});
 
 it("keeps compact cards tied to the full source reader without showing an entire chapter", async () => {
   const value = report();

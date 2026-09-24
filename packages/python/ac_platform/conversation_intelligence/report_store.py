@@ -173,7 +173,11 @@ class ConversationReports:
                 raise ValueError("unbound draft")
             report = ReportDraft.model_validate(draft.payload)
             checked = parse_report_draft(
-                draft.payload, transcript, source_label=report.source_label, profile=profile
+                draft.payload,
+                transcript,
+                source_label=report.source_label,
+                profile=profile,
+                canonical_read=True,
             )
             if content_hash(checked.model_dump(mode="json")) != draft.report_sha256:
                 raise ValueError("unbound report")
@@ -446,7 +450,16 @@ class ConversationReports:
                 **run,
                 "report": recovered["report"],
                 "message": recovered["message"],
-                "recovery": recovered["recovery"],
+                # The owner UI uses the same bounded recovery envelope as the
+                # acquisition report. Preserve the rich immutable audit view
+                # on the separate Admin recovery endpoint.
+                "recovery": {
+                    "version": recovered["version"],
+                    "validation_state": recovered["recovery"]["validation_state"],
+                    "provider_calls": 0,
+                    "human_approved": False,
+                    "official_score": False,
+                },
             }
         draft = await self.database.scalar(
             select(ConversationReportDraft)

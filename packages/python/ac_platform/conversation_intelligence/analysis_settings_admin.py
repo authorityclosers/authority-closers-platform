@@ -119,7 +119,7 @@ class ConversationAnalysisSettingsAdmin:
             raise ConversationConflict("Analysis settings changed. Reload before saving.")
         if (
             row is not None
-            and row.c5_coaching_prompt_revision == "coaching-v4"
+            and row.c5_coaching_prompt_revision in {"coaching-v4", "coaching-v5"}
             and not {"c5_coaching_prompt_revision", "report_language_default"}.issubset(
                 settings.model_fields_set
             )

@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -26,10 +26,13 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
+    SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS,
     AuthTransaction,
     AuthTransactionCodec,
     InvalidAuthTransaction,
+    SalesXrayCompletionReceiptCodec,
     normalize_return_path,
+    sales_xray_completion_flow_id,
 )
 from ac_platform.http.identity_provider import (
     DisabledIdentityProvider,
@@ -42,6 +45,12 @@ from ac_platform.identity.application import (
     AccountDeletionPrivacyHook,
     AsyncIdentityApplication,
     ResolvedActorContext,
+)
+from ac_platform.identity.email_login import (
+    EMAIL_LOGIN_CODE_TTL,
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_RESEND_AFTER,
+    EmailLoginCodeService,
 )
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
@@ -65,6 +74,11 @@ from ac_platform.identity.password_auth import (
     PasswordIdentityService,
     PasswordPolicyError,
 )
+from ac_platform.identity.sales_xray_profile import (
+    get_sales_xray_profile,
+    normalize_profile_name,
+    update_sales_xray_profile,
+)
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
     IdentityConcurrencyError,
@@ -76,6 +90,8 @@ from ac_platform.identity.services import (
     SessionMetadata,
     SessionNotFoundError,
     TenantScopeDeniedError,
+    VerifiedProviderAssertion,
+    validate_verified_provider_assertion,
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
@@ -94,6 +110,7 @@ SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
 OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{43}\Z")
 OAUTH_TRANSACTION_COOKIE_SUFFIX_PATTERN = re.compile(r"[A-Za-z0-9_-]{22}\Z")
 OAUTH_TRANSACTION_MAX_PENDING = 4
+SALES_XRAY_COMPLETION_COOKIE_NAME = "__Host-ac_sales_xray_completion"
 ONBOARDING_IDEMPOTENCY_MARKER = "identity.onboarding_save_idempotency"
 ONBOARDING_IDEMPOTENCY_KEY_MAX_LENGTH = 200
 
@@ -355,6 +372,26 @@ class PasswordVerifyRequest(BaseModel):
     token: str = Field(min_length=40, max_length=512)
 
 
+class EmailLoginCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=320)
+    consent: StrictBool = False
+    age_attested: StrictBool = False
+    consent_version: str | None = Field(default=None, min_length=1, max_length=64)
+    surface: Literal["learner", "sales_xray"] = "sales_xray"
+    return_path: str = Field(default="/", min_length=1, max_length=512)
+
+
+class EmailLoginCodeVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=320)
+    code: str = Field(min_length=1, max_length=32)
+    surface: Literal["learner", "sales_xray"] = "sales_xray"
+    return_path: str = Field(default="/", min_length=1, max_length=512)
+
+
 class PasswordRegistrationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -368,6 +405,48 @@ class PasswordSessionResponse(BaseModel):
     person_id: UUID
     email: str
     display_name: str | None
+
+
+class EmailLoginCodeConfigResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    consent_version: str | None
+    google_enabled: bool
+    expires_in_seconds: int
+    resend_after_seconds: int
+
+
+class EmailLoginCodeRequestResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: Literal[True]
+    expires_in_seconds: int
+    resend_after_seconds: int
+
+
+class EmailLoginCodeVerifyResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authenticated: Literal[True]
+    person_id: UUID
+    email: str
+    display_name: str | None
+    account_created: bool
+    profile_complete: bool
+    return_path: str
+
+
+class GoogleCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    flow_id: UUID
+
+
+class GoogleCompletionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    matched: StrictBool
 
 
 class PasswordRecoveryResponse(BaseModel):
@@ -468,6 +547,12 @@ class PasswordRegistrationUnavailable(DomainError):
     code = "password_registration_unavailable"
     title = "Password registration is not available"
     status = 503
+
+
+class EmailLoginCodeRejectedResponse(DomainError):
+    code = "email_login_code_rejected"
+    title = "The email code is no longer valid"
+    status = 400
 
 
 class LearnerConsentRequired(DomainError):
@@ -1027,6 +1112,42 @@ def _delete_session_cookie(response: Response, settings: Settings) -> None:
     )
 
 
+def _set_sales_xray_completion_cookie(response: Response, value: str) -> None:
+    if OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN.fullmatch(value) is None:
+        raise RuntimeError("Refusing to set a malformed Sales Xray completion receipt.")
+    response.set_cookie(
+        SALES_XRAY_COMPLETION_COOKIE_NAME,
+        value,
+        max_age=SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _delete_sales_xray_completion_cookie(response: Response) -> None:
+    response.delete_cookie(
+        SALES_XRAY_COMPLETION_COOKIE_NAME,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _sales_xray_completion_cookie(request: Request) -> str | None:
+    try:
+        return _single_raw_cookie(
+            request,
+            name=SALES_XRAY_COMPLETION_COOKIE_NAME,
+            pattern=OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN,
+            required=False,
+        )
+    except _InvalidRawCookie:
+        return None
+
+
 def _set_oauth_transaction_cookie(
     response: Response,
     encoded_transaction: str,
@@ -1233,6 +1354,28 @@ def _oauth_callback_unavailable_response(
     return response
 
 
+def _sales_xray_auth_result_response(
+    settings: Settings,
+    *,
+    result: Literal["success", "failed", "review_terms", "unavailable"],
+    transaction_cookie_names: tuple[str, ...],
+    flow_id: UUID | None = None,
+) -> RedirectResponse:
+    """Return only a bounded outcome on the configured Sales Xray host."""
+
+    parameters: dict[str, str] = {"auth_result": result}
+    if flow_id is not None:
+        parameters = {"flow": str(flow_id), **parameters}
+    location = f"{_surface_origin(settings, 'sales_xray')}/auth/complete?{urlencode(parameters)}"
+    response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    if result != "success":
+        _delete_sales_xray_completion_cookie(response)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
+
+
 async def _oauth_identity_problem_response(
     request: Request,
     settings: Settings,
@@ -1259,6 +1402,16 @@ def _surface_origin(settings: Settings, surface: str) -> str:
         raise InvalidAuthTransaction("The requested application surface is not allowed.")
     value = values[surface]
     return str(value).rstrip("/")
+
+
+def _email_login_return_path(surface: str, candidate: str) -> str:
+    """Keep the JSON sign-in flow on a fixed, same-origin destination."""
+
+    normalized = normalize_return_path(candidate)
+    allowed = {"/"} if surface == "sales_xray" else {"/", "/sales-xray"}
+    if normalized != candidate or normalized not in allowed:
+        raise InvalidAuthTransaction("The requested return path is not allowed.")
+    return normalized
 
 
 def _surface_callback_uri(settings: Settings, surface: str) -> str:
@@ -1372,6 +1525,9 @@ def install_identity_http(
 
     identity_provider = provider or DisabledIdentityProvider()
     codec = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value())
+    completion_receipt_codec = SalesXrayCompletionReceiptCodec(
+        settings.oauth_transaction_secret.get_secret_value()
+    )
     token_pepper = settings.session_token_pepper.get_secret_value()
     challenge_secret = settings.email_challenge_secret.get_secret_value()
     router = APIRouter(prefix="/v1", tags=["identity"])
@@ -1469,6 +1625,180 @@ def install_identity_http(
         except LearnerProvisioningError as error:
             raise PasswordRegistrationUnavailable(str(error)) from error
         return tenant_id
+
+    @router.get("/auth/email-code/config", response_model=EmailLoginCodeConfigResponse)
+    async def email_login_code_config(
+        request: Request,
+        response: Response,
+        surface: Literal["learner", "sales_xray"] = Query(default="sales_xray"),
+    ) -> EmailLoginCodeConfigResponse:
+        _require_surface_host(request, settings, surface)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        enabled = settings.public_learner_tenant_id is not None and consent_version is not None
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeConfigResponse(
+            enabled=enabled,
+            consent_version=consent_version,
+            google_enabled=(
+                settings.google_oauth_configured
+                and not isinstance(identity_provider, DisabledIdentityProvider)
+            ),
+            expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+            resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+        )
+
+    @router.post(
+        "/auth/email-code/request",
+        response_model=EmailLoginCodeRequestResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def request_email_login_code(
+        request: Request,
+        response: Response,
+        body: EmailLoginCodeRequest,
+    ) -> EmailLoginCodeRequestResponse:
+        require_safe_origin(request, settings)
+        _require_surface_host(request, settings, body.surface)
+        _email_login_return_path(body.surface, body.return_path)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        if settings.public_learner_tenant_id is not None and consent_version is not None:
+            try:
+                async with sessions() as database, database.begin():
+                    issue = await EmailLoginCodeService(
+                        database,
+                        challenge_secret=challenge_secret,
+                        audit_tenant_id=settings.operations_tenant_id,
+                    ).begin(
+                        email=body.email,
+                        consent_accepted=body.consent,
+                        age_attested=body.age_attested,
+                        submitted_consent_version=body.consent_version,
+                        required_consent_version=consent_version,
+                    )
+                    if issue is not None:
+                        await OutboxRepository(database).enqueue(
+                            EventEnvelope(
+                                name=EMAIL_LOGIN_REQUEST_EVENT,
+                                category=EventCategory.OPERATIONAL,
+                                aggregate_type="email_login_code",
+                                aggregate_id=issue.challenge_id,
+                                tenant_id=None,
+                                payload={
+                                    "challenge_id": str(issue.challenge_id),
+                                    "generation_id": str(issue.generation_id),
+                                },
+                            ),
+                            dedupe_key=(
+                                f"identity-email-login:{issue.challenge_id}:{issue.generation_id}"
+                            ),
+                        )
+            except ValueError:
+                # Malformed addresses and ineligible accounts receive the same
+                # public acknowledgement as a queued sign-in email.
+                pass
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeRequestResponse(
+            accepted=True,
+            expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+            resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+        )
+
+    @router.post(
+        "/auth/email-code/verify",
+        response_model=EmailLoginCodeVerifyResponse,
+    )
+    async def verify_email_login_code(
+        request: Request,
+        response: Response,
+        body: EmailLoginCodeVerifyRequest,
+    ) -> EmailLoginCodeVerifyResponse:
+        require_safe_origin(request, settings)
+        _require_surface_host(request, settings, body.surface)
+        return_path = _email_login_return_path(body.surface, body.return_path)
+        consent_version = (settings.learner_consent_version or "").strip() or None
+        if settings.public_learner_tenant_id is None or consent_version is None:
+            raise EmailLoginCodeRejectedResponse("The email code is no longer valid.")
+        verified = None
+        issued = None
+        profile_complete = False
+        try:
+            async with sessions() as database, database.begin():
+                verified = await EmailLoginCodeService(
+                    database,
+                    challenge_secret=challenge_secret,
+                    audit_tenant_id=settings.operations_tenant_id,
+                ).verify(
+                    email=body.email,
+                    code=body.code,
+                    required_consent_version=consent_version,
+                )
+                person = verified.person
+                if person is not None:
+                    identity = _identity(database)
+                    tenant_id = None
+                    if verified.learner_provisioning_required:
+                        tenant_id = await ensure_public_learner(database, person.id)
+                    else:
+                        candidate_tenant = settings.public_learner_tenant_id
+                        membership = await database.scalar(
+                            select(Membership).where(
+                                Membership.tenant_id == candidate_tenant,
+                                Membership.person_id == person.id,
+                                Membership.role == MembershipRole.LEARNER.value,
+                                Membership.status == MembershipStatus.ACTIVE.value,
+                            )
+                        )
+                        if membership is not None:
+                            tenant_id = candidate_tenant
+                    issued = await identity.issue_authenticated_session(
+                        person.id,
+                        user_agent=request.headers.get("user-agent"),
+                        ip_address=request.client.host if request.client else None,
+                    )
+                    if tenant_id is not None:
+                        await identity.select_tenant(issued.token, tenant_id)
+                    if verified.consent_audit_required:
+                        if (
+                            not verified.learner_provisioning_required
+                            or tenant_id is None
+                            or person.consent_version != consent_version
+                            or person.email_verified_at is None
+                        ):
+                            raise LearnerConsentRenewalUnavailable(
+                                "The accepted learner consent could not be recorded."
+                            )
+                        await _record_learner_consent_acceptance(
+                            database,
+                            person_id=person.id,
+                            consent_version=person.consent_version,
+                            consented_at=person.consented_at,
+                            session_id=issued.metadata.id,
+                            tenant_id=tenant_id,
+                            previous_consent_version=verified.previous_consent_version,
+                            previous_consented_at=verified.previous_consented_at,
+                            accepted_via="email_otp",
+                        )
+                    profile_complete = (
+                        await get_sales_xray_profile(database, person_id=person.id)
+                    ).profile_complete
+        except ValueError:
+            verified = None
+        if verified is None or verified.person is None or issued is None:
+            raise EmailLoginCodeRejectedResponse("The email code is no longer valid.")
+        _set_session_cookie(response, issued.token, settings)
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return EmailLoginCodeVerifyResponse(
+            authenticated=True,
+            person_id=verified.person.id,
+            email=verified.person.email or "",
+            display_name=verified.person.display_name or verified.person.first_name,
+            account_created=verified.account_created,
+            profile_complete=profile_complete,
+            return_path=return_path,
+        )
 
     @router.post(
         "/auth/password/register",
@@ -1779,6 +2109,95 @@ def install_identity_http(
             ),
         )
 
+    async def _record_learner_consent_acceptance(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        consent_version: str | None,
+        consented_at: datetime | None,
+        session_id: UUID,
+        tenant_id: UUID,
+        previous_consent_version: str | None,
+        previous_consented_at: datetime | None,
+        accepted_via: Literal["google", "email_otp"],
+    ) -> None:
+        """Append the canonical learner-consent audit for a signed full acceptance."""
+
+        if not isinstance(consent_version, str) or not isinstance(consented_at, datetime):
+            raise LearnerConsentRenewalUnavailable(
+                "The accepted learner consent could not be recorded."
+            )
+        action = "identity.learner_consent_accepted.v1"
+        existing = await database.scalar(
+            select(AuditEvent).where(
+                AuditEvent.tenant_id == tenant_id,
+                AuditEvent.actor_person_id == person_id,
+                AuditEvent.action == action,
+                AuditEvent.resource_type == "person_consent",
+                AuditEvent.resource_id == str(person_id),
+                AuditEvent.occurred_at == consented_at,
+            )
+        )
+        if existing is not None:
+            return
+        await AuditRepository(database).append(
+            tenant_id=tenant_id,
+            actor_person_id=person_id,
+            session_id=session_id,
+            action=action,
+            resource_type="person_consent",
+            resource_id=person_id,
+            payload={
+                "consent_version": consent_version,
+                "previous_consent_version": previous_consent_version,
+                "previous_consented_at": (
+                    previous_consented_at.isoformat() if previous_consented_at else None
+                ),
+                "explicit_acceptance": True,
+                "age_attestation": "18_plus_learner_declaration",
+                "accepted_via": accepted_via,
+                "terms_path": "/terms",
+                "privacy_path": "/privacy",
+            },
+            reason=(
+                "Learner accepted the current published Terms and Privacy notice via "
+                + ("Google sign-in." if accepted_via == "google" else "email sign-in code.")
+            ),
+            now=consented_at,
+        )
+
+    async def _prefill_sales_xray_profile_name(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        session_id: UUID,
+        tenant_id: UUID | None,
+        assertion: VerifiedProviderAssertion,
+    ) -> None:
+        """Use a verified Google name only when the canonical learner name is absent."""
+
+        if tenant_id is None:
+            return
+        validated = validate_verified_provider_assertion(assertion)
+        if validated.display_name is None:
+            return
+        try:
+            full_name = normalize_profile_name(validated.display_name)
+        except ValueError:
+            return
+        snapshot = await get_sales_xray_profile(database, person_id=person_id)
+        if snapshot.name is not None:
+            return
+        await update_sales_xray_profile(
+            database,
+            person_id=person_id,
+            session_id=session_id,
+            tenant_id=tenant_id,
+            full_name=full_name,
+            phone_number_e164=snapshot.phone_number_e164,
+            expected_revision=snapshot.revision,
+        )
+
     async def _learner_consent_response(
         auth: AuthenticatedTransaction,
         *,
@@ -1929,12 +2348,17 @@ def install_identity_http(
         surface: Literal["learner", "admin", "coach", "sales_xray"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
+        age_attested: bool = False,
         client_consent_version: Annotated[
             str | None, Query(alias="consent_version", min_length=1, max_length=64)
         ] = None,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if age_attested and (surface != "sales_xray" or not consent):
+            raise LearnerConsentRequired(
+                "The current learner acknowledgement must be accepted before continuing."
+            )
         if surface == "sales_xray" and authorization_type is ProviderAuthorizationType.LINK:
             raise InvalidAuthTransaction(
                 "Manage linked identities through your Academy account settings."
@@ -1943,6 +2367,7 @@ def install_identity_http(
             surface == "sales_xray"
             and authorization_type is ProviderAuthorizationType.AUTHENTICATE
             and consent
+            and age_attested
         ):
             # One consent-aware Google button serves new and existing people.
             # REGISTER already resolves a linked provider key to the same person;
@@ -1968,6 +2393,11 @@ def install_identity_http(
                 raise LearnerConsentRequired(
                     "Review the current Academy Terms and Privacy Policy before continuing."
                 )
+            if surface == "sales_xray" and not age_attested:
+                raise LearnerConsentRequired(
+                    "Accept the full learner acknowledgement before creating or updating "
+                    "an account."
+                )
             consent_version = (settings.learner_consent_version or "").strip()
             if settings.public_learner_tenant_id is None or not consent_version:
                 raise PasswordRegistrationUnavailable(
@@ -1980,6 +2410,10 @@ def install_identity_http(
             )
         else:
             consent_version = None
+        if surface == "sales_xray" and sales_xray_completion_flow_id(safe_return_path) is None:
+            raise InvalidAuthTransaction(
+                "Use the current Sales Xray completion flow to continue sign-in."
+            )
         audience = identity_provider.audience
         person_id: UUID | None = None
         async with sessions() as database, database.begin():
@@ -2000,6 +2434,7 @@ def install_identity_http(
             surface=surface,
             return_path=safe_return_path,
             consent_version=consent_version,
+            age_attested=(surface == "sales_xray" and age_attested),
         )
         redirect_uri = _surface_callback_uri(settings, surface)
         authorization_url = identity_provider.authorization_url(
@@ -2008,6 +2443,8 @@ def install_identity_http(
         )
         response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
         _prune_oauth_transaction_cookies(request, response, settings, codec)
+        if surface == "sales_xray":
+            _delete_sales_xray_completion_cookie(response)
         _set_oauth_transaction_cookie(
             response,
             codec.encode(transaction),
@@ -2021,14 +2458,48 @@ def install_identity_http(
     @router.get("/auth/google/callback", name="google_auth_callback")
     async def google_auth_callback(
         request: Request,
-        state_value: Annotated[str, Query(alias="state", min_length=32, max_length=160)],
-        code: Annotated[str | None, Query(min_length=1, max_length=4096)] = None,
-        provider_error: Annotated[
-            str | None,
-            Query(alias="error", min_length=1, max_length=200),
-        ] = None,
+        state_value: Annotated[str | None, Query(alias="state")] = None,
+        code: str | None = None,
+        provider_error: Annotated[str | None, Query(alias="error")] = None,
     ) -> Response:
+        state_values = request.query_params.getlist("state")
+        code_values = request.query_params.getlist("code")
+        error_values = request.query_params.getlist("error")
+        malformed_callback = (
+            len(state_values) != 1
+            or re.fullmatch(r"[A-Za-z0-9_-]{32,160}", state_values[0] if state_values else "")
+            is None
+            or len(code_values) > 1
+            or len(error_values) > 1
+            or bool(code_values)
+            and bool(error_values)
+            or bool(code_values)
+            and (not code_values[0] or len(code_values[0]) > 4096 or not code_values[0].isascii())
+            or bool(error_values)
+            and (not error_values[0] or len(error_values[0]) > 200)
+        )
+        if malformed_callback:
+            error = InvalidAuthTransaction("The callback parameters are invalid.")
+            if (
+                settings.sales_xray_app_url is not None
+                and request.url.hostname == settings.sales_xray_app_url.host
+            ):
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=(),
+                )
+            return _invalid_oauth_callback_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=(),
+            )
+        state_value = state_values[0]
+        code = code_values[0] if code_values else None
+        provider_error = error_values[0] if error_values else None
         transaction_cookie_names: tuple[str, ...] = ()
+        completion_flow_id: UUID | None = None
         try:
             transaction_cookie_name, encoded_transaction = _callback_oauth_transaction_cookie(
                 request,
@@ -2043,6 +2514,22 @@ def install_identity_http(
             )
             transaction = codec.decode(encoded_transaction)
             _require_surface_host(request, settings, transaction.surface)
+            if transaction.surface == "sales_xray":
+                completion_flow_id = sales_xray_completion_flow_id(transaction.return_path)
+                if completion_flow_id is None:
+                    raise InvalidAuthTransaction("The Sales Xray completion flow is invalid.")
+            if (
+                transaction.surface == "sales_xray"
+                and transaction.authorization_type is ProviderAuthorizationType.REGISTER
+                and not transaction.age_attested
+            ):
+                raise InvalidAuthTransaction(
+                    "The full learner acknowledgement is not bound to this transaction."
+                )
+            if transaction.age_attested and transaction.surface != "sales_xray":
+                raise InvalidAuthTransaction(
+                    "The learner acknowledgement is not valid for this application surface."
+                )
             if (
                 transaction.surface == "sales_xray"
                 and transaction.authorization_type is ProviderAuthorizationType.LINK
@@ -2056,6 +2543,16 @@ def install_identity_http(
                     request,
                     settings,
                     state=state_value,
+                )
+            if (
+                settings.sales_xray_app_url is not None
+                and request.url.hostname == settings.sales_xray_app_url.host
+            ):
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
                 )
             return _invalid_oauth_callback_response(
                 request,
@@ -2071,6 +2568,13 @@ def install_identity_http(
                     transaction_cookie_names=transaction_cookie_names,
                     transaction_return_path=transaction.return_path,
                 )
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_terminal_problem_response(
                 request,
                 settings,
@@ -2078,6 +2582,13 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         if code is None:
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _invalid_oauth_callback_response(
                 request,
                 settings,
@@ -2087,6 +2598,13 @@ def install_identity_http(
         try:
             presented_session_token = _session_cookie(request, settings, required=False)
         except AuthenticationRequired as error:
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_terminal_problem_response(
                 request,
                 settings,
@@ -2106,6 +2624,13 @@ def install_identity_http(
                     required_consent_version,
                 )
             ):
+                if transaction.surface == "sales_xray":
+                    return _sales_xray_auth_result_response(
+                        settings,
+                        result="review_terms",
+                        transaction_cookie_names=transaction_cookie_names,
+                        flow_id=completion_flow_id,
+                    )
                 return _oauth_terminal_problem_response(
                     request,
                     settings,
@@ -2119,6 +2644,13 @@ def install_identity_http(
             transaction.authorization_type is ProviderAuthorizationType.LINK
             and link_session_token is None
         ):
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_terminal_problem_response(
                 request,
                 settings,
@@ -2141,6 +2673,13 @@ def install_identity_http(
                     transaction_cookie_names=transaction_cookie_names,
                     transaction_return_path=transaction.return_path,
                 )
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_terminal_problem_response(
                 request,
                 settings,
@@ -2155,6 +2694,13 @@ def install_identity_http(
                     transaction_cookie_names=transaction_cookie_names,
                     transaction_return_path=transaction.return_path,
                 )
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="unavailable",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_terminal_problem_response(
                 request,
                 settings,
@@ -2162,6 +2708,7 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         session_token: str | None = None
+        issued_session_id: UUID | None = None
         try:
             async with sessions() as database, database.begin():
                 identity = _identity(database)
@@ -2171,16 +2718,40 @@ def install_identity_http(
                         assertion,
                         pkce_verifier=transaction.pkce_verifier,
                         consent_version=transaction.consent_version or "",
+                        allow_consent_supersession=(
+                            transaction.surface == "sales_xray" and transaction.age_attested
+                        ),
                         display_name=None,
                         user_agent=request.headers.get("user-agent"),
                     )
                     session_token = registered.session.token
+                    issued_session_id = registered.session.metadata.id
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
                             registered.person.id,
                         )
                         await identity.select_tenant(session_token, tenant_id)
+                        if transaction.surface == "sales_xray":
+                            if registered.consent_changed:
+                                await _record_learner_consent_acceptance(
+                                    database,
+                                    person_id=registered.person.id,
+                                    consent_version=registered.person.consent_version,
+                                    consented_at=registered.person.consented_at,
+                                    session_id=registered.session.metadata.id,
+                                    tenant_id=tenant_id,
+                                    previous_consent_version=(registered.previous_consent_version),
+                                    previous_consented_at=registered.previous_consented_at,
+                                    accepted_via="google",
+                                )
+                            await _prefill_sales_xray_profile_name(
+                                database,
+                                person_id=registered.person.id,
+                                session_id=registered.session.metadata.id,
+                                tenant_id=tenant_id,
+                                assertion=assertion,
+                            )
                 elif transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE:
                     issued = await identity.authenticate_provider(
                         transaction.transaction_id,
@@ -2189,11 +2760,13 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                     )
                     session_token = issued.token
+                    issued_session_id = issued.metadata.id
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
                     # unscoped session; the learner surface must select its
                     # existing learner context just as password login does.
                     existing_learner_tenant_id = settings.public_learner_tenant_id
+                    selected_learner_tenant_id: UUID | None = None
                     if (
                         transaction.surface in {"learner", "sales_xray"}
                         and existing_learner_tenant_id is not None
@@ -2208,6 +2781,15 @@ def install_identity_http(
                         )
                         if membership is not None:
                             await identity.select_tenant(session_token, existing_learner_tenant_id)
+                            selected_learner_tenant_id = existing_learner_tenant_id
+                    if transaction.surface == "sales_xray":
+                        await _prefill_sales_xray_profile_name(
+                            database,
+                            person_id=issued.metadata.person_id,
+                            session_id=issued.metadata.id,
+                            tenant_id=selected_learner_tenant_id,
+                            assertion=assertion,
+                        )
                 else:
                     if link_session_token is None:  # pragma: no cover - narrowed above
                         raise AuthenticationRequired(
@@ -2220,6 +2802,22 @@ def install_identity_http(
                         pkce_verifier=transaction.pkce_verifier,
                     )
         except PasswordRegistrationUnavailable as error:
+            if transaction.surface == "sales_xray":
+                if isinstance(
+                    error.__cause__,
+                    (LearnerConsentMissingError, LearnerConsentUpdateRequiredError),
+                ):
+                    result: Literal["success", "failed", "review_terms", "unavailable"] = (
+                        "review_terms"
+                    )
+                else:
+                    result = "unavailable"
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result=result,
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             if transaction.surface != "learner":
                 return _oauth_terminal_problem_response(
                     request,
@@ -2248,6 +2846,13 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         except ProviderConsentVersionConflictError as error:
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             if (
                 transaction.surface == "learner"
                 and transaction.authorization_type is ProviderAuthorizationType.REGISTER
@@ -2275,6 +2880,13 @@ def install_identity_http(
                     transaction_cookie_names=transaction_cookie_names,
                     transaction_return_path=transaction.return_path,
                 )
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return await _oauth_identity_problem_response(
                 request,
                 settings,
@@ -2282,6 +2894,13 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         except IdentityServiceError as error:
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="failed",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return await _oauth_identity_problem_response(
                 request,
                 settings,
@@ -2289,22 +2908,92 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         except (SQLAlchemyError, OSError, TimeoutError):
+            if transaction.surface == "sales_xray":
+                return _sales_xray_auth_result_response(
+                    settings,
+                    result="unavailable",
+                    transaction_cookie_names=transaction_cookie_names,
+                    flow_id=completion_flow_id,
+                )
             return _oauth_callback_unavailable_response(
                 request,
                 settings,
                 transaction_cookie_names=transaction_cookie_names,
             )
-        base_url = _surface_origin(settings, transaction.surface)
-        response = RedirectResponse(
-            f"{str(base_url).rstrip('/')}{transaction.return_path}",
-            status_code=status.HTTP_303_SEE_OTHER,
+        sales_xray_success = transaction.surface == "sales_xray" and (
+            completion_flow_id is not None
+            and issued_session_id is not None
+            and session_token is not None
         )
-        _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
-        if session_token is not None:
+        if transaction.surface == "sales_xray" and not sales_xray_success:
+            # A successful identity operation without a session/flow binding
+            # must never be accepted by the browser as completed sign-in.
+            response = _sales_xray_auth_result_response(
+                settings,
+                result="unavailable",
+                transaction_cookie_names=transaction_cookie_names,
+                flow_id=completion_flow_id,
+            )
+        elif transaction.surface == "sales_xray":
+            response = _sales_xray_auth_result_response(
+                settings,
+                result="success",
+                transaction_cookie_names=transaction_cookie_names,
+                flow_id=completion_flow_id,
+            )
+        else:
+            base_url = _surface_origin(settings, transaction.surface)
+            response = RedirectResponse(
+                f"{str(base_url).rstrip('/')}{transaction.return_path}",
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
+            _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+        if session_token is not None and (
+            transaction.surface != "sales_xray" or sales_xray_success
+        ):
             _set_session_cookie(response, session_token, settings)
+        if sales_xray_success:
+            assert completion_flow_id is not None
+            assert issued_session_id is not None
+            _set_sales_xray_completion_cookie(
+                response,
+                completion_receipt_codec.encode(
+                    flow_id=completion_flow_id,
+                    session_id=issued_session_id,
+                ),
+            )
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
         return response
+
+    @router.post(
+        "/auth/google/completion",
+        response_model=GoogleCompletionResponse,
+    )
+    async def google_auth_completion(
+        request: Request,
+        response: Response,
+        body: GoogleCompletionRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> GoogleCompletionResponse:
+        require_safe_origin(request, settings)
+        _require_surface_host(request, settings, "sales_xray")
+        matched = False
+        encoded_receipt = _sales_xray_completion_cookie(request)
+        if encoded_receipt is not None:
+            try:
+                receipt = completion_receipt_codec.decode(encoded_receipt)
+            except InvalidAuthTransaction:
+                pass
+            else:
+                matched = (
+                    receipt.surface == "sales_xray"
+                    and receipt.flow_id == body.flow_id
+                    and receipt.session_id == auth.resolved.actor.session_id
+                )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        return GoogleCompletionResponse(matched=matched)
 
     @router.get("/me", response_model=MeResponse)
     async def me(

@@ -55,6 +55,7 @@ from ac_platform.conversation_intelligence.storage import (
     RecordingObjectStorage,
     StorageError,
 )
+from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
@@ -699,6 +700,7 @@ class ConversationApplication:
             "id": str(run.id),
             "recording_id": str(run.recording_id),
             "state": state,
+            "execution_hold": "account_profile_required" if is_account_profile_hold(job) else None,
             "recipe_revision": run.recipe_revision,
             # Confirmed responses only; an ambiguous dispatch has no receipt.
             "provider_calls": int(job is not None and receipt is not None and not retained_reuse),

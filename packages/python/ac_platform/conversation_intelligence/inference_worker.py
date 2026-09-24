@@ -60,7 +60,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
-from ac_platform.conversation_intelligence.processing_actor import actor_from_row
+from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.storage import (
@@ -71,6 +71,12 @@ from ac_platform.conversation_intelligence.storage import (
     StorageError,
 )
 from ac_platform.conversation_intelligence.worker import Work, _drain, _FencedExecutor
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    AccountProfileRequired,
+    hold_current_job_for_account_profile,
+    require_person_profile,
+    require_recording_owner_profile,
+)
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
@@ -263,6 +269,17 @@ class ConversationInferenceWorker:
     ) -> None:
         self.sessions, self.storage, self.broker, self.clock = sessions, storage, broker, clock
         self.authority = authority
+
+    async def _require_customer_profile(self, db: AsyncSession, scope: Scope) -> None:
+        actor = actor_from_row(scope.task)
+        if isinstance(actor, ProcessingActor):
+            await require_recording_owner_profile(
+                db,
+                scope.recording,
+                now=self.clock(),
+            )
+        else:
+            await require_person_profile(db, person_id=actor.person_id)
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
@@ -547,6 +564,7 @@ class ConversationInferenceWorker:
                         environment=self.authority.environment,
                         operations_tenant_id=self.authority.operations_tenant_id,
                     )
+                await self._require_customer_profile(db, scope)
                 dispatch_now = self.clock()
                 transition = mark_dispatched(
                     before,
@@ -589,6 +607,10 @@ class ConversationInferenceWorker:
                         operations_tenant_id=self.authority.operations_tenant_id,
                     ):
                         scope = await self._scope(db, job, allow_started_effect=True)
+                # The second check is the last admission immediately before
+                # the provider call. If it fails after the durable dispatch
+                # marker, the normal ambiguity path preserves the reservation.
+                await self._require_customer_profile(db, scope)
                 # Restore, revocation and deletion wait on these canonical locks
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
@@ -765,6 +787,44 @@ class ConversationInferenceWorker:
             # A pause racing claim rolls back before a dispatch marker. Keep
             # every source/checkpoint/reservation intact; normal lease recovery
             # can reclaim this job after resume. Do not call failure/refund code.
+            return True
+        except AccountProfileRequired as error:
+            held = False
+            async with self.sessions() as db, db.begin():
+                held = await hold_current_job_for_account_profile(
+                    db,
+                    job_id=work.job_id,
+                    lease_token=work.lease_token,
+                    recovery_generation=work.recovery_generation,
+                    expected_kind=work.kind,
+                    hold_reason=error.hold_reason,
+                    now=self.clock(),
+                )
+            if not held:
+                # A profile change after the committed dispatch marker cannot
+                # be represented as a no-effect hold. Preserve the existing
+                # uncertain-effect and reserved-balance reconciliation path.
+                async with self.sessions() as db, db.begin():
+                    job = await db.scalar(
+                        select(Job)
+                        .where(Job.id == work.job_id)
+                        .with_for_update()
+                        .execution_options(populate_existing=True)
+                    )
+                    started = bool(
+                        job is not None
+                        and job.status == "leased"
+                        and job.lease_token == work.lease_token
+                        and job.dispatch_started_at is not None
+                    )
+                if started:
+                    cleanup = asyncio.create_task(
+                        self._fail(
+                            work,
+                            failure_code="conversation_account_profile_changed_after_dispatch",
+                        )
+                    )
+                    await _drain(cleanup)
             return True
         except BaseException as error:
             # A failed cleanup may itself be fenced by restore/lease loss. The

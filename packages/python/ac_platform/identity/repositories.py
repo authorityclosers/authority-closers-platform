@@ -45,6 +45,7 @@ from ac_platform.identity.services import (
     ProviderIdentitySnapshot,
     SessionRevisionConflictError,
     StoredSession,
+    provider_issuer_lookup_values,
 )
 from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, TenantStatus
 
@@ -204,9 +205,10 @@ class SqlAlchemyIdentityStore(IdentityStore):
     def find_provider_identities(
         self, issuer: str, subject: str
     ) -> Sequence[ProviderIdentitySnapshot]:
+        issuers = provider_issuer_lookup_values(issuer)
         rows = self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .execution_options(populate_existing=True)
         )
@@ -751,9 +753,10 @@ class AsyncSqlAlchemyIdentityRepository:
     async def find_provider_identities(
         self, issuer: str, subject: str
     ) -> Sequence[ProviderIdentitySnapshot]:
+        issuers = provider_issuer_lookup_values(issuer)
         rows = await self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .execution_options(populate_existing=True)
         )
@@ -764,9 +767,10 @@ class AsyncSqlAlchemyIdentityRepository:
     ) -> Sequence[ProviderIdentitySnapshot]:
         """Resolve and lock the canonical provider key without ambiguity."""
 
+        issuers = provider_issuer_lookup_values(issuer)
         rows = await self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .with_for_update()
             .execution_options(populate_existing=True)

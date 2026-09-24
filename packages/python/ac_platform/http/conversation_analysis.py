@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.kernel.authz import ActorContext
 
 
@@ -120,6 +121,7 @@ def install_analysis_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> Any:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         app = ConversationApplication(auth.database)
         try:
             stage = await payload.stage_request(app, auth.resolved.actor, recording_id, authority)
@@ -139,6 +141,7 @@ def install_analysis_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> Any:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         app = ConversationApplication(auth.database)
         try:
             stage = await payload.selection.stage_request(

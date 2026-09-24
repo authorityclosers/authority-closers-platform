@@ -27,6 +27,8 @@ GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
 _STRUCTURED_MARKER_V2 = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
 _STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v3\nMODEL: "
+_EVIDENCE_MARKER = "AC_TASK_ADAPTER: gemini-json-v4\nMODEL: "
+_DEPTH_MARKER = "COACHING_DEPTH: evidence-meaning-action-v5."
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
@@ -59,12 +61,14 @@ def _config(
     if structured_coaching:
         if task != "coaching":
             raise GeminiTaskError("task_prompt_invalid")
-        if structured_schema_version not in {2, 3}:
+        if structured_schema_version not in {2, 3, 4}:
             raise GeminiTaskError("task_prompt_invalid")
         config["responseJsonSchema"] = (
             coaching_response_json_schema()
             if structured_schema_version == 2
-            else coaching_generation_json_schema()
+            else coaching_generation_json_schema(
+                revision="coaching-v5" if structured_schema_version == 4 else "coaching-v4"
+            )
         )
     return config
 
@@ -137,8 +141,13 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         model=model,
         task=task,
         structured_coaching=structured_coaching,
+        structured_schema_version=4 if _DEPTH_MARKER in messages[0]["content"] else 3,
     )
-    marker = _STRUCTURED_MARKER if structured_coaching else _MARKER
+    marker = (
+        (_EVIDENCE_MARKER if _DEPTH_MARKER in messages[0]["content"] else _STRUCTURED_MARKER)
+        if structured_coaching
+        else _MARKER
+    )
     system = marker + model + "\n" + messages[0]["content"]
     user = messages[1]["content"]
     _require_prompt_budget(
@@ -180,12 +189,27 @@ def gemini_prompt_view(
                 raise ValueError
             texts.append(value)
         legacy_structured = texts[0].startswith(_STRUCTURED_MARKER_V2)
-        structured_coaching = legacy_structured or texts[0].startswith(_STRUCTURED_MARKER)
+        evidence_structured = texts[0].startswith(_EVIDENCE_MARKER)
+        structured_coaching = (
+            legacy_structured or evidence_structured or texts[0].startswith(_STRUCTURED_MARKER)
+        )
         if structured_coaching and (
             model != "gemini-3.8-flash" or task != "coaching" or OVERVIEW_MARKER not in texts[0]
         ):
             raise ValueError
         marker = _STRUCTURED_MARKER_V2 if legacy_structured else _STRUCTURED_MARKER
+        if evidence_structured:
+            marker = _EVIDENCE_MARKER
+        if structured_coaching and evidence_structured != (_DEPTH_MARKER in texts[0]):
+            raise ValueError
+        if (
+            model == "gemini-3.8-flash"
+            and task == "coaching"
+            and OVERVIEW_MARKER in texts[0]
+            and _DEPTH_MARKER in texts[0]
+            and not evidence_structured
+        ):
+            raise ValueError
         prefix = (marker if structured_coaching else _MARKER) + model + "\n"
         if not texts[0].startswith(prefix):
             raise ValueError
@@ -194,7 +218,7 @@ def gemini_prompt_view(
             model=model,
             task=task,
             structured_coaching=structured_coaching,
-            structured_schema_version=2 if legacy_structured else 3,
+            structured_schema_version=4 if evidence_structured else (2 if legacy_structured else 3),
         )
         if canonical(body["generationConfig"]) != canonical(config):
             raise ValueError

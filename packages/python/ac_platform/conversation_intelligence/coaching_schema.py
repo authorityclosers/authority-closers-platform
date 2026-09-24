@@ -39,9 +39,11 @@ _OUTCOME_KINDS = (
     "unclear",
 )
 _REWATCH_PURPOSES = ("must_watch", "watch", "repeat")
+_COACHING_V4 = "coaching-v4"
+_COACHING_V5 = "coaching-v5"
 
 
-def coaching_response_json_schema() -> dict[str, Any]:
+def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
     """Return a fresh Gemini-compatible schema for a detailed C5 response.
 
     The returned tree uses only the responseJsonSchema subset supported by the
@@ -49,6 +51,9 @@ def coaching_response_json_schema() -> dict[str, Any]:
     contain only a segment selector or a bounded source-text offset pair; the
     server resolves those references to quote and timing fields.
     """
+
+    if revision not in {_COACHING_V4, _COACHING_V5}:
+        raise ValueError("coaching_schema_revision_invalid")
 
     def obj(properties: dict[str, Any], required: tuple[str, ...]) -> dict[str, Any]:
         return {
@@ -114,14 +119,6 @@ def coaching_response_json_schema() -> dict[str, Any]:
                 "missing_inputs": arr({"type": "string"}, min_items=1, max_items=6),
             },
             ("status", "missing_inputs"),
-        ),
-        "dimension": obj(
-            {
-                "dimension_id": {"type": "string", "enum": list(_DIMENSION_IDS)},
-                "status": {"type": "string", "enum": list(_DIMENSION_STATES)},
-                "observation": {"type": "string"},
-            },
-            ("dimension_id", "status", "observation"),
         ),
         "call_diagnosis": obj(
             {
@@ -243,6 +240,40 @@ def coaching_response_json_schema() -> dict[str, Any]:
             ("repeat", "fix_first", "next_focus", "assessment"),
         ),
     }
+    dimension_properties = {
+        "dimension_id": {"type": "string", "enum": list(_DIMENSION_IDS)},
+        "status": {"type": "string", "enum": list(_DIMENSION_STATES)},
+        "observation": {"type": "string"},
+    }
+    if revision == _COACHING_V5:
+        # JSON Schema's anyOf keeps the status-dependent evidence rule in the
+        # local validation schema. The Gemini generation schema below removes
+        # cardinality hints, so the report parser independently enforces it.
+        observed_dimension = obj(
+            {
+                **dimension_properties,
+                "status": {"type": "string", "enum": ["observed", "conflicted"]},
+                "evidence": arr({"$ref": "#/$defs/evidence_ref"}, min_items=1, max_items=8),
+            },
+            ("dimension_id", "status", "observation", "evidence"),
+        )
+        unknown_dimension = obj(
+            {
+                **dimension_properties,
+                "status": {
+                    "type": "string",
+                    "enum": ["insufficient_evidence", "not_applicable", "unknown"],
+                },
+                "evidence": arr({"$ref": "#/$defs/evidence_ref"}, max_items=8),
+            },
+            ("dimension_id", "status", "observation", "evidence"),
+        )
+        defs["dimension"] = {"anyOf": [observed_dimension, unknown_dimension]}
+    else:
+        defs["dimension"] = obj(
+            dimension_properties,
+            ("dimension_id", "status", "observation"),
+        )
     defs["overview"] = obj(
         {
             "version": {"type": "string", "enum": [OVERVIEW_VERSION]},
@@ -313,7 +344,7 @@ def coaching_response_json_schema() -> dict[str, Any]:
     }
 
 
-def coaching_generation_json_schema() -> dict[str, Any]:
+def coaching_generation_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
     """Describe wire shape while leaving numeric/cardinality validation local."""
     local_bounds = {"minItems", "maxItems", "minimum", "maximum"}
 
@@ -324,7 +355,7 @@ def coaching_generation_json_schema() -> dict[str, Any]:
             return [shape(item) for item in value]
         return value
 
-    return shape(coaching_response_json_schema())  # type: ignore[no-any-return]
+    return shape(coaching_response_json_schema(revision))  # type: ignore[no-any-return]
 
 
 __all__ = ["coaching_response_json_schema", "coaching_generation_json_schema"]

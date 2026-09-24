@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     effective_budget_cap_paise,
 )
 from ac_platform.conversation_intelligence.inference import (
+    INFERENCE_JOB,
     TRANSCRIPT_RECIPE_BY_ROUTE,
     TRANSCRIPT_RECIPES,
     ConversationInference,
@@ -65,7 +66,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
-    load_qualitative_pack,
+    load_qualitative_pack_for_revision,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
@@ -78,11 +79,15 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_V3,
     COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
     FACT_PROMPT_COMPACT,
     FACT_PROMPT_LEGACY,
     load_report_profile,
 )
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    is_account_profile_hold,
+)
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -171,7 +176,7 @@ class PlanManifest(BaseModel):
     max_input_chars: Literal[16000] = 16000
     fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
     coaching_prompt_revision: Literal[
-        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
     ] = COACHING_PROMPT_LEGACY
     report_language: ReportLanguage | None = None
     qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
@@ -223,10 +228,11 @@ class PlanManifest(BaseModel):
             or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
-        if self.coaching_prompt_revision == COACHING_PROMPT_V4:
+        if self.coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
             if (
                 self.report_language is None
-                or self.qualitative_pack_sha256 != load_qualitative_pack().sha256
+                or self.qualitative_pack_sha256
+                != load_qualitative_pack_for_revision(self.coaching_prompt_revision).sha256
             ):
                 raise ValueError("processing_plan_coaching_options_invalid")
         elif self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None:
@@ -558,16 +564,23 @@ class ConversationProcessingPlans:
 
     @staticmethod
     def view(
-        row: ConversationProcessingPlan, *, include_report_options: bool = False
+        row: ConversationProcessingPlan,
+        *,
+        include_report_options: bool = False,
     ) -> dict[str, Any]:
         value = manifest_for(row)
+        account_profile_hold = (
+            row.state == "active"
+            and row.acceptance_command_id is not None
+            and row.progress.get("failure_code") == "account_profile_required"
+        )
         result = {
             "id": str(row.id),
             "recording_id": str(row.recording_id),
             "plan_fingerprint": row.plan_sha256,
             "privacy_revision": PLAN_PRIVACY_REVISION,
             "accepted": row.acceptance_command_id is not None,
-            "state": row.state,
+            "state": "held" if account_profile_hold else row.state,
             "automatic_progression": True,
             "cost_label": plan_cost_label(value.max_cost_paise),
             "max_cost_paise": value.max_cost_paise,
@@ -594,7 +607,11 @@ class ConversationProcessingPlans:
             "current_stage": row.progress.get("current_stage"),
             "report_ready": row.state == "completed" and bool(row.progress.get("report_run_id")),
             "report_run_id": row.progress.get("report_run_id"),
-            "failure_code": row.progress.get("failure_code"),
+            "failure_code": (
+                "account_profile_required"
+                if account_profile_hold
+                else row.progress.get("failure_code")
+            ),
         }
         if include_report_options:
             result["report_language"] = value.report_language or "en"
@@ -744,11 +761,12 @@ class ConversationProcessingPlans:
         selected_language = report_language or analysis_settings.report_language_default
         if coaching_prompt_revision == COACHING_PROMPT_V3 and selected_language != "en":
             raise ConversationDenied(
-                "Non-English report language requires the coaching-v4 qualitative engine."
+                "Non-English report language requires the coaching-v4 or coaching-v5 "
+                "qualitative engine."
             )
         qualitative_pack_sha256 = (
-            load_qualitative_pack().sha256
-            if coaching_prompt_revision == COACHING_PROMPT_V4
+            load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
+            if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
             else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
@@ -821,7 +839,8 @@ class ConversationProcessingPlans:
                 coaching_prompt_revision=coaching_prompt_revision,
                 report_language=(
                     selected_language
-                    if coaching_prompt_revision == COACHING_PROMPT_V4 or report_language is not None
+                    if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+                    or report_language is not None
                     else None
                 ),
                 qualitative_pack_sha256=qualitative_pack_sha256,
@@ -1015,6 +1034,38 @@ class ConversationProcessingPlans:
         assert task is not None
         return task
 
+    async def _account_profile_hold_stage(
+        self,
+        row: ConversationProcessingPlan,
+        tasks: list[ConversationInferenceTask],
+    ) -> str | None:
+        """Identify a selected plan task held before its external effect began."""
+
+        for task in tasks:
+            if (
+                task.state != "queued"
+                or task.erased_at is not None
+                or task.tenant_id != row.tenant_id
+                or task.person_id != row.person_id
+                or task.recording_id != row.recording_id
+                or task.generation != row.generation
+            ):
+                continue
+            job = await self.db.get(Job, task.job_id)
+            if (
+                job is not None
+                and job.tenant_id == row.tenant_id
+                and job.kind == INFERENCE_JOB
+                and job.external_side_effect
+                and job.payload == {"schema": 1, "run_id": str(task.run_id)}
+                and job.dispatch_started_at is None
+                and job.delivery_ambiguous_at is None
+                and job.provider_receipt is None
+                and is_account_profile_hold(job)
+            ):
+                return task.stage
+        return None
+
     async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 
@@ -1117,6 +1168,14 @@ class ConversationProcessingPlans:
                     if repair_progress is not None:
                         row.progress["c5_repair"] = repair_progress
                     return
+        profile_hold_stage = await self._account_profile_hold_stage(row, tasks)
+        if profile_hold_stage is not None:
+            row.progress = {
+                "current_stage": profile_hold_stage,
+                "failure_code": "account_profile_required",
+            }
+            row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
+            return
         bad = next(
             (item for item in tasks if item.state in {"failed", "uncertain", "cancelled"}), None
         )

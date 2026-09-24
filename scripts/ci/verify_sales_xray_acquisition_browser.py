@@ -23,22 +23,31 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / "apps/sales-xray-web"
 TEST_FILE = ROOT / "tests/e2e/test_sales_xray_acquisition_browser.py"
-TEST_NAME = "test_compiled_guest_upload_report_reload_claim_and_deletion"
+TEST_NAME = "test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion"
 TEST_NODE = f"tests/e2e/test_sales_xray_acquisition_browser.py::{TEST_NAME}"
 API_ORIGIN = "http://127.0.0.1:18116"
 
 REQUIRED_ASSERTIONS = {
+    "selected audio remains browser-local before authentication",
+    "pre-auth requests contain no source upload or processing plan",
+    "email OTP delivered through local outbox and verified",
+    "new canonical account exists before profile completion",
+    "required account name and mobile profile completed",
+    "no source transfer until authenticated profile is complete",
+    "originally selected audio bytes upload only after profile completion",
+    "selected filename stays visible through email OTP and profile",
+    "uploaded source hash matches originally selected audio bytes",
     "inline upload consent",
     "native C1",
-    "explicit provider plan",
+    "explicit provider plan after profile and upload consent",
     "C6 overview",
+    "acquisition allowance settled exactly once",
     "private range playback",
     "reload without retranscription",
     "390px reflow",
     "print",
-    "explicit account claim",
-    "actual password login and two-workspace chooser",
-    "new browser context discovers claimed call in account library",
+    "new browser context signs in again with email OTP",
+    "new browser context discovers call in canonical account library",
     "library row opens retained report and actual audio plays",
     "rendered Sign out button returns204 and private endpoints401",
     "stranger denied",
@@ -161,6 +170,29 @@ def _load_browser_receipt(path: Path, build_id: str) -> dict[str, Any]:
         raise GateError("The browser proof must declare its bounded synthetic adapters")
     if value.get("page_errors") != []:
         raise GateError("The browser proof reported a page error")
+    journey = value.get("journey_checks")
+    required_journey = {
+        "pre_auth_source_or_plan_writes": 0,
+        "pre_auth_provider_calls": 0,
+        "pre_auth_external_mutations": 0,
+        "email_otp_verified": True,
+        "account_created_before_profile": True,
+        "pre_profile_source_or_plan_writes": 0,
+        "profile_complete_before_upload": True,
+        "selected_filename_in_auth_modal": True,
+        "selected_filename_through_profile": True,
+        "selected_filename_visible_before_upload": True,
+        "uploaded_source_request_hash_matches_selected_bytes": True,
+        "acquisition_usage_count": 1,
+        "settlement_count": 1,
+        "charged_seconds": 1,
+        "relogin_existing_account": True,
+        "external_mutations": 0,
+    }
+    if not isinstance(journey, dict) or any(
+        journey.get(key) != expected for key, expected in required_journey.items()
+    ):
+        raise GateError("The browser proof did not establish account-first and one-charge evidence")
     passed = value.get("passed")
     if not isinstance(passed, list) or not REQUIRED_ASSERTIONS.issubset(passed):
         raise GateError("The browser receipt is missing one or more required journey assertions")
@@ -188,6 +220,23 @@ def _write_sanitized_receipt(path: Path, source: dict[str, Any], build_id: str) 
         "native_socket_simulated": True,
         "challenge_simulated": True,
         "page_errors": [],
+        "account_first_checks": {
+            key: source["journey_checks"][key]
+            for key in (
+                "pre_auth_source_or_plan_writes",
+                "pre_auth_external_mutations",
+                "email_otp_verified",
+                "account_created_before_profile",
+                "pre_profile_source_or_plan_writes",
+                "profile_complete_before_upload",
+                "selected_filename_visible_before_upload",
+                "uploaded_source_request_hash_matches_selected_bytes",
+                "acquisition_usage_count",
+                "settlement_count",
+                "charged_seconds",
+                "relogin_existing_account",
+            )
+        },
         "passed": sorted(REQUIRED_ASSERTIONS),
         "synthetic_only": True,
     }

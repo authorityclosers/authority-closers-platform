@@ -64,6 +64,7 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Tenant
@@ -223,7 +224,21 @@ async def seed(
                     name="Disposable Sales Xray tenant",
                 )
             )
-        database.add(Person(id=state.person_id, email_verified_at=state.now))
+        database.add(
+            Person(
+                id=state.person_id,
+                email=f"worker-{state.person_id.hex}@example.test",
+                display_name="Synthetic Worker Owner",
+                email_verified_at=state.now,
+            )
+        )
+        await database.flush()
+        database.add(
+            SalesXrayProfile(
+                person_id=state.person_id,
+                phone_number_e164=f"+1555{state.person_id.int % 10_000_000_000:010d}",
+            )
+        )
         await database.flush()
         database.add(Membership(tenant_id=state.tenant_id, person_id=state.person_id, role=role))
         await database.flush()

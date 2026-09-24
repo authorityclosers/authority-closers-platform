@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
@@ -9,7 +9,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin }),
 }));
 import Page from "./page";
-import { remainingAllowanceLabel } from "./acquisition-studio";
+import {
+  AcquisitionStudio,
+  remainingAllowanceLabel,
+} from "./acquisition-studio";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import {
   allowance,
@@ -22,6 +25,10 @@ import {
   recordingId,
   transcript,
 } from "../tests/acquisition-fixture";
+
+const secondSubmissionId = "22222222-2222-4222-8222-222222222222";
+const secondReportSummary =
+  "The second saved call has its own verified report.";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -36,6 +43,7 @@ vi.mock("./upload-check", () => ({
 let root: Root, container: HTMLDivElement;
 let calls: Array<{ path: string; init: RequestInit }>;
 let existing: boolean,
+  workspaceUnauthorized: boolean,
   accepted: boolean,
   claimed: boolean,
   failedUpload: boolean,
@@ -45,6 +53,7 @@ let existing: boolean,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
+let activeReportSubmissionId: string;
 let entryBody: unknown;
 let quoteBody: unknown;
 let savedPlanBody: unknown;
@@ -76,7 +85,21 @@ async function click(text: string) {
   await flush();
 }
 async function mount() {
-  await act(async () => root.render(<Page />));
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () => root.render(page));
+  await flush();
+}
+async function navigateToCall(callId: string) {
+  window.history.replaceState(null, "", `/?call=${callId}`);
+  const page = await Page({
+    searchParams: Promise.resolve({ call: callId }),
+  });
+  await act(async () => root.render(page));
   await flush();
 }
 async function select() {
@@ -107,6 +130,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
   existing = false;
+  workspaceUnauthorized = false;
   accepted = false;
   claimed = false;
   failedUpload = false;
@@ -116,6 +140,7 @@ beforeEach(() => {
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
+  activeReportSubmissionId = submissionId;
   entryBody = entry;
   quoteBody = plan;
   savedPlanBody = null;
@@ -149,6 +174,8 @@ beforeEach(() => {
           );
         });
       }
+      if (path === "/v1/me/workspaces" && workspaceUnauthorized)
+        return response({}, 401);
       if (path === "/v1/me/workspaces")
         return response({
           person_id: "person-1",
@@ -156,6 +183,10 @@ beforeEach(() => {
           selected_tenant_id: "tenant-1",
           workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
         });
+      if (path === "/v1/me/sales-xray-profile/write-eligibility")
+        return new Response(null, { status: 204 });
+      if (path === "/v1/auth/email-code/config?surface=sales_xray")
+        return response({}, 503);
       if (path.endsWith("/entry")) return response(entryBody);
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
@@ -210,7 +241,22 @@ beforeEach(() => {
           202,
         );
       }
-      if (path.endsWith("/report")) return response(reportBody);
+      if (path.endsWith("/report"))
+        return response(
+          activeReportSubmissionId === secondSubmissionId
+            ? {
+                ...envelope,
+                submission_id: secondSubmissionId,
+                report: {
+                  ...envelope.report,
+                  content: {
+                    ...envelope.report.content,
+                    summary: secondReportSummary,
+                  },
+                },
+              }
+            : reportBody,
+        );
       if (path.endsWith("/transcript")) return response(transcript);
       if (path.endsWith("/claim")) {
         claimed = false;
@@ -228,7 +274,8 @@ beforeEach(() => {
         savedSubmissionUnauthorized
       )
         return response({}, 401);
-      if (path.endsWith(`/submissions/${submissionId}`))
+      if (path.endsWith(`/submissions/${submissionId}`)) {
+        activeReportSubmissionId = submissionId;
         return init.method === "DELETE"
           ? deletionDenied
             ? response({}, 404)
@@ -268,6 +315,16 @@ beforeEach(() => {
                         state: accepted ? "report_ready" : "ready",
                       },
               );
+      }
+      if (path.endsWith(`/submissions/${secondSubmissionId}`)) {
+        activeReportSubmissionId = secondSubmissionId;
+        return response({
+          ...progress,
+          submission_id: secondSubmissionId,
+          has_report: true,
+          state: "report_ready",
+        });
+      }
       throw new Error("Unexpected test request");
     }),
   );
@@ -279,6 +336,51 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+it("opens account access on guest file selection and keeps Analyze gated without a guest upload", async () => {
+  workspaceUnauthorized = true;
+  await mount();
+  await select();
+  expect(container.textContent).toContain("Sales call.wav");
+  expect(
+    container.querySelector('[aria-label="Back to your call"]'),
+  ).not.toBeNull();
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toBe(false);
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toBe(false);
+
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Back to your call"]')
+      ?.click(),
+  );
+  await flush();
+  expect(container.textContent).toContain("Sales call.wav");
+  expect(container.textContent).not.toContain("Complete upload check");
+  await consent();
+  expect(button("Analyse my call").disabled).toBe(false);
+  await click("Analyse my call");
+  expect(
+    container.querySelector('[aria-label="Back to your call"]'),
+  ).not.toBeNull();
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toBe(false);
+  expect(
+    calls.some(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toBe(false);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
@@ -363,10 +465,14 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "Sign in to save this call",
   );
   expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
+  await click("Tabbed view");
+  expect(
     container.querySelectorAll(
       '[role="tablist"][aria-label="Explore your sales report"] [role="tab"]',
     ),
-  ).toHaveLength(5);
+  ).toHaveLength(6);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -562,6 +668,82 @@ it("opens a normally saved call when its session remains valid", async () => {
   expect(container.textContent).not.toContain("Start a new call");
 });
 
+it("keeps a deep-linked call neutral until its owner read returns, then opens its report", async () => {
+  existing = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${submissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+
+  await mount();
+  expect(container.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(container.textContent).toContain("Opening your saved call");
+  expect(container.textContent).not.toContain("Add a call to review");
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[data-stage="opening"]')).toBeNull();
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+  expect(calls.some(({ path }) => path.endsWith("/upload-policy"))).toBe(false);
+});
+
+it("drops the prior report before restoring a different call selector", async () => {
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${secondSubmissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+  await navigateToCall(secondSubmissionId);
+  expect(container.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(container.textContent).not.toContain(secondReportSummary);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(container.textContent).toContain(secondReportSummary);
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
 it("desktop and mobile Analyse navigation explicitly starts a new call", async () => {
   await mount();
   const desktop = container.querySelector('nav[aria-label="Workspace"] a');
@@ -612,7 +794,7 @@ it("generic failed lookup with no parsed submission can escape and remains new a
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
   expect(container.querySelector('[role="alert"]')).not.toBeNull();
-  await click("Analyse another call");
+  await click("Start a new call");
   expect(window.location.search).toBe("?new=1");
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(
@@ -643,6 +825,43 @@ it("consumes new-call intent when a new upload begins so reload can recover that
   expect(new URLSearchParams(window.location.search).has("new")).toBe(false);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+});
+
+it("keeps the next staged file ready after starting another call", async () => {
+  existing = true;
+  await mount();
+  const input =
+    container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const first = new File(["first"], "Discovery.wav", { type: "audio/wav" });
+  const second = new File(["second"], "Follow-up.m4a", { type: "audio/mp4" });
+  Object.defineProperty(first, "arrayBuffer", {
+    value: async () => new ArrayBuffer(10),
+  });
+  Object.defineProperty(input, "files", {
+    configurable: true,
+    value: [first, second],
+  });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+  expect(container.textContent).toContain("2 files added");
+  expect(container.textContent).toContain(
+    "Discovery.wav selected for analysis",
+  );
+  await consent();
+  await click("Analyse my call");
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  await act(async () =>
+    container
+      .querySelector<HTMLElement>('summary[aria-label="More report actions"]')!
+      .click(),
+  );
+  await click("Analyse another call");
+  expect(container.textContent).toContain("1 file added");
+  expect(container.textContent).toContain(
+    "Follow-up.m4a selected for analysis",
+  );
 });
 
 it("captures new-call intent before delayed bootstrap reads can mistake an in-flight upload for saved work", async () => {
@@ -827,6 +1046,14 @@ it("keeps status refresh read-only after a lost quote and requires a separate re
   const before = calls.filter(({ init }) =>
     ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
   ).length;
+  const recovery = container.querySelector('[role="alert"]');
+  const callPanel = container.querySelector('[aria-label="Your call"]');
+  expect(recovery).not.toBeNull();
+  expect(callPanel).not.toBeNull();
+  expect(
+    recovery!.compareDocumentPosition(callPanel!) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   quoteFailure = null;
   await click("Check again");
   await act(async () => vi.advanceTimersByTimeAsync(12_000));
@@ -863,6 +1090,10 @@ it("restores an unapproved call without quoting or accepting, including manual s
   await mount();
   await click("Check status");
   expect(container.textContent).toContain("Ready for your approval");
+  expect(
+    container.querySelector('[data-hero-stage="ready"] h1')?.textContent,
+  ).toBe("Ready to analyse");
+  expect(container.textContent).not.toContain("We're processing your call");
   expect(container.textContent).toContain("approval is not confirmed yet");
   expect(
     calls.filter(({ init }) =>
@@ -1003,7 +1234,13 @@ it("ignores an old observation after unmount and replacement of the studio", asy
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   // Deliberately ignore fetch cancellation to verify the mounted UI guard.
-  await act(async () => root.render(<Page key="replacement-studio" />));
+  await act(async () =>
+    root.render(
+      <Fragment key="replacement-studio">
+        <AcquisitionStudio />
+      </Fragment>,
+    ),
+  );
   await flush();
   progressOverride = {
     ...progress,
@@ -1264,7 +1501,9 @@ it("shows delayed-update guidance without changing progress, identity or submitt
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
   expect(container.querySelector("[data-update-delayed]")).toBeNull();
-  expect(container.querySelector('[role="tab"]')?.textContent).toBe("Overview");
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
 });
 
 it("replaces delayed guidance with real paused recovery without restarting analysis", async () => {
@@ -1779,10 +2018,22 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     savedAudio?.closest('[aria-label="Call audio player"]'),
   );
   expect(savedAudio?.getAttribute("src")).toBe(source);
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("reading");
+  expect(
+    container.querySelectorAll("[data-report-mode-section][hidden]"),
+  ).toHaveLength(0);
   const play = vi
     .spyOn(HTMLMediaElement.prototype, "play")
     .mockResolvedValue(undefined);
+  await click("Tabbed view");
   await click("Prospect");
+  expect(
+    container
+      .querySelector('[data-report-mode-section="prospect"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(false);
   expect(container.querySelector("[data-prospect-snapshot]")).not.toBeNull();
   const prospectSource =
     envelope.report.content.overview.prospect_interpretations[0].source
@@ -1795,6 +2046,11 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     prospectSource.start_ms / 1000,
   );
   expect(play).toHaveBeenCalledOnce();
+  await click("Reading view");
+  expect(
+    container.querySelector('[aria-label="Call audio player"] audio'),
+  ).toBe(savedAudio);
+  await click("Tabbed view");
   await click("Next-call plan");
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
@@ -1867,7 +2123,7 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   expect(button("Forget this saved call on this device")).toBeDefined();
   await click("Forget this saved call on this device");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
-  expect(container.textContent).toContain("Start with your sales call");
+  expect(container.textContent).toContain("Add a call to review");
   expect(
     container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
   ).toBe(false);

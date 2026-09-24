@@ -45,6 +45,7 @@ export type ReportDimension = {
   status: string;
   observation: string;
   citations: ReportCitation[];
+  evidence?: ReportEvidence[];
 };
 export type ReportSection = {
   number: number;
@@ -164,6 +165,8 @@ export type Job = {
   id: string;
   state: string;
   message: string;
+  executionHold?: "account_profile_required";
+  recovery?: RecoveryMetadata;
   report?: SalesReport;
 };
 
@@ -339,12 +342,23 @@ function parseFinding(
   };
 }
 
-function parseDimensions(value: unknown): ReportDimension[] {
+function parseDimensions(
+  value: unknown,
+  durationMs: number,
+  bindingTranscript?: Transcript,
+): ReportDimension[] {
   return array(value, "report_dimensions", 8, 8).map((entry, index) => {
     const dimension = object(entry, `report_dimension_${index}`);
     keys(
       dimension,
-      ["dimension_id", "label", "status", "observation", "citations"],
+      [
+        "dimension_id",
+        "label",
+        "status",
+        "observation",
+        "citations",
+        "evidence",
+      ],
       `report_dimension_${index}`,
     );
     const status = text(
@@ -354,7 +368,43 @@ function parseDimensions(value: unknown): ReportDimension[] {
     );
     if (!DIMENSION_STATES.has(status))
       throw new ReportContractError(`report_dimension_${index}_status_invalid`);
-    return {
+    const evidence =
+      dimension.evidence === undefined
+        ? undefined
+        : array(
+            dimension.evidence,
+            `report_dimension_${index}_evidence`,
+            0,
+            8,
+          ).map((entry, evidenceIndex) => {
+            const code = `report_dimension_${index}_evidence_${evidenceIndex}`;
+            const parsed = parseEvidence(
+              entry,
+              code,
+              durationMs,
+              bindingTranscript,
+            );
+            identifier(parsed.segment_id, `${code}_segment_id`);
+            const segment = bindingTranscript?.segments.find(
+              (candidate) => candidate.id === parsed.segment_id,
+            );
+            if (
+              segment &&
+              (parsed.start_ms !== segment.start_ms ||
+                parsed.end_ms !== segment.end_ms)
+            )
+              throw new ReportContractError(`${code}_segment_timing_mismatch`);
+            return parsed;
+          });
+    if (
+      evidence !== undefined &&
+      (status === "observed" || status === "conflicted") &&
+      evidence.length === 0
+    )
+      throw new ReportContractError(
+        `report_dimension_${index}_evidence_required`,
+      );
+    const parsed: ReportDimension = {
       dimension_id: text(
         dimension.dimension_id,
         `report_dimension_${index}_id`,
@@ -379,6 +429,8 @@ function parseDimensions(value: unknown): ReportDimension[] {
         ),
       ),
     };
+    if (evidence !== undefined) parsed.evidence = evidence;
+    return parsed;
   });
 }
 
@@ -567,7 +619,11 @@ function parseReport(
     source_label: text(report.source_label, "report_source_label", 256),
     source_sha256: sourceSha256,
     transcript_revision: transcriptRevision,
-    dimensions: parseDimensions(report.dimensions),
+    dimensions: parseDimensions(
+      report.dimensions,
+      binding.durationMs,
+      binding.transcript,
+    ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
   if (report.overview !== undefined && report.overview !== null) {
@@ -743,6 +799,8 @@ export function parseJobStatus(
       "message",
       "provider_calls",
       "report",
+      "execution_hold",
+      "recovery",
     ],
     "job",
   );
@@ -763,10 +821,24 @@ export function parseJobStatus(
   }
   if (job.recipe_revision !== undefined)
     text(job.recipe_revision, "job_recipe_revision", 128);
+  if (
+    job.execution_hold !== undefined &&
+    job.execution_hold !== null &&
+    job.execution_hold !== "account_profile_required"
+  )
+    throw new ReportContractError("job_execution_hold_invalid");
+  const recovery =
+    job.recovery === undefined
+      ? undefined
+      : parseRecoveryMetadata(job.recovery);
   return {
     id: text(job.id, "job_id", 128),
     state,
     message: optionalText(job.message, "job_message", 2_000),
+    ...(job.execution_hold === "account_profile_required"
+      ? { executionHold: "account_profile_required" as const }
+      : {}),
+    ...(recovery === undefined ? {} : { recovery }),
   };
 }
 

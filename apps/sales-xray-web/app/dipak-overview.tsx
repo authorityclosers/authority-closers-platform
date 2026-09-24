@@ -28,6 +28,7 @@ import { SourceWaveform } from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
 import { OverviewDashboard } from "./overview-dashboard";
 import { countReportMoments } from "./report-moments";
+import { useReportReading } from "./report-reading-context";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
@@ -78,6 +79,7 @@ function ReviewBlock({
   expanded?: boolean;
 }) {
   const focused = useContext(FocusedReview);
+  const reading = useReportReading();
   const header = (
     <>
       <span className={styles.number}>{number}</span>
@@ -87,7 +89,12 @@ function ReviewBlock({
       </div>
     </>
   );
-  if (!expanded && !focused && !["01", "02", "08", "11"].includes(number)) {
+  if (
+    !expanded &&
+    !reading &&
+    !focused &&
+    !["01", "02", "08", "11"].includes(number)
+  ) {
     return (
       <details
         className={`${styles.block} ${styles.fold}`}
@@ -133,6 +140,7 @@ function ImprovementDetailTabs({
   evidence: ReactNode;
   impact: ReactNode;
 }) {
+  const reading = useReportReading();
   const prefix = useId();
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const [tab, setTab] = useState<"happened" | "matters" | "try">("happened");
@@ -142,11 +150,16 @@ function ImprovementDetailTabs({
     ["try", "Try this"],
   ] as const;
   return (
-    <div className={styles.improvementTabs} data-improvement-tabs>
+    <div
+      className={styles.improvementTabs}
+      data-improvement-tabs
+      data-reading={reading || undefined}
+    >
       <div
         className={styles.improvementTabList}
         role="tablist"
         aria-label="Improvement detail"
+        hidden={reading}
       >
         {tabs.map(([id, label], index) => (
           <button
@@ -184,29 +197,35 @@ function ImprovementDetailTabs({
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-happened`}
-        aria-labelledby={`${prefix}-tab-happened`}
-        hidden={tab !== "happened"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-happened`}
+        aria-label={reading ? "What happened" : undefined}
+        hidden={!reading && tab !== "happened"}
       >
+        {reading && <h4>What happened</h4>}
         {whatHappened}
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-matters`}
-        aria-labelledby={`${prefix}-tab-matters`}
-        hidden={tab !== "matters"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-matters`}
+        aria-label={reading ? "Why it matters" : undefined}
+        hidden={!reading && tab !== "matters"}
       >
+        {reading && <h4>Why it matters</h4>}
         <p>{whyItMatters}</p>
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-try`}
-        aria-labelledby={`${prefix}-tab-try`}
-        hidden={tab !== "try"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-try`}
+        aria-label={reading ? "Try this" : undefined}
+        hidden={!reading && tab !== "try"}
       >
+        {reading && <h4>Try this</h4>}
         <p>{tryThis}</p>
       </div>
       {impact}
@@ -223,6 +242,7 @@ export function DipakOverview({
   durationMs,
   showHeading = true,
 }: Props) {
+  const reading = useReportReading();
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -487,7 +507,8 @@ export function DipakOverview({
       className={styles.overview}
       aria-label="Dipak’s call review"
       data-report-workspace
-      data-compact={!showHeading}
+      data-compact={!showHeading && !reading}
+      data-reading={reading || undefined}
     >
       {!showHeading && (
         <OverviewDashboard
@@ -543,7 +564,11 @@ export function DipakOverview({
           <span className={styles.statusPill}>Draft report</span>
         </div>
         {(detail?.diagnosis || detail?.outcome) && (
-          <details className={styles.sourceDetails} data-source-details>
+          <details
+            className={styles.sourceDetails}
+            data-source-details
+            open={reading}
+          >
             <summary className={styles.sourceDetailsSummary}>
               <span>Read source context</span>
               <ArrowUpRight size={15} aria-hidden="true" />
@@ -764,7 +789,7 @@ export function DipakOverview({
 
         <div className={styles.detailArea}>
           <ReviewDialog
-            open={Boolean(activeChapter)}
+            open={!reading && Boolean(activeChapter)}
             icon={<Target />}
             tone={
               ["02", "03", "04"].includes(activeReviewNumber ?? "")
@@ -786,7 +811,7 @@ export function DipakOverview({
             previousDisabled={activeReviewIndex === 0}
             nextDisabled={activeReviewIndex === insightRailItems.length - 1}
           >
-            {activeChapter && (
+            {activeChapter && !reading && (
               <button
                 className={styles.backToOverview}
                 type="button"
@@ -798,12 +823,12 @@ export function DipakOverview({
               </button>
             )}
             <FocusedReview.Provider
-              value={!showHeading ? activeReviewNumber : null}
+              value={!reading && !showHeading ? activeReviewNumber : null}
             >
               <div
                 className={styles.chapterStack}
-                data-focused={!showHeading && !!activeChapter}
-                hidden={!activeChapter}
+                data-focused={!reading && !showHeading && !!activeChapter}
+                hidden={!reading && !activeChapter}
               >
                 <section
                   className={styles.chapter}
@@ -812,7 +837,7 @@ export function DipakOverview({
                   role="region"
                   aria-label="Start here"
                   tabIndex={0}
-                  hidden={activeChapter !== "start"}
+                  hidden={!reading && activeChapter !== "start"}
                 >
                   <div className={styles.chapterHeading}>
                     <span className={styles.chapterRange}>01—04</span>
@@ -948,7 +973,7 @@ export function DipakOverview({
                   role="region"
                   aria-label="Read the conversation"
                   tabIndex={0}
-                  hidden={activeChapter !== "read"}
+                  hidden={!reading && activeChapter !== "read"}
                 >
                   <div className={styles.chapterHeading}>
                     <span className={styles.chapterRange}>05—09</span>
@@ -1150,7 +1175,7 @@ export function DipakOverview({
                   role="region"
                   aria-label="Practice and reflect"
                   tabIndex={0}
-                  hidden={activeChapter !== "practice"}
+                  hidden={!reading && activeChapter !== "practice"}
                 >
                   <div className={styles.chapterHeading}>
                     <span className={styles.chapterRange}>10—12</span>
@@ -1210,7 +1235,9 @@ export function DipakOverview({
                     <section
                       className={styles.ethicsBlock}
                       aria-label="Ethics observations"
-                      hidden={!showHeading && activeReviewNumber !== "10"}
+                      hidden={
+                        !reading && !showHeading && activeReviewNumber !== "10"
+                      }
                     >
                       <div className={styles.ethicsHeading}>
                         <p className={styles.eyebrow}>HUMAN REVIEW NOTE</p>
@@ -1295,7 +1322,7 @@ export function DipakOverview({
                   role="region"
                   aria-label="Close the loop"
                   tabIndex={0}
-                  hidden={activeChapter !== "close"}
+                  hidden={!reading && activeChapter !== "close"}
                 >
                   <div className={styles.chapterHeading}>
                     <span className={styles.chapterRange}>13—14</span>
@@ -1368,7 +1395,11 @@ export function DipakOverview({
                           key={section}
                           className={styles.block}
                           aria-label={title}
-                          hidden={!showHeading && activeReviewNumber !== "14"}
+                          hidden={
+                            !reading &&
+                            !showHeading &&
+                            activeReviewNumber !== "14"
+                          }
                         >
                           <div className={styles.blockHeading}>
                             <h3>{title}</h3>

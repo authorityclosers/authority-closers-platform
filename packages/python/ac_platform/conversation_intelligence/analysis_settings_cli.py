@@ -51,7 +51,9 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--c4-max-completion-tokens", type=int)
     command.add_argument("--c5-max-completion-tokens", type=int)
     command.add_argument("--c5-output-profile", choices=("standard", "detailed"))
-    command.add_argument("--c5-coaching-prompt-revision", choices=("coaching-v3", "coaching-v4"))
+    command.add_argument(
+        "--c5-coaching-prompt-revision", choices=("coaching-v3", "coaching-v4", "coaching-v5")
+    )
     command.add_argument("--report-language-default", choices=("en", "hi-Deva+en", "mr-Deva+en"))
     return command
 

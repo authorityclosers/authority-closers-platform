@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
@@ -10,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit import AuditRepository
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.auth import (
+    AuthenticatedTransaction,
+    RequestOriginDenied,
+    RequireActor,
+    require_safe_origin,
+)
 from ac_platform.media.api_contracts import (
     ActivityMediaBindingRequest,
     ActivityMediaBindingResponse,
@@ -52,6 +58,52 @@ def _service(runtime: MediaRuntime) -> MediaService:
 def _avatar_service(runtime: MediaRuntime) -> MediaService:
     avatar_runtime = runtime.filesystem_avatar_runtime or runtime.local_avatar_runtime
     return runtime.service if avatar_runtime is None else avatar_runtime.service
+
+
+def _filesystem_avatar_surface_origin(
+    request: Request, settings: Settings, *, require_origin: bool = True
+) -> str:
+    """Select a configured app surface from the canonical Host authority.
+
+    Writes require an exact Origin header. Same-surface reads commonly omit
+    Origin, so they bind to the exact configured HTTPS origin selected by Host.
+    Raw Host and configured origins are used independently of Uvicorn's proxy
+    handling; forwarded host/proto headers are not used as authority here.
+    """
+
+    origins = request.headers.getlist("origin")
+    host_headers = request.headers.getlist("host")
+    if (
+        len(origins) > 1
+        or (require_origin and len(origins) != 1)
+        or len(host_headers) != 1
+        or not host_headers[0]
+    ):
+        raise RequestOriginDenied("Profile media requires an exact configured app surface.")
+    request_origin = origins[0] if origins else None
+    request_host_header = host_headers[0]
+    for configured in (settings.public_app_url, settings.sales_xray_app_url):
+        if configured is None:
+            continue
+        origin = str(configured).rstrip("/")
+        try:
+            request_host = urlsplit(f"{configured.scheme}://{request_host_header}")
+            request_port = request_host.port
+        except ValueError:
+            continue
+        default_port = 443 if configured.scheme == "https" else 80
+        if (
+            (request_origin is None or request_origin == origin)
+            and request_host.username is None
+            and request_host.password is None
+            and not request_host.path
+            and not request_host.query
+            and not request_host.fragment
+            and request_host.hostname == configured.host
+            and (request_port or default_port) == (configured.port or default_port)
+        ):
+            return origin
+    raise RequestOriginDenied("Profile media requires an exact configured app surface.")
 
 
 def install_media_http(
@@ -149,11 +201,10 @@ def install_media_http(
             from ac_platform.media.local_avatar_storage import MAX_AVATAR_BYTES
 
             require_safe_origin(request, settings)
-            if (
-                request.headers.get("origin") != filesystem_avatar.storage.origin
-                or list(request.query_params.multi_items()) != [("token", token)]
-                or request.headers.get("content-encoding") not in {None, "identity"}
-            ):
+            surface_origin = _filesystem_avatar_surface_origin(request, settings)
+            if list(request.query_params.multi_items()) != [
+                ("token", token)
+            ] or request.headers.get("content-encoding") not in {None, "identity"}:
                 raise MediaBadRequest("The profile upload request is invalid.")
             body = await request.body()
             if not 0 < len(body) <= MAX_AVATAR_BYTES or request.headers.getlist(
@@ -170,6 +221,7 @@ def install_media_http(
                     content_type=request.headers.get("content-type", ""),
                     declared_length=request.headers.get("content-length", ""),
                     checksum=request.headers.get("x-content-sha256", ""),
+                    origin=surface_origin,
                 )
             )
             await record_person_audit(
@@ -233,11 +285,23 @@ def install_media_http(
 
             raise MediaBadRequest("The profile avatar route only accepts avatar media.")
         actor = auth.resolved.actor
-        result = await auth.database.run_sync(
-            lambda database: avatar_service.create_upload_intent(
-                database, actor, body, idempotency_key=idempotency_key or ""
+        if filesystem_avatar is not None:
+            upload_origin = _filesystem_avatar_surface_origin(request, settings)
+            result = await auth.database.run_sync(
+                lambda database: filesystem_avatar.service.create_upload_intent(
+                    database,
+                    actor,
+                    body,
+                    idempotency_key=idempotency_key or "",
+                    upload_origin=upload_origin,
+                )
             )
-        )
+        else:
+            result = await auth.database.run_sync(
+                lambda database: avatar_service.create_upload_intent(
+                    database, actor, body, idempotency_key=idempotency_key or ""
+                )
+            )
         await record_person_audit(
             auth,
             request,
@@ -252,12 +316,23 @@ def install_media_http(
 
     @router.get("/profile/avatar", response_model=ProfileAvatarResponse)
     async def get_profile_avatar(
+        request: Request,
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ProfileAvatarResponse:
-        result = await auth.database.run_sync(
-            lambda database: avatar_service.get_profile_avatar(database, auth.resolved.actor)
-        )
+        if filesystem_avatar is not None:
+            surface_origin = _filesystem_avatar_surface_origin(
+                request, settings, require_origin=False
+            )
+            result = await auth.database.run_sync(
+                lambda database: filesystem_avatar.service.get_profile_avatar_for_origin(
+                    database, auth.resolved.actor, origin=surface_origin
+                )
+            )
+        else:
+            result = await auth.database.run_sync(
+                lambda database: avatar_service.get_profile_avatar(database, auth.resolved.actor)
+            )
         _no_store(response)
         return result
 

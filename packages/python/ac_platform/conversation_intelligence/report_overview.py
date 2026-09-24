@@ -282,3 +282,44 @@ OVERVIEW_FORMAT = {
     "progress": None,
     "final_assessment": "{repeat,fix_first,next_focus,assessment:2-4 sentences}",
 }
+
+
+# Only the versioned successor uses the expanded constraints. Historical
+# requests must keep the exact bytes used by their accepted plans.
+OVERVIEW_V5_INSTRUCTION = (
+    " EVIDENCE_ARRAYS: v1. span={segment_id}; zero-based Python code points. "
+    "Legacy full references:exact-only. SourceNote={text,evidence:[span]}; "
+    "1-3 distinct supported spans per SourceNote, exactly one per rewatch; always arrays. "
+    "conversation_change: max(before.end_ms) <= min(change.start_ms) and "
+    "max(change.end_ms) <= min(after.start_ms); unclear/overlapping groups:entire field null. "
+    "Never invent pivots, reorder spans or alter timestamps. No duplicate findings. "
+    "Interpretations:hypotheses; unknown diagnosis/outcome/change:null. "
+    "Follow-up is not booking/sale. Business impact:insufficient_data, "
+    "missing_inputs required. Omit server fields and dimension labels/citations. "
+)
+
+# SourceNote is defined once above; do not repeat the same shape at every use.
+# This keeps the new guidance inside existing provider request-size bounds.
+OVERVIEW_V5_FORMAT = {
+    **OVERVIEW_FORMAT,
+    "diagnosis": "SourceNote(text<=320 chars)|null",
+    "outcome": "SourceNote+{kind:closed|follow_up|no_sale|future_date|disqualified|unclear}|null",
+    "improvement_details": (
+        "[{finding_index,what_happened:SourceNote,why_it_matters,"
+        "replacement_behavior:one doable action+sample phrase,"
+        "business_impact:{status:insufficient_data,missing_inputs:[text]}}] per improvement"
+    ),
+    "missed_details": (
+        "[{finding_index,prospect_signal:SourceNote,closer_response:SourceNote,"
+        "follow_up,potential_impact}]"
+    ),
+    "prospect_interpretations": (
+        "[{source:SourceNote,possible_concern,interpretation_kind:inference}],at most 3"
+    ),
+    "rewatch": "[SourceNote+{purpose:must_watch|watch|repeat}],at most 3;exactly one span each",
+    "conversation_change": (
+        "{before:SourceNote,change:SourceNote,after:SourceNote,possible_effect,"
+        "interpretation_kind:inference}|null;strictly chronological source spans"
+    ),
+    "ethics_notes": "[SourceNote],at most 3;observations only",
+}

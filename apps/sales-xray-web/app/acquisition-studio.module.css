@@ -2,6 +2,39 @@
   min-height: 0;
   background: #fff;
 }
+.reviewNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 10px clamp(16px, 3vw, 44px);
+  border: 1px solid color-mix(in srgb, CanvasText 22%, Canvas);
+  border-radius: 8px;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 13px;
+}
+.reviewNotice a {
+  color: LinkText;
+  font-weight: 650;
+}
+.reviewNotice > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reviewNotice small {
+  display: block;
+  color: GrayText;
+}
+.reviewNavigationLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
 .app[data-stage="upload"] {
   --mint: #007d79;
   --ink: #0e213d;
@@ -112,13 +145,6 @@
   color: #007d79;
   opacity: 0;
   animation: uploadCuePulse 4.4s ease-in-out infinite;
-}
-.app[data-stage="upload"] .dropZone h2 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 .app[data-stage="upload"] .dropTitle {
   margin: 0;
@@ -1287,6 +1313,9 @@
   border-top: 0;
 }
 .app[data-stage="report"] .report {
+  --report-font:
+    "Source Sans 3 Variable", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-family: var(--report-font);
   margin-top: 0;
   padding: 0;
   border: 0;
@@ -1310,15 +1339,15 @@
   color: #10243d;
   font-family: inherit;
   font-size: clamp(24px, 3vw, 36px);
-  font-weight: 800;
-  letter-spacing: -0.4px;
-  line-height: 1.15;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+  line-height: 1.16;
 }
 .reportHeading p {
   margin: 6px 0 0;
   color: #60738f;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.55;
 }
 @media (max-width: 620px) {
   .app[data-stage="report"] .reportHeader {
@@ -1351,6 +1380,11 @@
 }
 .app[data-stage="report"] :global(.studio-main) {
   padding-bottom: 90px;
+}
+@media (max-width: 760px) {
+  .app[data-stage="report"] :global(.studio-main) {
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
 }
 .reportMoreMenu > a {
   padding: 10px 12px;
@@ -1819,6 +1853,267 @@
   }
 }
 
+/* Upload landing layout. The guidance and links contain no fabricated activity. */
+.app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
+  gap: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
+  background: linear-gradient(#f8fbff, #fff 65%);
+}
+.app[data-stage="upload"][data-selected="false"] .layout {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 324px);
+  align-items: start;
+  gap: 16px;
+}
+.app[data-stage="upload"][data-selected="false"] .upload,
+.startGuide,
+.overviewCard {
+  border: 1px solid #dbe5f6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px #d7e5fa29;
+}
+.app[data-stage="upload"][data-selected="false"] .upload {
+  padding: 16px;
+}
+.app[data-stage="upload"][data-selected="false"] .upload.dragging {
+  border-color: #008e86;
+  box-shadow: 0 0 0 4px #008e861c;
+}
+.uploadCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+.uploadCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  color: #00877f;
+}
+.uploadCardTitle h2 {
+  margin: 0;
+  color: #14233c;
+  font-size: clamp(19px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.uploadCardTitle svg {
+  flex: 0 0 29px;
+}
+.allowanceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 45%;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #f4f7fc;
+  color: #334b70;
+  font-size: 11px;
+  line-height: 1.25;
+}
+.allowanceBadge svg {
+  flex: 0 0 19px;
+  color: #244b8c;
+}
+.app[data-stage="upload"][data-selected="false"] .dropZone {
+  min-height: 296px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f4fcfd, #fbffff);
+}
+.app[data-stage="upload"][data-selected="false"] .dropTitle {
+  font-size: clamp(19px, 1.65vw, 23px);
+}
+.app[data-stage="upload"][data-selected="false"] .formatFacts {
+  gap: 8px 20px;
+  font-size: 13px;
+}
+.app[data-stage="upload"][data-selected="false"]
+  .dropZone
+  :global(.studio-upload-icon) {
+  width: 82px;
+  height: 82px;
+  background: #ddf8f0;
+  color: #078d87;
+}
+.app[data-stage="upload"][data-selected="false"] .allowance {
+  display: none;
+}
+.startGuide {
+  min-width: 0;
+  padding: 20px 18px;
+}
+.startGuideHeading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2eaf7;
+  color: #6351cf;
+}
+.startGuideHeading h2 {
+  margin: 0;
+  color: #14233c;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.startGuide ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.startGuide li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e2eaf7;
+}
+.startGuide li > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid #b9d3e4;
+  border-radius: 50%;
+  color: #087d78;
+  font-size: 12px;
+  font-weight: 800;
+}
+.startGuide li strong {
+  color: #14233c;
+  font-size: 13px;
+}
+.startGuide li p {
+  margin: 2px 0 0;
+  color: #617592;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.startGuideHelp {
+  margin-top: 15px;
+  padding: 14px;
+  border: 1px solid #cae7e2;
+  border-radius: 11px;
+  background: linear-gradient(125deg, #edfcf8, #f6fbff);
+}
+.startGuideHelp h3 {
+  margin: 0;
+  color: #14233c;
+  font-size: 15px;
+}
+.startGuideHelp p {
+  margin: 4px 0 10px;
+  color: #526985;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.startGuideHelp a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: #007d79;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.startGuideHelp a:hover {
+  text-decoration: underline;
+}
+.startGuideHelp a:focus-visible,
+.overviewCard:focus-visible {
+  outline: 3px solid #aebff6;
+  outline-offset: 3px;
+}
+.overviewCards {
+  flex: 0 0 auto;
+  order: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.overviewCard {
+  display: flex;
+  min-width: 0;
+  min-height: 105px;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 18px;
+  color: inherit;
+  text-decoration: none;
+}
+a.overviewCard:hover {
+  border-color: #96cdc9;
+  background: #fcfffe;
+}
+.overviewIcon {
+  display: grid;
+  flex: 0 0 35px;
+  width: 35px;
+  height: 35px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e9faf6;
+  color: #00877f;
+}
+.overviewCard > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.overviewCard strong {
+  color: #14233c;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.overviewCard small {
+  color: #617592;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.overviewCard > svg:last-child {
+  flex: 0 0 18px;
+  margin-left: auto;
+  color: #00877f;
+}
+@media (max-width: 760px) {
+  .app[data-stage="upload"][data-selected="false"] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .startGuide {
+    padding: 18px;
+  }
+}
+@media (max-width: 620px) {
+  .app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
+    padding: 16px 16px 22px;
+  }
+  .uploadCardHeader {
+    flex-wrap: wrap;
+  }
+  .allowanceBadge {
+    max-width: 100%;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 240px;
+  }
+  .overviewCards {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* One stable, viewport-aware composition for every automatic stage. */
 .app[data-stage="processing"],
 .app[data-stage="uploading"] {
@@ -2037,5 +2332,362 @@
 @media (prefers-reduced-motion: reduce) {
   .progressRail > div {
     transition: none;
+  }
+}
+
+/* The reference layout keeps the upload and supporting cards in one column. */
+.primaryColumn {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.app[data-stage="upload"] .layout,
+.app[data-stage="processing"] .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 324px);
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.app[data-stage="upload"][data-selected="true"] .layout {
+  flex: 0 0 auto;
+}
+.app[data-stage="upload"][data-selected="true"] .upload {
+  overflow: visible;
+  min-height: 0;
+}
+.app[data-stage="processing"] :global(.studio-main) {
+  justify-content: flex-start;
+  max-width: 1320px;
+  padding: 0 24px 24px;
+}
+.app[data-stage="processing"] .upload {
+  padding: 16px;
+  border: 1px solid #dbe5f6;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px #d7e5fa29;
+}
+@media (max-width: 1100px) {
+  .app[data-stage="upload"] .layout,
+  .app[data-stage="upload"][data-selected="false"] .layout,
+  .app[data-stage="upload"][data-selected="true"] .layout,
+  .app[data-stage="processing"] .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 260px);
+    gap: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 214px;
+    padding: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"]
+    .dropZone
+    :global(.studio-upload-icon) {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 7px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropTitle {
+    font-size: 17px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropSelect {
+    min-height: 34px;
+    font-size: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .formatFacts {
+    gap: 4px 9px;
+    font-size: 10px;
+  }
+  .app[data-stage="upload"] .uploadCardTitle h2 {
+    font-size: 21px;
+  }
+  .app[data-stage="upload"] .allowanceBadge {
+    padding: 6px;
+    font-size: 10px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-main) {
+    padding-top: 0;
+    gap: 10px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .uploadCardHeader {
+    margin-bottom: 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .selectionHeading,
+  .app[data-stage="upload"][data-selected="true"] .verifyHeading {
+    display: none;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) {
+    min-height: 55px;
+    margin-bottom: 2px;
+    padding: 7px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-file)
+    > :global(.secondary-button) {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails {
+    margin-bottom: 0;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails summary,
+  .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
+    min-height: 20px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
+    min-height: 29px;
+    margin: 0;
+    padding: 2px 0;
+    font-size: 11px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
+    min-height: 36px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 760px) {
+  .app[data-stage="upload"] .layout,
+  .app[data-stage="upload"][data-selected="false"] .layout,
+  .app[data-stage="upload"][data-selected="true"] .layout,
+  .app[data-stage="processing"] .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .app[data-stage="upload"] :global(.studio-main) {
+    gap: 10px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .app[data-stage="upload"] .layout {
+    gap: 10px;
+  }
+  .app[data-stage="upload"] .primaryColumn {
+    gap: 10px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .uploadCardHeader {
+    margin-bottom: 8px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropZone {
+    min-height: 204px;
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="false"]
+    .dropZone
+    :global(.studio-upload-icon) {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 6px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropTitle {
+    font-size: 18px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .dropSelect {
+    min-height: 32px;
+    font-size: 14px;
+  }
+  .app[data-stage="upload"][data-selected="false"] .formatFacts {
+    gap: 4px 10px;
+    font-size: 10px;
+  }
+}
+
+/* Gentle motion gives the recording and upload marks a sense of activity. */
+.animatedWaveMark {
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px !important;
+  overflow: visible;
+}
+.waveBars rect {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wave-breathe 2.4s ease-in-out infinite;
+}
+.waveBars rect:nth-child(2) {
+  animation-delay: -1.8s;
+}
+.waveBars rect:nth-child(3) {
+  animation-delay: -1.25s;
+}
+.waveBars rect:nth-child(4) {
+  animation-delay: -0.6s;
+}
+.waveBars rect:nth-child(5) {
+  animation-delay: -1.55s;
+}
+.waveBars rect:nth-child(6) {
+  animation-delay: -0.95s;
+}
+.animatedUploadMark {
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+}
+.uploadOrbit {
+  transform-origin: 32px 32px;
+  animation: upload-orbit 16s linear infinite;
+}
+.uploadCloud {
+  animation: cloud-breathe 3.2s ease-in-out infinite;
+}
+.uploadArrow {
+  animation: arrow-rise 2.4s ease-in-out infinite;
+}
+.app[data-stage="upload"] .dropZone :global(.studio-upload-icon)::after {
+  position: absolute;
+  inset: -9px;
+  border: 1px solid #12a99c45;
+  border-radius: 50%;
+  animation: upload-halo 3.2s ease-out infinite;
+  content: "";
+  pointer-events: none;
+}
+@keyframes wave-breathe {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+@keyframes upload-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes cloud-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes arrow-rise {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes upload-halo {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.87);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .waveBars rect,
+  .uploadOrbit,
+  .uploadCloud,
+  .uploadArrow,
+  .app[data-stage="upload"] .dropZone :global(.studio-upload-icon)::after {
+    animation: none;
+  }
+}
+
+@media (min-width: 1101px) and (max-height: 1100px) {
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-main) {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .uploadCardHeader {
+    margin-bottom: 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .selectionHeading,
+  .app[data-stage="upload"][data-selected="true"] .verifyHeading {
+    display: none;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) {
+    min-height: 61px;
+    margin-bottom: 4px;
+    padding: 8px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-file)
+    > :global(.secondary-button) {
+    min-height: 34px;
+    padding: 5px 9px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails {
+    margin-bottom: 3px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails summary,
+  .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
+    min-height: 23px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
+    min-height: 35px;
+    margin: 0;
+    padding: 3px 0;
+    font-size: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
+    min-height: 42px;
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1101px) and (max-height: 800px) {
+  .app[data-stage="upload"][data-selected="true"] .upload {
+    padding: 12px;
+  }
+  .app[data-stage="upload"][data-selected="true"] :global(.studio-file) {
+    min-height: 55px;
+    margin-bottom: 2px;
+    padding: 7px;
+  }
+  .app[data-stage="upload"][data-selected="true"] .previewDetails summary,
+  .app[data-stage="upload"][data-selected="true"] .privacyDetails summary {
+    min-height: 20px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    :global(.studio-consent)
+    .consentLabel {
+    min-height: 29px;
+    padding: 2px 0;
+    font-size: 11px;
+  }
+  .app[data-stage="upload"][data-selected="true"]
+    .uploadActions
+    :global(.studio-wide) {
+    min-height: 36px;
+    font-size: 13px;
   }
 }

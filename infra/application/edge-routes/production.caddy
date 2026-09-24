@@ -1,3 +1,35 @@
+	# Account eligibility is checked with a body-free GET before new audio or
+	# processing requests reach the API. Domain authorization still runs there.
+	# Existing report reads, explicit claims, and privacy deletion stay outside
+	# this matcher. The foundation bootstrap routes do not activate this feature.
+	@production_xray_processing_write {
+		host learner.authorityclosers.com salesxray.authorityclosers.com api.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com
+		method POST PUT PATCH
+		path_regexp production_xray_write ^/v1/conversation/(acquisition/(session|submissions/[^/]+/(source|plan(/quote)?))|recordings(/[^/]+/(source|analysis(/quote)?|plan(/quote)?))?|runs|intake/quote|quotes/[^/]+/approve)/?$
+	}
+	handle @production_xray_processing_write {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		route {
+			reverse_proxy ac-production-api:8000 {
+				method GET
+				rewrite /v1/me/sales-xray-profile/write-eligibility?
+				header_up X-Forwarded-Method {method}
+				header_up X-Forwarded-Uri {uri}
+				@eligible status 204
+				handle_response @eligible {
+				}
+				@unexpected_success status 2xx
+				handle_response @unexpected_success {
+					respond "Account eligibility could not be confirmed.\n" 502
+				}
+			}
+			reverse_proxy ac-production-api:8000
+		}
+	}
+
 	# Legacy host transition never replays an API request or moves OAuth
 	# credentials across host-only cookie scopes.
 	@legacy_learner_api {

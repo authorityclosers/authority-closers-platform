@@ -55,6 +55,7 @@ from ac_platform.conversation_intelligence.stage_supplements import (
     processing_plan_sha256,
     supplemental_reservations,
 )
+from ac_platform.identity.sales_xray_profile import get_sales_xray_profile
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_postgresql import (
     postgres_harness as _postgres_harness,
@@ -193,19 +194,19 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
         path = f"{PREFIX}/submissions/{submission}"
         worker: ConversationInferenceWorker | None = None
         try:
+            async with setup.sessions() as database:
+                profile = await get_sales_xray_profile(database, person_id=setup.state.person_id)
+                assert profile.profile_complete
+
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 uploaded = await client.put(
                     path + "/source", content=data, headers=await _headers(client, data)
                 )
                 assert uploaded.status_code == 202, uploaded.text
             recording_id = UUID(uploaded.json()["recording_id"])
-            # Claim the real guest visitor after its initial source admission;
-            # the processing owner is resolved from the durable usage + claim.
-            async with setup.sessions() as database, database.begin():
-                await setup.factory(database).claim(setup.guest.token, setup.state.actor)
             await _reconcile(setup.sessions, setup.state)
             local = OfflineConversationWorker(
                 setup.sessions,
@@ -229,9 +230,17 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                         ConversationAcquisitionUsage.submission_id == submission
                     )
                 )
-                assert usage is not None and usage.visitor_id is not None
-                claim = await database.get(ConversationVisitorClaim, usage.visitor_id)
-                assert claim is not None and claim.person_id == setup.state.person_id
+                assert usage is not None
+                assert usage.person_id == setup.state.person_id
+                assert usage.visitor_id is None
+                assert (
+                    await database.scalar(
+                        select(ConversationVisitorClaim).where(
+                            ConversationVisitorClaim.person_id == setup.state.person_id
+                        )
+                    )
+                    is None
+                )
 
             async with setup.sessions() as database, database.begin():
                 database.add(
@@ -348,10 +357,10 @@ def test_paid_exact_source_supplement_completes_primary_and_one_repair(
                         ConversationAcquisitionUsage.submission_id == submission
                     )
                 )
-                assert usage is not None and usage.visitor_id is not None
-                claim = await database.get(ConversationVisitorClaim, usage.visitor_id)
-                assert claim is not None
-                owner_id = claim.person_id
+                assert usage is not None
+                assert usage.person_id == setup.state.person_id
+                assert usage.visitor_id is None
+                owner_id = usage.person_id
 
             base_bundle = setup.bundle_box["bundle"]
             policy = base_bundle.acquisition_policy

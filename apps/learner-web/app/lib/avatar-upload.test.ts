@@ -216,6 +216,8 @@ describe("avatar upload boundary", () => {
       upload_url: "https://upload.invalid/avatar",
       upload_headers: {
         "Content-Type": "image/png",
+        "Content-Length": "4",
+        Origin: "https://should-not-be-forwarded.example",
         "x-content-sha256": bytesChecksum,
       },
       expires_at: new Date(Date.now() + 60_000).toISOString(),
@@ -290,7 +292,11 @@ describe("avatar upload boundary", () => {
           method: "PUT",
           credentials: "omit",
           redirect: "error",
-          headers: intent.upload_headers,
+          referrerPolicy: "no-referrer",
+          headers: {
+            "Content-Type": "image/png",
+            "x-content-sha256": bytesChecksum,
+          },
         }),
       );
       expect(
@@ -316,6 +322,186 @@ describe("avatar upload boundary", () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it("uses the authenticated same-origin contract for exact hosted avatar objects", async () => {
+    const browserOrigin = "https://sales-xray.example.test";
+    vi.stubGlobal("window", { location: { origin: browserOrigin } });
+    const objectKey =
+      "tenants/00000000-0000-0000-0000-000000000001/media/avatar/00000000-0000-0000-0000-000000000002/00000000-0000-0000-0000-000000000003/original";
+    const intent = {
+      upload_id: "upload-hosted",
+      media_id: "asset-hosted",
+      media_version_id: "version-hosted",
+      version_number: 1,
+      state: "uploading" as const,
+      object_key: objectKey,
+      upload_url: `${browserOrigin}/v1/media/filesystem-avatar-upload/${objectKey.replaceAll("/", "%2F")}?token=AC-MEDIA.eyJzY29wZSI6ImF2YXRhciJ9.${"A".repeat(43)}`,
+      upload_headers: {
+        "content-type": "image/png",
+        "content-length": "4",
+        "x-content-sha256": bytesChecksum,
+      },
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      max_bytes: 5_000_000,
+    };
+    const api = {
+      createProfileAvatarUpload: vi.fn(async () => intent),
+      completeProfileAvatarUpload: vi.fn(async () => ({}) as never),
+      profileAvatar: vi.fn(async () => ({ avatar: null, pending: null })),
+    } as Parameters<typeof createApiAvatarUploadPort>[0];
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    try {
+      const result = await createApiAvatarUploadPort(api).upload({
+        file: {
+          name: "headshot.png",
+          type: "image/png",
+          size: 4,
+          slice: file("image/png").slice,
+        } as unknown as File,
+        crop: { scale: 1, offsetX: 0, offsetY: 0 },
+        sourceDimensions: { width: 1000, height: 1000 },
+      });
+
+      expect(result.status).toBe("processing");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        intent.upload_url,
+        expect.objectContaining({
+          method: "PUT",
+          credentials: "same-origin",
+          mode: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          referrerPolicy: "no-referrer",
+          headers: {
+            "content-type": "image/png",
+            "x-content-sha256": bytesChecksum,
+          },
+        }),
+      );
+      const headers = new Headers(fetchSpy.mock.calls[0]?.[1]?.headers);
+      expect(headers.has("content-length")).toBe(false);
+      expect(headers.has("origin")).toBe(false);
+      expect(headers.has("cookie")).toBe(false);
+      expect(headers.has("host")).toBe(false);
+      expect(api.completeProfileAvatarUpload).toHaveBeenCalledOnce();
+    } finally {
+      fetchSpy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    ["different origin", "https://attacker.example.test"],
+    ["different browser context", "https://learner.example.test"],
+  ])(
+    "rejects a hosted avatar URL with %s before sending bytes",
+    async (_case, origin) => {
+      const browserOrigin = "https://sales-xray.example.test";
+      vi.stubGlobal("window", { location: { origin: browserOrigin } });
+      const objectKey =
+        "tenants/00000000-0000-0000-0000-000000000001/media/avatar/00000000-0000-0000-0000-000000000002/00000000-0000-0000-0000-000000000003/original";
+      const intent = {
+        upload_id: "upload-cross-origin",
+        media_id: "asset-hosted",
+        media_version_id: "version-hosted",
+        version_number: 1,
+        state: "uploading" as const,
+        object_key: objectKey,
+        upload_url: `${origin}/v1/media/filesystem-avatar-upload/${objectKey.replaceAll("/", "%2F")}?token=AC-MEDIA.eyJzY29wZSI6ImF2YXRhciJ9.${"A".repeat(43)}`,
+        upload_headers: {
+          "content-type": "image/png",
+          "content-length": "4",
+          "x-content-sha256": bytesChecksum,
+        },
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        max_bytes: 5_000_000,
+      };
+      const api = {
+        createProfileAvatarUpload: vi.fn(async () => intent),
+        completeProfileAvatarUpload: vi.fn(),
+        profileAvatar: vi.fn(),
+      } as Parameters<typeof createApiAvatarUploadPort>[0];
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      try {
+        const result = await createApiAvatarUploadPort(api).upload({
+          file: file("image/png"),
+          crop: { scale: 1, offsetX: 0, offsetY: 0 },
+          sourceDimensions: { width: 1000, height: 1000 },
+        });
+        expect(result.status).toBe("terminal_error");
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(api.completeProfileAvatarUpload).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it.each([
+    ["object key", { object_key: "tenants/other/media/avatar/invalid" }],
+    [
+      "token multiplicity",
+      {
+        upload_url_suffix:
+          "&token=AC-MEDIA.duplicate.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+    ],
+    ["content length", { content_length: "5" }],
+    ["signed checksum", { checksum: "0".repeat(64) }],
+  ])(
+    "rejects a hosted avatar contract with a mismatched %s",
+    async (_case, change) => {
+      const browserOrigin = "https://sales-xray.example.test";
+      vi.stubGlobal("window", { location: { origin: browserOrigin } });
+      const objectKey =
+        "tenants/00000000-0000-0000-0000-000000000001/media/avatar/00000000-0000-0000-0000-000000000002/00000000-0000-0000-0000-000000000003/original";
+      const suffix =
+        "upload_url_suffix" in change ? change.upload_url_suffix : "";
+      const intent = {
+        upload_id: "upload-malformed",
+        media_id: "asset-hosted",
+        media_version_id: "version-hosted",
+        version_number: 1,
+        state: "uploading" as const,
+        object_key: "object_key" in change ? change.object_key : objectKey,
+        upload_url: `${browserOrigin}/v1/media/filesystem-avatar-upload/${objectKey.replaceAll("/", "%2F")}?token=AC-MEDIA.eyJzY29wZSI6ImF2YXRhciJ9.${"A".repeat(43)}${suffix}`,
+        upload_headers: {
+          "content-type": "image/png",
+          "content-length":
+            "content_length" in change ? change.content_length : "4",
+          "x-content-sha256":
+            "checksum" in change ? change.checksum : bytesChecksum,
+        },
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        max_bytes: 5_000_000,
+      };
+      const api = {
+        createProfileAvatarUpload: vi.fn(async () => intent),
+        completeProfileAvatarUpload: vi.fn(),
+        profileAvatar: vi.fn(),
+      } as Parameters<typeof createApiAvatarUploadPort>[0];
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      try {
+        const result = await createApiAvatarUploadPort(api).upload({
+          file: file("image/png"),
+          crop: { scale: 1, offsetX: 0, offsetY: 0 },
+          sourceDimensions: { width: 1000, height: 1000 },
+        });
+        expect(result.status).toBe("terminal_error");
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(api.completeProfileAvatarUpload).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 
   it("maps a rejected private upload to a safe terminal result", async () => {
     const api = {

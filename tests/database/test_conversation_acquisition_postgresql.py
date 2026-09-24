@@ -762,17 +762,40 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                 client.cookies.set(
                     "ac_xray_guest", guest.token, domain="salesxray.example.test", path="/"
                 )
+                start_params = {
+                    "action": "authenticate",
+                    "surface": "sales_xray",
+                    "consent": "true",
+                    "consent_version": settings.learner_consent_version,
+                    "return_path": f"/auth/complete?flow={uuid4()}",
+                }
+                partial_start = await client.get("/v1/auth/google/start", params=start_params)
+                assert partial_start.status_code == 303
+                partial_state = parse_qs(urlsplit(partial_start.headers["location"]).query)[
+                    "state"
+                ][0]
+                partial_callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": partial_state, "code": "synthetic-code"},
+                )
+                partial_flow = parse_qs(urlsplit(start_params["return_path"]).query)["flow"][0]
+                assert partial_callback.status_code == 303
+                assert partial_callback.headers["location"] == (
+                    origin + f"/auth/complete?flow={partial_flow}&auth_result=failed"
+                )
+                assert settings.session_cookie_name not in client.cookies
+                async with sessions() as db:
+                    assert await db.scalar(select(func.count()).select_from(Person)) == before
+
+                # Starting this Google registration represents a current full acknowledgement.
+                start_params["age_attested"] = "true"
                 person_id = None
                 for _ in range(2 if verified else 1):
+                    flow_id = uuid4()
+                    start_params["return_path"] = f"/auth/complete?flow={flow_id}"
                     start = await client.get(
                         "/v1/auth/google/start",
-                        params={
-                            "action": "authenticate",
-                            "surface": "sales_xray",
-                            "consent": "true",
-                            "consent_version": settings.learner_consent_version,
-                            "return_path": "/?report=synthetic-owned-report&continue=claim",
-                        },
+                        params=start_params,
                     )
                     assert start.status_code == 303
                     callback_state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
@@ -781,7 +804,10 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                         params={"state": callback_state, "code": "synthetic-code"},
                     )
                     if not verified:
-                        assert callback.status_code == 401, callback.text
+                        assert callback.status_code == 303, callback.text
+                        assert callback.headers["location"] == (
+                            origin + f"/auth/complete?flow={flow_id}&auth_result=failed"
+                        )
                         assert settings.session_cookie_name not in client.cookies
                         async with sessions() as db:
                             assert (
@@ -791,8 +817,22 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                     assert callback.status_code == 303, callback.text
                     assert (
                         callback.headers["location"]
-                        == origin + "/?report=synthetic-owned-report&continue=claim"
+                        == origin + f"/auth/complete?flow={flow_id}&auth_result=success"
                     )
+                    wrong_completion = await client.post(
+                        "/v1/auth/google/completion",
+                        json={"flow_id": str(uuid4())},
+                        headers={"Origin": origin},
+                    )
+                    assert wrong_completion.status_code == 200, wrong_completion.text
+                    assert wrong_completion.json() == {"matched": False}
+                    completion = await client.post(
+                        "/v1/auth/google/completion",
+                        json={"flow_id": str(flow_id)},
+                        headers={"Origin": origin},
+                    )
+                    assert completion.status_code == 200, completion.text
+                    assert completion.json() == {"matched": True}
                     me = await client.get("/v1/me")
                     assert me.status_code == 200, me.text
                     assert me.json()["selected_tenant_id"] == str(state.tenant_id)

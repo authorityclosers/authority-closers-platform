@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { NextCallPlan } from "./next-call-plan";
+import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport } from "./report-contract";
 
 (
@@ -42,6 +43,9 @@ it("shows source-backed keep, change and practice without fake progress or a pra
   expect(container.textContent).toContain(
     report.overview!.practice!.instructions,
   );
+  expect(
+    container.querySelector('[aria-label="Call outcome"]')?.textContent,
+  ).toContain(report.overview!.outcome!.text);
   expect(container.querySelector('input[type="checkbox"]')).toBeNull();
   expect(container.textContent).not.toContain("Start practice");
   await act(async () => button("Change").click());
@@ -55,6 +59,10 @@ it("plays exact supplied evidence and exposes all full notes in a bounded reader
     root.render(<NextCallPlan report={report} onSelectEvidence={select} />),
   );
   const evidence = report.improvements[0].evidence[0];
+  const outcomeEvidence = report.overview!.outcome!.evidence[0];
+  await act(async () => button(`Listen to call outcome at 00:03.500`).click());
+  expect(select).toHaveBeenCalledWith(outcomeEvidence, "Call outcome");
+  select.mockClear();
   await act(async () =>
     button(
       `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
@@ -98,7 +106,58 @@ it("does not invent coaching or playback when source fields are absent", async (
   expect(container.textContent).toContain(
     "No timed source moment was supplied",
   );
+  expect(container.querySelector('[aria-label="Call outcome"]')).toBeNull();
   expect(
     container.querySelector('[aria-label^="Play source moment"]'),
   ).toBeNull();
+});
+
+it("does not reopen an old plan dialog after switching through reading mode", async () => {
+  const renderMode = async (reading: boolean) => {
+    await act(async () =>
+      root.render(
+        <ReportReadingProvider reading={reading}>
+          <NextCallPlan report={report} onSelectEvidence={vi.fn()} />
+        </ReportReadingProvider>,
+      ),
+    );
+  };
+  await renderMode(false);
+  await act(async () => button("Read full notes : Change first").click());
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  await renderMode(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await renderMode(false);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("renders every plan section and source in reading mode while retaining evidence seeking", async () => {
+  const select = vi.fn();
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading>
+        <NextCallPlan report={report} onSelectEvidence={select} />
+      </ReportReadingProvider>,
+    ),
+  );
+  expect(container.querySelectorAll("article")).toHaveLength(3);
+  expect(
+    container.querySelectorAll('article[data-active="true"]'),
+  ).toHaveLength(1);
+  expect(container.textContent).toContain(
+    report.overview!.next_call_focus!.target,
+  );
+  expect(container.textContent).toContain(
+    report.overview!.practice!.success_condition,
+  );
+  expect(container.querySelectorAll("button[hidden]")).toHaveLength(3);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  const evidence = report.improvements[0].evidence[0];
+  expect(container.textContent).toContain(evidence.quote);
+  await act(async () =>
+    button(
+      `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
+    ).click(),
+  );
+  expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);
 });

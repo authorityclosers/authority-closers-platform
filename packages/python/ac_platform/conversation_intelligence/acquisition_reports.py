@@ -47,6 +47,7 @@ from ac_platform.conversation_intelligence.report_access import (
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.conversation_intelligence.reports import ReportDraft
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
+from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 
@@ -444,6 +445,21 @@ class AcquisitionReports:
             except ConversationConflict:
                 if recovered is None:
                     has_report = False
+        linked_job_ids = {task.job_id for task in tasks}
+        if local_run is not None:
+            linked_job_ids.add(local_run.job_id)
+        held_jobs = (
+            []
+            if not linked_job_ids
+            else list(
+                (await self.database.scalars(select(Job).where(Job.id.in_(linked_job_ids)))).all()
+            )
+        )
+        execution_hold = (
+            "account_profile_required"
+            if not has_report and any(is_account_profile_hold(job) for job in held_jobs)
+            else None
+        )
         failure_code = _progress_failure_code(
             plan,
             task_rows,
@@ -458,6 +474,7 @@ class AcquisitionReports:
             "state": "report_ready" if has_report else plan.state if plan else recording.state,
             "has_report": has_report,
             "automatic_progression": plan is not None and plan.state == "active",
+            "execution_hold": execution_hold,
             "failure_code": failure_code,
             "stages": [{"stage": task.stage, "state": task.state} for task in tasks],
         }

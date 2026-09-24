@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 
 
 def install_plan_routes(
@@ -71,6 +72,7 @@ def install_plan_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         report_language = await quote_language(request)
         try:
             return await ConversationProcessingPlans(
@@ -94,6 +96,7 @@ def install_plan_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         try:
             return await ConversationProcessingPlans(
                 ConversationApplication(auth.database), authority

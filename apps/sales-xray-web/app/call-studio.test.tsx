@@ -371,6 +371,40 @@ afterEach(async () => {
 });
 
 describe("CallStudio", () => {
+  it("shows a canonical profile hold and stops polling the held run", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    handleApi = (path, init) =>
+      path.endsWith("/runs/run-1/report")
+        ? response({
+            id: "run-1",
+            recording_id: "recording-1",
+            state: "queued",
+            execution_hold: "account_profile_required",
+          })
+        : originalHandler(path, init);
+    await render();
+    const file = await selectAudio("held.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain(
+      "Complete your account profile to continue",
+    );
+    expect(container.querySelector(".studio-progress .spin")).toBeNull();
+    const reads = requests.filter(({ url }) =>
+      url.endsWith("/runs/run-1/report"),
+    ).length;
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+    expect(
+      requests.filter(({ url }) => url.endsWith("/runs/run-1/report")),
+    ).toHaveLength(reads);
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).toBeNull();
+  });
+
   it("uses the embedded variant for the LMS mount without its standalone header", async () => {
     await render({ homeHref: "/home", variant: "embedded" });
 
@@ -939,52 +973,74 @@ describe("CallStudio", () => {
     );
   });
 
-  it("shows held plans honestly and requires a fresh quote to resume", async () => {
-    vi.useFakeTimers();
-    const originalHandler = handleApi;
-    let planReads = 0;
-    handleApi = (path, init) => {
-      if (
-        path.endsWith("/recordings/recording-1/plan") &&
-        init.method !== "POST"
-      ) {
-        planReads += 1;
-        if (planReads >= 1)
-          return response({
-            ...processingPlan,
-            accepted: true,
-            state: "held",
-            current_stage: "C4",
-            failure_code: "provider_timeout",
-          });
-      }
-      return originalHandler(path, init);
-    };
-    await render();
-    const file = await selectAudio("held-plan.wav");
-    await prepareAndAuthorize(file);
-    await act(async () => getButton("Upload and measure privately").click());
-    await flush();
-    await act(async () => vi.advanceTimersByTimeAsync(2500));
-    await flush();
-    await acceptProcessingPlan();
-    await act(async () => vi.advanceTimersByTimeAsync(2500));
-    await flush();
+  it.each(["provider_timeout", "account_profile_required"])(
+    "shows %s holds without polling or unauthorized retries",
+    async (failureCode) => {
+      vi.useFakeTimers();
+      const originalHandler = handleApi;
+      let planReads = 0;
+      handleApi = (path, init) => {
+        if (
+          path.endsWith("/recordings/recording-1/plan") &&
+          init.method !== "POST"
+        ) {
+          planReads += 1;
+          if (planReads >= 1)
+            return response({
+              ...processingPlan,
+              accepted: true,
+              state: "held",
+              current_stage: "C4",
+              failure_code: failureCode,
+            });
+        }
+        return originalHandler(path, init);
+      };
+      await render();
+      const file = await selectAudio("held-plan.wav");
+      await prepareAndAuthorize(file);
+      await act(async () => getButton("Upload and measure privately").click());
+      await flush();
+      await act(async () => vi.advanceTimersByTimeAsync(2500));
+      await flush();
+      await acceptProcessingPlan();
+      await act(async () => vi.advanceTimersByTimeAsync(2500));
+      await flush();
 
-    expect(container.textContent).toContain("report needs a fresh plan");
-    expect(container.textContent).toContain("Processing is paused");
-    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
-      null,
-    );
-    await act(async () => getButton("Request a fresh plan").click());
-    await flush();
-    expect(
-      requests.filter((request) =>
-        request.url.endsWith("/recordings/recording-1/plan/quote"),
-      ),
-    ).toHaveLength(2);
-    expect(container.textContent).toContain("Your approved report plan");
-  });
+      expect(container.textContent).toContain("Processing is paused");
+      expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+        null,
+      );
+      const heldReads = planReads;
+      await act(async () => vi.advanceTimersByTimeAsync(30_000));
+      expect(planReads).toBe(heldReads);
+      if (failureCode === "account_profile_required") {
+        expect(container.textContent).toContain(
+          "Complete your account profile to continue",
+        );
+        expect(container.textContent).toContain(
+          "Your approved plan and completed work are saved",
+        );
+        expect(container.textContent).not.toContain("Request a fresh plan");
+        expect(container.querySelector(".studio-progress .spin")).toBeNull();
+        expect(
+          requests.filter((request) =>
+            request.url.endsWith("/recordings/recording-1/plan/quote"),
+          ),
+        ).toHaveLength(1);
+        return;
+      }
+      expect(container.textContent).toContain("report needs a fresh plan");
+      await act(async () => getButton("Request a fresh plan").click());
+      await flush();
+      expect(
+        requests.filter((request) =>
+          request.url.endsWith("/recordings/recording-1/plan/quote"),
+        ),
+      ).toHaveLength(2);
+      expect(container.textContent).toContain("Your approved report plan");
+    },
+  );
 
   it("shows a funded upper limit and requires explicit cost consent", async () => {
     vi.useFakeTimers();
@@ -1274,6 +1330,7 @@ describe("CallStudio", () => {
   it.each(["audioatlas-48000-v1", "audioatlas-16000-v1"] as const)(
     "opens a saved %s recording, binds its report, and returns to the saved draft",
     async (recipeRevision) => {
+      const recovered = recipeRevision === "audioatlas-16000-v1";
       const originalHandler = handleApi;
       const savedRecording = {
         id: "recording-1",
@@ -1304,6 +1361,17 @@ describe("CallStudio", () => {
             state: "completed",
             message: "Saved report ready.",
             report,
+            ...(recovered
+              ? {
+                  recovery: {
+                    version: 2,
+                    validation_state: "corrected",
+                    provider_calls: 0,
+                    human_approved: false,
+                    official_score: false,
+                  },
+                }
+              : {}),
           });
         return originalHandler(path, init);
       };
@@ -1320,6 +1388,14 @@ describe("CallStudio", () => {
       expect(container.textContent).toContain(
         "Speaker labels remain unverified.",
       );
+      if (recovered) {
+        expect(container.textContent).toContain("Recovered draft · version 2");
+        expect(container.textContent).toContain(
+          "not a new analysis or a human-approved assessment",
+        );
+      } else {
+        expect(container.textContent).not.toContain("Recovered draft");
+      }
       expect(container.querySelector("audio")?.getAttribute("src")).toBe(
         "/v1/conversation/recordings/recording-1/source",
       );

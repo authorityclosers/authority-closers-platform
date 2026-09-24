@@ -14,8 +14,19 @@ import httpx
 import pytest
 from sqlalchemy import func, select, update
 
-from ac_platform.conversation_intelligence.acquisition_models import ConversationVisitorClaim
+from ac_platform.conversation_intelligence.acquisition_models import (
+    ConversationAcquisitionUsage,
+    ConversationVisitorClaim,
+)
+from ac_platform.conversation_intelligence.acquisition_processing import (
+    AcquisitionProcessing,
+    upload_policy,
+)
+from ac_platform.conversation_intelligence.acquisition_sessions import MeasuredSource
+from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpload
+from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.guest_models import ConversationProcessingLease
+from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
     ConversationRecording,
@@ -50,6 +61,56 @@ async def _upload(client: httpx.AsyncClient) -> dict[str, Any]:
     return response.json()
 
 
+async def _seed_retained_guest_submission(setup: Any) -> dict[str, Any]:
+    """Create a pre-cutover retained guest record through canonical services."""
+    audio = _wav_one_second_48k()
+    submission_id = uuid4()
+    source_sha256 = hashlib.sha256(audio).hexdigest()
+    upload = MeasuredUpload(
+        MeasuredSource(
+            submission_id,
+            source_sha256,
+            1_000,
+            hashlib.sha256(b"account-library-legacy-duration").hexdigest(),
+        ),
+        IntakeIntent(
+            source_sha256=source_sha256,
+            source_bytes=len(audio),
+            content_type="audio/wav",
+            duration_ms=1_000,
+            purpose="internal_analysis",
+        ),
+    )
+    async with setup.sessions() as db, db.begin():
+        processing = AcquisitionProcessing(GuestOwnership(setup.factory(db)), setup.runtime)
+        processing_actor, quote = await processing.prepare(
+            upload,
+            policy_sha256=upload_policy(setup.runtime.policy)["policy_sha256"],
+            token=setup.guest.token,
+        )
+        recording_id = UUID(quote["recording_id"])
+        await processing.application.store_source(
+            processing_actor,
+            recording_id,
+            chunks=(audio,),
+            storage=setup.runtime.storage,
+        )
+        recording = await db.get(ConversationRecording, recording_id)
+        usage = await db.scalar(
+            select(ConversationAcquisitionUsage).where(
+                ConversationAcquisitionUsage.tenant_id == setup.state.tenant_id,
+                ConversationAcquisitionUsage.submission_id == submission_id,
+            )
+        )
+        assert recording is not None and usage is not None
+        return {
+            "submission_id": submission_id,
+            "recording_id": recording_id,
+            "recording_person_id": recording.person_id,
+            "usage_id": usage.id,
+        }
+
+
 async def _session(setup: Any, state: Any) -> str:
     token = secrets.token_urlsafe(32)
     pepper = setup.settings.session_token_pepper.get_secret_value()
@@ -77,15 +138,46 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
             async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as guest:
                 assert (await guest.get(PREFIX + "/submissions")).status_code == 401
                 guest.cookies.set("ac_xray_guest", setup.guest.token)
-                uploaded_guest = await _upload(guest)
+                guest_upload = await guest.put(
+                    PREFIX + f"/submissions/{uuid4()}/source",
+                    content=(audio := _wav_one_second_48k()),
+                    headers=await _headers(guest, audio),
+                )
+                assert guest_upload.status_code == 401
                 assert (await guest.get(PREFIX + "/submissions")).status_code == 401
+            retained_guest = await _seed_retained_guest_submission(setup)
             async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as account:
-                account.cookies.set("ac_session", setup.token)
+                account.cookies.set(setup.settings.session_cookie_name, setup.token)
                 assert (await account.get(PREFIX + "/submissions")).json()["submissions"] == []
-                uploaded_direct = await _upload(account)
+                async with setup.sessions() as db, db.begin():
+                    jobs_before_claim = await db.scalar(select(func.count()).select_from(Job))
+                    await setup.factory(db).claim(setup.guest.token, setup.state.actor)
+                async with setup.sessions() as db:
+                    claim = await db.get(ConversationVisitorClaim, setup.guest.visitor_id)
+                    usage = await db.get(ConversationAcquisitionUsage, retained_guest["usage_id"])
+                    recording = await db.get(ConversationRecording, retained_guest["recording_id"])
+                    assert claim is not None and claim.person_id == setup.state.person_id
+                    assert usage is not None
+                    assert usage.visitor_id == setup.guest.visitor_id and usage.person_id is None
+                    assert recording is not None
+                    assert recording.person_id == retained_guest["recording_person_id"]
+                    assert recording.person_id != setup.state.person_id
+                    assert (
+                        await db.scalar(select(func.count()).select_from(Job)) == jobs_before_claim
+                    )
+                async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as guest:
+                    guest.cookies.set("ac_xray_guest", setup.guest.token)
+                    assert (
+                        await guest.get(PREFIX + f"/submissions/{retained_guest['submission_id']}")
+                    ).status_code == 403
+                assert {
+                    row["submission_id"]
+                    for row in (await account.get(PREFIX + "/submissions")).json()["submissions"]
+                } == {str(retained_guest["submission_id"])}
+                uploaded_first = await _upload(account)
+                uploaded_second = await _upload(account)
                 async with setup.sessions() as db, db.begin():
                     jobs_before = await db.scalar(select(func.count()).select_from(Job))
-                    await setup.factory(db).claim(setup.guest.token, setup.state.actor)
                 # New client has no guest cookie or local-storage selector.
                 response = await account.get(PREFIX + "/submissions")
                 assert response.status_code == 200
@@ -93,8 +185,9 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
                 assert response.headers["vary"] == "Cookie"
                 rows = response.json()["submissions"]
                 assert {row["submission_id"] for row in rows} == {
-                    uploaded_guest["submission_id"],
-                    uploaded_direct["submission_id"],
+                    str(retained_guest["submission_id"]),
+                    uploaded_first["submission_id"],
+                    uploaded_second["submission_id"],
                 }
                 assert all(row["duration_seconds"] == 1 and not row["has_report"] for row in rows)
                 assert all(
@@ -113,6 +206,28 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
                         )
                     ).all()
                     assert all(row.person_id != setup.state.person_id for row in recordings)
+                    usage_rows = (
+                        await db.scalars(
+                            select(ConversationAcquisitionUsage).where(
+                                ConversationAcquisitionUsage.tenant_id == setup.state.tenant_id
+                            )
+                        )
+                    ).all()
+                    assert {row.submission_id for row in usage_rows} == {
+                        retained_guest["submission_id"],
+                        UUID(uploaded_first["submission_id"]),
+                        UUID(uploaded_second["submission_id"]),
+                    }
+                    by_submission = {row.submission_id: row for row in usage_rows}
+                    retained_usage = by_submission[retained_guest["submission_id"]]
+                    assert retained_usage.visitor_id == setup.guest.visitor_id
+                    assert retained_usage.person_id is None
+                    assert all(
+                        by_submission[UUID(item["submission_id"])].person_id
+                        == setup.state.person_id
+                        and by_submission[UUID(item["submission_id"])].visitor_id is None
+                        for item in (uploaded_first, uploaded_second)
+                    )
                     assert (
                         await db.scalar(select(func.count()).select_from(ConversationVisitorClaim))
                         == 1
@@ -148,11 +263,11 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
                                 await stranger.get(
                                     PREFIX
                                     + "/submissions?before="
-                                    + uploaded_guest["submission_id"]
+                                    + str(retained_guest["submission_id"])
                                 )
                             ).status_code == 404
                         denied = await stranger.get(
-                            PREFIX + f"/submissions/{uploaded_guest['submission_id']}"
+                            PREFIX + f"/submissions/{retained_guest['submission_id']}"
                         )
                         assert denied.status_code in (403, 404)
                 # Natural execution lease expiry does not hide retained ownership.
@@ -166,14 +281,14 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
                         )
                     ).all()
                     assert leases and all(lease.expires_at < setup.clock[0] for lease in leases)
-                assert len((await account.get(PREFIX + "/submissions")).json()["submissions"]) == 2
-                # Deleting one recording and revoking the other removes both immediately.
+                assert len((await account.get(PREFIX + "/submissions")).json()["submissions"]) == 3
+                # Deleting the legacy item and revoking current permissions remove its rows.
                 deleted = await account.delete(
-                    PREFIX + f"/submissions/{uploaded_guest['submission_id']}",
-                    headers={"Origin": ORIGIN, "Idempotency-Key": "library-delete-guest"},
+                    PREFIX + f"/submissions/{retained_guest['submission_id']}",
+                    headers={"Origin": ORIGIN, "Idempotency-Key": "library-delete-claimed"},
                 )
                 assert deleted.status_code == 202
-                assert len((await account.get(PREFIX + "/submissions")).json()["submissions"]) == 1
+                assert len((await account.get(PREFIX + "/submissions")).json()["submissions"]) == 2
                 async with setup.sessions() as db, db.begin():
                     await db.execute(
                         update(ConversationPermission)

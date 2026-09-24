@@ -22,6 +22,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.audit.models import AuditEvent
+from ac_platform.conversation_intelligence import inference_worker as inference_worker_module
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -48,6 +49,11 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.storage import ObjectKey, ObjectKind, StorageError
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    PROFILE_INCOMPLETE_HOLD_REASON,
+    AccountProfileRequired,
+)
+from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository
 from tests.database.test_conversation_postgresql import run
@@ -295,6 +301,170 @@ def test_provider_rejects_wrong_source_route_or_permission_before_queue(
                     )
                     == 0
                 )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_incomplete_profile_holds_provider_job_before_dispatch_and_preserves_reservation(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+            )
+            async with sessions() as database, database.begin():
+                await ConversationInference(ConversationApplication(database)).accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                requested = await ConversationInference(
+                    ConversationApplication(database)
+                ).request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-profile-hold",
+                )
+                profile = await database.scalar(
+                    select(SalesXrayProfile).where(
+                        SalesXrayProfile.person_id == prepared.state.person_id
+                    )
+                )
+                assert profile is not None
+                profile.phone_number_e164 = None
+
+            broker = FakeBroker(prepared.data)
+            worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
+            assert await worker.run_once()
+            assert broker.calls == 0
+
+            async with sessions() as database, database.begin():
+                run_row = await database.get(ConversationRun, UUID(requested["id"]))
+                task = await database.get(ConversationInferenceTask, UUID(requested["id"]))
+                assert run_row is not None and run_row.state == "queued"
+                assert task is not None and task.state == "queued"
+                job = await database.get(Job, task.job_id)
+                assert job is not None and job.status == "held"
+                assert job.hold_reason == "sales_xray_profile_incomplete"
+                assert job.dispatch_started_at is None and job.provider_receipt is None
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                reservation = next(
+                    row
+                    for row in MinuteAccount.from_dict(minutes.snapshot).reservations
+                    if row.reservation_id == str(task.run_id)
+                )
+                assert reservation.state == "reserved"
+                response = await ConversationApplication(database).get_run(
+                    prepared.state.actor,
+                    UUID(requested["id"]),
+                )
+                assert response["state"] == "queued"
+                assert response["execution_hold"] == "account_profile_required"
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_profile_change_after_dispatch_marker_uses_uncertainty_reconciliation(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+            )
+            async with sessions() as database, database.begin():
+                await ConversationInference(ConversationApplication(database)).accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                requested = await ConversationInference(
+                    ConversationApplication(database)
+                ).request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-profile-change-after-marker",
+                )
+
+            require_profile = inference_worker_module.require_person_profile
+            checks = 0
+
+            async def profile_changes_between_fences(database: Any, *, person_id: UUID) -> None:
+                nonlocal checks
+                checks += 1
+                if checks == 1:
+                    await require_profile(database, person_id=person_id)
+                else:
+                    raise AccountProfileRequired(PROFILE_INCOMPLETE_HOLD_REASON)
+
+            monkeypatch.setattr(
+                inference_worker_module,
+                "require_person_profile",
+                profile_changes_between_fences,
+            )
+            broker = FakeBroker(prepared.data)
+            worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
+            assert await worker.run_once()
+            assert checks == 2 and broker.calls == 0
+
+            async with sessions() as database:
+                task = await database.get(ConversationInferenceTask, UUID(requested["id"]))
+                run_row = await database.get(ConversationRun, UUID(requested["id"]))
+                assert task is not None and task.state == "uncertain"
+                assert run_row is not None and run_row.state == "failed"
+                job = await database.get(Job, task.job_id)
+                assert job is not None and job.status == "dead_letter"
+                assert job.dispatch_started_at is not None
+                assert job.provider_idempotency_key == job.dedupe_key
+                assert job.provider_receipt is None
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (prepared.state.tenant_id, prepared.state.person_id),
+                )
+                assert minutes is not None
+                reservation = next(
+                    row
+                    for row in MinuteAccount.from_dict(minutes.snapshot).reservations
+                    if row.reservation_id == str(task.run_id)
+                )
+                assert reservation.state == "uncertain"
         finally:
             await engine.dispose()
 

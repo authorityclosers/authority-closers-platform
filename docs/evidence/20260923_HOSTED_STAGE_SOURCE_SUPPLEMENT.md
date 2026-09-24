@@ -13,3 +13,9 @@ Verification:
 - Mypy passed for the four changed conversation-intelligence package modules.
 
 No provider calls, live activation, production database changes, or deployment were performed for this evidence.
+
+## Account-required successor integration
+
+The successor account/profile release retains this scoped recovery implementation. Its vertical fixture now authenticates the canonical person before upload, verifies a complete profile, and binds the supplement to the durable account-owned usage with no visitor claim. It does not re-enable guest processing or broaden the existing coaching-v4 staging-only supplement to coaching-v5.
+
+After integration, 36 focused provider-policy/v5 integration unit tests and the isolated PostgreSQL supplement vertical test pass. The latter still verifies historical holds, exact owner/source/plan scope, concurrent primary admission, one repair and denial after the bounded allowance is consumed. No live provider or VPS operation was used for these checks.

@@ -25,6 +25,25 @@ from ac_platform.identity.models import (
     SessionAudience,
 )
 
+GOOGLE_ISSUER_CANONICAL = "https://accounts.google.com"
+GOOGLE_ISSUER_ALIASES = (GOOGLE_ISSUER_CANONICAL, "accounts.google.com")
+
+
+def normalize_provider_issuer(issuer: str) -> str:
+    """Canonicalize the two issuer spellings accepted by Google's OIDC contract."""
+
+    return GOOGLE_ISSUER_CANONICAL if issuer in GOOGLE_ISSUER_ALIASES else issuer
+
+
+def provider_issuer_lookup_values(issuer: str) -> tuple[str, ...]:
+    """Include Google's historical issuer spelling when resolving a canonical key."""
+
+    normalized = normalize_provider_issuer(issuer)
+    if normalized == GOOGLE_ISSUER_CANONICAL:
+        return GOOGLE_ISSUER_ALIASES
+    return (normalized,)
+
+
 if TYPE_CHECKING:
     from ac_platform.tenancy.services import TenantContext, TrustedTenantContextPort
 
@@ -363,6 +382,9 @@ class VerifiedProviderAssertion:
     # Kept only as a source-compatibility read field. It is never trusted or
     # used to identify a replay; the identity layer derives its own key.
     replay_key: str | None = None
+    # Optional display-only claim from the already verified provider token.
+    # It is never an identity key and callers must not overwrite a set name.
+    display_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,6 +396,7 @@ class ValidatedProviderAssertion:
     email: str
     replay_key: str
     authorization_type: ProviderAuthorizationType
+    display_name: str | None = None
 
 
 def validate_verified_provider_assertion(
@@ -382,7 +405,7 @@ def validate_verified_provider_assertion(
     """Normalize a provider assertion without trusting caller-owned bindings."""
 
     try:
-        issuer = _required_text(assertion.issuer, "issuer", 2048)
+        issuer = normalize_provider_issuer(_required_text(assertion.issuer, "issuer", 2048))
         subject = _required_text(assertion.subject, "subject", 512)
         audience = _required_text(assertion.audience, "audience")
         state = _required_text(assertion.state, "state")
@@ -392,6 +415,17 @@ def validate_verified_provider_assertion(
             assertion_id = _required_text(assertion.assertion_id, "assertion_id", 512)
         else:
             assertion_id = None
+        display_name = None
+        if isinstance(assertion.display_name, str):
+            candidate_name = " ".join(assertion.display_name.split())
+            if (
+                candidate_name
+                and len(candidate_name) <= 200
+                and not any(
+                    ord(character) < 0x20 or ord(character) == 0x7F for character in candidate_name
+                )
+            ):
+                display_name = candidate_name
     except ValueError as exc:
         raise InvalidProviderAssertionError(str(exc)) from exc
     if any("\x00" in value for value in (issuer, subject, audience, state, nonce, email)):
@@ -408,6 +442,7 @@ def validate_verified_provider_assertion(
         email=email,
         replay_key=replay_key,
         authorization_type=assertion.authorization_type,
+        display_name=display_name,
     )
 
 
@@ -679,10 +714,11 @@ class InMemoryIdentityStore:
     def find_provider_identities(
         self, issuer: str, subject: str
     ) -> Sequence[ProviderIdentitySnapshot]:
+        issuers = provider_issuer_lookup_values(issuer)
         return tuple(
             identity
             for identity in self.provider_identities.values()
-            if identity.issuer == issuer and identity.subject == subject
+            if identity.issuer in issuers and identity.subject == subject
         )
 
     def save_provider_identity(self, identity: ProviderIdentitySnapshot) -> None:
@@ -1674,4 +1710,6 @@ __all__ = [
     "issue_provider_authorization",
     "validate_provider_authorization_callback",
     "validate_verified_provider_assertion",
+    "normalize_provider_issuer",
+    "provider_issuer_lookup_values",
 ]

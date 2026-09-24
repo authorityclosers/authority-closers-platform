@@ -36,6 +36,7 @@ vi.mock("../components/site-shell", () => ({
 let root: Root, host: HTMLDivElement;
 let requests: { path: string; init: RequestInit }[];
 let workspaceStatus: number, entryStatus: number, sessionStatus: number;
+let profileEligible: boolean;
 let accepted: boolean, claimed: boolean, needsClaim: boolean;
 let navigate: ReturnType<typeof vi.spyOn>;
 const json = (body: unknown, status = 200) =>
@@ -64,8 +65,17 @@ const click = async (text: string) => {
   await act(async () => button(text).click());
   await flush();
 };
-const mount = async (library = false) => {
-  await act(async () => root.render(library ? <CallsPage /> : <Page />));
+const mount = async (library = false, callId?: string) => {
+  if (callId)
+    window.history.replaceState(null, "", `/sales-xray?call=${callId}`);
+  const page = library ? (
+    <CallsPage />
+  ) : (
+    await Page({
+      searchParams: Promise.resolve(callId ? { call: callId } : {}),
+    })
+  );
+  await act(async () => root.render(page));
   await flush();
 };
 const mutationRequests = () =>
@@ -77,6 +87,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   requests = [];
   workspaceStatus = entryStatus = sessionStatus = 200;
+  profileEligible = true;
   accepted = needsClaim = false;
   claimed = true;
   host = document.createElement("div");
@@ -94,6 +105,25 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (path: string, init: RequestInit = {}) => {
       requests.push({ path, init });
+      if (path === "/v1/me/sales-xray-profile/write-eligibility")
+        return new Response(null, { status: profileEligible ? 204 : 403 });
+      if (path === "/v1/me/sales-xray-profile")
+        return json({
+          name: profileEligible ? "Synthetic Learner" : null,
+          email: "learner@example.invalid",
+          phone_number_e164: profileEligible ? "+12025550123" : null,
+          phone_verified: false,
+          profile_complete: profileEligible,
+          revision: 1,
+        });
+      if (path === "/v1/auth/email-code/config?surface=sales_xray")
+        return json({
+          enabled: true,
+          consent_version: "synthetic-consent-v1",
+          google_enabled: false,
+          expires_in_seconds: 600,
+          resend_after_seconds: 60,
+        });
       if (path === "/v1/me/workspaces")
         return json(
           {
@@ -225,6 +255,8 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
+  expect(button("Reading view").getAttribute("aria-pressed")).toBe("true");
+  await click("Tabbed view");
   await click("Moments");
   expect(host.textContent).toContain("कल timing discuss करूया.");
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
@@ -254,7 +286,13 @@ it.each(["workspace", "entry", "session"])(
     if (boundary === "session") sessionStatus = 401;
     await mount();
     expect(host.textContent).toContain("Sign in");
-    expect(host.querySelector('a[href="/login"]')).not.toBeNull();
+    if (boundary === "workspace") {
+      await click("Sign in");
+      expect(host.querySelector("#account-auth-heading")).not.toBeNull();
+      expect(host.querySelector("#account-email")).not.toBeNull();
+    } else {
+      expect(host.querySelector('a[href="/login"]')).not.toBeNull();
+    }
     expect(host.querySelector('script[src*="turnstile"]')).toBeNull();
     expect(
       host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled ??
@@ -264,6 +302,31 @@ it.each(["workspace", "entry", "session"])(
     expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
   },
 );
+
+it("keeps learner audio local when the canonical profile is incomplete", async () => {
+  profileEligible = false;
+  await mount();
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const file = new File(["synthetic"], "Pending learner call.wav", {
+    type: "audio/wav",
+  });
+  Object.defineProperty(file, "arrayBuffer", {
+    value: async () => new ArrayBuffer(10),
+  });
+  Object.defineProperty(input, "files", { configurable: true, value: [file] });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Analyse my call");
+  expect(host.querySelector("#account-profile-heading")).not.toBeNull();
+  expect(host.textContent).toContain(file.name);
+  expect(mutationRequests()).toHaveLength(0);
+  expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
+});
 
 it("keeps a pending ownership claim explicit and restores its report without re-uploading", async () => {
   needsClaim = true;
@@ -280,6 +343,60 @@ it("keeps a pending ownership claim explicit and restores its report without re-
     "/v1/conversation/acquisition/claim",
   ]);
   expect(host.textContent).toContain("Remaining analysis time · 99m 55s");
+});
+
+it("shows a neutral opening state while a learner deep link is checked, then opens the saved report", async () => {
+  accepted = claimed = true;
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${submissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+
+  await mount(false, submissionId);
+  expect(host.querySelector('[data-stage="opening"]')).not.toBeNull();
+  expect(host.textContent).toContain("Opening your saved call");
+  expect(host.textContent).not.toContain("Add a call to review");
+  expect(host.querySelector('input[type="file"]')).toBeNull();
+  expect(mutationRequests()).toHaveLength(0);
+
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
+  expect(host.querySelector('[data-stage="opening"]')).toBeNull();
+  expect(mutationRequests()).toHaveLength(0);
+});
+
+it("shows a restored pending call as processing without returning to upload or accepting work", async () => {
+  await mount(false, submissionId);
+  expect(host.querySelector('[data-stage="processing"]')).not.toBeNull();
+  expect(host.querySelector('[aria-label="Sales call report"]')).toBeNull();
+  expect(
+    host.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(true);
+  expect(host.textContent).not.toContain("Start with your sales call");
+  expect(mutationRequests()).toHaveLength(0);
+});
+
+it("opens an authorized saved report when upload setup reads are unavailable", async () => {
+  accepted = claimed = true;
+  entryStatus = sessionStatus = 503;
+  await mount(false, submissionId);
+  expect(host.querySelector('[aria-label="Sales call report"]')).not.toBeNull();
+  expect(host.textContent).toContain(envelope.report.content.summary);
+  expect(requests.some(({ path }) => path.endsWith("/upload-policy"))).toBe(
+    false,
+  );
+  expect(mutationRequests()).toHaveLength(0);
 });
 
 it("opens an account library result in the learner report route without processing it", async () => {

@@ -12,6 +12,7 @@ import {
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
 import { ReviewDialog } from "./review-dialog";
+import { useReportReading } from "./report-reading-context";
 import styles from "./next-call-plan.module.css";
 
 export function NextCallPlan({
@@ -23,11 +24,18 @@ export function NextCallPlan({
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
 }) {
+  const reading = useReportReading();
   const prefix = useId();
   const [active, setActive] = useState(0);
   const [opened, setOpened] = useState<number | null>(null);
+  const [previousReading, setPreviousReading] = useState(reading);
+  if (previousReading !== reading) {
+    setPreviousReading(reading);
+    setOpened(null);
+  }
   const focus = report.overview?.next_call_focus;
   const practice = report.overview?.practice;
+  const outcome = report.overview?.outcome;
   const first = report.improvements[0];
   const strength = report.strengths[0];
   const sections = [
@@ -96,7 +104,11 @@ export function NextCallPlan({
   }
   const selected = opened === null ? null : sections[opened];
   return (
-    <section className={styles.plan} aria-label="Next-call plan">
+    <section
+      className={styles.plan}
+      aria-label="Next-call plan"
+      data-reading={reading}
+    >
       <header className={styles.header}>
         <span className={styles.headerIcon}>
           <CalendarDays aria-hidden="true" />
@@ -107,6 +119,30 @@ export function NextCallPlan({
         </div>
         <small>Based on this call</small>
       </header>
+      {outcome && (
+        <aside className={styles.outcome} aria-label="Call outcome">
+          <div>
+            <h3>What happened in this call</h3>
+            <p>{outcome.text}</p>
+          </div>
+          <div
+            className={styles.outcomeSources}
+            aria-label="Call outcome sources"
+          >
+            {outcome.evidence.map((item, index) => (
+              <button
+                key={`${item.segment_id}-${index}`}
+                type="button"
+                onClick={() => onSelectEvidence(item, "Call outcome")}
+                aria-label={`Listen to call outcome at ${formatTranscriptTime(item.start_ms)}`}
+              >
+                <Play size={13} aria-hidden="true" />
+                {formatTranscriptTime(item.start_ms)}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
       <nav className={styles.mobileTabs} aria-label="Plan sections">
         {sections.map((section, index) => (
           <button
@@ -147,7 +183,22 @@ export function NextCallPlan({
                   </p>
                 )}
               </div>
+              {reading &&
+                section.evidence.map((item, evidenceIndex) => (
+                  <div
+                    key={`${item.segment_id}-${evidenceIndex}`}
+                    className={styles.fullSource}
+                  >
+                    {evidenceButton(
+                      item,
+                      section.title ?? section.label,
+                      evidenceIndex,
+                    )}
+                    <blockquote>“{item.quote}”</blockquote>
+                  </div>
+                ))}
               <button
+                hidden={reading}
                 className={styles.open}
                 type="button"
                 onClick={() => setOpened(index)}
@@ -181,7 +232,7 @@ export function NextCallPlan({
           <ArrowRight size={15} aria-hidden="true" />
         </button>
       ) : null}
-      {selected && opened !== null && (
+      {!reading && selected && opened !== null && (
         <ReviewDialog
           open
           title={selected.label}

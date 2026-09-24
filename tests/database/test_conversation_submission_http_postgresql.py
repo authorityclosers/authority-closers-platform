@@ -289,6 +289,12 @@ async def _headers(client: httpx.AsyncClient, data: bytes) -> dict[str, str]:
     }
 
 
+def _sign_in(setup: Any, client: httpx.AsyncClient) -> None:
+    """Use the verified canonical account seeded by `_setup` for new uploads."""
+    client.cookies.clear()
+    client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+
 class _DeadlockOrigin(Exception):
     sqlstate = "40P01"
 
@@ -349,7 +355,7 @@ def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 path, _ = await _upload_for_read_test(setup, client)
                 original = AcquisitionReports.recording
                 calls = 0
@@ -392,7 +398,7 @@ def test_progress_deadlock_retry_is_bounded_and_code_specific(
                 transport=httpx.ASGITransport(app=setup.app, raise_app_exceptions=False),
                 base_url=ORIGIN,
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 path, _ = await _upload_for_read_test(setup, client)
                 calls = 0
 
@@ -422,7 +428,7 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 data, submission = _wav_one_second_48k(), uuid4()
                 path = f"{PREFIX}/submissions/{submission}"
                 headers = await _headers(client, data)
@@ -448,6 +454,13 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                         )
                         == 1
                     )
+                    usage = await db.scalar(
+                        select(ConversationAcquisitionUsage).where(
+                            ConversationAcquisitionUsage.submission_id == submission
+                        )
+                    )
+                    assert usage is not None
+                    assert usage.person_id == setup.state.person_id and usage.visitor_id is None
                     assert (
                         await db.scalar(
                             select(func.count())
@@ -481,22 +494,21 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                     headers={"Origin": ORIGIN, "Idempotency-Key": "no-provider-approved"},
                 )
                 assert unavailable.status_code == 409
+                client.cookies.clear()
                 for suffix in ("", "/source", "/report", "/transcript", "/waveform"):
                     client.cookies.set("ac_xray_guest", setup.stranger.token)
                     denied = await client.get(path + suffix)
                     assert denied.status_code == 404
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                client.cookies.clear()
                 setup.clock[0] += timedelta(hours=2)
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                assert (await client.get(path + "/source")).status_code == 404
+                _sign_in(setup, client)
                 audio = await client.get(path + "/source", headers={"Range": "bytes=0-43"})
                 assert audio.status_code == 206
                 assert audio.content == data[:44]
                 assert audio.headers["cache-control"] == "private, no-store"
                 assert audio.headers["content-range"] == f"bytes 0-43/{len(data)}"
-                async with setup.sessions() as db, db.begin():
-                    await setup.factory(db).claim(setup.guest.token, setup.state.actor)
-                assert (await client.get(path + "/source")).status_code == 403
-                client.cookies.clear()
-                client.cookies.set(setup.settings.session_cookie_name, setup.token)
                 assert (await client.get(path + "/source")).content == data
                 deleted = await client.delete(
                     path, headers={"Origin": ORIGIN, "Idempotency-Key": "owned-delete-after-lease"}
@@ -555,18 +567,17 @@ def test_authenticated_playback_keeps_shared_navigation_and_fences_deletion(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             )
             for client in (source_client, read_client, delete_client):
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
             data, submission = _wav_one_second_48k(), uuid4()
             path = f"{PREFIX}/submissions/{submission}"
             uploaded = await source_client.put(
                 path + "/source", content=data, headers=await _headers(source_client, data)
             )
             assert uploaded.status_code == 202, uploaded.text
+            read_client.cookies.clear()
             stranger = await read_client.get(path, cookies={"ac_xray_guest": setup.stranger.token})
             assert stranger.status_code == 404
-
-            async with setup.sessions() as db, db.begin():
-                await setup.factory(db).claim(setup.guest.token, setup.state.actor)
+            _sign_in(setup, read_client)
             await _reconcile(setup.sessions, setup.state)
             upload_worker = OfflineConversationWorker(
                 setup.sessions,
@@ -575,10 +586,6 @@ def test_authenticated_playback_keeps_shared_navigation_and_fences_deletion(
                 environment="test",
             )
             assert await upload_worker.run_once()
-            for client in (source_client, read_client, delete_client):
-                client.cookies.clear()
-                client.cookies.set(setup.settings.session_cookie_name, setup.token)
-
             async with setup.sessions() as db:
                 session_before = await db.get(IdentitySession, setup.state.session_id)
                 assert session_before is not None
@@ -718,15 +725,13 @@ def test_cancelled_authenticated_playback_closes_response_fence(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             )
             for client in (source_client, delete_client):
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
             data, submission = _wav_one_second_48k(), uuid4()
             path = f"{PREFIX}/submissions/{submission}"
             uploaded = await delete_client.put(
                 path + "/source", content=data, headers=await _headers(delete_client, data)
             )
             assert uploaded.status_code == 202, uploaded.text
-            async with setup.sessions() as db, db.begin():
-                await setup.factory(db).claim(setup.guest.token, setup.state.actor)
             await _reconcile(setup.sessions, setup.state)
             upload_worker = OfflineConversationWorker(
                 setup.sessions,
@@ -735,10 +740,6 @@ def test_cancelled_authenticated_playback_closes_response_fence(
                 environment="test",
             )
             assert await upload_worker.run_once()
-            for client in (source_client, delete_client):
-                client.cookies.clear()
-                client.cookies.set(setup.settings.session_cookie_name, setup.token)
-
             source_task = asyncio.create_task(source_client.get(path + "/source"))
             await asyncio.wait_for(source_started.wait(), 2)
 
@@ -816,7 +817,7 @@ def test_native_preflight_timeout_does_not_reserve_usage(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 data, submission = _wav_one_second_48k(), uuid4()
                 headers = await _headers(client, data)
                 uploaded = await client.put(
@@ -851,7 +852,7 @@ def test_exact_owned_upload_retry_survives_exhausted_allowance(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 data, submission = _wav_one_second_48k(), uuid4()
                 path = f"{PREFIX}/submissions/{submission}/source"
                 headers = await _headers(client, data)
@@ -862,7 +863,7 @@ def test_exact_owned_upload_retry_survives_exhausted_allowance(
                 async with setup.sessions() as db, db.begin():
                     await setup.factory(db).reserve(
                         MeasuredSource(uuid4(), "a" * 64, 3599 * 1000, "b" * 64),
-                        token=setup.guest.token,
+                        actor=setup.state.actor,
                     )
                 replay = await client.put(path, content=data, headers=headers)
                 assert replay.status_code == 202, replay.text
@@ -899,7 +900,7 @@ def test_exact_owned_upload_retry_survives_exhausted_allowance(
     run(exercise())
 
 
-def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
+def test_create_app_mounts_account_first_flow_and_streams_more_than_generic_body_limit(
     postgres_harness: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -962,6 +963,21 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
                 headers = await _headers(client, data)
                 headers["Content-Length"] = str(len(data))
                 submission = uuid4()
+                guest_upload = await client.put(
+                    f"{PREFIX}/submissions/{submission}/source", content=chunks(), headers=headers
+                )
+                assert guest_upload.status_code == 401, guest_upload.text
+                assert setup.native.calls == 0
+                async with setup.sessions() as db:
+                    assert (
+                        await db.scalar(
+                            select(func.count())
+                            .select_from(ConversationAcquisitionUsage)
+                            .where(ConversationAcquisitionUsage.submission_id == submission)
+                        )
+                        == 0
+                    )
+                _sign_in(setup, client)
                 uploaded = await client.put(
                     f"{PREFIX}/submissions/{submission}/source", content=chunks(), headers=headers
                 )
@@ -987,7 +1003,7 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=application), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 ready = await client.get(f"{PREFIX}/submissions/{submission}")
                 assert ready.json()["local_state"] == "completed"
         finally:
@@ -996,7 +1012,7 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
     run(exercise())
 
 
-def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_browser(
+def test_account_http_plan_reaches_source_bound_overview_and_settles_without_browser(
     postgres_harness: Any,
     tmp_path: Path,
 ) -> None:
@@ -1006,7 +1022,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 data, submission = _wav_one_second_48k(), uuid4()
                 path = f"{PREFIX}/submissions/{submission}"
                 headers = await _headers(client, data)
@@ -1090,7 +1106,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 assert report.status_code == 200, report.text
                 envelope = report.json()
                 assert envelope["source_sha256"] == hashlib.sha256(data).hexdigest()
-                assert envelope["report"]["access"] == "guest_preview"
+                assert envelope["report"]["access"] == "claimed_account"
                 assert envelope["report"]["numeric_publication"] is False
                 assert envelope["report"]["content"]["overview"]["version"] == "dipak-14-point-v1"
                 transcript = await client.get(path + "/transcript")
@@ -1100,6 +1116,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
                 setup.clock[0] += timedelta(hours=2)
                 assert (await client.get(path + "/report")).json() == envelope
                 assert broker.calls == 3
+                client.cookies.clear()
                 client.cookies.set("ac_xray_guest", setup.stranger.token)
                 assert (await client.get(path + "/report")).status_code == 404
         finally:
@@ -1108,7 +1125,7 @@ def test_guest_http_plan_reaches_source_bound_overview_and_settles_without_brows
     run(exercise())
 
 
-def test_guest_report_language_quote_is_bounded_frozen_and_read_only(
+def test_account_report_language_quote_is_bounded_frozen_and_read_only(
     postgres_harness: Any,
     tmp_path: Path,
 ) -> None:
@@ -1139,7 +1156,7 @@ def test_guest_report_language_quote_is_bounded_frozen_and_read_only(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 headers = await _headers(client, data)
                 upload = await client.put(path + "/source", content=data, headers=headers)
                 assert upload.status_code == 202, upload.text
@@ -1229,6 +1246,7 @@ def test_guest_report_language_quote_is_bounded_frozen_and_read_only(
                 assert still_frozen.status_code == 200
                 assert still_frozen.json()["report_language"] == "mr-Deva+en"
 
+                client.cookies.clear()
                 client.cookies.set("ac_xray_guest", setup.stranger.token)
                 foreign = await client.get(path + "/plan")
                 assert foreign.status_code == 404
@@ -1238,12 +1256,12 @@ def test_guest_report_language_quote_is_bounded_frozen_and_read_only(
     run(exercise())
 
 
-def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_call(
+def test_account_duplicate_upload_reuses_uncertain_retained_c2_without_provider_call(
     postgres_harness: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The guest-safe recovery path reuses a retained uncertain C2 receipt."""
+    """The account-owned recovery path reuses a retained uncertain C2 receipt."""
 
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
@@ -1251,7 +1269,7 @@ def test_guest_duplicate_upload_reuses_uncertain_retained_c2_without_provider_ca
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
-                client.cookies.set("ac_xray_guest", setup.guest.token)
+                _sign_in(setup, client)
                 data = _wav_one_second_48k()
                 source_submission = uuid4()
                 source_path = f"{PREFIX}/submissions/{source_submission}"
@@ -1556,27 +1574,32 @@ def test_upload_boundary_rejects_selector_cookie_origin_and_source_tampering(
                 headers = await _headers(client, data)
                 assert (await client.put(path, content=data, headers=headers)).status_code == 401
                 client.cookies.set("ac_xray_guest", setup.guest.token)
+                guest_denied = await client.put(path, content=data, headers=headers)
+                assert guest_denied.status_code == 401, guest_denied.text
+                assert setup.native.calls == 0
+                _sign_in(setup, client)
                 for changed, url, expected in [
                     ({"Origin": "https://foreign.example.test"}, path, 403),
                     ({}, path + "?tenant_id=" + str(setup.state.tenant_id), 422),
                     ({"Host": "learner.example.test"}, path, 403),
                     ({"X-Upload-Consent": "false"}, path, 422),
                     ({"X-Upload-Policy": "0" * 64}, path, 422),
-                    (
-                        {
-                            "Cookie": (
-                                f"ac_xray_guest={setup.guest.token}; "
-                                f"ac_xray_guest={setup.guest.token}"
-                            )
-                        },
-                        path,
-                        401,
-                    ),
                 ]:
                     rejected = await client.put(url, content=data, headers={**headers, **changed})
                     assert rejected.status_code == expected
-                    assert setup.guest.token not in rejected.text
                 assert setup.native.calls == 0
+                duplicate_cookie = (
+                    f"{setup.settings.session_cookie_name}={setup.token}; "
+                    f"{setup.settings.session_cookie_name}={setup.token}"
+                )
+                client.cookies.clear()
+                duplicated = await client.put(
+                    path,
+                    content=data,
+                    headers={**headers, "Cookie": duplicate_cookie},
+                )
+                assert duplicated.status_code == 401
+                _sign_in(setup, client)
                 mismatch = await client.put(
                     path, content=data, headers={**headers, "X-Source-SHA256": "0" * 64}
                 )
