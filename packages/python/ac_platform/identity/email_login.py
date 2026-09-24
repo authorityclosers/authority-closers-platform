@@ -479,8 +479,12 @@ class EmailLoginCodeService:
             account_created=created,
             learner_provisioning_required=created or first_mailbox_verification,
             consent_audit_required=created or first_mailbox_verification,
-            previous_consent_version=(None if created else previous_consent_version),
-            previous_consented_at=(None if created else previous_consented_at),
+            # Prior consent is change-audit metadata, not a new consent receipt
+            # for an already verified account that only signed in.
+            previous_consent_version=(
+                previous_consent_version if first_mailbox_verification else None
+            ),
+            previous_consented_at=(previous_consented_at if first_mailbox_verification else None),
         )
 
 
