@@ -37,3 +37,24 @@ Validation on 2026-09-24:
 - These are local application checks. No provider request was made and no
   production or staging release was performed by these checks. Actual hosted
   login, full viewport fit and completed v5 report quality remain release checks.
+
+The first complete CI run on f7e580e9 passed frontend validation, Python gates,
+test shards 1/2 and the capacity simulation. It failed formatting (fixed in
+ad8e2d50), the Google acquisition fixture's missing full acknowledgement (fixed
+in 92a1403a, including rejection of the previous incomplete input), and two
+browser harness assumptions (fixed in 8571e230). The password lookup now names
+the input exactly instead of also matching its visibility button. File-selection
+navigation waits for either the account form or the ready action before branching;
+account gating and file-retention assertions remain intact. Successor CI must
+execute these tests; collection and lint alone are not browser proof.
+
+A separate read-only Luna review of the browser plan/auth/phone/callback changes
+through 8571e230 found no high or medium findings. Its scope included the six
+changed frontend/config files and adjacent completion authority helpers; it did
+not execute tests or establish deployed behavior.
+
+Sanitized staging correlation for the owner's failed call found one quote 422
+followed by two successful 201 quotes on the same staging release. The recording
+and an unaccepted Hindi/v5 plan exist, with no completed new report. The original
+422 response detail was not logged, so its exact validation cause is unresolved.
+The proven frontend v5 rejection is separately reproduced and fixed above.
