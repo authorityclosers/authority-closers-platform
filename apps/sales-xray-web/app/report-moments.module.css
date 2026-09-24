@@ -484,6 +484,66 @@
   display: none;
 }
 
+.root[data-reading="true"] {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.root[data-reading="true"] .screen,
+.root[data-reading="true"] .sheet {
+  display: none;
+}
+
+.root[data-reading="true"] .print {
+  display: block;
+  height: auto;
+  color: #132a42;
+}
+
+.root[data-reading="true"] .print article {
+  margin: 20px 0;
+  padding: 0 0 20px;
+  border-bottom: 1px solid #dfe7ef;
+  break-inside: avoid;
+}
+
+.readingListen {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #b9d7d2);
+  border-radius: 7px;
+  background: var(--mint-bg, #f0f8f7);
+  color: var(--mint, #0e625c);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.readingListen:focus-visible {
+  outline: 3px solid var(--action, #607ad8);
+  outline-offset: 2px;
+}
+
+@media print {
+  .readingListen {
+    display: none;
+  }
+}
+
+.root[data-reading="true"] .print h2,
+.root[data-reading="true"] .print h3,
+.root[data-reading="true"] .print p,
+.root[data-reading="true"] .print blockquote {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 760px) {
   .screen {
     --report-moments-chrome: 340px;

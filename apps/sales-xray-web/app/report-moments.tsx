@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
+import { useReportReading } from "./report-reading-context";
 import styles from "./report-moments.module.css";
 
 const PAGE_SIZE = 4;
@@ -195,6 +196,7 @@ function MomentsBrowser({
   onSelectEvidence,
   transcriptSlot,
 }: ReportMomentsProps) {
+  const reading = useReportReading();
   const id = useId();
   const moments = suppliedMoments(report);
   const [filter, setFilter] = useState<SourceKind | "all">("all");
@@ -262,6 +264,7 @@ function MomentsBrowser({
       className={styles.root}
       aria-label="Source moments"
       data-report-moments
+      data-reading={reading || undefined}
     >
       <div className={styles.screen}>
         <header className={styles.toolbar}>
@@ -499,6 +502,14 @@ function MomentsBrowser({
             </p>
             <blockquote>{item.evidence.quote}</blockquote>
             {item.explanation && <p>{item.explanation}</p>}
+            <button
+              type="button"
+              className={styles.readingListen}
+              onClick={() => onSelectEvidence(item.evidence, item.title)}
+              aria-label={`Listen to ${item.title} at ${formatTranscriptTime(item.evidence.start_ms)}`}
+            >
+              <Play size={16} aria-hidden="true" /> Listen to this excerpt
+            </button>
           </article>
         ))}
       </div>

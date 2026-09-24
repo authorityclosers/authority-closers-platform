@@ -510,3 +510,52 @@
     display: none;
   }
 }
+
+.plan[data-reading="true"] .mobileTabs,
+.plan[data-reading="true"] .open[hidden] {
+  display: none;
+}
+.plan[data-reading="true"] .grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.plan[data-reading="true"] .card {
+  display: block;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+}
+.plan[data-reading="true"] .card:not([data-active="true"]) {
+  display: block;
+}
+.plan[data-reading="true"] .preview,
+.plan[data-reading="true"] .preview h4,
+.plan[data-reading="true"] .preview p {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+.plan[data-reading="true"] .preview .target {
+  display: block;
+}
+.plan[data-reading="true"] .source > div {
+  display: block;
+}
+.plan[data-reading="true"] .header p {
+  display: block;
+}
+.plan[data-reading="true"] .source blockquote,
+.plan[data-reading="true"] .fullSource blockquote {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  white-space: pre-wrap;
+}
+.plan[data-reading="true"] .fullSource blockquote {
+  margin: 12px 0 0;
+  color: #536b84;
+  font-size: 14px;
+  line-height: 1.6;
+}

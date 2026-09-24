@@ -15,6 +15,7 @@ import {
 } from "./report-contract";
 import { countReportMoments, ReportMoments } from "./report-moments";
 import { ReportTranscript } from "./report-transcript";
+import { ReportReadingProvider } from "./report-reading-context";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -74,14 +75,17 @@ async function render(
   report: SalesReport,
   onSelectEvidence = vi.fn<(evidence: ReportEvidence, title: string) => void>(),
   transcriptSlot?: ReactNode,
+  reading = false,
 ) {
   await act(async () =>
     root.render(
-      <ReportMoments
-        report={report}
-        onSelectEvidence={onSelectEvidence}
-        transcriptSlot={transcriptSlot}
-      />,
+      <ReportReadingProvider reading={reading}>
+        <ReportMoments
+          report={report}
+          onSelectEvidence={onSelectEvidence}
+          transcriptSlot={transcriptSlot}
+        />
+      </ReportReadingProvider>,
     ),
   );
   return onSelectEvidence;
@@ -120,6 +124,24 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+});
+
+it("renders every supplied source moment in reading mode", async () => {
+  const report = manyMoments();
+  const onSelect = await render(report, undefined, undefined, true);
+
+  const reading = container.querySelector<HTMLElement>(
+    '[data-report-moments][data-reading="true"]',
+  );
+  expect(
+    reading?.querySelectorAll("[data-moments-print] article"),
+  ).toHaveLength(countReportMoments(report));
+  await act(async () =>
+    reading
+      ?.querySelector<HTMLButtonElement>("[data-moments-print] article button")
+      ?.click(),
+  );
+  expect(onSelect).toHaveBeenCalledWith(excerpt(8), "First supplied finding");
 });
 afterEach(async () => {
   await act(async () => root.unmount());

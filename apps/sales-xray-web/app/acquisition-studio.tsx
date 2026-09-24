@@ -33,7 +33,7 @@ import {
 import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
-import { ReportExplorer } from "./report-explorer";
+import { ReportModes } from "./report-modes";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
@@ -2560,7 +2560,7 @@ export function AcquisitionStudio({
                     </div>
                   </details>
                 </div>
-                <ReportExplorer
+                <ReportModes
                   label="Explore your sales report"
                   boundCallId={submission?.id}
                   panels={[
@@ -2595,20 +2595,6 @@ export function AcquisitionStudio({
                         <ReportMoments
                           report={report}
                           onSelectEvidence={seek}
-                          transcriptSlot={
-                            <ReportTranscript
-                              transcript={result.transcript}
-                              language="en"
-                              onSelect={(segment) =>
-                                seek({
-                                  segment_id: segment.id,
-                                  quote: segment.text,
-                                  start_ms: segment.start_ms,
-                                  end_ms: segment.end_ms,
-                                })
-                              }
-                            />
-                          }
                         />
                       ),
                     },
@@ -2632,6 +2618,24 @@ export function AcquisitionStudio({
                           report={report}
                           onSelectEvidence={seek}
                           onUnlock={() => router.push("/login")}
+                        />
+                      ),
+                    },
+                    {
+                      id: "transcript",
+                      label: "Transcript",
+                      content: (
+                        <ReportTranscript
+                          transcript={result.transcript}
+                          language="en"
+                          onSelect={(segment) =>
+                            seek({
+                              segment_id: segment.id,
+                              quote: segment.text,
+                              start_ms: segment.start_ms,
+                              end_ms: segment.end_ms,
+                            })
+                          }
                         />
                       ),
                     },
@@ -2675,7 +2679,9 @@ export function AcquisitionStudio({
         heroStage={
           !result && !busy && !deletionOnlyId
             ? submission
-              ? "processing"
+              ? waitingForApproval && !plan?.accepted
+                ? "ready"
+                : "processing"
               : "welcome"
             : undefined
         }

@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { SalesSkills } from "./sales-skills";
+import { ReportReadingProvider } from "./report-reading-context";
 import type { ReportDimension } from "./report-contract";
 
 (
@@ -129,7 +130,9 @@ it("keeps mixed or missing evidence neutral and handles an empty report", async 
   expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
     "No recording excerpt was supplied for this skill.",
   );
-  expect(container.querySelector('[role="dialog"] button[aria-label^="Listen"]')).toBeNull();
+  expect(
+    container.querySelector('[role="dialog"] button[aria-label^="Listen"]'),
+  ).toBeNull();
   await act(async () => root.render(<SalesSkills dimensions={[]} />));
   expect(container.textContent).toContain(
     "No skill observations were supplied",
@@ -167,4 +170,42 @@ it("shows exact skill excerpts and seeks their source, without using coaching ci
   );
   expect(onSelectEvidence).toHaveBeenCalledExactlyOnceWith(evidence);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("shows every skill observation, source excerpt, and citation in reading mode", async () => {
+  const evidence = {
+    segment_id: "segment-reading",
+    quote: "The prospect confirmed the timeline.",
+    start_ms: 15_000,
+    end_ms: 20_000,
+  };
+  const onSelectEvidence = vi.fn();
+  const readingDimensions = dimensions.map((dimension, index) => ({
+    ...dimension,
+    observation: `Full observation ${index}: ${dimension.observation}`,
+    ...(index === 0 ? { evidence: [evidence] } : {}),
+  }));
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading>
+        <SalesSkills
+          dimensions={readingDimensions}
+          onSelectEvidence={onSelectEvidence}
+        />
+      </ReportReadingProvider>,
+    ),
+  );
+  expect(container.querySelectorAll("article")).toHaveLength(8);
+  expect(container.querySelectorAll('[data-page-visible="true"]')).toHaveLength(
+    4,
+  );
+  expect(container.textContent).toContain("Full observation 7:");
+  expect(container.textContent).toContain(evidence.quote);
+  expect(container.textContent).toContain("Doc-1");
+  expect(container.querySelectorAll("button[hidden]")).toHaveLength(8);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await act(async () =>
+    button(`Listen to ${dimensions[0].label} excerpt at 00:15.000`).click(),
+  );
+  expect(onSelectEvidence).toHaveBeenCalledExactlyOnceWith(evidence);
 });

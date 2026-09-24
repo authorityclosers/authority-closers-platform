@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,6 +21,7 @@ import type { ReportDimension, ReportEvidence } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
 import { getReportUiCopy } from "./report-ui-copy";
 import { ReviewDialog } from "./review-dialog";
+import { useReportReading } from "./report-reading-context";
 import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
@@ -45,18 +46,25 @@ export function SalesSkills({
   dimensions: SkillDimension[];
   onSelectEvidence?: (evidence: ReportEvidence) => void;
 }) {
+  const reading = useReportReading();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (reading) setSelectedId(null);
+  }, [reading]);
   const selectedIndex = dimensions.findIndex(
     (item) => item.dimension_id === selectedId,
   );
   const selected = dimensions[selectedIndex];
-  const excerpts = selected?.evidence ?? [];
   const pageCount = Math.max(1, Math.ceil(dimensions.length / 4));
   const activePage = Math.min(page, pageCount - 1);
   const copy = getReportUiCopy();
   return (
-    <section className={styles.skills} aria-label="Sales skills">
+    <section
+      className={styles.skills}
+      aria-label="Sales skills"
+      data-reading={reading}
+    >
       <header className={styles.banner}>
         <span className={styles.bannerIcon}>
           <GraduationCap aria-hidden="true" />
@@ -103,9 +111,16 @@ export function SalesSkills({
                       copy.factorStatus.unknown}
                   </span>
                   <p className={styles.observation}>{dimension.observation}</p>
+                  {reading && (
+                    <SkillSources
+                      dimension={dimension}
+                      onSelectEvidence={onSelectEvidence}
+                    />
+                  )}
                   <button
                     type="button"
                     className={styles.open}
+                    hidden={reading}
                     onClick={() => setSelectedId(dimension.dimension_id)}
                     aria-label={`Open notes: ${dimension.label}`}
                   >
@@ -140,7 +155,7 @@ export function SalesSkills({
           </nav>
         </>
       )}
-      {selected && (
+      {!reading && selected && (
         <ReviewDialog
           open
           title={selected.label}
@@ -165,63 +180,84 @@ export function SalesSkills({
             </span>
             <h3>Report observation</h3>
             <p>{selected.observation}</p>
-            <section className={styles.source} aria-label="Recording excerpts">
-              <h3>From the recording</h3>
-              {excerpts.length ? (
-                <ol className={styles.excerpts}>
-                  {excerpts.map((evidence, index) => (
-                    <li key={`${evidence.segment_id}-${index}`}>
-                      <span className={styles.sourceTime}>
-                        {formatTranscriptTime(evidence.start_ms)}–
-                        {formatTranscriptTime(evidence.end_ms)} · Source segment{" "}
-                        {evidence.segment_id}
-                      </span>
-                      <blockquote>{evidence.quote}</blockquote>
-                      {onSelectEvidence && (
-                        <button
-                          type="button"
-                          className={styles.listen}
-                          onClick={() => {
-                            setSelectedId(null);
-                            onSelectEvidence(evidence);
-                          }}
-                          aria-label={`Listen to ${selected.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
-                        >
-                          <Play size={15} fill="currentColor" aria-hidden="true" />
-                          Listen to this excerpt
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className={styles.noSource}>
-                  No recording excerpt was supplied for this skill.
-                </p>
-              )}
-            </section>
-            {!!selected.citations.length && (
-              <aside className={styles.references}>
-                <h3>
-                  <BookOpen size={18} aria-hidden="true" /> Coaching references
-                </h3>
-                <p>
-                  Document references supplied with this observation; not
-                  recording timestamps.
-                </p>
-                <ul>
-                  {selected.citations.map((citation, index) => (
-                    <li key={`${citation.doc}-${index}`}>
-                      <strong>{citation.doc}</strong> ·{" "}
-                      {citation.sections.join(", ")}
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            )}
+            <SkillSources
+              dimension={selected}
+              onSelectEvidence={
+                onSelectEvidence
+                  ? (evidence) => {
+                      setSelectedId(null);
+                      onSelectEvidence(evidence);
+                    }
+                  : undefined
+              }
+            />
           </div>
         </ReviewDialog>
       )}
     </section>
+  );
+}
+
+function SkillSources({
+  dimension,
+  onSelectEvidence,
+}: {
+  dimension: SkillDimension;
+  onSelectEvidence?: (evidence: ReportEvidence) => void;
+}) {
+  const excerpts = dimension.evidence ?? [];
+  return (
+    <>
+      <section className={styles.source} aria-label="Recording excerpts">
+        <h3>From the recording</h3>
+        {excerpts.length ? (
+          <ol className={styles.excerpts}>
+            {excerpts.map((evidence, index) => (
+              <li key={`${evidence.segment_id}-${index}`}>
+                <span className={styles.sourceTime}>
+                  {formatTranscriptTime(evidence.start_ms)}–
+                  {formatTranscriptTime(evidence.end_ms)} · Source segment{" "}
+                  {evidence.segment_id}
+                </span>
+                <blockquote>{evidence.quote}</blockquote>
+                {onSelectEvidence && (
+                  <button
+                    type="button"
+                    className={styles.listen}
+                    onClick={() => onSelectEvidence(evidence)}
+                    aria-label={`Listen to ${dimension.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
+                  >
+                    <Play size={15} fill="currentColor" aria-hidden="true" />{" "}
+                    Listen to this excerpt
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className={styles.noSource}>
+            No recording excerpt was supplied for this skill.
+          </p>
+        )}
+      </section>
+      {!!dimension.citations.length && (
+        <aside className={styles.references}>
+          <h3>
+            <BookOpen size={18} aria-hidden="true" /> Coaching references
+          </h3>
+          <p>
+            Document references supplied with this observation; not recording
+            timestamps.
+          </p>
+          <ul>
+            {dimension.citations.map((citation, index) => (
+              <li key={`${citation.doc}-${index}`}>
+                <strong>{citation.doc}</strong> · {citation.sections.join(", ")}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
+    </>
   );
 }

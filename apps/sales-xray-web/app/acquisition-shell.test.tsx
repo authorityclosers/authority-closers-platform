@@ -38,6 +38,17 @@ it("uses the same hero frame during processing and a neutral guest greeting", ()
   expect(guest).not.toContain("Welcome back");
 });
 
+it("describes a saved call awaiting approval without claiming analysis has begun", () => {
+  const ready = renderToStaticMarkup(
+    <AcquisitionShell authenticated heroStage="ready">
+      <p>Approval needed</p>
+    </AcquisitionShell>,
+  );
+  expect(ready).toContain('data-hero-stage="ready"');
+  expect(ready).toContain("Ready to analyse");
+  expect(ready).not.toContain("We&#x27;re processing your call");
+});
+
 it("labels a local processing fixture as an example", () => {
   const preview = renderToStaticMarkup(
     <AcquisitionShell authenticated={false} heroStage="processing" previewHero>

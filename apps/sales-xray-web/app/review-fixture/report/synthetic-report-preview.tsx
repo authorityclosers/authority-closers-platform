@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ReportEvidence } from "../../report-contract";
-import { ReportExplorer } from "../../report-explorer";
+import { ReportModes } from "../../report-modes";
 import { formatTranscriptTime } from "../../report-transcript";
 import { SalesSkills } from "../../sales-skills";
 import { NextCallPlan } from "../../next-call-plan";
@@ -38,7 +38,7 @@ export function SyntheticReportPreview() {
           This preview checks responsive layout, source navigation, and
           accessibility. It does not show a validated coaching result.
         </aside>
-        <ReportExplorer
+        <ReportModes
           label="Synthetic report sections"
           panels={[
             {
