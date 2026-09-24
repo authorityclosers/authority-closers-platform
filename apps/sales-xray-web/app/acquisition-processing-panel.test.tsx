@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
+import Link from "next/link";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 
 it("shows only stage completion supplied by confirmed processing rows", () => {
@@ -65,6 +66,45 @@ it("halts activity treatment for a held state and does not invent allowance or f
   expect(markup).not.toContain("Unlimited testing");
   expect(markup).not.toContain("12.4 MB");
   expect(markup).not.toContain('aria-current="step"');
+});
+
+it("puts the confirmed status and recovery actions before stage and file details", () => {
+  const markup = renderToStaticMarkup(
+    <AcquisitionProcessingPanel
+      stageRows={[
+        { stage: "C2", state: "queued", label: "Queued" },
+        { stage: "C4", state: null, label: "Not started" },
+        { stage: "C5", state: null, label: "Not started" },
+      ]}
+      statusText="Ready for your approval"
+      waitingForApproval
+      accepted={false}
+      fileName="Synthetic full recording filename.m4a"
+    >
+      <button type="button">Check status</button>
+      <Link href="/?call=synthetic-id">This call’s link</Link>
+      <button type="button">Review analysis plan</button>
+    </AcquisitionProcessingPanel>,
+  );
+
+  expect(markup).toContain(">Ready to analyse</h2>");
+  expect(markup).not.toContain(">Processing your call</h2>");
+  const latestStatus = markup.indexOf("Ready for your approval");
+  const guidance = markup.indexOf("analysis approval is not confirmed yet");
+  const checkStatus = markup.indexOf("Check status");
+  const callLink = markup.indexOf("This call’s link");
+  const recoveryAction = markup.indexOf("Review analysis plan");
+  const stageTrail = markup.indexOf('aria-label="Processing stages"');
+  const fileDetails = markup.indexOf(">Uploaded file</h3>");
+  expect(latestStatus).toBeGreaterThan(-1);
+  expect(guidance).toBeGreaterThan(latestStatus);
+  expect(checkStatus).toBeGreaterThan(guidance);
+  expect(callLink).toBeGreaterThan(checkStatus);
+  expect(recoveryAction).toBeGreaterThan(callLink);
+  expect(stageTrail).toBeGreaterThan(recoveryAction);
+  expect(fileDetails).toBeGreaterThan(stageTrail);
+  expect(markup).toContain("Synthetic full recording filename.m4a");
+  expect(markup.match(/Review analysis plan/g)).toHaveLength(1);
 });
 
 it("renders a static fixture with no live-call timer, saved-work claim, or action", () => {

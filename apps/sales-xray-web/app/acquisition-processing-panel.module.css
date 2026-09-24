@@ -60,14 +60,22 @@
   white-space: nowrap;
 }
 
+.statusBlock {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: clamp(8px, 1vh, 12px);
+}
+
 .journey {
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  justify-content: space-around;
-  gap: clamp(16px, 2vh, 25px);
-  padding: clamp(18px, 2vw, 25px) clamp(13px, 1.7vw, 20px);
+  justify-content: center;
+  gap: clamp(12px, 1.5vh, 18px);
+  padding: clamp(13px, 1.6vw, 20px) clamp(13px, 1.7vw, 20px);
   border: 1px solid #dce6fa;
   border-radius: 12px;
   background: linear-gradient(180deg, #fff 0%, #fbffff 100%);
@@ -187,11 +195,11 @@
 
 .signalCard {
   display: grid;
-  min-height: clamp(93px, 12.8vh, 157px);
-  grid-template-columns: minmax(115px, 0.88fr) 1px minmax(0, 1.55fr);
+  min-height: clamp(82px, 9.5vh, 118px);
+  grid-template-columns: minmax(80px, 0.72fr) 1px minmax(0, 1.75fr);
   align-items: center;
-  gap: clamp(14px, 2.3vw, 31px);
-  padding: clamp(10px, 1.8vw, 20px);
+  gap: clamp(10px, 1.8vw, 22px);
+  padding: clamp(9px, 1.35vw, 14px);
   border: 1px dashed #b5ebe7;
   border-radius: 11px;
   background: #f6ffff;
@@ -199,8 +207,8 @@
 
 .waveform {
   display: block;
-  width: min(100%, 200px);
-  max-height: 100px;
+  width: min(100%, 160px);
+  max-height: 70px;
   margin: auto;
   overflow: visible;
 }
@@ -239,20 +247,20 @@
   line-height: 1.3;
 }
 
-.panel .journey .signalCopy p {
+.panel .signalCopy p {
   margin: 4px 0 0;
   color: #62769d;
   font-size: clamp(9px, 0.94vw, 12px);
   line-height: 1.35;
 }
 
-.panel .journey .signalCopy p:first-child {
+.panel .signalCopy p:first-child {
   margin: 0 0 4px;
   font-size: 9px;
   letter-spacing: 0.09em;
 }
 
-.panel .journey .signalCopy p:last-child:not(:first-child) {
+.panel .signalCopy p:last-child:not(:first-child) {
   margin-top: 6px;
 }
 
@@ -409,9 +417,10 @@
 
 .footer > p {
   flex: 1 1 220px;
+  min-width: 0;
   margin: 0;
   color: #657697;
-  font-size: clamp(9px, 0.85vw, 11px);
+  font-size: clamp(10px, 0.9vw, 12px);
   line-height: 1.35;
 }
 
@@ -421,14 +430,14 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .actions > :is(button, a) {
-  min-height: 34px;
+  min-height: 44px;
   margin: 0;
-  padding: 6px 9px;
-  font-size: 11px;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 @keyframes signalBreath {
@@ -529,7 +538,8 @@
     font-size: 10px;
   }
   .journey {
-    gap: 20px;
+    gap: 14px;
+    padding-block: 13px;
   }
   .stage strong {
     font-size: 11px;
@@ -541,11 +551,21 @@
     font-size: 9px;
   }
   .signalCard {
-    grid-template-columns: minmax(80px, 0.7fr) 1px minmax(0, 1.3fr);
-    gap: 10px;
+    grid-template-columns: minmax(65px, 0.62fr) 1px minmax(0, 1.55fr);
+    gap: 9px;
   }
   .fileStatus {
     padding: 5px 7px;
+  }
+  .footer > p {
+    flex-basis: 100%;
+  }
+  .actions {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .actions > :is(button, a) {
+    white-space: normal;
   }
 }
 

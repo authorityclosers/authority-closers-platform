@@ -169,7 +169,11 @@ export function AcquisitionProcessingPanel({
           />
         </span>
         <h2 id="acquisition-processing-title">
-          {staticPreview ? "Example processing state" : "Processing your call"}
+          {staticPreview
+            ? "Example processing state"
+            : waitingForApproval && !accepted
+              ? "Ready to analyse"
+              : "Processing your call"}
         </h2>
         {!staticPreview && allowanceLabel && (
           <span className={styles.allowance}>
@@ -179,41 +183,15 @@ export function AcquisitionProcessingPanel({
         )}
       </div>
 
-      <div className={styles.journey}>
-        <ol className={styles.stageList} aria-label="Processing stages">
-          {rows.map((row) => {
-            const state = visualState(row.state, needsAttention);
-            const Icon = row.Icon;
-            return (
-              <li
-                className={styles.stage}
-                key={row.id}
-                data-stage={row.id}
-                data-state={row.state ?? "not-started"}
-                data-visual-state={state}
-                aria-current={state === "active" ? "step" : undefined}
-                aria-label={`${stageNames[row.id]}: ${row.label ?? (row.state === null ? "Not started" : row.state)}`}
-              >
-                <span className={styles.stageIcon} aria-hidden="true">
-                  {state === "completed" ? (
-                    <Check size={24} strokeWidth={2.8} />
-                  ) : (
-                    <Icon size={27} strokeWidth={1.9} />
-                  )}
-                </span>
-                <strong>{row.title}</strong>
-                <span className={styles.stageDescription}>
-                  {row.description}
-                </span>
-                <small className={styles.stageStatus}>
-                  {row.label ??
-                    (row.state === null ? "Not started" : row.state)}
-                </small>
-              </li>
-            );
-          })}
-        </ol>
-
+      <div className={styles.statusBlock}>
+        {!staticPreview && connectionProblem && (
+          <p className={styles.connection} role="status">
+            {offline
+              ? "Your browser is offline."
+              : "Status cannot currently be refreshed."} The stage trail shows
+            the last confirmed information.
+          </p>
+        )}
         <div
           className={styles.signalCard}
           data-animated={active && !motionSuspended}
@@ -281,23 +259,60 @@ export function AcquisitionProcessingPanel({
               <div>
                 <h3>{statusText}</h3>
                 <p>
-                  The stages above reflect the latest confirmed update for this
-                  call.
+                  The stage trail below reflects the latest confirmed update
+                  for this call.
                 </p>
               </div>
             )}
           </div>
         </div>
+        <footer className={styles.footer}>
+          <p>
+            {staticPreview
+              ? "This example stays paused. Choose another state in the review controls."
+              : needsAttention
+                ? "Completed work remains saved. Review the available recovery action before continuing."
+                : guidance}
+          </p>
+          {!staticPreview && <div className={styles.actions}>{children}</div>}
+        </footer>
       </div>
 
-      {!staticPreview && connectionProblem && (
-        <p className={styles.connection} role="status">
-          {offline
-            ? "Your browser is offline."
-            : "Status cannot currently be refreshed."}{" "}
-          The stage trail shows the last confirmed information.
-        </p>
-      )}
+      <div className={styles.journey}>
+        <ol className={styles.stageList} aria-label="Processing stages">
+          {rows.map((row) => {
+            const state = visualState(row.state, needsAttention);
+            const Icon = row.Icon;
+            return (
+              <li
+                className={styles.stage}
+                key={row.id}
+                data-stage={row.id}
+                data-state={row.state ?? "not-started"}
+                data-visual-state={state}
+                aria-current={state === "active" ? "step" : undefined}
+                aria-label={`${stageNames[row.id]}: ${row.label ?? (row.state === null ? "Not started" : row.state)}`}
+              >
+                <span className={styles.stageIcon} aria-hidden="true">
+                  {state === "completed" ? (
+                    <Check size={24} strokeWidth={2.8} />
+                  ) : (
+                    <Icon size={27} strokeWidth={1.9} />
+                  )}
+                </span>
+                <strong>{row.title}</strong>
+                <span className={styles.stageDescription}>
+                  {row.description}
+                </span>
+                <small className={styles.stageStatus}>
+                  {row.label ??
+                    (row.state === null ? "Not started" : row.state)}
+                </small>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
       <div className={styles.fileCard}>
         <div className={styles.fileHeading}>
@@ -355,16 +370,6 @@ export function AcquisitionProcessingPanel({
           </aside>
         )}
       </div>
-      <footer className={styles.footer}>
-        <p>
-          {staticPreview
-            ? "This example stays paused. Choose another state in the review controls."
-            : needsAttention
-              ? "Completed work remains saved. Review the available recovery action before continuing."
-              : guidance}
-        </p>
-        {!staticPreview && <div className={styles.actions}>{children}</div>}
-      </footer>
     </section>
   );
 }
