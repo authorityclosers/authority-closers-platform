@@ -323,8 +323,7 @@ const AVATAR_STATUS_MAX_ATTEMPTS = 12;
 const AVATAR_STATUS_INITIAL_DELAY_MS = 750;
 const AVATAR_STATUS_MAX_DELAY_MS = 5_000;
 export const AVATAR_HASH_CHUNK_BYTES = BLOB_HASH_CHUNK_BYTES;
-const FILESYSTEM_AVATAR_UPLOAD_PREFIX =
-  "/v1/media/filesystem-avatar-upload/";
+const FILESYSTEM_AVATAR_UPLOAD_PREFIX = "/v1/media/filesystem-avatar-upload/";
 const FILESYSTEM_AVATAR_OBJECT_KEY =
   /^tenants\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/media\/avatar\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/original$/;
 const MEDIA_TOKEN = /^AC-MEDIA\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/;
@@ -408,12 +407,7 @@ type AvatarDirectUploadIntent = {
 
 type AvatarDirectUploadOptions = Pick<
   RequestInit,
-  | "headers"
-  | "credentials"
-  | "mode"
-  | "cache"
-  | "redirect"
-  | "referrerPolicy"
+  "headers" | "credentials" | "mode" | "cache" | "redirect" | "referrerPolicy"
 >;
 
 function browserSafeUploadHeaders(
@@ -440,8 +434,9 @@ function avatarDirectUploadOptions(
   file: File,
   contentType: AvatarAcceptedMimeType,
   checksum: string,
-  browserOrigin: string | null =
-    typeof window === "undefined" ? null : window.location.origin,
+  browserOrigin: string | null = typeof window === "undefined"
+    ? null
+    : window.location.origin,
 ): AvatarDirectUploadOptions | null {
   let uploadUrl: URL;
   try {
@@ -467,7 +462,8 @@ function avatarDirectUploadOptions(
       uploadUrl.password ||
       uploadUrl.hash ||
       !FILESYSTEM_AVATAR_OBJECT_KEY.test(intent.object_key) ||
-      uploadUrl.pathname !== `${FILESYSTEM_AVATAR_UPLOAD_PREFIX}${encodedKey}` ||
+      uploadUrl.pathname !==
+        `${FILESYSTEM_AVATAR_UPLOAD_PREFIX}${encodedKey}` ||
       tokenEntries.length !== 1 ||
       tokenEntries[0]?.[0] !== "token" ||
       uploadUrl.search !== `?token=${tokenEntries[0]?.[1]}` ||

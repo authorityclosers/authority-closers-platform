@@ -188,8 +188,8 @@ export function AcquisitionProcessingPanel({
           <p className={styles.connection} role="status">
             {offline
               ? "Your browser is offline."
-              : "Status cannot currently be refreshed."} The stage trail shows
-            the last confirmed information.
+              : "Status cannot currently be refreshed."}{" "}
+            The stage trail shows the last confirmed information.
           </p>
         )}
         <div
@@ -259,8 +259,8 @@ export function AcquisitionProcessingPanel({
               <div>
                 <h3>{statusText}</h3>
                 <p>
-                  The stage trail below reflects the latest confirmed update
-                  for this call.
+                  The stage trail below reflects the latest confirmed update for
+                  this call.
                 </p>
               </div>
             )}
