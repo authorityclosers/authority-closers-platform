@@ -21,11 +21,19 @@ TEMPLATE_SHA256 = "4fad19ce3234848c9f992190f9f498184bb8be6996664a9e7cb6dc133aa3a
 def stage_completion_limit(
     stage: str, approved_maximum: int, *, provider: str = "", model: str = ""
 ) -> int:
-    """Allocate a larger C5 response only within the exact approved output cap."""
+    """Intersect approval with the route's existing request allocation.
+
+    Legacy Groq prompts share an 8,000-token input/output envelope. Retain
+    their allocation instead of consuming space required by source evidence.
+    Gemini and OpenAI validate their larger envelopes separately and may use
+    the full approved output cap. An omitted route is a legacy caller.
+    """
     if stage not in {"C4", "C5"} or type(approved_maximum) is not int:
         raise ValueError("report_stage_limit_invalid")
     if not 256 <= approved_maximum <= completion_ceiling(provider, model, stage):
         raise ValueError("report_stage_limit_invalid")
+    if provider in {"", "groq"}:
+        return min(3_200 if stage == "C5" else 1_400, approved_maximum)
     return approved_maximum
 
 

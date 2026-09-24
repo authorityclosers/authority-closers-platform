@@ -65,3 +65,37 @@ settlement. A post-dispatch unknown outcome must still prevent a repeat paid eff
 OpenAI C5 runtime integration and a real, matched report comparison are separate
 pending work. No new provider report or Brain 3.0 semantic-quality result was generated
 by these tests, and no Brain 3.1/3.2 source coverage is claimed.
+
+## Groq allocation regression found by combined CI
+
+Application run `36050628475` on `daa2d1bb4a9237cf7740ccf087c1ee8966973e95`
+passed static, frontend, compiled acquisition browser, and gates checks. Two
+Python shards failed because the new full-output allocation consumed space needed
+by source evidence in the legacy Groq 8,000-token combined envelope. Local
+reproduction confirmed `report_prompt_budget_exceeded` and a held processing plan.
+
+The fix preserves Groq's existing 3,200-token C5 and 1,400-token C4 allocations,
+bounded by the approved maximum. Explicit Gemini and OpenAI routes retain their
+separately validated approved output caps. No approval, cost ceiling, input gate,
+or test assertion was relaxed to make a failing report complete.
+
+Validation on the corrected working tree:
+
+- 133 focused report/allocation/Gemini unit tests passed in 3.07 seconds.
+- All 20 PostgreSQL processing-plan tests passed in 241.28 seconds, including
+  retained C2 reuse, exact stage bindings, exhausted audio-minute balance, and
+  bounded invalid-response repair.
+- The composed runtime and hosted-authority browser tests passed (2 tests,
+  57.53 seconds).
+- The durable processing-plan browser test passed in 33.75 seconds and checked
+  that provider requests were not duplicated.
+- Ruff lint, format and Git whitespace checks passed.
+
+All provider responses in these tests were synthetic. Earlier failing CI/local
+receipts remain preserved; this does not establish a hosted provider-quality result.
+
+| Receipt | SHA-256 |
+| --- | --- |
+| Allocation units | `df984b038959d056cdabf105d322a81ab29f1156915969fa37a19a423e88692a` |
+| Runtime and authority browser | `5d79079651279608108e5e77d9d6b425773032098ac2faf5bb0fe7f70e23e794` |
+| Durable processing-plan browser | `3e264a07d7846780048b28039fc5e87ec36913ff377d3a7bafc3364cc5dc34aa` |

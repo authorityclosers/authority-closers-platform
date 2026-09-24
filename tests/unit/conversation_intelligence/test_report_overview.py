@@ -452,13 +452,22 @@ def test_shared_browser_fixture_passes_the_authoritative_backend_parser() -> Non
     assert result.overview.model_dump(mode="json") == fixture["report"]["overview"]
 
 
-def test_response_allocation_preserves_the_owner_approved_route_bounded_cap() -> None:
-    assert stage_completion_limit("C5", 4000) == 4000
+def test_legacy_groq_allocation_preserves_space_for_source_evidence() -> None:
+    assert stage_completion_limit("C5", 4000) == 3200
     assert stage_completion_limit("C5", 1400) == 1400
-    assert stage_completion_limit("C4", 4000) == 4000
+    assert stage_completion_limit("C4", 4000) == 1400
+    assert stage_completion_limit("C5", 4000, provider="groq", model="openai/gpt-oss-120b") == 3200
+    assert stage_completion_limit("C4", 4000, provider="groq", model="openai/gpt-oss-120b") == 1400
     for maximum in [True, 0, 255, 4001]:
         with pytest.raises(ValueError, match="report_stage_limit_invalid"):
             stage_completion_limit("C5", maximum)
+
+
+def test_gemini_allocation_uses_the_approved_cap_without_a_legacy_groq_clamp() -> None:
+    for stage in ("C4", "C5"):
+        assert (
+            stage_completion_limit(stage, 4000, provider="gemini", model="gemini-3.8-flash") == 4000
+        )
 
 
 @pytest.mark.parametrize(
