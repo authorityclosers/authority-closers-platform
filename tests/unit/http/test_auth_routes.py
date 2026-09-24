@@ -97,6 +97,7 @@ class _IdentityApplication:
         *,
         pkce_verifier: str,
         consent_version: str,
+        allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
     ) -> SimpleNamespace:
@@ -106,6 +107,7 @@ class _IdentityApplication:
                 "assertion": assertion,
                 "pkce_verifier": pkce_verifier,
                 "consent_version": consent_version,
+                "allow_consent_supersession": allow_consent_supersession,
                 "display_name": display_name,
                 "user_agent": user_agent,
             }
@@ -113,8 +115,16 @@ class _IdentityApplication:
         return SimpleNamespace(
             person=SimpleNamespace(
                 id=UUID("11111111-1111-4111-8111-111111111111"),
+                consent_version=consent_version,
+                consented_at=datetime.now(UTC),
             ),
-            session=SimpleNamespace(token=VALID_SESSION_TOKEN),
+            session=SimpleNamespace(
+                token=VALID_SESSION_TOKEN,
+                metadata=SimpleNamespace(id=UUID("22222222-2222-4222-8222-222222222222")),
+            ),
+            consent_changed=True,
+            previous_consent_version=None,
+            previous_consented_at=None,
         )
 
 
@@ -238,7 +248,10 @@ class _CallbackIdentityApplication(_IdentityApplication):
         del transaction_id, assertion, pkce_verifier, user_agent
         return SimpleNamespace(
             token=VALID_SESSION_TOKEN,
-            metadata=SimpleNamespace(person_id=UUID("11111111-1111-4111-8111-111111111111")),
+            metadata=SimpleNamespace(
+                person_id=UUID("11111111-1111-4111-8111-111111111111"),
+                id=UUID("22222222-2222-4222-8222-222222222222"),
+            ),
         )
 
 
@@ -276,7 +289,8 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
         *,
         pkce_verifier: str,
         consent_version: str,
-        display_name: str | None,
+        allow_consent_supersession: bool = False,
+        display_name: str | None = None,
         user_agent: str | None = None,
     ) -> SimpleNamespace:
         del (
@@ -284,6 +298,7 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
             assertion,
             pkce_verifier,
             consent_version,
+            allow_consent_supersession,
             display_name,
             user_agent,
         )
