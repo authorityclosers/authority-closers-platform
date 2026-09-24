@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -28,9 +28,11 @@ export function NextCallPlan({
   const prefix = useId();
   const [active, setActive] = useState(0);
   const [opened, setOpened] = useState<number | null>(null);
-  useEffect(() => {
-    if (reading) setOpened(null);
-  }, [reading]);
+  const [previousReading, setPreviousReading] = useState(reading);
+  if (previousReading !== reading) {
+    setPreviousReading(reading);
+    setOpened(null);
+  }
   const focus = report.overview?.next_call_focus;
   const practice = report.overview?.practice;
   const outcome = report.overview?.outcome;

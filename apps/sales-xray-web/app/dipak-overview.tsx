@@ -83,7 +83,6 @@ function ReviewBlock({
 }) {
   const focused = useContext(FocusedReview);
   const reading = useReportReading();
-  const navigateToReport = useReportNavigation();
   const header = (
     <>
       <span className={styles.number}>{number}</span>
