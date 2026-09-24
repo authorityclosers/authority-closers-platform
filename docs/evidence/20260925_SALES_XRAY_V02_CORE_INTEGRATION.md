@@ -195,3 +195,19 @@ activation preparer suites passed 42 tests with 18 POSIX-specific skips. Ruff,
 whitespace and the changed Admin files' Prettier checks passed. Linux CI must
 exercise the POSIX cases before release. No hosted credential activation or paid
 provider generation is established by these local checks.
+
+## Exact-source CI fixture correction
+
+The first combined Linux CI run passed the frontend, compiled acquisition
+browser journey, static checks, migration/role gates and three Python shards.
+The fourth shard rejected one synthetic OpenAI response because its old fixture
+omitted the returned model. Local reproduction confirmed the same failure.
+The fixture now reports its literal Luna model; runtime validation is unchanged.
+All 1,359 conversation unit tests then passed, with one POSIX ownership skip on
+Windows (39.88 seconds). An intermediate local run used a temporary directory
+under a repository ancestor and failed the storage boundary checks; its evidence
+is retained. The passing run used the dedicated external scratch root.
+
+Fresh exact-source CI is required after this test-only correction. The native
+image built but its upload was refused by the repository artifact-pool ceiling;
+retention review must preserve release and rollback evidence before retrying.

@@ -622,6 +622,7 @@ async def test_openai_c5_canonical_request_routes_once_and_validates_source_boun
     payload["overview"] = overview_for(payload)
     response: dict[str, Any] = {
         "object": "response",
+        "model": "gpt-6-luna",
         "status": "completed",
         "incomplete_details": None,
         "error": None,
