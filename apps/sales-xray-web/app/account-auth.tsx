@@ -970,12 +970,12 @@ export function AccountAuth({
           )}
           {selectedFile && (
             <div className={styles.file}>
-              <FileAudio size={22} aria-hidden="true" />
-              <span>
+              <FileAudio className={styles.fileIcon} size={22} aria-hidden="true" />
+              <span className={styles.fileDetails}>
                 <strong title={selectedFile.name}>{selectedFile.name}</strong>
-                <small>Ready on this device · not uploaded yet</small>
+                <small className={styles.fileStatus}>Ready on this device · not uploaded yet</small>
               </span>
-              <AudioLines size={21} aria-hidden="true" />
+              <AudioLines className={styles.fileWave} size={21} aria-hidden="true" />
             </div>
           )}
           <p className={styles.footnote}>
