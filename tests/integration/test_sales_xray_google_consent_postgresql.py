@@ -261,7 +261,13 @@ def test_sales_xray_google_full_ack_supersession_is_audited_and_transactional(
                     assert len(consent_events) == 1
                     current_event = consent_events[0]
                     assert current_event.occurred_at == first_consent_at
-                    assert current_event.payload == {
+                    current_payload = dict(current_event.payload)
+                    assert (
+                        datetime.fromisoformat(current_payload["previous_consented_at"])
+                        == previous_time
+                    )
+                    current_payload["previous_consented_at"] = previous_time.isoformat()
+                    assert current_payload == {
                         "consent_version": current_version,
                         "previous_consent_version": previous_version,
                         "previous_consented_at": previous_time.isoformat(),
@@ -272,7 +278,14 @@ def test_sales_xray_google_full_ack_supersession_is_audited_and_transactional(
                         "privacy_path": "/privacy",
                     }
                     assert database.get(Membership, (tenant_id, person_id)) is not None
-                    assert database.get(SalesXrayProfile, person_id) is not None
+                    sales_xray_profile = database.scalar(
+                        select(SalesXrayProfile).where(
+                            SalesXrayProfile.person_id == person_id
+                        )
+                    )
+                    assert sales_xray_profile is not None
+                    assert sales_xray_profile.phone_number_e164 is None
+                    assert sales_xray_profile.phone_verified_at is None
 
                 second = await _start_and_callback(
                     client,

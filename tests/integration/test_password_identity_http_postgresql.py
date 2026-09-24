@@ -737,7 +737,11 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
             assert pending_person.email_verified_at is None
             assert pending_person.consent_version == "email-age-consent-v1"
             assert pending_person.consented_at == previous_consent_time
-            assert database.get(PasswordCredential, pending_person_id) is not None
+            assert database.scalar(
+                select(PasswordCredential).where(
+                    PasswordCredential.person_id == pending_person_id
+                )
+            ) is not None
             legacy_challenge = database.get(EmailLoginCode, challenge_id)
             assert legacy_challenge is not None
             assert legacy_challenge.age_attested is False
@@ -777,8 +781,8 @@ def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_s
             assert signed_in.person.id == verified_person_id
             assert signed_in.learner_provisioning_required is False
             assert signed_in.consent_audit_required is False
-            assert signed_in.previous_consent_version is None
-            assert signed_in.previous_consented_at is None
+            assert signed_in.previous_consent_version == "email-age-consent-v1"
+            assert signed_in.previous_consented_at == previous_consent_time
 
         with Session(postgres_harness.engine) as database:
             verified_person = database.get(Person, verified_person_id)
@@ -956,7 +960,9 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                 membership = database.get(Membership, (public_tenant_id, person_id))
                 assert membership is not None
                 assert membership.role == "learner" and membership.status == "active"
-                assert database.get(PasswordCredential, person_id) is None
+                assert database.scalar(
+                    select(PasswordCredential).where(PasswordCredential.person_id == person_id)
+                ) is None
                 old_challenges = list(
                     database.scalars(
                         select(EmailChallenge).where(EmailChallenge.person_id == person_id)
@@ -1006,8 +1012,8 @@ def test_email_login_reclaim_cancels_unverified_password_credentials_and_session
                     == previous_consent_version
                 )
                 assert (
-                    consent_history[1].payload["previous_consented_at"]
-                    == previous_consent_time.isoformat()
+                    datetime.fromisoformat(consent_history[1].payload["previous_consented_at"])
+                    == previous_consent_time
                 )
                 assert consent_history[1].payload["accepted_via"] == "email_otp"
                 assert consent_history[1].payload["age_attestation"] == (
@@ -1952,7 +1958,11 @@ def test_existing_google_registration_records_first_consent_and_enables_password
                     assert person.consent_version == consent_version
                     assert person.consented_at is not None
                     assert database.get(Membership, (public_tenant_id, person_id)) is not None
-                    assert database.get(PasswordCredential, person_id) is None
+                    assert database.scalar(
+                        select(PasswordCredential).where(
+                            PasswordCredential.person_id == person_id
+                        )
+                    ) is None
 
                 recovery = await client.post(
                     "/v1/auth/password/recovery",
