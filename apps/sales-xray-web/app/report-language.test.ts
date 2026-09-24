@@ -22,16 +22,18 @@ it.each(
 it.each(["en", "hi-Deva+en", "mr-Deva+en"])(
   "accepts %s only with a compatible frozen revision",
   (language) => {
-    expect(
-      parseProcessingPlan(
-        {
-          ...plan,
-          report_language: language,
-          coaching_prompt_revision: "coaching-v4",
-        },
-        recordingId,
-      ).report_language,
-    ).toBe(language);
+    for (const revision of ["coaching-v4", "coaching-v5"]) {
+      expect(
+        parseProcessingPlan(
+          {
+            ...plan,
+            report_language: language,
+            coaching_prompt_revision: revision,
+          },
+          recordingId,
+        ).report_language,
+      ).toBe(language);
+    }
     if (language !== "en")
       expect(() =>
         parseProcessingPlan(
@@ -48,6 +50,16 @@ it.each(["en", "hi-Deva+en", "mr-Deva+en"])(
 it("rejects partial or unknown plan language metadata", () => {
   expect(() =>
     parseProcessingPlan({ ...plan, report_language: "en" }, recordingId),
+  ).toThrow();
+  expect(() =>
+    parseProcessingPlan(
+      {
+        ...plan,
+        report_language: "en",
+        coaching_prompt_revision: "coaching-v6",
+      },
+      recordingId,
+    ),
   ).toThrow();
   expect(() =>
     parseProcessingPlan(

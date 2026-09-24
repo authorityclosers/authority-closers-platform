@@ -72,6 +72,7 @@ const config: NextConfig = {
                   "/v1/auth/logout",
                   "/v1/auth/google/start",
                   "/v1/auth/google/callback",
+                  "/v1/auth/google/completion",
                   "/v1/me/sales-xray-profile",
                   "/v1/me/sales-xray-profile/write-eligibility",
                 ].map((source) => ({

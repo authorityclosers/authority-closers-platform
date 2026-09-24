@@ -113,10 +113,12 @@ it("retains password access during code config failure and redirects only after 
     }),
   );
   await mount();
-  expect(host.textContent).toContain("Email code sign-in isn’t available right now.");
+  expect(host.textContent).toContain(
+    "Email code sign-in isn’t available right now.",
+  );
   expect(host.textContent).not.toContain("Sign-in is temporarily unavailable.");
   expect(host.querySelector("#account-email")).toBeNull();
-  expect(host.querySelectorAll('button[disabled]')).toHaveLength(0);
+  expect(host.querySelectorAll("button[disabled]")).toHaveLength(0);
   await click("Use my existing password");
   const email = host.querySelector<HTMLInputElement>(
     "#account-password-email",
@@ -149,41 +151,67 @@ it("retains password access during code config failure and redirects only after 
 it("offers password access when code sign-in is disabled and restores code after a successful recheck", async () => {
   let configReads = 0;
   const fetcher = vi.fn(async (url: string) => {
-    if (url !== "/v1/auth/email-code/config?surface=sales_xray") throw new Error(`Unexpected ${url}`);
+    if (url !== "/v1/auth/email-code/config?surface=sales_xray")
+      throw new Error(`Unexpected ${url}`);
     configReads += 1;
-    return Response.json(configReads === 1
-      ? { ...config, enabled: false, consent_version: null, google_enabled: false }
-      : config);
+    return Response.json(
+      configReads === 1
+        ? {
+            ...config,
+            enabled: false,
+            consent_version: null,
+            google_enabled: false,
+          }
+        : config,
+    );
   });
   vi.stubGlobal("fetch", fetcher);
   await mount();
-  expect(host.textContent).toContain("Email code sign-in isn’t available right now.");
+  expect(host.textContent).toContain(
+    "Email code sign-in isn’t available right now.",
+  );
   expect(host.querySelector("#account-email")).toBeNull();
   await click("Check code sign-in again");
   expect(host.querySelector("#account-email")).not.toBeNull();
-  expect(host.textContent).not.toContain("Email code sign-in isn’t available right now.");
+  expect(host.textContent).not.toContain(
+    "Email code sign-in isn’t available right now.",
+  );
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(assign).not.toHaveBeenCalled();
 });
 
 it("does not blame credentials when the password endpoint cannot complete sign-in", async () => {
   const calls: string[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-    calls.push(url);
-    if (url.includes("/config")) return new Response(null, { status: 404 });
-    if (url === "/v1/auth/password/login") return new Response(null, { status: 404 });
-    throw new Error(`Unexpected ${url}`);
-  }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/config")) return new Response(null, { status: 404 });
+      if (url === "/v1/auth/password/login")
+        return new Response(null, { status: 404 });
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
   await mount();
   await click("Use my existing password");
-  const email = host.querySelector<HTMLInputElement>("#account-password-email")!;
+  const email = host.querySelector<HTMLInputElement>(
+    "#account-password-email",
+  )!;
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(email, "existing@example.test");
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(email, "existing@example.test");
     email.dispatchEvent(new Event("input", { bubbles: true }));
     email.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  host.querySelector<HTMLInputElement>("#account-password")!.value = "synthetic-password";
-  await act(async () => host.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  host.querySelector<HTMLInputElement>("#account-password")!.value =
+    "synthetic-password";
+  await act(async () =>
+    host
+      .querySelector<HTMLFormElement>("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
   await flush();
   expect(host.textContent).toContain("We couldn’t complete password sign-in.");
   expect(calls).toEqual([

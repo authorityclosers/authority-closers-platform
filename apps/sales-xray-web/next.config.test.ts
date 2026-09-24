@@ -23,6 +23,7 @@ it("rewrites only the required canonical auth and profile endpoints", async () =
     "/v1/auth/password/login",
     "/v1/auth/google/start",
     "/v1/auth/google/callback",
+    "/v1/auth/google/completion",
     "/v1/me/workspaces",
     "/v1/me/sales-xray-profile",
     "/v1/me/sales-xray-profile/write-eligibility",

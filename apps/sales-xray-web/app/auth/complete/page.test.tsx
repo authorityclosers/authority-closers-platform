@@ -2,9 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("./auth-complete-client", () => ({
-  AuthCompleteClient: ({ flow }: { flow: string | null }) => (
-    <div data-flow={flow ?? ""} />
-  ),
+  AuthCompleteClient: ({
+    flow,
+    result,
+  }: {
+    flow: string | null;
+    result: string | null;
+  }) => <div data-flow={flow ?? ""} data-result={result ?? ""} />,
 }));
 
 import AuthCompletePage from "./page";
@@ -22,14 +26,30 @@ it("does not read request searchParams during static preview export", async () =
   const route = await AuthCompletePage({
     searchParams: unreadableSearchParams,
   });
-  expect(renderToStaticMarkup(route)).toBe('<div data-flow=""></div>');
+  expect(renderToStaticMarkup(route)).toBe(
+    '<div data-flow="" data-result=""></div>',
+  );
 });
 
-it("forwards the exact string flow in the production callback path", async () => {
+it("forwards the exact flow and allowlisted result in the production callback path", async () => {
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
   const flow = "eaed7960-d4d0-4675-bd34-5b6a7d9c598d";
   const route = await AuthCompletePage({
-    searchParams: Promise.resolve({ flow }),
+    searchParams: Promise.resolve({ flow, auth_result: "success" }),
   });
-  expect(renderToStaticMarkup(route)).toBe(`<div data-flow="${flow}"></div>`);
+  expect(renderToStaticMarkup(route)).toBe(
+    `<div data-flow="${flow}" data-result="success"></div>`,
+  );
+});
+
+it("does not accept the old flow-only callback as successful sign-in", async () => {
+  vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
+  const route = await AuthCompletePage({
+    searchParams: Promise.resolve({
+      flow: "eaed7960-d4d0-4675-bd34-5b6a7d9c598d",
+    }),
+  });
+  expect(renderToStaticMarkup(route)).toBe(
+    '<div data-flow="" data-result=""></div>',
+  );
 });

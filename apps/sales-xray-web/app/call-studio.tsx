@@ -72,7 +72,8 @@ export type ProcessingPlan = {
     | "coaching-v1"
     | "coaching-v2"
     | "coaching-v3"
-    | "coaching-v4";
+    | "coaching-v4"
+    | "coaching-v5";
   id: string;
   recording_id: string;
   plan_fingerprint: string;
@@ -338,10 +339,16 @@ export function parseProcessingPlan(
   ) {
     languageOptions.report_language = parseReportLanguage(plan.report_language);
     if (
-      !["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"].includes(
+      ![
+        "coaching-v1",
+        "coaching-v2",
+        "coaching-v3",
+        "coaching-v4",
+        "coaching-v5",
+      ].includes(String(plan.coaching_prompt_revision)) ||
+      (!["coaching-v4", "coaching-v5"].includes(
         String(plan.coaching_prompt_revision),
-      ) ||
-      (plan.coaching_prompt_revision !== "coaching-v4" &&
+      ) &&
         languageOptions.report_language !== "en")
     )
       throw new ReportContractError("plan_language_revision_invalid");
