@@ -718,6 +718,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         not reauthenticated["account_created"]
                         and reauthenticated["person_id"] == str(owner_person_id)
                     )
+                    # OTP's response precedes the login component's confirmed
+                    # document navigation. Observe that navigation before this
+                    # fresh context requests the saved-call library.
+                    await library_page.wait_for_url(
+                        ORIGIN + "/", wait_until="domcontentloaded", timeout=20000
+                    )
                     await library_page.goto(ORIGIN + "/calls", wait_until="domcontentloaded")
                     assert (
                         await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")

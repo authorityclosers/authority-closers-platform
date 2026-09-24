@@ -43,3 +43,14 @@ it does not identify an incident root cause or authorize resuming a held plan.
   disposable loopback PostgreSQL URL was configured.
 - Ruff check, Ruff format check, and `git diff --check`: passed.
 - No provider calls, production access, SQL edits, or UI changes were made.
+
+## CI follow-through
+
+Application run `36019147279` passed all four Python test shards, static checks,
+gates, capacity checks and frontend validation. Its browser journey failed after
+OTP reauthentication: the test navigated to `/calls` while the login component's
+confirmed `window.location.assign("/")` was still pending. The OTP helper had
+waited for the API response but not that document navigation. The browser test
+now waits for the exact expected `/` URL before requesting `/calls`; all identity,
+library, ownership and report assertions remain. This is a test synchronization
+fix, not a claim that the browser gate has passed or an application auth change.
