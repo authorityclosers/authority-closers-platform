@@ -255,6 +255,8 @@ it("runs the actual learner upload and report journey under one Academy main and
   expect(host.querySelector("audio")?.getAttribute("src")).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/source`,
   );
+  expect(button("Reading view").getAttribute("aria-pressed")).toBe("true");
+  await click("Tabbed view");
   await click("Moments");
   expect(host.textContent).toContain("कल timing discuss करूया.");
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);

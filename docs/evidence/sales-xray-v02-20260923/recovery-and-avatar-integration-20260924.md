@@ -67,3 +67,12 @@ the current view rather than navigating again; all eight report-mode tests pass.
 The reviewer found no additional high/medium recovery-placement issue. The CI
 Python shard's single failure was a 15-second PowerShell syntax-check timeout;
 the unchanged test passed locally in 0.95 seconds and remains required in CI.
+
+The compiled acquisition browser journey now passes with an explicit switch
+from the default Reading view to Tabbed view before inspecting Moments. CI also
+passed all 451 Sales Xray frontend tests. Its remaining learner integration
+failure had the same obsolete tab assumption; the learner journey now checks
+the default Reading view before switching. All ten focused learner acquisition
+tests pass. One local run failed to open a temporary transform file and was not
+counted as a pass; the unchanged rerun completed successfully. Hosted acceptance
+and report-quality comparison remain outstanding.
