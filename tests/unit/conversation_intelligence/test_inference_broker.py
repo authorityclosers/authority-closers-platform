@@ -154,7 +154,7 @@ async def test_execute_binds_route_and_deserializes_only_raw_response() -> None:
     assert result.data == {"answer": "synthetic"}
     assert BROKER_MODULE in runner.calls[0][0]
     assert set(runner.calls[0][2]).isdisjoint(
-        {"GEMINI_API_KEY", "GROQ_API_KEY", "ELEVENLABS_API_KEY"}
+        {"GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY"}
     )
 
 

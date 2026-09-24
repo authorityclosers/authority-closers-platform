@@ -99,3 +99,32 @@ receipts remain preserved; this does not establish a hosted provider-quality res
 | Allocation units | `df984b038959d056cdabf105d322a81ab29f1156915969fa37a19a423e88692a` |
 | Runtime and authority browser | `5d79079651279608108e5e77d9d6b425773032098ac2faf5bb0fe7f70e23e794` |
 | Durable processing-plan browser | `3e264a07d7846780048b28039fc5e87ec36913ff377d3a7bafc3364cc5dc34aa` |
+| Full PostgreSQL processing-plan module | `ad2868a5bd989e0cb25e50d959e4347efa4747da9620ef0fb500d34fc9523dab` |
+
+## OpenAI C5 integration checkpoint
+
+The combined tree includes the bounded Responses adapter at `0b159fb4` and
+canonical C5 wiring at `5268108354d373d1d7014d19a002b82a2616a0c6`.
+The worker service/router admit OpenAI for C5 only. The owner-authenticated C5
+quote path now binds the selected prompt, language, qualitative pack, detailed
+profile and approved cap while retaining the exact saved transcript/fact IDs.
+OpenAI remains a single-attempt route; neither a malformed response nor a
+transport ambiguity authorizes an automatic second paid request.
+
+Import conflicts were resolved by retaining both OpenAI and the existing bounded
+provider-failure observations, including their reservation binding. Combined
+tests found and corrected an unintended change to Gemini's existing immutable
+pricing-snapshot shape and display basis. Missing OpenAI usage remains unknown.
+Explicit type narrowing fixed 17 static errors without relaxing runtime checks.
+
+The report module's reviewed OpenAI change is limited to its docstring and prompt
+provider admission. AST comparison against `ae06cb69` shows its other 52 functions
+and classes unchanged. Report validation/adaptation remains revision 5; its full
+source hash was repinned to `7bc877f94353babc42801f1436b43857d0ff89b8f774dbbac58258d96bd3231f`.
+
+The combined unit suite passed 1,348 tests in 33.05 seconds. One POSIX-ownership
+test is skipped on Windows. Ruff lint/format and mypy across 91 affected source
+files passed. The first failing combined suite is preserved alongside the pass.
+Real PostgreSQL OpenAI HTTP acceptance, independent semantic review, exact-source
+hosted CI and canonical activation remain pending. No live OpenAI report or
+production configuration change is established by this checkpoint.

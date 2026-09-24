@@ -107,3 +107,68 @@ def test_gemini_estimate_stays_unavailable_when_only_thought_tokens_exist() -> N
 
     assert estimate["paise"] is None
     assert estimate["state"] == "usage_unavailable"
+
+
+def test_openai_estimate_prices_disjoint_cache_buckets_and_not_reasoning_twice() -> None:
+    estimate = estimate_provider_usage(
+        "openai",
+        "gpt-6-luna",
+        {
+            "input_tokens": 100_000,
+            "cached_tokens": 20_000,
+            "cache_write_tokens": 10_000,
+            "output_tokens": 8_000,
+            "reasoning_tokens": 3_000,
+            "total_tokens": 108_000,
+        },
+    )
+
+    assert estimate["state"] == "available"
+    assert estimate["paise"] == 125
+    assert estimate["usage_breakdown"] == {
+        "input_tokens": 100_000,
+        "ordinary_input_tokens": 70_000,
+        "cached_tokens": 20_000,
+        "cache_write_tokens": 10_000,
+        "output_tokens": 8_000,
+        "reasoning_tokens": 3_000,
+    }
+    assert estimate["pricing_snapshot"]["source_date"] == "2026-09-24"
+    assert estimate["pricing_snapshot"]["evidence_sha256"]
+
+
+def test_openai_long_context_uses_long_rate_and_missing_counters_are_not_zero() -> None:
+    long_context = estimate_provider_usage(
+        "openai",
+        "gpt-6-luna",
+        {
+            "input_tokens": 272_001,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 272_001,
+        },
+    )
+    missing_cache_detail = estimate_provider_usage(
+        "openai",
+        "gpt-6-luna",
+        {"input_tokens": 10, "output_tokens": 1, "total_tokens": 11},
+    )
+    malformed_cache_detail = estimate_provider_usage(
+        "openai",
+        "gpt-6-luna",
+        {
+            "input_tokens": 10,
+            "cached_tokens": 8,
+            "cache_write_tokens": 3,
+            "output_tokens": 1,
+            "reasoning_tokens": 0,
+            "total_tokens": 11,
+        },
+    )
+
+    assert long_context["basis"].endswith("_long_context")
+    assert long_context["paise"] == 545
+    assert missing_cache_detail["state"] == "usage_unavailable"
+    assert malformed_cache_detail["state"] == "usage_invalid"

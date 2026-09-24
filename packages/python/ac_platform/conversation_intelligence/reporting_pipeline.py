@@ -106,7 +106,7 @@ class StageRequest(BaseModel):
     transcript_checkpoint_id: UUID
     fact_checkpoint_ids: tuple[UUID, ...] = Field(default=(), max_length=64)
     chunk_index: int = Field(default=1, strict=True, ge=1, le=64)
-    provider: Literal["groq", "gemini"] = Field(
+    provider: Literal["groq", "gemini", "openai"] = Field(
         default="groq", exclude_if=lambda value: value == "groq"
     )
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
@@ -137,6 +137,10 @@ class StageRequest(BaseModel):
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
+        if self.provider == "openai" and self.stage != "C5":
+            raise ValueError("OpenAI is approved for coaching only.")
+        if self.provider == "openai" and self.repair is not None:
+            raise ValueError("OpenAI coaching repair is not authorized.")
         if self.max_completion_tokens > completion_ceiling(self.provider, self.model, self.stage):
             raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
@@ -181,6 +185,8 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
 
     if prepared.task != "coaching":
         raise ConversationConflict("Only a coaching response can be repaired.")
+    if prepared.provider == "openai":
+        raise ConversationConflict("OpenAI coaching repair is not authorized.")
     body = prepared.as_provider_body()
     if prepared.provider == "groq":
         messages = body.get("messages")

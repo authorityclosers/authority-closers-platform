@@ -10,19 +10,29 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.analysis_settings import latest_analysis_settings
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationProcessingPlan,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
+from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    load_report_profile,
+)
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.kernel.authz import ActorContext
@@ -74,7 +84,44 @@ class AnalysisSelection(BaseModel):
             return None
         if approval.max_completion_tokens < 256:
             raise HTTPException(403, "The approved output limit does not support this stage.")
+        if self.stage == "C4" and approval.provider_id == "openai":
+            raise HTTPException(403, "OpenAI is approved for coaching only.")
         assert self.transcript_checkpoint_id is not None
+        if self.stage == "C4":
+            return StageRequest(
+                stage=self.stage,
+                transcript_checkpoint_id=self.transcript_checkpoint_id,
+                fact_checkpoint_ids=self.fact_checkpoint_ids,
+                chunk_index=self.chunk_index,
+                provider=approval.provider_id,
+                model=approval.model_id,
+                max_completion_tokens=stage_completion_limit(
+                    self.stage,
+                    approval.max_completion_tokens,
+                    provider=approval.provider_id,
+                    model=approval.model_id,
+                ),
+            )
+
+        _settings_row, analysis_settings = await latest_analysis_settings(
+            app.database, authority.operations_tenant_id
+        )
+        prompt_revision = analysis_settings.c5_coaching_prompt_revision
+        output_profile = analysis_settings.c5_output_profile
+        if approval.provider_id == "openai" and (
+            prompt_revision not in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+            or output_profile != "detailed"
+        ):
+            raise HTTPException(403, "OpenAI requires the approved detailed coaching prompt.")
+        profile = load_report_profile()
+        if approval.profile_sha256 != content_hash(profile):
+            raise HTTPException(403, "The current coaching profile is not approved for this route.")
+        qualitative_pack_sha256 = (
+            load_qualitative_pack_for_revision(prompt_revision).sha256
+            if prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+            else None
+        )
+        maximum = min(approval.max_completion_tokens, analysis_settings.c5_max_completion_tokens)
         return StageRequest(
             stage=self.stage,
             transcript_checkpoint_id=self.transcript_checkpoint_id,
@@ -83,8 +130,13 @@ class AnalysisSelection(BaseModel):
             provider=approval.provider_id,
             model=approval.model_id,
             max_completion_tokens=stage_completion_limit(
-                self.stage, approval.max_completion_tokens
+                self.stage, maximum, provider=approval.provider_id, model=approval.model_id
             ),
+            coaching_prompt_revision=prompt_revision,
+            report_language=analysis_settings.report_language_default,
+            qualitative_pack_sha256=qualitative_pack_sha256,
+            output_profile=output_profile,
+            profile=profile,
         )
 
 

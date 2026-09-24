@@ -103,6 +103,9 @@ _RECEIPT_USAGE_KEYS = frozenset(
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
     }
 )
 
@@ -205,6 +208,13 @@ _VALIDATION_FAILURES = frozenset(
         "gemini_response_blocked",
         "gemini_response_incomplete",
         "gemini_response_json_invalid",
+        "openai_response_incomplete",
+        "openai_response_incomplete_or_stored",
+        "openai_response_invalid",
+        "openai_response_json_invalid",
+        "openai_response_refused",
+        "openai_response_tool_or_message_invalid",
+        "openai_response_empty_or_oversized",
     }
 )
 

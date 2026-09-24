@@ -1,6 +1,6 @@
 """Bounded, source-bound qualitative sales report drafts.
 
-This module only prepares a Groq request and validates its decoded JSON response.
+This module prepares source-bound text-provider prompts and validates decoded JSON.
 It never calls a provider and never treats model supplied provenance as authority.
 The transcript is the source of segment text and timing; the server supplies the
 report source label, transcript hash and revision.
@@ -1956,7 +1956,7 @@ def build_report_groq_prompt(
         raise ReportError("report_output_budget_invalid")
     if not isinstance(model, str) or not model.strip() or len(model) > 128:
         raise ReportError("report_model_invalid")
-    if provider not in {"groq", "gemini"}:
+    if provider not in {"groq", "gemini", "openai"}:
         raise ReportError("report_provider_invalid")
     if coaching_prompt_revision not in {
         COACHING_PROMPT_LEGACY,
