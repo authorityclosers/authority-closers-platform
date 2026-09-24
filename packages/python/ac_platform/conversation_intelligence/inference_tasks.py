@@ -192,7 +192,7 @@ def _text_response(result: ProviderResult) -> Mapping[str, Any]:
         return result.data
     if result.provider == "openai":
         try:
-            return decode_openai_object(result.data)
+            return decode_openai_object(result.data, expected_model=result.model)
         except OpenAITaskError as exc:
             raise InferenceTaskError(str(exc)) from None
     try:

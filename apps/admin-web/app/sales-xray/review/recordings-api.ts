@@ -25,7 +25,7 @@ const providerUsageSchema = z.record(
 const pricingSnapshotSchema = z
   .object({
     schema: z.literal("ac.sales-xray.pricing-snapshot/1"),
-    evidence_release_sha: releaseShaSchema,
+    evidence_release_sha: releaseShaSchema.nullable(),
     provider: z.string().min(1),
     model: z.string().min(1),
     currency: z.literal("INR"),
@@ -34,14 +34,37 @@ const pricingSnapshotSchema = z
     pricing_ref: z.string().min(1),
     evidence_sha256: digestSchema,
     source_url: z.string().url(),
-    rate_basis: z.enum(["per_hour", "per_minute", "per_million_tokens"]),
+    rate_basis: z.enum([
+      "per_hour",
+      "per_minute",
+      "per_million_tokens",
+      "per_million_tokens_with_cache_categories_and_long_context_tier",
+    ]),
     usd_per_hour: z.number().nonnegative().nullable(),
     usd_per_minute: z.number().nonnegative().optional(),
     input_usd_per_million_tokens: z.number().nonnegative().nullable(),
     output_usd_per_million_tokens: z.number().nonnegative().nullable(),
+    cached_input_usd_per_million_tokens: z.number().nonnegative().optional(),
+    cache_write_usd_per_million_tokens: z.number().nonnegative().optional(),
+    long_context_threshold_tokens: z.number().int().positive().optional(),
+    long_input_usd_per_million_tokens: z.number().nonnegative().optional(),
+    long_cached_input_usd_per_million_tokens: z
+      .number()
+      .nonnegative()
+      .optional(),
+    long_cache_write_usd_per_million_tokens: z
+      .number()
+      .nonnegative()
+      .optional(),
+    long_output_usd_per_million_tokens: z.number().nonnegative().optional(),
     is_billing_rate: z.literal(false),
   })
-  .strict();
+  .strict()
+  .refine(
+    (snapshot) =>
+      snapshot.evidence_release_sha !== null || snapshot.provider === "openai",
+    "Release evidence is required for existing provider snapshots.",
+  );
 
 const providerStageSchema = z
   .object({

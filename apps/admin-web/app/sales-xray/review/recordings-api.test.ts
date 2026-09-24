@@ -233,6 +233,135 @@ describe("admin recordings API", () => {
     await expect(loadAdminRecordings({ fetcher })).rejects.toThrow();
   });
 
+  it("keeps OpenAI cache and context-tier estimates visible with dated source evidence", async () => {
+    const original = payload.items[0]!;
+    const stage = original.latest_run.provider_stages[0]!;
+    const openaiPayload = {
+      ...payload,
+      items: [
+        {
+          ...original,
+          latest_run: {
+            ...original.latest_run,
+            provider_stages: [
+              {
+                ...stage,
+                stage: "C5",
+                provider: "openai",
+                model: "gpt-6-luna",
+                usage: {
+                  input_tokens: 100,
+                  output_tokens: 20,
+                  cached_tokens: 10,
+                  cache_write_tokens: 0,
+                  reasoning_tokens: 5,
+                },
+                pricing_snapshot: {
+                  ...stage.pricing_snapshot,
+                  evidence_release_sha: null,
+                  provider: "openai",
+                  model: "gpt-6-luna",
+                  source_date: "2026-09-24",
+                  pricing_ref: "ref:pricing/openai-test-fixture",
+                  source_url: "https://developers.openai.com/api/docs/pricing",
+                  rate_basis:
+                    "per_million_tokens_with_cache_categories_and_long_context_tier",
+                  cached_input_usd_per_million_tokens: 0.05,
+                  cache_write_usd_per_million_tokens: 0,
+                  long_context_threshold_tokens: 272000,
+                  long_input_usd_per_million_tokens: 1,
+                  long_cached_input_usd_per_million_tokens: 0.1,
+                  long_cache_write_usd_per_million_tokens: 0,
+                  long_output_usd_per_million_tokens: 5,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const fetcher = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(openaiPayload), { status: 200 }),
+    );
+    const result = await loadAdminRecordings({ fetcher });
+    const accepted = result.items[0]?.latest_run?.provider_stages[0];
+    expect(accepted?.pricing_snapshot?.evidence_release_sha).toBeNull();
+    expect(accepted?.pricing_snapshot?.long_context_threshold_tokens).toBe(
+      272000,
+    );
+    expect(accepted?.usage?.cached_tokens).toBe(10);
+    expect(accepted?.usage?.reasoning_tokens).toBe(5);
+    expect(accepted?.cost_state).toBe("reconciliation_required");
+  });
+
+  it("keeps a model-unverified OpenAI run visible without a cost estimate", async () => {
+    const original = payload.items[0]!;
+    const unverified = {
+      ...payload,
+      items: [
+        {
+          ...original,
+          latest_run: {
+            ...original.latest_run,
+            provider_stages: [
+              {
+                ...original.latest_run.provider_stages[0],
+                stage: "C5",
+                provider: "openai",
+                model: "gpt-6-luna",
+                state: "failed",
+                usage_estimate_state: "usage_unavailable",
+                usage_estimate_basis: "provider_model_unverified",
+                usage_estimate_paise: null,
+                pricing_snapshot: null,
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const fetcher = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(unverified), { status: 200 }),
+    );
+    const result = await loadAdminRecordings({ fetcher });
+    expect(result.items[0]?.id).toBe(ids.recording);
+    expect(
+      result.items[0]?.latest_run?.provider_stages[0]?.usage_estimate_basis,
+    ).toBe("provider_model_unverified");
+    expect(
+      result.items[0]?.latest_run?.provider_stages[0]?.usage_estimate_paise,
+    ).toBeNull();
+  });
+
+  it("still requires release evidence for existing Gemini pricing snapshots", async () => {
+    const original = payload.items[0]!;
+    const stage = original.latest_run.provider_stages[0]!;
+    const invalid = {
+      ...payload,
+      items: [
+        {
+          ...original,
+          latest_run: {
+            ...original.latest_run,
+            provider_stages: [
+              {
+                ...stage,
+                pricing_snapshot: {
+                  ...stage.pricing_snapshot,
+                  evidence_release_sha: null,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const fetcher = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(invalid), { status: 200 }),
+    );
+    await expect(loadAdminRecordings({ fetcher })).rejects.toThrow();
+  });
+
   it("rejects an unbounded page size before making a request", async () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(loadAdminRecordings({ limit: 51, fetcher })).rejects.toThrow(

@@ -128,3 +128,43 @@ files passed. The first failing combined suite is preserved alongside the pass.
 Real PostgreSQL OpenAI HTTP acceptance, independent semantic review, exact-source
 hosted CI and canonical activation remain pending. No live OpenAI report or
 production configuration change is established by this checkpoint.
+
+## Returned-model verification and Admin compatibility
+
+Independent review found that OpenAI's response model was not compared with the
+approved model. The decoder now requires an exact supported-model match. The
+worker first preserves the raw provider response and a receipt containing the
+requested model, reported model and verification result. A mismatch is held for
+review without automatic redispatch. Its usage stays visible, but no verified
+cost estimate is shown.
+
+Admin now accepts the reviewed OpenAI cache/context-tier pricing snapshot and its
+dated source evidence. Existing provider snapshots still require their release
+evidence, unknown fields remain rejected, and unsettled charges remain explicitly
+unsettled. An unavailable model estimate uses the existing `usage_unavailable`
+state, preventing an additive provider receipt from breaking the recordings page.
+
+Validation:
+
+- 73 focused OpenAI/worker/Admin unit tests passed; after the final compatible
+  Admin-state mapping, all 19 Admin unit tests passed again.
+- Both existing Gemini hosted-authority and durable-plan browser journeys passed
+  with the integrated OpenAI/model-verification changes (66.56 seconds).
+- The new canonical authenticated OpenAI HTTP/worker PostgreSQL test passed on
+  the combined tree (27.36 seconds). It checks exact saved C2/C4 reuse, one C5
+  provider request, settings-drift denial without new tasks/jobs/reservations,
+  wrong-source and wrong-owner denial, saved report/checkpoint/receipt history,
+  and uncertain cost reservations pending settlement evidence.
+- Eleven Admin API/component tests and the Admin TypeScript check passed under
+  the repository's pinned Node 24 runtime. Tests include OpenAI pricing parsing,
+  unavailable estimates, strict legacy evidence and retained recordings.
+
+Two initial root PostgreSQL attempts did not execute product behavior: the first
+omitted the harness's named database environment variable; the second used a
+missing scratch parent. Both receipts are preserved. Setting the documented
+loopback variable and creating the dedicated external scratch directory allowed
+the test to run. No production database, provider or customer clip was used.
+
+The independent review's model-binding finding is addressed; hosted activation
+and a real matched provider-quality comparison remain required. Synthetic test
+success is not evidence of a live Brain-quality improvement.

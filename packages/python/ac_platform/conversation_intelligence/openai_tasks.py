@@ -196,9 +196,14 @@ def openai_prompt_view(
     }
 
 
-def decode_openai_object(response: Mapping[str, Any]) -> dict[str, Any]:
+def decode_openai_object(response: Mapping[str, Any], *, expected_model: str) -> dict[str, Any]:
     """Unwrap exactly one complete final JSON message, rejecting tools/refusals."""
 
+    # The reviewed model pages and account inventory expose only these exact
+    # IDs. Do not silently accept another model or invent a dated alias map.
+    # Validation happens after the worker retains the raw returned response.
+    if expected_model not in OPENAI_TASK_MODELS or response.get("model") != expected_model:
+        _fail("openai_response_model_mismatch")
     if (
         response.get("object") != "response"
         or response.get("status") != "completed"

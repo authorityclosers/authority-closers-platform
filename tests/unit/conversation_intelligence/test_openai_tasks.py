@@ -31,6 +31,7 @@ def _prompt(model: str = "gpt-6-luna") -> dict[str, object]:
 def _complete_response(output_text: str = '{"ok":true}') -> dict[str, object]:
     return {
         "object": "response",
+        "model": "gpt-6-luna",
         "status": "completed",
         "incomplete_details": None,
         "error": None,
@@ -110,10 +111,10 @@ def test_responses_body_rejects_unreviewed_combinations_and_effort() -> None:
 
 
 def test_responses_decoder_requires_one_complete_unstored_json_message() -> None:
-    assert decode_openai_object(_complete_response()) == {"ok": True}
+    assert decode_openai_object(_complete_response(), expected_model="gpt-6-luna") == {"ok": True}
     duplicate = _complete_response('{"ok":true,"ok":false}')
     with pytest.raises(OpenAITaskError, match="openai_response_json_invalid"):
-        decode_openai_object(duplicate)
+        decode_openai_object(duplicate, expected_model="gpt-6-luna")
     for mutate, code in (
         (lambda value: value.update(status="incomplete"), "openai_response_incomplete_or_stored"),
         (lambda value: value.update(store=True), "openai_response_incomplete_or_stored"),
@@ -131,10 +132,25 @@ def test_responses_decoder_requires_one_complete_unstored_json_message() -> None
         invalid = _complete_response()
         mutate(invalid)
         with pytest.raises(OpenAITaskError, match=code):
-            decode_openai_object(invalid)
+            decode_openai_object(invalid, expected_model="gpt-6-luna")
 
 
 def test_responses_decoder_rejects_duplicate_and_nonfinite_json() -> None:
     for text in ('{"value":NaN}', "[1,2]"):
         with pytest.raises(OpenAITaskError, match="openai_response_json_invalid"):
-            decode_openai_object(_complete_response(text))
+            decode_openai_object(_complete_response(text), expected_model="gpt-6-luna")
+
+
+@pytest.mark.parametrize("reported", [None, "", "gpt-6-sol", "gpt-6-luna-2099-01-01", 123])
+def test_returned_model_must_match_the_exact_approved_route(reported: object) -> None:
+    response = _complete_response()
+    response["model"] = reported
+    with pytest.raises(OpenAITaskError, match="openai_response_model_mismatch"):
+        decode_openai_object(response, expected_model="gpt-6-luna")
+
+
+@pytest.mark.parametrize("model", sorted(OPENAI_REASONING_EFFORTS))
+def test_each_supported_model_preserves_its_reported_identity(model: str) -> None:
+    response = _complete_response()
+    response["model"] = model
+    assert decode_openai_object(response, expected_model=model) == {"ok": True}

@@ -552,6 +552,7 @@ def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() 
     ]
     openai_response = {
         "object": "response",
+        "model": openai_coaching.model,
         "status": "completed",
         "incomplete_details": None,
         "error": None,
