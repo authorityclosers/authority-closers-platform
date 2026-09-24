@@ -145,8 +145,12 @@ it("keeps paused C5 recovery actions and the uploaded-file card in distinct flow
   expect(markup).toContain("Discovery call.m4a");
   expect(markup).toContain("Check status");
   expect(markup).toContain("Review and continue analysis");
-  expect(markup.indexOf("Uploaded file")).toBeLessThan(
-    markup.indexOf("Check status"),
+  expect(markup).toContain('role="group" aria-label="Recovery actions"');
+  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
+    markup.indexOf("Uploaded file"),
+  );
+  expect(markup.indexOf('aria-label="Recovery actions"')).toBeLessThan(
+    markup.indexOf("Review and continue analysis"),
   );
 });
 

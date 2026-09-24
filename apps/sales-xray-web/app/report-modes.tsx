@@ -231,14 +231,14 @@ export function ReportModes({
           aria-pressed={view === "reading"}
           onClick={() => changeView("reading")}
         >
-          <BookOpen aria-hidden="true" /> Reading
+          <BookOpen aria-hidden="true" /> Reading view
         </button>
         <button
           type="button"
           aria-pressed={view === "tabs"}
           onClick={() => changeView("tabs")}
         >
-          <PanelsTopLeft aria-hidden="true" /> Tabs
+          <PanelsTopLeft aria-hidden="true" /> Tabbed view
         </button>
       </div>
       {view === "tabs" && (
