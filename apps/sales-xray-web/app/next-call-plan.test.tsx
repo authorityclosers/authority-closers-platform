@@ -112,6 +112,25 @@ it("does not invent coaching or playback when source fields are absent", async (
   ).toBeNull();
 });
 
+it("does not reopen an old plan dialog after switching through reading mode", async () => {
+  const renderMode = async (reading: boolean) => {
+    await act(async () =>
+      root.render(
+        <ReportReadingProvider reading={reading}>
+          <NextCallPlan report={report} onSelectEvidence={vi.fn()} />
+        </ReportReadingProvider>,
+      ),
+    );
+  };
+  await renderMode(false);
+  await act(async () => button("Read full notes : Change first").click());
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  await renderMode(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  await renderMode(false);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+});
+
 it("renders every plan section and source in reading mode while retaining evidence seeking", async () => {
   const select = vi.fn();
   await act(async () =>

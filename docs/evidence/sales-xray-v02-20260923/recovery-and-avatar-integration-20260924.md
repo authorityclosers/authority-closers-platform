@@ -53,3 +53,10 @@ regression, and final focused ESLint passes. The whole frontend formatting
 check and Sales Xray TypeScript check passed. A transient local module-resolution
 failure during lint was not counted as a pass; the successful rerun used the
 same installed ESLint and source files.
+
+Exact-source CI for `b10e8cc7` found the same effect reset issue in the remaining
+Next-call plan component outside the initial focused lint set. It is corrected
+with a conditional mode-change reset. Five Next-call plan tests, including the
+mode-switch dialog regression, and full Sales Xray ESLint now pass. That CI run
+also has a separate acquisition browser failure under investigation; `b10e8cc7`
+is not deployable and its successful native build does not override those gates.
