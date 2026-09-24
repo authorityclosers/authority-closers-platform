@@ -51,6 +51,7 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.storage import ObjectKey, ObjectKind
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime, IntakePolicy
@@ -163,6 +164,8 @@ def _coaching_output() -> dict[str, Any]:
 
 
 class OpenAIC5ReportingBroker(ReportingBroker):
+    reported_model = "gpt-6-luna"
+
     async def execute(self, reservation: Any, payload: bytes) -> ProviderResult:
         if reservation.quote.provider_id != "openai":
             return await super().execute(reservation, payload)
@@ -182,7 +185,7 @@ class OpenAIC5ReportingBroker(ReportingBroker):
         }
         response = {
             "object": "response",
-            "model": "gpt-6-luna",
+            "model": self.reported_model,
             "status": "completed",
             "incomplete_details": None,
             "error": None,
@@ -276,8 +279,9 @@ async def _checkpoints(setup: Any, stage: str) -> UUID:
         return task.checkpoint_id
 
 
+@pytest.mark.parametrize("reported_model", ["gpt-6-luna", "gpt-6-sol"])
 def test_http_openai_c5_reuses_checkpoints_and_fences_settings_and_scope(
-    postgres_harness: Any, tmp_path: Path
+    postgres_harness: Any, tmp_path: Path, reported_model: str
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, text_provider="gemini")
@@ -286,6 +290,7 @@ def test_http_openai_c5_reuses_checkpoints_and_fences_settings_and_scope(
             await _insert_settings(setup, 1)
 
             provider_child = OpenAIC5ReportingBroker(setup.prepared.data)
+            provider_child.reported_model = reported_model
             router = FixedProviderRouter(
                 {
                     provider: ProviderRoute(
@@ -573,6 +578,63 @@ def test_http_openai_c5_reuses_checkpoints_and_fences_settings_and_scope(
                 )
                 assert successful_c5["state"] == "queued"
                 assert await worker.run_once()
+                if reported_model != "gpt-6-luna":
+                    async with setup.sessions() as database:
+                        task = await database.scalar(
+                            select(ConversationInferenceTask).where(
+                                ConversationInferenceTask.recording_id
+                                == setup.prepared.recording_id,
+                                ConversationInferenceTask.stage == "C5",
+                            )
+                        )
+                        assert task is not None and task.state == "uncertain"
+                        assert task.checkpoint_id is None
+                        job = await database.get(Job, task.job_id)
+                        assert job is not None and job.status == "dead_letter"
+                        assert job.last_error == "conversation_openai_response_model_mismatch"
+                        assert job.provider_receipt is not None
+                        receipt = job.provider_receipt
+                        assert receipt["model"] == "gpt-6-luna"
+                        assert receipt["reported_model"] == reported_model
+                        assert receipt["model_verified"] is False
+                        assert receipt["validation_state"] == "provider_returned"
+                        raw = b"".join(
+                            setup.prepared.storage.iter_bytes(
+                                ObjectKey(
+                                    task.tenant_id,
+                                    task.recording_id,
+                                    task.run_id,
+                                    ObjectKind.PROVIDER_RESPONSE,
+                                ),
+                                expected_sha256=receipt["response_sha256"],
+                            )
+                        )
+                        assert json.loads(raw)["model"] == reported_model
+                        assert (
+                            await database.scalar(
+                                select(func.count())
+                                .select_from(ConversationReportDraft)
+                                .where(
+                                    ConversationReportDraft.run_id == task.run_id,
+                                )
+                            )
+                            == 0
+                        )
+                        budget = await database.get(
+                            ConversationBudgetAccount, setup.bundle.budget_scope_id
+                        )
+                        assert budget is not None
+                        reservations = BudgetAccount.from_dict(budget.snapshot).reservations
+                        openai_reservations = [
+                            item for item in reservations if item.quote.provider_id == "openai"
+                        ]
+                        assert len(openai_reservations) == 1
+                        assert openai_reservations[0].state == "uncertain"
+                    assert await _checkpoints(setup, "C2") == transcript_id
+                    assert await _checkpoints(setup, "C4") == facts_id
+                    assert not await worker.run_once()
+                    assert provider_child.routes == ["elevenlabs", "gemini", "openai"]
+                    return
                 c5_checkpoint = await _checkpoints(setup, "C5")
                 assert provider_child.routes == ["elevenlabs", "gemini", "openai"]
 

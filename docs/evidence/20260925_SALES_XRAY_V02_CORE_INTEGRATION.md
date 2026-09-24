@@ -168,3 +168,13 @@ the test to run. No production database, provider or customer clip was used.
 The independent review's model-binding finding is addressed; hosted activation
 and a real matched provider-quality comparison remain required. Synthetic test
 success is not evidence of a live Brain-quality improvement.
+
+The HTTP/worker database test now also injects a returned model different from
+the quoted Luna model. It proves the task becomes uncertain, the job is held in
+dead letter with the typed model-mismatch reason, raw response bytes and the
+unverified receipt remain readable, no report/checkpoint is accepted, budget
+reservation remains uncertain, C2/C4 checkpoints are unchanged, and another
+worker pass causes no provider redispatch. This case passed in 19.68 seconds;
+the matching-model case passed in the preceding parameterized run. The first
+mismatch assertion omitted the standard `conversation_` error prefix; correcting
+that test expectation required no product change. Its failed receipt is retained.
