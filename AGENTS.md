@@ -53,3 +53,12 @@ delegate. Never bypass service limits, silently substitute an unapproved model,
 send secrets or raw customer data, or treat a cloud-chat handoff as production
 evidence. A handoff is accepted only after its claims and artifacts are checked
 against the repository and release controls.
+
+For substantive Sales Xray interface design, report presentation, architecture,
+and reusable SVG/component generation, continue the relevant existing AC
+Orchestra Pro chat with an exact source pin and bounded deliverable. Reuse and
+harvest its existing work before opening another research chat. Keep a durable
+chat-to-task record and use the authorized GitHub handoff route. Codex owns
+machine access, source review, integration, tests and release verification; cloud
+claims never replace those checks. Record unavailable Pro access or artifacts
+explicitly and keep the urgent verified repair moving.
