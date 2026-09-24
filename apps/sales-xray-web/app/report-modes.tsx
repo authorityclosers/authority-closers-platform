@@ -185,16 +185,20 @@ export function ReportModes({
         <button
           type="button"
           aria-pressed={view === "reading"}
-          onClick={() => navigate({ view: "reading", section: selected })}
+          onClick={() => {
+            if (view !== "reading")
+              navigate({ view: "reading", section: selected });
+          }}
         >
           Reading view
         </button>
         <button
           type="button"
           aria-pressed={view === "tabs"}
-          onClick={() =>
-            navigate({ view: "tabs", section: currentReadingSection })
-          }
+          onClick={() => {
+            if (view !== "tabs")
+              navigate({ view: "tabs", section: currentReadingSection });
+          }}
         >
           Tabbed view
         </button>

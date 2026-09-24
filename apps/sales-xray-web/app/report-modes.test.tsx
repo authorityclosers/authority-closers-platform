@@ -158,6 +158,19 @@ it("ignores a URL bound to a different call", async () => {
   expect(mode().dataset.reportSection).toBe("overview");
 });
 
+it("keeps a bookmarked tab when its already-selected mode is clicked again", async () => {
+  const query = `?call=${call}&view=tabs&section=transcript`;
+  window.history.replaceState(null, "", `/${query}`);
+  await render(call);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-pressed="true"]')!
+      .click(),
+  );
+  expect(mode().dataset.reportSection).toBe("transcript");
+  expect(window.location.search).toBe(query);
+});
+
 it("opens an explicit reading bookmark at its linked section", async () => {
   const scroll = vi.fn();
   const previous = Object.getOwnPropertyDescriptor(

@@ -60,3 +60,10 @@ with a conditional mode-change reset. Five Next-call plan tests, including the
 mode-switch dialog regression, and full Sales Xray ESLint now pass. That CI run
 also has a separate acquisition browser failure under investigation; `b10e8cc7`
 is not deployable and its successful native build does not override those gates.
+
+Independent review found that clicking the already-selected Tabbed view control
+could reset a directly bookmarked section. Both active mode buttons now preserve
+the current view rather than navigating again; all eight report-mode tests pass.
+The reviewer found no additional high/medium recovery-placement issue. The CI
+Python shard's single failure was a 15-second PowerShell syntax-check timeout;
+the unchanged test passed locally in 0.95 seconds and remains required in CI.
