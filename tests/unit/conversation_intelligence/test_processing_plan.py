@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence.activation_contract import StageApproval
 from ac_platform.conversation_intelligence.application import ConversationDenied
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.inference import DEEPGRAM_TRANSCRIPT_RECIPE
@@ -14,12 +15,14 @@ from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
     PlanAcceptance,
     PlanManifest,
+    _implemented_text_provider,
     automatic_c5_repair_cost,
     c5_repair_intent,
     manifest_for,
     maximum_plan_cost_with_repair,
     parse_report_language_preference,
     plan_cost_label,
+    planned_c5_requests,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
 from ac_platform.conversation_intelligence.reports import FACT_PROMPT_COMPACT
@@ -142,6 +145,25 @@ def test_saved_legacy_plan_omits_compact_prompt_revision_and_new_plan_roundtrips
     )
 
 
+def test_openai_is_admitted_only_for_c5_and_has_no_automatic_repair():
+    assert _implemented_text_provider("C5", "openai") is True
+    assert _implemented_text_provider("C4", "openai") is False
+    assert _implemented_text_provider("C2", "openai") is False
+    stage = saved_plan().manifest["stages"][2]
+    approval = StageApproval.model_validate_json(canonical(stage)).model_copy(
+        update={
+            "provider_id": "openai",
+            "model_id": "gpt-6-luna",
+            "max_requests": 2,
+            "max_cost_paise": 1_000,
+            "zero_cost_basis": "paid_pricing_evidence",
+            "free_allowance_ref": None,
+        }
+    )
+    assert planned_c5_requests(approval) == 1
+    assert automatic_c5_repair_cost(approval) == 0
+
+
 def test_saved_plan_accepts_the_explicit_deepgram_c2_route() -> None:
     data = manifest_for(saved_plan()).as_dict()
     data["stages"][0].update(
@@ -241,6 +263,9 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
     assert repair is not None
     assert repair.attempt == 1
     assert repair.original_run_id == task.run_id
+    task.intent["request"]["provider"] = "openai"
+    assert c5_repair_intent(task, job) is None
+    task.intent["request"].pop("provider")
     job.last_error = "conversation_provider_execution_timeout"
     assert c5_repair_intent(task, job) is None
 

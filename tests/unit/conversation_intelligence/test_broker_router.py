@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -31,11 +32,16 @@ from ac_platform.conversation_intelligence.inference_broker import InferenceBrok
 from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_coaching_input,
     prepare_fact_inputs,
+    validate_coaching_result,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
+    StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
 
@@ -171,6 +177,7 @@ def _reservation(
     operation: str = "transcribe_scribe_v2",
     input_sha256: str = SOURCE_SHA,
     entitlement_seconds: int = 1,
+    provider_configuration_sha256: str | None = None,
 ) -> Reservation:
     quote = Quote(
         quote_id="quote-router-1",
@@ -182,6 +189,7 @@ def _reservation(
         recipe_revision=recipe_revision,
         operation=operation,
         input_sha256=input_sha256,
+        provider_configuration_sha256=provider_configuration_sha256,
         privacy_revision="privacy-router-v1",
         permission_ref=permission_ref or "ref:permission/router-v1",
         provider_terms_ref="ref:terms/router-v1",
@@ -215,6 +223,7 @@ def _router(bundle_box: dict[str, HostedApprovalBundle], child: Any) -> FixedPro
             "deepgram": ProviderRoute("deepgram", "ref:credential/deepgram/v1", child),
             "groq": ProviderRoute("groq", "ref:credential/groq/v1", child),
             "gemini": ProviderRoute("gemini", "ref:credential/gemini/v1", child),
+            "openai": ProviderRoute("openai", "ref:credential/openai/v1", child),
         },
         current_authority=lambda _now: bundle_box["bundle"],
         clock=lambda: NOW,
@@ -522,6 +531,241 @@ async def test_c5_router_accepts_production_coaching_recipe_and_frozen_profile()
     assert child.calls == [(reservation, prepared.payload)]
     assert b"Profile:\\n" in prepared.payload
     assert str(profile["revision"]).encode() in prepared.payload
+
+
+def _openai_c5_fixture() -> tuple[dict[str, Any], Any, Any, Any, Any]:
+    transcript = _synthetic_transcript()
+    profile = load_report_profile()
+    pack = load_qualitative_pack_for_revision("coaching-v5")
+    fact_packet = FactPacket(
+        schema_id="ac.sales-xray.style-independent-facts/1",
+        source_sha256=SOURCE_SHA,
+        transcript_revision=str(transcript["revision"]),
+        timebase_id="scribe-native-seconds",
+        chunk_index=1,
+        chunk_count=1,
+        covered_segment_ids=["segment-1"],
+        overview="One synthetic price question is present.",
+        observations=[],
+        uncertainties=["Synthetic speaker labels remain unverified."],
+    )
+    request = StageRequest(
+        stage="C5",
+        transcript_checkpoint_id=UUID("50000000-0000-4000-8000-000000000005"),
+        fact_checkpoint_ids=(UUID("60000000-0000-4000-8000-000000000006"),),
+        provider="openai",
+        model="gpt-6-luna",
+        max_completion_tokens=1_800,
+        coaching_prompt_revision="coaching-v5",
+        report_language="en",
+        qualitative_pack_sha256=pack.sha256,
+        profile=profile,
+    )
+    prepared = prepare_coaching_input(
+        transcript,
+        [fact_packet],
+        provider=request.provider,
+        profile=profile,
+        model=request.model,
+        max_completion_tokens=request.max_completion_tokens,
+        output_profile=request.output_profile,
+        coaching_prompt_revision=request.coaching_prompt_revision,
+        report_language=request.report_language or "en",
+        qualitative_pack_sha256=request.qualitative_pack_sha256,
+    )
+    return transcript, profile, request, prepared, fact_packet
+
+
+@pytest.mark.asyncio
+async def test_openai_c5_canonical_request_routes_once_and_validates_source_bound_draft() -> None:
+    transcript, profile, request, prepared, _fact_packet = _openai_c5_fixture()
+    profile_sha256 = hashlib.sha256(canonical(profile)).hexdigest()
+    approval = _stage(
+        stage="C5",
+        provider_id="openai",
+        model_id=prepared.model,
+        recipe_revision=COACHING_RECIPE,
+        profile_sha256=profile_sha256,
+    ).model_copy(update={"max_input_bytes": 255_000})
+    bundle = _bundle(approval)
+    reservation = _reservation(
+        bundle,
+        provider_id="openai",
+        provider_model=prepared.model,
+        recipe_revision=COACHING_RECIPE,
+        operation="extract_context_evidence",
+        input_sha256=prepared.input_sha256,
+        entitlement_seconds=0,
+        provider_configuration_sha256=approval.configuration_sha256,
+    )
+    payload: dict[str, Any] = {
+        "summary": "Synthetic qualitative draft.",
+        "strengths": [],
+        "missed_opportunities": [],
+        "improvements": [],
+        "objection_analysis": [],
+        "closing_analysis": [],
+        "verdict": "Human review is required.",
+        "review_status": "draft_not_dipak_adjudicated",
+        "dimensions": [
+            {
+                "dimension_id": item["id"],
+                "status": "insufficient_evidence",
+                "observation": "The synthetic source does not establish this dimension.",
+                "evidence": [],
+            }
+            for item in profile["dimensions"]
+        ],
+    }
+    from tests.conversation_overview_fixtures import overview_for
+
+    payload["overview"] = overview_for(payload)
+    response: dict[str, Any] = {
+        "object": "response",
+        "status": "completed",
+        "incomplete_details": None,
+        "error": None,
+        "store": False,
+        "service_tier": "default",
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [
+                    {"type": "output_text", "text": json.dumps(payload, ensure_ascii=False)}
+                ],
+            }
+        ],
+    }
+
+    class SyntheticOpenAIChild(FakeChild):
+        async def execute(self, current: Reservation, body: bytes) -> ProviderResult:
+            self.calls.append((current, body))
+            raw = canonical(response)
+            return ProviderResult(
+                provider=current.quote.provider_id,
+                model=current.quote.provider_model,
+                request_id="synthetic-openai-response",
+                response_sha256=hashlib.sha256(raw).hexdigest(),
+                raw_json=raw,
+                data=response,
+                input_sha256=hashlib.sha256(body).hexdigest(),
+                usage={},
+            )
+
+    child = SyntheticOpenAIChild()
+    routed = await _router({"bundle": bundle}, child).execute(reservation, prepared.payload)
+    draft = validate_coaching_result(routed, prepared, transcript, profile=profile)
+
+    assert request.provider == "openai"
+    assert prepared.checkpoint == "C5" and prepared.payload_kind == "openai_json"
+    assert child.calls == [(reservation, prepared.payload)]
+    assert draft.data()["source_sha256"] == SOURCE_SHA
+    assert draft.data()["review_status"] == "draft_not_dipak_adjudicated"
+    assert draft.usage == ()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("denial", "expected"),
+    [
+        ("missing_approval", "broker_router_route_mismatch"),
+        ("configuration_digest", "broker_router_route_mismatch"),
+        ("credential", "broker_router_credential_mismatch"),
+        ("expired", "broker_router_expired"),
+        ("wrong_stage", "broker_router_route_mismatch"),
+        ("over_cap", "broker_router_payload_mismatch"),
+        ("wrong_model", "broker_router_payload_mismatch"),
+        ("malformed_schema", "broker_router_payload_mismatch"),
+    ],
+)
+async def test_openai_route_denials_happen_before_child(denial: str, expected: str) -> None:
+    _transcript, profile, _request, prepared, _fact_packet = _openai_c5_fixture()
+    approval = _stage(
+        stage="C5",
+        provider_id="openai",
+        model_id=prepared.model,
+        recipe_revision=COACHING_RECIPE,
+        profile_sha256=hashlib.sha256(canonical(profile)).hexdigest(),
+        expires_at_epoch=999 if denial == "expired" else 1_800,
+    ).model_copy(
+        update={
+            "max_input_bytes": 255_000,
+            "max_completion_tokens": 1_000 if denial == "over_cap" else 4_000,
+            "credential_ref": (
+                "ref:credential/openai/alternate"
+                if denial == "credential"
+                else "ref:credential/openai/v1"
+            ),
+            "stage": "C4" if denial == "wrong_stage" else "C5",
+            "recipe_revision": FACT_RECIPE if denial == "wrong_stage" else COACHING_RECIPE,
+            "profile_sha256": None
+            if denial == "wrong_stage"
+            else hashlib.sha256(canonical(profile)).hexdigest(),
+        }
+    )
+    bundle = _bundle(_stage() if denial == "missing_approval" else approval)
+    payload = prepared.payload
+    input_sha256 = prepared.input_sha256
+    if denial in {"wrong_model", "malformed_schema"}:
+        body = json.loads(payload)
+        if denial == "wrong_model":
+            body["model"] = "gpt-6-sol"
+        else:
+            body["text"]["format"]["strict"] = False
+        payload = canonical(body)
+        input_sha256 = hashlib.sha256(payload).hexdigest()
+    reservation = _reservation(
+        bundle,
+        provider_id="openai",
+        provider_model=prepared.model,
+        recipe_revision=FACT_RECIPE if denial == "wrong_stage" else COACHING_RECIPE,
+        operation="extract_context_evidence",
+        input_sha256=input_sha256,
+        entitlement_seconds=0,
+        provider_configuration_sha256=(
+            "f" * 64 if denial == "configuration_digest" else approval.configuration_sha256
+        ),
+    )
+    child = FakeChild()
+
+    with pytest.raises(ProviderRouterError, match=expected):
+        await _router({"bundle": bundle}, child).execute(reservation, payload)
+    assert child.calls == []
+
+
+@pytest.mark.asyncio
+async def test_approved_openai_route_without_its_launcher_does_not_fall_back() -> None:
+    _transcript, profile, _request, prepared, _fact_packet = _openai_c5_fixture()
+    approval = _stage(
+        stage="C5",
+        provider_id="openai",
+        model_id=prepared.model,
+        recipe_revision=COACHING_RECIPE,
+        profile_sha256=hashlib.sha256(canonical(profile)).hexdigest(),
+    )
+    bundle = _bundle(approval)
+    reservation = _reservation(
+        bundle,
+        provider_id="openai",
+        provider_model=prepared.model,
+        recipe_revision=COACHING_RECIPE,
+        operation="extract_context_evidence",
+        input_sha256=prepared.input_sha256,
+        entitlement_seconds=0,
+        provider_configuration_sha256=approval.configuration_sha256,
+    )
+    child = FakeChild()
+    router = FixedProviderRouter(
+        {"gemini": ProviderRoute("gemini", "ref:credential/gemini/v1", child)},
+        current_authority=lambda _now: bundle,
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(ProviderRouterError, match="broker_router_provider_unconfigured"):
+        await router.execute(reservation, prepared.payload)
+    assert child.calls == []
 
 
 @pytest.mark.asyncio

@@ -35,9 +35,10 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
     require_long_coaching_cost_approval,
 )
 from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
+from ac_platform.conversation_intelligence.openai_tasks import openai_prompt_view
 from ac_platform.conversation_intelligence.providers import ProviderResult
 
-_SUPPORTED_PROVIDERS = frozenset({"deepgram", "elevenlabs", "groq", "gemini"})
+_SUPPORTED_PROVIDERS = frozenset({"deepgram", "elevenlabs", "groq", "gemini", "openai"})
 _REFERENCE = re.compile(r"^ref:[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$")
 _SENSITIVE = re.compile(
     r"(?:api[_-]?key|bearer|basic|password|secret|token|sk[-_]|gsk_|aq\.)",
@@ -305,6 +306,20 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_payload_mismatch")
         if len(payload) > approval.max_input_bytes:
             raise ProviderRouterError("broker_router_payload_mismatch")
+        if approval.provider_id == "openai" and approval.stage == "C5":
+            try:
+                body = json.loads(payload)
+                maximum = body["max_output_tokens"]
+                if type(maximum) is not int or maximum > approval.max_completion_tokens:
+                    raise ValueError
+                openai_prompt_view(
+                    body,
+                    model=approval.model_id,
+                    maximum=maximum,
+                    task="coaching",
+                )
+            except (KeyError, TypeError, ValueError):
+                raise ProviderRouterError("broker_router_payload_mismatch") from None
         if approval.provider_id == "gemini" and approval.stage in {"C4", "C5"}:
             try:
                 body = json.loads(payload)
@@ -370,7 +385,9 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_route_mismatch")
         if approval.stage == "C2" and approval.provider_id not in {"elevenlabs", "deepgram"}:
             raise ProviderRouterError("broker_router_route_mismatch")
-        if approval.stage in {"C4", "C5"} and approval.provider_id not in {"groq", "gemini"}:
+        if approval.stage == "C4" and approval.provider_id not in {"groq", "gemini"}:
+            raise ProviderRouterError("broker_router_route_mismatch")
+        if approval.stage == "C5" and approval.provider_id not in {"groq", "gemini", "openai"}:
             raise ProviderRouterError("broker_router_route_mismatch")
         if route.credential_ref != approval.credential_ref:
             raise ProviderRouterError("broker_router_credential_mismatch")

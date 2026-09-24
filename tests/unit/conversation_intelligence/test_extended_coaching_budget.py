@@ -158,6 +158,30 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction(f
     assert repaired.input_sha256 != original.input_sha256
 
 
+def test_openai_stage_request_is_c5_only_and_disallows_paid_repair():
+    base = dict(
+        transcript_checkpoint_id=uuid4(),
+        fact_checkpoint_ids=(uuid4(),),
+        provider="openai",
+        model="gpt-6-luna",
+        max_completion_tokens=1800,
+    )
+    assert StageRequest(stage="C5", **base).provider == "openai"
+    with pytest.raises(ValidationError):
+        StageRequest(
+            stage="C4",
+            fact_checkpoint_ids=(),
+            **{key: value for key, value in base.items() if key != "fact_checkpoint_ids"},
+        )
+    repair = C5RepairIntent(
+        failure_code="conversation_report_overview_invalid",
+        original_run_id=uuid4(),
+        original_response_sha256="a" * 64,
+    )
+    with pytest.raises(ValidationError):
+        StageRequest(stage="C5", **base, repair=repair)
+
+
 @pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 96000)])
 def test_input_envelope_rejects_one_byte_over_each_exact_bound(maximum, limit):
     kwargs = dict(model="gemini-3.8-flash", task="coaching", maximum=maximum)

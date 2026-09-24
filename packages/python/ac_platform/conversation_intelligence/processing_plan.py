@@ -96,9 +96,23 @@ C5_AUTO_REPAIR_ATTEMPTS = 1
 NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
 
 
-def planned_c5_requests(stage: StageApproval) -> int:
-    """Reserve one bounded C5 repair only when the pinned approval permits it."""
+def _implemented_text_provider(stage: str, provider: str) -> bool:
+    """Return the fixed text-provider/stage combinations implemented here."""
 
+    if stage == "C4":
+        return provider in {"groq", "gemini"}
+    if stage == "C5":
+        return provider in {"groq", "gemini", "openai"}
+    return False
+
+
+def planned_c5_requests(stage: StageApproval) -> int:
+    """Reserve one C5 attempt, except routes explicitly approved for one repair."""
+
+    # OpenAI is intentionally a one-shot C5 route during this canary. A later
+    # repair would be another paid effect, so it is not included in its plan.
+    if stage.provider_id == "openai":
+        return 1
     return 1 + min(C5_AUTO_REPAIR_ATTEMPTS, max(0, stage.max_requests - 1))
 
 
@@ -124,7 +138,11 @@ def c5_repair_intent(task: ConversationInferenceTask, job: Job) -> C5RepairInten
     if task.stage != "C5" or task.state != "uncertain":
         return None
     request = task.intent.get("request") if isinstance(task.intent, dict) else None
-    if not isinstance(request, dict) or request.get("repair") is not None:
+    if (
+        not isinstance(request, dict)
+        or request.get("repair") is not None
+        or request.get("provider") == "openai"
+    ):
         return None
     receipt = job.provider_receipt
     if (
@@ -737,7 +755,7 @@ class ConversationProcessingPlans:
         ):
             item = approvals[stage]
             if (
-                item.provider_id not in {"groq", "gemini"}
+                not _implemented_text_provider(stage, item.provider_id)
                 or item.max_completion_tokens < 256
                 or source.duration_ms > item.max_source_duration_ms
             ):
