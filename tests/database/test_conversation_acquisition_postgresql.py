@@ -762,17 +762,25 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                 client.cookies.set(
                     "ac_xray_guest", guest.token, domain="salesxray.example.test", path="/"
                 )
+                start_params = {
+                    "action": "authenticate",
+                    "surface": "sales_xray",
+                    "consent": "true",
+                    "consent_version": settings.learner_consent_version,
+                    "return_path": "/?report=synthetic-owned-report&continue=claim",
+                }
+                partial_start = await client.get("/v1/auth/google/start", params=start_params)
+                assert partial_start.status_code == 400
+                async with sessions() as db:
+                    assert await db.scalar(select(func.count()).select_from(Person)) == before
+
+                # Starting this Google registration represents a current full acknowledgement.
+                start_params["age_attested"] = "true"
                 person_id = None
                 for _ in range(2 if verified else 1):
                     start = await client.get(
                         "/v1/auth/google/start",
-                        params={
-                            "action": "authenticate",
-                            "surface": "sales_xray",
-                            "consent": "true",
-                            "consent_version": settings.learner_consent_version,
-                            "return_path": "/?report=synthetic-owned-report&continue=claim",
-                        },
+                        params=start_params,
                     )
                     assert start.status_code == 303
                     callback_state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
