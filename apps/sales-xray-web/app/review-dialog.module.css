@@ -33,6 +33,7 @@
   background: #fff;
   box-shadow: 0 24px 80px rgb(11 30 48 / 30%);
   color: #172b3a;
+  font-family: var(--report-font);
   animation: sheet-enter 180ms ease-out both;
 }
 .dialog[data-tone="orange"] {

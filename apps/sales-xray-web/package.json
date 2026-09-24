@@ -13,6 +13,7 @@
   "dependencies": {
     "@ac/sales-xray-client": "workspace:*",
     "@ac/ui": "workspace:*",
+    "@fontsource-variable/plus-jakarta-sans": "5.3.0",
     "lucide-react": "1.37.0",
     "next": "16.3.3",
     "react": "19.2.8",

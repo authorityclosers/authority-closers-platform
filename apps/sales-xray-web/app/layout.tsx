@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "@fontsource-variable/plus-jakarta-sans/wght.css";
 import "./styles.css";
 import { LiveDataBanner } from "./live-data-banner";
 export const metadata: Metadata = {

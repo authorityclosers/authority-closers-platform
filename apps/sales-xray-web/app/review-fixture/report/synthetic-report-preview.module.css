@@ -1,18 +1,19 @@
 .page {
   box-sizing: border-box;
   min-height: 100dvh;
-  padding: clamp(16px, 3vw, 40px);
+  padding: clamp(12px, 2vw, 28px);
   background: linear-gradient(145deg, #f2f7ff, #f8fffd 65%, #fff);
   color: #10243d;
-  font-family: "Segoe UI Variable", var(--font-sans, "Segoe UI"), sans-serif;
+  font-family: var(--report-font);
   font-size: 15px;
+  font-weight: 450;
   line-height: 1.6;
 }
 .frame {
   box-sizing: border-box;
   width: min(100%, 1360px);
   margin-inline: auto;
-  padding: clamp(16px, 2vw, 28px);
+  padding: clamp(16px, 1.8vw, 26px);
   border: 1px solid #dce6f2;
   border-radius: 20px;
   background: #fff;
@@ -23,29 +24,29 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .eyebrow {
-  margin: 0 0 6px;
+  margin: 0 0 5px;
   color: #087b79;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .heading h1 {
   margin: 0;
-  font-size: clamp(31px, 3.25vw, 42px);
-  font-weight: 700;
+  font-size: clamp(30px, 3vw, 38px);
+  font-weight: 800;
   line-height: 1.12;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.045em;
 }
 .heading p:not(.eyebrow) {
-  max-width: 68ch;
-  margin: 9px 0 0;
-  color: #526984;
-  font-size: 15px;
-  line-height: 1.55;
+  max-width: 78ch;
+  margin: 6px 0 0;
+  color: #48617b;
+  font-size: 14px;
+  line-height: 1.45;
 }
 .badge {
   flex: 0 0 auto;
@@ -54,18 +55,18 @@
   border-radius: 999px;
   background: #e8faf6;
   color: #006f67;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 750;
 }
 .disclaimer {
-  margin-bottom: 16px;
-  padding: 11px 14px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
   border-left: 3px solid #6b5bdb;
   border-radius: 8px;
   background: #f5f3ff;
   color: #544b87;
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .source {
   margin-top: 20px;
@@ -81,7 +82,7 @@
 }
 .source strong {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 750;
 }
 .source p {
   margin: 7px 0;
