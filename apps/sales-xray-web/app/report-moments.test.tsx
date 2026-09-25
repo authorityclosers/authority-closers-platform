@@ -235,7 +235,8 @@ it("uses validated rewatch notes in report order with the exact quote, purpose a
     first.evidence[0].quote,
   );
   expect(focused().textContent).toContain("Rewatch · Must watch");
-  expect(focused().textContent).toContain("00:01.000 – 00:02.200");
+  expect(focused().textContent).toContain("00:01–00:02");
+  expect(focused().textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
   expect(screen().textContent).not.toMatch(
     /Discovery|What happened|Why it matters/,
   );
@@ -526,7 +527,8 @@ it("opens complete long text and provenance in a focused review, then restores t
     evidence.quote,
   );
   expect(dialog().textContent).toContain(explanation);
-  expect(dialog().textContent).toContain("01:01.123–01:01.987 · under 1 sec");
+  expect(dialog().textContent).toContain("at 01:01");
+  expect(dialog().textContent).not.toContain("01:01–01:01");
   for (const value of [
     report.source_label,
     report.source_sha256,
@@ -609,6 +611,72 @@ it.each(["source", "revision"])(
     );
   },
 );
+
+it("reads each moment in the normal flow with its full quote, finding, linked context and one-click Listen", async () => {
+  const report = suppliedReport();
+  const onSelect = await render(report, undefined, undefined, true);
+  const reading = container.querySelector<HTMLElement>("[data-moments-print]")!;
+  const cards = [...reading.querySelectorAll<HTMLElement>("article")];
+  expect(cards).toHaveLength(report.overview!.rewatch.length);
+  const [first, second] = report.overview!.rewatch;
+  expect(cards[0].querySelector("h3")?.textContent).toBe(first.text);
+  expect(cards[0].querySelector("blockquote")?.textContent).toBe(
+    first.evidence[0].quote,
+  );
+  expect(
+    cards[0].querySelector("blockquote p")?.getAttribute("data-script"),
+  ).toBe("deva");
+  expect(cards[0].textContent).toContain("Rewatch · Must watch");
+  // Findings citing the exact same span, joined on the saved source bounds.
+  expect(cards[0].textContent).toContain("Change first");
+  expect(cards[0].textContent).toContain(report.improvements[0].title);
+  expect(cards[0].textContent).toContain(
+    `Try this: ${report.overview!.improvement_details[0].replacement_behavior}`,
+  );
+  expect(cards[0].textContent).toContain(
+    `Explore next: ${report.overview!.missed_details[0].follow_up}`,
+  );
+  expect(cards[1].textContent).toContain(
+    `Why it worked: ${report.overview!.golden_moments[0].why_effective}`,
+  );
+  expect(cards[1].textContent).not.toContain(report.improvements[0].title);
+  const buttons = cards[1].querySelectorAll<HTMLButtonElement>("button");
+  expect(buttons).toHaveLength(1);
+  expect(buttons[0].textContent).toContain("Listen");
+  // 2.5–3.3 s is under one second, so it is one location, not "00:02–00:03".
+  expect(buttons[0].textContent).toContain("at 00:02");
+  await act(async () => buttons[0].click());
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(
+    second.evidence[0],
+    second.text,
+  );
+  expect(onSelect.mock.calls[0][0]).toBe(second.evidence[0]);
+  for (const value of [
+    report.source_label,
+    report.source_sha256,
+    report.transcript_revision,
+  ])
+    expect(container.textContent).not.toContain(value);
+  expect(container.textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
+});
+
+it("shows a sub-second clip as one location and never clamps a moment title", async () => {
+  const report = manyMoments();
+  const onSelect = await render(report, undefined, undefined, true);
+  const listen = container.querySelector<HTMLButtonElement>(
+    "[data-moments-print] article button",
+  )!;
+  expect(listen.textContent).toContain("at 00:08");
+  expect(listen.textContent).not.toContain("00:08–00:08");
+  await act(async () => listen.click());
+  expect(onSelect.mock.calls[0][0]).toEqual(excerpt(8));
+  expect(onSelect.mock.calls[0][0].end_ms).toBe(8_987);
+  await render(report);
+  expect(focused().textContent).toContain("at 00:08");
+  expect(
+    screen().querySelector<HTMLElement>("[data-moment-id] strong")?.textContent,
+  ).toBe(report.strengths[0].title);
+});
 
 it("retains existing transcript phrase search and exact-source selection in an independently scrollable sheet", async () => {
   const onTranscriptSelect = vi.fn();

@@ -150,8 +150,9 @@ it("keeps the actual overview and source playback inline in the tabbed report", 
     report().strengths[0].title,
   );
   const review = container.querySelector<HTMLButtonElement>(
-    '[aria-label="Open review: Key takeaway"]',
+    '[data-overview-card="0"] [data-open-review]',
   )!;
+  expect(review.textContent).toContain("Read the final verdict");
   await act(async () => review.click());
   await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   expect(
@@ -180,7 +181,7 @@ it("keeps compact cards tied to the full source reader without showing an entire
   expect(dashboard.querySelector('[aria-label="Overview pages"]')).toBeNull();
   expect(dashboard.querySelector('[aria-label="Overview cards"]')).toBeNull();
   const opener = dashboard.querySelector<HTMLButtonElement>(
-    '[aria-label="Open review: Key takeaway"]',
+    '[data-overview-card="0"] [data-open-review]',
   )!;
   opener.focus();
   await act(async () => opener.click());
@@ -222,7 +223,7 @@ it("keeps the compact overview focused on five useful actions without a review p
   await act(async () =>
     dashboard
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Open review: Keep doing this"]',
+        '[data-overview-card="1"] [data-open-review]',
       )!
       .click(),
   );
@@ -252,7 +253,7 @@ it("shows one overview metrics row with a deduplicated playable highlight count"
   const dashboardMetrics = container.querySelector(
     'section[aria-label="Call overview"] [aria-label="Call metrics"]',
   );
-  expect(dashboardMetrics?.textContent).toContain("Highlights5");
+  expect(dashboardMetrics?.textContent).toContain("Key moments5");
   expect(container.textContent).not.toContain("Source moments");
 });
 
@@ -317,7 +318,7 @@ it("links improvement tabs and supports arrow-key navigation without modifying e
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Open review: First thing to change"]',
+        '[data-overview-card="2"] [data-open-review]',
       )!
       .click(),
   );
@@ -446,7 +447,7 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
   );
 });
 
-it("keeps source context behind an explicit disclosure", async () => {
+it("keeps source context once, behind the final-verdict disclosure", async () => {
   const value = parseJobResponse(
     {
       id: "synthetic-run",
@@ -462,12 +463,22 @@ it("keeps source context behind an explicit disclosure", async () => {
   ).report!;
   await render(value);
   const details = container.querySelector<HTMLDetailsElement>(
-    "[data-source-details]",
+    'details[data-review-point="14"]',
   );
   expect(details).not.toBeNull();
   expect(details?.open).toBe(false);
-  expect(details?.textContent).toContain(value.overview!.diagnosis!.text);
-  expect(details?.textContent).toContain(value.overview!.outcome!.text);
+  const context = details?.querySelector('[aria-label="Source context"]');
+  expect(context?.textContent).toContain(value.overview!.diagnosis!.text);
+  expect(context?.textContent).toContain(value.overview!.outcome!.text);
+  expect(
+    container.querySelectorAll('[aria-label="Source context"]'),
+  ).toHaveLength(1);
+  expect(
+    context?.querySelectorAll(".studio-finding-evidence blockquote"),
+  ).toHaveLength(
+    value.overview!.diagnosis!.evidence.length +
+      value.overview!.outcome!.evidence.length,
+  );
 });
 
 it("opens source context for print and restores its closed state", async () => {
@@ -486,7 +497,7 @@ it("opens source context for print and restores its closed state", async () => {
   ).report!;
   await render(value);
   const details = container.querySelector<HTMLDetailsElement>(
-    "[data-source-details]",
+    'details[data-review-point="14"]',
   )!;
   expect(details.open).toBe(false);
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
@@ -647,7 +658,7 @@ it("replays literal mixed-script evidence with its exact source span and no HTML
   );
   expect(container.querySelector("script")).toBeNull();
   const button = container.querySelector<HTMLButtonElement>(
-    '[data-review-point="01"] button[aria-label^="Play source moment"]',
+    '[data-review-point="01"] button[aria-label^="Listen"]',
   )!;
   await act(async () => button.click());
   expect(select).toHaveBeenCalledExactlyOnceWith(
@@ -820,6 +831,218 @@ it("shows no unlock cards for complete accounts or single/empty guest sections",
   await render();
   expect(container.querySelector("[data-preview-section]")).toBeNull();
   expect(container.textContent).not.toContain("Unlock remaining insights");
+});
+
+/** The synthetic fixture with all three priority fixes, so all fourteen points render. */
+function detailedReport(): SalesReport {
+  const source = structuredClone(fixture.report);
+  source.improvements = Array.from({ length: 3 }, (_, index) => ({
+    ...structuredClone(source.improvements[0]),
+    title: `Priority ${index + 1}`,
+  }));
+  source.overview.improvement_details = Array.from(
+    { length: 3 },
+    (_, index) => ({
+      ...structuredClone(source.overview.improvement_details[0]),
+      finding_index: index,
+    }),
+  );
+  return parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: source,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+}
+
+function primaryQuotes(value: SalesReport): string[] {
+  const detail = value.overview!;
+  return [
+    ...value.strengths,
+    ...value.improvements,
+    ...value.missed_opportunities,
+    ...value.objection_analysis,
+    ...value.closing_analysis,
+    ...[
+      detail.diagnosis,
+      detail.outcome,
+      ...detail.prospect_interpretations.map((item) => item.source),
+      ...detail.ethics_notes,
+    ].flatMap((note) => (note ? [note] : [])),
+  ].flatMap((item) => item.evidence.map((evidence) => evidence.quote));
+}
+
+async function renderModes(value: SalesReport, view: "reading" | "tabs") {
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <DipakOverview
+                report={value}
+                onSelectEvidence={select}
+                showHeading={false}
+                durationMs={fixture.transcript.duration_ms}
+              />
+            ),
+          },
+          {
+            id: "transcript",
+            label: "Transcript",
+            content: <p>Transcript remains a separate section.</p>,
+          },
+        ]}
+      />,
+    ),
+  );
+  if (view === "tabs")
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent?.includes("Tabbed view"))!
+        .click(),
+    );
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe(view);
+  return container.querySelector<HTMLElement>(
+    '[data-report-mode-section="overview"]',
+  )!;
+}
+
+it.each(["reading", "tabs"] as const)(
+  "shows one summary, all fourteen points and every primary quote in %s view",
+  async (view) => {
+    const value = detailedReport();
+    const overview = await renderModes(value, view);
+    expect(overview.hidden).toBe(false);
+    expect(
+      overview.querySelectorAll('section[aria-label="Call overview"]'),
+    ).toHaveLength(1);
+    expect(overview.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+    const points = [
+      ...overview.querySelectorAll<HTMLElement>("[data-review-point]"),
+    ];
+    expect(points.map((point) => point.dataset.reviewPoint)).toEqual(
+      Array.from({ length: 14 }, (_, index) =>
+        String(index + 1).padStart(2, "0"),
+      ),
+    );
+    expect(
+      points.every(
+        (point) => point.closest("[hidden],details:not([open])") === null,
+      ),
+    ).toBe(true);
+    // Report modes already navigate; no hidden review map, replay shortcut or modal.
+    expect(
+      overview.querySelector(
+        "[data-insight-number], [data-source-moment], dialog",
+      ),
+    ).toBeNull();
+    const text = overview.textContent ?? "";
+    for (const quote of primaryQuotes(value)) expect(text).toContain(quote);
+    expect(text.split(value.summary)).toHaveLength(2);
+    expect(text.split(value.verdict)).toHaveLength(2);
+    expect(text).not.toContain(value.source_label);
+    expect(text).not.toContain(value.transcript_revision);
+    expect(text).not.toContain(value.source_sha256);
+  },
+);
+
+it("keeps summary counts labelled, readable and non-interactive", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "reading");
+  const metrics = overview.querySelector<HTMLElement>(
+    '[aria-label="Call metrics"]',
+  )!;
+  expect(metrics.tagName).toBe("DL");
+  expect(
+    [...metrics.querySelectorAll("dt")].map((term) => term.textContent),
+  ).toEqual(["Call length", "Key moments", "Priority fixes"]);
+  expect(
+    [...metrics.querySelectorAll("dd")].map((value) => value.textContent),
+  ).toEqual(["00:05", String(value.overview!.rewatch.length), "3"]);
+  expect(metrics.querySelector("button, a, [role='button']")).toBeNull();
+  expect(overview.textContent?.split("Call length")).toHaveLength(2);
+});
+
+it("starts only the exact supported excerpt with one click from each summary row", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "reading");
+  const listen = (card: string) =>
+    [
+      ...overview.querySelectorAll<HTMLButtonElement>(
+        `[data-overview-card="${card}"] button`,
+      ),
+    ].find((button) => button.textContent?.trim() === "Listen")!;
+  await act(async () => listen("2").click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.improvements[0].evidence[0],
+    value.improvements[0].title,
+  );
+  await act(async () => listen("3").click());
+  expect(select).toHaveBeenLastCalledWith(
+    value.overview!.outcome!.evidence[0],
+    "Observed outcome",
+  );
+  expect(select).toHaveBeenCalledTimes(2);
+  expect(
+    overview.querySelector('[data-overview-card="3"]')?.textContent,
+  ).toContain("Follow-up");
+});
+
+it("gives every summary action a named destination that opens its review point", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "tabs");
+  const actions = [
+    ...overview.querySelectorAll<HTMLButtonElement>("[data-open-review]"),
+  ];
+  expect(
+    actions.map((action) => [
+      action.textContent?.trim(),
+      action.dataset.openReview,
+    ]),
+  ).toEqual([
+    ["Read the final verdict", "14"],
+    ["See why it works", "01"],
+    ["See what happened", "02"],
+    ["See the outcome evidence", "14"],
+    ["See the full focus", "11"],
+  ]);
+  await act(async () => actions[2].click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(document.activeElement?.getAttribute("data-review-point")).toBe("02");
+  expect(select).not.toHaveBeenCalled();
+});
+
+it("shows a sub-second excerpt as one location while seeking its exact bounds", async () => {
+  const value = report();
+  value.strengths[0].evidence[0] = {
+    ...value.strengths[0].evidence[0],
+    start_ms: 61_900,
+    end_ms: 62_100,
+  };
+  await render(value);
+  const button = container.querySelector<HTMLButtonElement>(
+    '[data-review-point="01"] button[aria-label^="Listen"]',
+  )!;
+  expect(button.textContent).toContain("at 01:01");
+  expect(button.textContent).not.toContain("01:01–01:02");
+  await act(async () => button.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.strengths[0].evidence[0],
+    value.strengths[0].title,
+  );
+  expect(select.mock.calls[0][0].start_ms).toBe(61_900);
 });
 
 it("renders retained objection and closing findings with their actual source controls", async () => {

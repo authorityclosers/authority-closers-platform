@@ -655,7 +655,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(container.textContent).not.toContain("Call length");
+  expect(container.textContent).toContain("Call length");
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
