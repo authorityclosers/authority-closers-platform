@@ -29,7 +29,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
 from ac_platform.authorization.application import CapabilityApplication
-from ac_platform.authorization.policy import CapabilityScope
+from ac_platform.authorization.policy import CapabilityConflict, CapabilityScope
 from ac_platform.community.models import CohorvaPublicProfile
 from ac_platform.conversation_intelligence.acquisition_sessions import (
     AcquisitionSessions,
@@ -105,8 +105,11 @@ def _postgres_url() -> URL:
     return url.set(drivername="postgresql+psycopg")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Iterator[_Harness]:
+    # Capability bootstrap is intentionally once-ever per database schema.
+    # Give each integration test its own migrated schema instead of deleting
+    # permission/audit history or depending on test execution order.
     root = Path(__file__).parents[2]
     base_url = _postgres_url()
     schema = f"operations_http_{uuid4().hex}"
@@ -141,7 +144,7 @@ def postgres_harness() -> Iterator[_Harness]:
                 ),
             }
         )
-        migration = subprocess.run(
+        migration = subprocess.run(  # noqa: S603 - fixed Alembic argv; database URL is test-only env
             [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
             cwd=root,
             env=environment,
@@ -1534,6 +1537,19 @@ def test_minute_account_target_resolution_is_exact_audited_and_public_tenant_sco
                     command_id=uuid4(),
                     reason="Disposable exact minute-target lookup fixture",
                 )
+
+            # The first-manager gate remains strict when actual permission
+            # history exists; the harness isolates tests without weakening it.
+            with pytest.raises(CapabilityConflict, match="Permission history exists"):
+                async with sessions() as database, database.begin():
+                    await CapabilityApplication(
+                        database,
+                        operations_tenant_id=seed.tenant_id,
+                    ).bootstrap_first_manager(
+                        person_id=seed.person_id,
+                        command_id=uuid4(),
+                        reason="A second bootstrap must not reset history",
+                    )
 
             manager_app = _application(
                 sessions=sessions,
