@@ -450,6 +450,10 @@ afterEach(async () => {
 
 it("keeps the new account home clear of empty recent-call panels", async () => {
   await mount();
+  expect(
+    container.querySelector('[aria-label="Workspace"] [aria-current="page"]')
+      ?.textContent,
+  ).toBe("New analysis");
   expect(container.querySelector(".calls-library-preview")).toBeNull();
   expect(container.textContent).not.toContain("No saved calls yet");
   expect(container.textContent).not.toContain("No recent activity");
@@ -2527,6 +2531,10 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   accepted = true;
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
+  expect(
+    container.querySelector('[aria-label="Workspace"] [aria-current="page"]')
+      ?.textContent,
+  ).toBe("Calls");
   const savedAudio = container.querySelector(
     '[aria-label="Call audio player"] audio',
   );

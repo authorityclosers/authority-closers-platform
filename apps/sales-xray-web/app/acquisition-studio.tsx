@@ -1754,6 +1754,7 @@ export function AcquisitionStudio({
       reviewStatus
     ) : (
       <AcquisitionShell
+        active={activeRequestedCallId ? "calls" : "analyse"}
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
       >
@@ -1823,6 +1824,7 @@ export function AcquisitionStudio({
         fallback
       ) : (
         <AcquisitionShell
+          active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
           homeHref={homeHref}
         >
@@ -2027,6 +2029,7 @@ export function AcquisitionStudio({
       if (embedded) return entryView;
       return (
         <AcquisitionShell
+          active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
           homeHref={homeHref}
           mobileFit
@@ -3243,6 +3246,7 @@ export function AcquisitionStudio({
     if (embedded) return content;
     return (
       <AcquisitionShell
+        active={activeRequestedCallId || reportReady ? "calls" : "analyse"}
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
         mobileFit
