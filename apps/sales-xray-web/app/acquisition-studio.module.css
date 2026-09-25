@@ -2427,6 +2427,14 @@ a.overviewCard:hover {
   }
 }
 
+/* A new standalone call needs one surface. Keep the queue rail only when
+   there are multiple actual files to review; never reserve an empty column. */
+.app[data-variant="standalone"] .layout.quietIntake {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
+
 @media (min-width: 1024px) and (max-height: 800px) {
   .app[data-stage="upload"] :global(.studio-main) {
     gap: 10px;

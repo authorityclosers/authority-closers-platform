@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
+
+import { useUploadSession } from "./hooks/upload-session";
 
 export type WorkspaceAccessStatus =
   | "loading"
@@ -38,6 +40,18 @@ export function WorkspaceAccessProvider({
   value: WorkspaceAccessValue;
   children: React.ReactNode;
 }>) {
+  const upload = useUploadSession();
+  const observation = useMemo(
+    () => ({
+      status: value.status,
+      authenticated: value.authenticated,
+      context: value.context,
+    }),
+    [value.authenticated, value.context, value.status],
+  );
+  useEffect(() => {
+    upload?.observeAccount(observation);
+  }, [observation, upload]);
   return (
     <WorkspaceAccessContext.Provider value={value}>
       {children}

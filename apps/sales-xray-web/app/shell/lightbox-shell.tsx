@@ -158,14 +158,14 @@ export function LightboxShell({
         </div>
         <nav className={styles.nav} aria-label="Workspace">
           {/* Full navigation resets a restored call even on the same route. */}
-          <a
+          <Link
             className={styles.newAnalysis}
             href={newAnalysisHref}
             aria-current={active === "analyse" ? "page" : undefined}
           >
             <Plus size={18} aria-hidden="true" />
             <span>New analysis</span>
-          </a>
+          </Link>
           <Link
             className={styles.navLink}
             href="/calls"
@@ -252,14 +252,14 @@ export function LightboxShell({
         className={styles.bottomNav}
         aria-label="Mobile Sales Xray navigation"
       >
-        <a
+        <Link
           className={styles.bottomLink}
           href={newAnalysisHref}
           aria-current={active === "analyse" ? "page" : undefined}
         >
           <Plus size={20} aria-hidden="true" />
           <span>New</span>
-        </a>
+        </Link>
         <Link
           className={styles.bottomLink}
           href="/calls"

@@ -4,12 +4,19 @@ import { ChevronDown, CircleUserRound, FolderOpen, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { requestSalesXrayLogout } from "./account-navigation";
+import {
+  requestSalesXrayLogout,
+  UploadNeedsSignOutConfirmationError,
+} from "./account-navigation";
 import { readAccountProfile } from "./account-profile-client";
+import { useUploadSession } from "./hooks/upload-session";
 import { ThemeControl } from "./lightbox/theme-provider";
 import { LocalSettingsButton } from "./live-data-banner";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
+
+const SIGN_OUT_UPLOAD_WARNING =
+  "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
 
 export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
 
@@ -44,6 +51,7 @@ export function ProfileMenu({
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
   const access = useWorkspaceAccess();
+  const upload = useUploadSession();
 
   useEffect(() => {
     if (!authenticated) return;
@@ -100,16 +108,26 @@ export function ProfileMenu({
 
   async function signOut() {
     if (signingOutRef.current) return;
+    const unresolved = upload?.requiresSignOutConfirmation() ?? false;
+    if (
+      unresolved &&
+      !window.confirm(SIGN_OUT_UPLOAD_WARNING)
+    )
+      return;
     signingOutRef.current = true;
     setSigningOut(true);
     setError("");
     try {
-      await requestSalesXrayLogout();
+      await requestSalesXrayLogout(upload, unresolved);
       // Discard the mounted report, audio and client route cache after logout.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign out must discard private document state.
       window.location.assign("/");
-    } catch {
-      setError("We couldn’t confirm sign out. Try again.");
+    } catch (error) {
+      setError(
+        error instanceof UploadNeedsSignOutConfirmationError
+          ? "Check the upload and confirm sign out again."
+          : "We couldn’t confirm sign out. Try again.",
+      );
       setSigningOut(false);
       signingOutRef.current = false;
     }
