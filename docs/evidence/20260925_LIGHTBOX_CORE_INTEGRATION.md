@@ -29,6 +29,14 @@ the repository's required Node 24 runtime, so these checks are local integration
 evidence only. Exact-source CI on the required runtime, build, and release/browser
 acceptance remain required before promotion.
 
+Subsequent required-runtime check: an isolated official Node `v24.21.0` runtime
+was downloaded from `nodejs.org/dist/latest-v24.x` and its Windows x64 archive
+verified against the official SHA256 checksum
+`158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541`.
+The same four-file command then passed all 12 tests under Node 24 (11.55 seconds).
+The default system runtime was not changed. Exact-source CI, build and browser
+acceptance still remain required.
+
 `git diff --cached --check -- apps packages pnpm-lock.yaml` passed. The complete
 diff reports whitespace already present in three lines of the imported original
 design asset sheet and handoff document; those source artifacts were preserved
