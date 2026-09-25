@@ -91,6 +91,10 @@ type GrantIntent = {
   reason: string;
   restored: boolean;
 };
+type BlockedGrantOutcome = {
+  kind: "confirmed" | "rejected";
+  message: string;
+};
 type PendingGrantRead =
   | { status: "none" }
   | { status: "matching"; intent: GrantIntent }
@@ -166,7 +170,9 @@ function clearPendingGrant(intent: GrantIntent) {
       parsed.data.actorTenantId !== intent.actorTenantId ||
       parsed.data.actorPersonId !== intent.actorPersonId ||
       parsed.data.tenantId !== intent.tenantId ||
-      parsed.data.personId !== intent.personId
+      parsed.data.personId !== intent.personId ||
+      parsed.data.minutes !== intent.minutes ||
+      parsed.data.reason !== intent.reason
     ) {
       return false;
     }
@@ -228,7 +234,10 @@ function lookupError(error: unknown) {
   if (error instanceof ApiError && error.status === 403) {
     return "Your current account cannot manage platform access.";
   }
-  if (error instanceof ApiError && error.status === 400) {
+  if (
+    error instanceof ApiError &&
+    (error.status === 400 || error.status === 422)
+  ) {
     return "Enter an exact email address or public username.";
   }
   return "Could not verify this learner account. Check the connection and try again.";
@@ -295,6 +304,8 @@ export function MinuteAccountAdminPanel() {
   >("idle");
   const [pendingGrant, setPendingGrant] = useState<GrantIntent | null>(null);
   const [recoveryBlocked, setRecoveryBlocked] = useState(false);
+  const [blockedGrantOutcome, setBlockedGrantOutcome] =
+    useState<BlockedGrantOutcome | null>(null);
   const lookupSequence = useRef(0);
   const lookupController = useRef<AbortController | null>(null);
   const grantIntent = useRef<GrantIntent | null>(null);
@@ -322,6 +333,7 @@ export function MinuteAccountAdminPanel() {
     setReason("");
     setPendingGrant(null);
     setRecoveryBlocked(false);
+    setBlockedGrantOutcome(null);
     setGrantState("idle");
     setGrantMessage("");
   }, [actorKey]);
@@ -344,6 +356,7 @@ export function MinuteAccountAdminPanel() {
     setLookupState("idle");
     setLookupMessage("");
     setRecoveryBlocked(false);
+    setBlockedGrantOutcome(null);
     setGrantMessage("");
     setGrantState("idle");
   }
@@ -380,6 +393,7 @@ export function MinuteAccountAdminPanel() {
     setLookupMessage("Verifying exact account and current balance…");
     setGrantMessage("");
     setGrantState("idle");
+    setBlockedGrantOutcome(null);
 
     const current = () =>
       !controller.signal.aborted &&
@@ -425,6 +439,7 @@ export function MinuteAccountAdminPanel() {
       setAccount(accountValue);
       setLookupState("ready");
       setRecoveryBlocked(false);
+      setBlockedGrantOutcome(null);
       if (recovery.status === "matching") {
         grantIntent.current = recovery.intent;
         setPendingGrant(recovery.intent);
@@ -593,13 +608,20 @@ export function MinuteAccountAdminPanel() {
       if (markerCleared) {
         grantIntent.current = null;
         setPendingGrant(null);
+        setBlockedGrantOutcome(null);
         setMinutesText("");
         setReason("");
       } else {
         setRecoveryBlocked(true);
         setGrantState("uncertain");
+        setBlockedGrantOutcome({
+          kind: "confirmed",
+          message: value.replayed
+            ? "The original grant was confirmed; no duplicate grant was added."
+            : "Minute grant confirmed in the canonical account ledger.",
+        });
         setGrantMessage(
-          "The grant is confirmed, but this browser could not clear its recovery record. Keep the same request and retry later to reconcile it.",
+          "The grant is confirmed, but this browser could not clear its recovery record. Recheck the saved request before starting another grant.",
         );
         return;
       }
@@ -618,6 +640,7 @@ export function MinuteAccountAdminPanel() {
         if (!markerCleared) {
           setRecoveryBlocked(true);
           setGrantState("uncertain");
+          setBlockedGrantOutcome({ kind: "rejected", message: outcome.text });
           setGrantMessage(
             "The request was rejected, but this browser could not clear its recovery record. No new grant can be started until it is reconciled.",
           );
@@ -625,6 +648,7 @@ export function MinuteAccountAdminPanel() {
         }
         grantIntent.current = null;
         setPendingGrant(null);
+        setBlockedGrantOutcome(null);
         setGrantState("error");
       } else {
         grantIntent.current = { ...intent, restored: true };
@@ -635,6 +659,46 @@ export function MinuteAccountAdminPanel() {
     } finally {
       grantBusy.current = false;
     }
+  }
+
+  function recheckBlockedGrant() {
+    const intent = grantIntent.current;
+    const outcome = blockedGrantOutcome;
+    const currentActor = actor;
+    if (
+      !recoveryBlocked ||
+      !intent ||
+      !outcome ||
+      !currentActor ||
+      intent.actorTenantId !== currentActor.tenantId ||
+      intent.actorPersonId !== currentActor.personId ||
+      grantBusy.current
+    ) {
+      return;
+    }
+
+    // This checks the exact stored actor, target, amount, reason, and key. A
+    // missing marker is also safe here because the server outcome is already
+    // known; a changed or unreadable marker remains blocked.
+    if (!clearPendingGrant(intent)) {
+      setGrantMessage(
+        "The saved request is unavailable or no longer matches this exact grant. No new grant can be started; recheck after browser storage recovers.",
+      );
+      return;
+    }
+
+    grantIntent.current = null;
+    setPendingGrant(null);
+    setRecoveryBlocked(false);
+    setBlockedGrantOutcome(null);
+    if (outcome.kind === "confirmed") {
+      setMinutesText("");
+      setReason("");
+      setGrantState("success");
+    } else {
+      setGrantState("error");
+    }
+    setGrantMessage(outcome.message);
   }
 
   useEffect(() => {
@@ -863,6 +927,16 @@ export function MinuteAccountAdminPanel() {
                     ? "Retry same grant"
                     : "Grant minutes"}
               </button>
+              {blockedGrantOutcome ? (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={recheckBlockedGrant}
+                  disabled={!actor || grantState === "submitting"}
+                >
+                  Recheck saved grant
+                </button>
+              ) : null}
               {unresolved ? (
                 <span className={styles.warning}>
                   The exact amount and reason are locked so the same idempotency

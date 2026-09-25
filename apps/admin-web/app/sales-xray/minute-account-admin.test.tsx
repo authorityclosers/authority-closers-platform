@@ -178,6 +178,21 @@ describe("minute account administration", () => {
     expect(host.textContent).not.toContain("internal payload");
   });
 
+  it("explains server-side 422 lookup validation as an input problem", async () => {
+    await renderPanel();
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ detail: "private validation detail" }, 422),
+    );
+
+    await lookup("valid_learner");
+
+    expect(host.textContent).toContain(
+      "Enter an exact email address or public username.",
+    );
+    expect(host.textContent).not.toContain("Check the connection");
+    expect(host.textContent).not.toContain("private validation detail");
+  });
+
   it("resolves one exact learner and renders the server balance and separate upload ledger", async () => {
     await renderPanel();
     await loadTargetAccount();
@@ -549,6 +564,102 @@ describe("minute account administration", () => {
         (fetchMock.mock.calls[3] as [string, RequestInit])[1].headers,
       ).get("Idempotency-Key"),
     ).toBe("grant-key-1");
+  });
+
+  it("rechecks exact local recovery after a confirmed grant cannot clear its marker", async () => {
+    await renderPanel();
+    await loadTargetAccount();
+    changeValue(
+      host.querySelector<HTMLInputElement>("#minute-grant-amount")!,
+      "4",
+    );
+    changeValue(
+      host.querySelector<HTMLTextAreaElement>("#minute-grant-reason")!,
+      "Approved correction",
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        grant_id: "4b7f9793-f1cf-4cf6-a46e-32e29e26e5df",
+        minutes: 4,
+        replayed: false,
+        account: account({
+          revision: 5,
+          granted_seconds: 1_440,
+          available_seconds: 4_740,
+          available_minutes: 79,
+        }),
+      }),
+    );
+    const removeItem = vi
+      .spyOn(window.sessionStorage, "removeItem")
+      .mockImplementationOnce(() => {
+        throw new DOMException("storage unavailable", "SecurityError");
+      });
+
+    await click("Grant minutes");
+    expect(button("Retry same grant").disabled).toBe(true);
+    expect(button("Recheck saved grant").disabled).toBe(false);
+    expect(sessionStorage.length).toBe(1);
+
+    const storageKey = `ac.admin.sales-xray.minute-grant.v1:${target.tenant_id}:${target.person_id}`;
+    const originalRecord = sessionStorage.getItem(storageKey)!;
+    const changedRecord = JSON.parse(originalRecord) as Record<string, unknown>;
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({ ...changedRecord, reason: "Different request" }),
+    );
+    await click("Recheck saved grant");
+    expect(button("Retry same grant").disabled).toBe(true);
+    expect(host.textContent).toContain("no longer matches this exact grant");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    sessionStorage.setItem(storageKey, originalRecord);
+    removeItem.mockRestore();
+    await click("Recheck saved grant");
+
+    expect(sessionStorage.length).toBe(0);
+    expect(button("Grant minutes").disabled).toBe(false);
+    expect(host.textContent).toContain(
+      "Minute grant confirmed in the canonical account ledger.",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps a rejected grant blocked until its exact local marker is reconciled", async () => {
+    await renderPanel();
+    await loadTargetAccount();
+    changeValue(
+      host.querySelector<HTMLInputElement>("#minute-grant-amount")!,
+      "4",
+    );
+    changeValue(
+      host.querySelector<HTMLTextAreaElement>("#minute-grant-reason")!,
+      "Approved correction",
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ detail: "private validation detail" }, 422),
+    );
+    const removeItem = vi
+      .spyOn(window.sessionStorage, "removeItem")
+      .mockImplementationOnce(() => {
+        throw new DOMException("storage unavailable", "SecurityError");
+      });
+
+    await click("Grant minutes");
+    expect(button("Retry same grant").disabled).toBe(true);
+    expect(button("Recheck saved grant").disabled).toBe(false);
+    expect(host.textContent).not.toContain("private validation detail");
+    expect(sessionStorage.length).toBe(1);
+
+    removeItem.mockRestore();
+    await click("Recheck saved grant");
+
+    expect(sessionStorage.length).toBe(0);
+    expect(button("Grant minutes").disabled).toBe(false);
+    expect(host.textContent).toContain(
+      "The grant was rejected. Review the amount and reason, then refresh the balance.",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("does not let an older lookup overwrite the newer exact account result", async () => {
