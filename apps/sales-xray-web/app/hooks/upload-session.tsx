@@ -20,11 +20,32 @@ export type UploadMeta = Readonly<{
   sourceSha256: string | null;
 }>;
 
+/**
+ * The analysis start a saved upload's Analyse click authorized. It lives only
+ * in this document's memory; a reload or another view never recreates it.
+ */
+export type AnalysisStart =
+  | Readonly<{ state: "checking" | "starting" }>
+  | Readonly<{ state: "accepted" }>
+  | Readonly<{ state: "needs_action"; message: string }>;
+
+export type AnalysisStartSettled = Extract<
+  AnalysisStart,
+  { state: "accepted" | "needs_action" }
+>;
+
+const START_FAILED =
+  "Your recording is saved, but analysis could not be started. Open the call to try again.";
+
 type ActiveUpload = UploadMeta &
   (
     | Readonly<{ phase: "preparing" }>
     | Readonly<{ phase: "uploading" }>
-    | Readonly<{ phase: "saved"; submissionId: string }>
+    | Readonly<{
+        phase: "saved";
+        submissionId: string;
+        analysis?: AnalysisStart;
+      }>
     | Readonly<{
         phase: "interrupted";
         reconciliation: "unknown" | "missing";
@@ -80,6 +101,7 @@ export class UploadSessionStore {
   private snapshot: UploadSnapshot = IDLE;
   private readonly listeners = new Set<() => void>();
   private controller: AbortController | null = null;
+  private startController: AbortController | null = null;
   private live: Promise<unknown> | null = null;
   private retainedFile: Readonly<{ intentId: string; file: File }> | null =
     null;
@@ -143,8 +165,14 @@ export class UploadSessionStore {
       // old-account response cannot replace the explicit warning.
       currentController?.abort();
     } else if (this.snapshot.phase === "saved") {
+      const currentStart = this.startController;
+      this.startController = null;
       this.retainedFile = null;
+      this.guardUnload(false);
       this.publish(null);
+      // The authorization belonged to the previous identity; its late result
+      // is dropped because the start is no longer the current owner.
+      currentStart?.abort();
     }
   }
 
@@ -172,7 +200,9 @@ export class UploadSessionStore {
   /** Called only after the canonical logout endpoint confirms 204. */
   completeSignOut() {
     const currentController = this.controller;
+    const currentStart = this.startController;
     this.controller = null;
+    this.startController = null;
     this.live = null;
     this.retainedFile = null;
     this.accountKey = null;
@@ -183,16 +213,27 @@ export class UploadSessionStore {
     this.guardUnload(false);
     this.publish(null);
     currentController?.abort();
+    currentStart?.abort();
   }
 
-  /** Starts the transport. Only one upload may be live at a time. */
+  /**
+   * Starts the transport. Only one upload may be live at a time. `start`, when
+   * given, is the analysis start the same click authorized; the store owns it
+   * after the source is saved so client navigation cannot drop or repeat it.
+   */
   run<T extends { submissionId: string }>(
     meta: UploadMeta,
     file: File,
     task: (signal: AbortSignal) => Promise<T>,
+    start?: (
+      saved: T,
+      signal: AbortSignal,
+      onPhase: (phase: "checking" | "starting") => void,
+    ) => Promise<AnalysisStartSettled>,
   ): Promise<T> {
     if (this.signOutLocked) return Promise.reject(new UploadInProgressError());
     if (
+      this.startController ||
       this.snapshot.phase === "preparing" ||
       this.snapshot.phase === "uploading"
     )
@@ -229,7 +270,12 @@ export class UploadSessionStore {
               ...this.latestMeta(meta),
               phase: "saved",
               submissionId: result.submissionId,
+              ...(start ? { analysis: { state: "checking" } as const } : {}),
             });
+            if (start)
+              this.beginStart(result.submissionId, (signal, onPhase) =>
+                start(result, signal, onPhase),
+              );
           }
           return result;
         },
@@ -343,8 +389,17 @@ export class UploadSessionStore {
       this.publish({ ...current, phase: "uploading" });
   }
 
+  /** The saved call whose authorized analysis start is still running. */
+  startingSubmissionId(): string | null {
+    return this.startController && this.snapshot.phase === "saved"
+      ? this.snapshot.submissionId
+      : null;
+  }
+
   /** Clears a finished outcome once a view has shown or applied it. */
   settle(intentId: string) {
+    // Opening the call or remounting a view never drops a pending start.
+    if (this.startController) return;
     if (
       this.snapshot.phase === "saved" &&
       this.snapshot.intentId === intentId
@@ -367,6 +422,43 @@ export class UploadSessionStore {
       this.viewers -= 1;
       this.refreshViewed();
     };
+  }
+
+  private beginStart(
+    submissionId: string,
+    start: (
+      signal: AbortSignal,
+      onPhase: (phase: "checking" | "starting") => void,
+    ) => Promise<AnalysisStartSettled>,
+  ) {
+    const controller = new AbortController();
+    this.startController = controller;
+    // Leaving now would lose the in-memory authorization; ask first.
+    this.guardUnload(true);
+    const publishAnalysis = (analysis: AnalysisStart) => {
+      const current = this.snapshot;
+      if (
+        this.startController !== controller ||
+        current.phase !== "saved" ||
+        current.submissionId !== submissionId
+      )
+        return;
+      this.publish({ ...current, analysis });
+    };
+    const settle = (settled: AnalysisStartSettled) => {
+      if (this.startController !== controller) return;
+      publishAnalysis(settled);
+      this.startController = null;
+      this.guardUnload(false);
+    };
+    void Promise.resolve()
+      .then(() => {
+        if (controller.signal.aborted) throw new UploadCancelledError();
+        return start(controller.signal, (state) => publishAnalysis({ state }));
+      })
+      .then(settle, () =>
+        settle({ state: "needs_action", message: START_FAILED }),
+      );
   }
 
   private finish(next: ActiveUpload) {

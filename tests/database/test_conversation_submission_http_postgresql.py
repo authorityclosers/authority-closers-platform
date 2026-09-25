@@ -155,9 +155,7 @@ class AcquisitionC5HistoryBroker(OpenAIC5ReportingBroker):
                             "content": {
                                 "role": "model",
                                 "parts": [
-                                    {
-                                        "text": json.dumps(_coaching_output(), ensure_ascii=False)
-                                    }
+                                    {"text": json.dumps(_coaching_output(), ensure_ascii=False)}
                                 ],
                             },
                         }
@@ -688,31 +686,31 @@ def test_owned_acquisition_c5_benchmark_uses_retained_c2_c4_and_one_saved_openai
                 assert prior_report.status_code == 200, prior_report.text
                 assert prior_report.json()["run_id"] == str(prior_c5_run_id)
                 benchmark = AcquisitionC5BenchmarkApproval(
-                        id=benchmark_id,
-                        authorization_ref="ref:permission:synthetic-acquisition-c5-benchmark",
-                        tenant_id=setup.state.tenant_id,
-                        owner_person_id=owner_id,
-                        submission_id=submission_id,
-                        recording_id=recording.id,
-                        processing_person_id=processor_id,
-                        processing_lease_id=link.processing_lease_id,
-                        usage_id=link.usage_id,
-                        source_sha256=recording.source_sha256,
-                        source_revision=recording.source_revision,
-                        generation=recording.generation,
-                        stage_approval_id=stage_approval_id,
-                        configuration_sha256=saved_config.digest,
-                        analysis_settings_revision=5,
-                        analysis_settings_sha256=settings_sha256,
-                        coaching_prompt_revision="coaching-v5",
-                        report_language="en",
-                        output_profile="detailed",
-                        profile_sha256=profile_sha256,
-                        issued_at_epoch=issued_at,
-                        expires_at_epoch=expires_at,
-                        max_cost_paise=2_200,
-                        max_completion_tokens=8_000,
-                    )
+                    id=benchmark_id,
+                    authorization_ref="ref:permission:synthetic-acquisition-c5-benchmark",
+                    tenant_id=setup.state.tenant_id,
+                    owner_person_id=owner_id,
+                    submission_id=submission_id,
+                    recording_id=recording.id,
+                    processing_person_id=processor_id,
+                    processing_lease_id=link.processing_lease_id,
+                    usage_id=link.usage_id,
+                    source_sha256=recording.source_sha256,
+                    source_revision=recording.source_revision,
+                    generation=recording.generation,
+                    stage_approval_id=stage_approval_id,
+                    configuration_sha256=saved_config.digest,
+                    analysis_settings_revision=5,
+                    analysis_settings_sha256=settings_sha256,
+                    coaching_prompt_revision="coaching-v5",
+                    report_language="en",
+                    output_profile="detailed",
+                    profile_sha256=profile_sha256,
+                    issued_at_epoch=issued_at,
+                    expires_at_epoch=expires_at,
+                    max_cost_paise=2_200,
+                    max_completion_tokens=8_000,
+                )
 
                 configured_bundle = HostedApprovalBundle.model_validate_json(
                     base_bundle.model_copy(
@@ -742,9 +740,7 @@ def test_owned_acquisition_c5_benchmark_uses_retained_c2_c4_and_one_saved_openai
                 invalid_scopes = (
                     (
                         benchmark.model_copy(update={"source_sha256": invalid_source_sha256}),
-                        benchmark_stage.model_copy(
-                            update={"source_sha256": invalid_source_sha256}
-                        ),
+                        benchmark_stage.model_copy(update={"source_sha256": invalid_source_sha256}),
                     ),
                     (
                         benchmark.model_copy(
@@ -812,8 +808,7 @@ def test_owned_acquisition_c5_benchmark_uses_retained_c2_c4_and_one_saved_openai
                     issued_quote = await database.get(ConversationQuote, UUID(quote["id"]))
                     assert issued_quote is not None
                     assert (
-                        issued_quote.quote["provider_configuration_sha256"]
-                        == saved_config.digest
+                        issued_quote.quote["provider_configuration_sha256"] == saved_config.digest
                     )
                     assert issued_quote.execution_permission[
                         "acquisition_c5_benchmark_approval_id"
@@ -851,21 +846,25 @@ def test_owned_acquisition_c5_benchmark_uses_retained_c2_c4_and_one_saved_openai
                     c5 = next(
                         item
                         for item in c5_tasks
-                            if item.intent["request"].get("acquisition_c5_benchmark_approval_id")
+                        if item.intent["request"].get("acquisition_c5_benchmark_approval_id")
                         == str(benchmark_id)
                     )
                     assert c5.state == "completed" and c5.run_id != prior_c5_run_id
-                    assert (
-                        c5.intent["request"]["acquisition_c5_benchmark_approval_id"]
-                        == str(benchmark_id)
+                    assert c5.intent["request"]["acquisition_c5_benchmark_approval_id"] == str(
+                        benchmark_id
                     )
-                    assert await database.scalar(
-                        select(func.count()).select_from(ConversationInferenceTask).where(
-                            ConversationInferenceTask.recording_id == recording_id,
-                            ConversationInferenceTask.stage.in_(("C2", "C4")),
-                            ConversationInferenceTask.state == "completed",
+                    assert (
+                        await database.scalar(
+                            select(func.count())
+                            .select_from(ConversationInferenceTask)
+                            .where(
+                                ConversationInferenceTask.recording_id == recording_id,
+                                ConversationInferenceTask.stage.in_(("C2", "C4")),
+                                ConversationInferenceTask.state == "completed",
+                            )
                         )
-                    ) == 2
+                        == 2
+                    )
                     assert await database.get(ConversationReportDraft, prior_draft.id) is not None
                 benchmark_report = await client.get(path + "/report")
                 assert benchmark_report.status_code == 200, benchmark_report.text

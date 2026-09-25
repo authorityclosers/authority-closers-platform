@@ -174,6 +174,37 @@ async function consent() {
   await flush();
 }
 
+const quotes = () =>
+  calls.filter(
+    ({ path, init }) =>
+      path.endsWith(`/submissions/${submissionId}/plan/quote`) &&
+      init.method === "POST",
+  );
+const accepts = () =>
+  calls.filter(
+    ({ path, init }) =>
+      path.endsWith(`/submissions/${submissionId}/plan`) &&
+      init.method === "POST",
+  );
+async function settleAll() {
+  for (let n = 0; n < 6; n++) await flush();
+}
+async function analyseThenOpenAnotherCall() {
+  deferSourcePut = true;
+  await mountWithUploadSession();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await navigateToSavedCallWithUploadSession(secondSubmissionId);
+}
+async function saveDeferredSource() {
+  resolveDeferredSourcePut?.(
+    response({ ...progress, duration_ms: 5000, allowance }, 202),
+  );
+  await settleAll();
+}
+
 beforeEach(() => {
   navigateToAccount.mockReset();
   replaceToLogin.mockReset();
@@ -425,6 +456,15 @@ it("keeps the new account home clear of empty recent-call panels", async () => {
   ).toHaveLength(1);
 });
 
+it("does not request acquisition history while the entry is disabled", async () => {
+  entryBody = { ...entry, enabled: false };
+  await mount();
+  expect(container.querySelector(".calls-library-preview")).toBeNull();
+  expect(
+    calls.filter(({ path }) => path.endsWith("/submissions")),
+  ).toHaveLength(0);
+});
+
 it("shows real account recent calls on home and opens the selected saved report", async () => {
   libraryBody = {
     submissions: [
@@ -575,10 +615,17 @@ it("keeps one source upload alive across client navigation and shows the confirm
   );
   await flush();
 
+  await settleAll();
+  // The root store, not the unmounted intake, owns the start this click
+  // authorized: one quote and one acceptance for the saved call.
   expect(
-    container.querySelector('[data-upload-indicator="saved"]'),
+    container.querySelector(
+      '[data-upload-indicator="saved"][data-analysis-start="accepted"]',
+    ),
   ).not.toBeNull();
-  expect(container.textContent).toContain("Upload saved");
+  expect(container.textContent).toContain("Analysis started");
+  expect(quotes()).toHaveLength(1);
+  expect(accepts()).toHaveLength(1);
   expect(
     container.querySelector('a[href="/?call=' + submissionId + '"]'),
   ).not.toBeNull();
@@ -592,6 +639,106 @@ it("keeps one source upload alive across client navigation and shows the confirm
       ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
+});
+
+it("waits for native file checks after navigating away mid-upload, then starts once across remounts", async () => {
+  await analyseThenOpenAnotherCall();
+  progressOverride = { ...progress, local_state: "running" };
+  await saveDeferredSource();
+
+  expect(
+    container.querySelector('[data-analysis-start="checking"]'),
+  ).not.toBeNull();
+  expect(container.textContent).toContain("Checking recording");
+  expect(quotes()).toHaveLength(0);
+  expect(
+    container.querySelector('[aria-label="Dismiss upload status"]'),
+  ).toBeNull();
+
+  // Opening the saved call remounts the studio. It mirrors the root-owned
+  // start and must neither settle it nor quote on its own.
+  await navigateToSavedCallWithUploadSession(submissionId);
+  await settleAll();
+  expect(quotes()).toHaveLength(0);
+  progressOverride = undefined;
+  await act(async () => {
+    vi.advanceTimersByTime(3_000);
+  });
+  await settleAll();
+  await navigateToSavedCallWithUploadSession(secondSubmissionId);
+  await settleAll();
+
+  expect(quotes()).toHaveLength(1);
+  expect(accepts()).toHaveLength(1);
+  expect(
+    container.querySelector('[data-analysis-start="accepted"]'),
+  ).not.toBeNull();
+});
+
+it("reconciles a lost root-owned acceptance with the owner plan and never posts it again", async () => {
+  planFailure = { status: 503, body: {} };
+  savedPlanBody = {
+    ...plan,
+    accepted: true,
+    state: "active",
+    current_stage: "C2",
+  };
+  await analyseThenOpenAnotherCall();
+  await saveDeferredSource();
+
+  expect(quotes()).toHaveLength(1);
+  expect(accepts()).toHaveLength(1);
+  expect(
+    calls.some(
+      ({ path, init }) =>
+        path.endsWith(`/submissions/${submissionId}/plan`) && !init.method,
+    ),
+  ).toBe(true);
+  expect(
+    container.querySelector('[data-analysis-start="accepted"]'),
+  ).not.toBeNull();
+});
+
+it("settles never-ready native checks to a visible action and keeps the saved call", async () => {
+  await analyseThenOpenAnotherCall();
+  progressOverride = { ...progress, local_state: "running" };
+  await saveDeferredSource();
+  for (let n = 0; n < 41; n++) {
+    await act(async () => {
+      vi.advanceTimersByTime(3_000);
+    });
+    await flush();
+  }
+  await settleAll();
+
+  expect(
+    container.querySelector('[data-analysis-start="needs_action"]'),
+  ).not.toBeNull();
+  expect(container.textContent).toContain("file checks are still running");
+  expect(container.textContent).not.toContain("Upload not confirmed");
+  expect(quotes()).toHaveLength(0);
+  expect(accepts()).toHaveLength(0);
+  expect(
+    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+  ).not.toBeNull();
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+});
+
+it("never recreates the Analyse authorization after a full reload", async () => {
+  await analyseThenOpenAnotherCall();
+  // A reload discards the document, including the root store and its File.
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await navigateToSavedCallWithUploadSession(submissionId);
+  await settleAll();
+  await act(async () => {
+    vi.advanceTimersByTime(6_000);
+  });
+  await settleAll();
+
+  expect(quotes()).toHaveLength(0);
+  expect(accepts()).toHaveLength(0);
+  expect(container.querySelector("[data-analysis-start]")).toBeNull();
 });
 
 it("reconciles the locally hashed source after a lost PUT response without a second PUT", async () => {

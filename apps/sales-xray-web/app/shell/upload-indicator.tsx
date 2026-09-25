@@ -57,6 +57,9 @@ export function UploadIndicator({
       </aside>
     );
   const upload = snapshot;
+  const analysis = upload.phase === "saved" ? upload.analysis : undefined;
+  const starting =
+    analysis?.state === "checking" || analysis?.state === "starting";
   const settle = () => store.settle(upload.intentId);
   const openIntake = (event: MouseEvent<HTMLAnchorElement>) => {
     if (upload.phase === "interrupted") settle();
@@ -75,9 +78,12 @@ export function UploadIndicator({
       className={styles.indicator}
       aria-label="Upload status"
       data-upload-indicator={upload.phase}
+      data-analysis-start={analysis?.state}
     >
       <span className={styles.mark} aria-hidden="true">
-        {upload.phase === "preparing" || upload.phase === "uploading" ? (
+        {upload.phase === "preparing" ||
+        upload.phase === "uploading" ||
+        starting ? (
           <span className={styles.live} />
         ) : (
           <Glyph
@@ -92,9 +98,17 @@ export function UploadIndicator({
             ? "Preparing private upload"
             : upload.phase === "uploading"
               ? "Uploading privately"
-              : upload.phase === "saved"
-                ? "Upload saved"
-                : "Upload not confirmed"}
+              : analysis?.state === "checking"
+                ? "Checking recording"
+                : analysis?.state === "starting"
+                  ? "Starting analysis"
+                  : analysis?.state === "accepted"
+                    ? "Analysis started"
+                    : analysis?.state === "needs_action"
+                      ? "Recording saved · needs action"
+                      : upload.phase === "saved"
+                        ? "Upload saved"
+                        : "Upload not confirmed"}
         </strong>
         <span className={styles.name} title={upload.fileName}>
           {upload.fileName}
@@ -104,11 +118,19 @@ export function UploadIndicator({
             ? `${fileSizeLabel(upload.totalBytes)} · preparing your recording`
             : upload.phase === "uploading"
               ? `${fileSizeLabel(upload.totalBytes)} · keep this tab open until it’s saved`
-              : upload.phase === "saved"
-                ? "The server has your recording."
-                : upload.reconciliation === "missing"
-                  ? "The server did not find it. Review current consent before trying again."
-                  : "Check whether it arrived before uploading again."}
+              : analysis?.state === "checking"
+                ? "Saved. The server is checking the file before analysis starts."
+                : analysis?.state === "starting"
+                  ? "Saved. Starting the analysis you approved."
+                  : analysis?.state === "accepted"
+                    ? "Your report will appear in Calls when it’s ready."
+                    : analysis?.state === "needs_action"
+                      ? analysis.message
+                      : upload.phase === "saved"
+                        ? "The server has your recording."
+                        : upload.reconciliation === "missing"
+                          ? "The server did not find it. Review current consent before trying again."
+                          : "Check whether it arrived before uploading again."}
         </span>
       </div>
       <div className={styles.actions}>
@@ -131,7 +153,7 @@ export function UploadIndicator({
               : "Check upload"}
           </Link>
         )}
-        {upload.phase === "saved" ? (
+        {upload.phase === "saved" && !starting ? (
           <button
             type="button"
             className={styles.dismiss}

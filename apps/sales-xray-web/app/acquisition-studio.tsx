@@ -88,7 +88,9 @@ import {
   UploadInProgressError,
   useUploadSession,
   useUploadSnapshot,
+  type AnalysisStartSettled,
 } from "./hooks/upload-session";
+import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
@@ -352,6 +354,19 @@ export function AcquisitionStudio({
           (!routeHasSpecificCall &&
             submission?.id === uploadSnapshot.submissionId))));
   const uploadUnresolved = uploadPhaseUnresolved && uploadMatchesCurrentView;
+  // The root store owns an analysis start authorized by an Analyse click. This
+  // view only mirrors it, so a remount can neither drop nor repeat it.
+  const rootAnalysis =
+    uploadSnapshot.phase === "saved" &&
+    submission !== null &&
+    uploadSnapshot.submissionId === submission.id
+      ? (uploadSnapshot.analysis ?? null)
+      : null;
+  const rootAnalysisState = rootAnalysis?.state ?? null;
+  const rootAnalysisMessage =
+    rootAnalysis?.state === "needs_action" ? rootAnalysis.message : "";
+  const rootStartPending =
+    rootAnalysisState === "checking" || rootAnalysisState === "starting";
   const onToken = useCallback((value: string) => setToken(value), []);
   const review = useProcessingReview(
     activeRequestedCallId ?? submission?.id ?? null,
@@ -997,7 +1012,7 @@ export function AcquisitionStudio({
       abort.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [submission, result, pollAttempt, review.requested]);
+  }, [submission, result, pollAttempt, review.requested, rootAnalysisState]);
 
   // Automatic acceptance is bound to the upload just consented to in this
   // mounted page. Restoring or refreshing a call never recreates that consent.
@@ -1217,6 +1232,14 @@ export function AcquisitionStudio({
       homeHref: resume?.homeHref ?? newCallHref(homeHref),
       sourceSha256: resume?.sourceSha256 ?? null,
     } as const;
+    const rootOwned = Boolean(uploadStore && !embedded);
+    // Everything the analysis start may use is fixed by this click.
+    const clickLanguage =
+      uploadMeta.reportLanguage ?? chosenReportLanguage.current ?? "en";
+    const clickSupportsLanguage = languageCapabilities.current;
+    const clickPaused = analysisPaused;
+    const clickPolicySha = consentedPolicySha ?? "";
+    let sentSha = "";
     const send = async (signal: AbortSignal) => {
       if (!session) {
         try {
@@ -1250,6 +1273,7 @@ export function AcquisitionStudio({
         n.toString(16).padStart(2, "0"),
       ).join("");
       uploadStore?.sourceDigest(id, sha);
+      sentSha = sha;
       setNewCallRequested(false);
       const outcome = await sendSource({
         id,
@@ -1279,11 +1303,36 @@ export function AcquisitionStudio({
         if (recoveredProgress) setProgress(recoveredProgress);
         setSubmission(bound);
         clearConsent();
-        setConsentedSubmissionId(bound.id);
+        // With a root store the start below is the single owner; the mounted
+        // auto-acceptance effect stays reserved for the embedded learner.
+        if (!rootOwned) setConsentedSubmissionId(bound.id);
         setPlanRequiresAction(false);
         setError("");
       }
       return outcome;
+    };
+    const start = async (
+      outcome: Awaited<ReturnType<typeof send>>,
+      signal: AbortSignal,
+      onPhase: (phase: "checking" | "starting") => void,
+    ): Promise<AnalysisStartSettled> => {
+      const started = await startAnalysis(
+        {
+          bound: outcome.bound,
+          sourceSha256: sentSha,
+          policySha256: clickPolicySha,
+          reportLanguage: clickLanguage,
+          supportsLanguage: clickSupportsLanguage,
+          paused: clickPaused,
+        },
+        signal,
+        onPhase,
+      );
+      if (started.kind === "needs_action")
+        return { state: "needs_action", message: started.message };
+      if (started.plan && active.current && !signal.aborted)
+        setPlan(started.plan);
+      return { state: "accepted" };
     };
 
     if (uploadStore && !embedded) {
@@ -1293,7 +1342,7 @@ export function AcquisitionStudio({
       setBusy("Preparing private upload…");
       setError("");
       try {
-        await uploadStore.run(uploadMeta, selected, send);
+        await uploadStore.run(uploadMeta, selected, send, start);
       } catch (error) {
         if (active.current) {
           setError(
@@ -1314,10 +1363,19 @@ export function AcquisitionStudio({
     });
   }
 
+  function settleStartNotice() {
+    if (
+      rootAnalysisState === "needs_action" &&
+      uploadSnapshot.phase === "saved"
+    )
+      uploadStore?.settle(uploadSnapshot.intentId);
+  }
+
   async function approvePlan() {
     if (
       analysisWriteBlocked ||
       analysisPaused ||
+      rootStartPending ||
       !submission ||
       !plan ||
       plan.expires_at_epoch * 1000 <= Date.now()
@@ -1328,6 +1386,7 @@ export function AcquisitionStudio({
     }
     const bound = submission;
     const shown = plan;
+    settleStartNotice();
     await operation("Starting your report…", async (signal) => {
       try {
         await acceptPlanRequest(bound, shown, signal);
@@ -1344,9 +1403,16 @@ export function AcquisitionStudio({
   }
 
   async function freshPlan() {
-    if (!submission || analysisPaused || analysisWriteBlocked) return;
+    if (
+      !submission ||
+      analysisPaused ||
+      analysisWriteBlocked ||
+      rootStartPending
+    )
+      return;
     const bound = submission;
     await operation("Checking available analysis…", async (signal) => {
+      settleStartNotice();
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
       const next = await getPlan(bound, signal);
       if (!signal.aborted) {
@@ -1363,6 +1429,7 @@ export function AcquisitionStudio({
       !submission ||
       analysisPaused ||
       analysisWriteBlocked ||
+      rootStartPending ||
       result ||
       progress?.local_state !== "completed" ||
       processingTerminal
@@ -1370,6 +1437,7 @@ export function AcquisitionStudio({
       return;
     const bound = submission;
     await operation("Starting your report…", async (signal) => {
+      settleStartNotice();
       // Retry the same quote/acceptance identity. Creating a new attempt or
       // recovering held provider work remains a separate server decision.
       if (plan?.accepted) {
@@ -1616,12 +1684,21 @@ export function AcquisitionStudio({
         ? "Preparing private upload…"
         : uploadMatchesCurrentView && uploadSnapshot.phase === "uploading"
           ? "Uploading privately…"
-          : busy,
+          : rootAnalysisState === "checking"
+            ? "Checking your recording…"
+            : rootAnalysisState === "starting"
+              ? "Starting analysis…"
+              : busy,
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
         ? "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit."
-        : error,
+        : rootAnalysisState === "needs_action" &&
+            !plan?.accepted &&
+            !progress?.automatic_progression &&
+            !result
+          ? rootAnalysisMessage
+          : error,
     statusIssue: review.frame ? "" : statusIssue,
     checkingStatus: review.frame ? false : checkingStatus,
     requestedCallEntryState: review.frame
@@ -1675,7 +1752,9 @@ export function AcquisitionStudio({
       progress.local_state === "completed" &&
       latestStage(progress, "C2")?.state === "completed";
     const waitingForApproval = Boolean(
-      !plan?.accepted &&
+      !rootStartPending &&
+        rootAnalysisState !== "accepted" &&
+        !plan?.accepted &&
         !progress?.automatic_progression &&
         progress?.local_state === "completed" &&
         !processingNeedsAttention &&
@@ -2869,6 +2948,7 @@ export function AcquisitionStudio({
                 <AcquisitionLowerPanels compact={displayFileSelected} />
               )}
               {!embedded &&
+                entry?.enabled === true &&
                 access?.authenticated === true &&
                 !displayFileSelected &&
                 !submission &&

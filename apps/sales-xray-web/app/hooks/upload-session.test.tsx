@@ -5,6 +5,7 @@ import {
   UploadInProgressError,
   UploadReconciliationRequiredError,
   UploadSessionStore,
+  type AnalysisStartSettled,
   type UploadMeta,
 } from "./upload-session";
 
@@ -61,6 +62,122 @@ describe("root upload session", () => {
       submissionId: firstMeta.intentId,
     });
     expect(store.fileFor(firstMeta.intentId)).toBeNull();
+  });
+
+  it("owns the authorized analysis start after save and keeps it until it settles", async () => {
+    const store = new UploadSessionStore();
+    const add = vi.spyOn(window, "addEventListener");
+    const started = deferred<AnalysisStartSettled>();
+    const start = vi.fn(
+      (
+        _saved: { submissionId: string },
+        _signal: AbortSignal,
+        onPhase: (phase: "checking" | "starting") => void,
+      ) => {
+        onPhase("starting");
+        return started.promise;
+      },
+    );
+    await store.run(
+      firstMeta,
+      new File(["audio"], "call.wav"),
+      async () => ({ submissionId: firstMeta.intentId }),
+      start,
+    );
+    await vi.waitFor(() =>
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "saved",
+        analysis: { state: "starting" },
+      }),
+    );
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(store.startingSubmissionId()).toBe(firstMeta.intentId);
+    expect(add).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+
+    // Open call, dismiss or a remount cannot drop the pending start.
+    store.settle(firstMeta.intentId);
+    expect(store.getSnapshot()).toMatchObject({ phase: "saved" });
+    await expect(
+      store.run(secondMeta, new File(["other"], "other.wav"), async () => ({
+        submissionId: secondMeta.intentId,
+      })),
+    ).rejects.toBeInstanceOf(UploadInProgressError);
+
+    started.resolve({ state: "accepted" });
+    await vi.waitFor(() =>
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "saved",
+        submissionId: firstMeta.intentId,
+        analysis: { state: "accepted" },
+      }),
+    );
+    expect(store.startingSubmissionId()).toBeNull();
+    expect(start).toHaveBeenCalledTimes(1);
+    store.settle(firstMeta.intentId);
+    expect(store.getSnapshot()).toEqual({ phase: "idle" });
+    add.mockRestore();
+  });
+
+  it("keeps the saved call and shows an action when the start fails", async () => {
+    const store = new UploadSessionStore();
+    await store.run(
+      firstMeta,
+      new File(["audio"], "call.wav"),
+      async () => ({ submissionId: firstMeta.intentId }),
+      async () => {
+        throw new TypeError("start interrupted");
+      },
+    );
+    await vi.waitFor(() =>
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "saved",
+        submissionId: firstMeta.intentId,
+        analysis: { state: "needs_action" },
+      }),
+    );
+    expect(store.startingSubmissionId()).toBeNull();
+  });
+
+  it("aborts a pending start on account change or sign-out without late publication", async () => {
+    for (const change of ["account", "signout"] as const) {
+      const store = new UploadSessionStore();
+      store.observeAccount({
+        status: "authenticated",
+        authenticated: true,
+        context: { personId: "p1", sessionId: "s1", tenantId: "t1" },
+      });
+      const seen: { signal: AbortSignal | null } = { signal: null };
+      const started = deferred<AnalysisStartSettled>();
+      await store.run(
+        firstMeta,
+        new File(["audio"], "call.wav"),
+        async () => ({ submissionId: firstMeta.intentId }),
+        (_saved, signal) => {
+          seen.signal = signal;
+          return started.promise;
+        },
+      );
+      await vi.waitFor(() => expect(seen.signal).not.toBeNull());
+
+      if (change === "account")
+        store.observeAccount({
+          status: "authenticated",
+          authenticated: true,
+          context: { personId: "p2", sessionId: "s2", tenantId: "t1" },
+        });
+      else {
+        expect(store.beginSignOut()).toBe(true);
+        store.completeSignOut();
+      }
+      expect(seen.signal!.aborted).toBe(true);
+      expect(store.getSnapshot()).toEqual({ phase: "idle" });
+
+      started.resolve({ state: "accepted" });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(store.getSnapshot()).toEqual({ phase: "idle" });
+      expect(store.startingSubmissionId()).toBeNull();
+    }
   });
 
   it("does not dismiss an unknown outcome or replace its File before reconciliation", async () => {
