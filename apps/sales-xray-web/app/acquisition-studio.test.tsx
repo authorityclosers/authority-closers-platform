@@ -57,6 +57,7 @@ let existing: boolean,
 let reportBody: unknown;
 let activeReportSubmissionId: string;
 let entryBody: unknown;
+let libraryBody: unknown;
 let quoteBody: unknown;
 let savedPlanBody: unknown;
 let progressOverride: unknown;
@@ -191,6 +192,7 @@ beforeEach(() => {
   reportBody = envelope;
   activeReportSubmissionId = submissionId;
   entryBody = entry;
+  libraryBody = { submissions: [], next_cursor: null };
   quoteBody = plan;
   savedPlanBody = null;
   progressOverride = undefined;
@@ -245,6 +247,7 @@ beforeEach(() => {
       if (path.endsWith("/entry")) return response(entryBody);
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
+      if (path.endsWith("/submissions")) return response(libraryBody);
       if (path.endsWith("/upload-policy")) return response(policy);
       if (path.endsWith("/session")) {
         if (init.method === "POST") {
@@ -410,6 +413,50 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+it("keeps the new account home clear of empty recent-call panels", async () => {
+  await mount();
+  expect(container.querySelector(".calls-library-preview")).toBeNull();
+  expect(container.textContent).not.toContain("No saved calls yet");
+  expect(container.textContent).not.toContain("No recent activity");
+  expect(
+    calls.filter(({ path }) => path.endsWith("/submissions")),
+  ).toHaveLength(1);
+});
+
+it("shows real account recent calls on home and opens the selected saved report", async () => {
+  libraryBody = {
+    submissions: [
+      {
+        submission_id: secondSubmissionId,
+        created_at: "2026-09-25T08:30:00Z",
+        duration_seconds: 61,
+        state: "completed",
+        has_report: true,
+      },
+    ],
+    next_cursor: null,
+  };
+  await mount();
+  const preview = container.querySelector(".calls-library-preview");
+  expect(preview?.textContent).toContain("Recent calls");
+  expect(preview?.textContent).toContain("Report ready");
+  expect(preview?.textContent).toContain("About 1:01");
+  expect(preview?.querySelector('a[href="/calls"]')?.textContent).toContain(
+    "View all calls",
+  );
+  expect(container.querySelectorAll("main")).toHaveLength(1);
+  await act(async () =>
+    preview?.querySelector<HTMLButtonElement>(".calls-library-item")?.click(),
+  );
+  expect(navigateToAccount).toHaveBeenCalledWith(
+    `/?call=${secondSubmissionId}`,
+  );
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(
+    secondSubmissionId,
+  );
+  expect(calls.some(({ init }) => init.method === "POST")).toBe(false);
 });
 
 it("opens account access on guest file selection and keeps Analyze gated without a guest upload", async () => {

@@ -25,6 +25,7 @@ import {
   type CallStudioVariant,
 } from "./call-studio";
 import { AcquisitionShell } from "./acquisition-shell";
+import { CallsLibrary } from "./calls-library";
 import {
   AcquisitionGuideRail,
   AcquisitionLowerPanels,
@@ -2867,6 +2868,12 @@ export function AcquisitionStudio({
               {embedded && !submission && !report && !deletionOnlyId && (
                 <AcquisitionLowerPanels compact={displayFileSelected} />
               )}
+              {!embedded &&
+                access?.authenticated === true &&
+                !displayFileSelected &&
+                !submission &&
+                !report &&
+                !deletionOnlyId && <CallsLibrary preview />}
             </div>
             {(embedded || stagedFiles.length >= 2) &&
               !report &&
