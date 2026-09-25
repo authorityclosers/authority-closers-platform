@@ -38,6 +38,7 @@ let requests: { path: string; init: RequestInit }[];
 let workspaceStatus: number, entryStatus: number, sessionStatus: number;
 let profileEligible: boolean;
 let accepted: boolean, claimed: boolean, needsClaim: boolean;
+let sourcePresent: boolean;
 let navigate: ReturnType<typeof vi.spyOn>;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -90,6 +91,7 @@ beforeEach(() => {
   profileEligible = true;
   accepted = needsClaim = false;
   claimed = true;
+  sourcePresent = true;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -160,11 +162,13 @@ beforeEach(() => {
         claimed = true;
         return json({ state: "claimed", allowance: remaining });
       }
-      if (path.endsWith("/source") && init.method === "PUT")
+      if (path.endsWith("/source") && init.method === "PUT") {
+        sourcePresent = true;
         return json(
           { ...progress, duration_ms: 5000, allowance: remaining },
           202,
         );
+      }
       if (path.endsWith("/plan/quote")) return json(plan, 201);
       if (path.endsWith("/plan")) {
         accepted = true;
@@ -182,12 +186,14 @@ beforeEach(() => {
             access: claimed ? "claimed_account" : "guest_preview",
           },
         });
-      if (path.endsWith(`/submissions/${submissionId}`))
+      if (path.endsWith(`/submissions/${submissionId}`)) {
+        if (!sourcePresent) return json({ detail: "Not found" }, 404);
         return json({
           ...progress,
           has_report: accepted,
           state: accepted ? "report_ready" : "ready",
         });
+      }
       if (path.endsWith("/submissions"))
         return json({
           submissions: [
@@ -215,6 +221,7 @@ afterEach(async () => {
 });
 
 it("runs the actual learner upload and report journey under one Academy main and shared allowance", async () => {
+  sourcePresent = false;
   await mount();
   expect(host.querySelectorAll("main")).toHaveLength(1);
   expect(
@@ -260,6 +267,14 @@ it("runs the actual learner upload and report journey under one Academy main and
   await click("Moments");
   expect(host.textContent).toContain("कल timing discuss करूया.");
   expect(requests.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  const sourceUploadIndex = requests.findIndex(
+    ({ init }) => init.method === "PUT",
+  );
+  expect(
+    requests
+      .slice(0, sourceUploadIndex)
+      .some(({ path }) => path.endsWith(`/submissions/${submissionId}`)),
+  ).toBe(true);
   expect(requests.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
   expect(requests.filter(({ path }) => path.endsWith("/session"))).toHaveLength(
     1,

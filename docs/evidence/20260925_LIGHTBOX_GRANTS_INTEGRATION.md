@@ -45,3 +45,16 @@ web image to repair v5 settings; updating only Sales Xray web is insufficient.
 Preserve active provider holds, credentials, tenant/consent boundaries and
 canonical release activation. No production provider benchmark, credential
 activation, successful real report or complete v0.2 claim is established here.
+
+## Learner upload fixture correction after CI
+
+CI on `02130b0c6277e9745c65ed417648f5f1fb94dc91` passed the compiled
+account/upload/report/relogin/deletion browser journey, but the learner unit
+journey returned an existing canonical submission before its first upload. The
+new GET-before-PUT reconciliation correctly skipped a duplicate PUT, exposing
+that stale fixture. The fixture now returns 404 until a successful source PUT.
+The journey still requires exactly one source upload and now checks that the
+canonical lookup precedes it. No application behavior or protection changed.
+
+The corrected learner journey passed all 10 tests locally under Node 24.21.0.
+The full required CI suite must pass on the successor commit before deployment.
