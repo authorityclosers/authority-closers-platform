@@ -81,7 +81,8 @@ export class UploadSessionStore {
   private readonly listeners = new Set<() => void>();
   private controller: AbortController | null = null;
   private live: Promise<unknown> | null = null;
-  private retainedFile: Readonly<{ intentId: string; file: File }> | null = null;
+  private retainedFile: Readonly<{ intentId: string; file: File }> | null =
+    null;
   private viewers = 0;
   private accountKey: string | null = null;
   private accountObserved = false;
@@ -190,8 +191,7 @@ export class UploadSessionStore {
     file: File,
     task: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
-    if (this.signOutLocked)
-      return Promise.reject(new UploadInProgressError());
+    if (this.signOutLocked) return Promise.reject(new UploadInProgressError());
     if (
       this.snapshot.phase === "preparing" ||
       this.snapshot.phase === "uploading"
@@ -320,7 +320,11 @@ export class UploadSessionStore {
     this.controller = null;
     this.live = null;
     this.guardUnload(false);
-    this.publish({ ...current, phase: "interrupted", reconciliation: "missing" });
+    this.publish({
+      ...current,
+      phase: "interrupted",
+      reconciliation: "missing",
+    });
   }
 
   /** Aborts the transport. The outcome stays unknown until it is read back. */

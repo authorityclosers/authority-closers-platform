@@ -246,7 +246,9 @@ export function AcquisitionStudio({
     null,
   );
   const consentCurrent = Boolean(
-    consent && policy?.policy_sha256 && consentedPolicySha === policy.policy_sha256,
+    consent &&
+      policy?.policy_sha256 &&
+      consentedPolicySha === policy.policy_sha256,
   );
   const clearConsent = useCallback(() => {
     setConsent(false);
@@ -316,9 +318,7 @@ export function AcquisitionStudio({
   const interruptedIntentId =
     uploadSnapshot.phase === "interrupted" ? uploadSnapshot.intentId : null;
   const interruptedSourceSha =
-    uploadSnapshot.phase === "interrupted"
-      ? uploadSnapshot.sourceSha256
-      : null;
+    uploadSnapshot.phase === "interrupted" ? uploadSnapshot.sourceSha256 : null;
   const activeUploadIntentId =
     uploadSnapshot.phase === "preparing" ||
     uploadSnapshot.phase === "uploading" ||
@@ -326,7 +326,8 @@ export function AcquisitionStudio({
       ? uploadSnapshot.intentId
       : null;
   const uploadHomeHref =
-    uploadSnapshot.phase !== "idle" && uploadSnapshot.phase !== "account_changed"
+    uploadSnapshot.phase !== "idle" &&
+    uploadSnapshot.phase !== "account_changed"
       ? uploadSnapshot.homeHref
       : "/";
   const uploadHomeIsNewIntake = new URL(
@@ -1526,14 +1527,13 @@ export function AcquisitionStudio({
     progress: review.frame?.progress ?? progress,
     result: review.frame ? null : result,
     plan: review.frame ? null : plan,
-    busy:
-      review.frame
-        ? ""
-        : uploadMatchesCurrentView && uploadSnapshot.phase === "preparing"
-          ? "Preparing private upload…"
-          : uploadMatchesCurrentView && uploadSnapshot.phase === "uploading"
-            ? "Uploading privately…"
-            : busy,
+    busy: review.frame
+      ? ""
+      : uploadMatchesCurrentView && uploadSnapshot.phase === "preparing"
+        ? "Preparing private upload…"
+        : uploadMatchesCurrentView && uploadSnapshot.phase === "uploading"
+          ? "Uploading privately…"
+          : busy,
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"

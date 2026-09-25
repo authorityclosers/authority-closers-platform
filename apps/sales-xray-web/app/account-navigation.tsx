@@ -8,7 +8,10 @@ import {
   rememberPendingUpload,
   rememberSubmission,
 } from "./acquisition-client";
-import { useUploadSession, type UploadSessionStore } from "./hooks/upload-session";
+import {
+  useUploadSession,
+  type UploadSessionStore,
+} from "./hooks/upload-session";
 import { useWorkspaceAccess } from "./workspace-access";
 
 const SIGN_OUT_ERROR = "We couldn’t confirm sign out. Try again.";
@@ -60,11 +63,7 @@ export function AccountNavigation({ compact = false }: { compact?: boolean }) {
   async function signOut() {
     if (inFlight.current) return;
     const unresolved = upload?.requiresSignOutConfirmation() ?? false;
-    if (
-      unresolved &&
-      !window.confirm(SIGN_OUT_UPLOAD_WARNING)
-    )
-      return;
+    if (unresolved && !window.confirm(SIGN_OUT_UPLOAD_WARNING)) return;
     inFlight.current = true;
     setSigningOut(true);
     setError("");

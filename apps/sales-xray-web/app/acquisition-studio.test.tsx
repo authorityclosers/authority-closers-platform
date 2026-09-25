@@ -493,18 +493,20 @@ it("keeps one source upload alive across client navigation and shows the confirm
   await flush();
 
   expect(
-    calls.filter(({ path, init }) =>
-      path.endsWith("/source") && init.method === "PUT",
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
   expect(resolveDeferredSourcePut).toBeTypeOf("function");
 
   await navigateToSavedCallWithUploadSession(secondSubmissionId);
-  expect(container.querySelector('[data-upload-indicator="uploading"]'))
-    .not.toBeNull();
+  expect(
+    container.querySelector('[data-upload-indicator="uploading"]'),
+  ).not.toBeNull();
   expect(container.textContent).toContain("Uploading privately");
-  expect(container.querySelector('[aria-label="Sales call report"]'))
-    .not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
   expect(container.textContent).toContain(secondReportSummary);
   expect(
     container.querySelector('[aria-label="Dismiss upload status"]'),
@@ -526,8 +528,9 @@ it("keeps one source upload alive across client navigation and shows the confirm
   );
   await flush();
 
-  expect(container.querySelector('[data-upload-indicator="saved"]'))
-    .not.toBeNull();
+  expect(
+    container.querySelector('[data-upload-indicator="saved"]'),
+  ).not.toBeNull();
   expect(container.textContent).toContain("Upload saved");
   expect(
     container.querySelector('a[href="/?call=' + submissionId + '"]'),
@@ -538,8 +541,8 @@ it("keeps one source upload alive across client navigation and shows the confirm
     container.querySelector('[aria-label="Dismiss upload status"]'),
   ).not.toBeNull();
   expect(
-    calls.filter(({ path, init }) =>
-      path.endsWith("/source") && init.method === "PUT",
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
 });
@@ -554,8 +557,8 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
   await flush();
 
   expect(
-    calls.filter(({ path, init }) =>
-      path.endsWith("/source") && init.method === "PUT",
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
   const sourcePutIndex = calls.findIndex(
@@ -569,21 +572,21 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
   expect(sourceReadIndices.some((index) => index < sourcePutIndex)).toBe(true);
   expect(
     sourceReadIndices.some(
-      (index) =>
-        index > sourcePutIndex && !calls[index]?.init.signal?.aborted,
+      (index) => index > sourcePutIndex && !calls[index]?.init.signal?.aborted,
     ),
   ).toBe(true);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
 
   await navigateToSavedCallWithUploadSession(secondSubmissionId);
-  expect(container.querySelector('[data-upload-indicator="saved"]'))
-    .not.toBeNull();
+  expect(
+    container.querySelector('[data-upload-indicator="saved"]'),
+  ).not.toBeNull();
   expect(
     container.querySelector('a[href="/?call=' + submissionId + '"]'),
   ).not.toBeNull();
   expect(
-    calls.filter(({ path, init }) =>
-      path.endsWith("/source") && init.method === "PUT",
+    calls.filter(
+      ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
     ),
   ).toHaveLength(1);
 });
@@ -1161,7 +1164,9 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
   ).toHaveLength(1);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
   expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
-  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(secondSubmissionId);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(
+    secondSubmissionId,
+  );
 });
 
 it.each([

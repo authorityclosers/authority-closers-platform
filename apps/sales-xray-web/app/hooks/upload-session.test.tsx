@@ -119,10 +119,7 @@ describe("root upload session", () => {
       phase: "interrupted",
       reconciliation: "missing",
     });
-    expect(remove).toHaveBeenCalledWith(
-      "beforeunload",
-      expect.any(Function),
-    );
+    expect(remove).toHaveBeenCalledWith("beforeunload", expect.any(Function));
     remove.mockRestore();
   });
 
@@ -185,12 +182,15 @@ describe("root upload session", () => {
         tenantId: "tenant-a",
       },
     });
-    const running = store.run(firstMeta, file, (signal) =>
-      new Promise<{ submissionId: string }>((_resolve, reject) => {
-        signal.addEventListener("abort", () => reject(new Error("aborted")), {
-          once: true,
-        });
-      }),
+    const running = store.run(
+      firstMeta,
+      file,
+      (signal) =>
+        new Promise<{ submissionId: string }>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
     );
     expect(store.fileFor(firstMeta.intentId)).toBe(file);
     store.observeAccount({

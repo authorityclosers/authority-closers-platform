@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { rememberPendingUpload, rememberSubmission } from "../acquisition-client";
+import {
+  rememberPendingUpload,
+  rememberSubmission,
+} from "../acquisition-client";
 import { sendSource } from "./source-upload";
 
 const id = "11111111-1111-4111-8111-111111111111";
@@ -88,9 +91,11 @@ describe("source upload reconciliation", () => {
   });
 
   it("recovers an already accepted upload without sending the File again", async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(boundSubmission), { status: 200 }),
-    );
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(boundSubmission), { status: 200 }),
+      );
     vi.stubGlobal("fetch", fetch);
 
     const result = await sendSource({
@@ -175,7 +180,10 @@ describe("source upload reconciliation", () => {
 
   it.each([
     ["a denied read", () => Promise.resolve(new Response("", { status: 403 }))],
-    ["a redirect failure", () => Promise.reject(new TypeError("Failed to fetch"))],
+    [
+      "a redirect failure",
+      () => Promise.reject(new TypeError("Failed to fetch")),
+    ],
   ])("never PUTs after %s", async (_label, recoveryRead) => {
     const fetch = vi.fn().mockImplementation(recoveryRead);
     vi.stubGlobal("fetch", fetch);
@@ -224,12 +232,14 @@ describe("source upload reconciliation", () => {
   });
 
   it("requires a reconciled response to match both the ID and source hash", async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ ...boundSubmission, source_sha256: "c".repeat(64) }),
-        { status: 200 },
-      ),
-    );
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ...boundSubmission, source_sha256: "c".repeat(64) }),
+          { status: 200 },
+        ),
+      );
     vi.stubGlobal("fetch", fetch);
 
     await expect(

@@ -123,7 +123,9 @@
 @media (max-width: 620px) {
   .indicator {
     right: max(12px, env(safe-area-inset-right));
-    bottom: calc(var(--lx-bottom-nav-h) + max(12px, env(safe-area-inset-bottom)));
+    bottom: calc(
+      var(--lx-bottom-nav-h) + max(12px, env(safe-area-inset-bottom))
+    );
     width: min(420px, calc(100vw - 24px));
     grid-template-columns: 32px minmax(0, 1fr) auto;
     gap: var(--lx-space-2);

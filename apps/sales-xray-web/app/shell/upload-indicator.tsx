@@ -80,7 +80,10 @@ export function UploadIndicator({
         {upload.phase === "preparing" || upload.phase === "uploading" ? (
           <span className={styles.live} />
         ) : (
-          <Glyph name={upload.phase === "saved" ? "saved" : "retry"} size={18} />
+          <Glyph
+            name={upload.phase === "saved" ? "saved" : "retry"}
+            size={18}
+          />
         )}
       </span>
       <div className={styles.copy} role="status" aria-live="polite">
@@ -89,9 +92,9 @@ export function UploadIndicator({
             ? "Preparing private upload"
             : upload.phase === "uploading"
               ? "Uploading privately"
-            : upload.phase === "saved"
-              ? "Upload saved"
-              : "Upload not confirmed"}
+              : upload.phase === "saved"
+                ? "Upload saved"
+                : "Upload not confirmed"}
         </strong>
         <span className={styles.name} title={upload.fileName}>
           {upload.fileName}
@@ -101,11 +104,11 @@ export function UploadIndicator({
             ? `${fileSizeLabel(upload.totalBytes)} · preparing your recording`
             : upload.phase === "uploading"
               ? `${fileSizeLabel(upload.totalBytes)} · keep this tab open until it’s saved`
-            : upload.phase === "saved"
-              ? "The server has your recording."
-              : upload.reconciliation === "missing"
-                ? "The server did not find it. Review current consent before trying again."
-                : "Check whether it arrived before uploading again."}
+              : upload.phase === "saved"
+                ? "The server has your recording."
+                : upload.reconciliation === "missing"
+                  ? "The server did not find it. Review current consent before trying again."
+                  : "Check whether it arrived before uploading again."}
         </span>
       </div>
       <div className={styles.actions}>

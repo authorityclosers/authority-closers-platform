@@ -109,11 +109,7 @@ export function ProfileMenu({
   async function signOut() {
     if (signingOutRef.current) return;
     const unresolved = upload?.requiresSignOutConfirmation() ?? false;
-    if (
-      unresolved &&
-      !window.confirm(SIGN_OUT_UPLOAD_WARNING)
-    )
-      return;
+    if (unresolved && !window.confirm(SIGN_OUT_UPLOAD_WARNING)) return;
     signingOutRef.current = true;
     setSigningOut(true);
     setError("");
