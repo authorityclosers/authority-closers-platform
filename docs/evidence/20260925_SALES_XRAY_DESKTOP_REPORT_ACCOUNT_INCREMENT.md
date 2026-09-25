@@ -69,6 +69,10 @@ Three required-CI failures on the committed increment were repaired without chan
   - local full-shell browser: overflow actions are reachable, Escape dismisses the menu, and Reading view exposes six section links with `view=reading` in the URL
   - the browser journey itself runs in CI and was not run locally
 
+## Learner saved-call journey repair
+- Follow-up CI on `de81cc4` passed the acquisition browser journey and all Python shards. The learner's saved-call journey still selected the removed "Open call" text. It now clicks the actual saved-call row by submission ID, retaining the learner-route, recovery-storage and zero-processing-write assertions.
+- The learner acquisition journey (10 tests) and shared Calls library (27 tests) passed with Node 24.19.0. Prettier passed for the changed test.
+
 ## Known limits
 - The simulated media tests and fictional fixture do not prove real recording playback or audio alignment.
 - Real 200% browser zoom, long Marathi report composition in the full shell, signed-in Account and rename browser checks, and production verification are pending.

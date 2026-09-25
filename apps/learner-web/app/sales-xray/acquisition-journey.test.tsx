@@ -419,7 +419,12 @@ it("opens an account library result in the learner report route without processi
   expect(host.querySelectorAll("main")).toHaveLength(1);
   expect(host.querySelector(".studio-header")).toBeNull();
   expect(host.textContent).toContain("Report ready");
-  await click("Open call");
+  const savedCall = host.querySelector<HTMLButtonElement>(
+    `button[data-submission-id="${submissionId}"]`,
+  );
+  expect(savedCall).not.toBeNull();
+  await act(async () => savedCall!.click());
+  await flush();
   expect(navigate).toHaveBeenCalledWith(`/sales-xray?call=${submissionId}`);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(mutationRequests()).toHaveLength(0);
