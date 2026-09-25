@@ -76,6 +76,45 @@ class InternalTesterPolicy:
             None,
         )
 
+    async def for_learner_account(
+        self,
+        database: AsyncSession,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        bundle: HostedApprovalBundle | None = None,
+    ) -> InternalTesterApproval | None:
+        """Resolve the current account-minute scope for an exact learner."""
+
+        if type(tenant_id) is not UUID or type(person_id) is not UUID:
+            return None
+        person = await database.scalar(
+            select(Person).where(Person.id == person_id).execution_options(populate_existing=True)
+        )
+        membership = await database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.person_id == person_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+            or membership is None
+            or membership.status != MembershipStatus.ACTIVE.value
+            or membership.role != "learner"
+            or membership.ended_at is not None
+        ):
+            return None
+        try:
+            return self._approval(bundle or self.current(), person.email or "", "account_minutes")
+        except (TypeError, ValueError, OSError):
+            # An unavailable or stale approval cannot confer unlimited access.
+            return None
+
     async def for_actor(
         self,
         database: AsyncSession,

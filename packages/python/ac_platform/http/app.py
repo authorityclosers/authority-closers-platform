@@ -327,6 +327,7 @@ def create_app(
         settings=settings,
         sessions=session_factory,
         require_actor=require_actor,
+        tester_policy=tester_policy,
     )
     application.add_middleware(
         RequestBodyLimitMiddleware,

@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Quote,
     reserve,
 )
+from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -592,6 +593,15 @@ class ConversationApplication:
             self.database, tenant_id=recording.tenant_id, person_id=actor.person_id
         )
         account = MinuteAccount.from_dict(minute_row.snapshot)
+        additional_allowance_seconds = 0
+        if authority is not None:
+            additional_allowance_seconds = await audited_admin_grant_seconds(
+                self.database,
+                account=account,
+                tenant_id=recording.tenant_id,
+                person_id=actor.person_id,
+                operations_tenant_id=authority.operations_tenant_id,
+            )
         if (
             not account.unlimited
             and acquisition_used
@@ -599,7 +609,7 @@ class ConversationApplication:
                 acquisition_used
                 + sum(item.committed_seconds for item in account.reservations)
                 + quote.entitlement_seconds
-                > ALLOWANCE_SECONDS
+                > ALLOWANCE_SECONDS + additional_allowance_seconds
             )
         ):
             raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)

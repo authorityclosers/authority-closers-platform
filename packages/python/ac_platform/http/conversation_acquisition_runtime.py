@@ -211,11 +211,18 @@ def install_acquisition_runtime(
         tenant = settings.public_learner_tenant_id
         if tenant is None:
             raise RuntimeError("The configured public Academy is required.")
+        authority = runtime.intake.authority
+        operations_tenant_id = (
+            authority.operations_tenant_id
+            if authority is not None and authority.operations_tenant_id is not None
+            else settings.operations_tenant_id
+        )
         return AcquisitionSessions(
             database,
             tenant_id=tenant,
             policy_revision=runtime.policy_revision,
             tester_policy=runtime.tester_policy,
+            operations_tenant_id=operations_tenant_id,
         )
 
     install_acquisition_http(

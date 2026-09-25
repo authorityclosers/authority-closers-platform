@@ -18,6 +18,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
+from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 
 ALLOWANCE_SECONDS = 3600
@@ -64,6 +65,23 @@ async def existing_account_seconds(
     database: AsyncSession, *, tenant_id: UUID, person_id: UUID
 ) -> int:
     """Count reserved/uncertain/settled use; only confirmed releases count zero."""
+    committed_seconds, _ = await existing_account_usage(
+        database,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        operations_tenant_id=None,
+    )
+    return committed_seconds
+
+
+async def existing_account_usage(
+    database: AsyncSession,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    operations_tenant_id: UUID | None,
+) -> tuple[int, int]:
+    """Return committed legacy account use and canonical admin-grant add-ons."""
     row = await database.scalar(
         select(ConversationMinuteAccount)
         .where(
@@ -73,8 +91,40 @@ async def existing_account_seconds(
         .execution_options(populate_existing=True)
     )
     if row is None:
-        return 0
+        return 0, 0
     account = MinuteAccount.from_dict(row.snapshot)
     if (account.tenant_id, account.account_id) != (str(tenant_id), str(person_id)):
         raise ValueError("The processing account does not match its owner.")
-    return sum(reservation.committed_seconds for reservation in account.reservations)
+    committed_seconds = sum(reservation.committed_seconds for reservation in account.reservations)
+    if operations_tenant_id is None:
+        return committed_seconds, 0
+    additional_seconds = await audited_admin_grant_seconds(
+        database,
+        account=account,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        operations_tenant_id=operations_tenant_id,
+    )
+    return committed_seconds, additional_seconds
+
+
+async def shared_account_committed_seconds(
+    database: AsyncSession,
+    *,
+    tenant_id: UUID,
+    person_id: UUID,
+    operations_tenant_id: UUID,
+) -> tuple[int, int]:
+    """Return shared upload usage and its audited finite add-on for one learner."""
+    acquisition_committed = await acquisition_seconds(
+        database,
+        tenant_id=tenant_id,
+        person_id=person_id,
+    )
+    account_committed, additional_allowance = await existing_account_usage(
+        database,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        operations_tenant_id=operations_tenant_id,
+    )
+    return acquisition_committed + account_committed, additional_allowance
