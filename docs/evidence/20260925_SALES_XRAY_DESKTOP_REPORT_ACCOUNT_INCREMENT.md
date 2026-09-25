@@ -53,6 +53,22 @@ New or extended integration coverage:
 - Keyboard: arrow keys, Home and End move across all six tabs and update the URL. Section jump, Return and browser Back restore focus and position.
 - Reflow at a 720×450 CSS viewport had no horizontal document overflow. This is reflow evidence, not an actual 200% browser-zoom check.
 
+## CI repair after commit 37354ed
+Three required-CI failures on the committed increment were repaired without changing application behaviour.
+- **Formatting:** four frontend files were reformatted with the repository Prettier configuration (Account view and its test, and the replay-strip and report-header tests). Prettier now reports the whole `apps/sales-xray-web/app` tree clean.
+- **Acquisition browser journey** (`tests/e2e/test_sales_xray_acquisition_browser.py`): the selectors were updated to the released UI; no assertion or provider, cost or consent invariant was removed.
+  - The report opens in Tabbed view by default at desktop width, which is the intended default when the URL has no `view=`. The journey asserts that default, explicitly switches to Reading view (one horizontal row of six section links), then switches back to Tabbed before continuing the Moments and playback checks.
+  - The Calls page heading is now "Calls".
+  - Request deletion is reached by opening the report's "More report actions" overflow first.
+  - The playback, re-login, deletion and sign-out steps are unchanged.
+- **Standalone browser journey:** its exact navigation-probe cancellation list now includes `HEAD /account/: net::ERR_ABORTED`, matching the new Account link. Other failed requests, static asset failures, API responses and authorization assertions remain checked.
+- Local results:
+  - focused frontend tests for the changed files: 4 files, 37 tests passed
+  - typecheck and lint: passed
+  - Python format and lint checks for both browser tests: passed
+  - local full-shell browser: overflow actions are reachable, Escape dismisses the menu, and Reading view exposes six section links with `view=reading` in the URL
+  - the browser journey itself runs in CI and was not run locally
+
 ## Known limits
 - The simulated media tests and fictional fixture do not prove real recording playback or audio alignment.
 - Real 200% browser zoom, long Marathi report composition in the full shell, signed-in Account and rename browser checks, and production verification are pending.

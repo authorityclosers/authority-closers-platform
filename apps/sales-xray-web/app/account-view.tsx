@@ -41,10 +41,12 @@ type Loaded<T> =
   | { state: "loading" }
   | { state: "ready"; value: T }
   | { state: "error" };
-type LoadedProfile = Loaded<AccountProfileRecord> | {
-  state: "needs_refresh";
-  reason: "conflict" | "uncertain";
-};
+type LoadedProfile =
+  | Loaded<AccountProfileRecord>
+  | {
+      state: "needs_refresh";
+      reason: "conflict" | "uncertain";
+    };
 
 type Country = "IN" | "US" | "CA" | "GB" | "AU" | "AE" | "OTHER";
 const COUNTRIES: ReadonlyArray<{ value: Country; label: string }> = [
@@ -456,7 +458,9 @@ function ProfileForm({
         Email is your sign-in identity and can’t be changed here.
       </p>
       {issue ? (
-        <p className={styles.errorText} role="alert">{issue}</p>
+        <p className={styles.errorText} role="alert">
+          {issue}
+        </p>
       ) : null}
       <div className={styles.actions}>
         {refreshReason ? (

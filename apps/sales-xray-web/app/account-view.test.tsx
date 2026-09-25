@@ -153,7 +153,9 @@ it("shows Unlimited without inventing a percentage", async () => {
   const allowance = host.querySelector("[data-allowance]")!;
   expect(allowance.getAttribute("data-allowance")).toBe("unlimited");
   expect(allowance.textContent).toContain("Unlimited");
-  expect(allowance.textContent).toContain("20 min used or reserved by analyses.");
+  expect(allowance.textContent).toContain(
+    "20 min used or reserved by analyses.",
+  );
   expect(allowance.querySelector('[role="meter"]')).toBeNull();
   expect(allowance.textContent).not.toMatch(/%/);
 });
@@ -354,10 +356,12 @@ it("preserves an accepted save draft and blocks resubmission until a reread", as
   await flush();
   expect(host.querySelector("form")).not.toBeNull();
   expect(host.textContent).toContain("Your update was accepted");
-  expect(host.querySelector<HTMLInputElement>('input[autocomplete="name"]')?.value).toBe(
-    "Asha R. Rao",
-  );
-  const saveButton = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(
+    host.querySelector<HTMLInputElement>('input[autocomplete="name"]')?.value,
+  ).toBe("Asha R. Rao");
+  const saveButton = host.querySelector<HTMLButtonElement>(
+    'button[type="submit"]',
+  )!;
   expect(saveButton.disabled).toBe(true);
   await act(async () => saveButton.click());
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);

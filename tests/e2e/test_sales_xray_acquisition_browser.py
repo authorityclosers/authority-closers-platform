@@ -679,9 +679,23 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await page.screenshot(path=str(receipt / "report-desktop.png"), full_page=True)
                     reading_view = page.get_by_role("button", name="Reading view", exact=True)
                     tabbed_view = page.get_by_role("button", name="Tabbed view", exact=True)
+                    # Intended default: a bound report URL without view= opens
+                    # in Tabbed view on a desktop-width (>=1100px) viewport.
+                    await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                    await expect(reading_view).to_have_attribute("aria-pressed", "false")
+                    # The reader can explicitly choose Reading view: one
+                    # horizontal row of section links, all sections shown.
+                    await reading_view.click()
                     await expect(reading_view).to_have_attribute("aria-pressed", "true")
+                    await expect(
+                        page.get_by_role(
+                            "navigation", name="Explore your sales report", exact=True
+                        ).get_by_role("link")
+                    ).to_have_count(6)
+                    assert "view=reading" in page.url
                     await tabbed_view.click()
                     await expect(tabbed_view).to_have_attribute("aria-pressed", "true")
+                    assert "view=tabs" in page.url
                     await page.get_by_role("tab", name="Moments", exact=True).click()
                     assert (
                         await page.locator("audio").get_attribute("src")
@@ -734,8 +748,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         .get_by_role("link", name="Calls", exact=True)
                         .click()
                     )
+                    # The Calls page has one page heading, "Calls".
                     await expect(
-                        library_page.get_by_role("heading", name="Saved calls", exact=True)
+                        library_page.get_by_role("heading", name="Calls", exact=True, level=1)
                     ).to_be_visible()
                     await expect(
                         library_page.locator(f'button[data-submission-id="{submission_id}"]')
@@ -791,6 +806,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     report_actions = library_page.get_by_role(
                         "region", name="Sales call report", exact=True
                     ).get_by_role("group", name="Report actions", exact=True)
+                    # Download and deletion live in the report's overflow menu.
+                    await report_actions.get_by_label("More report actions", exact=True).click()
                     await report_actions.get_by_role(
                         "button", name="Request deletion", exact=True
                     ).click()

@@ -800,6 +800,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "HEAD /: net::ERR_ABORTED",
                 "HEAD /login/: net::ERR_ABORTED",
                 "HEAD /calls/: net::ERR_ABORTED",
+                "HEAD /account/: net::ERR_ABORTED",
             }
             for method, path, status in (
                 ("POST", "/v1/auth/password/login", 200),

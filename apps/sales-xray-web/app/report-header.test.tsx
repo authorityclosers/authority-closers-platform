@@ -9,8 +9,9 @@ let host: HTMLDivElement;
 let onDownload: ReturnType<typeof vi.fn<() => void>>;
 let onAnalyseAnother: ReturnType<typeof vi.fn<() => void>>;
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
-  .IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(async () => {
   host = document.createElement("div");
@@ -18,21 +19,23 @@ beforeEach(async () => {
   root = createRoot(host);
   onDownload = vi.fn();
   onAnalyseAnother = vi.fn();
-  await act(async () => root.render(
-    <ReportHeader
-      durationMs={67_000}
-      languageLabel="English"
-      sourceLabel="Fictional test source"
-      claimed
-      busy={false}
-      canDownload
-      canRequestDeletion
-      deletionDisabled={false}
-      onAnalyseAnother={onAnalyseAnother}
-      onDownload={onDownload}
-      onRequestDeletion={() => {}}
-    />,
-  ));
+  await act(async () =>
+    root.render(
+      <ReportHeader
+        durationMs={67_000}
+        languageLabel="English"
+        sourceLabel="Fictional test source"
+        claimed
+        busy={false}
+        canDownload
+        canRequestDeletion
+        deletionDisabled={false}
+        onAnalyseAnother={onAnalyseAnother}
+        onDownload={onDownload}
+        onRequestDeletion={() => {}}
+      />,
+    ),
+  );
 });
 
 afterEach(async () => {
@@ -55,9 +58,15 @@ it("Escape closes secondary actions and restores their trigger focus", async () 
   const { trigger, menu } = openMenu();
   const download = menu.querySelector<HTMLButtonElement>("button")!;
   download.focus();
-  await act(async () => download.dispatchEvent(new KeyboardEvent("keydown", {
-    key: "Escape", bubbles: true, cancelable: true,
-  })));
+  await act(async () =>
+    download.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
   expect(menu.open).toBe(false);
   expect(document.activeElement).toBe(trigger);
   expect(onDownload).not.toHaveBeenCalled();
@@ -65,8 +74,9 @@ it("Escape closes secondary actions and restores their trigger focus", async () 
 
 it("outside pointer dismissal preserves the clicked action", async () => {
   const { menu } = openMenu();
-  const next = Array.from(host.querySelectorAll("button"))
-    .find(button => button.textContent?.includes("Analyse another call"))!;
+  const next = Array.from(host.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("Analyse another call"),
+  )!;
   await act(async () => {
     next.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     next.click();
@@ -85,7 +95,9 @@ it("tabbing away dismisses the popup without returning focus", () => {
 
 it("the download action runs once and closes its disclosure", async () => {
   const { menu } = openMenu();
-  await act(async () => menu.querySelector<HTMLButtonElement>("button")!.click());
+  await act(async () =>
+    menu.querySelector<HTMLButtonElement>("button")!.click(),
+  );
   expect(onDownload).toHaveBeenCalledOnce();
   expect(menu.open).toBe(false);
 });

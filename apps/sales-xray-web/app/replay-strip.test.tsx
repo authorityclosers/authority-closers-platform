@@ -126,8 +126,12 @@ it("says so when clips fall outside the recording or timing is unknown", async (
     ...container.querySelectorAll<HTMLElement>("[data-replay-beyond]"),
   ];
   expect(beyond).toHaveLength(2);
-  expect(beyond[0].textContent).toContain("Crossing · extends past the 01:00 recording");
-  expect(beyond[1].textContent).toContain("After · extends past the 01:00 recording");
+  expect(beyond[0].textContent).toContain(
+    "Crossing · extends past the 01:00 recording",
+  );
+  expect(beyond[1].textContent).toContain(
+    "After · extends past the 01:00 recording",
+  );
   expect(container.textContent).toContain(
     "2 clip ranges extend past the 01:00 recording",
   );
@@ -157,9 +161,9 @@ it("never calls a known length unknown when every clip lies beyond it (R8)", asy
   expect(container.textContent).toContain(
     "None of the 2 clip ranges fit fully within the 01:00 recording, so they are not drawn or playable.",
   );
-  expect(container.querySelector("[data-replay-beyond]")?.textContent).toContain(
-    "Crossing · extends past the 01:00 recording",
-  );
+  expect(
+    container.querySelector("[data-replay-beyond]")?.textContent,
+  ).toContain("Crossing · extends past the 01:00 recording");
   // No marker, no playback control, no seek can be issued.
   expect(markers()).toHaveLength(0);
   expect(items()).toHaveLength(0);
