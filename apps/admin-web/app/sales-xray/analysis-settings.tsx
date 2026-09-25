@@ -251,15 +251,18 @@ export function AnalysisSettingsPanel() {
                     ...draft,
                     c5_coaching_prompt_revision: event.target.value as
                       | "coaching-v3"
-                      | "coaching-v4",
+                      | "coaching-v4"
+                      | "coaching-v5",
                   })
                 }
               >
                 {bounds.c5_coaching_prompt_revision.values.map((value) => (
                   <option key={value} value={value}>
-                    {value === "coaching-v4"
-                      ? "Qualitative v0.2 · source-bound rule pack"
-                      : "Current report · v3"}
+                    {value === "coaching-v5"
+                      ? "Qualitative coaching · v5"
+                      : value === "coaching-v4"
+                        ? "Qualitative v0.2 · source-bound rule pack"
+                        : "Current report · v3"}
                   </option>
                 ))}
               </select>

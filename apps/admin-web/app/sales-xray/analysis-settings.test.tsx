@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AnalysisSettingsPanel } from "./analysis-settings";
+import { responseSchema, settingsSchema } from "./analysis-settings-contract";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -28,6 +29,23 @@ const state = {
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status });
+
+const current = {
+  ...state,
+  revision: 5,
+  settings: {
+    ...state.settings,
+    c5_coaching_prompt_revision: "coaching-v5",
+    report_language_default: "en",
+  },
+  bounds: {
+    ...state.bounds,
+    c5_coaching_prompt_revision: {
+      values: ["coaching-v3", "coaching-v4", "coaching-v5"],
+    },
+    report_language_default: { values: ["en", "hi-Deva+en", "mr-Deva+en"] },
+  },
+};
 
 let host: HTMLDivElement;
 let root: Root;
@@ -147,4 +165,92 @@ it("requires the versioned engine for Marathi and sends the exact selected setti
     },
   });
   expect(host.textContent).toContain("revision 1");
+});
+
+it.each(["en", "hi-Deva+en", "mr-Deva+en"])(
+  "loads and saves the server's v5 revision with %s without dropping its engine",
+  async (language) => {
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) =>
+      json(
+        init.method === "POST"
+          ? {
+              ...current,
+              revision: 6,
+              settings: JSON.parse(init.body as string).settings,
+            }
+          : current,
+      ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await act(async () => root.render(createElement(AnalysisSettingsPanel)));
+    expect(host.textContent).not.toContain("could not be verified");
+    const engine = host.querySelector<HTMLSelectElement>(
+      '[aria-label="Report engine"]',
+    )!;
+    expect(engine.value).toBe("coaching-v5");
+    expect(engine.selectedOptions[0].textContent).toBe(
+      "Qualitative coaching · v5",
+    );
+    await act(async () => {
+      const field = host.querySelector<HTMLSelectElement>(
+        '[aria-label="Default report language"]',
+      )!;
+      field.value = language;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) =>
+          button.textContent?.includes("Save future plan limits"),
+        )!
+        .click();
+    });
+    const writes = fetcher.mock.calls.filter(
+      ([, init]) => init.method === "POST",
+    );
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(writes[0][1].body as string)).toMatchObject({
+      expected_revision: 5,
+      settings: {
+        c5_coaching_prompt_revision: "coaching-v5",
+        report_language_default: language,
+      },
+    });
+    expect(host.textContent).toContain("revision 6");
+  },
+);
+
+it("still rejects unrecognized engines and out-of-bound settings", () => {
+  expect(responseSchema.safeParse(current).success).toBe(true);
+  expect(
+    responseSchema.safeParse({
+      ...current,
+      settings: {
+        ...current.settings,
+        c5_coaching_prompt_revision: "coaching-v6",
+      },
+    }).success,
+  ).toBe(false);
+  expect(
+    responseSchema.safeParse({
+      ...current,
+      bounds: {
+        ...current.bounds,
+        c5_coaching_prompt_revision: { values: ["coaching-v5", "coaching-v6"] },
+      },
+    }).success,
+  ).toBe(false);
+  expect(
+    settingsSchema.safeParse({
+      ...current.settings,
+      c5_max_completion_tokens: 8001,
+    }).success,
+  ).toBe(false);
+  expect(
+    settingsSchema.safeParse({
+      ...current.settings,
+      c5_coaching_prompt_revision: "coaching-v3",
+      report_language_default: "hi-Deva+en",
+    }).success,
+  ).toBe(false);
 });

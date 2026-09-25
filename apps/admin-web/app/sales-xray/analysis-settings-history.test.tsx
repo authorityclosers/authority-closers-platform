@@ -66,6 +66,45 @@ it("loads on demand and follows the immutable revision cursor without a mutation
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
+it("keeps v5 and older revisions readable in the same history", async () => {
+  const latest = revision(5);
+  const fetcher = vi.fn(async () =>
+    json({
+      items: [
+        {
+          ...latest,
+          settings: {
+            ...latest.settings,
+            c5_coaching_prompt_revision: "coaching-v5",
+            report_language_default: "mr-Deva+en",
+          },
+          bounds: {
+            ...latest.bounds,
+            c5_coaching_prompt_revision: {
+              values: ["coaching-v3", "coaching-v4", "coaching-v5"],
+            },
+            report_language_default: {
+              values: ["en", "hi-Deva+en", "mr-Deva+en"],
+            },
+          },
+        },
+        revision(4),
+      ],
+      next_before_revision: null,
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () =>
+    root.render(createElement(AnalysisSettingsHistory, { revision: 5 })),
+  );
+  await act(async () => button("View revision").click());
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(host.querySelectorAll("li")).toHaveLength(2);
+  expect(host.textContent).toContain("coaching-v5");
+  expect(host.textContent).toContain("mr-Deva+en");
+  expect(host.textContent).toContain("Revision 4");
+});
+
 it("rejects a repeated cursor page and retries without losing verified history", async () => {
   let calls = 0;
   vi.stubGlobal(
