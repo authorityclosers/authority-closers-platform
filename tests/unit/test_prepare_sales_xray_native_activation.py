@@ -70,6 +70,83 @@ def test_prepare_rejects_native_artifact_from_different_release(
     assert not (tmp_path / "output").exists()
 
 
+def test_prepare_native_reuse_is_verified_and_recorded_separately(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source_activation, source_bytes = _write_source_activation(tmp_path)
+    target = "2" * 40
+    _patch_target_native(monkeypatch, "3" * 40)
+    sibling = str(_SCRIPT.parent)
+    if sibling not in sys.path:
+        sys.path.insert(0, sibling)
+    import native_artifact_compatibility as compatibility
+
+    def verified(**arguments):
+        assert arguments["target_release"] == target
+        assert arguments["proof_path"] == tmp_path / "proof.json"
+        assert arguments["proof_sha256"] == "b" * 64
+        assert arguments["repository_root"] == tmp_path
+        return {"native_source_commit": "3" * 40, "target_release_id": target}
+
+    monkeypatch.setattr(compatibility, "verify_reuse", verified)
+    result = _MODULE.prepare(
+        source_activation=source_activation,
+        target_release_id=target,
+        native_artifact_manifest=tmp_path / "native.json",
+        native_artifact_sha256="a" * 64,
+        output_dir=tmp_path / "prepared-reuse",
+        native_reuse_proof=tmp_path / "proof.json",
+        native_reuse_proof_sha256="b" * 64,
+        source_repository=tmp_path,
+    )
+    activation = Path(result["activation"]).read_bytes()
+    receipt = json.loads(Path(result["native_compatibility_receipt"]).read_bytes())
+    assert receipt["activation_sha256"] == hashlib.sha256(activation).hexdigest()
+    assert receipt["native_source_commit"] == result["native_source_commit"] == "3" * 40
+    assert json.loads(activation)["release_id"] == target
+    assert result["approval_replaced"] is False
+    assert result["writes"] == 5
+    assert all(Path(path).read_bytes() == raw for path, raw in source_bytes.items())
+
+    def refused(**_arguments):
+        raise compatibility.NativeCompatibilityError("native_inputs_changed")
+
+    monkeypatch.setattr(compatibility, "verify_reuse", refused)
+    with pytest.raises(_MODULE.PrepareError, match="native_inputs_changed"):
+        _MODULE.prepare(
+            source_activation=source_activation,
+            target_release_id=target,
+            native_artifact_manifest=tmp_path / "native.json",
+            native_artifact_sha256="a" * 64,
+            output_dir=tmp_path / "must-not-exist",
+            native_reuse_proof=tmp_path / "proof.json",
+            native_reuse_proof_sha256="b" * 64,
+            source_repository=tmp_path,
+        )
+    assert not (tmp_path / "must-not-exist").exists()
+
+
+@pytest.mark.parametrize(
+    "provided", ["native_reuse_proof", "native_reuse_proof_sha256", "source_repository"]
+)
+def test_prepare_reuse_arguments_must_be_complete(tmp_path: Path, provided: str) -> None:
+    values = {
+        "native_reuse_proof": tmp_path / "proof.json",
+        "native_reuse_proof_sha256": "b" * 64,
+        "source_repository": tmp_path,
+    }
+    with pytest.raises(_MODULE.PrepareError, match="requires a proof"):
+        _MODULE.prepare(
+            source_activation=tmp_path / "source.json",
+            target_release_id="2" * 40,
+            native_artifact_manifest=tmp_path / "native.json",
+            native_artifact_sha256="a" * 64,
+            output_dir=tmp_path / "must-not-exist",
+            **{provided: values[provided]},
+        )
+    assert not (tmp_path / "must-not-exist").exists()
+
+
 def _env_values() -> dict[str, str]:
     identity_dir = "C:/ac-test/identity" if os.name == "nt" else "/etc/ac-test/identity"
     values = {key: identity_dir for key in _MODULE.ABSOLUTE_ENV_KEYS}

@@ -514,20 +514,52 @@ def prepare(
     output_dir: Path,
     approval_file: Path | None = None,
     approval_sha256: str | None = None,
+    native_reuse_proof: Path | None = None,
+    native_reuse_proof_sha256: str | None = None,
+    source_repository: Path | None = None,
 ) -> dict[str, Any]:
     """Validate source inputs and write a new, inactive activation bundle."""
 
     target_release = _release(target_release_id, "target_release_id")
     if (approval_file is None) != (approval_sha256 is None):
         raise _fail("replacement approval path and digest must be supplied together")
+    reuse_arguments = (native_reuse_proof, native_reuse_proof_sha256, source_repository)
+    if any(value is not None for value in reuse_arguments) and any(
+        value is None for value in reuse_arguments
+    ):
+        raise _fail("native reuse requires a proof, its digest and source repository together")
     descriptor, _descriptor_raw, env, service, _service_raw, _approval, _approval_raw = (
         _load_source(source_activation)
     )
     _source_commit, image_ref, config_id = _load_native_manifest(
         native_artifact_manifest, native_artifact_sha256
     )
+    compatibility: dict[str, Any] | None = None
     if _source_commit != target_release:
-        raise _fail("native artifact source commit differs from target release")
+        if (
+            native_reuse_proof is None
+            or native_reuse_proof_sha256 is None
+            or source_repository is None
+        ):
+            raise _fail("native artifact source commit differs from target release")
+        sibling_directory = str(Path(__file__).resolve().parent)
+        if sibling_directory not in sys.path:
+            sys.path.insert(0, sibling_directory)
+        from native_artifact_compatibility import NativeCompatibilityError, verify_reuse
+
+        try:
+            compatibility = verify_reuse(
+                repository_root=source_repository,
+                proof_path=native_reuse_proof,
+                proof_sha256=native_reuse_proof_sha256,
+                native_manifest=native_artifact_manifest,
+                native_manifest_sha256=native_artifact_sha256,
+                target_release=target_release,
+            )
+        except NativeCompatibilityError as exc:
+            raise _fail(f"native reuse proof refused: {exc}") from exc
+    elif native_reuse_proof is not None:
+        raise _fail("native reuse proof is unnecessary for an exact-source native artifact")
     replacement_approval_raw: bytes | None = None
     replacement_approval_digest: str | None = None
     if approval_file is not None and approval_sha256 is not None:
@@ -604,6 +636,11 @@ def prepare(
     ]
     if approval_output_raw is not None:
         output_files.append((approval_output_path, approval_output_raw))
+    compatibility_path: Path | None = None
+    if compatibility is not None:
+        compatibility_path = output_dir / f"native-compatibility-{target_release}.json"
+        compatibility["activation_sha256"] = _sha(descriptor_raw)
+        output_files.append((compatibility_path, _json_bytes(compatibility)))
     created_paths: list[Path] = []
     try:
         for path, raw in output_files:
@@ -624,6 +661,7 @@ def prepare(
         "native_source_commit": _source_commit,
         "native_image_ref": image_ref,
         "native_image_config_id": config_id,
+        "native_compatibility_receipt": str(compatibility_path) if compatibility_path else None,
         "approval_file": str(approval_output_path),
         "approval_sha256": approval_output_digest,
         "approval_replaced": approval_output_raw is not None,
@@ -645,6 +683,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--native-artifact-sha256", required=True)
     parser.add_argument("--approval-file", type=Path)
     parser.add_argument("--approval-sha256")
+    parser.add_argument("--native-reuse-proof", type=Path)
+    parser.add_argument("--native-reuse-proof-sha256")
+    parser.add_argument("--source-repository", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -660,6 +701,9 @@ def main(arguments: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             approval_file=args.approval_file,
             approval_sha256=args.approval_sha256,
+            native_reuse_proof=args.native_reuse_proof,
+            native_reuse_proof_sha256=args.native_reuse_proof_sha256,
+            source_repository=args.source_repository,
         )
     except (PrepareError, OSError, ValueError, TypeError, KeyError) as exc:
         print(f"FAIL  {exc}", file=sys.stderr)
