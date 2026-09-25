@@ -8,11 +8,13 @@ then writes a fresh descriptor, service file, and compose environment file to
 an operator-selected output directory.  It never writes the source files,
 the live configuration directory, a database, or a secret.
 
-The generated approval reference and approval digest are carried forward
-unchanged.  The only policy values changed are the target release identity,
-the native image pair, and the generated versioned path/digest references.
-The canonical installer remains responsible for copying/reviewing these
-prepared artifacts and for activation.
+By default, the generated approval reference and approval digest are carried
+forward unchanged.  For a new release only, an operator may instead supply a
+separately approved, digest-pinned replacement approval.  The complete hosted
+approval contract is validated before the exact input bytes are copied into
+the fresh output bundle.  Source files are never changed.  The canonical
+installer remains responsible for copying/reviewing these prepared artifacts
+and for activation.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -390,6 +393,97 @@ def _load_native_manifest(path: Path, supplied_sha256: str) -> tuple[str, str, s
     return source, image_ref, config_id
 
 
+def _hosted_approval_loader() -> tuple[Any, Any]:
+    """Load the same strict approval parser used by the hosted application."""
+
+    package_root = Path(__file__).resolve().parents[3] / "packages" / "python"
+    if package_root.is_dir() and str(package_root) not in sys.path:
+        sys.path.insert(0, str(package_root))
+    try:
+        from ac_platform.conversation_intelligence.activation_contract import (
+            ActivationContractError,
+            load_hosted_approval_bundle,
+        )
+    except ImportError as exc:
+        raise _fail("hosted approval contract validator is unavailable") from exc
+    return ActivationContractError, load_hosted_approval_bundle
+
+
+def _validate_replacement_approval(
+    raw: bytes,
+    *,
+    expected_sha256: str,
+    environment: str,
+    operations_tenant_id: str,
+    service: Mapping[str, Any],
+    now_epoch: int | None = None,
+) -> None:
+    """Require canonical, current approval bytes bound to this hosted service."""
+
+    if _sha(raw) != expected_sha256:
+        raise _fail("replacement approval digest differs from the supplied approval")
+    contract_error, load_bundle = _hosted_approval_loader()
+    try:
+        bundle = load_bundle(raw)
+    except contract_error as exc:
+        raise _fail("replacement approval does not satisfy the hosted contract") from exc
+    if bundle.to_json() != raw:
+        raise _fail("replacement approval must use canonical hosted contract bytes")
+    if bundle.environment != environment:
+        raise _fail("replacement approval environment differs from the source activation")
+    if str(bundle.provider_control_tenant_id) != operations_tenant_id:
+        raise _fail("replacement approval tenant differs from the service operations tenant")
+    try:
+        now = int(time.time()) if now_epoch is None else now_epoch
+        bundle.current(now, environment)
+    except contract_error as exc:
+        raise _fail("replacement approval is not current") from exc
+
+    all_stages = list(bundle.stages)
+    if bundle.acquisition_policy is not None:
+        all_stages.extend(
+            stage for stage_set in bundle.acquisition_policy.stage_sets() for stage in stage_set
+        )
+    if any(stage.expires_at_epoch <= now for stage in all_stages):
+        raise _fail("replacement approval contains an expired provider scope")
+    if any(item.zero_cost_basis == "synthetic" for item in all_stages):
+        raise _fail("hosted replacement approval cannot contain synthetic provider scopes")
+    if any(
+        item.expires_at_epoch <= now or item.issued_at_epoch > now
+        for item in bundle.acquisition_c5_benchmarks
+    ) or any(
+        item.expires_at_epoch <= now or item.issued_at_epoch > now
+        for item in bundle.stage_call_supplements
+    ):
+        raise _fail("replacement approval contains an inactive bounded provider scope")
+
+    providers = service.get("providers")
+    if not isinstance(providers, list) or any(not isinstance(item, dict) for item in providers):
+        raise _fail("replacement approval service providers are invalid")
+    provider_by_id: dict[str, Mapping[str, Any]] = {}
+    credential_refs: set[str] = set()
+    for provider in providers:
+        provider_id = provider.get("provider_id")
+        credential_ref = provider.get("credential_ref")
+        if (
+            not isinstance(provider_id, str)
+            or provider_id in provider_by_id
+            or not isinstance(credential_ref, str)
+            or credential_ref in credential_refs
+        ):
+            raise _fail("replacement approval service providers are ambiguous")
+        provider_by_id[provider_id] = provider
+        credential_refs.add(credential_ref)
+
+    for stage in all_stages:
+        configured_provider = provider_by_id.get(stage.provider_id)
+        if (
+            configured_provider is None
+            or configured_provider.get("credential_ref") != stage.credential_ref
+        ):
+            raise _fail("replacement approval provider credential is not configured by the service")
+
+
 def _json_bytes(value: Mapping[str, Any]) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
@@ -418,18 +512,36 @@ def prepare(
     native_artifact_manifest: Path,
     native_artifact_sha256: str,
     output_dir: Path,
+    approval_file: Path | None = None,
+    approval_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Validate source inputs and write a new, inactive activation bundle."""
 
     target_release = _release(target_release_id, "target_release_id")
-    descriptor, _descriptor_raw, env, service, _service_raw, approval, _approval_raw = _load_source(
-        source_activation
+    if (approval_file is None) != (approval_sha256 is None):
+        raise _fail("replacement approval path and digest must be supplied together")
+    descriptor, _descriptor_raw, env, service, _service_raw, _approval, _approval_raw = (
+        _load_source(source_activation)
     )
     _source_commit, image_ref, config_id = _load_native_manifest(
         native_artifact_manifest, native_artifact_sha256
     )
     if _source_commit != target_release:
         raise _fail("native artifact source commit differs from target release")
+    replacement_approval_raw: bytes | None = None
+    replacement_approval_digest: str | None = None
+    if approval_file is not None and approval_sha256 is not None:
+        if target_release == descriptor["release_id"]:
+            raise _fail("replacement approval requires a new target release")
+        replacement_approval_digest = _digest(approval_sha256, "replacement approval SHA-256")
+        replacement_approval_raw = _read_bytes(approval_file, MAX_REFERENCE_BYTES)
+        _validate_replacement_approval(
+            replacement_approval_raw,
+            expected_sha256=replacement_approval_digest,
+            environment=descriptor["environment"],
+            operations_tenant_id=service["operations_tenant_id"],
+            service=service,
+        )
     _fresh_output_dir(output_dir)
     environment = descriptor["environment"]
     artifact_prefix = native_artifact_sha256[:16]
@@ -437,13 +549,26 @@ def prepare(
     env_path = output_dir / f"compose-{target_release}-native-{artifact_prefix}.env"
     activation_path = output_dir / f"activation-{target_release}.json"
     digest_path = output_dir / f"activation-{target_release}.json.sha256"
-    paths = (service_path, env_path, activation_path, digest_path)
+    if replacement_approval_raw is None or replacement_approval_digest is None:
+        approval_output_path = Path(descriptor["approval_file"])
+        approval_output_raw = None
+        approval_output_digest = descriptor["approval_sha256"]
+    else:
+        approval_output_path = output_dir / (
+            f"approval-{target_release}-{replacement_approval_digest[:16]}.json"
+        )
+        approval_output_raw = replacement_approval_raw
+        approval_output_digest = replacement_approval_digest
+    paths = [service_path, env_path, activation_path, digest_path]
+    if approval_output_raw is not None:
+        paths.append(approval_output_path)
     if any(path.exists() or path.is_symlink() for path in paths):
         raise _fail("output artifact already exists")
 
     next_service = dict(service)
     next_service["release_id"] = target_release
     next_service["native_image_ref"] = image_ref
+    next_service["sales_xray_approval_sha256"] = approval_output_digest
     service_raw = _json_bytes(next_service)
     service_digest = _sha(service_raw)
 
@@ -451,6 +576,8 @@ def prepare(
     next_env["AC_XRAY_SERVICE_CONFIG"] = str(service_path)
     next_env["AC_XRAY_SERVICE_SHA256"] = service_digest
     next_env["AC_XRAY_NATIVE_IMAGE_REF"] = image_ref
+    next_env["AC_XRAY_APPROVAL_FILE"] = str(approval_output_path)
+    next_env["AC_XRAY_APPROVAL_SHA256"] = approval_output_digest
     env_raw = _env_bytes(next_env)
 
     next_descriptor = dict(descriptor)
@@ -463,23 +590,31 @@ def prepare(
             "service_config_sha256": service_digest,
             "native_image_ref": image_ref,
             "native_image_config_id": config_id,
-            # Approval path and digest are intentionally copied exactly.
-            "approval_file": descriptor["approval_file"],
-            "approval_sha256": descriptor["approval_sha256"],
+            "approval_file": str(approval_output_path),
+            "approval_sha256": approval_output_digest,
         }
     )
     descriptor_raw = _json_bytes(next_descriptor)
     digest_raw = (_sha(descriptor_raw) + "\n").encode("ascii")
+    output_files: list[tuple[Path, bytes]] = [
+        (service_path, service_raw),
+        (env_path, env_raw),
+        (activation_path, descriptor_raw),
+        (digest_path, digest_raw),
+    ]
+    if approval_output_raw is not None:
+        output_files.append((approval_output_path, approval_output_raw))
+    created_paths: list[Path] = []
     try:
-        service_path.write_bytes(service_raw)
-        env_path.write_bytes(env_raw)
-        activation_path.write_bytes(descriptor_raw)
-        digest_path.write_bytes(digest_raw)
+        for path, raw in output_files:
+            with path.open("xb") as output_file:
+                created_paths.append(path)
+                output_file.write(raw)
     except OSError as exc:
         # The output directory is disposable and created by this command.  A
         # best-effort cleanup prevents a caller from mistaking a partial set
         # for a reviewable bundle; source/live paths are never touched.
-        for path in paths:
+        for path in created_paths:
             with contextlib.suppress(OSError):
                 path.unlink()
         raise _fail("output artifact write failed") from exc
@@ -489,14 +624,15 @@ def prepare(
         "native_source_commit": _source_commit,
         "native_image_ref": image_ref,
         "native_image_config_id": config_id,
-        "approval_file": descriptor["approval_file"],
-        "approval_sha256": descriptor["approval_sha256"],
+        "approval_file": str(approval_output_path),
+        "approval_sha256": approval_output_digest,
+        "approval_replaced": approval_output_raw is not None,
         "output_dir": str(output_dir),
         "activation": str(activation_path),
         "activation_sha256": str(digest_path),
         "service": str(service_path),
         "compose_env": str(env_path),
-        "writes": 4,
+        "writes": len(output_files),
         "provider_calls": 0,
     }
 
@@ -507,6 +643,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-release-id", required=True)
     parser.add_argument("--native-artifact-manifest", type=Path, required=True)
     parser.add_argument("--native-artifact-sha256", required=True)
+    parser.add_argument("--approval-file", type=Path)
+    parser.add_argument("--approval-sha256")
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -520,6 +658,8 @@ def main(arguments: list[str] | None = None) -> int:
             native_artifact_manifest=args.native_artifact_manifest,
             native_artifact_sha256=args.native_artifact_sha256,
             output_dir=args.output_dir,
+            approval_file=args.approval_file,
+            approval_sha256=args.approval_sha256,
         )
     except (PrepareError, OSError, ValueError, TypeError, KeyError) as exc:
         print(f"FAIL  {exc}", file=sys.stderr)
