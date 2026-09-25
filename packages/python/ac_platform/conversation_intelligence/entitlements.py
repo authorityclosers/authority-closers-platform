@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields, replace
 from typing import Any, ClassVar, Self
+from uuid import UUID
 
 from .checkpoints import SourceBinding, content_hash, require_sha256, require_text
 
@@ -217,11 +218,44 @@ class ExecutionPermission(Snapshot):
     quote_fingerprint: str
     approved_by: str
     expires_at_epoch: int
+    acquisition_c5_benchmark_approval_id: str | None = None
 
     def __post_init__(self) -> None:
         _strings(self, ("authorization_ref", "approved_by"))
         require_sha256(self.quote_fingerprint, "permission quote fingerprint")
         _integer(self.expires_at_epoch, "permission expiry epoch", 1)
+        if self.acquisition_c5_benchmark_approval_id is not None:
+            try:
+                value = UUID(self.acquisition_c5_benchmark_approval_id)
+            except (TypeError, ValueError):
+                raise ValueError("invalid acquisition benchmark permission") from None
+            if str(value) != self.acquisition_c5_benchmark_approval_id:
+                raise ValueError("invalid acquisition benchmark permission")
+
+    def as_dict(self) -> dict[str, Any]:
+        value = super().as_dict()
+        if self.acquisition_c5_benchmark_approval_id is None:
+            # Preserve the exact schema and fingerprint for pre-benchmark
+            # execution permissions.
+            value.pop("acquisition_c5_benchmark_approval_id", None)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Any) -> Self:
+        legacy_fields = {
+            "schema",
+            "authorization_ref",
+            "quote_fingerprint",
+            "approved_by",
+            "expires_at_epoch",
+        }
+        if (
+            isinstance(value, dict)
+            and set(value) == legacy_fields
+            and value.get("schema") == "ac.sales_xray.ExecutionPermission/1"
+        ):
+            value = {**value, "acquisition_c5_benchmark_approval_id": None}
+        return super().from_dict(value)
 
 
 @dataclass(frozen=True)

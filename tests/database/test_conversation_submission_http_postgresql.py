@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import hmac
 import io
+import json
 import secrets
 import tempfile
 import threading
@@ -40,13 +41,20 @@ from ac_platform.conversation_intelligence.acquisition_sessions import (
 )
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionC5BenchmarkApproval,
     AcquisitionProviderPolicy,
     AcquisitionStagePolicy,
+    HostedApprovalBundle,
 )
+from ac_platform.conversation_intelligence.analysis_settings import settings_from_row
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
-from ac_platform.conversation_intelligence.guest_models import ConversationProcessingContinuation
+from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
+from ac_platform.conversation_intelligence.guest_models import (
+    ConversationGuestSubmission,
+    ConversationProcessingContinuation,
+)
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
@@ -56,8 +64,11 @@ from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationProcessingPlan,
+    ConversationProviderActivation,
+    ConversationProviderConfiguration,
     ConversationQuote,
     ConversationRecording,
+    ConversationReportDraft,
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.native_runtime import (
@@ -68,9 +79,13 @@ from ac_platform.conversation_intelligence.processing_plan import (
     ProcessingPlanScheduler,
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
+from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
+from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
+from ac_platform.conversation_intelligence.reports import load_report_profile
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import install_identity_http
+from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
@@ -82,6 +97,7 @@ from ac_platform.outbox.models import Job
 from tests.database.test_conversation_authority_postgresql import (
     _bundle,
     _promote_admin,
+    _provider,
     _registry_config,
 )
 from tests.database.test_conversation_guest_ownership_postgresql import _provision
@@ -94,6 +110,10 @@ from tests.database.test_conversation_worker_postgresql import (
     OfflineConversationWorker,
     _reconcile,
     _wav_one_second_48k,
+)
+from tests.database.test_openai_c5_http_postgresql import (
+    OpenAIC5ReportingBroker,
+    _coaching_output,
 )
 
 ORIGIN = "https://salesxray.example.test"
@@ -115,6 +135,46 @@ class OfflinePreflight:
     def inspect(self, source: Path, outdir: Path, *, job_id: UUID, rate: Any) -> dict[str, Any]:
         self.calls += 1
         return signals.inspect_media(source, outdir, rate=rate)
+
+
+class AcquisitionC5HistoryBroker(OpenAIC5ReportingBroker):
+    """Return schema-valid synthetic C5 output for the retained Gemini run too."""
+
+    async def execute(self, reservation: Any, payload: bytes) -> ProviderResult:
+        if reservation.quote.provider_id == "gemini":
+            body = json.loads(payload)
+            user = body["contents"][0]["parts"][0]["text"]
+            if not user.startswith("{"):
+                self.routes.append("gemini")
+                self.calls += 1
+                self.payloads.append(payload)
+                response = {
+                    "candidates": [
+                        {
+                            "finishReason": "STOP",
+                            "content": {
+                                "role": "model",
+                                "parts": [
+                                    {
+                                        "text": json.dumps(_coaching_output(), ensure_ascii=False)
+                                    }
+                                ],
+                            },
+                        }
+                    ]
+                }
+                raw = canonical(response)
+                return ProviderResult(
+                    provider="gemini",
+                    model=reservation.quote.provider_model,
+                    request_id=f"synthetic-gemini-c5-history-{self.calls + 1}",
+                    response_sha256=hashlib.sha256(raw).hexdigest(),
+                    raw_json=raw,
+                    data=response,
+                    usage={"total_tokens": 224},
+                    input_sha256=reservation.quote.input_sha256,
+                )
+        return await super().execute(reservation, payload)
 
 
 async def _setup(
@@ -196,6 +256,7 @@ async def _setup(
             text_cost_paise=text_cost_paise,
             asr_cost_paise=asr_cost_paise,
         )
+        stage_templates = bundle.stages
         stage_request_limits = {"C2": c2_max_requests, "C4": c4_max_requests, "C5": c5_max_requests}
         acquisition_stages = tuple(
             AcquisitionStagePolicy.model_validate(
@@ -274,6 +335,7 @@ async def _setup(
         require_actor=require_actor,
         authority=authority,
         bundle_box=None if not gemini else bundle_box,
+        stage_templates=None if not gemini else stage_templates,
     )
 
 
@@ -374,6 +436,475 @@ def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
                 body = progress.json()
                 assert body["submission_id"] == path.rsplit("/", 1)[-1]
                 assert body["failure_code"] is None
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_owned_acquisition_c5_benchmark_uses_retained_c2_c4_and_one_saved_openai_route(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The account owner can approve one exact C5 while the processor stays a separate actor."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True, funded=True)
+        try:
+            owner_id = setup.state.person_id
+            processor_id = setup.processing_person_id
+            assert owner_id != processor_id
+            settings_row = ConversationAnalysisSettings(
+                id=uuid4(),
+                tenant_id=setup.authority.operations_tenant_id,
+                person_id=owner_id,
+                session_id=setup.state.session_id,
+                revision=5,
+                c4_max_requests=64,
+                c4_max_completion_tokens=1_400,
+                c5_max_completion_tokens=8_000,
+                c5_output_profile="detailed",
+                c5_coaching_prompt_revision="coaching-v5",
+                report_language_default="en",
+                created_at=setup.state.now,
+            )
+            benchmark_settings = settings_from_row(settings_row)
+            settings_sha256 = content_hash(benchmark_settings.effective_values())
+            profile = load_report_profile()
+            profile_sha256 = content_hash(profile)
+
+            admin = await _promote_admin(setup.engine, setup.state)
+            async with setup.sessions() as database, database.begin():
+                base_configuration = await database.scalar(
+                    select(ConversationProviderConfiguration).where(
+                        ConversationProviderConfiguration.tenant_id
+                        == setup.authority.operations_tenant_id,
+                        ConversationProviderConfiguration.revision == 1,
+                    )
+                )
+                assert base_configuration is not None
+                active_configuration = await database.scalar(
+                    select(ConversationProviderActivation).where(
+                        ConversationProviderActivation.tenant_id
+                        == setup.authority.operations_tenant_id
+                    )
+                )
+                if active_configuration is None:
+                    database.add(
+                        ConversationProviderActivation(
+                            id=uuid4(),
+                            tenant_id=setup.authority.operations_tenant_id,
+                            person_id=admin.person_id,
+                            session_id=admin.session_id,
+                            configuration_id=base_configuration.id,
+                            configuration_revision=base_configuration.revision,
+                            configuration_sha256=base_configuration.configuration_sha256,
+                            sequence=1,
+                            created_at=setup.state.now,
+                        )
+                    )
+                data = deepcopy(base_configuration.configuration)
+                openai_provider = _provider(
+                    "openai",
+                    "gpt-6-luna",
+                    "https://api.openai.com/v1/responses",
+                    max_cost_paise=2_200,
+                )
+                data["revision"] = "saved-openai-c5-benchmark-v5"
+                data["providers"].append(openai_provider.as_dict())
+                coaching_route = next(item for item in data["routes"] if item["task"] == "coaching")
+                coaching_route["provider_id"] = "openai"
+                coaching_route["model_id"] = "gpt-6-luna"
+                data["policy"]["allow_paid"] = True
+                data["policy"]["paid_approval_ref"] = setup.bundle_box["bundle"].paid_approval_ref
+                saved_config = parse_registry_config(data)
+                saved = await ConversationProviderAdmin(
+                    ConversationApplication(database, clock=lambda: setup.state.now)
+                ).save(
+                    admin,
+                    saved_config.as_dict(),
+                    expected_revision=1,
+                    key="synthetic-openai-c5-saved-revision-five",
+                )
+                assert saved["revision"] == 2
+                database.add(settings_row)
+
+            base_bundle = setup.bundle_box["bundle"]
+            base_c5 = next(item for item in setup.stage_templates if item.stage == "C5")
+            stage_approval_id = uuid4()
+            benchmark_id = uuid4()
+            issued_at = int(setup.state.now.timestamp())
+            policy = base_bundle.acquisition_policy
+            assert policy is not None
+            expires_at = min(
+                base_bundle.expires_at_epoch,
+                policy.expires_at_epoch,
+                base_c5.expires_at_epoch,
+                issued_at + 3_600,
+            )
+            benchmark_stage = base_c5.model_copy(
+                update={
+                    "id": stage_approval_id,
+                    "configuration_sha256": saved_config.digest,
+                    "provider_id": "openai",
+                    "model_id": "gpt-6-luna",
+                    "permission_ref": openai_provider.permission_ref,
+                    "provider_terms_ref": openai_provider.provider_terms_ref,
+                    "privacy_ref": openai_provider.privacy_ref,
+                    "pricing_ref": openai_provider.pricing_ref,
+                    "credential_ref": openai_provider.credential_ref,
+                    "free_allowance_ref": None,
+                    "zero_cost_basis": "paid_pricing_evidence",
+                    "price_evidence_sha256": hashlib.sha256(
+                        b"synthetic isolated PostgreSQL C5 benchmark price fixture"
+                    ).hexdigest(),
+                    "max_requests": 1,
+                    "max_cost_paise": 2_200,
+                    "max_completion_tokens": 8_000,
+                    "max_input_bytes": 134_217_728,
+                    "profile_sha256": profile_sha256,
+                    "expires_at_epoch": expires_at,
+                }
+            )
+            origin = ORIGIN
+            app = setup.app
+            install_conversation_http(
+                app,
+                settings=setup.settings,
+                require_actor=setup.require_actor,
+                intake_runtime=setup.runtime,
+            )
+            broker = AcquisitionC5HistoryBroker(_wav_one_second_48k())
+            router = FixedProviderRouter(
+                {
+                    provider: ProviderRoute(provider, f"ref:credential:{provider}", broker)
+                    for provider in ("elevenlabs", "gemini", "openai")
+                },
+                authority=setup.authority,
+            )
+            worker = ConversationInferenceWorker(
+                setup.sessions,
+                setup.runtime.storage,
+                router,
+                authority=setup.authority,
+            )
+            scheduler = ProcessingPlanScheduler(
+                setup.sessions, setup.authority, setup.runtime.storage
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url=origin
+            ) as client:
+                _sign_in(setup, client)
+                audio = _wav_one_second_48k()
+                submission_id = uuid4()
+                path = f"{PREFIX}/submissions/{submission_id}"
+                uploaded = await client.put(
+                    path + "/source", content=audio, headers=await _headers(client, audio)
+                )
+                assert uploaded.status_code == 202, uploaded.text
+                await _reconcile(setup.sessions, setup.state)
+                local = OfflineConversationWorker(
+                    setup.sessions,
+                    storage=setup.runtime.storage,
+                    scratch=setup.runtime.scratch,
+                    environment="test",
+                )
+                assert await local.run_once()
+
+                # The ordinary acquisition plan is owner-approved and produces
+                # the retained C2/C4 inputs. Stop before its default C5 stage.
+                quoted_plan = await client.post(
+                    path + "/plan/quote",
+                    headers={"Origin": origin, "Idempotency-Key": "benchmark-fixture-plan-quote"},
+                )
+                assert quoted_plan.status_code == 201, quoted_plan.text
+                plan = quoted_plan.json()
+                accepted_plan = await client.post(
+                    path + "/plan",
+                    json={
+                        "plan_id": plan["id"],
+                        "plan_fingerprint": plan["plan_fingerprint"],
+                        "privacy_revision": plan["privacy_revision"],
+                        "accepted": True,
+                    },
+                    headers={"Origin": origin, "Idempotency-Key": "benchmark-fixture-plan-accept"},
+                )
+                assert accepted_plan.status_code == 202, accepted_plan.text
+                assert await worker.run_once()
+                await _make_due(setup, UUID(plan["id"]))
+                assert await scheduler.step()
+                assert await worker.run_once()
+                await _make_due(setup, UUID(plan["id"]))
+                assert await scheduler.step()
+                assert await worker.run_once()
+                async with setup.sessions() as database:
+                    retained = (
+                        await database.scalars(
+                            select(ConversationInferenceTask).where(
+                                ConversationInferenceTask.recording_id
+                                == UUID(uploaded.json()["recording_id"]),
+                                ConversationInferenceTask.stage.in_(("C2", "C4")),
+                            )
+                        )
+                    ).all()
+                    assert {row.stage for row in retained} == {"C2", "C4"}
+                    assert all(row.state == "completed" for row in retained)
+                    prior_c5 = await database.scalar(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id
+                            == UUID(uploaded.json()["recording_id"]),
+                            ConversationInferenceTask.stage == "C5",
+                        )
+                    )
+                    assert prior_c5 is not None
+                    if prior_c5.state != "completed":
+                        prior_job = await database.get(Job, prior_c5.job_id)
+                        raise AssertionError(
+                            "synthetic prior C5 did not complete: "
+                            f"state={prior_c5.state}, last_error="
+                            f"{prior_job.last_error if prior_job is not None else 'job_missing'}"
+                        )
+                    prior_c5_run_id = prior_c5.run_id
+                    prior_draft = await database.scalar(
+                        select(ConversationReportDraft).where(
+                            ConversationReportDraft.run_id == prior_c5_run_id,
+                            ConversationReportDraft.erased_at.is_(None),
+                        )
+                    )
+                    assert prior_draft is not None
+                    link = await database.get(
+                        ConversationGuestSubmission,
+                        (setup.state.tenant_id, submission_id),
+                    )
+                    recording = await database.get(
+                        ConversationRecording, UUID(uploaded.json()["recording_id"])
+                    )
+                    assert link is not None and recording is not None
+                    assert link.person_id == processor_id
+                    assert link.source_sha256 == hashlib.sha256(audio).hexdigest()
+                    assert recording.source_revision == 1 and recording.generation == 1
+                    assert setup.state.person_id == owner_id
+                    assert link.person_id != owner_id
+                prior_report = await client.get(path + "/report")
+                assert prior_report.status_code == 200, prior_report.text
+                assert prior_report.json()["run_id"] == str(prior_c5_run_id)
+                benchmark = AcquisitionC5BenchmarkApproval(
+                        id=benchmark_id,
+                        authorization_ref="ref:permission:synthetic-acquisition-c5-benchmark",
+                        tenant_id=setup.state.tenant_id,
+                        owner_person_id=owner_id,
+                        submission_id=submission_id,
+                        recording_id=recording.id,
+                        processing_person_id=processor_id,
+                        processing_lease_id=link.processing_lease_id,
+                        usage_id=link.usage_id,
+                        source_sha256=recording.source_sha256,
+                        source_revision=recording.source_revision,
+                        generation=recording.generation,
+                        stage_approval_id=stage_approval_id,
+                        configuration_sha256=saved_config.digest,
+                        analysis_settings_revision=5,
+                        analysis_settings_sha256=settings_sha256,
+                        coaching_prompt_revision="coaching-v5",
+                        report_language="en",
+                        output_profile="detailed",
+                        profile_sha256=profile_sha256,
+                        issued_at_epoch=issued_at,
+                        expires_at_epoch=expires_at,
+                        max_cost_paise=2_200,
+                        max_completion_tokens=8_000,
+                    )
+
+                configured_bundle = HostedApprovalBundle.model_validate_json(
+                    base_bundle.model_copy(
+                        update={
+                            "stages": (*base_bundle.stages, benchmark_stage),
+                            "acquisition_c5_benchmarks": (benchmark,),
+                        }
+                    ).to_json()
+                )
+                setup.bundle_box["bundle"] = configured_bundle
+                recording_id = UUID(uploaded.json()["recording_id"])
+                ordinary = await client.get(f"/v1/conversation/recordings/{recording_id}/analysis")
+                assert ordinary.status_code == 404, ordinary.text
+
+                before_routes = list(broker.routes)
+                assert before_routes == ["elevenlabs", "gemini", "gemini"]
+                benchmark_path = path + "/c5-benchmark"
+                caller_selected_route = await client.post(
+                    benchmark_path + "/quote",
+                    json={"provider": "gemini", "model": "caller-selected"},
+                    headers={"Origin": origin, "Idempotency-Key": "caller-route-rejected"},
+                )
+                assert caller_selected_route.status_code == 422, caller_selected_route.text
+                assert broker.routes == before_routes
+                invalid_source_sha256 = "0" * 64
+                invalid_configuration_sha256 = "0" * 64
+                invalid_scopes = (
+                    (
+                        benchmark.model_copy(update={"source_sha256": invalid_source_sha256}),
+                        benchmark_stage.model_copy(
+                            update={"source_sha256": invalid_source_sha256}
+                        ),
+                    ),
+                    (
+                        benchmark.model_copy(
+                            update={"configuration_sha256": invalid_configuration_sha256}
+                        ),
+                        benchmark_stage.model_copy(
+                            update={"configuration_sha256": invalid_configuration_sha256}
+                        ),
+                    ),
+                    (
+                        benchmark.model_copy(
+                            update={
+                                "issued_at_epoch": issued_at - 3_600,
+                                "expires_at_epoch": issued_at - 1,
+                            }
+                        ),
+                        benchmark_stage,
+                    ),
+                )
+                for index, (invalid, invalid_stage) in enumerate(invalid_scopes):
+                    invalid_stages = tuple(
+                        invalid_stage if item.id == stage_approval_id else item
+                        for item in configured_bundle.stages
+                    )
+                    setup.bundle_box["bundle"] = HostedApprovalBundle.model_validate_json(
+                        configured_bundle.model_copy(
+                            update={
+                                "stages": invalid_stages,
+                                "acquisition_c5_benchmarks": (invalid,),
+                            }
+                        ).to_json()
+                    )
+                    refused = await client.post(
+                        benchmark_path + "/quote",
+                        headers={
+                            "Origin": origin,
+                            "Idempotency-Key": f"invalid-benchmark-scope-{index}",
+                        },
+                    )
+                    assert refused.status_code in {403, 409}, refused.text
+                    assert broker.routes == before_routes
+                setup.bundle_box["bundle"] = configured_bundle
+                quote_response = await client.post(
+                    benchmark_path + "/quote",
+                    headers={"Origin": origin, "Idempotency-Key": "owner-benchmark-quote"},
+                )
+                assert quote_response.status_code == 201, quote_response.text
+                quote = quote_response.json()
+                assert quote["purpose"] == "acquisition_c5_benchmark"
+                assert quote["benchmark_approval_id"] == str(benchmark_id)
+                assert quote["provider"] == "openai" and quote["model"] == "gpt-6-luna"
+                assert quote["max_cost_paise"] == 2_200
+
+                async with setup.sessions() as database:
+                    active = await database.scalar(
+                        select(ConversationProviderActivation)
+                        .where(
+                            ConversationProviderActivation.tenant_id
+                            == setup.authority.operations_tenant_id
+                        )
+                        .order_by(ConversationProviderActivation.sequence.desc())
+                    )
+                    assert active is not None
+                    assert active.configuration_sha256 == base_configuration.configuration_sha256
+                    issued_quote = await database.get(ConversationQuote, UUID(quote["id"]))
+                    assert issued_quote is not None
+                    assert (
+                        issued_quote.quote["provider_configuration_sha256"]
+                        == saved_config.digest
+                    )
+                    assert issued_quote.execution_permission[
+                        "acquisition_c5_benchmark_approval_id"
+                    ] == str(benchmark_id)
+
+                accepted = await client.post(
+                    benchmark_path,
+                    json={
+                        "quote_id": quote["id"],
+                        "quote_fingerprint": quote["quote_fingerprint"],
+                        "privacy_revision": quote["privacy_revision"],
+                        "accepted": True,
+                    },
+                    headers={"Origin": origin, "Idempotency-Key": "owner-benchmark-accept"},
+                )
+                assert accepted.status_code == 202, accepted.text
+                assert accepted.json()["purpose"] == "acquisition_c5_benchmark"
+                assert accepted.json()["state"] == "queued"
+                assert await worker.run_once()
+                assert broker.routes == ["elevenlabs", "gemini", "gemini", "openai"]
+                assert sum(route == "openai" for route in broker.routes) == 1
+                assert str(benchmark_id).encode() not in broker.payloads[-1]
+                async with setup.sessions() as database:
+                    c5_tasks = (
+                        await database.scalars(
+                            select(ConversationInferenceTask)
+                            .where(
+                                ConversationInferenceTask.recording_id == recording_id,
+                                ConversationInferenceTask.stage == "C5",
+                            )
+                            .order_by(ConversationInferenceTask.created_at)
+                        )
+                    ).all()
+                    assert len(c5_tasks) == 2
+                    c5 = next(
+                        item
+                        for item in c5_tasks
+                            if item.intent["request"].get("acquisition_c5_benchmark_approval_id")
+                        == str(benchmark_id)
+                    )
+                    assert c5.state == "completed" and c5.run_id != prior_c5_run_id
+                    assert (
+                        c5.intent["request"]["acquisition_c5_benchmark_approval_id"]
+                        == str(benchmark_id)
+                    )
+                    assert await database.scalar(
+                        select(func.count()).select_from(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id == recording_id,
+                            ConversationInferenceTask.stage.in_(("C2", "C4")),
+                            ConversationInferenceTask.state == "completed",
+                        )
+                    ) == 2
+                    assert await database.get(ConversationReportDraft, prior_draft.id) is not None
+                benchmark_report = await client.get(path + "/report")
+                assert benchmark_report.status_code == 200, benchmark_report.text
+                assert benchmark_report.json()["run_id"] == str(c5.run_id)
+                repeated_accept = await client.post(
+                    benchmark_path,
+                    json={
+                        "quote_id": quote["id"],
+                        "quote_fingerprint": quote["quote_fingerprint"],
+                        "privacy_revision": quote["privacy_revision"],
+                        "accepted": True,
+                    },
+                    headers={"Origin": origin, "Idempotency-Key": "owner-benchmark-accept"},
+                )
+                assert repeated_accept.status_code == 202, repeated_accept.text
+                assert repeated_accept.json()["id"] == accepted.json()["id"]
+                calls_after_benchmark = list(broker.routes)
+                outsider = await seed(setup.engine, tenant_id=setup.state.tenant_id)
+                outsider_token = secrets.token_urlsafe(32)
+                async with setup.sessions() as database, database.begin():
+                    session = await database.get(IdentitySession, outsider.session_id)
+                    assert session is not None
+                    session.token_hash = hmac.new(
+                        setup.settings.session_token_pepper.get_secret_value().encode(),
+                        outsider_token.encode(),
+                        hashlib.sha256,
+                    ).digest()
+                client.cookies.clear()
+                client.cookies.set(setup.settings.session_cookie_name, outsider_token)
+                foreign_owner = await client.post(
+                    benchmark_path + "/quote",
+                    headers={"Origin": origin, "Idempotency-Key": "foreign-owner-benchmark-quote"},
+                )
+                assert foreign_owner.status_code == 404, foreign_owner.text
+                assert broker.routes == calls_after_benchmark
+                _sign_in(setup, client)
+                owner_report = await client.get(path + "/report")
+                assert owner_report.status_code == 200, owner_report.text
+                assert owner_report.json()["run_id"] == str(c5.run_id)
         finally:
             await setup.engine.dispose()
 

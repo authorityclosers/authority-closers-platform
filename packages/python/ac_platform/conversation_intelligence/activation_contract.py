@@ -39,6 +39,7 @@ MAX_ALLOWANCES = 64
 MAX_STAGES = 192
 MAX_INTERNAL_TESTER_ACCOUNTS = 8
 MAX_STAGE_CALL_SUPPLEMENTS = 64
+MAX_ACQUISITION_C5_BENCHMARKS = 8
 ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"] = (
     "ac.sales-xray.acquisition-provider-policy/1"
 )
@@ -297,6 +298,44 @@ class StageCallSupplement(_StrictFrozenModel):
             self.max_additional_requests * self.max_cost_per_request_paise
         ):
             raise ValueError("stage_supplement_aggregate_exceeds_request_cap")
+        return self
+
+
+class AcquisitionC5BenchmarkApproval(_StrictFrozenModel):
+    """One human-authorized, exact-source acquisition C5 benchmark."""
+
+    id: UUID
+    authorization_ref: str = Field(min_length=6, max_length=256)
+    tenant_id: UUID
+    owner_person_id: UUID
+    submission_id: UUID
+    recording_id: UUID
+    processing_person_id: UUID
+    processing_lease_id: UUID
+    usage_id: UUID
+    source_sha256: str = Field(pattern=_DIGEST)
+    source_revision: StrictInt = Field(ge=1)
+    generation: StrictInt = Field(ge=1)
+    stage_approval_id: UUID
+    configuration_sha256: str = Field(pattern=_DIGEST)
+    analysis_settings_revision: StrictInt = Field(ge=1)
+    analysis_settings_sha256: str = Field(pattern=_DIGEST)
+    coaching_prompt_revision: Literal["coaching-v5"]
+    report_language: Literal["en", "hi-Deva+en", "mr-Deva+en"]
+    output_profile: Literal["detailed"]
+    profile_sha256: str = Field(pattern=_DIGEST)
+    issued_at_epoch: StrictInt = Field(gt=0)
+    expires_at_epoch: StrictInt = Field(gt=0)
+    max_requests: Literal[1] = 1
+    max_cost_paise: StrictInt = Field(ge=1, le=2_200)
+    max_completion_tokens: StrictInt = Field(ge=256, le=8_000)
+
+    _authorization_ref = field_validator("authorization_ref")(_validate_reference)
+
+    @model_validator(mode="after")
+    def validate_window(self) -> Self:
+        if self.expires_at_epoch <= self.issued_at_epoch:
+            raise ValueError("acquisition_c5_benchmark_window_invalid")
         return self
 
 
@@ -570,6 +609,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
     stage_call_supplements: tuple[StageCallSupplement, ...] = Field(
         default=(), max_length=MAX_STAGE_CALL_SUPPLEMENTS
     )
+    acquisition_c5_benchmarks: tuple[AcquisitionC5BenchmarkApproval, ...] = Field(
+        default=(), max_length=MAX_ACQUISITION_C5_BENCHMARKS
+    )
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
     _budget_authorization_ref = field_validator("budget_authorization_ref")(_validate_reference)
@@ -616,6 +658,13 @@ class HostedApprovalBundle(_StrictFrozenModel):
         ]
         if len(supplement_scopes) != len(set(supplement_scopes)):
             raise ValueError("duplicate_stage_supplement_scope")
+
+        benchmarks = self.acquisition_c5_benchmarks
+        benchmark_ids = [item.id for item in benchmarks]
+        if len(benchmark_ids) != len(set(benchmark_ids)) or set(benchmark_ids) & set(
+            approval_ids + tester_ids + supplement_ids
+        ):
+            raise ValueError("duplicate_approval_id")
 
         allowance_recipients = [
             (approval.tenant_id, approval.person_id) for approval in self.allowances
@@ -726,6 +775,36 @@ class HostedApprovalBundle(_StrictFrozenModel):
                     or supplement.max_cost_per_request_paise > base.max_cost_paise
                 ):
                     raise ValueError("stage_supplement_base_approval_invalid")
+        elif benchmarks:
+            raise ValueError("acquisition_c5_benchmark_requires_acquisition_policy")
+        for benchmark in benchmarks:
+            candidates = tuple(
+                item for item in self.stages if item.id == benchmark.stage_approval_id
+            )
+            if len(candidates) != 1:
+                raise ValueError("acquisition_c5_benchmark_stage_approval_missing")
+            stage = candidates[0]
+            if (
+                self.environment not in {"staging", "test"}
+                or policy is None
+                or benchmark.tenant_id != policy.tenant_id
+                or benchmark.processing_person_id != policy.processing_person_id
+                or stage.tenant_id != benchmark.tenant_id
+                or stage.person_id != benchmark.processing_person_id
+                or stage.source_sha256 != benchmark.source_sha256
+                or stage.stage != "C5"
+                or stage.provider_id != "openai"
+                or stage.model_id != "gpt-6-luna"
+                or stage.configuration_sha256 != benchmark.configuration_sha256
+                or stage.expires_at_epoch < benchmark.expires_at_epoch
+                or stage.max_requests != 1
+                or stage.max_cost_paise != benchmark.max_cost_paise
+                or stage.max_completion_tokens != benchmark.max_completion_tokens
+                or stage.profile_sha256 != benchmark.profile_sha256
+                or stage.zero_cost_basis != "paid_pricing_evidence"
+                or benchmark.expires_at_epoch > min(self.expires_at_epoch, policy.expires_at_epoch)
+            ):
+                raise ValueError("acquisition_c5_benchmark_stage_scope_invalid")
         return self
 
     @property
@@ -756,6 +835,10 @@ class HostedApprovalBundle(_StrictFrozenModel):
         if not self.stage_call_supplements:
             # Keep the canonical bytes and digest of historical /1 bundles.
             value.pop("stage_call_supplements", None)
+        if not self.acquisition_c5_benchmarks:
+            # Do not change canonical bytes for deployments without this
+            # explicitly issued one-source benchmark grant.
+            value.pop("acquisition_c5_benchmarks", None)
         for stage in value["stages"]:
             if stage.get("max_cost_paise") == 0:
                 stage.pop("max_cost_paise", None)
@@ -858,6 +941,7 @@ def load_approval_bundle(raw: bytes | str | Mapping[str, Any]) -> HostedApproval
 __all__ = [
     "ActivationContractError",
     "ACQUISITION_POLICY_SCHEMA",
+    "AcquisitionC5BenchmarkApproval",
     "AcquisitionProviderPolicy",
     "AcquisitionProviderProfile",
     "AcquisitionStagePolicy",
@@ -868,6 +952,7 @@ __all__ = [
     "MAX_INTERNAL_TESTER_ACCOUNTS",
     "MAX_APPROVAL_BUNDLE_BYTES",
     "MAX_ALLOWANCES",
+    "MAX_ACQUISITION_C5_BENCHMARKS",
     "MAX_STAGES",
     "StageApproval",
     "StageCallSupplement",

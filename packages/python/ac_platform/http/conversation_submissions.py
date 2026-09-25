@@ -25,6 +25,12 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
+    benchmark_for_submission,
+    build_benchmark_request,
+    record_owner_benchmark_receipt,
+    validate_benchmark_scope,
+)
 from ac_platform.conversation_intelligence.acquisition_library import account_library
 from ac_platform.conversation_intelligence.acquisition_processing import (
     AcquisitionProcessing,
@@ -42,7 +48,9 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import (
@@ -52,6 +60,7 @@ from ac_platform.conversation_intelligence.processing_plan import (
 )
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
+from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     ObjectKey,
@@ -93,6 +102,12 @@ class _Owner:
         if self.shared_identity_locks:
             value["shared_identity_locks"] = True
         return value
+
+
+class AcquisitionC5BenchmarkAcceptance(QuoteAcceptance):
+    """Owner accepts one server-issued, exact-source benchmark quote."""
+
+    quote_id: UUID
 
 
 def _is_postgres_deadlock(error: DBAPIError) -> bool:
@@ -247,6 +262,65 @@ def install_submission_http(
 
     dependency = Depends(current_owner, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
+
+    async def acquisition_benchmark_context(
+        submission_id: UUID,
+        key: str,
+        owner: _Owner,
+    ) -> tuple[ConversationApplication, Any, Any, Any, Any, Any]:
+        if owner.actor is None:
+            raise fail(401, "Sign in to the public Academy account to continue.")
+        if owner.actor.tenant_id != settings.public_learner_tenant_id:
+            raise fail(403, "The public Academy account is required for this benchmark.")
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
+        if runtime.authority is None:
+            raise fail(409, "The approved benchmark provider route is unavailable.")
+
+        # Expired processing authority is recovered only through the existing
+        # owner-authenticated continuation contract. The lease itself is never
+        # rewritten and the benchmark bundle does not manufacture continuation.
+        await owner.ownership.ensure_processing_continuation(
+            submission_id, key=key, **owner.arguments
+        )
+        processor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
+        if (
+            processor.tenant_id != scope.tenant_id
+            or processor.person_id != scope.processing_person_id
+            or processor.processing_lease_id != scope.processing_lease_id
+        ):
+            raise fail(409, "The current processing lease differs from this saved call.")
+        app = ConversationApplication(owner.ownership.database)
+        now = app.clock()
+        bundle = await runtime.authority.admit(app, processor)
+        benchmark = benchmark_for_submission(
+            bundle,
+            tenant_id=scope.tenant_id,
+            owner_person_id=owner.actor.person_id,
+            submission_id=scope.submission_id,
+            recording_id=scope.recording_id,
+            processing_person_id=scope.processing_person_id,
+            processing_lease_id=scope.processing_lease_id,
+            usage_id=scope.usage_id,
+            source_sha256=scope.source_sha256,
+        )
+        recording = await app._recording(processor, scope.recording_id)
+        await validate_benchmark_scope(app, processor, recording, bundle, benchmark, now)
+        stage_request = await build_benchmark_request(app, processor, bundle, benchmark, recording)
+        return app, processor, recording, bundle, benchmark, stage_request
+
+    async def require_empty_benchmark_quote_body(request: Request) -> None:
+        total = 0
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    total += len(block)
+                    if total:
+                        raise fail(422, "The benchmark quote uses its server-approved source only.")
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The benchmark quote request was interrupted.") from None
 
     @asynccontextmanager
     async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
@@ -677,6 +751,145 @@ def install_submission_http(
         return await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
+
+    @router.post("/submissions/{submission_id}/c5-benchmark/quote", status_code=201)
+    async def quote_acquisition_c5_benchmark(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        await require_empty_benchmark_quote_body(request)
+        (
+            app,
+            processor,
+            recording,
+            _bundle,
+            benchmark,
+            stage_request,
+        ) = await acquisition_benchmark_context(submission_id, key, owner)
+        assert runtime.authority is not None and owner.actor is not None
+        quote = await runtime.authority.issue(
+            app,
+            processor,
+            recording.id,
+            key=key,
+            request=stage_request,
+        )
+        now = app.clock()
+        await record_owner_benchmark_receipt(
+            app,
+            owner.actor,
+            processor,
+            recording,
+            benchmark,
+            UUID(quote["id"]),
+            quote["quote_fingerprint"],
+            now,
+            accepted=False,
+        )
+        return {
+            **quote,
+            "purpose": "acquisition_c5_benchmark",
+            "benchmark_approval_id": str(benchmark.id),
+        }
+
+    @router.post("/submissions/{submission_id}/c5-benchmark", status_code=202)
+    async def accept_acquisition_c5_benchmark(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
+            raise fail(415, "Approve the exact displayed benchmark quote.")
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 8192:
+                        raise fail(413, "The benchmark acceptance is too large.")
+                    raw.extend(block)
+            payload = AcquisitionC5BenchmarkAcceptance.model_validate_json(raw)
+        except (ValidationError, ValueError):
+            raise fail(422, "Approve the exact displayed benchmark quote.") from None
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The benchmark acceptance was interrupted.") from None
+
+        (
+            app,
+            processor,
+            recording,
+            bundle,
+            benchmark,
+            stage_request,
+        ) = await acquisition_benchmark_context(submission_id, key, owner)
+        assert runtime.authority is not None and owner.actor is not None
+        inference = ConversationInference(app, authority=runtime.authority)
+        plan = await ReportingPipeline(inference).plan(recording, stage_request)
+        row, quote, _permission = await inference._quote(
+            processor,
+            recording,
+            payload.quote_id,
+            plan,
+            app.clock(),
+            require_acceptance=False,
+        )
+        if (
+            payload.accepted is not True
+            or payload.quote_fingerprint != quote.fingerprint
+            or payload.privacy_revision != quote.privacy_revision
+        ):
+            raise fail(409, "Approve the exact displayed benchmark quote and privacy terms.")
+        await validate_benchmark_scope(
+            app,
+            processor,
+            recording,
+            bundle,
+            benchmark,
+            app.clock(),
+            quote=row,
+            require_owner_quote=True,
+        )
+        await record_owner_benchmark_receipt(
+            app,
+            owner.actor,
+            processor,
+            recording,
+            benchmark,
+            payload.quote_id,
+            quote.fingerprint,
+            app.clock(),
+            accepted=True,
+        )
+        acceptance = QuoteAcceptance(
+            quote_fingerprint=payload.quote_fingerprint,
+            privacy_revision=payload.privacy_revision,
+            accepted=True,
+        )
+        await inference.accept(
+            processor,
+            recording.id,
+            payload.quote_id,
+            acceptance,
+            request=stage_request,
+        )
+        started = await inference.request_stage(
+            processor,
+            recording.id,
+            payload.quote_id,
+            key=key,
+            request=stage_request,
+        )
+        return {
+            **started,
+            "purpose": "acquisition_c5_benchmark",
+            "benchmark_approval_id": str(benchmark.id),
+        }
 
     @router.get("/submissions/{submission_id}/source")
     async def playback(

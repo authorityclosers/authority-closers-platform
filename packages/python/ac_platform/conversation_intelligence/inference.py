@@ -379,6 +379,7 @@ class ConversationInference:
                 quote,
                 permission,
                 now,
+                require_owner_acceptance=require_acceptance,
             )
         elif permission.authorization_ref.startswith("hosted-stage-v1:"):
             raise ConversationDenied("Hosted processing requires its current release authority.")

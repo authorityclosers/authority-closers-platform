@@ -15,12 +15,18 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 
+from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
+    benchmark_by_id,
+    stage_approval_for_benchmark,
+    validate_benchmark_scope,
+)
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitor,
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionC5BenchmarkApproval,
     AcquisitionProviderPolicy,
     HostedApprovalBundle,
     StageApproval,
@@ -533,15 +539,54 @@ class ConversationAuthority:
             is None
         ):
             self.recipient(bundle, actor)
-        approved_default_configuration_sha256 = self._approved_default_configuration_sha256(
-            bundle,
-            actor,
-            source_sha256=recording.source_sha256,
-            stage=plan.checkpoint.stage,
+        benchmark: AcquisitionC5BenchmarkApproval | None = None
+        approved_default_configuration_sha256: str | None
+        benchmark_id = (
+            plan.request.acquisition_c5_benchmark_approval_id
+            if isinstance(plan, StagePlan)
+            else None
+        )
+        if benchmark_id is not None:
+            if (
+                not isinstance(actor, ProcessingActor)
+                or not isinstance(plan, StagePlan)
+                or plan.checkpoint.stage != "C5"
+            ):
+                raise ConversationDenied("The acquisition benchmark route is unavailable.")
+            benchmark = benchmark_by_id(bundle, benchmark_id)
+            if configuration_sha256 not in {None, benchmark.configuration_sha256}:
+                raise ConversationDenied("The benchmark provider configuration changed.")
+            await validate_benchmark_scope(app, actor, recording, bundle, benchmark, now)
+            request = plan.request
+            if (
+                request.stage != "C5"
+                or request.provider != "openai"
+                or request.model != "gpt-6-luna"
+                or request.repair is not None
+                or request.coaching_prompt_revision != benchmark.coaching_prompt_revision
+                or request.report_language != benchmark.report_language
+                or request.output_profile != benchmark.output_profile
+                or request.max_completion_tokens > benchmark.max_completion_tokens
+                or request.profile is None
+                or content_hash(request.profile) != benchmark.profile_sha256
+            ):
+                raise ConversationDenied("The C5 request exceeds its benchmark approval.")
+            approved_default_configuration_sha256 = benchmark.configuration_sha256
+        else:
+            approved_default_configuration_sha256 = self._approved_default_configuration_sha256(
+                bundle,
+                actor,
+                source_sha256=recording.source_sha256,
+                stage=plan.checkpoint.stage,
+            )
+        selected_configuration_sha256 = (
+            benchmark.configuration_sha256
+            if benchmark is not None and configuration_sha256 is None
+            else configuration_sha256
         )
         configuration = await self._provider_configuration(
             app,
-            configuration_sha256=configuration_sha256,
+            configuration_sha256=selected_configuration_sha256,
             default_configuration_sha256=approved_default_configuration_sha256,
         )
         if configuration is None:
@@ -550,12 +595,16 @@ class ConversationAuthority:
             # Selecting the public template still requires the canonical exact
             # recording permission created by the intake consent command.
             await app._permission(actor, recording.permission_id, recording.source_sha256, now)
-        approval = self.stage_approval(
-            bundle,
-            actor,
-            source_sha256=recording.source_sha256,
-            stage=plan.checkpoint.stage,
-            configuration_sha256=configuration.configuration_sha256,
+        approval = (
+            stage_approval_for_benchmark(bundle, benchmark)
+            if benchmark is not None
+            else self.stage_approval(
+                bundle,
+                actor,
+                source_sha256=recording.source_sha256,
+                stage=plan.checkpoint.stage,
+                configuration_sha256=configuration.configuration_sha256,
+            )
         )
         if approval is None or approval.expires_at_epoch <= int(now.timestamp()):
             raise ConversationDenied("This recording and processing stage need current approval.")
@@ -1313,7 +1362,18 @@ class ConversationAuthority:
         quote: Quote,
         permission: ExecutionPermission,
         now: datetime,
+        *,
+        require_owner_acceptance: bool = False,
     ) -> StageApproval:
+        request_benchmark_id = (
+            plan.request.acquisition_c5_benchmark_approval_id
+            if isinstance(plan, StagePlan)
+            else None
+        )
+        if permission.acquisition_c5_benchmark_approval_id != (
+            None if request_benchmark_id is None else str(request_benchmark_id)
+        ):
+            raise ConversationDenied("The quote purpose differs from its execution permission.")
         configuration_sha256 = quote.provider_configuration_sha256
         bundle = self.current(now)
         if configuration_sha256 is None:
@@ -1357,6 +1417,30 @@ class ConversationAuthority:
         # reservation, even across multiple uploads of the same source.
         _, budget = await ConversationInference(app).accounts(recording, row)
         entries = BudgetAccount.from_dict(budget.snapshot).reservations
+        if request_benchmark_id is not None:
+            benchmark_entries = tuple(
+                item
+                for item in entries
+                if item.permission.acquisition_c5_benchmark_approval_id == str(request_benchmark_id)
+            )
+            if (
+                len(benchmark_entries) > 1
+                or any(item.quote.quote_id != quote.quote_id for item in benchmark_entries)
+                or any(item.quote.max_cost_paise > 2_200 for item in benchmark_entries)
+            ):
+                raise ConversationDenied("The one-request benchmark allowance is used.")
+            benchmark = benchmark_by_id(bundle, request_benchmark_id)
+            await validate_benchmark_scope(
+                app,
+                actor,
+                recording,
+                bundle,
+                benchmark,
+                now,
+                quote=row,
+                require_owner_quote=require_owner_acceptance,
+                require_owner_acceptance=require_owner_acceptance,
+            )
         prefix = f"hosted-stage-v1:{approval.id}:"
         used = [entry for entry in entries if entry.permission.authorization_ref.startswith(prefix)]
         provider_count_tester = await self._provider_stage_request_count_tester(
@@ -1561,6 +1645,10 @@ class ConversationAuthority:
                 quote.fingerprint,
                 str(actor.person_id),
                 quote.expires_at_epoch,
+                None
+                if not isinstance(plan, StagePlan)
+                or plan.request.acquisition_c5_benchmark_approval_id is None
+                else str(plan.request.acquisition_c5_benchmark_approval_id),
             )
             row = ConversationQuote(
                 id=identifier,

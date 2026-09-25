@@ -134,6 +134,9 @@ class StageRequest(BaseModel):
     )
     profile: dict[str, Any] | None = Field(default=None, repr=False)
     repair: C5RepairIntent | None = Field(default=None, exclude_if=lambda value: value is None)
+    acquisition_c5_benchmark_approval_id: UUID | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
@@ -141,6 +144,10 @@ class StageRequest(BaseModel):
             raise ValueError("OpenAI is approved for coaching only.")
         if self.provider == "openai" and self.repair is not None:
             raise ValueError("OpenAI coaching repair is not authorized.")
+        if self.acquisition_c5_benchmark_approval_id is not None and (
+            self.stage != "C5" or self.provider != "openai"
+        ):
+            raise ValueError("Acquisition benchmark authority is C5-only.")
         if self.max_completion_tokens > completion_ceiling(self.provider, self.model, self.stage):
             raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
@@ -564,6 +571,13 @@ class ReportingPipeline:
             c5_config["qualitative_pack_sha256"] = request.qualitative_pack_sha256
         if request.repair is not None:
             c5_config["repair"] = request.repair.model_dump(mode="json")
+        if request.acquisition_c5_benchmark_approval_id is not None:
+            # Keep the one-off benchmark distinct in the checkpoint lineage;
+            # this identifier is execution metadata and is never added to the
+            # prepared provider prompt.
+            c5_config["acquisition_c5_benchmark_approval_id"] = str(
+                request.acquisition_c5_benchmark_approval_id
+            )
         template = build_checkpoint(
             binding,
             "C5",
