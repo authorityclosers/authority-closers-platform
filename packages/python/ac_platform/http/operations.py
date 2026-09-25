@@ -720,6 +720,10 @@ def install_operations_http(
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
         key = _normalize_idempotency_key(idempotency_key)
         reason = _normalize_reason(body.reason)
+        # Serialize actor/key lookup before touching a target account. The
+        # account lock alone is insufficient: concurrent requests that reuse
+        # one key for two different learners would otherwise both grant.
+        await _lock_idempotency_scope(auth.database, operations_tenant_id)
         digest = _minute_grant_digest(
             tenant_id=tenant_id,
             person_id=person_id,

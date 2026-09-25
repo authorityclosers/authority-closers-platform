@@ -1295,6 +1295,69 @@ def test_account_minute_grants_are_finite_audited_idempotent_and_tenant_scoped_p
                     3_600 + final_account["granted_seconds"]
                 )
                 assert after_negative_provenance.get("unlimited") is not True
+
+            # A key is actor-scoped across targets, not just per learner lock.
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=second_manager_app),
+                base_url="https://admin.authorityclosers.test",
+            ) as cross_target_client:
+                cross_target_key = "learner-minute-grant-concurrent-cross-target"
+
+                async def cross_target_grant(person_id: UUID) -> httpx.Response:
+                    return await cross_target_client.post(
+                        f"/v1/admin/conversation-minute-accounts/{learner_tenant_id}/"
+                        f"{person_id}/grants",
+                        json={"minutes": 17, "reason": "One key cannot grant twice"},
+                        headers={
+                            "Origin": "https://admin.authorityclosers.test",
+                            "Idempotency-Key": cross_target_key,
+                        },
+                    )
+
+                cross_target_pair = await asyncio.wait_for(
+                    asyncio.gather(
+                        cross_target_grant(learner_id),
+                        cross_target_grant(second_learner_id),
+                    ),
+                    timeout=5,
+                )
+                assert sorted(result.status_code for result in cross_target_pair) == [200, 409]
+                loser = next(result for result in cross_target_pair if result.status_code == 409)
+                assert loser.json()["code"] == "idempotency_conflict"
+                with Session(postgres_harness.engine) as database:
+                    key_events = list(
+                        database.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.tenant_id == seed.tenant_id,
+                                AuditEvent.action == "operations.conversation_minute_granted",
+                            )
+                        ).all()
+                    )
+                    key_events = [
+                        event
+                        for event in key_events
+                        if isinstance(event.payload, dict)
+                        and event.payload.get("idempotency_key") == cross_target_key
+                    ]
+                    assert len(key_events) == 1
+                    grant_event = key_events[0]
+                    assert grant_event.payload["person_id"] in {
+                        str(learner_id),
+                        str(second_learner_id),
+                    }
+                    granted_person_id = UUID(grant_event.payload["person_id"])
+                    account_row = database.get(
+                        ConversationMinuteAccount,
+                        (learner_tenant_id, granted_person_id),
+                    )
+                    assert account_row is not None
+                    assert (
+                        sum(
+                            grant.authorization_ref == f"audit-event:{grant_event.id}"
+                            for grant in MinuteAccount.from_dict(account_row.snapshot).grants
+                        )
+                        == 1
+                    )
         finally:
             await async_engine.dispose()
 
