@@ -29,7 +29,8 @@ from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
-    existing_account_seconds,
+    existing_account_usage,
+    shared_account_committed_seconds,
 )
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -89,16 +90,18 @@ class AcquisitionSessions:
         lifetime: timedelta = timedelta(days=1),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         tester_policy: InternalTesterPolicy | None = None,
+        operations_tenant_id: UUID | None = None,
     ) -> None:
         if (
             type(tenant_id) is not UUID
             or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", policy_revision)
             or not timedelta(minutes=5) <= lifetime <= timedelta(days=7)
+            or (operations_tenant_id is not None and type(operations_tenant_id) is not UUID)
         ):
             raise ValueError("Invalid acquisition policy.")
         self.database, self.tenant_id = database, tenant_id
         self.policy_revision, self.lifetime, self.clock = policy_revision, lifetime, clock
-        self.tester_policy = tester_policy
+        self.tester_policy, self.operations_tenant_id = tester_policy, operations_tenant_id
 
     async def _admit(self, *, mutation: bool = False) -> datetime:
         transaction = self.database.get_transaction()
@@ -238,17 +241,38 @@ class AcquisitionSessions:
         return None, actor.person_id
 
     async def _used(self, visitor_id: UUID | None, person_id: UUID | None) -> int:
+        used, _ = await self._usage_and_additional_allowance(visitor_id, person_id)
+        return used
+
+    async def _usage_and_additional_allowance(
+        self, visitor_id: UUID | None, person_id: UUID | None
+    ) -> tuple[int, int]:
+        if person_id is not None:
+            if self.operations_tenant_id is not None:
+                return await shared_account_committed_seconds(
+                    self.database,
+                    tenant_id=self.tenant_id,
+                    person_id=person_id,
+                    operations_tenant_id=self.operations_tenant_id,
+                )
+            total = await acquisition_seconds(
+                self.database,
+                tenant_id=self.tenant_id,
+                person_id=person_id,
+            )
+            account_seconds, additional_allowance = await existing_account_usage(
+                self.database,
+                tenant_id=self.tenant_id,
+                person_id=person_id,
+                operations_tenant_id=self.operations_tenant_id,
+            )
+            return total + account_seconds, additional_allowance
         total = await acquisition_seconds(
             self.database,
             tenant_id=self.tenant_id,
             visitor_id=visitor_id,
-            person_id=person_id,
         )
-        if person_id is not None:
-            total += await existing_account_seconds(
-                self.database, tenant_id=self.tenant_id, person_id=person_id
-            )
-        return total
+        return total, 0
 
     async def allowance(
         self,
@@ -264,11 +288,12 @@ class AcquisitionSessions:
             now,
             shared_identity_locks=shared_identity_locks,
         )
-        used = await self._used(*owner)
+        used, additional_allowance = await self._usage_and_additional_allowance(*owner)
+        allowance_seconds = ALLOWANCE_SECONDS + additional_allowance
         value: dict[str, int | bool | None] = {
-            "allowance_seconds": ALLOWANCE_SECONDS,
+            "allowance_seconds": allowance_seconds,
             "committed_seconds": used,
-            "available_seconds": max(0, ALLOWANCE_SECONDS - used),
+            "available_seconds": max(0, allowance_seconds - used),
         }
         tester = (
             None
@@ -317,11 +342,12 @@ class AcquisitionSessions:
             ):
                 raise ConversationConflict("This upload belongs to a different source receipt.")
             return previous.id
-        if (
-            tester is None
-            and await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS
-        ):
-            raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
+        if tester is None:
+            used, additional_allowance = await self._usage_and_additional_allowance(
+                visitor_id, person_id
+            )
+            if used + source.seconds > ALLOWANCE_SECONDS + additional_allowance:
+                raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         self.database.add(
             ConversationAcquisitionUsage(
