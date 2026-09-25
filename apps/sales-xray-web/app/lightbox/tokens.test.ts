@@ -243,6 +243,32 @@ describe("Lightbox token derivative", () => {
     expect(withoutComments(embed)).not.toMatch(/(^|\n)\s*:root\b/);
   });
 
+  it("keeps a light report surface coherent inside a dark app theme", () => {
+    const surface = block(derivative, '[data-lx-surface="light"]');
+    const declared = tokens(surface);
+    // Every token the dark theme overrides, plus tokens whose var() at :root
+    // references one (their computed value would otherwise inherit dark colours).
+    const referencesDark = (value: string) =>
+      [...value.matchAll(/var\(--lx-([a-z0-9-]+)\)/g)].some(([, name]) =>
+        appDarkOverrides.has(name),
+      );
+    const required = new Set([
+      ...appDarkOverrides.keys(),
+      ...[...appLight.entries()]
+        .filter(([, value]) => referencesDark(value))
+        .map(([name]) => name),
+    ]);
+    expect(required.has("ring-focus")).toBe(true);
+    const mismatched = [...required].filter(
+      (name) => declared.get(name) !== appLight.get(name),
+    );
+    expect(mismatched).toEqual([]);
+    expect(withoutComments(surface)).toMatch(/color-scheme:\s*light;/);
+    expect(withoutComments(surface)).toMatch(
+      /background-color:\s*var\(--lx-paper\);/,
+    );
+  });
+
   it("keeps new Lightbox modules on tokens, never raw hex colours", () => {
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -256,6 +282,8 @@ describe("Lightbox token derivative", () => {
     walk(join(appDir, "lightbox"));
     walk(join(appDir, "shell"));
     files.push(join(appDir, "profile-menu.module.css"));
+    // The report navigation (tab strip, section list, return control).
+    files.push(join(appDir, "report-modes.module.css"));
     const offenders = files
       .filter((path) => !path.endsWith(join("lightbox", "tokens.css")))
       .filter((path) =>

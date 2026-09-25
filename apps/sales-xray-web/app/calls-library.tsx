@@ -5,6 +5,7 @@ import {
   AudioLines,
   FolderOpen,
   LoaderCircle,
+  Plus,
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,11 @@ import {
   type LibrarySubmission,
 } from "./acquisition-client";
 import { useWorkspaceAccess } from "./workspace-access";
+import { formatClock } from "./lightbox/time";
+import { newCallHref } from "./new-call-navigation";
+import { callTitle, type CallLabel } from "./call-label";
+import { readCallLabel, renameCall } from "./call-label-client";
+import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -28,17 +34,64 @@ const duplicateError =
 const libraryReadTimeoutMs = 12_000;
 const processingRefreshIntervalMs = 15_000;
 
-function formatDuration(durationSeconds: number) {
-  return `About ${Math.floor(durationSeconds / 60)
-    .toString()
-    .padStart(1, "0")}:${(durationSeconds % 60).toString().padStart(2, "0")}`;
+/*
+ * The library's duration_seconds is the reserved (estimated) length recorded
+ * when the call was admitted, not a measured source duration. It is always
+ * presented as approximate until the list API supplies a measured field.
+ */
+function hasDurationEstimate(submission: LibrarySubmission) {
+  return (
+    Number.isFinite(submission.durationSeconds) &&
+    submission.durationSeconds > 0
+  );
 }
 
-function formatCreatedAt(createdAt: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(createdAt));
+function formatDuration(durationSeconds: number) {
+  return `About ${formatClock(durationSeconds * 1000)}`;
+}
+
+function formatCreatedDate(createdAt: string) {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    new Date(createdAt),
+  );
+}
+
+function formatCreatedTime(createdAt: string) {
+  return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
+    new Date(createdAt),
+  );
+}
+
+/** Status families from the saved state only; no inferred outcome. */
+type CallTone = "ready" | "active" | "attention" | "idle";
+
+function callTone(submission: LibrarySubmission): CallTone {
+  if (submission.hasReport) return "ready";
+  if (
+    ["uploading", "queued", "processing", "running", "active"].includes(
+      submission.state,
+    )
+  )
+    return "active";
+  if (["held", "uncertain", "failed", "blocked"].includes(submission.state))
+    return "attention";
+  return "idle";
+}
+
+const FILTERS: { id: "all" | CallTone; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "ready", label: "Report ready" },
+  { id: "active", label: "In progress" },
+  { id: "attention", label: "Needs attention" },
+];
+
+function openLabel(submission: LibrarySubmission) {
+  const tone = callTone(submission);
+  return tone === "ready"
+    ? "Open report"
+    : tone === "active"
+      ? "View progress"
+      : "Open call";
 }
 
 const STATE_COPY: Record<string, string> = {
@@ -125,7 +178,11 @@ function CallsLibraryContent({
   const [loading, setLoading] = useState(access?.authenticated === true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [opening, setOpening] = useState(false);
+  // Only the call being opened says so; the others are just unavailable.
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const opening = openingId !== null;
+  const [filter, setFilter] = useState<"all" | CallTone>("all");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seenSubmissionIds = useRef(new Set<string>());
   const firstPageSubmissionIds = useRef(new Set<string>());
@@ -475,45 +532,151 @@ function CallsLibraryContent({
     setAttempt((value) => value + 1);
   }
 
+  /** Apply a server-confirmed label to its own row only. */
+  function applyLabel(id: string, label: CallLabel) {
+    const next = submissionsRef.current.map((row) =>
+      row.id === id ? { ...row, label } : row,
+    );
+    submissionsRef.current = next;
+    setSubmissions(next);
+  }
+
   function openSubmission(submission: LibrarySubmission) {
     if (opening) return;
-    setOpening(true);
+    setOpeningId(submission.id);
     rememberSubmission(submission.id);
     router.push(`${studioHref}?call=${submission.id}`);
   }
 
-  const visibleSubmissions = submissions;
   const initialLoading = access?.authenticated === true && loading;
   const callsHref = "/calls";
-  const submissionButton = (submission: LibrarySubmission) => (
-    <button
-      className="calls-library-item"
-      key={submission.id}
-      data-submission-id={submission.id}
-      type="button"
-      disabled={opening}
-      onClick={() => openSubmission(submission)}
-    >
-      <span className="calls-library-icon" aria-hidden="true">
-        <AudioLines size={19} />
-      </span>
-      <span className="calls-library-copy">
-        <strong>Sales call · {formatCreatedAt(submission.createdAt)}</strong>
-        <small>{formatDuration(submission.durationSeconds)}</small>
-      </span>
-      <span className="calls-library-state">{submissionState(submission)}</span>
-      <span className="calls-library-open">
-        {opening ? "Opening…" : "Open call"}{" "}
-        <ArrowRight size={15} aria-hidden="true" />
-      </span>
-    </button>
+  const counts = submissions.reduce(
+    (total, submission) => {
+      total[callTone(submission)] += 1;
+      return total;
+    },
+    { ready: 0, active: 0, attention: 0, idle: 0 } as Record<CallTone, number>,
   );
+  const visibleSubmissions =
+    filter === "all"
+      ? submissions
+      : submissions.filter((submission) => callTone(submission) === filter);
+  // Bars compare estimated lengths against the longest loaded estimate.
+  const longestSeconds = Math.max(
+    0,
+    ...submissions
+      .filter(hasDurationEstimate)
+      .map((row) => row.durationSeconds),
+  );
+  const submissionButton = (submission: LibrarySubmission) => {
+    const estimated = hasDurationEstimate(submission);
+    const tone = callTone(submission);
+    const isOpening = openingId === submission.id;
+    const title = callTitle(
+      submission.label,
+      `Sales call · ${formatCreatedDate(submission.createdAt)}`,
+    );
+    // Rename needs a server that supplies labels; the server enforces ownership.
+    const label = submission.label;
+    if (renamingId === submission.id && label && !preview)
+      return (
+        <div
+          className="calls-library-row"
+          key={submission.id}
+          data-renaming="true"
+        >
+          <div className="calls-library-rename">
+            <CallLabelEditor
+              label={label}
+              onSave={(name, revision, signal) =>
+                renameCall(submission.id, name, revision, signal)
+              }
+              onRefresh={(signal) => readCallLabel(submission.id, signal)}
+              onConfirmed={(confirmed) => applyLabel(submission.id, confirmed)}
+              onClose={() => setRenamingId(null)}
+            />
+          </div>
+        </div>
+      );
+    return (
+      <div className="calls-library-row" key={submission.id}>
+        <button
+          className="calls-library-item"
+          data-submission-id={submission.id}
+          data-tone={tone}
+          type="button"
+          disabled={opening}
+          aria-busy={isOpening || undefined}
+          onClick={() => openSubmission(submission)}
+        >
+          <span className="calls-library-icon" aria-hidden="true">
+            <AudioLines size={19} />
+          </span>
+          <span className="calls-library-copy">
+            <strong>{title}</strong>
+            <small>
+              {label?.displayName
+                ? `${formatCreatedDate(submission.createdAt)} · ${formatCreatedTime(submission.createdAt)}`
+                : formatCreatedTime(submission.createdAt)}
+            </small>
+          </span>
+          <span
+            className="calls-library-duration"
+            aria-label={
+              estimated
+                ? `Estimated length: ${formatDuration(submission.durationSeconds)}`
+                : "Length unavailable"
+            }
+            title={
+              estimated
+                ? "Estimated length, compared with the longest call in this list"
+                : undefined
+            }
+          >
+            <span className="calls-library-duration-track" aria-hidden="true">
+              {estimated && longestSeconds > 0 ? (
+                <span
+                  className="calls-library-duration-fill"
+                  style={{
+                    width: `${Math.max(4, (submission.durationSeconds / longestSeconds) * 100)}%`,
+                  }}
+                />
+              ) : null}
+            </span>
+            <span className="calls-library-duration-clock" aria-hidden="true">
+              {estimated ? formatDuration(submission.durationSeconds) : "—"}
+            </span>
+          </span>
+          <span className="calls-library-state" data-tone={tone}>
+            {tone === "active" ? (
+              <span className="calls-library-pulse" aria-hidden="true" />
+            ) : null}
+            {submissionState(submission)}
+          </span>
+          <span className="calls-library-open">
+            {isOpening ? "Opening…" : openLabel(submission)}{" "}
+            {isOpening ? (
+              <LoaderCircle className="spin" size={15} aria-hidden="true" />
+            ) : (
+              <ArrowRight size={15} aria-hidden="true" />
+            )}
+          </span>
+        </button>
+        {label && !preview ? (
+          <RenameCallButton
+            callTitle={title}
+            onClick={() => setRenamingId(submission.id)}
+          />
+        ) : null}
+      </div>
+    );
+  };
 
   if (preview) {
     if (
       access?.authenticated !== true ||
       initialLoading ||
-      visibleSubmissions.length === 0
+      submissions.length === 0
     )
       return null;
     return (
@@ -531,7 +694,7 @@ function CallsLibraryContent({
           </Link>
         </div>
         <div className="calls-library-items">
-          {visibleSubmissions.slice(0, 3).map(submissionButton)}
+          {submissions.slice(0, 3).map(submissionButton)}
         </div>
         {error ? (
           <div className="calls-library-inline-error" role="alert">
@@ -549,14 +712,22 @@ function CallsLibraryContent({
       data-variant={variant}
     >
       <Main className="studio-main calls-library-main">
-        <div className="calls-library-intro">
-          <p className="eyebrow">YOUR AC ACCOUNT</p>
-          <h1>Saved calls</h1>
-          <p>
-            Open a saved call and continue with its report in Sales Xray. Calls
-            stay private to your account and selected workspace.
-          </p>
-        </div>
+        {/* One page heading; privacy is one quiet line, not a second title. */}
+        <header className="calls-library-intro">
+          <div>
+            <h1 id="calls-library-title">Calls</h1>
+            <p className="calls-library-summary">
+              {access?.authenticated === true && submissions.length > 0
+                ? `${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"} · private to your account and workspace`
+                : "Private to your account and workspace"}
+            </p>
+          </div>
+          {access?.authenticated === true ? (
+            <Link href={newCallHref(studioHref)} className="calls-library-new">
+              <Plus size={16} aria-hidden="true" /> New analysis
+            </Link>
+          ) : null}
+        </header>
 
         {access?.authenticated === false ? (
           <section
@@ -593,7 +764,7 @@ function CallsLibraryContent({
             <LoaderCircle className="spin" size={18} aria-hidden="true" />{" "}
             Checking your saved calls…
           </p>
-        ) : visibleSubmissions.length === 0 && !nextCursor ? (
+        ) : submissions.length === 0 && !nextCursor ? (
           <section
             className="panel calls-library-state"
             aria-labelledby="calls-library-empty"
@@ -601,40 +772,92 @@ function CallsLibraryContent({
             <AudioLines size={26} aria-hidden="true" />
             <h2 id="calls-library-empty">No saved calls yet.</h2>
             <p>Upload a call from the Sales Xray home page to begin.</p>
-            <Link href={studioHref} className="secondary-button">
+            <Link href={newCallHref(studioHref)} className="secondary-button">
               Analyse a call <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </section>
         ) : (
           <section
             className="panel calls-library-list-panel"
-            aria-labelledby="calls-library-list-heading"
+            aria-labelledby="calls-library-title"
           >
             <div className="calls-library-list-heading">
-              <div>
-                <p className="eyebrow">PRIVATE CALL LIBRARY</p>
-                <h2 id="calls-library-list-heading">Your calls</h2>
+              <div
+                className="calls-library-filters"
+                role="group"
+                aria-label="Filter loaded calls by status"
+              >
+                {FILTERS.map((option) => {
+                  const count =
+                    option.id === "all"
+                      ? submissions.length
+                      : counts[option.id];
+                  if (option.id !== "all" && count === 0) return null;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={filter === option.id}
+                      data-tone={option.id}
+                      onClick={() => setFilter(option.id)}
+                    >
+                      {option.label}
+                      <span className="calls-library-count">{count}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {loading || refreshing ? (
-                <span className="calls-library-inline-status" role="status">
-                  <LoaderCircle className="spin" size={15} aria-hidden="true" />{" "}
-                  Updating…
-                </span>
-              ) : null}
+              <div className="calls-library-tools">
+                {loading || refreshing ? (
+                  <span className="calls-library-inline-status" role="status">
+                    <LoaderCircle
+                      className="spin"
+                      size={15}
+                      aria-hidden="true"
+                    />{" "}
+                    Updating…
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="text-button calls-library-refresh"
+                  onClick={() => {
+                    refreshHandler.current(identityKey, true);
+                  }}
+                  disabled={loading || refreshing || opening}
+                >
+                  <RefreshCw size={14} aria-hidden="true" /> Refresh
+                </button>
+              </div>
+            </div>
+            <div className="calls-library-columns" aria-hidden="true">
+              <span />
+              <span>Call</span>
+              <span>Est. length</span>
+              <span>Status</span>
+              <span />
             </div>
             <div className="calls-library-items">
               {visibleSubmissions.map(submissionButton)}
             </div>
-            <button
-              type="button"
-              className="text-button calls-library-refresh"
-              onClick={() => {
-                refreshHandler.current(identityKey, true);
-              }}
-              disabled={loading || refreshing || opening}
-            >
-              <RefreshCw size={14} aria-hidden="true" /> Refresh calls
-            </button>
+            {visibleSubmissions.length === 0 && submissions.length > 0 ? (
+              <p className="calls-library-filter-empty" role="status">
+                No loaded calls match this status.{" "}
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setFilter("all")}
+                >
+                  Show all calls
+                </button>
+              </p>
+            ) : null}
+            {filter !== "all" && nextCursor ? (
+              <p className="calls-library-filter-note">
+                The filter covers loaded calls only. Load more to include older
+                calls.
+              </p>
+            ) : null}
             {nextCursor ? (
               <button
                 type="button"
@@ -672,7 +895,8 @@ function CallsLibraryContent({
       authenticated={access?.authenticated === true}
       homeHref={studioHref}
       active="calls"
-      mobileFit={!embedded}
+      /* Calls read as a normal page: the document scrolls, not an inner box. */
+      mobileFit={false}
     >
       {content}
     </AcquisitionShell>

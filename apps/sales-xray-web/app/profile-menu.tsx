@@ -200,9 +200,7 @@ export function ProfileMenu({
                 onClick={() => setOpen(false)}
               >
                 <FolderOpen size={16} aria-hidden="true" />
-                {authenticated
-                  ? "Saved calls & account"
-                  : "Sign in to my AC account"}
+                {authenticated ? "Account" : "Sign in to my AC account"}
               </Link>
             )}
             <LocalSettingsButton className={styles.item} />

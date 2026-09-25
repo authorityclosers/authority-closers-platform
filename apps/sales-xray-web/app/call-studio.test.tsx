@@ -644,6 +644,125 @@ describe("CallStudio", () => {
     expect(pause).toHaveBeenCalledOnce();
   });
 
+  it("drives the shared report clip controls from this studio's own player", async () => {
+    vi.useFakeTimers();
+    await render();
+    const file = await selectAudio("seekable.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain("Name the objection earlier");
+
+    const audio = container.querySelector<HTMLAudioElement>("audio")!;
+    let paused = true;
+    let now = 0;
+    Object.defineProperty(audio, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    Object.defineProperty(audio, "currentTime", {
+      configurable: true,
+      get: () => now,
+      set: (value: number) => {
+        now = value;
+      },
+    });
+    const play = vi.spyOn(audio, "play").mockImplementation(async () => {
+      paused = false;
+      audio.dispatchEvent(new Event("play"));
+    });
+    const pause = vi.spyOn(audio, "pause").mockImplementation(() => {
+      paused = true;
+      audio.dispatchEvent(new Event("pause"));
+    });
+    // The saved improvement evidence is 00:02.5–00:03.2 (segment s2).
+    const clip = () =>
+      container.querySelector<HTMLButtonElement>(
+        '.evidence-time-button[aria-label*="What would make this useful?"]',
+      )!;
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    expect(play).toHaveBeenCalledOnce();
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+    expect(clip().getAttribute("data-clip-playing")).toBe("true");
+
+    // Same control pauses the one element in place, then resumes it.
+    now = 2.8;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await act(async () => clip().click());
+    await flush();
+    expect(pause).toHaveBeenCalledOnce();
+    expect(now).toBe(2.8);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+    await act(async () => clip().click());
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(now).toBe(2.8);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+
+    // A manual seek in the player is the full-recording escape.
+    now = 10;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(container.querySelector('[data-clip-playing="true"]')).toBeNull();
+
+    // After a clip completes, a manual seek back into its range and native
+    // play must not let the finished clip claim the full-recording playback.
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    now = 3.2;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await flush();
+    expect(paused).toBe(true);
+    expect(now).toBe(3.2);
+    // The studio's own end-of-clip seek is not a manual escape.
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    now = 2.8;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.play());
+    now = 2.9;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await flush();
+    expect(paused).toBe(false);
+    expect(container.querySelector('[data-clip-playing="true"]')).toBeNull();
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+    // Pressing the clip again is a fresh bounded selection from its start.
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+    await act(async () => clip().click());
+    await flush();
+    expect(paused).toBe(true);
+
+    // The shared overview component's context control reads the same player.
+    await act(async () => getButton("Play with context").click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(1);
+    const contextPause = container.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Pause context playback,"]',
+    );
+    expect(contextPause).not.toBeNull();
+    await act(async () => contextPause!.click());
+    await flush();
+    // Pauses: inline pause, clip end, inline pause, context pause.
+    expect(pause).toHaveBeenCalledTimes(4);
+    expect(now).toBe(1);
+  });
+
   it("keeps source exploration available without technical report measurement cards", async () => {
     vi.useFakeTimers();
     await render();

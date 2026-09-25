@@ -214,6 +214,26 @@ describe("acquisition source-bound presentation", () => {
     expect(parsed.report.overview).toEqual(envelope.report.content.overview);
     expect(parsed.report.report_sections).toEqual([]);
     expect(parsed.report.strengths).toEqual(envelope.report.content.strengths);
+    // An envelope from a server without labels still opens (C1 is additive).
+    expect(parsed.label).toBeNull();
+  });
+  it("opens a report envelope that carries the C1 call name", () => {
+    const parsed = parseAcquisitionReport(
+      { ...envelope, display_name: "Renewal review", display_name_revision: 5 },
+      { submissionId, recordingId },
+      parseTranscript(transcript, transcript.source_sha256),
+    );
+    expect(parsed.label).toEqual({
+      displayName: "Renewal review",
+      revision: 5,
+    });
+    expect(() =>
+      parseAcquisitionReport(
+        { ...envelope, display_name: "Half present" },
+        { submissionId, recordingId },
+        parseTranscript(transcript, transcript.source_sha256),
+      ),
+    ).toThrow("report_envelope_label");
   });
   it.each([
     "source",

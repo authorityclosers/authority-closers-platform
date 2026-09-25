@@ -18,7 +18,6 @@ import {
 } from "react";
 
 import type { Allowance } from "../acquisition-client";
-import { Glyph } from "../lightbox/glyph";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
@@ -32,7 +31,7 @@ export type LightboxShellProps = {
   children: ReactNode;
   authenticated: boolean;
   homeHref?: string;
-  active?: "analyse" | "calls";
+  active?: "analyse" | "calls" | "account";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -88,10 +87,9 @@ export function LightboxShell({
   const access = useWorkspaceAccess();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const hasToggled = useRef(false);
-  const accountHref = authenticated ? "/calls" : "/login";
-  const accountLabel = authenticated
-    ? "Account & saved calls"
-    : "Profile & account";
+  // Account is its own destination; it no longer duplicates Calls.
+  const accountHref = authenticated ? "/account" : "/login";
+  const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
   const heading = compactBusy ? null : pageHeading(visibleHero, previewHero);
 
@@ -177,6 +175,7 @@ export function LightboxShell({
             className={styles.navLink}
             href={accountHref}
             onClick={openAccount}
+            aria-current={active === "account" ? "page" : undefined}
           >
             <CircleUserRound size={19} strokeWidth={1.75} aria-hidden="true" />
             <span>{accountLabel}</span>
@@ -228,12 +227,6 @@ export function LightboxShell({
             {active === "calls" ? "Calls" : null}
           </span>
           <div className={styles.barActions}>
-            {authenticated ? (
-              <span className={styles.trust}>
-                <Glyph name="shield" size={15} />
-                Private to your account
-              </span>
-            ) : null}
             <HelpMenu />
           </div>
         </header>
@@ -271,6 +264,7 @@ export function LightboxShell({
           className={styles.bottomLink}
           href={accountHref}
           onClick={openAccount}
+          aria-current={active === "account" ? "page" : undefined}
         >
           <CircleUserRound size={20} aria-hidden="true" />
           <span>{authenticated ? "Account" : "Profile"}</span>

@@ -10,7 +10,6 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  Download,
   FileAudio,
   FileText,
   FolderOpen,
@@ -18,6 +17,7 @@ import {
   LoaderCircle,
   ShieldCheck,
 } from "lucide-react";
+import { formatClipRange, formatClock, isPlayableRange } from "./lightbox/time";
 import {
   CallStudio,
   parseProcessingPlan,
@@ -94,7 +94,10 @@ import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
-import { SourceWaveformProvider } from "./source-waveform";
+import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
+import { ReportHeader } from "./report-header";
+import type { CallLabel } from "./call-label";
+import { readCallLabel, renameCall } from "./call-label-client";
 import {
   revalidateContextualSourcePlayback,
   type ContextualSourcePlayback,
@@ -107,6 +110,8 @@ type Result = {
   transcript: Transcript;
   runId: string;
   claimed: boolean;
+  /** Owner call name (C1), server-confirmed; null on older servers. */
+  label?: CallLabel | null;
 };
 type ExistingCallEntryState = {
   submissionId: string;
@@ -137,7 +142,8 @@ export function remainingAllowanceLabel(
   unknown: boolean,
 ): string {
   if (allowance) {
-    if (allowance.unlimited) return "Unlimited testing";
+    // No limit applies: say so plainly, never as a percentage.
+    if (allowance.unlimited) return "Unlimited analysis time";
     const minutes = Math.floor(allowance.available_seconds / 60);
     const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
     return allowance.available_seconds === 0
@@ -320,6 +326,11 @@ export function AcquisitionStudio({
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
   const lastRequestedCallId = useRef<string | null>(null);
+  // The call a rename confirmation may update; never a later-bound call.
+  const bindingRef = useRef<string | null>(null);
+  useEffect(() => {
+    bindingRef.current = submission?.id ?? null;
+  }, [submission?.id]);
   const stalePlanRefresh = useRef<string | null>(null);
   const previewUrl = useRef("");
   const reconciliationAttempted = useRef("");
@@ -1629,11 +1640,52 @@ export function AcquisitionStudio({
     });
   }
 
+  /* One media session: pressing the control of the clip that is playing now
+     pauses the same audio element, and pressing it again resumes in place. */
+  function toggleActiveClip(range: { start_ms: number; end_ms: number }) {
+    const player = audio.current;
+    if (!player) return false;
+    const nowMs = player.currentTime * 1000;
+    const action = clipPressAction(range, {
+      paused: player.paused,
+      currentTimeMs: nowMs,
+      activeRange: moment,
+    });
+    if (action === "pause") {
+      player.pause();
+      setPlaybackMessage(`Paused at ${formatClock(nowMs)}`);
+      return true;
+    }
+    if (action === "resume") {
+      void player
+        .play()
+        .catch(() =>
+          setPlaybackMessage(
+            "Press play in the audio controls to hear this moment.",
+          ),
+        );
+      return true;
+    }
+    return false;
+  }
+
   function seek(evidence: ReportEvidence) {
     if (!audio.current || !result) return;
+    if (toggleActiveClip(evidence)) return;
+    seekTo(evidence);
+  }
+
+  /** A plain transcript seek: always starts the chosen segment. */
+  function seekTo(evidence: ReportEvidence) {
+    if (!audio.current || !result) return;
+    // An invalid or empty interval stays readable but is never played.
+    if (!isPlayableRange(evidence.start_ms, evidence.end_ms)) {
+      setPlaybackMessage("This excerpt has no playable time range.");
+      return;
+    }
     setMoment(evidence);
     setPlaybackMessage(
-      `Selected ${time(evidence.start_ms)}–${time(evidence.end_ms)}`,
+      `Selected ${formatClipRange(evidence.start_ms, evidence.end_ms)}`,
     );
     audio.current.currentTime = evidence.start_ms / 1000;
     void audio.current
@@ -1659,9 +1711,14 @@ export function AcquisitionStudio({
       return;
     }
     const { start_ms: startMs, end_ms: endMs } = verified.playback_range;
+    if (!isPlayableRange(startMs, endMs)) {
+      setPlaybackMessage("This excerpt has no playable time range.");
+      return;
+    }
+    if (toggleActiveClip(verified.playback_range)) return;
     setMoment(verified.playback_range);
     setPlaybackMessage(
-      `Playing with context · ${time(startMs)}–${time(endMs)} · ${title}`,
+      `Playing with context · ${formatClipRange(startMs, endMs)} · ${title}`,
     );
     audio.current.currentTime = startMs / 1000;
     void audio.current
@@ -2304,30 +2361,28 @@ export function AcquisitionStudio({
                     </span>
                   </div>
                 )}
-                <div
-                  className={styles.stepHeader}
-                  aria-label="Current analysis step"
-                >
-                  <span className={styles.stepNumber}>
-                    {reportReady ? "03" : submission ? "02" : "01"}
-                  </span>
-                  <span>
-                    <strong>
-                      {reportReady
-                        ? "Report ready"
-                        : submission
-                          ? "Your analysis"
-                          : "Your call"}
-                    </strong>
-                    <small>
-                      {reportReady
-                        ? "Explore your saved analysis"
-                        : submission
-                          ? "Saved work, processing privately"
-                          : "Select a recording to begin"}
-                    </small>
-                  </span>
-                </div>
+                {/* The empty state already has its card heading; a step
+                    header only earns its space once a call exists. */}
+                {reportReady || submission ? (
+                  <div
+                    className={styles.stepHeader}
+                    aria-label="Current analysis step"
+                  >
+                    <span className={styles.stepNumber}>
+                      {reportReady ? "03" : "02"}
+                    </span>
+                    <span>
+                      <strong>
+                        {reportReady ? "Report ready" : "Your analysis"}
+                      </strong>
+                      <small>
+                        {reportReady
+                          ? "Explore your saved analysis"
+                          : "Saved work, processing privately"}
+                      </small>
+                    </span>
+                  </div>
+                ) : null}
                 {busy && !submission ? (
                   <div
                     className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
@@ -3003,74 +3058,49 @@ export function AcquisitionStudio({
             <SourceWaveformProvider
               submissionId={submission?.id}
               audioRef={audio}
+              activeRange={moment}
             >
               <section
                 className={`studio-report panel ${styles.report}`}
                 aria-label="Sales call report"
+                data-lx-surface="light"
               >
-                <div className={styles.reportHeader}>
-                  <div className={styles.reportHeading}>
-                    <h1>Your call, clearly.</h1>
-                    <p>
-                      Actionable insights. Real conversations. A stronger you.
-                    </p>
-                    {plan?.report_language &&
-                      plan.report_run_id === result.runId && (
-                        <p className={styles.reportMetadata}>
-                          Report language:{" "}
-                          {reportLanguageLabels[plan.report_language]} ·
-                          Original quotes preserved
-                        </p>
-                      )}
-                  </div>
-                  <div
-                    className={styles.reportActions}
-                    role="group"
-                    aria-label="Report actions"
-                  >
-                    {!result.claimed && (
-                      <Link className={styles.reportAction} href="/login">
-                        Sign in to save
-                      </Link>
-                    )}
-                    <button
-                      className={`${styles.reportAction} ${styles.reportActionPrimary}`}
-                      type="button"
-                      disabled={!!busy || !submission}
-                      onClick={() => void downloadReport()}
-                    >
-                      <Download size={16} aria-hidden="true" />
-                      Download report
-                    </button>
-                    <button
-                      className={styles.reportAction}
-                      type="button"
-                      disabled={!!busy}
-                      onClick={startAnotherCall}
-                    >
-                      <ArrowRight size={16} aria-hidden="true" />
-                      Analyse another call
-                    </button>
-                    {submission && (
-                      <button
-                        className={`${styles.reportAction} ${styles.reportActionSupport}`}
-                        type="button"
-                        disabled={!!busy || analysisWriteBlocked}
-                        onClick={() => setDeleteConfirm(true)}
-                      >
-                        Request deletion
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <p className={styles.reportDisclosure}>
-                  Draft coaching; not adjudicated by Dipak. Speaker labels are
-                  unverified. Source: {report.source_label}. Duration:{" "}
-                  {time(result.transcript.duration_ms)}. Need the call removed?{" "}
-                  <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
-                    Contact the AC team.
-                  </a>
-                </p>
+                <ReportHeader
+                  key={submission?.id ?? "unbound"}
+                  label={result.label ?? null}
+                  rename={
+                    submission
+                      ? {
+                          save: (name, revision, signal) =>
+                            renameCall(submission.id, name, revision, signal),
+                          refresh: (signal) =>
+                            readCallLabel(submission.id, signal),
+                          // Apply only to the call it was issued for.
+                          confirmed: (label) =>
+                            setResult((current) =>
+                              current && bindingRef.current === submission.id
+                                ? { ...current, label }
+                                : current,
+                            ),
+                        }
+                      : undefined
+                  }
+                  durationMs={result.transcript.duration_ms}
+                  languageLabel={
+                    plan?.report_language && plan.report_run_id === result.runId
+                      ? reportLanguageLabels[plan.report_language]
+                      : null
+                  }
+                  sourceLabel={report.source_label}
+                  claimed={result.claimed}
+                  busy={!!busy}
+                  canDownload={!!submission}
+                  canRequestDeletion={!!submission}
+                  deletionDisabled={analysisWriteBlocked}
+                  onAnalyseAnother={startAnotherCall}
+                  onDownload={() => void downloadReport()}
+                  onRequestDeletion={() => setDeleteConfirm(true)}
+                />
                 {submission && deleteConfirm && (
                   <div className={styles.reportDeleteConfirm} role="alert">
                     <p>
@@ -3168,7 +3198,7 @@ export function AcquisitionStudio({
                           transcript={result.transcript}
                           language="en"
                           onSelect={(segment) =>
-                            seek({
+                            seekTo({
                               segment_id: segment.id,
                               quote: segment.text,
                               start_ms: segment.start_ms,

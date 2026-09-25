@@ -6,12 +6,13 @@ import {
   CalendarDays,
   ChartNoAxesColumnIncreasing,
   Lightbulb,
-  Play,
   Trophy,
 } from "lucide-react";
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
 import { ReviewDialog } from "./review-dialog";
+import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
+import { formatClipRange, spokenClipRange } from "./lightbox/time";
 import { useReportInline } from "./report-reading-context";
 import styles from "./next-call-plan.module.css";
 
@@ -80,26 +81,36 @@ export function NextCallPlan({
     },
   ];
   function evidenceButton(item: ReportEvidence, title: string, index: number) {
+    const spoken = spokenClipRange(item.start_ms, item.end_ms);
     return (
-      <button
+      <ClipPlayState
         key={`${item.segment_id}-${index}`}
-        type="button"
-        className={styles.evidence}
-        onClick={() => onSelectEvidence(item, title)}
-        aria-label={`Play source moment, ${item.start_ms} to ${item.end_ms}`}
+        startMs={item.start_ms}
+        endMs={item.end_ms}
       >
-        <span className={styles.play}>
-          <Play size={17} aria-hidden="true" />
-        </span>
-        <span>
-          <strong>Listen to the source moment</strong>
-          <small>
-            {formatTranscriptTime(item.start_ms)}–
-            {formatTranscriptTime(item.end_ms)}
-          </small>
-        </span>
-        <ArrowRight size={17} aria-hidden="true" />
-      </button>
+        {(playing) => (
+          <button
+            type="button"
+            className={styles.evidence}
+            onClick={() => onSelectEvidence(item, title)}
+            aria-label={`${playing ? "Pause" : "Play"} source moment, ${spoken}`}
+            aria-pressed={playing}
+          >
+            <span className={styles.play}>
+              <ClipPlayIcon playing={playing} size={17} />
+            </span>
+            <span>
+              <strong>
+                {playing
+                  ? "Pause the source moment"
+                  : "Listen to the source moment"}
+              </strong>
+              <small>{formatClipRange(item.start_ms, item.end_ms)}</small>
+            </span>
+            <ArrowRight size={17} aria-hidden="true" />
+          </button>
+        )}
+      </ClipPlayState>
     );
   }
   const selected = opened === null ? null : sections[opened];
@@ -130,15 +141,23 @@ export function NextCallPlan({
             aria-label="Call outcome sources"
           >
             {outcome.evidence.map((item, index) => (
-              <button
+              <ClipPlayState
                 key={`${item.segment_id}-${index}`}
-                type="button"
-                onClick={() => onSelectEvidence(item, "Call outcome")}
-                aria-label={`Listen to call outcome at ${formatTranscriptTime(item.start_ms)}`}
+                startMs={item.start_ms}
+                endMs={item.end_ms}
               >
-                <Play size={13} aria-hidden="true" />
-                {formatTranscriptTime(item.start_ms)}
-              </button>
+                {(playing) => (
+                  <button
+                    type="button"
+                    onClick={() => onSelectEvidence(item, "Call outcome")}
+                    aria-label={`${playing ? "Pause" : "Listen to"} call outcome at ${formatTranscriptTime(item.start_ms)}`}
+                    aria-pressed={playing}
+                  >
+                    <ClipPlayIcon playing={playing} size={13} />
+                    {formatTranscriptTime(item.start_ms)}
+                  </button>
+                )}
+              </ClipPlayState>
             ))}
           </div>
         </aside>

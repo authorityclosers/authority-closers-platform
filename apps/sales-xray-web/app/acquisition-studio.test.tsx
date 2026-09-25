@@ -17,6 +17,7 @@ import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
+import { spokenClipRange } from "./lightbox/time";
 import {
   allowance,
   entry,
@@ -483,7 +484,13 @@ it("shows real account recent calls on home and opens the selected saved report"
   const preview = container.querySelector(".calls-library-preview");
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
-  expect(preview?.textContent).toContain("About 1:01");
+  // The library length is the reserved estimate: always "About".
+  expect(preview?.textContent).toContain("About 01:01");
+  expect(
+    preview
+      ?.querySelector(".calls-library-duration")
+      ?.getAttribute("aria-label"),
+  ).toBe("Estimated length: About 01:01");
   expect(preview?.querySelector('a[href="/calls"]')?.textContent).toContain(
     "View all calls",
   );
@@ -548,6 +555,25 @@ it("opens account access on guest file selection and keeps Analyze gated without
 it("keeps a fresh standalone call focused on upload without empty dashboards or sample rails", async () => {
   await mount();
   expect(container.textContent).toContain("Add a call to review");
+  // No redundant "01 · Your call" step header before any call exists, and the
+  // allowance is the verified session value.
+  expect(
+    container.querySelector('[aria-label="Current analysis step"]'),
+  ).toBeNull();
+  expect(container.textContent).not.toContain("Select a recording to begin");
+  // Before the session confirms, the advertised trial allowance is shown as such.
+  expect(container.textContent).toMatch(
+    /Remaining analysis time · \d+m \d\ds|Up to \d+m trial allowance/,
+  );
+  expect(container.textContent).not.toMatch(/\d+%/);
+  // One upload target with its real policy limits.
+  expect(
+    container.querySelectorAll('[aria-label="Add sales call audio files"]'),
+  ).toHaveLength(1);
+  expect(
+    container.querySelector('[aria-label="Supported audio file limits"]')
+      ?.textContent,
+  ).toMatch(/Up to \d+ MB/);
   expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
   for (const text of [
     "No saved calls yet",
@@ -792,7 +818,9 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     container.querySelector('[aria-label="Sales Xray navigation"]'),
   ).not.toBeNull();
   expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
-  expect(container.textContent).toContain("Account & saved calls");
+  expect(container.querySelector('a[href="/account"]')?.textContent).toBe(
+    "Account",
+  );
   expect(container.querySelectorAll("main")).toHaveLength(1);
   const sidebarToggle = container.querySelector<HTMLButtonElement>(
     '[aria-label="Collapse Sales Xray navigation"]',
@@ -855,9 +883,23 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "Draft coaching; not adjudicated by Dipak.",
   );
   expect(container.textContent).toContain(`Source: ${envelope.source_label}.`);
+  // Header, disclosure and sections read on one light report surface.
   expect(
-    container.querySelector('[aria-label="More report actions"]'),
-  ).toBeNull();
+    container
+      .querySelector('[aria-label="Sales call report"]')
+      ?.getAttribute("data-lx-surface"),
+  ).toBe("light");
+  // Download and deletion stay reachable in the overflow, not the header row.
+  const overflow = container.querySelector(
+    '[role="group"][aria-label="Report actions"] details',
+  );
+  expect(
+    overflow?.querySelector('summary[aria-label="More report actions"]'),
+  ).not.toBeNull();
+  expect(overflow?.textContent).toContain("Download report");
+  expect(overflow?.textContent).toContain("Request deletion");
+  expect(container.textContent).not.toContain("Your call, clearly.");
+  expect(container.textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
   expect(
     container.querySelector('[role="group"][aria-label="Report actions"]'),
   ).not.toBeNull();
@@ -1390,7 +1432,7 @@ it("renders an explicit unlimited tester allowance", () => {
       3600,
       false,
     ),
-  ).toBe("Unlimited testing");
+  ).toBe("Unlimited analysis time");
 });
 
 it("gives guests their owner-checked call link instead of promising an account library", async () => {
@@ -2586,7 +2628,7 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
     });
   const evidence = envelope.report.content.strengths[0].evidence[0];
   const excerpt = container.querySelector<HTMLButtonElement>(
-    `[aria-label="Play source moment, ${evidence.start_ms} to ${evidence.end_ms}"]`,
+    `[aria-label="Play source moment, ${spokenClipRange(evidence.start_ms, evidence.end_ms)}"]`,
   )!;
 
   await act(async () => excerpt.click());
@@ -2618,9 +2660,7 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   const contextual = container.querySelector<HTMLButtonElement>(
     'button[aria-label^="Play with context,"]',
   );
-  expect(contextual?.getAttribute("aria-label")).toContain(
-    "00:01.000 to 00:03.300",
-  );
+  expect(contextual?.getAttribute("aria-label")).toContain("00:01 to 00:03");
   await act(async () => contextual?.click());
   await flush();
   expect(currentTime).toBe(1);
@@ -2643,6 +2683,120 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   await flush();
   expect(paused).toBe(false);
   expect(pause).toHaveBeenCalledTimes(2);
+});
+
+it("toggles every visible clip control against the one shared player", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  const audio = container.querySelector<HTMLAudioElement>(
+    '[aria-label="Call audio player"] audio',
+  )!;
+  let paused = true;
+  let currentTime = 0;
+  Object.defineProperty(audio, "paused", {
+    configurable: true,
+    get: () => paused,
+  });
+  Object.defineProperty(audio, "currentTime", {
+    configurable: true,
+    get: () => currentTime,
+    set: (value: number) => {
+      currentTime = value;
+    },
+  });
+  const play = vi
+    .spyOn(HTMLMediaElement.prototype, "play")
+    .mockImplementation(async () => {
+      paused = false;
+      audio.dispatchEvent(new Event("play"));
+    });
+  const pause = vi
+    .spyOn(HTMLMediaElement.prototype, "pause")
+    .mockImplementation(() => {
+      paused = true;
+      audio.dispatchEvent(new Event("pause"));
+    });
+  const tick = async (seconds: number) => {
+    currentTime = seconds;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await flush();
+  };
+  const press = async (target: HTMLButtonElement | null) => {
+    expect(target).not.toBeNull();
+    await act(async () => target!.click());
+    await flush();
+  };
+  // Keep = 00:02.5–00:03.3 and Change = 00:01.0–00:02.2; the saved context
+  // range 00:01.0–00:03.3 overlaps both.
+  const keep = envelope.report.content.strengths[0].evidence[0];
+  const change = envelope.report.content.improvements[0].evidence[0];
+  const control = (verb: "Play" | "Pause", item: typeof keep) =>
+    container.querySelector<HTMLButtonElement>(
+      `[aria-label="${verb} source moment, ${spokenClipRange(item.start_ms, item.end_ms)}"]`,
+    );
+
+  // Keep is a valid 800 ms clip: shown as a location, never "00:02–00:03"
+  // or "00:02–00:02", while its canonical milliseconds still bound playback.
+  expect(control("Play", keep)?.textContent).toContain(
+    "at 00:02 · under 1 second",
+  );
+  expect(container.textContent).not.toMatch(/(\d\d:\d\d)–\1/);
+  await press(control("Play", keep));
+  expect(currentTime).toBe(keep.start_ms / 1000);
+  expect(control("Pause", keep)?.getAttribute("aria-pressed")).toBe("true");
+  expect(control("Pause", keep)?.textContent).toContain("Pause");
+  // Only the clip that started playback claims it.
+  expect(control("Play", change)).not.toBeNull();
+
+  // Pausing mid-clip keeps the position; the same control resumes in place.
+  await tick(2.9);
+  await press(control("Pause", keep));
+  expect(pause).toHaveBeenCalledOnce();
+  expect(paused).toBe(true);
+  expect(currentTime).toBe(2.9);
+  expect(control("Play", keep)?.getAttribute("aria-pressed")).toBe("false");
+  await press(control("Play", keep));
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(currentTime).toBe(2.9);
+  expect(control("Pause", keep)).not.toBeNull();
+
+  // The cited end stops playback; the next press restarts at the cited start.
+  await tick(keep.end_ms / 1000);
+  expect(paused).toBe(true);
+  expect(control("Play", keep)).not.toBeNull();
+  await press(control("Play", keep));
+  expect(currentTime).toBe(keep.start_ms / 1000);
+  expect(play).toHaveBeenCalledTimes(3);
+
+  // Full-recording play from the dock releases clip ownership.
+  await press(control("Pause", keep));
+  const dockPlay = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Call audio player"] button[aria-label="Play recording"]',
+  );
+  await press(dockPlay);
+  expect(paused).toBe(false);
+  await tick(2.9);
+  expect(control("Play", keep)).not.toBeNull();
+  expect(container.querySelector('[data-clip-playing="true"]')).toBeNull();
+
+  // Context playback is its own clip: its control pauses the same element.
+  await press(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Play with context,"]',
+    ),
+  );
+  expect(currentTime).toBe(1);
+  const contextPause = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Pause context playback,"]',
+  );
+  expect(contextPause?.getAttribute("aria-pressed")).toBe("true");
+  expect(control("Play", change)).not.toBeNull();
+  await press(contextPause);
+  expect(paused).toBe(true);
+  expect(currentTime).toBe(1);
 });
 
 it("keeps the current evidence stop boundary when contextual playback revalidation fails", async () => {
@@ -2677,7 +2831,7 @@ it("keeps the current evidence stop boundary when contextual playback revalidati
     });
   const exactEvidence = envelope.report.content.improvements[0].evidence[0];
   const exactButton = container.querySelector<HTMLButtonElement>(
-    `[aria-label="Play source moment, ${exactEvidence.start_ms} to ${exactEvidence.end_ms}"]`,
+    `[aria-label="Play source moment, ${spokenClipRange(exactEvidence.start_ms, exactEvidence.end_ms)}"]`,
   );
   expect(exactButton).not.toBeNull();
   await act(async () => exactButton?.click());

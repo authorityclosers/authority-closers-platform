@@ -160,12 +160,12 @@ it("shows exact skill excerpts and seeks their source, without using coaching ci
   const dialog = container.querySelector('[role="dialog"]');
   expect(dialog?.textContent).toContain(dimensions[0].observation);
   expect(dialog?.textContent).toContain(evidence.quote);
-  expect(dialog?.textContent).toContain("01:12.000–01:19.000");
+  expect(dialog?.textContent).toContain("01:12–01:19");
   expect(dialog?.textContent).not.toContain("segment-12");
   expect(dialog?.textContent).toContain("Doc-1");
   expect(dialog?.querySelectorAll('[aria-label^="Listen to"]')).toHaveLength(1);
   await act(async () =>
-    button(`Listen to ${dimensions[0].label} excerpt at 01:12.000`).click(),
+    button(`Listen to ${dimensions[0].label} excerpt at 01:12`).click(),
   );
   expect(onSelectEvidence).toHaveBeenCalledExactlyOnceWith(evidence);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
@@ -223,7 +223,7 @@ it("shows every skill observation, source excerpt, and citation in reading mode"
   expect(container.querySelectorAll("button[hidden]")).toHaveLength(8);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   await act(async () =>
-    button(`Listen to ${dimensions[0].label} excerpt at 00:15.000`).click(),
+    button(`Listen to ${dimensions[0].label} excerpt at 00:15`).click(),
   );
   expect(onSelectEvidence).toHaveBeenCalledExactlyOnceWith(evidence);
 });

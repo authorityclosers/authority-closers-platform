@@ -124,7 +124,10 @@ describe("ReportTranscript", () => {
     expect(container.textContent).toContain(
       "Speaker labels come from the source and are unverified",
     );
-    expect(formatTranscriptTime(61_234)).toBe("01:01.234");
+    // Visible clocks never show milliseconds; long calls read as h:mm:ss.
+    expect(formatTranscriptTime(61_234)).toBe("01:01");
+    expect(formatTranscriptTime(3_597_994)).toBe("59:57");
+    expect(formatTranscriptTime(3_723_000)).toBe("1:02:03");
 
     const search = container.querySelector<HTMLInputElement>(
       'input[aria-label="Search transcript phrases"]',

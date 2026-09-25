@@ -1,3 +1,4 @@
+import { parseCallLabel, type CallLabel } from "./call-label";
 import {
   parseDetailedOverview,
   type DetailedOverview,
@@ -670,6 +671,7 @@ export function parseAcquisitionReport(
   runId: string;
   claimed: boolean;
   recovery?: RecoveryMetadata;
+  label: CallLabel | null;
 } {
   const envelope = object(value, "report_envelope");
   keys(
@@ -684,9 +686,18 @@ export function parseAcquisitionReport(
       "source_label",
       "report",
       "recovery",
+      "display_name",
+      "display_name_revision",
     ],
     "report_envelope",
   );
+  // The owner's call name (C1) travels with the envelope; absent on older servers.
+  let label: CallLabel | null;
+  try {
+    label = parseCallLabel(envelope);
+  } catch {
+    throw new ReportContractError("report_envelope_label");
+  }
   if (
     envelope.schema !== "ac.sales-xray.report-envelope/2" ||
     envelope.submission_id !== expected.submissionId ||
@@ -764,8 +775,8 @@ export function parseAcquisitionReport(
     report.preview = parsePreview(projection.preview, report);
   }
   return recovery === undefined
-    ? { claimed, report, runId }
-    : { claimed, report, runId, recovery };
+    ? { claimed, report, runId, label }
+    : { claimed, report, runId, recovery, label };
 }
 
 export function parseJobResponse(

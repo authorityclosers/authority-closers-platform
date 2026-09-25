@@ -18,7 +18,7 @@ export function MinutesMeter({
   if (allowance.unlimited)
     return (
       <p className={styles.meter} data-variant={variant} data-minutes-meter>
-        <span className={styles.label}>Unlimited testing</span>
+        <span className={styles.label}>Unlimited analysis time</span>
       </p>
     );
   const left = Math.floor(allowance.available_seconds / 60);

@@ -113,6 +113,330 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+function routeFetch(
+  routes: Record<string, (init: RequestInit) => Response | Promise<Response>>,
+) {
+  fetchMock.mockImplementation(
+    async (input: RequestInfo, init: RequestInit = {}) => {
+      const key = `${init.method ?? "GET"} ${String(input)}`;
+      const handler = routes[key];
+      if (!handler) throw new Error(`Unexpected request ${key}`);
+      return handler(init);
+    },
+  );
+}
+const ok = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+const LIST = "GET /v1/conversation/acquisition/submissions";
+const labelPath = (id: string) =>
+  `/v1/conversation/acquisition/submissions/${id}/label`;
+const setInput = (input: HTMLInputElement, value: string) => {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+const renameButton = () =>
+  host.querySelector<HTMLButtonElement>('button[aria-label^="Rename call"]');
+const editorInput = () =>
+  host.querySelector<HTMLInputElement>("[data-call-label-editor] input")!;
+const submitEditor = () =>
+  act(async () =>
+    host
+      .querySelector<HTMLFormElement>("[data-call-label-editor]")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+
+it("renames a call only after the server confirms it (C1)", async () => {
+  const patches: RequestInit[] = [];
+  routeFetch({
+    [LIST]: () =>
+      ok(
+        page([
+          {
+            ...row(firstId, true),
+            display_name: null,
+            display_name_revision: 2,
+          },
+        ]),
+      ),
+    [`PATCH ${labelPath(firstId)}`]: (init) => {
+      patches.push(init);
+      return ok({
+        display_name: "Harbolite discovery",
+        display_name_revision: 3,
+      });
+    },
+  });
+  await act(async () => renderLibrary());
+  await flush();
+  // Unnamed: an honest date fallback, never an invented name.
+  expect(host.querySelector(".calls-library-copy strong")?.textContent).toMatch(
+    /^Sales call · /,
+  );
+  await act(async () => renameButton()!.click());
+  await act(async () => setInput(editorInput(), "  Harbolite discovery  "));
+  await submitEditor();
+  await flush();
+
+  expect(patches).toHaveLength(1);
+  expect(new Headers(patches[0].headers).get("If-Match")).toBe(
+    '"call-label-2"',
+  );
+  expect(JSON.parse(String(patches[0].body))).toEqual({
+    display_name: "Harbolite discovery",
+  });
+  expect(host.querySelector("[data-call-label-editor]")).toBeNull();
+  expect(host.querySelector(".calls-library-copy strong")?.textContent).toBe(
+    "Harbolite discovery",
+  );
+});
+
+it("keeps the draft on a conflict and saves against the refreshed revision", async () => {
+  let patchCount = 0;
+  const ifMatch: (string | null)[] = [];
+  routeFetch({
+    [LIST]: () =>
+      ok(
+        page([
+          {
+            ...row(firstId, true),
+            display_name: "Old",
+            display_name_revision: 1,
+          },
+        ]),
+      ),
+    [`PATCH ${labelPath(firstId)}`]: (init) => {
+      patchCount += 1;
+      ifMatch.push(new Headers(init.headers).get("If-Match"));
+      return patchCount === 1
+        ? ok({ detail: "The call name changed." }, 409)
+        : ok({ display_name: "Mine", display_name_revision: 3 });
+    },
+    [`GET /v1/conversation/acquisition/submissions/${firstId}`]: () =>
+      ok({ display_name: "Theirs", display_name_revision: 2 }),
+  });
+  await act(async () => renderLibrary());
+  await flush();
+  await act(async () => renameButton()!.click());
+  await act(async () => setInput(editorInput(), "Mine"));
+  await submitEditor();
+  await flush();
+
+  // Not saved: the editor stays open with the reader's text intact.
+  const alert = host.querySelector("[data-call-label-editor] [role='alert']");
+  expect(alert?.textContent).toContain("renamed elsewhere");
+  expect(editorInput().value).toBe("Mine");
+  expect(host.textContent).not.toContain("Harbolite");
+
+  const refresh = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === "Refresh name",
+  )!;
+  await act(async () => refresh.click());
+  await flush();
+  expect(editorInput().value).toBe("Mine");
+  expect(host.textContent).toContain("Current name: Theirs");
+
+  await submitEditor();
+  await flush();
+  expect(ifMatch).toEqual(['"call-label-1"', '"call-label-2"']);
+  expect(host.querySelector(".calls-library-copy strong")?.textContent).toBe(
+    "Mine",
+  );
+});
+
+it("confirms an accepted rename with a malformed response only through a GET", async () => {
+  let patches = 0;
+  routeFetch({
+    [LIST]: () =>
+      ok(
+        page([
+          {
+            ...row(firstId, true),
+            display_name: "Old",
+            display_name_revision: 1,
+          },
+        ]),
+      ),
+    // Committed on the server, but the confirmation body is unusable.
+    [`PATCH ${labelPath(firstId)}`]: () => {
+      patches += 1;
+      return ok({ display_name: "Renewal" });
+    },
+    [`GET /v1/conversation/acquisition/submissions/${firstId}`]: () =>
+      ok({ display_name: "Renewal", display_name_revision: 2 }),
+  });
+  await act(async () => renderLibrary());
+  await flush();
+  await act(async () => renameButton()!.click());
+  await act(async () => setInput(editorInput(), "Renewal"));
+  await submitEditor();
+  await flush();
+
+  expect(host.textContent).toContain(
+    "We couldn't confirm whether the name was saved",
+  );
+  // The draft is kept and nothing reads as saved from an unverified response.
+  expect(editorInput().value).toBe("Renewal");
+  expect(
+    host.querySelector("[data-call-label-editor] [role='alert']")?.textContent,
+  ).not.toContain("Current name");
+  await submitEditor();
+  await flush();
+  expect(patches).toBe(1);
+
+  const check = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === "Check saved name",
+  )!;
+  await act(async () => check.click());
+  await flush();
+  expect(patches).toBe(1);
+  expect(host.querySelector("[data-call-label-editor]")).toBeNull();
+  expect(host.querySelector(".calls-library-copy strong")?.textContent).toBe(
+    "Renewal",
+  );
+});
+
+it("offers no rename on an older server that supplies no labels", async () => {
+  routeFetch({ [LIST]: () => ok(page([row(firstId, true)])) });
+  await act(async () => renderLibrary());
+  await flush();
+  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(1);
+  expect(renameButton()).toBeNull();
+});
+
+it("reads as one full-width Calls page with estimated lengths and per-row opening", async () => {
+  const long = { ...row(firstId, true), duration_seconds: 3_598 };
+  const short = { ...row(secondId, true), duration_seconds: 67 };
+  // The library contract requires a positive whole-second duration.
+  const held = { ...row(thirdId), state: "held", duration_seconds: 1_200 };
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify(page([long, short, held])), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await act(async () => renderLibrary());
+  await flush();
+
+  // One page heading; no stacked "Saved calls" / "Your calls" titles.
+  expect([...host.querySelectorAll("h1")].map((h) => h.textContent)).toEqual([
+    "Calls",
+  ]);
+  const calls = host.querySelector(".calls-library-app")!;
+  expect(calls.querySelectorAll("h2")).toHaveLength(0);
+  expect(calls.textContent).not.toMatch(/Saved calls|Your calls|PRIVATE CALL/);
+  expect(host.textContent).toContain("3 saved calls");
+  // The page scrolls as a document rather than inside a fixed-height box.
+  expect(
+    host
+      .querySelector("[data-lightbox-shell]")
+      ?.getAttribute("data-mobile-fit"),
+  ).toBe("false");
+
+  const items = [...host.querySelectorAll<HTMLElement>(".calls-library-item")];
+  const durations = items.map((item) =>
+    item.querySelector(".calls-library-duration")?.getAttribute("aria-label"),
+  );
+  // duration_seconds is the reserved estimate, never presented as measured.
+  expect(durations).toEqual([
+    "Estimated length: About 59:58",
+    "Estimated length: About 01:07",
+    "Estimated length: About 20:00",
+  ]);
+  expect(
+    items[0].querySelector(".calls-library-duration-clock")?.textContent,
+  ).toBe("About 59:58");
+  expect(calls.textContent).not.toMatch(/measured/i);
+  // Bars compare against the longest loaded estimate; very short calls stay visible.
+  const widths = items.map((item) =>
+    parseFloat(
+      item.querySelector<HTMLElement>(".calls-library-duration-fill")?.style
+        .width ?? "NaN",
+    ),
+  );
+  expect(widths[0]).toBe(100);
+  expect(widths[1]).toBe(4);
+  expect(widths[2]).toBeCloseTo((1_200 / 3_598) * 100, 3);
+  expect(items.map((item) => item.dataset.tone)).toEqual([
+    "ready",
+    "ready",
+    "attention",
+  ]);
+  expect(items[0].textContent).toContain("Open report");
+
+  await act(async () => items[1].click());
+  expect(openSelectedCall).toHaveBeenCalledWith(`/?call=${secondId}`);
+  const openingLabels = items.map((item) =>
+    item.querySelector(".calls-library-open")?.textContent?.trim(),
+  );
+  // Only the chosen call says it is opening; the rest just wait.
+  expect(openingLabels.filter((label) => label === "Opening…")).toHaveLength(1);
+  expect(items[1].getAttribute("aria-busy")).toBe("true");
+  expect(items.every((item) => (item as HTMLButtonElement).disabled)).toBe(
+    true,
+  );
+});
+
+it("starts New analysis as a fresh call without cancelling the remembered one", async () => {
+  localStorage.setItem("ac.xray.submission.v1", firstId);
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify(page([row(firstId, true)])), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await act(async () => renderLibrary());
+  await flush();
+  const newAnalysis =
+    host.querySelector<HTMLAnchorElement>(".calls-library-new");
+  // Fresh-call intent: the studio must not reopen the remembered report.
+  expect(newAnalysis?.getAttribute("href")).toBe("/?new=1");
+  // The saved call stays saved and listed; nothing was deleted or cancelled.
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(firstId);
+  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(1);
+  expect(
+    fetchMock.mock.calls.every(
+      ([, init]) => !init?.method || init.method === "GET",
+    ),
+  ).toBe(true);
+});
+
+it("filters loaded calls by their saved status only", async () => {
+  const held = { ...row(thirdId), state: "held" };
+  fetchMock.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify(page([row(firstId), row(secondId, true), held])),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+  await act(async () => renderLibrary());
+  await flush();
+  const filters = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      ".calls-library-filters button",
+    ),
+  ];
+  expect(filters.map((button) => button.textContent)).toEqual([
+    "All3",
+    "Report ready1",
+    "In progress1",
+    "Needs attention1",
+  ]);
+  await act(async () => filters[3].click());
+  expect(filters[3].getAttribute("aria-pressed")).toBe("true");
+  const visible = [
+    ...host.querySelectorAll<HTMLElement>(".calls-library-item"),
+  ].map((item) => item.dataset.submissionId);
+  expect(visible).toEqual([thirdId]);
+  await act(async () => filters[0].click());
+  expect(host.querySelectorAll(".calls-library-item")).toHaveLength(3);
+});
+
 it("loads every server listed state without auto claiming or processing", async () => {
   fetchMock.mockResolvedValueOnce(
     new Response(JSON.stringify(page([row(firstId), row(secondId, true)])), {

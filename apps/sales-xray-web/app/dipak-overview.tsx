@@ -25,18 +25,24 @@ import type {
   Transcript,
 } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
-import { SourceWaveform } from "./source-waveform";
+import {
+  ClipListenButton,
+  ClipPlayIcon,
+  ClipPlayState,
+  SourceWaveform,
+} from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
 import {
   countReportMoments,
   formatClipTime,
+  reportReplayClips,
   rewatchPurposeLabels,
 } from "./report-moments";
+import { ReplayStrip } from "./replay-strip";
 import { useReportNavigation, useReportInline } from "./report-reading-context";
 import { Glyph } from "./lightbox/glyph";
 import { sourceTextAttributes } from "./lightbox/script";
-import { formatClock } from "./lightbox/time";
-import { formatTranscriptTime } from "./report-transcript";
+import { formatClipRange, formatClock, spokenClipRange } from "./lightbox/time";
 import {
   buildContextualSourcePlayback,
   formatContextSpeakerLabel,
@@ -475,14 +481,13 @@ export function DipakOverview({
     const clip = formatClipTime(item);
     return (
       <span className={styles.listenGroup}>
-        <button
+        <ClipListenButton
           className={styles.listen}
-          type="button"
+          startMs={item.start_ms}
+          endMs={item.end_ms}
           onClick={() => onSelectEvidence(item, title)}
-          aria-label={`Listen ${clip}: ${title}`}
-        >
-          <Play size={13} fill="currentColor" aria-hidden="true" /> Listen
-        </button>
+          label={`${clip}: ${title}`}
+        />
         <span className={styles.clock} aria-hidden="true">
           {clip}
         </span>
@@ -507,15 +512,17 @@ export function DipakOverview({
                 {item.quote}
               </span>
               <span className={styles.evidenceControls}>
-                <button
+                <ClipListenButton
                   className={styles.timestamp}
-                  type="button"
+                  startMs={item.start_ms}
+                  endMs={item.end_ms}
+                  iconSize={12}
                   onClick={() => onSelectEvidence(item, finding.title)}
-                  aria-label={`Listen ${clip}: ${item.quote}`}
+                  label={`${clip}: ${item.quote}`}
                 >
-                  <Play size={12} fill="currentColor" aria-hidden="true" />
-                  Listen <span className={styles.clock}>{clip}</span>
-                </button>
+                  {" "}
+                  <span className={styles.clock}>{clip}</span>
+                </ClipListenButton>
                 <SourceWaveform
                   className={styles.evidenceWaveform}
                   startMs={item.start_ms}
@@ -611,17 +618,18 @@ export function DipakOverview({
             {reviewLink("14", "Read the final verdict")}
           </div>
         </article>
+        {/* Facts line: each value names exactly what it counts. */}
         <dl className={styles.metrics} aria-label="Call metrics">
           <div>
             <dt>Call length</dt>
             <dd>{durationMs ? formatClock(durationMs) : "Not supplied"}</dd>
           </div>
           <div>
-            <dt>Key moments</dt>
+            <dt>Replay clips</dt>
             <dd>{countReportMoments(report)}</dd>
           </div>
           <div>
-            <dt>Priority fixes</dt>
+            <dt>Suggested changes</dt>
             <dd>{report.improvements.length}</dd>
           </div>
         </dl>
@@ -740,6 +748,13 @@ export function DipakOverview({
             </div>
           </article>
         </div>
+        <div className={styles.replay}>
+          <ReplayStrip
+            clips={reportReplayClips(report)}
+            durationMs={durationMs}
+            onSelect={onSelectEvidence}
+          />
+        </div>
       </section>
 
       <div className={styles.workspaceLayout} data-map={showMap || undefined}>
@@ -765,21 +780,20 @@ export function DipakOverview({
                 )}
               </div>
               {sourceMoment && (
-                <button
+                <ClipListenButton
                   className={styles.sourceMomentButton}
-                  type="button"
-                  data-source-moment
+                  data={{ "data-source-moment": "" }}
+                  startMs={sourceMoment.evidence.start_ms}
+                  endMs={sourceMoment.evidence.end_ms}
+                  iconSize={14}
                   onClick={() =>
                     onSelectEvidence(
                       sourceMoment.evidence,
                       sourceMoment.finding.title,
                     )
                   }
-                  aria-label={`Listen ${formatClipTime(sourceMoment.evidence)}: ${sourceMoment.finding.title}`}
-                >
-                  <Play size={14} fill="currentColor" aria-hidden="true" />{" "}
-                  Listen
-                </button>
+                  label={`${formatClipTime(sourceMoment.evidence)}: ${sourceMoment.finding.title}`}
+                />
               )}
             </section>
           </div>
@@ -1127,30 +1141,41 @@ export function DipakOverview({
                                   className={styles.rewatchItem}
                                   key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
                                 >
-                                  <button
-                                    type="button"
-                                    data-kind={kind}
-                                    onClick={() =>
-                                      onSelectEvidence(item, finding.title)
-                                    }
+                                  <ClipPlayState
+                                    startMs={item.start_ms}
+                                    endMs={item.end_ms}
                                   >
-                                    <span className={styles.visuallyHidden}>
-                                      Listen:{" "}
-                                    </span>
-                                    <span
-                                      className={styles.play}
-                                      aria-hidden="true"
-                                    >
-                                      <Play size={15} fill="currentColor" />
-                                    </span>
-                                    <span className={styles.clipCopy}>
-                                      <small>{label}</small>
-                                      <strong>{finding.title}</strong>
-                                    </span>
-                                    <span className={styles.clipTime}>
-                                      {formatClipTime(item)}
-                                    </span>
-                                  </button>
+                                    {(playing) => (
+                                      <button
+                                        type="button"
+                                        data-kind={kind}
+                                        aria-pressed={playing}
+                                        onClick={() =>
+                                          onSelectEvidence(item, finding.title)
+                                        }
+                                      >
+                                        <span className={styles.visuallyHidden}>
+                                          {playing ? "Pause: " : "Listen: "}
+                                        </span>
+                                        <span
+                                          className={styles.play}
+                                          aria-hidden="true"
+                                        >
+                                          <ClipPlayIcon
+                                            playing={playing}
+                                            size={15}
+                                          />
+                                        </span>
+                                        <span className={styles.clipCopy}>
+                                          <small>{label}</small>
+                                          <strong>{finding.title}</strong>
+                                        </span>
+                                        <span className={styles.clipTime}>
+                                          {formatClipTime(item)}
+                                        </span>
+                                      </button>
+                                    )}
+                                  </ClipPlayState>
                                   {hasContext &&
                                     onSelectContextualPlayback &&
                                     contextualPlayback &&
@@ -1225,28 +1250,42 @@ export function DipakOverview({
                                           Adjacent transcript context is
                                           separate from the saved evidence.
                                         </small>
-                                        <button
-                                          className={styles.playWithContext}
-                                          type="button"
-                                          aria-label={`Play with context, ${formatTranscriptTime(contextualPlayback.playback_range.start_ms)} to ${formatTranscriptTime(contextualPlayback.playback_range.end_ms)}: ${finding.title}`}
-                                          onClick={() =>
-                                            onSelectContextualPlayback(
-                                              contextualPlayback,
-                                              finding.title,
-                                            )
+                                        <ClipPlayState
+                                          startMs={
+                                            contextualPlayback.playback_range
+                                              .start_ms
+                                          }
+                                          endMs={
+                                            contextualPlayback.playback_range
+                                              .end_ms
                                           }
                                         >
-                                          Play with context ·{" "}
-                                          {formatTranscriptTime(
-                                            contextualPlayback.playback_range
-                                              .start_ms,
+                                          {(playing) => (
+                                            <button
+                                              className={styles.playWithContext}
+                                              type="button"
+                                              aria-pressed={playing}
+                                              aria-label={`${playing ? "Pause context playback" : "Play with context"}, ${spokenClipRange(contextualPlayback.playback_range.start_ms, contextualPlayback.playback_range.end_ms)}: ${finding.title}`}
+                                              onClick={() =>
+                                                onSelectContextualPlayback(
+                                                  contextualPlayback,
+                                                  finding.title,
+                                                )
+                                              }
+                                            >
+                                              {playing
+                                                ? "Pause context playback"
+                                                : "Play with context"}{" "}
+                                              ·{" "}
+                                              {formatClipRange(
+                                                contextualPlayback
+                                                  .playback_range.start_ms,
+                                                contextualPlayback
+                                                  .playback_range.end_ms,
+                                              )}
+                                            </button>
                                           )}
-                                          –
-                                          {formatTranscriptTime(
-                                            contextualPlayback.playback_range
-                                              .end_ms,
-                                          )}
-                                        </button>
+                                        </ClipPlayState>
                                       </div>
                                     )}
                                 </div>

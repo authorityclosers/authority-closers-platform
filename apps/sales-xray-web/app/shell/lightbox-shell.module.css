@@ -3,6 +3,7 @@
 
   display: grid;
   grid-template-columns: var(--shell-rail-w) minmax(0, 1fr);
+  transition: grid-template-columns 180ms ease;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--lx-paper);
@@ -54,28 +55,58 @@
   background: var(--lx-surface);
 }
 
+/* Learner-rail behaviour: the brand row keeps one fixed height in both states.
+   The collapse control is an overlay revealed on rail hover/focus, and in the
+   collapsed rail it sits exactly over the mark, so nothing moves vertically. */
 .railTop {
+  position: relative;
   display: flex;
+  min-height: 44px;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--lx-space-2);
+  justify-content: flex-start;
 }
 
 .toggle {
+  position: absolute;
+  top: 50%;
+  right: 0;
   display: inline-grid;
-  width: 40px;
-  height: 40px;
-  flex: none;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border: 1px solid var(--lx-line);
   border-radius: var(--lx-radius-sm);
-  background: transparent;
+  background: var(--lx-surface);
   color: var(--lx-muted);
+  box-shadow: 0 1px 3px rgba(15, 27, 51, 0.08);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.rail:hover .toggle,
+.rail:focus-within .toggle,
+.toggle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .toggle:hover {
+  background: var(--lx-sunken);
   color: var(--lx-ink);
+}
+
+/* Touch-first desktops have no hover discovery: keep the control visible. */
+@media (hover: none), (pointer: coarse) {
+  .toggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .nav {
@@ -157,7 +188,20 @@
 }
 
 .collapsed .railTop {
-  flex-direction: column;
+  width: 44px;
+  justify-content: center;
+}
+
+.collapsed .railTop > a {
+  padding: 2px;
+}
+
+.collapsed .toggle {
+  right: auto;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
 }
 
 .collapsed .railTop > a > span,
@@ -203,9 +247,10 @@
   background: transparent;
 }
 
+/* A slim utility bar: location + help only. Privacy lives with each report. */
 .topBar {
-  height: var(--lx-topbar-h);
-  padding: 0 var(--lx-space-12);
+  height: 48px;
+  padding: 0 var(--lx-space-8, 32px);
 }
 
 .mobileBar {
@@ -449,6 +494,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell,
+  .toggle,
   .skip {
     transition: none;
   }

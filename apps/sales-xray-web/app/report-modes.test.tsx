@@ -75,6 +75,9 @@ const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 it("shows all six report sections in one continuous reading layout", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
+  // The tab strip, section list and sections share one light report surface,
+  // whatever the app theme (tokens.css [data-lx-surface="light"]).
+  expect(mode().getAttribute("data-lx-surface")).toBe("light");
   expect(sections()).toHaveLength(6);
   expect(sections().every((section) => !section.hidden)).toBe(true);
   expect(
@@ -166,6 +169,221 @@ it("keeps all six accessible tabs available without horizontal overflow", async 
     if (previous)
       Object.defineProperty(HTMLElement.prototype, "scrollIntoView", previous);
     else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  }
+});
+
+const settle = () =>
+  act(async () => new Promise((resolve) => setTimeout(resolve, 90)));
+const buttonNamed = (text: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.trim() === text,
+  );
+async function jumpFromMoments() {
+  const jump = buttonNamed("Focus point 14")!;
+  jump.focus();
+  await act(async () => jump.click());
+  await settle();
+  return jump;
+}
+
+it("returns from a jump to the original URL without a section and its exact control", async () => {
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await render(call);
+  const push = vi.spyOn(window.history, "pushState");
+  const jump = await jumpFromMoments();
+  // The destination is a real history entry, focused and briefly marked.
+  expect(push).toHaveBeenCalledOnce();
+  expect(window.location.search).toContain("section=overview");
+  const point = container.querySelector<HTMLElement>(
+    '[data-review-point="14"]',
+  );
+  expect(document.activeElement).toBe(point);
+  expect(point?.getAttribute("data-arrived")).toBe("true");
+
+  await act(async () => buttonNamed("Back to Moments")!.click());
+  await settle();
+  // The jump entry is undone rather than stacked, so the URL is the original.
+  expect(window.location.search).toBe(`?call=${call}`);
+  expect(document.activeElement).toBe(jump);
+  expect(container.querySelector("[data-report-return]")).toBeNull();
+});
+
+it("restores the jump origin on browser Back as well", async () => {
+  window.history.replaceState(null, "", `/?call=${call}`);
+  await render(call);
+  const jump = await jumpFromMoments();
+  expect(container.querySelector("[data-report-return]")).not.toBeNull();
+  await act(async () => window.history.back());
+  await settle();
+  expect(window.location.search).toBe(`?call=${call}`);
+  expect(document.activeElement).toBe(jump);
+  expect(container.querySelector("[data-report-return]")).toBeNull();
+});
+
+it("returns to the originating tab in the tabbed view", async () => {
+  const origin = `?call=${call}&view=tabs&section=moments`;
+  window.history.replaceState(null, "", `/${origin}`);
+  await render(call);
+  const jump = await jumpFromMoments();
+  expect(mode().dataset.view).toBe("tabs");
+  expect(
+    sections().find((section) => !section.hidden)?.dataset.reportModeSection,
+  ).toBe("overview");
+
+  await act(async () => buttonNamed("Back to Moments")!.click());
+  await settle();
+  expect(window.location.search).toBe(origin);
+  expect(
+    sections().find((section) => !section.hidden)?.dataset.reportModeSection,
+  ).toBe("moments");
+  expect(document.activeElement).toBe(jump);
+});
+
+it("moves instantly under reduced motion and smoothly otherwise", async () => {
+  const scroll = vi.fn();
+  const previous = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  );
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scroll,
+  });
+  const media = (reduce: boolean) =>
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query: string) =>
+        ({
+          matches: reduce && query.includes("reduce"),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+  if (!window.matchMedia)
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: () => ({ matches: false }),
+    });
+  try {
+    window.history.replaceState(null, "", `/?call=${call}`);
+    await render(call);
+    media(true);
+    await jumpFromMoments();
+    expect(scroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ behavior: "auto" }),
+    );
+    await act(async () => buttonNamed("Back to Moments")!.click());
+    await settle();
+    vi.restoreAllMocks();
+    media(false);
+    await jumpFromMoments();
+    expect(scroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ behavior: "smooth" }),
+    );
+  } finally {
+    if (previous)
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", previous);
+    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  }
+});
+
+it("focuses a jump target even when it is a plain container", async () => {
+  await act(async () =>
+    root.render(
+      <ReportModes
+        boundCallId={call}
+        panels={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: <div data-review-point="14">Verdict</div>,
+          },
+          { id: "moments", label: "Moments", content: <JumpToPoint /> },
+        ]}
+      />,
+    ),
+  );
+  await jumpFromMoments();
+  const point = container.querySelector<HTMLElement>(
+    '[data-review-point="14"]',
+  );
+  expect(point?.getAttribute("tabindex")).toBe("-1");
+  expect(document.activeElement).toBe(point);
+});
+
+function desktopViewport(matches: boolean) {
+  const previous = Object.getOwnPropertyDescriptor(window, "matchMedia");
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) =>
+      ({
+        matches: matches && query.includes("min-width"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList,
+  });
+  return () => {
+    if (previous) Object.defineProperty(window, "matchMedia", previous);
+    else Reflect.deleteProperty(window, "matchMedia");
+  };
+}
+
+it("opens desktop reports in Tabbed view unless the URL or reader chose", async () => {
+  const restore = desktopViewport(true);
+  try {
+    window.history.replaceState(null, "", `/?call=${call}`);
+    await render(call);
+    expect(mode().dataset.view).toBe("tabs");
+    // One navigation row: the section tabs and the view choice together.
+    const row = container.querySelector('[role="tablist"]')!.parentElement!;
+    expect(row.querySelector('[role="group"]')).not.toBeNull();
+    // The selected tab names the section; its heading is kept, visually hidden.
+    const heading = sections()
+      .find((section) => !section.hidden)!
+      .querySelector("h2")!;
+    expect(heading.className).not.toBe("");
+
+    // A reader's explicit choice wins over the viewport default.
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[role="group"] button')!
+        .click(),
+    );
+    expect(mode().dataset.view).toBe("reading");
+    expect(window.location.search).toContain("view=reading");
+    expect(
+      container.querySelectorAll("nav[aria-label='Report sections'] a"),
+    ).toHaveLength(6);
+  } finally {
+    restore();
+  }
+});
+
+it("keeps an explicit reading bookmark on a desktop viewport", async () => {
+  const restore = desktopViewport(true);
+  try {
+    window.history.replaceState(null, "", `/?call=${call}&view=reading`);
+    await render(call);
+    expect(mode().dataset.view).toBe("reading");
+    // Reading view has no second sidebar: section links share the one row.
+    const links = container.querySelector("nav[aria-label='Report sections']")!;
+    expect(links.parentElement?.querySelector('[role="group"]')).not.toBeNull();
+    expect(sections().every((section) => !section.hidden)).toBe(true);
+  } finally {
+    restore();
+  }
+});
+
+it("stays in Reading view on a narrow viewport without a choice", async () => {
+  const restore = desktopViewport(false);
+  try {
+    await render(call);
+    expect(mode().dataset.view).toBe("reading");
+  } finally {
+    restore();
   }
 });
 

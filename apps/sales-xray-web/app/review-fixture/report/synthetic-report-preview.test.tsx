@@ -56,11 +56,11 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   const skills = container.querySelector('[data-report-mode-section="skills"]');
   expect(skills?.hasAttribute("hidden")).toBe(false);
   expect(skills?.textContent).toContain(syntheticEvidence.respect.quote);
-  expect(skills?.textContent).toContain("00:31.000–00:35.000");
+  expect(skills?.textContent).toContain("00:31–00:35");
   expect(button("Open notes: Human Connection & Trust").hidden).toBe(true);
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   await act(async () =>
-    button("Listen to Human Connection & Trust excerpt at 00:31.000").click(),
+    button("Listen to Human Connection & Trust excerpt at 00:31").click(),
   );
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   expect(container.querySelector('[role="status"]')?.textContent).toContain(
@@ -79,7 +79,7 @@ it("keeps the no-next-action outcome explicit in the production next-call plan a
   expect(outcome?.textContent).toContain(
     "No sale was agreed. The buyer declined a next step",
   );
-  await act(async () => button("Listen to call outcome at 00:26.000").click());
+  await act(async () => button("Listen to call outcome at 00:26").click());
   expect(container.querySelector('[role="status"]')?.textContent).toContain(
     syntheticEvidence.boundary.quote,
   );

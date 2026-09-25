@@ -1,8 +1,12 @@
+/* Report navigation colours come only from semantic Lightbox tokens, so the tab
+   strip, section list and return control always match the surface they sit on.
+   The workspace is a light report surface (data-lx-surface, tokens.css). */
 .workspace {
-  --report-ink: #111b3e;
-  --report-muted: #536783;
-  --report-border: #dbe5f1;
-  --report-teal: #087e79;
+  --report-ink: var(--lx-ink);
+  --report-muted: var(--lx-muted);
+  --report-border: var(--lx-line);
+  --report-teal: var(--lx-teal);
+  --report-active-ink: var(--lx-strength-ink);
   min-width: 0;
   color: var(--report-ink);
   /* Every report section shares the accepted Lightbox UI face. */
@@ -11,23 +15,38 @@
   line-height: 1.6;
 }
 
+/* The single sticky report navigation row (both views): sections scroll
+   sideways at narrow widths or 200% zoom; the view choice stays trailing. */
+.navRow {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--report-border);
+  background: var(--lx-paper);
+}
+
 .toolbar {
   display: flex;
-  justify-content: flex-end;
-  margin: 0 0 12px;
+  flex: none;
+  margin: 0;
 }
 
 .toolbar > button {
   display: inline-flex;
-  min-width: 104px;
-  min-height: 44px;
+  min-width: 96px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 7px;
+  padding: 6px 11px;
   border: 1px solid var(--report-border);
-  background: #fff;
-  color: #536783;
+  background: var(--lx-surface);
+  color: var(--report-muted);
   font: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -46,9 +65,9 @@
 .toolbar > button[aria-pressed="true"] {
   position: relative;
   z-index: 1;
-  border-color: #acd9d2;
-  background: #edf9f6;
-  color: #08766f;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-soft);
+  color: var(--report-active-ink);
 }
 
 .toolbar svg {
@@ -56,59 +75,64 @@
   height: 17px;
 }
 
+/* Sections use the full report width in both views. */
 .layout {
-  display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
-  align-items: start;
-  gap: 26px;
+  display: block;
   min-width: 0;
 }
 
+/* Reading view: section links in the same horizontal row as the tabs. */
 .contents {
-  position: sticky;
-  top: 76px;
-  display: grid;
-  align-self: start;
-  max-height: calc(100dvh - 96px);
-  gap: 2px;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
   min-width: 0;
-  overflow-y: auto;
-  padding-left: 10px;
-  border-left: 1px solid var(--report-border);
-  scrollbar-width: thin;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.contents::-webkit-scrollbar {
+  display: none;
 }
 
 .contents a {
-  display: flex;
-  min-width: 0;
-  min-height: 43px;
+  display: inline-flex;
+  flex: none;
+  min-height: 46px;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-left: 2px solid transparent;
-  border-radius: 0 7px 7px 0;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: #5a6d8a;
+  color: var(--report-muted);
   font-size: 14px;
-  font-weight: 650;
-  line-height: 1.35;
+  font-weight: 680;
+  line-height: 1.3;
+  white-space: nowrap;
   text-decoration: none;
   transition:
     color 150ms ease,
-    background-color 150ms ease,
     border-color 150ms ease;
 }
 
 .contents a:hover {
-  background: #f7f9fc;
   color: var(--report-ink);
 }
 
 .contents a[aria-current="location"] {
-  border-left-color: var(--report-teal);
-  background: #effaf7;
-  color: #08766f;
-  font-weight: 750;
+  border-bottom-color: var(--report-teal);
+  color: var(--report-active-ink);
+}
+
+.visuallyHiddenHeading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .sectionIcon {
@@ -127,42 +151,125 @@
   display: none;
 }
 
+/* One horizontal tablist with an underline indicator; it scrolls sideways
+   rather than stacking when the viewport (or 200% zoom) is narrow. */
 .tabNavigation {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
   min-width: 0;
-  margin: 0 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabNavigation::-webkit-scrollbar {
+  display: none;
 }
 
 .tabNavigation button {
-  display: flex;
-  min-width: 0;
+  display: inline-flex;
+  flex: none;
   min-height: 46px;
   align-items: center;
-  gap: 9px;
-  padding: 9px 12px;
-  border: 1px solid var(--report-border);
-  border-radius: 9px;
-  background: #fff;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: var(--report-muted);
   font: inherit;
   font-size: 14px;
   font-weight: 680;
   line-height: 1.3;
-  text-align: left;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.tabNavigation button:hover {
+  color: var(--report-ink);
 }
 
 .tabNavigation button[aria-selected="true"] {
-  border-color: #a8d8d0;
-  background: #eef9f6;
-  color: #08766f;
+  border-bottom-color: var(--report-teal);
+  color: var(--report-active-ink);
 }
 
-.tabNavigation button span {
-  min-width: 0;
-  overflow-wrap: anywhere;
+/* Destination feedback after a jump: a short tint that fades out. */
+.workspace :global([data-arrived="true"]) {
+  animation: arrived 1.6s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes arrived {
+  0%,
+  35% {
+    background-color: var(--lx-teal-soft);
+    box-shadow: 0 0 0 6px var(--lx-teal-soft);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.returnBar {
+  position: fixed;
+  z-index: 45;
+  right: 28px;
+  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+}
+
+.returnButton,
+.returnDismiss {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--report-active-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.returnButton {
+  padding: 0 10px 0 16px;
+}
+
+.returnDismiss {
+  padding: 0 12px 0 8px;
+  border-left: 1px solid var(--lx-teal-edge);
+  color: var(--report-muted);
+}
+
+.returnButton svg,
+.returnDismiss svg {
+  width: 16px;
+  height: 16px;
+}
+
+.returnButton:hover,
+.returnDismiss:hover {
+  background: var(--lx-teal-tint);
+}
+
+.returnButton:focus-visible,
+.returnDismiss:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: inset var(--lx-ring-focus);
 }
 
 .contents a:focus-visible,
@@ -177,35 +284,32 @@
   min-width: 0;
 }
 
+/* Scroll targets clear the one sticky navigation row (~48px). */
 .section {
   min-width: 0;
-  padding-block: 10px 28px;
-  scroll-margin-block-start: 86px;
+  padding-block: 0 28px;
+  scroll-margin-block-start: 64px;
 }
 
 .section + .section {
-  padding-top: 28px;
+  padding-top: 24px;
   border-top: 1px solid var(--report-border);
 }
 
 .section > h2 {
-  margin: 0 0 20px;
+  margin: 0 0 14px;
   color: var(--lx-ink);
   font-family: var(--lx-font-ui);
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
   overflow-wrap: anywhere;
-  scroll-margin-block-start: 86px;
+  scroll-margin-block-start: 64px;
 }
 
 .section[hidden] {
   display: none;
-}
-
-.workspace[data-view="tabs"] .layout {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace[data-view="tabs"] .section {
@@ -213,70 +317,27 @@
   border: 0;
 }
 
-@media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+/* Narrow: the view choice gets its own line above the scrolling sections. */
+@media (max-width: 760px) {
+  .navRow {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
-  .contents {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0 12px;
+  .toolbar {
+    order: -1;
     width: 100%;
-    max-height: none;
-    align-self: auto;
-    overflow: visible;
-    padding: 0;
-    border: 0;
-  }
-
-  .contents a {
-    min-height: 42px;
-    padding: 8px 4px;
-    border-bottom: 1px solid var(--report-border);
-    border-left: 0;
-    border-radius: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .contents a[aria-current="location"] {
-    border-bottom: 2px solid var(--report-teal);
-    background: transparent;
-  }
-
-  .section {
-    scroll-margin-block-start: 74px;
-  }
-
-  .section > h2 {
-    scroll-margin-block-start: 74px;
+    justify-content: flex-end;
+    padding-top: 6px;
   }
 }
 
 @media (max-width: 640px) {
-  .contents,
-  .tabNavigation {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 10px;
-  }
-
-  .tabNavigation {
-    gap: 7px;
-  }
-
-  .tabNavigation button {
-    min-height: 44px;
-    gap: 7px;
-    padding: 8px;
-    font-size: 13px;
-  }
-
+  .tabNavigation button,
   .contents a {
     min-height: 44px;
     gap: 7px;
-    padding-inline: 2px;
+    padding: 8px 10px;
     font-size: 13px;
   }
 
@@ -313,10 +374,12 @@
   .workspace *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+    animation: none !important;
   }
 }
 
 @media print {
+  .navRow,
   .toolbar,
   .contents,
   .tabNavigation {

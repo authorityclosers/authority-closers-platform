@@ -1,3 +1,4 @@
+import { parseCallLabel, type CallLabel } from "./call-label";
 import { ReportContractError } from "./report-contract";
 import {
   parseLanguageCapabilities,
@@ -42,6 +43,8 @@ export type LibrarySubmission = {
   durationSeconds: number;
   state: string;
   hasReport: boolean;
+  /** Owner call name (C1); null when the server predates labels. */
+  label: CallLabel | null;
 };
 export type SubmissionLibraryPage = {
   submissions: LibrarySubmission[];
@@ -380,6 +383,8 @@ export function parseSubmissionLibraryPage(
             "duration_seconds",
             "state",
             "has_report",
+            "display_name",
+            "display_name_revision",
           ].includes(key),
       ) ||
       typeof submission.submission_id !== "string" ||
@@ -394,6 +399,12 @@ export function parseSubmissionLibraryPage(
       typeof submission.has_report !== "boolean"
     )
       throw new ReportContractError("acquisition_library_submission");
+    let label: CallLabel | null;
+    try {
+      label = parseCallLabel(submission);
+    } catch {
+      throw new ReportContractError("acquisition_library_submission");
+    }
     ids.add(submission.submission_id);
     submissions.push({
       id: submission.submission_id,
@@ -401,6 +412,7 @@ export function parseSubmissionLibraryPage(
       durationSeconds: submission.duration_seconds as number,
       state: submission.state,
       hasReport: submission.has_report,
+      label,
     });
   }
   return {

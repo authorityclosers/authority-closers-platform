@@ -7,14 +7,18 @@ import {
   FileText,
   Flag,
   Maximize2,
-  Play,
   Search,
   X,
 } from "lucide-react";
+import {
+  ClipListenButton,
+  ClipPlayIcon,
+  ClipPlayState,
+} from "./source-waveform";
 import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
 import { Glyph, type GlyphName } from "./lightbox/glyph";
 import { sourceTextAttributes } from "./lightbox/script";
-import { formatClock, isUnderOneSecond } from "./lightbox/time";
+import { formatClipRange, formatClock } from "./lightbox/time";
 import {
   useReportInline,
   useReportNavigation,
@@ -73,11 +77,7 @@ export function formatClipTime({
   start_ms,
   end_ms,
 }: Pick<ReportEvidence, "start_ms" | "end_ms">) {
-  const start = formatClock(start_ms);
-  const end = formatClock(end_ms);
-  return isUnderOneSecond(start_ms, end_ms) || start === end
-    ? `at ${start}`
-    : `${start}–${end}`;
+  return formatClipRange(start_ms, end_ms);
 }
 
 /** Preserve report order and each finding's provenance, including shared clips. */
@@ -113,14 +113,31 @@ function suppliedMoments(report: SalesReport): Moment[] {
   );
 }
 
+/** One distinct replayable interval and every supplied finding that cites it. */
+export type ReplayClip = { evidence: ReportEvidence; titles: string[] };
+
+/**
+ * The same supplied dataset as the moments browser, grouped by identical
+ * interval and ordered by time. The count, replay strip and list share it.
+ */
+export function reportReplayClips(report: SalesReport): ReplayClip[] {
+  const clips = new Map<string, ReplayClip>();
+  for (const { evidence, title } of suppliedMoments(report)) {
+    const key = `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`;
+    const clip = clips.get(key);
+    if (!clip) clips.set(key, { evidence, titles: [title] });
+    else if (!clip.titles.includes(title)) clip.titles.push(title);
+  }
+  return [...clips.values()].sort(
+    (a, b) =>
+      a.evidence.start_ms - b.evidence.start_ms ||
+      a.evidence.end_ms - b.evidence.end_ms,
+  );
+}
+
 /** Same supplied dataset as the browser; repeated citations retain their contexts. */
 export function countReportMoments(report: SalesReport): number {
-  return new Set(
-    suppliedMoments(report).map(
-      ({ evidence }) =>
-        `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`,
-    ),
-  ).size;
+  return reportReplayClips(report).length;
 }
 
 const sameClip = (a: ReportEvidence, b: ReportEvidence) =>
@@ -541,14 +558,22 @@ function MomentsBrowser({
               )}
               <Linked items={linkedFindings(report, moment.evidence)} />
               <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.listen}
-                  onClick={listen}
+                <ClipPlayState
+                  startMs={moment.evidence.start_ms}
+                  endMs={moment.evidence.end_ms}
                 >
-                  <Play size={17} fill="currentColor" aria-hidden="true" />{" "}
-                  Listen
-                </button>
+                  {(playing) => (
+                    <button
+                      type="button"
+                      className={styles.listen}
+                      onClick={listen}
+                      aria-pressed={playing}
+                    >
+                      <ClipPlayIcon playing={playing} size={17} />{" "}
+                      {playing ? "Pause" : "Listen"}
+                    </button>
+                  )}
+                </ClipPlayState>
                 {!inline && (
                   <button
                     type="button"
@@ -600,9 +625,22 @@ function MomentsBrowser({
             )}
             <Linked items={linkedFindings(report, moment.evidence)} />
             <p className={styles.provenance}>From this call</p>
-            <button type="button" className={styles.listen} onClick={listen}>
-              <Play size={17} aria-hidden="true" /> Listen to this excerpt
-            </button>
+            <ClipPlayState
+              startMs={moment.evidence.start_ms}
+              endMs={moment.evidence.end_ms}
+            >
+              {(playing) => (
+                <button
+                  type="button"
+                  className={styles.listen}
+                  onClick={listen}
+                  aria-pressed={playing}
+                >
+                  <ClipPlayIcon playing={playing} size={17} />{" "}
+                  {playing ? "Pause this excerpt" : "Listen to this excerpt"}
+                </button>
+              )}
+            </ClipPlayState>
           </div>
         </MomentsSheet>
       )}
@@ -646,15 +684,17 @@ function MomentsBrowser({
                     <p className={styles.cardNote}>{item.explanation}</p>
                   )}
                   <Linked items={linkedFindings(report, item.evidence)} />
-                  <button
-                    type="button"
+                  <ClipListenButton
                     className={styles.readingListen}
+                    startMs={item.evidence.start_ms}
+                    endMs={item.evidence.end_ms}
+                    iconSize={15}
                     onClick={() => onSelectEvidence(item.evidence, item.title)}
-                    aria-label={`Listen ${clip}: ${item.title}`}
+                    label={`${clip}: ${item.title}`}
                   >
-                    <Play size={15} fill="currentColor" aria-hidden="true" />
-                    Listen <span className={styles.clock}>{clip}</span>
-                  </button>
+                    {" "}
+                    <span className={styles.clock}>{clip}</span>
+                  </ClipListenButton>
                 </article>
               </li>
             );

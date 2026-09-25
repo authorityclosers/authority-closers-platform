@@ -61,7 +61,15 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", (
       ?.getAttribute("href"),
   ).toBe("/?new=1");
   expect(shell.querySelector('a[href="/calls"]')).not.toBeNull();
-  expect(shell.textContent).toContain("Account & saved calls");
+  // Account is its own destination, not a second link to Calls.
+  const account = shell.querySelector<HTMLAnchorElement>(
+    'nav[aria-label="Workspace"] a[href="/account"]',
+  );
+  expect(account?.textContent).toBe("Account");
+  expect(shell.textContent).not.toContain("Account & saved calls");
+  expect(
+    shell.querySelectorAll('nav[aria-label="Workspace"] a[href="/calls"]'),
+  ).toHaveLength(1);
   expect(shell.querySelectorAll("main")).toHaveLength(1);
   expect(shell.querySelector("main")?.id).toBe("main-content");
   expect(shell.querySelector('a[href="#main-content"]')?.textContent).toBe(
@@ -180,10 +188,10 @@ it("shows trial minutes only from a verified allowance", () => {
     ),
   );
   expect(unlimited.querySelector('[role="meter"]')).toBeNull();
-  expect(unlimited.textContent).toContain("Unlimited testing");
+  expect(unlimited.textContent).toContain("Unlimited analysis time");
 });
 
-it("claims privacy only for a signed-in account", () => {
+it("never claims privacy in the shell chrome; each saved report states it", () => {
   const signedIn = renderToStaticMarkup(
     <AcquisitionShell authenticated>
       <p>Content</p>
@@ -194,7 +202,7 @@ it("claims privacy only for a signed-in account", () => {
       <p>Content</p>
     </AcquisitionShell>,
   );
-  expect(signedIn).toContain("Private to your account");
+  expect(signedIn).not.toContain("Private to your account");
   expect(guest).not.toContain("Private to your account");
   expect(guest).toContain("Profile &amp; account");
   expect(guest).toContain("Sign in to analyse calls");

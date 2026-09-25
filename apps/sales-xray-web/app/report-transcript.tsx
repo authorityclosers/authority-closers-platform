@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatClock } from "./lightbox/time";
 import type { Transcript, TranscriptSegment } from "./report-contract";
 import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
 import { useReportInline, useReportReading } from "./report-reading-context";
@@ -20,11 +21,9 @@ function speakerLabel(
   return speakerId ?? unlabelledLabel;
 }
 
+/** Visible times are mm:ss (h:mm:ss from one hour); seeks keep source milliseconds. */
 export function formatTranscriptTime(milliseconds: number): string {
-  const minutes = Math.floor(milliseconds / 60_000);
-  const seconds = Math.floor(milliseconds / 1_000) % 60;
-  const millis = milliseconds % 1_000;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+  return formatClock(milliseconds);
 }
 
 export type ReportTranscriptProps = {

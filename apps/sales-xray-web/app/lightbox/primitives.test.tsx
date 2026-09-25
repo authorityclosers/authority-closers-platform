@@ -15,7 +15,13 @@ import {
 } from "./script";
 import { StatusChip } from "./status-chip";
 import { Stepper } from "./stepper";
-import { formatClock, isUnderOneSecond } from "./time";
+import {
+  formatClipRange,
+  formatClock,
+  isPlayableRange,
+  isUnderOneSecond,
+  spokenClipRange,
+} from "./time";
 import { Toast } from "./toast";
 
 (
@@ -53,6 +59,22 @@ describe("time and script helpers", () => {
     expect(formatClock(Number.NaN)).toBe("00:00");
     expect(isUnderOneSecond(1_000, 1_900)).toBe(true);
     expect(isUnderOneSecond(1_000, 2_000)).toBe(false);
+  });
+
+  it("never presents a subsecond clip as an equal-endpoint range", () => {
+    // 11:33.100–11:33.900 is a valid 800 ms clip.
+    expect(formatClipRange(693_100, 693_900)).toBe("at 11:33 · under 1 second");
+    expect(spokenClipRange(693_100, 693_900)).toBe("at 11:33, under 1 second");
+    // Crossing a second boundary but still under a second.
+    expect(formatClipRange(693_900, 694_300)).toBe("at 11:33 · under 1 second");
+    expect(formatClipRange(186_100, 209_340)).toBe("03:06–03:29");
+    expect(spokenClipRange(186_100, 209_340)).toBe("03:06 to 03:29");
+    // Invalid or non-positive intervals are never playable.
+    expect(isPlayableRange(5_000, 5_000)).toBe(false);
+    expect(isPlayableRange(5_000, 4_000)).toBe(false);
+    expect(isPlayableRange(-1, 4_000)).toBe(false);
+    expect(isPlayableRange(Number.NaN, 4_000)).toBe(false);
+    expect(isPlayableRange(4_000, 4_800)).toBe(true);
   });
 
   it("tags Devanagari source text by script, never by the requested report language", () => {

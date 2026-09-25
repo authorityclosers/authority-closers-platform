@@ -53,6 +53,43 @@ export async function requestSalesXrayLogout(
   }
 }
 
+/**
+ * Server-confirmed sign out with the same upload guard as the account menus:
+ * an unresolved upload needs explicit confirmation, and a confirmed logout
+ * replaces the document so private report state cannot linger.
+ */
+export function useSalesXraySignOut() {
+  const upload = useUploadSession();
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
+
+  async function signOut() {
+    if (inFlight.current) return;
+    const unresolved = upload?.requiresSignOutConfirmation() ?? false;
+    if (unresolved && !window.confirm(SIGN_OUT_UPLOAD_WARNING)) return;
+    inFlight.current = true;
+    setSigningOut(true);
+    setError("");
+    try {
+      await requestSalesXrayLogout(upload, unresolved);
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign out must discard the privileged document and route cache.
+      window.location.assign("/");
+    } catch (caught) {
+      setError(
+        caught instanceof UploadNeedsSignOutConfirmationError
+          ? "Check the upload and confirm sign out again."
+          : SIGN_OUT_ERROR,
+      );
+      setSigningOut(false);
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return { signOut, signingOut, error };
+}
+
 export function AccountNavigation({ compact = false }: { compact?: boolean }) {
   const access = useWorkspaceAccess();
   const upload = useUploadSession();

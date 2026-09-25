@@ -11,7 +11,6 @@ import {
   Handshake,
   Lightbulb,
   MessagesSquare,
-  Play,
   Presentation,
   ShieldCheck,
   Target,
@@ -19,9 +18,11 @@ import {
 } from "lucide-react";
 import type { ReportDimension, ReportEvidence } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
+import { formatClipRange } from "./lightbox/time";
 import { getReportUiCopy } from "./report-ui-copy";
 import { ReviewDialog } from "./review-dialog";
 import { useReportInline } from "./report-reading-context";
+import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
@@ -210,45 +211,57 @@ function SkillSources({
   const excerpts = dimension.evidence ?? [];
   return (
     <>
-      <section className={styles.source} aria-label="Recording excerpts">
-        <h3>From the recording</h3>
-        {excerpts.length ? (
+      {/* A recording panel appears only when the call actually supplied an excerpt. */}
+      {excerpts.length ? (
+        <section className={styles.source} aria-label="Recording excerpts">
+          <h3>From the recording</h3>
           <ol className={styles.excerpts}>
             {excerpts.map((evidence, index) => (
               <li key={`${evidence.segment_id}-${index}`}>
                 <span className={styles.sourceTime}>
-                  {formatTranscriptTime(evidence.start_ms)}–
-                  {formatTranscriptTime(evidence.end_ms)}
+                  {formatClipRange(evidence.start_ms, evidence.end_ms)}
                 </span>
                 <blockquote>{evidence.quote}</blockquote>
                 {onSelectEvidence && (
-                  <button
-                    type="button"
-                    className={styles.listen}
-                    onClick={() => onSelectEvidence(evidence)}
-                    aria-label={`Listen to ${dimension.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
+                  <ClipPlayState
+                    startMs={evidence.start_ms}
+                    endMs={evidence.end_ms}
                   >
-                    <Play size={15} fill="currentColor" aria-hidden="true" />{" "}
-                    Listen to this excerpt
-                  </button>
+                    {(playing) => (
+                      <button
+                        type="button"
+                        className={styles.listen}
+                        onClick={() => onSelectEvidence(evidence)}
+                        aria-label={`${playing ? "Pause" : "Listen to"} ${dimension.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
+                        aria-pressed={playing}
+                      >
+                        <ClipPlayIcon playing={playing} size={15} />{" "}
+                        {playing
+                          ? "Pause this excerpt"
+                          : "Listen to this excerpt"}
+                      </button>
+                    )}
+                  </ClipPlayState>
                 )}
               </li>
             ))}
           </ol>
-        ) : (
-          <p className={styles.noSource}>
-            No recording excerpt was supplied for this skill.
-          </p>
-        )}
-      </section>
+        </section>
+      ) : (
+        <p className={styles.noSource}>
+          No recording excerpt was supplied for this skill.
+        </p>
+      )}
+      {/* Raw coaching-material identifiers are audit provenance, not reading
+          content: they stay available behind a closed disclosure. */}
       {!!dimension.citations.length && (
-        <aside className={styles.references}>
-          <h3>
-            <BookOpen size={18} aria-hidden="true" /> Coaching references
-          </h3>
+        <details className={styles.references}>
+          <summary>
+            <BookOpen size={16} aria-hidden="true" /> Coaching source details
+          </summary>
           <p>
-            Document references supplied with this observation; not recording
-            timestamps.
+            Internal coaching-material references used for this draft
+            observation. They are not moments from your call.
           </p>
           <ul>
             {dimension.citations.map((citation, index) => (
@@ -257,7 +270,7 @@ function SkillSources({
               </li>
             ))}
           </ul>
-        </aside>
+        </details>
       )}
     </>
   );

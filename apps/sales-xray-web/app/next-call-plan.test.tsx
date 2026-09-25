@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
+import { formatClock } from "./lightbox/time";
 import { NextCallPlan } from "./next-call-plan";
 import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport } from "./report-contract";
@@ -60,12 +61,13 @@ it("plays exact supplied evidence and exposes all full notes in a bounded reader
   );
   const evidence = report.improvements[0].evidence[0];
   const outcomeEvidence = report.overview!.outcome!.evidence[0];
-  await act(async () => button(`Listen to call outcome at 00:03.500`).click());
+  await act(async () => button(`Listen to call outcome at 00:03`).click());
   expect(select).toHaveBeenCalledWith(outcomeEvidence, "Call outcome");
   select.mockClear();
+  // The accessible name reads mm:ss, never raw milliseconds.
   await act(async () =>
     button(
-      `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
+      `Play source moment, ${formatClock(evidence.start_ms)} to ${formatClock(evidence.end_ms)}`,
     ).click(),
   );
   expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);
@@ -156,7 +158,7 @@ it("renders every plan section and source in reading mode while retaining eviden
   expect(container.textContent).toContain(evidence.quote);
   await act(async () =>
     button(
-      `Play source moment, ${evidence.start_ms} to ${evidence.end_ms}`,
+      `Play source moment, ${formatClock(evidence.start_ms)} to ${formatClock(evidence.end_ms)}`,
     ).click(),
   );
   expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);

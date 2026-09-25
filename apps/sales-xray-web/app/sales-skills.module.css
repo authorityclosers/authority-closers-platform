@@ -284,17 +284,33 @@
   font-size: 13px;
 }
 .references {
-  margin-top: 20px;
-  padding: 1px 18px 16px;
-  border: 1px solid #e3ddfa;
-  border-radius: 12px;
-  background: #f8f5ff;
+  margin-top: 14px;
+  color: #63788d;
 }
-.references h3 {
-  display: flex;
+.references > summary {
+  display: inline-flex;
+  min-height: 32px;
   align-items: center;
-  gap: 8px;
-  color: #6331df;
+  gap: 7px;
+  color: #536783;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+.references > summary::-webkit-details-marker {
+  display: none;
+}
+.references > summary:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid #aebff6;
+  outline-offset: 2px;
+}
+.references[open] {
+  padding: 4px 14px 12px;
+  border: 1px solid #e6ebf2;
+  border-radius: 10px;
+  background: #fbfcfe;
 }
 .references p,
 .references li {

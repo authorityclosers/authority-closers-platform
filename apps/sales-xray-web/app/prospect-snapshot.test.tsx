@@ -109,7 +109,7 @@ it("separates the report observation, exact source words, and hypothesis", async
 
   const evidence = interpretation.source.evidence[0];
   const play = card.querySelector<HTMLButtonElement>(
-    '[aria-label="Play source moment, 00:01.000 to 00:02.200"]',
+    '[aria-label="Play source moment, 00:01 to 00:02"]',
   )!;
   await act(async () => play.click());
   expect(selected).toHaveBeenCalledWith(evidence, "Prospect signal 1");

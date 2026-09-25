@@ -4,15 +4,16 @@
   gap: 12px;
 }
 
+/* A compact, purposeful drop target: one row on wide screens. */
 .dropArea {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: clamp(190px, 30vh, 282px);
+  min-height: 150px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 10px;
   padding: 18px 18px 20px;
   border: 1px dashed #a5dadd;
   border-radius: 14px;
@@ -36,8 +37,8 @@
 .cloud {
   position: relative;
   display: grid;
-  width: 74px;
-  height: 74px;
+  width: 58px;
+  height: 58px;
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
@@ -56,8 +57,8 @@
 }
 
 .uploadMark {
-  width: 49px;
-  height: 49px;
+  width: 36px;
+  height: 36px;
   overflow: visible;
 }
 
@@ -116,21 +117,47 @@
 }
 
 .dropCopy strong {
-  font-size: clamp(16px, 1.5vw, 21px);
-  font-weight: 760;
-  line-height: 1.25;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.3;
 }
 
 .browse {
-  min-height: 30px;
+  min-height: 32px;
   padding: 1px 7px;
   border: 0;
   background: transparent;
-  color: #0b908f;
+  color: #0b7f7a;
   cursor: pointer;
   font: inherit;
-  font-size: clamp(14px, 1.3vw, 18px);
+  font-size: 14px;
   font-weight: 750;
+}
+
+/* Wide screens: mark | copy | limits in one calm row. */
+@media (min-width: 760px) {
+  .stage:not([data-has-files="true"]) .dropArea {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 18px;
+    padding: 20px 24px;
+    text-align: left;
+  }
+
+  .stage:not([data-has-files="true"]) .dropCopy {
+    justify-items: start;
+  }
+
+  .stage:not([data-has-files="true"]) .browse {
+    padding-inline: 0;
+  }
+
+  .stage:not([data-has-files="true"]) .facts {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 0 0 0 auto;
+  }
 }
 
 .browse:hover {
@@ -172,9 +199,9 @@
   align-items: center;
   justify-content: center;
   gap: 6px 17px;
-  margin-top: 12px;
-  color: #587198;
-  font-size: 12px;
+  margin-top: 4px;
+  color: #4f6689;
+  font-size: 12.5px;
   line-height: 1.3;
 }
 
@@ -433,7 +460,7 @@
   .stage[data-has-files="true"] .facts {
     gap: 2px 8px;
     padding-left: 37px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .stage[data-has-files="true"] .facts svg {
@@ -475,9 +502,9 @@
 
   .stage[data-has-files="true"] .selectedBadge,
   .stage[data-has-files="true"] .select {
-    min-height: 23px;
+    min-height: 24px;
     padding: 2px 7px;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .stage[data-has-files="true"] .remove {
@@ -492,14 +519,14 @@
   }
 
   .dropArea {
-    min-height: 188px;
+    min-height: 132px;
     gap: 6px;
     padding: 10px 14px;
   }
 
   .cloud {
-    width: 54px;
-    height: 54px;
+    width: 48px;
+    height: 48px;
   }
 
   .cloud svg {
@@ -510,7 +537,7 @@
   .facts {
     gap: 4px 10px;
     margin-top: 3px;
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .stage[data-has-files="true"] .dropArea {
@@ -526,7 +553,7 @@
 
   .stage[data-has-files="true"] .facts {
     padding-left: 39px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .selection {
@@ -550,12 +577,12 @@
 
 @media (max-width: 600px) {
   .dropArea {
-    min-height: 225px;
+    min-height: 180px;
     padding: 16px 11px;
   }
 
   .facts {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .stage[data-has-files="true"] .facts {

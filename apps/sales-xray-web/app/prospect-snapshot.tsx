@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowRight, CircleHelp, LockKeyhole, Play, Quote } from "lucide-react";
+import { ArrowRight, CircleHelp, LockKeyhole, Quote } from "lucide-react";
 import type { ReportEvidence, SalesReport } from "./report-contract";
-import { formatTranscriptTime } from "./report-transcript";
+import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
+import { formatClipRange, spokenClipRange } from "./lightbox/time";
 import { useReportInline } from "./report-reading-context";
 import styles from "./prospect-snapshot.module.css";
 
@@ -17,26 +18,32 @@ function sourceAction(
   index: number,
   onSelectEvidence: ProspectSnapshotProps["onSelectEvidence"],
 ) {
-  const start = formatTranscriptTime(evidence.start_ms);
-  const end = formatTranscriptTime(evidence.end_ms);
+  const spoken = spokenClipRange(evidence.start_ms, evidence.end_ms);
   return (
-    <button
-      type="button"
-      className={styles.sourceAction}
-      aria-label={`Play source moment, ${start} to ${end}`}
-      onClick={() => onSelectEvidence(evidence, `Prospect signal ${index + 1}`)}
-    >
-      <span className={styles.play} aria-hidden="true">
-        <Play size={16} />
-      </span>
-      <span className={styles.actionCopy}>
-        <strong>Play source moment</strong>
-        <small>
-          {start}–{end}
-        </small>
-      </span>
-      <ArrowRight size={17} aria-hidden="true" />
-    </button>
+    <ClipPlayState startMs={evidence.start_ms} endMs={evidence.end_ms}>
+      {(playing) => (
+        <button
+          type="button"
+          className={styles.sourceAction}
+          aria-label={`${playing ? "Pause" : "Play"} source moment, ${spoken}`}
+          aria-pressed={playing}
+          onClick={() =>
+            onSelectEvidence(evidence, `Prospect signal ${index + 1}`)
+          }
+        >
+          <span className={styles.play} aria-hidden="true">
+            <ClipPlayIcon playing={playing} size={16} />
+          </span>
+          <span className={styles.actionCopy}>
+            <strong>
+              {playing ? "Pause source moment" : "Play source moment"}
+            </strong>
+            <small>{formatClipRange(evidence.start_ms, evidence.end_ms)}</small>
+          </span>
+          <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      )}
+    </ClipPlayState>
   );
 }
 

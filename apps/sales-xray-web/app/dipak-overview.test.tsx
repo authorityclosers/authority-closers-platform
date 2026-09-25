@@ -96,6 +96,57 @@ it("shows all report chapters as one expanded document in reading mode", async (
   expect(container.querySelectorAll("[data-review-fold]")).toHaveLength(0);
 });
 
+it("composes one open overview: takeaway, facts, Keep/Change/Outcome/Next and replay locations", async () => {
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        showHeading={false}
+        report={report()}
+        onSelectEvidence={select}
+        durationMs={fixture.transcript.duration_ms}
+      />,
+    ),
+  );
+  const summary = container.querySelector(
+    'section[aria-label="Call overview"]',
+  )!;
+  const parts = [...summary.children].map(
+    (child) =>
+      child.getAttribute("data-overview-card") ??
+      child.getAttribute("aria-label") ??
+      child.className,
+  );
+  // Takeaway, then the facts line, then the paired readout, then replay.
+  expect(parts[0]).toBe("0");
+  expect(parts[1]).toBe("Call metrics");
+  const readout = summary.querySelectorAll("[data-tone]");
+  expect([...readout].map((row) => row.getAttribute("data-tone"))).toEqual([
+    "keep",
+    "change",
+    "outcome",
+    "next",
+  ]);
+  // One replay dataset for the facts count, the strip and its list.
+  const strip = summary.querySelector("[data-replay-strip]")!;
+  const count = summary.querySelector(
+    '[aria-label="Call metrics"] div:nth-child(2) dd',
+  )?.textContent;
+  expect(strip.querySelectorAll("ol li")).toHaveLength(Number(count));
+  // Two fixture clips end after the 00:05 transcript: listed, never playable.
+  expect(strip.querySelectorAll("ol button")).toHaveLength(Number(count) - 2);
+  expect(strip.querySelectorAll("[data-replay-beyond]")).toHaveLength(2);
+  // No invented stages, scores or sentiment; "not a score" is the only mention.
+  expect(
+    summary.textContent?.replace("positions only, not a score", ""),
+  ).not.toMatch(/score|%|probability|positive|negative|stage/i);
+  // This fixture's transcript is shorter than two clip ends: disclosed, not hidden.
+  expect(strip.textContent).toContain(
+    "2 clip ranges extend past the 00:05 recording",
+  );
+  // Every review destination and all eight skills remain in the document.
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
+});
+
 it("keeps the actual overview and source playback inline in the tabbed report", async () => {
   await act(async () =>
     root.render(
@@ -256,7 +307,7 @@ it("shows one overview metrics row with a deduplicated playable highlight count"
   const dashboardMetrics = container.querySelector(
     'section[aria-label="Call overview"] [aria-label="Call metrics"]',
   );
-  expect(dashboardMetrics?.textContent).toContain("Key moments5");
+  expect(dashboardMetrics?.textContent).toContain("Replay clips5");
   expect(container.textContent).not.toContain("Source moments");
 });
 
@@ -372,7 +423,7 @@ it("keeps saved rewatch evidence exact and offers explicitly labelled adjacent t
     ),
   ][0];
   expect(contextualClip?.getAttribute("aria-label")).toContain(
-    "00:03.000 to 00:05.900",
+    "00:03 to 00:05",
   );
   await act(async () => contextualClip?.click());
   expect(selectContext).toHaveBeenCalledOnce();
@@ -1134,7 +1185,7 @@ it("keeps summary counts labelled, readable and non-interactive", async () => {
   expect(metrics.tagName).toBe("DL");
   expect(
     [...metrics.querySelectorAll("dt")].map((term) => term.textContent),
-  ).toEqual(["Call length", "Key moments", "Priority fixes"]);
+  ).toEqual(["Call length", "Replay clips", "Suggested changes"]);
   expect(
     [...metrics.querySelectorAll("dd")].map((value) => value.textContent),
   ).toEqual(["00:05", String(value.overview!.rewatch.length), "3"]);
