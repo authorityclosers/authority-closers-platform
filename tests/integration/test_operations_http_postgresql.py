@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import os
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
 from ac_platform.authorization.application import CapabilityApplication
 from ac_platform.authorization.policy import CapabilityScope
+from ac_platform.community.models import CohorvaPublicProfile
 from ac_platform.conversation_intelligence.acquisition_sessions import (
     AcquisitionSessions,
     MeasuredSource,
@@ -272,7 +274,11 @@ def _seed(engine: Engine) -> _Seed:
     )
 
 
-def _settings(*, operations_tenant_id: UUID) -> Settings:
+def _settings(
+    *,
+    operations_tenant_id: UUID,
+    public_learner_tenant_id: UUID | None = None,
+) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -283,6 +289,7 @@ def _settings(*, operations_tenant_id: UUID) -> Settings:
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
         operations_tenant_id=operations_tenant_id,
+        public_learner_tenant_id=public_learner_tenant_id,
     )
 
 
@@ -302,6 +309,7 @@ def _application(
     webhook_adapter: ConfiguredWebhookAdapter,
     operations_tenant_id: UUID,
     membership_role: str = "owner",
+    public_learner_tenant_id: UUID | None = None,
 ) -> FastAPI:
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         async with sessions() as database, database.begin():
@@ -323,7 +331,10 @@ def _application(
     register_problem_handlers(application)
     install_operations_http(
         application,
-        settings=_settings(operations_tenant_id=operations_tenant_id),
+        settings=_settings(
+            operations_tenant_id=operations_tenant_id,
+            public_learner_tenant_id=public_learner_tenant_id,
+        ),
         sessions=sessions,
         require_actor=require_actor,
         webhook_adapters={"fake-email": webhook_adapter},
@@ -1358,6 +1369,327 @@ def test_account_minute_grants_are_finite_audited_idempotent_and_tenant_scoped_p
                         )
                         == 1
                     )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_minute_account_target_resolution_is_exact_audited_and_public_tenant_scoped_postgresql(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(postgres_harness.engine)
+    now = datetime.now(UTC)
+    public_tenant_id, foreign_tenant_id = uuid4(), uuid4()
+    email_person_id, username_person_id, foreign_person_id, unverified_person_id = (
+        uuid4() for _ in range(4)
+    )
+    suspended_person_id, inactive_membership_person_id, unprivileged_person_id = (
+        uuid4() for _ in range(3)
+    )
+    unprivileged_session_id = uuid4()
+    with Session(postgres_harness.engine) as database:
+        manager_session = database.get(IdentitySession, seed.session_id)
+        assert manager_session is not None
+        manager_session.created_at = now - timedelta(minutes=1)
+        manager_session.expires_at = now + timedelta(hours=1)
+        database.add_all(
+            [
+                Tenant(
+                    id=public_tenant_id,
+                    slug=f"public-{public_tenant_id.hex[:12]}",
+                    name="Public learners",
+                ),
+                Tenant(
+                    id=foreign_tenant_id,
+                    slug=f"foreign-{foreign_tenant_id.hex[:12]}",
+                    name="Other learners",
+                ),
+                Person(
+                    id=email_person_id,
+                    email="exact.learner@example.test",
+                    email_verified_at=now,
+                    display_name="Exact Email Learner",
+                ),
+                Person(
+                    id=username_person_id,
+                    email="username.learner@example.test",
+                    email_verified_at=now,
+                    display_name="Public Username Learner",
+                ),
+                Person(
+                    id=foreign_person_id,
+                    email="foreign.learner@example.test",
+                    email_verified_at=now,
+                    display_name="Foreign Tenant Learner",
+                ),
+                Person(
+                    id=unverified_person_id,
+                    email="unverified.learner@example.test",
+                    display_name="Unverified Learner",
+                ),
+                Person(
+                    id=suspended_person_id,
+                    email="suspended.learner@example.test",
+                    email_verified_at=now,
+                    status="suspended",
+                    display_name="Suspended Learner",
+                ),
+                Person(
+                    id=inactive_membership_person_id,
+                    email="inactive.membership@example.test",
+                    email_verified_at=now,
+                    display_name="Inactive Membership Learner",
+                ),
+                Person(
+                    id=unprivileged_person_id,
+                    email="unprivileged@example.test",
+                    email_verified_at=now,
+                ),
+            ]
+        )
+        database.flush()
+        database.add_all(
+            [
+                Membership(tenant_id=public_tenant_id, person_id=email_person_id, role="learner"),
+                Membership(
+                    tenant_id=public_tenant_id, person_id=username_person_id, role="learner"
+                ),
+                Membership(
+                    tenant_id=foreign_tenant_id, person_id=foreign_person_id, role="learner"
+                ),
+                Membership(
+                    tenant_id=public_tenant_id, person_id=unverified_person_id, role="learner"
+                ),
+                Membership(
+                    tenant_id=public_tenant_id, person_id=suspended_person_id, role="learner"
+                ),
+                Membership(
+                    tenant_id=public_tenant_id,
+                    person_id=inactive_membership_person_id,
+                    role="learner",
+                    status="inactive",
+                    ended_at=now,
+                ),
+                Membership(
+                    tenant_id=seed.tenant_id, person_id=unprivileged_person_id, role="support"
+                ),
+            ]
+        )
+        database.flush()
+        database.add_all(
+            [
+                CohorvaPublicProfile(
+                    person_id=username_person_id,
+                    username="exact_learner",
+                    claim_source="legacy_0027",
+                    legacy_profile_count=1,
+                ),
+                IdentitySession(
+                    id=unprivileged_session_id,
+                    person_id=unprivileged_person_id,
+                    token_hash=uuid4().bytes + uuid4().bytes,
+                    created_at=now - timedelta(minutes=1),
+                    expires_at=now + timedelta(hours=1),
+                    selected_tenant_id=seed.tenant_id,
+                ),
+            ]
+        )
+        database.commit()
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(
+            postgres_harness.schema_url,
+            connect_args={"connect_timeout": 5},
+            pool_pre_ping=True,
+        )
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        secret = b"minute-target-resolution-unused-webhook-fixture"
+        adapter = ConfiguredWebhookAdapter(
+            provider="fake-email",
+            verifier=HmacWebhookVerifier(secret),
+            tenant_id=seed.tenant_id,
+            resource_type="delivery",
+            resource_id_field="resource",
+        )
+        manager_actor = ActorContext(
+            person_id=seed.person_id,
+            session_id=seed.session_id,
+            tenant_id=seed.tenant_id,
+            permissions=frozenset({"admin_surface"}),
+        )
+        denied_actor = ActorContext(
+            person_id=unprivileged_person_id,
+            session_id=unprivileged_session_id,
+            tenant_id=seed.tenant_id,
+            permissions=frozenset({"admin_surface"}),
+        )
+        try:
+            async with sessions() as database, database.begin():
+                await CapabilityApplication(
+                    database,
+                    operations_tenant_id=seed.tenant_id,
+                ).bootstrap_first_manager(
+                    person_id=seed.person_id,
+                    command_id=uuid4(),
+                    reason="Disposable exact minute-target lookup fixture",
+                )
+
+            manager_app = _application(
+                sessions=sessions,
+                actor=manager_actor,
+                webhook_adapter=adapter,
+                operations_tenant_id=seed.tenant_id,
+                public_learner_tenant_id=public_tenant_id,
+            )
+            denied_app = _application(
+                sessions=sessions,
+                actor=denied_actor,
+                webhook_adapter=adapter,
+                operations_tenant_id=seed.tenant_id,
+                public_learner_tenant_id=public_tenant_id,
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=manager_app),
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                email_result = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={"query": "  EXACT.LEARNER@EXAMPLE.TEST  "},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert email_result.status_code == 200, email_result.text
+                assert email_result.headers["cache-control"] == "no-store"
+                email_target = email_result.json()["target"]
+                assert email_target == {
+                    "tenant_id": str(public_tenant_id),
+                    "person_id": str(email_person_id),
+                    "display_name": "Exact Email Learner",
+                    "username": None,
+                    "masked_email": "e***@example.test",
+                }
+                assert "exact.learner@example.test" not in email_result.text
+
+                username_result = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={"query": "EXACT_LEARNER"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert username_result.status_code == 200, username_result.text
+                username_target = username_result.json()["target"]
+                assert username_target["person_id"] == str(username_person_id)
+                assert username_target["username"] == "exact_learner"
+                assert username_target["masked_email"] == "u***@example.test"
+
+                for query in (
+                    "foreign.learner@example.test",
+                    "unverified.learner@example.test",
+                    "suspended.learner@example.test",
+                    "inactive_membership@example.test",
+                    "absent.learner@example.test",
+                ):
+                    result = await client.post(
+                        "/v1/admin/conversation-minute-accounts/resolve-target",
+                        json={"query": query},
+                        headers={"Origin": "https://admin.authorityclosers.test"},
+                    )
+                    assert result.status_code == 200, result.text
+                    assert result.json() == {"target": None}
+
+                for query in (
+                    str(email_person_id),
+                    "+1 (555) 010-1212",
+                    "Exact Email",
+                ):
+                    result = await client.post(
+                        "/v1/admin/conversation-minute-accounts/resolve-target",
+                        json={"query": query},
+                        headers={"Origin": "https://admin.authorityclosers.test"},
+                    )
+                    assert result.status_code == 422
+
+                extra_field = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={
+                        "query": "exact.learner@example.test",
+                        "tenant_id": str(foreign_tenant_id),
+                    },
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert extra_field.status_code == 422
+                query_parameter = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target?tenant_id="
+                    + str(foreign_tenant_id),
+                    json={"query": "exact.learner@example.test"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert query_parameter.status_code == 422
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=denied_app),
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                known_target = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={"query": "exact.learner@example.test"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                missing_target = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={"query": "missing@example.test"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert known_target.status_code == missing_target.status_code == 403
+                assert known_target.json()["code"] == missing_target.json()["code"]
+
+            unconfigured_app = _application(
+                sessions=sessions,
+                actor=manager_actor,
+                webhook_adapter=adapter,
+                operations_tenant_id=seed.tenant_id,
+                public_learner_tenant_id=None,
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=unconfigured_app),
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                unconfigured = await client.post(
+                    "/v1/admin/conversation-minute-accounts/resolve-target",
+                    json={"query": "exact.learner@example.test"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert unconfigured.status_code == 503
+                assert unconfigured.json()["code"] == "public_learner_tenant_unconfigured"
+
+            with Session(postgres_harness.engine) as database:
+                events = list(
+                    database.scalars(
+                        select(AuditEvent).where(
+                            AuditEvent.tenant_id == seed.tenant_id,
+                            AuditEvent.action == "operations.conversation_minute_target_resolved",
+                        )
+                    ).all()
+                )
+                assert len(events) == 7
+                assert all(event.actor_person_id == seed.person_id for event in events)
+                assert all(event.session_id == seed.session_id for event in events)
+                assert all(
+                    event.reason
+                    == "Exact public learner resolution for minute-account administration."
+                    for event in events
+                )
+                serialized_audit = json.dumps(
+                    [{"payload": event.payload, "reason": event.reason} for event in events]
+                )
+                assert "exact.learner@example.test" not in serialized_audit
+                assert "+1 (555)" not in serialized_audit
+                assert all(
+                    event.payload["target_tenant_id"] == str(public_tenant_id)
+                    and event.payload["result_count"] in {0, 1}
+                    for event in events
+                )
+                assert sum(event.payload["result_count"] == 1 for event in events) == 2
+                assert verify_audit_chain_sync(database, seed.tenant_id).valid
         finally:
             await async_engine.dispose()
 

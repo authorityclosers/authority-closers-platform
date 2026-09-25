@@ -18,7 +18,7 @@ from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -43,6 +43,11 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     append_minute_grant,
     load_minute_account,
     require_eligible_learner,
+)
+from ac_platform.conversation_intelligence.minute_account_targets import (
+    MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH,
+    MinuteAccountLookupInvalid,
+    resolve_public_learner_target,
 )
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -83,6 +88,8 @@ _PROVIDER_TIMESTAMP_PATTERN = re.compile(r"^[0-9]{1,20}$")
 
 JOB_RETRY_MARKER = "operations.job_retry_idempotency"
 RECOVERY_RECONCILE_MARKER = "operations.recovery_reconcile_idempotency"
+MINUTE_ACCOUNT_TARGET_LOOKUP_ACTION = "operations.conversation_minute_target_resolved"
+MINUTE_ACCOUNT_TARGET_LOOKUP_RESOURCE = "conversation_minute_target_resolution"
 
 
 class OperationsTenantRequired(DomainError):
@@ -137,6 +144,12 @@ class MinuteAccountUnavailable(DomainError):
     code = "conversation_minute_account_conflict"
     title = "The learner minute account is unavailable"
     status = 409
+
+
+class PublicLearnerTenantUnconfigured(DomainError):
+    code = "public_learner_tenant_unconfigured"
+    title = "The public learner tenant is not configured"
+    status = 503
 
 
 class ProviderWebhookUnavailable(DomainError):
@@ -261,6 +274,28 @@ class ConversationMinuteGrantResponse(BaseModel):
     minutes: int
     replayed: bool
     account: ConversationMinuteAccountResponse
+
+
+class MinuteAccountTargetResolutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: StrictStr = Field(min_length=1, max_length=MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH)
+
+
+class MinuteAccountTargetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    person_id: UUID
+    display_name: str
+    username: str | None
+    masked_email: str
+
+
+class MinuteAccountTargetResolutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target: MinuteAccountTargetResponse | None
 
 
 def _normalize_idempotency_key(value: str | None) -> str:
@@ -629,6 +664,75 @@ def install_operations_http(
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = Depends(require_actor)
+
+    @router.post(
+        "/admin/conversation-minute-accounts/resolve-target",
+        response_model=MinuteAccountTargetResolutionResponse,
+    )
+    async def resolve_minute_account_target(
+        request: Request,
+        response: Response,
+        body: MinuteAccountTargetResolutionRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> MinuteAccountTargetResolutionResponse:
+        require_safe_origin(request, settings)
+        actor = auth.resolved.actor
+        operations_tenant_id = settings.operations_tenant_id
+        capabilities = await platform_projection(
+            auth.database,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+        )
+        if "platform_access_manage" not in capabilities:
+            raise CapabilityDenied("A current platform access-management assignment is required.")
+        assert operations_tenant_id is not None  # platform_projection rejects missing settings
+        if request.query_params:
+            raise InvalidOperationsRequest("Target resolution accepts no query parameters.")
+        public_tenant_id = settings.public_learner_tenant_id
+        if public_tenant_id is None:
+            raise PublicLearnerTenantUnconfigured(
+                "Target resolution requires the configured public learner tenant."
+            )
+        try:
+            target, lookup_kind = await resolve_public_learner_target(
+                auth.database,
+                tenant_id=public_tenant_id,
+                query=body.query,
+            )
+        except MinuteAccountLookupInvalid as error:
+            raise InvalidOperationsRequest(
+                "Enter one exact email address or public username."
+            ) from error
+
+        await AuditRepository(auth.database).append(
+            tenant_id=operations_tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action=MINUTE_ACCOUNT_TARGET_LOOKUP_ACTION,
+            resource_type=MINUTE_ACCOUNT_TARGET_LOOKUP_RESOURCE,
+            resource_id=target.person_id if target is not None else public_tenant_id,
+            payload={
+                "lookup_kind": lookup_kind,
+                "result_count": 1 if target is not None else 0,
+                "target_tenant_id": str(public_tenant_id),
+            },
+            reason="Exact public learner resolution for minute-account administration.",
+            request_id=_request_id(request),
+        )
+        _no_store(response)
+        return MinuteAccountTargetResolutionResponse(
+            target=(
+                None
+                if target is None
+                else MinuteAccountTargetResponse(
+                    tenant_id=target.tenant_id,
+                    person_id=target.person_id,
+                    display_name=target.display_name,
+                    username=target.username,
+                    masked_email=target.masked_email,
+                )
+            )
+        )
 
     @router.get(
         "/admin/conversation-minute-accounts/{tenant_id}/{person_id}",
