@@ -19,9 +19,14 @@ cannot dispatch a second acceptance. An uncertain result stops further actions
 and keeps the reference for investigation. This page never automatically retries
 a provider request.
 
-Validation: six focused tests cover staging host and selector restrictions,
+Validation: seven focused tests cover staging host and selector restrictions,
 malformed/mismatched/expired/over-cap/incorrect-model quotes, saved-source
 preconditions, explicit acceptance, duplicate clicks and uncertain outcomes.
 Frontend type checking and lint passed locally. The exact committed candidate
 must also pass release CI and deployed owner verification before claiming that a
 comparison ran. These checks do not establish provider quality or cost.
+
+The initial CI candidate exposed a static-export incompatibility: reading request
+headers while building the offline preview caused its build to fail. The route
+now returns 404 in static-preview mode before touching request headers. The
+regression test asserts that neither headers nor the acquisition client are read.

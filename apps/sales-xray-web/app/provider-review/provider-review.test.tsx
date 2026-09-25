@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   acquisition: vi.fn(),
   host: "salesxray-staging.authorityclosers.com",
+  headers: vi.fn(),
 }));
 
 vi.mock("../acquisition-client", async (importOriginal) => {
@@ -12,7 +13,10 @@ vi.mock("../acquisition-client", async (importOriginal) => {
   return { ...actual, acquisition: mocks.acquisition };
 });
 vi.mock("next/headers", () => ({
-  headers: async () => new Headers({ host: mocks.host }),
+  headers: async () => {
+    mocks.headers();
+    return new Headers({ host: mocks.host });
+  },
 }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -124,15 +128,27 @@ beforeEach(() => {
   root = createRoot(container);
   mocks.host = "salesxray-staging.authorityclosers.com";
   mocks.acquisition.mockReset();
+  mocks.headers.mockClear();
+  vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
 });
 
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("provider review staging owner action", () => {
+  it("excludes the action from static exports before reading request headers", async () => {
+    vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "1");
+    await expect(
+      Page({ searchParams: Promise.resolve({ call: submissionId }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.headers).not.toHaveBeenCalled();
+    expect(mocks.acquisition).not.toHaveBeenCalled();
+  });
+
   it("serves the route only on the exact staging host with one UUID call selector", async () => {
     const page = await Page({
       searchParams: Promise.resolve({ call: submissionId }),
