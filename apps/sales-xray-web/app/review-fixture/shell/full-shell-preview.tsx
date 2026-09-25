@@ -68,139 +68,146 @@ export function FullShellPreview() {
           authenticated
           homeHref="/review-fixture/shell"
           active="analyse"
+          mobileFit
           allowance={FIXTURE_ALLOWANCE}
         >
+          {/* Production's report ancestry: shell main > .xray-app > .studio-main,
+              the report's own scroll container under the mobile-fit shell. */}
           <div
             className={`xray-app simple-app ${acquisitionStyles.app} ${styles.page}`}
+            data-theme="light"
+            data-variant="standalone"
             data-stage="report"
             data-full-shell-fixture="true"
           >
-            <p className={styles.banner} role="note">
-              Development fixture · fictional data · no account, recording or
-              provider call
-            </p>
-            <SourceWaveformProvider audioRef={audio}>
-              <section
-                className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
-                aria-label="Sales call report"
-                data-lx-surface="light"
-              >
-                <ReportHeader
-                  durationMs={FIXTURE_DURATION_MS}
-                  languageLabel="Marathi + English"
-                  sourceLabel="Fictional fixture transcript"
-                  claimed
-                  busy={false}
-                  canDownload={false}
-                  canRequestDeletion
-                  deletionDisabled
-                  onAnalyseAnother={() =>
-                    setStatus("Would open New analysis. Nothing was sent.")
-                  }
-                  onDownload={() => {}}
-                  onRequestDeletion={() => {}}
-                />
-                <ReportModes
-                  label="Explore your sales report"
-                  boundCallId="00000000-0000-4000-8000-000000000002"
-                  panels={[
-                    {
-                      id: "overview",
-                      label: "Overview",
-                      content: (
-                        <DipakOverview
-                          showHeading={false}
-                          report={syntheticReport}
-                          onSelectEvidence={selectSource}
-                          durationMs={FIXTURE_DURATION_MS}
-                        />
-                      ),
-                    },
-                    {
-                      id: "prospect",
-                      label: "Prospect",
-                      content: (
-                        <ProspectSnapshot
-                          report={syntheticReport}
-                          onSelectEvidence={selectSource}
-                        />
-                      ),
-                    },
-                    {
-                      id: "moments",
-                      label: "Moments",
-                      content: (
-                        <ReportMoments
-                          report={syntheticReport}
-                          onSelectEvidence={selectSource}
-                        />
-                      ),
-                    },
-                    {
-                      id: "skills",
-                      label: "Sales skills",
-                      compactLabel: "Skills",
-                      content: (
-                        <SalesSkills
-                          dimensions={syntheticReport.dimensions}
-                          onSelectEvidence={(evidence) =>
-                            selectSource(evidence, "Sales skill excerpt")
-                          }
-                        />
-                      ),
-                    },
-                    {
-                      id: "next-call-plan",
-                      label: "Next-call plan",
-                      compactLabel: "Next-call",
-                      content: (
-                        <NextCallPlan
-                          report={syntheticReport}
-                          onSelectEvidence={selectSource}
-                        />
-                      ),
-                    },
-                    {
-                      id: "transcript",
-                      label: "Transcript",
-                      content: (
-                        <ReportTranscript
-                          transcript={{
-                            ...baseFixture.transcript,
-                            duration_ms: FIXTURE_DURATION_MS,
-                          }}
-                          onSelect={(segment) =>
-                            selectSource(
-                              {
-                                segment_id: segment.id,
-                                quote: segment.text,
-                                start_ms: segment.start_ms,
-                                end_ms: segment.end_ms,
-                              },
-                              "Transcript excerpt",
-                            )
-                          }
-                        />
-                      ),
-                    },
-                  ]}
-                />
-                <p
-                  className={styles.status}
-                  role="status"
-                  aria-label="Fixture action status"
-                  aria-live="polite"
+            <div className="studio-main">
+              <p className={styles.banner} role="note">
+                Development fixture · fictional data · no account, recording or
+                provider call
+              </p>
+              <SourceWaveformProvider audioRef={audio}>
+                <section
+                  className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
+                  aria-label="Sales call report"
+                  data-lx-surface="light"
                 >
-                  {status}
-                </p>
-              </section>
-              <CallAudioDock
-                audioRef={audio}
-                src=""
-                durationMs={FIXTURE_DURATION_MS}
-                title="Fictional fixture · no audio"
-              />
-            </SourceWaveformProvider>
+                  <ReportHeader
+                    durationMs={FIXTURE_DURATION_MS}
+                    languageLabel="Marathi + English"
+                    sourceLabel="Fictional fixture transcript"
+                    claimed
+                    busy={false}
+                    canDownload={false}
+                    canRequestDeletion
+                    deletionDisabled
+                    onAnalyseAnother={() =>
+                      setStatus("Would open New analysis. Nothing was sent.")
+                    }
+                    onDownload={() => {}}
+                    onRequestDeletion={() => {}}
+                  />
+                  <ReportModes
+                    label="Explore your sales report"
+                    boundCallId="00000000-0000-4000-8000-000000000002"
+                    panels={[
+                      {
+                        id: "overview",
+                        label: "Overview",
+                        content: (
+                          <DipakOverview
+                            showHeading={false}
+                            report={syntheticReport}
+                            onSelectEvidence={selectSource}
+                            durationMs={FIXTURE_DURATION_MS}
+                          />
+                        ),
+                      },
+                      {
+                        id: "prospect",
+                        label: "Prospect",
+                        content: (
+                          <ProspectSnapshot
+                            report={syntheticReport}
+                            onSelectEvidence={selectSource}
+                          />
+                        ),
+                      },
+                      {
+                        id: "moments",
+                        label: "Moments",
+                        content: (
+                          <ReportMoments
+                            report={syntheticReport}
+                            onSelectEvidence={selectSource}
+                          />
+                        ),
+                      },
+                      {
+                        id: "skills",
+                        label: "Sales skills",
+                        compactLabel: "Skills",
+                        content: (
+                          <SalesSkills
+                            dimensions={syntheticReport.dimensions}
+                            onSelectEvidence={(evidence) =>
+                              selectSource(evidence, "Sales skill excerpt")
+                            }
+                          />
+                        ),
+                      },
+                      {
+                        id: "next-call-plan",
+                        label: "Next-call plan",
+                        compactLabel: "Next-call",
+                        content: (
+                          <NextCallPlan
+                            report={syntheticReport}
+                            onSelectEvidence={selectSource}
+                          />
+                        ),
+                      },
+                      {
+                        id: "transcript",
+                        label: "Transcript",
+                        content: (
+                          <ReportTranscript
+                            transcript={{
+                              ...baseFixture.transcript,
+                              duration_ms: FIXTURE_DURATION_MS,
+                            }}
+                            onSelect={(segment) =>
+                              selectSource(
+                                {
+                                  segment_id: segment.id,
+                                  quote: segment.text,
+                                  start_ms: segment.start_ms,
+                                  end_ms: segment.end_ms,
+                                },
+                                "Transcript excerpt",
+                              )
+                            }
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                  <p
+                    className={styles.status}
+                    role="status"
+                    aria-label="Fixture action status"
+                    aria-live="polite"
+                  >
+                    {status}
+                  </p>
+                </section>
+                <CallAudioDock
+                  audioRef={audio}
+                  src=""
+                  durationMs={FIXTURE_DURATION_MS}
+                  title="Fictional fixture · no audio"
+                />
+              </SourceWaveformProvider>
+            </div>
           </div>
         </AcquisitionShell>
       </WorkspaceAccessProvider>

@@ -1,6 +1,7 @@
+/* The production report scope (.studio-main) owns padding and scrolling;
+   the fixture adds none of its own so scroll geometry matches. */
 .page {
   box-sizing: border-box;
-  padding: 16px clamp(20px, 3vw, 40px) calc(128px + env(safe-area-inset-bottom));
 }
 
 .banner {

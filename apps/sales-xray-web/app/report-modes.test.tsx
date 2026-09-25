@@ -729,3 +729,134 @@ it("opens a direct section bookmark at its section", async () => {
     else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
   }
 });
+
+/** Replaces one prototype method for a test and returns its restore. */
+function replacePrototype(
+  key: "scrollIntoView" | "getBoundingClientRect",
+  value: unknown,
+) {
+  const previous = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+  Object.defineProperty(HTMLElement.prototype, key, {
+    configurable: true,
+    value,
+  });
+  return () => {
+    if (previous) Object.defineProperty(HTMLElement.prototype, key, previous);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  };
+}
+
+it("settles a stale first jump after a view change below the sticky navigation", async () => {
+  // Production geometry at 720x640: the report scroller starts below the
+  // 56px mobile bar with 12px top padding; the wrapped nav row is 93.8px.
+  const verdictContentTop = 5000;
+  let scrollTop = 0;
+  const rect = (top: number, height: number) =>
+    ({
+      x: 0,
+      y: top,
+      top,
+      right: 320,
+      bottom: top + height,
+      left: 0,
+      width: 320,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  const scroll = vi.fn(function (this: HTMLElement) {
+    // The browser's scroll resolves its end point once; content first laid
+    // out during the motion leaves the verdict under the sticky navigation.
+    if (this.dataset.reviewPoint === "14")
+      scrollTop = verdictContentTop - (56 + 57.075);
+  });
+  const restoreScroll = replacePrototype("scrollIntoView", scroll);
+  const restoreRect = replacePrototype(
+    "getBoundingClientRect",
+    function (this: HTMLElement) {
+      if (this.hasAttribute("data-fixture-scrollport")) return rect(56, 508);
+      if (this.hasAttribute("data-report-nav")) return rect(68, 93.8);
+      if (this.dataset.reviewPoint === "14")
+        return rect(verdictContentTop - scrollTop, 200);
+      return rect(0, 0);
+    },
+  );
+  try {
+    window.history.replaceState(null, "", `/?call=${call}`);
+    await act(async () =>
+      root.render(
+        <div
+          data-fixture-scrollport
+          style={{ height: 508, overflowY: "auto", paddingTop: "12px" }}
+        >
+          <ReportModes panels={panels()} boundCallId={call} />
+        </div>,
+      ),
+    );
+    const scroller = container.querySelector<HTMLElement>(
+      "[data-fixture-scrollport]",
+    )!;
+    Object.defineProperties(scroller, {
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+      scrollHeight: { configurable: true, value: 20_000 },
+      clientHeight: { configurable: true, value: 508 },
+      scrollTo: {
+        configurable: true,
+        value: ({ top }: ScrollToOptions) => {
+          scrollTop = top ?? scrollTop;
+        },
+      },
+    });
+
+    buttonNamed("Focus point 14")!.focus();
+    await act(async () => buttonNamed("Focus point 14")!.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 250)));
+
+    const point = container.querySelector<HTMLElement>(
+      '[data-review-point="14"]',
+    )!;
+    const navBottom = 68 + 93.8;
+    // Offset = scroller padding + nav height + 8px, from the scrollport edge.
+    expect(
+      Number.parseFloat(
+        mode().style.getPropertyValue("--report-scroll-target-offset"),
+      ),
+    ).toBeCloseTo(113.8);
+    expect(point.getBoundingClientRect().top).toBeGreaterThan(navBottom);
+    expect(point.getBoundingClientRect().top).toBeCloseTo(56 + 113.8);
+    // One motion plus one instant correction of the real scroller only.
+    expect(scroll).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(point);
+  } finally {
+    restoreScroll();
+    restoreRect();
+  }
+});
+
+it("restores a Back origin with a section without a competing section scroll", async () => {
+  const scroll = vi.fn();
+  const restoreScroll = replacePrototype("scrollIntoView", scroll);
+  try {
+    const origin = `?call=${call}&view=reading&section=moments`;
+    window.history.replaceState(null, "", `/${origin}`);
+    await render(call);
+    await settle();
+    const jump = await jumpFromMoments();
+    scroll.mockClear();
+
+    await act(async () => window.history.back());
+    await settle();
+    expect(window.location.search).toBe(origin);
+    // Only the originating control is brought back; the restored URL's own
+    // section bookmark does not start a second, competing scroll.
+    expect(scroll.mock.contexts).toEqual([jump]);
+    expect(document.activeElement).toBe(jump);
+  } finally {
+    restoreScroll();
+  }
+});

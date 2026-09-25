@@ -94,16 +94,107 @@ function scrollBehavior(): ScrollBehavior {
     : "smooth";
 }
 
-/** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
-function arriveAt(destination: HTMLElement | null | undefined) {
-  if (!destination) return;
-  // Focus must land on the real target, even a plain container.
-  if (!destination.hasAttribute("tabindex") && destination.tabIndex < 0)
-    destination.setAttribute("tabindex", "-1");
-  destination.focus({ preventScroll: true });
-  destination.scrollIntoView?.({ block: "start", behavior: scrollBehavior() });
-  destination.setAttribute("data-arrived", "true");
-  window.setTimeout(() => destination.removeAttribute("data-arrived"), 1600);
+/** Reader input that takes over scrolling from a pending jump correction. */
+const READER_SCROLL_INPUT = ["wheel", "touchstart", "pointerdown", "keydown"];
+/** Upper bound on frames spent waiting for a jump's scroll to finish. */
+const SETTLE_FRAME_LIMIT = 240;
+
+/** The element that really scrolls the report: its nearest scrolling ancestor, else the document. */
+function reportScroller(element: HTMLElement): HTMLElement {
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if (
+      ["auto", "scroll", "overlay"].includes(overflowY) &&
+      parent.scrollHeight > parent.clientHeight
+    )
+      return parent;
+  }
+  return (
+    (document.scrollingElement as HTMLElement | null) ??
+    document.documentElement
+  );
+}
+
+/**
+ * Waits for a jump's scroll to finish, then puts the destination exactly
+ * below the sticky navigation. The scroll's end point is resolved once, when
+ * it starts; content laid out for the first time during the motion (after a
+ * viewport or view change) can shift the destination under the navigation.
+ * Only the report's own scroller is corrected, once, and never after the
+ * reader starts scrolling. Returns a cancel function.
+ */
+function settleJump(
+  destination: HTMLElement,
+  scroller: HTMLElement,
+  startTop: number,
+  measureOffset: () => number,
+): () => void {
+  const isDocument =
+    scroller === document.scrollingElement ||
+    scroller === document.documentElement;
+  const events: EventTarget = isDocument ? window : scroller;
+  let frame = 0;
+  let frames = 0;
+  let stableFrames = 0;
+  let moved = false;
+  let last = startTop;
+  let done = false;
+
+  const stop = () => {
+    if (done) return;
+    done = true;
+    cancelAnimationFrame(frame);
+    events.removeEventListener("scrollend", onScrollEnd);
+    for (const type of READER_SCROLL_INPUT)
+      window.removeEventListener(type, stop, true);
+  };
+  const correct = () => {
+    stop();
+    if (!destination.isConnected) return;
+    const bounds = destination.getBoundingClientRect();
+    // Hidden or not laid out: nothing can be measured or corrected.
+    if (!bounds.width && !bounds.height) return;
+    const scrollportTop = isDocument
+      ? 0
+      : scroller.getBoundingClientRect().top + scroller.clientTop;
+    const drift = bounds.top - (scrollportTop + measureOffset());
+    if (Math.abs(drift) <= 1) return;
+    const top = scroller.scrollTop + drift;
+    if (typeof scroller.scrollTo === "function")
+      scroller.scrollTo({ top, behavior: "instant" });
+    else scroller.scrollTop = top;
+  };
+  function onScrollEnd() {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(correct);
+  }
+  const watch = () => {
+    frames += 1;
+    const position = scroller.scrollTop;
+    if (position !== last) {
+      moved = true;
+      stableFrames = 0;
+    } else stableFrames += 1;
+    last = position;
+    // Settled: motion stopped, the scroll never started, or the bound ran out.
+    if (
+      (moved && stableFrames >= 3) ||
+      (!moved && frames >= 10) ||
+      frames >= SETTLE_FRAME_LIMIT
+    )
+      correct();
+    else frame = requestAnimationFrame(watch);
+  };
+
+  events.addEventListener("scrollend", onScrollEnd);
+  for (const type of READER_SCROLL_INPUT)
+    window.addEventListener(type, stop, { capture: true, passive: true });
+  frame = requestAnimationFrame(watch);
+  return stop;
 }
 
 /** Where an in-report jump started: the control, its section and its URL. */
@@ -116,11 +207,17 @@ type ReturnPoint = {
 };
 
 /** Brings the reader back to the exact control that started a jump. */
-function restoreOrigin(point: ReturnPoint) {
-  if (!point.element.isConnected) return;
-  // Two frames: let a restored tab/section render and any bookmark scroll run first.
+function restoreOrigin(point: ReturnPoint, done: () => void) {
+  if (!point.element.isConnected) {
+    done();
+    return;
+  }
+  // Two frames: let a restored tab/section render first. The restored URL's
+  // own section scroll is suppressed until this finishes, so it can't compete.
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
+      done();
+      if (!point.element.isConnected) return;
       point.element.focus({ preventScroll: true });
       point.element.scrollIntoView?.({
         block: "center",
@@ -169,8 +266,14 @@ function nearestScrollport(element: HTMLElement): HTMLElement | null {
   return null;
 }
 
-/** Measures the shell chrome that can actually cover report scroll targets. */
-function updateReportLayerOffsets(workspace: HTMLElement, navRow: HTMLElement) {
+/**
+ * Measures the shell chrome that can actually cover report scroll targets and
+ * returns the scroll-target offset from the scrollport's top edge.
+ */
+function updateReportLayerOffsets(
+  workspace: HTMLElement,
+  navRow: HTMLElement,
+): number {
   const shell = workspace.closest<HTMLElement>("[data-lightbox-shell]");
   const mobileBar = shell?.querySelector<HTMLElement>("header");
   const mobileBarPosition = mobileBar
@@ -186,10 +289,15 @@ function updateReportLayerOffsets(workspace: HTMLElement, navRow: HTMLElement) {
     mobileBar && mobileBarIsSticky
       ? Math.max(0, mobileBar.getBoundingClientRect().bottom - scrollportTop)
       : 0;
+  // A sticky row sits inside its scroll container's padding, while scroll
+  // margins are measured from the scrollport edge: count that padding too.
+  const scrollportPadding = scrollport
+    ? Number.parseFloat(window.getComputedStyle(scrollport).paddingTop) || 0
+    : 0;
   const measuredNavHeight = navRow.getBoundingClientRect().height;
   const targetOffset = Math.max(
     64,
-    mobileBarOverlap + (measuredNavHeight || 56) + 8,
+    mobileBarOverlap + scrollportPadding + (measuredNavHeight || 56) + 8,
   );
 
   workspace.style.setProperty(
@@ -218,10 +326,11 @@ function updateReportLayerOffsets(workspace: HTMLElement, navRow: HTMLElement) {
         "--report-return-bottom",
         `${bottomClearance}px`,
       );
-      return;
+      return targetOffset;
     }
   }
   workspace.style.removeProperty("--report-return-bottom");
+  return targetOffset;
 }
 
 /** Keeps all real report sections available in a bookmarkable reading or tabbed view. */
@@ -240,6 +349,9 @@ export function ReportModes({
   const navRowRef = useRef<HTMLDivElement | null>(null);
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const skipBookmarkScroll = useRef(false);
+  // Cancels a pending jump correction; set while an origin restore owns scrolling.
+  const cancelSettle = useRef<(() => void) | null>(null);
+  const restoring = useRef(false);
   const [local, setLocal] = useState<Address>({
     view: null,
     section: panels[0]?.id ?? "",
@@ -291,15 +403,23 @@ export function ReportModes({
   // Browser Back to the URL where a jump started restores that exact place,
   // including an original URL that had no section at all.
   useEffect(() => {
+    const settle = cancelSettle;
     const onPopState = () => {
       const point = returnRef.current;
       if (!point || window.location.href !== point.href) return;
       returnRef.current = null;
       setReturnPointState(null);
-      restoreOrigin(point);
+      settle.current?.();
+      restoring.current = true;
+      restoreOrigin(point, () => {
+        restoring.current = false;
+      });
     };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      settle.current?.();
+    };
   }, []);
 
   const linked = boundCallId
@@ -347,11 +467,14 @@ export function ReportModes({
 
   useEffect(() => {
     if (!linked?.section || !new URLSearchParams(search).has("section")) return;
+    // Returning to a jump's origin restores that exact control instead.
+    if (restoring.current) return;
     if (skipBookmarkScroll.current) {
       skipBookmarkScroll.current = false;
       return;
     }
     const frame = requestAnimationFrame(() => {
+      if (restoring.current) return;
       setReadingSection(linked.section);
       document
         .getElementById(`${id}-heading-${linked.section}`)
@@ -361,6 +484,33 @@ export function ReportModes({
   }, [id, linked?.section, search]);
 
   if (!panels.length) return null;
+
+  /** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
+  function arriveAt(destination: HTMLElement | null | undefined) {
+    if (!destination) return;
+    cancelSettle.current?.();
+    cancelSettle.current = null;
+    const workspace = workspaceRef.current;
+    const navRow = navRowRef.current;
+    // Measure now: a viewport or view change may not have reached the observer.
+    if (workspace && navRow) updateReportLayerOffsets(workspace, navRow);
+    // Focus must land on the real target, even a plain container.
+    if (!destination.hasAttribute("tabindex") && destination.tabIndex < 0)
+      destination.setAttribute("tabindex", "-1");
+    destination.focus({ preventScroll: true });
+    const scroller = navRow ? reportScroller(navRow) : null;
+    const startTop = scroller?.scrollTop ?? 0;
+    destination.scrollIntoView?.({
+      block: "start",
+      behavior: scrollBehavior(),
+    });
+    destination.setAttribute("data-arrived", "true");
+    window.setTimeout(() => destination.removeAttribute("data-arrived"), 1600);
+    if (workspace && navRow && scroller)
+      cancelSettle.current = settleJump(destination, scroller, startTop, () =>
+        updateReportLayerOffsets(workspace, navRow),
+      );
+  }
 
   function navigate(section: string, nextView: View = view, focus = false) {
     if (!panels.some((panel) => panel.id === section)) return;
@@ -438,6 +588,8 @@ export function ReportModes({
   function returnToOrigin() {
     const point = returnRef.current;
     if (!point) return;
+    cancelSettle.current?.();
+    cancelSettle.current = null;
     // Exactly one entry was pushed for this jump: undo it, so the origin URL
     // (even one without a section) and browser history stay truthful. The
     // popstate listener restores focus and position.
@@ -451,6 +603,7 @@ export function ReportModes({
     }
     setReturnPoint(null);
     if (!point.element.isConnected) return;
+    restoring.current = true;
     if (boundCallId && window.location.href !== point.href) {
       window.history.replaceState(window.history.state, "", point.href);
       window.dispatchEvent(new Event(CHANGE));
@@ -460,7 +613,9 @@ export function ReportModes({
         ?.getAttribute("data-report-mode-section");
       if (section) setLocal((previous) => ({ ...previous, section }));
     }
-    restoreOrigin(point);
+    restoreOrigin(point, () => {
+      restoring.current = false;
+    });
   }
 
   function changeView(nextView: View) {

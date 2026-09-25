@@ -59,6 +59,14 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   // inherited report rules that can override the redesigned CSS Modules.
   expect(report?.classList.contains("studio-report")).toBe(true);
   expect(report?.closest(".xray-app")).not.toBeNull();
+  // Production's scroll ancestry: the mobile-fit shell's main holds the
+  // report app, whose .studio-main is the report's scroll container.
+  const shell = container.querySelector("[data-lightbox-shell]");
+  expect(shell?.getAttribute("data-mobile-fit")).toBe("true");
+  const studioMain = report?.closest(".studio-main");
+  expect(studioMain?.parentElement?.classList.contains("xray-app")).toBe(true);
+  expect(studioMain?.parentElement?.parentElement?.id).toBe("main-content");
+  expect(studioMain?.querySelector("[data-report-nav]")).not.toBeNull();
   expect(report?.getAttribute("data-lx-surface")).toBe("light");
   expect(report?.querySelector("h1")?.textContent).toBe("Sales call report");
   expect(
