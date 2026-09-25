@@ -22,6 +22,7 @@ import { SourceWaveformProvider } from "../../source-waveform";
 import { WorkspaceAccessProvider } from "../../workspace-access";
 import { syntheticReport } from "../report/synthetic-report";
 import baseFixture from "../../../tests/fixtures/dipak-overview.json";
+import acquisitionStyles from "../../acquisition-studio.module.css";
 import styles from "./full-shell-preview.module.css";
 
 /** Fictional identity: never a real person, session or workspace. */
@@ -69,14 +70,18 @@ export function FullShellPreview() {
           active="analyse"
           allowance={FIXTURE_ALLOWANCE}
         >
-          <div className={styles.page} data-full-shell-fixture="true">
+          <div
+            className={`xray-app simple-app ${acquisitionStyles.app} ${styles.page}`}
+            data-stage="report"
+            data-full-shell-fixture="true"
+          >
             <p className={styles.banner} role="note">
               Development fixture · fictional data · no account, recording or
               provider call
             </p>
             <SourceWaveformProvider audioRef={audio}>
               <section
-                className={styles.report}
+                className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
                 aria-label="Sales call report"
                 data-lx-surface="light"
               >

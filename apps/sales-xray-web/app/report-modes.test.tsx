@@ -387,6 +387,174 @@ it("stays in Reading view on a narrow viewport without a choice", async () => {
   }
 });
 
+it("measures overlapping shell chrome for sticky rows, jumps, and the Return pill", async () => {
+  const previousWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
+  const previousHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 720,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: 640,
+  });
+  const rect = (top: number, height: number) =>
+    ({
+      x: 0,
+      y: top,
+      top,
+      right: 0,
+      bottom: top + height,
+      left: 0,
+      width: 0,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  const previousRect = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "getBoundingClientRect",
+  );
+  Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: HTMLElement) {
+      if (this.hasAttribute("data-fixture-mobile-bar")) return rect(0, 56);
+      if (this.hasAttribute("data-report-nav")) return rect(0, 115.4);
+      if (this.getAttribute("aria-label") === "Call audio player")
+        return rect(492, 64);
+      return rect(0, 0);
+    },
+  });
+
+  try {
+    await act(async () =>
+      root.render(
+        <div data-lightbox-shell>
+          <header data-fixture-mobile-bar style={{ position: "sticky" }} />
+          <ReportModes panels={panels()} boundCallId={call} />
+          <section
+            aria-label="Call audio player"
+            data-embedded="false"
+            style={{ position: "fixed" }}
+          />
+        </div>,
+      ),
+    );
+
+    expect(mode().style.getPropertyValue("--report-nav-sticky-top")).toBe(
+      "56px",
+    );
+    expect(
+      Number.parseFloat(
+        mode().style.getPropertyValue("--report-scroll-target-offset"),
+      ),
+    ).toBeCloseTo(179.4);
+    expect(mode().style.getPropertyValue("--report-return-bottom")).toBe(
+      "160px",
+    );
+  } finally {
+    if (previousWidth)
+      Object.defineProperty(window, "innerWidth", previousWidth);
+    else Reflect.deleteProperty(window, "innerWidth");
+    if (previousHeight)
+      Object.defineProperty(window, "innerHeight", previousHeight);
+    else Reflect.deleteProperty(window, "innerHeight");
+    if (previousRect)
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+        previousRect,
+      );
+    else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
+  }
+});
+
+it("does not double-count the mobile bar when an inner scrollport begins below it", async () => {
+  const previousWidth = Object.getOwnPropertyDescriptor(window, "innerWidth");
+  const previousHeight = Object.getOwnPropertyDescriptor(window, "innerHeight");
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: 720,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    value: 640,
+  });
+  const rect = (top: number, height: number) =>
+    ({
+      x: 0,
+      y: top,
+      top,
+      right: 0,
+      bottom: top + height,
+      left: 0,
+      width: 0,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  const previousRect = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "getBoundingClientRect",
+  );
+  Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value(this: HTMLElement) {
+      if (this.hasAttribute("data-fixture-mobile-bar")) return rect(0, 56);
+      if (this.hasAttribute("data-fixture-scrollport")) return rect(56, 500);
+      if (this.hasAttribute("data-report-nav")) return rect(56, 90);
+      if (this.getAttribute("aria-label") === "Call audio player")
+        return rect(500, 64);
+      return rect(0, 0);
+    },
+  });
+
+  try {
+    await act(async () =>
+      root.render(
+        <div data-lightbox-shell>
+          <header data-fixture-mobile-bar style={{ position: "sticky" }} />
+          <div
+            data-fixture-scrollport
+            style={{ height: 500, overflowY: "auto" }}
+          >
+            <ReportModes panels={panels()} boundCallId={call} />
+          </div>
+          <section
+            aria-label="Call audio player"
+            data-embedded="false"
+            style={{ position: "fixed" }}
+          />
+        </div>,
+      ),
+    );
+
+    expect(mode().style.getPropertyValue("--report-nav-sticky-top")).toBe(
+      "0px",
+    );
+    expect(
+      Number.parseFloat(
+        mode().style.getPropertyValue("--report-scroll-target-offset"),
+      ),
+    ).toBe(98);
+    expect(mode().style.getPropertyValue("--report-return-bottom")).toBe(
+      "152px",
+    );
+  } finally {
+    if (previousWidth)
+      Object.defineProperty(window, "innerWidth", previousWidth);
+    else Reflect.deleteProperty(window, "innerWidth");
+    if (previousHeight)
+      Object.defineProperty(window, "innerHeight", previousHeight);
+    else Reflect.deleteProperty(window, "innerHeight");
+    if (previousRect)
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "getBoundingClientRect",
+        previousRect,
+      );
+    else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
+  }
+});
+
 it("preserves mounted section state while tabs show only one report section", async () => {
   await render(call);
   const note = container.querySelector<HTMLInputElement>(

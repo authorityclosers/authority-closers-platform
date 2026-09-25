@@ -55,6 +55,10 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   ).not.toBeNull();
   // Real report header with overflow actions and collapsed provenance.
   const report = container.querySelector('[aria-label="Sales call report"]');
+  // Keep production's legacy CSS scope present: otherwise visual review misses
+  // inherited report rules that can override the redesigned CSS Modules.
+  expect(report?.classList.contains("studio-report")).toBe(true);
+  expect(report?.closest(".xray-app")).not.toBeNull();
   expect(report?.getAttribute("data-lx-surface")).toBe("light");
   expect(report?.querySelector("h1")?.textContent).toBe("Sales call report");
   expect(

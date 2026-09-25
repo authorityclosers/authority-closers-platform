@@ -1361,7 +1361,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
 
   function renderFindings(title: string, rows: Finding[]) {
     return (
-      <section key={title}>
+      <section key={title} className="studio-legacy-findings">
         <h2 lang="en">{title}</h2>
         {rows.length ? (
           rows.map((finding, i) => (

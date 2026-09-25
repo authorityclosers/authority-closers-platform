@@ -152,6 +152,78 @@ function serverDesktopSnapshot() {
   return false;
 }
 
+function nearestScrollport(element: HTMLElement): HTMLElement | null {
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    const style = window.getComputedStyle(parent);
+    const scrollableOverflow = [style.overflowY, style.overflow].some((value) =>
+      ["auto", "scroll", "hidden", "overlay"].includes(value),
+    );
+    if (scrollableOverflow) {
+      return parent;
+    }
+  }
+  return null;
+}
+
+/** Measures the shell chrome that can actually cover report scroll targets. */
+function updateReportLayerOffsets(workspace: HTMLElement, navRow: HTMLElement) {
+  const shell = workspace.closest<HTMLElement>("[data-lightbox-shell]");
+  const mobileBar = shell?.querySelector<HTMLElement>("header");
+  const mobileBarPosition = mobileBar
+    ? window.getComputedStyle(mobileBar).position
+    : "static";
+  const mobileBarIsSticky =
+    mobileBarPosition === "sticky" || mobileBarPosition === "fixed";
+  const scrollport = nearestScrollport(navRow);
+  const scrollportTop = scrollport
+    ? scrollport.getBoundingClientRect().top + scrollport.clientTop
+    : 0;
+  const mobileBarOverlap =
+    mobileBar && mobileBarIsSticky
+      ? Math.max(0, mobileBar.getBoundingClientRect().bottom - scrollportTop)
+      : 0;
+  const measuredNavHeight = navRow.getBoundingClientRect().height;
+  const targetOffset = Math.max(
+    64,
+    mobileBarOverlap + (measuredNavHeight || 56) + 8,
+  );
+
+  workspace.style.setProperty(
+    "--report-nav-sticky-top",
+    `${mobileBarOverlap}px`,
+  );
+  workspace.style.setProperty(
+    "--report-scroll-target-offset",
+    `${targetOffset}px`,
+  );
+
+  const dock = shell?.querySelector<HTMLElement>(
+    '[aria-label="Call audio player"][data-embedded="false"]',
+  );
+  if (
+    shell &&
+    window.innerWidth < 900 &&
+    window.innerHeight > 560 &&
+    dock &&
+    window.getComputedStyle(dock).position === "fixed"
+  ) {
+    const dockTop = dock.getBoundingClientRect().top;
+    const bottomClearance = window.innerHeight - dockTop + 12;
+    if (Number.isFinite(bottomClearance) && bottomClearance > 12) {
+      workspace.style.setProperty(
+        "--report-return-bottom",
+        `${bottomClearance}px`,
+      );
+      return;
+    }
+  }
+  workspace.style.removeProperty("--report-return-bottom");
+}
+
 /** Keeps all real report sections available in a bookmarkable reading or tabbed view. */
 export function ReportModes({
   label = "Report sections",
@@ -164,6 +236,8 @@ export function ReportModes({
   boundCallId?: string;
 }) {
   const id = useId();
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const navRowRef = useRef<HTMLDivElement | null>(null);
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const skipBookmarkScroll = useRef(false);
   const [local, setLocal] = useState<Address>({
@@ -186,6 +260,33 @@ export function ReportModes({
     setReturnPointState(point);
   };
   const search = useSyncExternalStore(subscribe, browserSearch, serverSearch);
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    const navRow = navRowRef.current;
+    if (!workspace || !navRow) return;
+
+    const shell = workspace.closest<HTMLElement>("[data-lightbox-shell]");
+    const mobileBar = shell?.querySelector<HTMLElement>("header");
+    const scrollport = nearestScrollport(navRow);
+    const dock = shell?.querySelector<HTMLElement>(
+      '[aria-label="Call audio player"][data-embedded="false"]',
+    );
+    const update = () => updateReportLayerOffsets(workspace, navRow);
+    update();
+
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(navRow);
+    if (mobileBar) observer?.observe(mobileBar);
+    if (scrollport) observer?.observe(scrollport);
+    if (dock) observer?.observe(dock);
+    window.addEventListener("resize", update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   // Browser Back to the URL where a jump started restores that exact place,
   // including an original URL that had no section at all.
@@ -372,6 +473,7 @@ export function ReportModes({
 
   return (
     <div
+      ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
       data-lx-surface="light"
@@ -380,7 +482,7 @@ export function ReportModes({
     >
       {/* One horizontal row: section tabs (Tabbed) or section links (Reading),
           with the view choice at its trailing edge. No second report sidebar. */}
-      <div className={styles.navRow}>
+      <div ref={navRowRef} className={styles.navRow} data-report-nav>
         {view === "tabs" && (
           <nav
             className={styles.tabNavigation}

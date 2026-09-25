@@ -20,7 +20,7 @@
 .navRow {
   position: sticky;
   z-index: 5;
-  top: 0;
+  top: var(--report-nav-sticky-top, 0px);
   display: flex;
   min-width: 0;
   align-items: center;
@@ -220,7 +220,10 @@
   position: fixed;
   z-index: 45;
   right: 28px;
-  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  bottom: var(
+    --report-return-bottom,
+    calc(108px + env(safe-area-inset-bottom, 0px))
+  );
   display: inline-flex;
   align-items: center;
   overflow: hidden;
@@ -284,11 +287,11 @@
   min-width: 0;
 }
 
-/* Scroll targets clear the one sticky navigation row (~48px). */
+/* Measured offsets include any shell bar overlapping the report scrollport. */
 .section {
   min-width: 0;
   padding-block: 0 28px;
-  scroll-margin-block-start: 64px;
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
 }
 
 .section + .section {
@@ -305,7 +308,7 @@
   letter-spacing: -0.015em;
   line-height: 1.3;
   overflow-wrap: anywhere;
-  scroll-margin-block-start: 64px;
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
 }
 
 .section[hidden] {
@@ -349,7 +352,7 @@
 
   .section {
     padding-block: 14px 22px;
-    scroll-margin-block-start: 68px;
+    scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
   }
 
   .section + .section {
@@ -359,12 +362,20 @@
   .section > h2 {
     margin-bottom: 14px;
     font-size: 21px;
-    scroll-margin-block-start: 68px;
+    scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
   }
 
   .toolbar > button {
     min-height: 44px;
     min-width: 94px;
+  }
+}
+
+/* Keep the shortcut above the audio dock and mobile navigation. Its custom
+   offset is measured from the dock at runtime, including narrow dock layouts. */
+@media (max-width: 899.98px) and (min-height: 560.02px) {
+  :global([data-lightbox-shell]) .returnBar {
+    right: 12px;
   }
 }
 

@@ -590,7 +590,7 @@
 
 .chapter {
   min-width: 0;
-  scroll-margin-top: 110px;
+  scroll-margin-top: var(--report-scroll-target-offset, 110px);
 }
 
 .chapter + .chapter {
@@ -642,6 +642,7 @@
 
 .block {
   min-width: 0;
+  scroll-margin-top: var(--report-scroll-target-offset, 110px);
   padding: var(--lx-space-6) 0;
   border-bottom: 1px solid var(--lx-line);
   color: var(--lx-ink-3);
@@ -731,7 +732,7 @@
 }
 
 .anchor {
-  scroll-margin-top: 110px;
+  scroll-margin-top: var(--report-scroll-target-offset, 110px);
 }
 
 .groupHeading {
