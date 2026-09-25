@@ -1494,7 +1494,10 @@ class ConversationAuthority:
         *,
         key: str,
         request: StageRequest | None = None,
+        configuration_sha256: str | None = None,
     ) -> dict[str, Any]:
+        if configuration_sha256 is not None and isinstance(actor, ProcessingActor):
+            raise ConversationDenied("Processing actors use the release-pinned route.")
         now = await app.admit(actor)
         await app.get(actor, recording_id)
         recording = await app._recording(actor, recording_id)
@@ -1504,7 +1507,14 @@ class ConversationAuthority:
             if request is None
             else await ReportingPipeline(service).plan(recording, request)
         )
-        bundle, approval = await self.approval(app, actor, recording, plan, now)
+        bundle, approval = await self.approval(
+            app,
+            actor,
+            recording,
+            plan,
+            now,
+            configuration_sha256=configuration_sha256,
+        )
         intent = {
             "recording_id": str(recording_id),
             "cache_key": plan.checkpoint.cache_key,

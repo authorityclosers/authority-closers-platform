@@ -91,11 +91,12 @@ async def test_openai_c5_http_selection_uses_canonical_settings_and_saved_checkp
     seen = patch_settings(monkeypatch, settings())
     actor = SimpleNamespace(tenant_id=TENANT_ID, person_id=PERSON_ID)
 
-    request = await selection.stage_request(
+    request, configuration_sha256 = await selection.stage_request(
         FakeApplication(), actor, RECORDING_ID, FakeAuthority(openai_bundle())
     )
 
     assert request is not None
+    assert configuration_sha256 == "b" * 64
     assert (request.stage, request.provider, request.model) == ("C5", "openai", "gpt-6-luna")
     assert request.max_completion_tokens == 8_000
     assert request.transcript_checkpoint_id == TRANSCRIPT_ID
@@ -105,6 +106,31 @@ async def test_openai_c5_http_selection_uses_canonical_settings_and_saved_checkp
     assert request.qualitative_pack_sha256 is not None
     assert request.profile == load_report_profile()
     assert seen == [TENANT_ID]
+
+
+@pytest.mark.asyncio
+async def test_http_selection_fails_closed_on_ambiguous_approved_configurations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selection = analysis_module.AnalysisSelection(
+        stage="C5",
+        transcript_checkpoint_id=TRANSCRIPT_ID,
+        fact_checkpoint_ids=(FACT_ID,),
+    )
+    patch_settings(monkeypatch, settings())
+    bundle = openai_bundle()
+    alternate = bundle.stages[0].model_copy(update={"configuration_sha256": "a" * 64})
+    ambiguous = bundle.model_copy(update={"stages": (*bundle.stages, alternate)})
+
+    with pytest.raises(HTTPException) as caught:
+        await selection.stage_request(
+            FakeApplication(),
+            SimpleNamespace(tenant_id=TENANT_ID, person_id=PERSON_ID),
+            RECORDING_ID,
+            FakeAuthority(ambiguous),
+        )
+
+    assert caught.value.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -145,7 +171,20 @@ async def test_openai_http_selection_cannot_run_facts_or_transcription(
             FakeApplication(), actor, RECORDING_ID, FakeAuthority(openai_bundle(stage="C4"))
         )
     assert caught.value.status_code == 403
-    assert (
-        await c2.stage_request(FakeApplication(), actor, RECORDING_ID, FakeAuthority(_bundle()))
-        is None
+    request, configuration_sha256 = await c2.stage_request(
+        FakeApplication(), actor, RECORDING_ID, FakeAuthority(_bundle())
     )
+    assert request is None
+    assert configuration_sha256 == "b" * 64
+
+
+def test_analysis_selection_does_not_accept_client_configuration_override() -> None:
+    with pytest.raises(ValueError):
+        analysis_module.AnalysisSelection.model_validate(
+            {
+                "stage": "C5",
+                "transcript_checkpoint_id": str(TRANSCRIPT_ID),
+                "fact_checkpoint_ids": [str(FACT_ID)],
+                "configuration_sha256": "a" * 64,
+            }
+        )

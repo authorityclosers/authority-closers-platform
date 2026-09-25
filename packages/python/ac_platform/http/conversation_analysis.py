@@ -65,23 +65,21 @@ class AnalysisSelection(BaseModel):
         actor: ActorContext,
         recording_id: UUID,
         authority: ConversationAuthority,
-    ) -> StageRequest | None:
+    ) -> tuple[StageRequest | None, str]:
         bundle = await authority.admit(app, actor)
         await app.get(actor, recording_id)
         recording = await app._recording(actor, recording_id)
-        approval = next(
-            (
-                item
-                for item in bundle.stages
-                if (item.tenant_id, item.person_id, item.source_sha256, item.stage)
-                == (actor.tenant_id, actor.person_id, recording.source_sha256, self.stage)
-            ),
-            None,
+        approvals = tuple(
+            item
+            for item in bundle.stages
+            if (item.tenant_id, item.person_id, item.source_sha256, item.stage)
+            == (actor.tenant_id, actor.person_id, recording.source_sha256, self.stage)
         )
-        if approval is None:
+        if len(approvals) != 1:
             raise HTTPException(403, "This recording and stage need current processing approval.")
+        approval = approvals[0]
         if self.stage == "C2":
-            return None
+            return None, approval.configuration_sha256
         if approval.max_completion_tokens < 256:
             raise HTTPException(403, "The approved output limit does not support this stage.")
         if self.stage == "C4" and approval.provider_id == "openai":
@@ -101,7 +99,7 @@ class AnalysisSelection(BaseModel):
                     provider=approval.provider_id,
                     model=approval.model_id,
                 ),
-            )
+            ), approval.configuration_sha256
 
         _settings_row, analysis_settings = await latest_analysis_settings(
             app.database, authority.operations_tenant_id
@@ -137,7 +135,7 @@ class AnalysisSelection(BaseModel):
             qualitative_pack_sha256=qualitative_pack_sha256,
             output_profile=output_profile,
             profile=profile,
-        )
+        ), approval.configuration_sha256
 
 
 class AnalysisAcceptance(QuoteAcceptance):
@@ -176,9 +174,16 @@ def install_analysis_routes(
         await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         app = ConversationApplication(auth.database)
         try:
-            stage = await payload.stage_request(app, auth.resolved.actor, recording_id, authority)
+            stage, configuration_sha256 = await payload.stage_request(
+                app, auth.resolved.actor, recording_id, authority
+            )
             return await authority.issue(
-                app, auth.resolved.actor, recording_id, key=key, request=stage
+                app,
+                auth.resolved.actor,
+                recording_id,
+                key=key,
+                request=stage,
+                configuration_sha256=configuration_sha256,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
@@ -196,7 +201,7 @@ def install_analysis_routes(
         await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         app = ConversationApplication(auth.database)
         try:
-            stage = await payload.selection.stage_request(
+            stage, _configuration_sha256 = await payload.selection.stage_request(
                 app, auth.resolved.actor, recording_id, authority
             )
             service = ConversationInference(app, authority=authority)

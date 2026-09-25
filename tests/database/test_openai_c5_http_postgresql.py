@@ -43,6 +43,8 @@ from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationPermission,
+    ConversationProviderActivation,
+    ConversationProviderConfiguration,
     ConversationQuote,
     ConversationQuoteAcceptance,
     ConversationReportDraft,
@@ -93,7 +95,29 @@ def _analysis_settings(
     )
 
 
-async def _configure_openai_c5(setup: Any) -> None:
+async def _configure_openai_c5(setup: Any) -> str:
+    async with setup.sessions() as database, database.begin():
+        baseline = await database.scalar(
+            select(ConversationProviderConfiguration).where(
+                ConversationProviderConfiguration.tenant_id == setup.authority.operations_tenant_id,
+                ConversationProviderConfiguration.configuration_sha256 == setup.config.digest,
+            )
+        )
+        assert baseline is not None
+        database.add(
+            ConversationProviderActivation(
+                id=uuid4(),
+                tenant_id=setup.authority.operations_tenant_id,
+                person_id=setup.actor.person_id,
+                session_id=setup.actor.session_id,
+                configuration_id=baseline.id,
+                configuration_revision=baseline.revision,
+                configuration_sha256=baseline.configuration_sha256,
+                sequence=1,
+                created_at=setup.prepared.state.now,
+            )
+        )
+
     config_data = setup.config.as_dict()
     config_data["revision"] = "hosted-openai-c5-http-test-v1"
     openai_config = _provider("openai", "gpt-6-luna", "https://api.openai.com/v1/responses")
@@ -124,18 +148,21 @@ async def _configure_openai_c5(setup: Any) -> None:
     }
     stages = []
     for stage in setup.bundle.stages:
-        update: dict[str, Any] = {"configuration_sha256": config.digest}
         if stage.stage == "C5":
+            update: dict[str, Any] = {"configuration_sha256": config.digest}
             update.update(
                 openai_refs,
                 max_completion_tokens=8_000,
                 max_input_bytes=255_000,
             )
-        stages.append(stage.model_copy(update=update))
+            stages.append(stage.model_copy(update=update))
+        else:
+            stages.append(stage)
     new_bundle = HostedApprovalBundle.model_validate_json(
         setup.bundle.model_copy(update={"stages": tuple(stages)}).to_json()
     )
     setup.bundle_box["bundle"] = new_bundle
+    return config.digest
 
 
 def _coaching_output() -> dict[str, Any]:
@@ -286,7 +313,7 @@ def test_http_openai_c5_reuses_checkpoints_and_fences_settings_and_scope(
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, text_provider="gemini")
         try:
-            await _configure_openai_c5(setup)
+            openai_configuration_sha256 = await _configure_openai_c5(setup)
             await _insert_settings(setup, 1)
 
             provider_child = OpenAIC5ReportingBroker(setup.prepared.data)
@@ -403,6 +430,71 @@ def test_http_openai_c5_reuses_checkpoints_and_fences_settings_and_scope(
                 assert c5_quote["provider"] == "openai"
                 assert c5_quote["model"] == "gpt-6-luna"
                 assert c5_quote["input_sha256"] != setup.prepared.state.source_sha256
+
+                async with setup.sessions() as database:
+                    persisted_quote = await database.get(ConversationQuote, UUID(c5_quote["id"]))
+                    active_configuration = await database.scalar(
+                        select(ConversationProviderActivation)
+                        .where(
+                            ConversationProviderActivation.tenant_id
+                            == setup.authority.operations_tenant_id
+                        )
+                        .order_by(ConversationProviderActivation.sequence.desc())
+                    )
+                    assert persisted_quote is not None
+                    assert (
+                        persisted_quote.quote["provider_configuration_sha256"]
+                        == openai_configuration_sha256
+                    )
+                    assert active_configuration is not None
+                    assert active_configuration.configuration_sha256 == setup.config.digest
+                    ordinary_default = await setup.authority._provider_configuration(
+                        ConversationApplication(database)
+                    )
+                    assert ordinary_default is not None
+                    assert ordinary_default.configuration_sha256 == setup.config.digest
+
+                approved_bundle = setup.bundle_box["bundle"]
+                mismatched_stages = tuple(
+                    stage.model_copy(update={"configuration_sha256": "f" * 64})
+                    if stage.stage == "C5"
+                    else stage
+                    for stage in approved_bundle.stages
+                )
+                setup.bundle_box["bundle"] = approved_bundle.model_copy(
+                    update={"stages": mismatched_stages}
+                )
+                mismatched_config = await client.post(
+                    f"/v1/conversation/recordings/{setup.prepared.recording_id}/analysis/quote",
+                    json=c5_selection,
+                    headers={
+                        **origin_header,
+                        "Idempotency-Key": "openai-c5-http-mismatched-config",
+                    },
+                )
+                assert mismatched_config.status_code == 403, mismatched_config.text
+
+                expired_stages = tuple(
+                    stage.model_copy(
+                        update={"expires_at_epoch": int(setup.prepared.state.now.timestamp()) - 1}
+                    )
+                    if stage.stage == "C5"
+                    else stage
+                    for stage in approved_bundle.stages
+                )
+                setup.bundle_box["bundle"] = approved_bundle.model_copy(
+                    update={"stages": expired_stages}
+                )
+                expired_approval = await client.post(
+                    f"/v1/conversation/recordings/{setup.prepared.recording_id}/analysis/quote",
+                    json=c5_selection,
+                    headers={
+                        **origin_header,
+                        "Idempotency-Key": "openai-c5-http-expired-approval",
+                    },
+                )
+                assert expired_approval.status_code == 403, expired_approval.text
+                setup.bundle_box["bundle"] = approved_bundle
 
                 async with setup.sessions() as database:
                     task_count = await database.scalar(

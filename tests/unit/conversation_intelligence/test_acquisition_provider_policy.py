@@ -672,6 +672,23 @@ async def test_unactivated_saved_draft_is_not_an_implicit_provider_route() -> No
     assert app.database.scalar.await_count == 1
 
 
+@pytest.mark.asyncio
+async def test_processing_actor_cannot_override_release_pinned_configuration() -> None:
+    authority = ConversationAuthority(
+        lambda: _bundle(_policy()), environment="test", operations_tenant_id=TENANT_ID
+    )
+    actor = ProcessingActor(PROCESSING_PERSON_ID, TENANT_ID, uuid4())
+
+    with pytest.raises(ConversationDenied, match="release-pinned route"):
+        await authority.issue(
+            None,  # rejected before application, database, or plan work is accessed
+            actor,
+            uuid4(),
+            key="processing-config-override-denied",
+            configuration_sha256="a" * 64,
+        )
+
+
 def test_only_matching_processing_actor_can_select_policy() -> None:
     bundle = _bundle(_policy())
     actor = ProcessingActor(PROCESSING_PERSON_ID, TENANT_ID, uuid4())
