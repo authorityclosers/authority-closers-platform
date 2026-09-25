@@ -1,7 +1,7 @@
 "use client";
 import { AnalysisAvailability } from "./analysis-availability";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -77,8 +77,18 @@ import {
   reportLanguageLabels,
   type ReportLanguage,
 } from "./report-language";
-import { isNewCallRequested, setNewCallRequested } from "./new-call-navigation";
+import {
+  isNewCallRequested,
+  newCallHref,
+  setNewCallRequested,
+} from "./new-call-navigation";
 import { UploadCheck } from "./upload-check";
+import {
+  UploadInProgressError,
+  useUploadSession,
+  useUploadSnapshot,
+} from "./hooks/upload-session";
+import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider } from "./source-waveform";
@@ -148,7 +158,48 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const accessStatus = access?.status ?? null;
+  const accessAuthenticated = access?.authenticated ?? null;
+  const accessPersonId = access?.context?.personId ?? null;
+  const accessSessionId = access?.context?.sessionId ?? null;
+  const accessTenantId = access?.context?.tenantId ?? null;
+  const accessObservation = useMemo(
+    () =>
+      accessStatus === null
+        ? null
+        : {
+            status: accessStatus,
+            authenticated: accessAuthenticated,
+            context:
+              accessPersonId && accessSessionId && accessTenantId
+                ? {
+                    personId: accessPersonId,
+                    sessionId: accessSessionId,
+                    tenantId: accessTenantId,
+                  }
+                : null,
+          },
+    [
+      accessAuthenticated,
+      accessPersonId,
+      accessSessionId,
+      accessStatus,
+      accessTenantId,
+    ],
+  );
+  const routeRequestedCallId =
+    requestedCallId === undefined
+      ? typeof window === "undefined"
+        ? null
+        : requestedSubmissionId()
+      : requestedCallId;
+  const routeHasSpecificCall = routeRequestedCallId !== null;
+  const explicitNewIntake =
+    typeof window !== "undefined" &&
+    (isNewCallRequested() || savedSubmissionId() === null);
   const pending = usePendingAnalysis();
+  const uploadStore = useUploadSession();
+  const uploadSnapshot = useUploadSnapshot();
   const [entry, setEntry] = useState<Entry | null>(null);
   const router = useRouter();
   const [analysisPaused, setAnalysisPaused] = useState(false);
@@ -161,7 +212,26 @@ export function AcquisitionStudio({
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [localStagedFiles, setLocalStagedFiles] = useState<File[]>([]);
   const stagedFiles = pending?.stagedFiles ?? localStagedFiles;
-  const file = pending ? (pending.selection?.file ?? null) : localFile;
+  const retainedUploadFile =
+    uploadStore &&
+    !embedded &&
+    (explicitNewIntake ||
+      (uploadSnapshot.phase !== "idle" &&
+        uploadSnapshot.phase !== "account_changed" &&
+        uploadSnapshot.phase !== "saved" &&
+        routeRequestedCallId === uploadSnapshot.intentId)) &&
+    (uploadSnapshot.phase === "preparing" ||
+      uploadSnapshot.phase === "uploading" ||
+      uploadSnapshot.phase === "interrupted")
+      ? uploadStore.fileFor(uploadSnapshot.intentId)
+      : null;
+  const file = pending
+    ? (pending.selection?.file ?? retainedUploadFile)
+    : (localFile ?? retainedUploadFile);
+  const uploadPhaseUnresolved =
+    uploadSnapshot.phase === "preparing" ||
+    uploadSnapshot.phase === "uploading" ||
+    uploadSnapshot.phase === "interrupted";
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("en");
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [localValidationError, setLocalValidationError] = useState(false);
@@ -172,6 +242,16 @@ export function AcquisitionStudio({
     ? (pending.selection?.audioUrl ?? "")
     : localAudioUrl;
   const [consent, setConsent] = useState(false);
+  const [consentedPolicySha, setConsentedPolicySha] = useState<string | null>(
+    null,
+  );
+  const consentCurrent = Boolean(
+    consent && policy?.policy_sha256 && consentedPolicySha === policy.policy_sha256,
+  );
+  const clearConsent = useCallback(() => {
+    setConsent(false);
+    setConsentedPolicySha(null);
+  }, []);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -227,12 +307,49 @@ export function AcquisitionStudio({
   const active = useRef(true);
   const inFlight = useRef(false);
   const chosenId = useRef("");
-  const attemptedUploadId = useRef("");
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
   const lastRequestedCallId = useRef<string | null>(null);
   const stalePlanRefresh = useRef<string | null>(null);
   const previewUrl = useRef("");
+  const reconciliationAttempted = useRef("");
+  const interruptedIntentId =
+    uploadSnapshot.phase === "interrupted" ? uploadSnapshot.intentId : null;
+  const interruptedSourceSha =
+    uploadSnapshot.phase === "interrupted"
+      ? uploadSnapshot.sourceSha256
+      : null;
+  const activeUploadIntentId =
+    uploadSnapshot.phase === "preparing" ||
+    uploadSnapshot.phase === "uploading" ||
+    uploadSnapshot.phase === "interrupted"
+      ? uploadSnapshot.intentId
+      : null;
+  const uploadHomeHref =
+    uploadSnapshot.phase !== "idle" && uploadSnapshot.phase !== "account_changed"
+      ? uploadSnapshot.homeHref
+      : "/";
+  const uploadHomeIsNewIntake = new URL(
+    uploadHomeHref,
+    "https://sales-xray.invalid",
+  ).searchParams.has("new");
+  const uploadMatchesCurrentView =
+    !embedded &&
+    (Boolean(
+      activeUploadIntentId &&
+        (routeRequestedCallId === activeUploadIntentId ||
+          activeRequestedCallId === activeUploadIntentId ||
+          (!routeHasSpecificCall &&
+            (pending?.selection?.intentId === activeUploadIntentId ||
+              explicitNewIntake ||
+              uploadHomeIsNewIntake))),
+    ) ||
+      (uploadSnapshot.phase === "saved" &&
+        (activeRequestedCallId === uploadSnapshot.submissionId ||
+          routeRequestedCallId === uploadSnapshot.submissionId ||
+          (!routeHasSpecificCall &&
+            submission?.id === uploadSnapshot.submissionId))));
+  const uploadUnresolved = uploadPhaseUnresolved && uploadMatchesCurrentView;
   const onToken = useCallback((value: string) => setToken(value), []);
   const review = useProcessingReview(
     activeRequestedCallId ?? submission?.id ?? null,
@@ -261,7 +378,7 @@ export function AcquisitionStudio({
     : reportLanguage;
   const displayConsent = localObservation
     ? localObservation.consent_checked
-    : consent;
+    : consentCurrent;
   const displayPrivacyOpen = localObservation
     ? localObservation.privacy_open
     : privacyOpen;
@@ -284,7 +401,7 @@ export function AcquisitionStudio({
           ? "upload.file.selected"
           : "upload.empty",
       privacy_open: privacyOpen,
-      consent_checked: consent,
+      consent_checked: consentCurrent,
       report_language: entry.report_languages ? reportLanguage : null,
       verification: !policy
         ? "checking"
@@ -300,7 +417,7 @@ export function AcquisitionStudio({
       file_size_bytes: file?.size ?? null,
     });
   }, [
-    consent,
+    consentCurrent,
     deletionOnlyId,
     entry,
     file,
@@ -323,6 +440,87 @@ export function AcquisitionStudio({
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!uploadStore || !uploadMatchesCurrentView) return;
+    return uploadStore.view();
+  }, [uploadMatchesCurrentView, uploadStore]);
+
+  useEffect(() => {
+    if (
+      !uploadStore ||
+      !uploadMatchesCurrentView ||
+      !interruptedIntentId ||
+      !interruptedSourceSha
+    )
+      return;
+    if (accessObservation) uploadStore.observeAccount(accessObservation);
+    const intentId = interruptedIntentId;
+    const sourceSha256 = interruptedSourceSha;
+    const recoveryKey = `${intentId}:${sourceSha256}`;
+    if (
+      reconciliationAttempted.current === recoveryKey ||
+      !uploadStore.canReconcile(intentId)
+    )
+      return;
+    reconciliationAttempted.current = recoveryKey;
+    const abort = new AbortController();
+    void reconcileSource({
+      id: intentId,
+      sha: sourceSha256,
+      signal: abort.signal,
+    })
+      .then(async (outcome) => {
+        if (abort.signal.aborted) return;
+        if (outcome.kind === "missing") {
+          uploadStore.markMissing(intentId);
+          if (active.current) {
+            clearConsent();
+            setError(
+              "The server did not find this upload. Review the current consent before trying again.",
+            );
+          }
+          return;
+        }
+        uploadStore.markReconciled(intentId, outcome.submissionId);
+        if (!active.current) return;
+        setSubmission(outcome.bound);
+        setProgress(parseProgress(outcome.raw, outcome.bound));
+        clearConsent();
+        setConsentedSubmissionId(outcome.bound.id);
+        setPlanRequiresAction(false);
+        setError("");
+        try {
+          const current = record(
+            await acquisition("/session", { signal: abort.signal }),
+          );
+          if (abort.signal.aborted || !active.current) return;
+          setAllowance(parseAllowance(current.allowance));
+          setAllowanceUnknown(false);
+        } catch {
+          // The source is already bound. Allowance is refreshed by its normal
+          // authority path when the page resumes.
+        }
+      })
+      .catch(() => {
+        if (!abort.signal.aborted && active.current)
+          setError(
+            "Upload status could not be checked. The selected recording remains in this tab.",
+          );
+      });
+    return () => {
+      abort.abort();
+      if (reconciliationAttempted.current === recoveryKey)
+        reconciliationAttempted.current = "";
+    };
+  }, [
+    clearConsent,
+    accessObservation,
+    interruptedIntentId,
+    interruptedSourceSha,
+    uploadMatchesCurrentView,
+    uploadStore,
+  ]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -859,9 +1057,13 @@ export function AcquisitionStudio({
 
   function choose(next: File | undefined) {
     if (!next || inFlight.current || submission) return;
+    if (uploadUnresolved && next !== file) {
+      setError("Check the current upload before choosing another recording.");
+      return;
+    }
     setError("");
     setDeleted(false);
-    setConsent(false);
+    clearConsent();
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
     if (
@@ -893,7 +1095,7 @@ export function AcquisitionStudio({
   }
 
   function addFiles(nextFiles: FileList | File[]) {
-    if (inFlight.current || submission || !policy) return;
+    if (inFlight.current || submission || !policy || uploadUnresolved) return;
     const candidates = Array.from(nextFiles);
     const valid = candidates.filter(
       (candidate) =>
@@ -927,7 +1129,7 @@ export function AcquisitionStudio({
   }
 
   function removeStagedFile(removed: File) {
-    if (inFlight.current || submission) return;
+    if (inFlight.current || submission || uploadUnresolved) return;
     const remaining = stagedFiles.filter((candidate) => candidate !== removed);
     if (file === removed) {
       if (remaining.length > 0) choose(remaining[0]);
@@ -958,13 +1160,31 @@ export function AcquisitionStudio({
   }
 
   async function upload() {
-    if (analysisWriteBlocked || !file || !policy || !consent) return;
+    if (analysisWriteBlocked || !file || !policy || !consentCurrent) return;
     if (access?.requestAnalysisAccess && !access.requestAnalysisAccess())
       return;
     if (!session && !token) return;
     if (embedded && !session) return;
     const selected = file;
-    await operation("Uploading and checking your call…", async (signal) => {
+    const resume =
+      uploadSnapshot.phase === "interrupted" &&
+      uploadStore?.fileFor(uploadSnapshot.intentId) === selected
+        ? uploadSnapshot
+        : null;
+    const id =
+      resume?.intentId ?? pending?.selection?.intentId ?? chosenId.current;
+    if (!id) return;
+    const uploadMeta = {
+      intentId: id,
+      fileName: selected.name,
+      totalBytes: selected.size,
+      reportLanguage:
+        resume?.reportLanguage ??
+        (entry?.report_languages ? reportLanguage : null),
+      homeHref: resume?.homeHref ?? newCallHref(homeHref),
+      sourceSha256: resume?.sourceSha256 ?? null,
+    } as const;
+    const send = async (signal: AbortSignal) => {
       if (!session) {
         try {
           const issued = record(
@@ -975,12 +1195,14 @@ export function AcquisitionStudio({
               body: JSON.stringify({ challenge_token: token }),
             }),
           );
-          if (signal.aborted) return;
-          setSession(true);
-          setAllowance(parseAllowance(issued.allowance));
-          setAllowanceUnknown(false);
+          if (signal.aborted) throw new Error("upload_cancelled");
+          if (active.current) {
+            setSession(true);
+            setAllowance(parseAllowance(issued.allowance));
+            setAllowanceUnknown(false);
+          }
         } finally {
-          if (!signal.aborted) {
+          if (!signal.aborted && active.current) {
             setToken("");
             setCheckKey((key) => key + 1);
           }
@@ -990,63 +1212,72 @@ export function AcquisitionStudio({
         "SHA-256",
         await selected.arrayBuffer(),
       );
-      if (signal.aborted) return;
+      if (signal.aborted) throw new Error("upload_cancelled");
       const sha = Array.from(new Uint8Array(digest), (n) =>
         n.toString(16).padStart(2, "0"),
       ).join("");
-      const id = pending?.selection?.intentId ?? chosenId.current;
-      // Only an opaque selector is remembered. Cookies stay HttpOnly; no report,
-      // transcript, filename, audio or credential is copied to browser storage.
-      rememberSubmission(id);
-      // Once a new upload starts, reload must recover that attempt normally.
+      uploadStore?.sourceDigest(id, sha);
       setNewCallRequested(false);
-      // A failed PUT response does not prove the upload failed to commit. Read
-      // the same opaque submission before replay, even after a long local wait.
-      // Denied, malformed or unavailable reads never authorize another PUT.
-      let raw: Record<string, unknown> | null = null;
-      let recovered = false;
-      if (attemptedUploadId.current === id) {
-        try {
-          raw = record(await acquisition(submissionPath(id), { signal }));
-          recovered = true;
-        } catch (error) {
-          if (!(error instanceof AcquisitionError && error.status === 404))
-            throw error;
-        }
-      }
-      if (!raw) {
-        attemptedUploadId.current = id;
-        raw = record(
-          await acquisition(`${submissionPath(id)}/source`, {
-            method: "PUT",
-            signal,
-            headers: {
-              "Content-Type": "application/octet-stream",
-              "X-Source-SHA256": sha,
-              "X-Upload-Policy": policy.policy_sha256,
-              "X-Upload-Consent": "accepted",
-            },
-            body: selected,
-          }),
-        );
-      }
-      const bound = parseSubmission(raw);
-      if (bound.id !== id || bound.sha !== sha)
-        throw new Error("uploaded_source_mismatch");
-      const recoveredProgress = recovered ? parseProgress(raw, bound) : null;
+      const outcome = await sendSource({
+        id,
+        file: selected,
+        sha,
+        policySha: policy.policy_sha256,
+        uploadConsent: {
+          accepted: consentCurrent,
+          policySha256: consentedPolicySha ?? "",
+        },
+        signal,
+        onPut: () => uploadStore?.markSending(id),
+      });
+      const bound = outcome.bound;
+      const recoveredProgress = outcome.recovered
+        ? parseProgress(outcome.raw, bound)
+        : null;
       // GET progress does not include allowance. Refresh it from its authority,
       // never subtract an estimated duration locally or reuse a pre-upload value.
-      const allowanceSource = recovered
+      const allowanceSource = outcome.recovered
         ? record(await acquisition("/session", { signal }))
-        : raw;
-      if (signal.aborted) return;
-      setAllowance(parseAllowance(allowanceSource.allowance));
-      setAllowanceUnknown(false);
-      if (recoveredProgress) setProgress(recoveredProgress);
-      setSubmission(bound);
-      setConsent(false);
-      setConsentedSubmissionId(bound.id);
-      setPlanRequiresAction(false);
+        : outcome.raw;
+      if (signal.aborted) throw new Error("upload_cancelled");
+      if (active.current) {
+        setAllowance(parseAllowance(allowanceSource.allowance));
+        setAllowanceUnknown(false);
+        if (recoveredProgress) setProgress(recoveredProgress);
+        setSubmission(bound);
+        clearConsent();
+        setConsentedSubmissionId(bound.id);
+        setPlanRequiresAction(false);
+        setError("");
+      }
+      return outcome;
+    };
+
+    if (uploadStore && !embedded) {
+      if (inFlight.current) return;
+      if (access) uploadStore.observeAccount(access);
+      inFlight.current = true;
+      setBusy("Preparing private upload…");
+      setError("");
+      try {
+        await uploadStore.run(uploadMeta, selected, send);
+      } catch (error) {
+        if (active.current) {
+          setError(
+            error instanceof UploadInProgressError
+              ? "Another recording is still uploading. Check its upload status before continuing."
+              : message(error),
+          );
+        }
+      } finally {
+        inFlight.current = false;
+        if (active.current) setBusy("");
+      }
+      return;
+    }
+
+    await operation("Preparing private upload…", async (signal) => {
+      await send(signal);
     });
   }
 
@@ -1098,7 +1329,7 @@ export function AcquisitionStudio({
     preserveSavedSubmission?: boolean;
     preserveQueuedFiles?: boolean;
   }) {
-    if (inFlight.current) return;
+    if (inFlight.current || uploadUnresolved) return;
     const queuedForNext = options?.preserveQueuedFiles
       ? stagedFiles.filter((candidate) => candidate !== file)
       : [];
@@ -1119,7 +1350,7 @@ export function AcquisitionStudio({
     setCheckingStatus(false);
     setPlan(null);
     setResult(null);
-    setConsent(false);
+    clearConsent();
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
     setSavedCallNeedsSession(false);
@@ -1148,7 +1379,9 @@ export function AcquisitionStudio({
   }
 
   function startAnotherCall() {
-    if (inFlight.current) return;
+    if (inFlight.current || uploadUnresolved) return;
+    if (uploadSnapshot.phase === "saved")
+      uploadStore?.settle(uploadSnapshot.intentId);
     reset({ preserveSavedSubmission: true, preserveQueuedFiles: true });
     setNewCallRequested(true);
     // Re-read entry/session without racing an older saved-call lookup.
@@ -1293,7 +1526,14 @@ export function AcquisitionStudio({
     progress: review.frame?.progress ?? progress,
     result: review.frame ? null : result,
     plan: review.frame ? null : plan,
-    busy: review.frame ? "" : busy,
+    busy:
+      review.frame
+        ? ""
+        : uploadMatchesCurrentView && uploadSnapshot.phase === "preparing"
+          ? "Preparing private upload…"
+          : uploadMatchesCurrentView && uploadSnapshot.phase === "uploading"
+            ? "Uploading privately…"
+            : busy,
     error: review.frame
       ? pausedFailureMessage(review.frame.progress.failure_code)
       : localObservation?.phase === "upload.validation.error"
@@ -1707,7 +1947,7 @@ export function AcquisitionStudio({
           )}
           {savedCallRecovery}
           <div
-            className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
+            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
             <div className={styles.primaryColumn}>
               <section
@@ -2201,7 +2441,13 @@ export function AcquisitionStudio({
                               ? "observed-consent-note"
                               : undefined
                           }
-                          onChange={(event) => setConsent(event.target.checked)}
+                          onChange={(event) => {
+                            const accepted = event.target.checked;
+                            setConsent(accepted);
+                            setConsentedPolicySha(
+                              accepted ? (policy?.policy_sha256 ?? null) : null,
+                            );
+                          }}
                         />
                         <span>
                           I agree to the{" "}
@@ -2257,7 +2503,7 @@ export function AcquisitionStudio({
                           className="primary-button studio-wide"
                           disabled={
                             analysisWriteBlocked ||
-                            !consent ||
+                            !consentCurrent ||
                             (!(
                               access?.authenticated === false &&
                               access.requestAnalysisAccess
@@ -2468,17 +2714,20 @@ export function AcquisitionStudio({
                   </div>
                 )}
               </section>
-              {!submission && !report && !deletionOnlyId && (
+              {embedded && !submission && !report && !deletionOnlyId && (
                 <AcquisitionLowerPanels compact={displayFileSelected} />
               )}
             </div>
-            {!report && !deletionOnlyId && !submission && (
-              <AcquisitionGuideRail
-                stage={displayFileSelected ? "selected" : "empty"}
-                stagedFiles={stagedFiles}
-                maximumFileBytes={policy?.maximum_file_bytes}
-              />
-            )}
+            {(embedded || stagedFiles.length >= 2) &&
+              !report &&
+              !deletionOnlyId &&
+              !submission && (
+                <AcquisitionGuideRail
+                  stage={displayFileSelected ? "selected" : "empty"}
+                  stagedFiles={stagedFiles}
+                  maximumFileBytes={policy?.maximum_file_bytes}
+                />
+              )}
           </div>
           {visibleError && !savedCallNeedsSession && (
             <div className={`notice error ${styles.error}`} role="alert">

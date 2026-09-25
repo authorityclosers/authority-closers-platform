@@ -481,3 +481,23 @@ export function rememberSubmission(id: string | null) {
     /* A blocked local store never prevents a private upload. */
   }
 }
+// An upload whose server outcome is not confirmed yet. It is kept apart from
+// the saved-call selector above, so an interrupted upload is reconciled with
+// one read instead of being shown as a saved call.
+const PENDING_UPLOAD = "ac.xray.pending-upload.v1";
+export function pendingUploadId(): string | null {
+  try {
+    const id = localStorage.getItem(PENDING_UPLOAD);
+    return id && UUID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+export function rememberPendingUpload(id: string | null) {
+  try {
+    if (id && UUID.test(id)) localStorage.setItem(PENDING_UPLOAD, id);
+    else localStorage.removeItem(PENDING_UPLOAD);
+  } catch {
+    /* A blocked local store never prevents a private upload. */
+  }
+}

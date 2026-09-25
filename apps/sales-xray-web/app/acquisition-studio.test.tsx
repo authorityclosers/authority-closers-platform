@@ -13,6 +13,8 @@ import {
   AcquisitionStudio,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
+import { UploadSessionProvider } from "./hooks/upload-session";
+import { UploadIndicator } from "./shell/upload-indicator";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import {
   allowance,
@@ -63,6 +65,12 @@ let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
 let savedLookupDelayed: boolean;
+let sourcePutAttempted: boolean;
+let resolveDeferredSourcePut: ((value: Response) => void) | null;
+let deferSourcePut: boolean;
+let sourcePutLosesResponse: boolean;
+let sourceUploadIntent: boolean;
+let generatedId: string;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -102,6 +110,37 @@ async function mount() {
   await act(async () => root.render(page));
   await flush();
 }
+async function mountWithUploadSession() {
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () =>
+    root.render(
+      <UploadSessionProvider>
+        <UploadIndicator />
+        {page}
+      </UploadSessionProvider>,
+    ),
+  );
+  await flush();
+}
+async function navigateToSavedCallWithUploadSession(callId: string) {
+  const page = await Page({
+    searchParams: Promise.resolve({ call: callId }),
+  });
+  await act(async () =>
+    root.render(
+      <UploadSessionProvider>
+        <UploadIndicator />
+        {page}
+      </UploadSessionProvider>,
+    ),
+  );
+  await flush();
+}
 async function navigateToCall(callId: string) {
   window.history.replaceState(null, "", `/?call=${callId}`);
   const page = await Page({
@@ -111,6 +150,7 @@ async function navigateToCall(callId: string) {
   await flush();
 }
 async function select() {
+  sourcePutAttempted = false;
   const input =
     container.querySelector<HTMLInputElement>('input[type="file"]')!;
   const file = new File(["synthetic"], "Sales call.wav", { type: "audio/wav" });
@@ -124,6 +164,7 @@ async function select() {
   await flush();
 }
 async function consent() {
+  sourceUploadIntent = true;
   await act(async () =>
     container
       .querySelector<HTMLInputElement>('input[type="checkbox"]')!
@@ -158,6 +199,12 @@ beforeEach(() => {
   quoteFailure = null;
   analysisPaused = false;
   savedLookupDelayed = false;
+  sourcePutAttempted = false;
+  resolveDeferredSourcePut = null;
+  deferSourcePut = false;
+  sourcePutLosesResponse = false;
+  sourceUploadIntent = false;
+  generatedId = submissionId;
   localStorage.clear();
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
@@ -166,7 +213,7 @@ beforeEach(() => {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:synthetic-only");
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   vi.stubGlobal("crypto", {
-    randomUUID: () => submissionId,
+    randomUUID: () => generatedId,
     subtle: { digest: async () => new Uint8Array(32).buffer },
   });
   vi.stubGlobal(
@@ -213,21 +260,33 @@ beforeEach(() => {
             })
           : response({}, 401);
       }
-      if (path.endsWith("/source") && init.method === "PUT")
-        return failedUpload
-          ? response({}, 503)
-          : response(
-              {
-                ...progress,
-                duration_ms: 5000,
-                allowance: {
-                  ...allowance,
-                  committed_seconds: 5,
-                  available_seconds: 5995,
-                },
-              },
-              202,
-            );
+      if (path.endsWith("/source") && init.method === "PUT") {
+        sourcePutAttempted = true;
+        if (deferSourcePut)
+          return new Promise<Response>((resolve) => {
+            resolveDeferredSourcePut = resolve;
+          });
+        if (sourcePutLosesResponse) {
+          sourcePutLosesResponse = false;
+          return Promise.reject(new TypeError("Failed to fetch"));
+        }
+        if (failedUpload) return response({}, 503);
+        return response(
+          {
+            ...progress,
+            submission_id: generatedId,
+            recording_id: recordingId,
+            source_sha256: "0".repeat(64),
+            duration_ms: 5000,
+            allowance: {
+              ...allowance,
+              committed_seconds: 5,
+              available_seconds: 5995,
+            },
+          },
+          202,
+        );
+      }
       if (path.endsWith("/plan/quote"))
         return quoteFailure
           ? response(quoteFailure.body, quoteFailure.status)
@@ -270,6 +329,13 @@ beforeEach(() => {
         claimed = false;
         return response({ state: "claimed", allowance });
       }
+      if (
+        sourceUploadIntent &&
+        !sourcePutAttempted &&
+        /\/submissions\/[0-9a-f-]{36}$/.test(String(path)) &&
+        init.method !== "DELETE"
+      )
+        return response({}, 404);
       if (
         path.endsWith(`/submissions/${submissionId}`) &&
         init.method !== "DELETE" &&
@@ -389,6 +455,137 @@ it("opens account access on guest file selection and keeps Analyze gated without
       ({ path, init }) => path.endsWith("/session") && init.method === "POST",
     ),
   ).toBe(false);
+});
+
+it("keeps a fresh standalone call focused on upload without empty dashboards or sample rails", async () => {
+  await mount();
+  expect(container.textContent).toContain("Add a call to review");
+  expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
+  for (const text of [
+    "No saved calls yet",
+    "No recent activity",
+    "Sample insight",
+    "Upload your first call",
+    "Invite your team",
+  ]) {
+    expect(container.textContent).not.toContain(text);
+  }
+  expect(
+    container.querySelector('[aria-label="Getting started and help"]'),
+  ).toBeNull();
+
+  await select();
+  expect(container.textContent).toContain("Sales call.wav");
+  expect(
+    container.querySelector('[aria-label="Getting started and help"]'),
+  ).toBeNull();
+  expect(button("Analyse my call").disabled).toBe(true);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+});
+
+it("keeps one source upload alive across client navigation and shows the confirmed result", async () => {
+  deferSourcePut = true;
+  await mountWithUploadSession();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await flush();
+
+  expect(
+    calls.filter(({ path, init }) =>
+      path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
+  expect(resolveDeferredSourcePut).toBeTypeOf("function");
+
+  await navigateToSavedCallWithUploadSession(secondSubmissionId);
+  expect(container.querySelector('[data-upload-indicator="uploading"]'))
+    .not.toBeNull();
+  expect(container.textContent).toContain("Uploading privately");
+  expect(container.querySelector('[aria-label="Sales call report"]'))
+    .not.toBeNull();
+  expect(container.textContent).toContain(secondReportSummary);
+  expect(
+    container.querySelector('[aria-label="Dismiss upload status"]'),
+  ).toBeNull();
+
+  resolveDeferredSourcePut?.(
+    response(
+      {
+        ...progress,
+        duration_ms: 5000,
+        allowance: {
+          ...allowance,
+          committed_seconds: 5,
+          available_seconds: 5995,
+        },
+      },
+      202,
+    ),
+  );
+  await flush();
+
+  expect(container.querySelector('[data-upload-indicator="saved"]'))
+    .not.toBeNull();
+  expect(container.textContent).toContain("Upload saved");
+  expect(
+    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+  ).not.toBeNull();
+  expect(container.textContent).toContain(secondReportSummary);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(
+    container.querySelector('[aria-label="Dismiss upload status"]'),
+  ).not.toBeNull();
+  expect(
+    calls.filter(({ path, init }) =>
+      path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
+});
+
+it("reconciles the locally hashed source after a lost PUT response without a second PUT", async () => {
+  sourcePutLosesResponse = true;
+  await mountWithUploadSession();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await flush();
+
+  expect(
+    calls.filter(({ path, init }) =>
+      path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
+  const sourcePutIndex = calls.findIndex(
+    ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+  );
+  const sourceReadIndices = calls.flatMap(({ path, init }, index) =>
+    path.endsWith(`/submissions/${submissionId}`) && init.method !== "DELETE"
+      ? [index]
+      : [],
+  );
+  expect(sourceReadIndices.some((index) => index < sourcePutIndex)).toBe(true);
+  expect(
+    sourceReadIndices.some(
+      (index) =>
+        index > sourcePutIndex && !calls[index]?.init.signal?.aborted,
+    ),
+  ).toBe(true);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+
+  await navigateToSavedCallWithUploadSession(secondSubmissionId);
+  expect(container.querySelector('[data-upload-indicator="saved"]'))
+    .not.toBeNull();
+  expect(
+    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+  ).not.toBeNull();
+  expect(
+    calls.filter(({ path, init }) =>
+      path.endsWith("/source") && init.method === "PUT",
+    ),
+  ).toHaveLength(1);
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
@@ -853,6 +1050,9 @@ it("keeps the next staged file ready after starting another call", async () => {
   );
   await flush();
   expect(container.textContent).toContain("2 files added");
+  expect(
+    container.querySelector('[aria-label="Added files and next steps"]'),
+  ).not.toBeNull();
   expect(container.textContent).toContain(
     "Discovery.wav selected for analysis",
   );
@@ -861,6 +1061,9 @@ it("keeps the next staged file ready after starting another call", async () => {
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
   await click("Analyse another call");
   expect(container.textContent).toContain("1 file added");
+  expect(
+    container.querySelector('[aria-label="Added files and next steps"]'),
+  ).toBeNull();
   expect(container.textContent).toContain(
     "Follow-up.m4a selected for analysis",
   );
@@ -945,6 +1148,7 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
   expect(
     container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
   ).toBe(false);
+  generatedId = secondSubmissionId;
   await select();
   await consent();
   await click("Complete upload check");
@@ -957,7 +1161,7 @@ it("lets a guest start a new upload without clearing a stale opaque selector", a
   ).toHaveLength(1);
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
   expect(calls.some(({ init }) => init.method === "DELETE")).toBe(false);
-  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(secondSubmissionId);
 });
 
 it.each([
