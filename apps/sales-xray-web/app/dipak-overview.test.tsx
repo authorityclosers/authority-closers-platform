@@ -10,6 +10,7 @@ import type {
   Finding,
   GuestReportPreview,
   SalesReport,
+  Transcript,
 } from "./report-contract";
 
 (
@@ -18,6 +19,7 @@ import type {
 let root: Root;
 let container: HTMLDivElement;
 const select = vi.fn();
+const selectContext = vi.fn();
 function finding(title: string, start: number): Finding {
   return {
     title,
@@ -66,6 +68,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   select.mockClear();
+  selectContext.mockClear();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -290,6 +293,170 @@ it("plays only the exact supported strength from the compact Keep card", async (
   expect(
     container.querySelector('[data-overview-card="1"]')?.textContent,
   ).not.toContain("Listen");
+});
+
+it("keeps saved rewatch evidence exact and offers explicitly labelled adjacent transcript context", async () => {
+  const value = report();
+  const evidence = value.improvements[0].evidence[0];
+  const transcript: Transcript = {
+    source_sha256: value.source_sha256,
+    revision: value.transcript_revision,
+    timebase_id: "decoded-audio-ms-v1",
+    duration_ms: 10_000,
+    segments: [
+      {
+        id: "s3000",
+        speaker_id: "speaker-2",
+        start_ms: 3_000,
+        end_ms: 3_900,
+        text: "कल timing discuss करूया.",
+      },
+      {
+        id: evidence.segment_id,
+        speaker_id: "speaker-1",
+        start_ms: evidence.start_ms,
+        end_ms: evidence.end_ms,
+        text: evidence.quote,
+      },
+      {
+        id: "s5000",
+        speaker_id: "speaker-2",
+        start_ms: 5_000,
+        end_ms: 5_900,
+        text: "हो, मी confirm करतो.",
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        transcript={transcript}
+        onSelectEvidence={select}
+        onSelectContextualPlayback={selectContext}
+      />,
+    ),
+  );
+
+  expect(container.textContent).toContain("Context before · Speaker 1");
+  expect(container.textContent).toContain("Saved evidence · Speaker 2");
+  expect(container.textContent).toContain("Context after · Speaker 1");
+  expect(container.textContent).toContain(evidence.quote);
+  expect(container.textContent).toContain("कल timing discuss करूया.");
+  expect(container.textContent).toContain("हो, मी confirm करतो.");
+  const sourceQuoteSpans = [
+    ...container.querySelectorAll<HTMLElement>(
+      '[aria-label^="Transcript context"] span',
+    ),
+  ];
+  expect(sourceQuoteSpans).toHaveLength(3);
+  expect(sourceQuoteSpans[0].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[0].getAttribute("data-script")).toBe("deva");
+  expect(sourceQuoteSpans[1].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[1].getAttribute("data-script")).toBe("deva");
+  expect(sourceQuoteSpans[2].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[2].getAttribute("data-script")).toBe("deva");
+
+  const savedClip = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Practise this"))!;
+  await act(async () => savedClip.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    evidence,
+    value.improvements[0].title,
+  );
+
+  const contextualClip = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label^="Play with context,"]',
+    ),
+  ][0];
+  expect(contextualClip?.getAttribute("aria-label")).toContain(
+    "00:03.000 to 00:05.900",
+  );
+  await act(async () => contextualClip?.click());
+  expect(selectContext).toHaveBeenCalledOnce();
+  const [selection, title] = selectContext.mock.calls[0];
+  expect(title).toBe(value.improvements[0].title);
+  expect(selection.evidence).toEqual(evidence);
+  expect(selection.playback_range).toEqual({
+    start_ms: 3_000,
+    end_ms: 5_900,
+  });
+  expect(selection.evidence.start_ms).toBe(evidence.start_ms);
+  expect(selection.evidence.end_ms).toBe(evidence.end_ms);
+});
+
+it("includes the reply after a saved reaction while preserving the exact citation", async () => {
+  const value = report();
+  const evidence = {
+    segment_id: "reaction-evidence",
+    start_ms: 2_000,
+    end_ms: 2_800,
+    quote: "That sounds good.",
+  };
+  value.improvements[0].evidence = [evidence];
+  const transcript: Transcript = {
+    source_sha256: value.source_sha256,
+    revision: value.transcript_revision,
+    timebase_id: "decoded-audio-ms-v1",
+    duration_ms: 5_000,
+    segments: [
+      {
+        id: "reaction-question",
+        speaker_id: "speaker_0",
+        start_ms: 1_000,
+        end_ms: 1_900,
+        text: "Would you like a short outline?",
+      },
+      {
+        id: evidence.segment_id,
+        speaker_id: "speaker_1",
+        start_ms: evidence.start_ms,
+        end_ms: evidence.end_ms,
+        text: evidence.quote,
+      },
+      {
+        id: "reaction-reply",
+        speaker_id: "speaker_0",
+        start_ms: 2_900,
+        end_ms: 4_100,
+        text: "Please email the details tomorrow.",
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        transcript={transcript}
+        onSelectEvidence={select}
+        onSelectContextualPlayback={selectContext}
+      />,
+    ),
+  );
+
+  const savedClip = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Practise this"))!;
+  await act(async () => savedClip.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    evidence,
+    value.improvements[0].title,
+  );
+
+  const contextualClip = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Play with context,"]',
+  )!;
+  await act(async () => contextualClip.click());
+  expect(selectContext).toHaveBeenCalledOnce();
+  const [selection] = selectContext.mock.calls[0];
+  expect(selection.context_after?.text).toBe(
+    "Please email the details tomorrow.",
+  );
+  expect(selection.playback_range).toEqual({ start_ms: 1_000, end_ms: 4_100 });
+  expect(selection.evidence).toEqual(evidence);
+  expect(selection.evidence.end_ms).toBe(2_800);
 });
 
 it("links improvement tabs and supports arrow-key navigation without modifying evidence", async () => {

@@ -6,6 +6,7 @@ import {
   parseProcessingPlan,
   type CallStudioProps,
 } from "./call-studio";
+import * as sourcePlaybackContext from "./source-playback-context";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -590,7 +591,7 @@ describe("CallStudio", () => {
       writable: true,
       value: 0,
     });
-    vi.spyOn(audio, "play").mockResolvedValue();
+    const play = vi.spyOn(audio, "play").mockResolvedValue();
     await act(async () => getButton("00:01").click());
     expect(audio.currentTime).toBe(1.5);
     await act(async () => audio.dispatchEvent(new Event("seeking")));
@@ -609,6 +610,37 @@ describe("CallStudio", () => {
     await act(async () => audio.dispatchEvent(new Event("timeupdate")));
     expect(audio.currentTime).toBe(3.1);
     expect(moment?.getAttribute("aria-pressed")).toBe("false");
+    expect(pause).toHaveBeenCalledOnce();
+
+    const savedRewatchEvidence = report.improvements[0].evidence[0];
+    const playWithContext = getButton("Play with context");
+    pause.mockClear();
+    const previousPlayCalls = play.mock.calls.length;
+    await act(async () => playWithContext.click());
+    expect(audio.currentTime).toBe(1);
+    expect(play).toHaveBeenCalledTimes(previousPlayCalls + 1);
+    expect(savedRewatchEvidence).toEqual({
+      segment_id: "s2",
+      start_ms: 2500,
+      end_ms: 3200,
+      quote: "What would make this useful?",
+    });
+    const revalidate = vi
+      .spyOn(sourcePlaybackContext, "revalidateContextualSourcePlayback")
+      .mockReturnValue(null);
+    await act(async () => playWithContext.click());
+    revalidate.mockRestore();
+    expect(audio.currentTime).toBe(1);
+    expect(play).toHaveBeenCalledTimes(previousPlayCalls + 1);
+    audio.currentTime = 3.2;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.2);
+    expect(pause).toHaveBeenCalledOnce();
+
+    audio.currentTime = 3.4;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.4);
     expect(pause).toHaveBeenCalledOnce();
   });
 

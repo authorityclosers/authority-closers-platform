@@ -853,6 +853,12 @@
   gap: var(--lx-space-2);
 }
 
+.rewatchItem {
+  display: grid;
+  min-width: 0;
+  gap: var(--lx-space-2);
+}
+
 .rewatch button {
   position: relative;
   display: grid;
@@ -918,6 +924,57 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.contextPanel {
+  display: grid;
+  min-width: 0;
+  gap: var(--lx-space-2);
+  margin-left: 48px;
+  padding: var(--lx-space-3);
+  border-left: 2px solid var(--lx-line-strong);
+  background: var(--lx-paper-2);
+  color: var(--lx-ink-2);
+}
+
+.contextPanel p,
+.contextPanel blockquote {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.contextPanel strong {
+  color: var(--lx-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.contextPanel > small {
+  color: var(--lx-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.rewatch .playWithContext {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: var(--lx-space-2) var(--lx-space-3);
+  border-color: var(--lx-line-strong);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: normal;
 }
 
 .skillLead {
@@ -1327,6 +1384,10 @@ span.evidenceWaveform {
 
   .clipTime {
     grid-column: 2;
+  }
+
+  .contextPanel {
+    margin-left: 0;
   }
 }
 

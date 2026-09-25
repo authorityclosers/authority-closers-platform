@@ -37,6 +37,10 @@ import {
   type Finding,
   type Job,
 } from "./report-contract";
+import {
+  revalidateContextualSourcePlayback,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
 
 type Quote = {
   id: string;
@@ -1182,7 +1186,10 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     : duration
       ? time(duration)
       : "Not available";
-  function seekToMoment(moment: EvidenceMoment) {
+  function seekToMoment(
+    moment: Pick<EvidenceMoment, "key" | "start_ms" | "end_ms">,
+    statusLabel = copy.playingMoment,
+  ) {
     setSelectedMomentKey(moment.key);
     const player = audio.current;
     if (!player || !player.isConnected) {
@@ -1202,7 +1209,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
       }
       void playback
         .then(() =>
-          setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
+          setMomentStatus(`${statusLabel} · ${time(moment.start_ms)}.`),
         )
         .catch(() => {
           momentEndMs.current = null;
@@ -1214,6 +1221,32 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
       programmaticSeekTargetMs.current = null;
       setMomentStatus(copy.playbackUnavailable);
     }
+  }
+  function playWithContext(selection: ContextualSourcePlayback, title: string) {
+    const report = job?.report;
+    const transcript = activeTranscript;
+    if (!report || !transcript) {
+      setMomentStatus(copy.playbackUnavailable);
+      return;
+    }
+    const verified = revalidateContextualSourcePlayback(
+      selection,
+      report,
+      transcript,
+    );
+    if (!verified) {
+      setMomentStatus(
+        "Transcript context no longer matches this saved report. Use its saved evidence instead.",
+      );
+      return;
+    }
+    seekToMoment(
+      {
+        key: `context:${verified.evidence.segment_id}:${verified.playback_range.start_ms}:${verified.playback_range.end_ms}`,
+        ...verified.playback_range,
+      },
+      `Playing with context · ${title}`,
+    );
   }
   function allowFullCallSeek(event: SyntheticEvent<HTMLAudioElement>) {
     const player = event.currentTarget;
@@ -1288,8 +1321,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
                       onClick={() =>
                         seekToMoment({
-                          ...e,
-                          findingTitle: finding.title,
+                          start_ms: e.start_ms,
+                          end_ms: e.end_ms,
                           key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
                         })
                       }
@@ -1903,13 +1936,15 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   content: (
                     <DipakOverview
                       report={job.report}
-                      onSelectEvidence={(item, title) =>
+                      transcript={activeTranscript ?? undefined}
+                      onSelectEvidence={(item) =>
                         seekToMoment({
-                          ...item,
-                          findingTitle: title,
+                          start_ms: item.start_ms,
+                          end_ms: item.end_ms,
                           key: `${item.segment_id}:${item.start_ms}:${item.end_ms}`,
                         })
                       }
+                      onSelectContextualPlayback={playWithContext}
                     />
                   ),
                 },
@@ -1995,11 +2030,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                                 language="en"
                                 onSelect={(segment) =>
                                   seekToMoment({
-                                    segment_id: segment.id,
-                                    quote: segment.text,
                                     start_ms: segment.start_ms,
                                     end_ms: segment.end_ms,
-                                    findingTitle: "Transcript",
                                     key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
                                   })
                                 }

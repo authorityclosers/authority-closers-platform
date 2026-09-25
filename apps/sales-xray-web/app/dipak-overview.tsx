@@ -22,6 +22,7 @@ import type {
   PreviewSection,
   ReportEvidence,
   SalesReport,
+  Transcript,
 } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
 import { SourceWaveform } from "./source-waveform";
@@ -35,11 +36,22 @@ import { useReportNavigation, useReportInline } from "./report-reading-context";
 import { Glyph } from "./lightbox/glyph";
 import { sourceTextAttributes } from "./lightbox/script";
 import { formatClock } from "./lightbox/time";
+import { formatTranscriptTime } from "./report-transcript";
+import {
+  buildContextualSourcePlayback,
+  formatContextSpeakerLabel,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
+  transcript?: Transcript;
+  onSelectContextualPlayback?: (
+    selection: ContextualSourcePlayback,
+    title: string,
+  ) => void;
   onUnlock?: () => void;
   durationMs?: number;
   showHeading?: boolean;
@@ -243,6 +255,8 @@ function BusinessImpact({ missing }: { missing: string }) {
 export function DipakOverview({
   report,
   onSelectEvidence,
+  transcript,
+  onSelectContextualPlayback,
   onUnlock,
   durationMs,
   showHeading = true,
@@ -1096,33 +1110,148 @@ export function DipakOverview({
                       {rewatch.length ? (
                         <div className={styles.rewatch}>
                           {rewatch.map(
-                            ({ finding, evidence: item, label, kind }) => (
-                              <button
-                                type="button"
-                                key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
-                                data-kind={kind}
-                                onClick={() =>
-                                  onSelectEvidence(item, finding.title)
-                                }
-                              >
-                                <span className={styles.visuallyHidden}>
-                                  Listen:{" "}
-                                </span>
-                                <span
-                                  className={styles.play}
-                                  aria-hidden="true"
+                            ({ finding, evidence: item, label, kind }) => {
+                              const contextualPlayback = transcript
+                                ? buildContextualSourcePlayback(
+                                    report,
+                                    transcript,
+                                    item,
+                                  )
+                                : null;
+                              const hasContext = Boolean(
+                                contextualPlayback?.context_before ||
+                                  contextualPlayback?.context_after,
+                              );
+                              return (
+                                <div
+                                  className={styles.rewatchItem}
+                                  key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
                                 >
-                                  <Play size={15} fill="currentColor" />
-                                </span>
-                                <span className={styles.clipCopy}>
-                                  <small>{label}</small>
-                                  <strong>{finding.title}</strong>
-                                </span>
-                                <span className={styles.clipTime}>
-                                  {formatClipTime(item)}
-                                </span>
-                              </button>
-                            ),
+                                  <button
+                                    type="button"
+                                    data-kind={kind}
+                                    onClick={() =>
+                                      onSelectEvidence(item, finding.title)
+                                    }
+                                  >
+                                    <span className={styles.visuallyHidden}>
+                                      Listen:{" "}
+                                    </span>
+                                    <span
+                                      className={styles.play}
+                                      aria-hidden="true"
+                                    >
+                                      <Play size={15} fill="currentColor" />
+                                    </span>
+                                    <span className={styles.clipCopy}>
+                                      <small>{label}</small>
+                                      <strong>{finding.title}</strong>
+                                    </span>
+                                    <span className={styles.clipTime}>
+                                      {formatClipTime(item)}
+                                    </span>
+                                  </button>
+                                  {hasContext &&
+                                    onSelectContextualPlayback &&
+                                    contextualPlayback &&
+                                    transcript && (
+                                      <div
+                                        className={styles.contextPanel}
+                                        aria-label={`Transcript context for ${finding.title}`}
+                                      >
+                                        {contextualPlayback.context_before && (
+                                          <p>
+                                            <strong>
+                                              Context before ·{" "}
+                                              {formatContextSpeakerLabel(
+                                                transcript,
+                                                contextualPlayback
+                                                  .context_before.speaker_id,
+                                              )}
+                                            </strong>
+                                            <span
+                                              {...sourceTextAttributes(
+                                                contextualPlayback
+                                                  .context_before.text,
+                                              )}
+                                            >
+                                              {
+                                                contextualPlayback
+                                                  .context_before.text
+                                              }
+                                            </span>
+                                          </p>
+                                        )}
+                                        <blockquote>
+                                          <strong>
+                                            Saved evidence ·{" "}
+                                            {formatContextSpeakerLabel(
+                                              transcript,
+                                              contextualPlayback.evidence_speaker_id,
+                                            )}
+                                          </strong>
+                                          <span
+                                            {...sourceTextAttributes(
+                                              item.quote,
+                                            )}
+                                          >
+                                            {item.quote}
+                                          </span>
+                                        </blockquote>
+                                        {contextualPlayback.context_after && (
+                                          <p>
+                                            <strong>
+                                              Context after ·{" "}
+                                              {formatContextSpeakerLabel(
+                                                transcript,
+                                                contextualPlayback.context_after
+                                                  .speaker_id,
+                                              )}
+                                            </strong>
+                                            <span
+                                              {...sourceTextAttributes(
+                                                contextualPlayback.context_after
+                                                  .text,
+                                              )}
+                                            >
+                                              {
+                                                contextualPlayback.context_after
+                                                  .text
+                                              }
+                                            </span>
+                                          </p>
+                                        )}
+                                        <small>
+                                          Adjacent transcript context is
+                                          separate from the saved evidence.
+                                        </small>
+                                        <button
+                                          className={styles.playWithContext}
+                                          type="button"
+                                          aria-label={`Play with context, ${formatTranscriptTime(contextualPlayback.playback_range.start_ms)} to ${formatTranscriptTime(contextualPlayback.playback_range.end_ms)}: ${finding.title}`}
+                                          onClick={() =>
+                                            onSelectContextualPlayback(
+                                              contextualPlayback,
+                                              finding.title,
+                                            )
+                                          }
+                                        >
+                                          Play with context ·{" "}
+                                          {formatTranscriptTime(
+                                            contextualPlayback.playback_range
+                                              .start_ms,
+                                          )}
+                                          –
+                                          {formatTranscriptTime(
+                                            contextualPlayback.playback_range
+                                              .end_ms,
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                </div>
+                              );
+                            },
                           )}
                         </div>
                       ) : (

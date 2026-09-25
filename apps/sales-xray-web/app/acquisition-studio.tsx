@@ -95,6 +95,11 @@ import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider } from "./source-waveform";
+import {
+  revalidateContextualSourcePlayback,
+  type ContextualSourcePlayback,
+  type SourcePlaybackRange,
+} from "./source-playback-context";
 import styles from "./acquisition-studio.module.css";
 
 type Result = {
@@ -278,7 +283,7 @@ export function AcquisitionStudio({
   const [pollAttempt, setPollAttempt] = useState(0);
   const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
   const [checkingStatus, setCheckingStatus] = useState(false);
-  const [moment, setMoment] = useState<ReportEvidence | null>(null);
+  const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);
@@ -1636,6 +1641,34 @@ export function AcquisitionStudio({
       .catch(() =>
         setPlaybackMessage(
           "Press play in the audio controls to hear this moment.",
+        ),
+      );
+  }
+
+  function seekWithContext(selection: ContextualSourcePlayback, title: string) {
+    if (!audio.current || !result) return;
+    const verified = revalidateContextualSourcePlayback(
+      selection,
+      result.report,
+      result.transcript,
+    );
+    if (!verified) {
+      setPlaybackMessage(
+        "This transcript context no longer matches the saved report. Use the saved evidence clip instead.",
+      );
+      return;
+    }
+    const { start_ms: startMs, end_ms: endMs } = verified.playback_range;
+    setMoment(verified.playback_range);
+    setPlaybackMessage(
+      `Playing with context · ${time(startMs)}–${time(endMs)} · ${title}`,
+    );
+    audio.current.currentTime = startMs / 1000;
+    void audio.current
+      .play()
+      .catch(() =>
+        setPlaybackMessage(
+          "Press play in the audio controls to hear this contextual clip.",
         ),
       );
   }
@@ -3076,6 +3109,8 @@ export function AcquisitionStudio({
                           showHeading={false}
                           report={report}
                           onSelectEvidence={seek}
+                          transcript={result.transcript}
+                          onSelectContextualPlayback={seekWithContext}
                           onUnlock={() => router.push("/login")}
                           durationMs={result.transcript.duration_ms}
                         />

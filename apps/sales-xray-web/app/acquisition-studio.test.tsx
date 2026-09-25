@@ -16,6 +16,7 @@ import {
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
+import * as sourcePlaybackContext from "./source-playback-context";
 import {
   allowance,
   entry,
@@ -2612,6 +2613,96 @@ it("stops an excerpt at its cited end and lets the dock resume the full call", a
   await act(async () => audio.dispatchEvent(new Event("timeupdate")));
   await flush();
   expect(paused).toBe(false);
+  expect(pause).toHaveBeenCalledOnce();
+
+  const contextual = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Play with context,"]',
+  );
+  expect(contextual?.getAttribute("aria-label")).toContain(
+    "00:01.000 to 00:03.300",
+  );
+  await act(async () => contextual?.click());
+  await flush();
+  expect(currentTime).toBe(1);
+  expect(paused).toBe(false);
+  expect(play).toHaveBeenCalledTimes(3);
+
+  currentTime = 3.3;
+  await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+  await flush();
+  expect(currentTime).toBe(3.3);
+  expect(paused).toBe(true);
+  expect(pause).toHaveBeenCalledTimes(2);
+
+  await act(async () => fullCallPlay.click());
+  await flush();
+  expect(play).toHaveBeenCalledTimes(4);
+  expect(paused).toBe(false);
+  currentTime = 4.2;
+  await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+  await flush();
+  expect(paused).toBe(false);
+  expect(pause).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the current evidence stop boundary when contextual playback revalidation fails", async () => {
+  existing = true;
+  claimed = true;
+  accepted = true;
+  window.history.replaceState(null, "", `/?call=${submissionId}`);
+  await mount();
+  const audio = container.querySelector<HTMLAudioElement>(
+    '[aria-label="Call audio player"] audio',
+  )!;
+  let currentTime = 0;
+  let paused = true;
+  Object.defineProperty(audio, "paused", {
+    configurable: true,
+    get: () => paused,
+  });
+  Object.defineProperty(audio, "currentTime", {
+    configurable: true,
+    get: () => currentTime,
+    set: (value: number) => {
+      currentTime = value;
+    },
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => {
+    paused = false;
+  });
+  const pause = vi
+    .spyOn(HTMLMediaElement.prototype, "pause")
+    .mockImplementation(() => {
+      paused = true;
+    });
+  const exactEvidence = envelope.report.content.improvements[0].evidence[0];
+  const exactButton = container.querySelector<HTMLButtonElement>(
+    `[aria-label="Play source moment, ${exactEvidence.start_ms} to ${exactEvidence.end_ms}"]`,
+  );
+  expect(exactButton).not.toBeNull();
+  await act(async () => exactButton?.click());
+  expect(currentTime).toBe(exactEvidence.start_ms / 1000);
+  expect(paused).toBe(false);
+
+  const contextualButton = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Play with context,"]',
+  );
+  expect(contextualButton).not.toBeNull();
+  const revalidate = vi
+    .spyOn(sourcePlaybackContext, "revalidateContextualSourcePlayback")
+    .mockReturnValue(null);
+  await act(async () => contextualButton?.click());
+  revalidate.mockRestore();
+  expect(container.textContent).toContain(
+    "This transcript context no longer matches the saved report",
+  );
+  expect(currentTime).toBe(exactEvidence.start_ms / 1000);
+  expect(paused).toBe(false);
+
+  currentTime = exactEvidence.end_ms / 1000;
+  await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+  await flush();
+  expect(paused).toBe(true);
   expect(pause).toHaveBeenCalledOnce();
 });
 
