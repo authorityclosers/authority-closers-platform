@@ -195,7 +195,7 @@ export function ReportModes({
   }
 
   function navigateToReport(section: string, reviewPoint?: string) {
-    navigate(section, "reading");
+    navigate(section);
     requestAnimationFrame(() => {
       const target = reviewPoint
         ? Array.from(
@@ -320,6 +320,7 @@ export function ReportModes({
 
         <ReportReadingProvider
           reading={view === "reading"}
+          inline
           navigate={navigateToReport}
         >
           <div className={styles.sections}>

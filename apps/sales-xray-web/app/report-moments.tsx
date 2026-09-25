@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
-import { useReportReading } from "./report-reading-context";
+import {
+  useReportInline,
+  useReportNavigation,
+  useReportReading,
+} from "./report-reading-context";
 import styles from "./report-moments.module.css";
 
 const PAGE_SIZE = 4;
@@ -205,6 +209,8 @@ function MomentsBrowser({
   transcriptSlot,
 }: ReportMomentsProps) {
   const reading = useReportReading();
+  const inline = useReportInline();
+  const navigateToReport = useReportNavigation();
   const id = useId();
   const moments = suppliedMoments(report);
   const [filter, setFilter] = useState<SourceKind | "all">("all");
@@ -225,7 +231,9 @@ function MomentsBrowser({
   const page = Math.floor(index / PAGE_SIZE);
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
   const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const hasTranscript = transcriptSlot !== undefined && transcriptSlot !== null;
+  const hasTranscript =
+    Boolean(navigateToReport) ||
+    (transcriptSlot !== undefined && transcriptSlot !== null);
 
   function select(next: number) {
     const target = filtered[next];
@@ -273,6 +281,7 @@ function MomentsBrowser({
       aria-label="Source moments"
       data-report-moments
       data-reading={reading || undefined}
+      data-inline={inline || undefined}
     >
       <div className={styles.screen}>
         <header className={styles.toolbar}>
@@ -305,7 +314,10 @@ function MomentsBrowser({
             <button
               type="button"
               className={styles.transcriptButton}
-              onClick={() => setTranscriptOpen(true)}
+              onClick={() => {
+                if (navigateToReport) navigateToReport("transcript");
+                else setTranscriptOpen(true);
+              }}
               aria-label="Search full transcript"
             >
               <Search size={17} aria-hidden="true" /> Transcript
@@ -411,13 +423,15 @@ function MomentsBrowser({
                   <Play size={17} fill="currentColor" aria-hidden="true" />{" "}
                   Listen
                 </button>
-                <button
-                  type="button"
-                  className={styles.review}
-                  onClick={() => setReviewOpen(true)}
-                >
-                  <Maximize2 size={17} aria-hidden="true" /> Open review
-                </button>
+                {!inline && (
+                  <button
+                    type="button"
+                    className={styles.review}
+                    onClick={() => setReviewOpen(true)}
+                  >
+                    <Maximize2 size={17} aria-hidden="true" /> Open review
+                  </button>
+                )}
               </div>
             </article>
           </div>
@@ -437,7 +451,7 @@ function MomentsBrowser({
         )}
       </div>
 
-      {moment && (
+      {moment && !inline && (
         <MomentsSheet
           open={reviewOpen}
           contentKey={moment.id}
@@ -466,7 +480,7 @@ function MomentsBrowser({
           </div>
         </MomentsSheet>
       )}
-      {hasTranscript && (
+      {hasTranscript && !navigateToReport && (
         <MomentsSheet
           open={transcriptOpen}
           title="Full transcript"

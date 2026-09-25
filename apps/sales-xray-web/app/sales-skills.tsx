@@ -21,7 +21,7 @@ import type { ReportDimension, ReportEvidence } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
 import { getReportUiCopy } from "./report-ui-copy";
 import { ReviewDialog } from "./review-dialog";
-import { useReportReading } from "./report-reading-context";
+import { useReportInline } from "./report-reading-context";
 import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
@@ -46,7 +46,7 @@ export function SalesSkills({
   dimensions: SkillDimension[];
   onSelectEvidence?: (evidence: ReportEvidence) => void;
 }) {
-  const reading = useReportReading();
+  const reading = useReportInline();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [previousReading, setPreviousReading] = useState(reading);

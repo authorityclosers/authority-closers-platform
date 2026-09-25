@@ -32,7 +32,19 @@ function block(css: string, selector: string): string {
 function tokens(body: string): Tokens {
   const found: Tokens = new Map();
   for (const match of body.matchAll(/--lx-([a-z0-9-]+):\s*([^;]+);/g))
-    found.set(match[1], match[2].trim().replace(/\s+/g, " ").toLowerCase());
+    found.set(
+      match[1],
+      match[2]
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase()
+        // Prettier adds leading zeroes to decimals in alpha, easing and shadow
+        // values. Preserve the numeric value while ignoring that formatting.
+        .replace(
+          /(^|[\s,(])(-?)\.(\d+)/g,
+          (_, prefix, sign, digits) => `${prefix}${sign}0.${digits}`,
+        ),
+    );
   return found;
 }
 

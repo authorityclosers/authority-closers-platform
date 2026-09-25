@@ -3,7 +3,7 @@
 import { ArrowRight, CircleHelp, LockKeyhole, Play, Quote } from "lucide-react";
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
-import { useReportReading } from "./report-reading-context";
+import { useReportInline } from "./report-reading-context";
 import styles from "./prospect-snapshot.module.css";
 
 export type ProspectSnapshotProps = {
@@ -45,7 +45,7 @@ export function ProspectSnapshot({
   onSelectEvidence,
   onUnlock,
 }: ProspectSnapshotProps) {
-  const reading = useReportReading();
+  const reading = useReportInline();
   const interpretations = report.overview?.prospect_interpretations ?? [];
   const preview = report.preview?.sections.prospect_interpretations;
   const hiddenCount = preview?.hidden_count ?? 0;

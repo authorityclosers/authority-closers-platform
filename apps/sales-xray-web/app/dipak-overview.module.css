@@ -1338,17 +1338,11 @@
   border-top: 1px solid var(--line);
 }
 
-.overview :global(.studio-finding-evidence) > summary {
-  min-height: 40px;
+.overview :global(.studio-finding-evidence-heading) {
   padding: 7px 0;
-  color: var(--indigo);
+  color: var(--ink);
   font-size: 14px;
   font-weight: 700;
-  cursor: pointer;
-}
-
-.overview :global(.studio-finding-evidence) > summary::marker {
-  color: var(--indigo);
 }
 
 .overview :global(.studio-finding-evidence) blockquote {

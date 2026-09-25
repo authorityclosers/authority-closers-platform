@@ -28,10 +28,7 @@ import { SourceWaveform } from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
 import { OverviewDashboard } from "./overview-dashboard";
 import { countReportMoments } from "./report-moments";
-import {
-  useReportNavigation,
-  useReportReading,
-} from "./report-reading-context";
+import { useReportNavigation, useReportInline } from "./report-reading-context";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
@@ -82,7 +79,7 @@ function ReviewBlock({
   expanded?: boolean;
 }) {
   const focused = useContext(FocusedReview);
-  const reading = useReportReading();
+  const reading = useReportInline();
   const header = (
     <>
       <span className={styles.number}>{number}</span>
@@ -143,7 +140,7 @@ function ImprovementDetailTabs({
   evidence: ReactNode;
   impact: ReactNode;
 }) {
-  const reading = useReportReading();
+  const reading = useReportInline();
   const prefix = useId();
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const [tab, setTab] = useState<"happened" | "matters" | "try">("happened");
@@ -245,7 +242,7 @@ export function DipakOverview({
   durationMs,
   showHeading = true,
 }: Props) {
-  const reading = useReportReading();
+  const reading = useReportInline();
   const navigateToReport = useReportNavigation();
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {

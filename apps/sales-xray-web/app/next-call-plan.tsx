@@ -12,7 +12,7 @@ import {
 import type { ReportEvidence, SalesReport } from "./report-contract";
 import { formatTranscriptTime } from "./report-transcript";
 import { ReviewDialog } from "./review-dialog";
-import { useReportReading } from "./report-reading-context";
+import { useReportInline } from "./report-reading-context";
 import styles from "./next-call-plan.module.css";
 
 export function NextCallPlan({
@@ -24,7 +24,7 @@ export function NextCallPlan({
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
 }) {
-  const reading = useReportReading();
+  const reading = useReportInline();
   const prefix = useId();
   const [active, setActive] = useState(0);
   const [opened, setOpened] = useState<number | null>(null);

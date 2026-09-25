@@ -729,7 +729,11 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")
                         is None
                     )
-                    await library_page.get_by_role("link", name="Saved calls", exact=True).click()
+                    await (
+                        library_page.get_by_role("navigation", name="Workspace", exact=True)
+                        .get_by_role("link", name="Calls", exact=True)
+                        .click()
+                    )
                     await expect(
                         library_page.get_by_role("heading", name="Saved calls", exact=True)
                     ).to_be_visible()

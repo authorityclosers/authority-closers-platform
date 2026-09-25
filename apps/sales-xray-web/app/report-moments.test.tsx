@@ -16,6 +16,7 @@ import {
 import { countReportMoments, ReportMoments } from "./report-moments";
 import { ReportTranscript } from "./report-transcript";
 import { ReportReadingProvider } from "./report-reading-context";
+import { ReportModes } from "./report-modes";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -121,9 +122,82 @@ async function filter(kind: string) {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+});
+
+it("keeps filters, full quotes and playback in the Moments tab and routes transcript search inline", async () => {
+  const onSelect = vi.fn();
+  const report = {
+    ...manyMoments(),
+    improvements: [
+      {
+        title: "A complete improvement title",
+        explanation: "The complete explanation stays beside the source.",
+        evidence: [excerpt(12)],
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={[
+          {
+            id: "moments",
+            label: "Moments",
+            content: (
+              <ReportMoments report={report} onSelectEvidence={onSelect} />
+            ),
+          },
+          {
+            id: "transcript",
+            label: "Transcript",
+            content: (
+              <ReportTranscript transcript={transcript} onSelect={vi.fn()} />
+            ),
+          },
+        ]}
+      />,
+    ),
+  );
+  await click("Tabbed view", container);
+  expect(
+    container
+      .querySelector("[data-report-moments]")
+      ?.getAttribute("data-reading"),
+  ).toBeNull();
+  expect(
+    screen().querySelector('select[aria-label="Moment source"]'),
+  ).not.toBeNull();
+  expect(container.querySelector("dialog")).toBeNull();
+  expect(screen().textContent).not.toContain("Open review");
+  await filter("improvements");
+  expect(focused().querySelector("blockquote p")?.textContent).toBe(
+    excerpt(12).quote,
+  );
+  expect(focused().textContent).toContain(report.improvements[0].explanation);
+  await click("Listen");
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(
+    report.improvements[0].evidence[0],
+    report.improvements[0].title,
+  );
+  await click("Search full transcript");
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("tabs");
+  const transcriptSection = container.querySelector(
+    '[data-report-mode-section="transcript"]',
+  )!;
+  expect(transcriptSection.hasAttribute("hidden")).toBe(false);
+  expect(
+    transcriptSection.querySelector<HTMLInputElement>('input[type="search"]'),
+  ).not.toBeNull();
+  expect(
+    transcriptSection.querySelector<HTMLDetailsElement>("details")?.open,
+  ).toBe(true);
+  expect(container.querySelector("dialog")).toBeNull();
 });
 
 it("renders every supplied source moment in reading mode", async () => {

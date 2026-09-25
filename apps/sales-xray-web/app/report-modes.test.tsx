@@ -152,9 +152,12 @@ it("keeps all six accessible tabs available without horizontal overflow", async 
     ].find((button) => button.textContent?.trim() === "Focus point 14")!;
     await act(async () => jump.click());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
-    expect(mode().dataset.view).toBe("reading");
+    expect(mode().dataset.view).toBe("tabs");
     expect(mode().dataset.reportSection).toBe("overview");
-    expect(sections().every((section) => !section.hidden)).toBe(true);
+    expect(sections().filter((section) => !section.hidden)).toHaveLength(1);
+    expect(
+      sections().find((section) => !section.hidden)?.dataset.reportModeSection,
+    ).toBe("overview");
     expect(container.querySelector('[data-review-point="14"]')).toBe(
       document.activeElement,
     );

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Transcript, TranscriptSegment } from "./report-contract";
 import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
-import { useReportReading } from "./report-reading-context";
+import { useReportInline, useReportReading } from "./report-reading-context";
 import styles from "./report-transcript.module.css";
 
 const PAGE_SIZE = 50;
@@ -39,6 +39,7 @@ export function ReportTranscript({
   language = "en",
 }: ReportTranscriptProps) {
   const reading = useReportReading();
+  const inline = useReportInline();
   const copy = getReportUiCopy(language);
   const [query, setQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState(ALL_SPEAKERS);
@@ -86,10 +87,10 @@ export function ReportTranscript({
   return (
     <details
       className={styles.root}
-      open={reading}
+      open={inline}
       data-reading={reading || undefined}
     >
-      <summary className={styles.summary} hidden={reading}>
+      <summary className={styles.summary} hidden={inline}>
         <span>{copy.transcriptTitle}</span>
         <span className={styles.summaryMeta}>
           {transcript.segments.length} {copy.segmentsLabel}

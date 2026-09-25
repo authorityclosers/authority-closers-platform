@@ -652,20 +652,19 @@ describe("CallStudio", () => {
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 
     const evidencePanels = [
-      ...container.querySelectorAll<HTMLDetailsElement>(
-        ".studio-finding-evidence",
-      ),
+      ...container.querySelectorAll<HTMLElement>(".studio-finding-evidence"),
     ];
     expect(evidencePanels.length).toBeGreaterThan(0);
-    expect(evidencePanels.every((panel) => !panel.open)).toBe(true);
-    evidencePanels[0].open = true;
+    expect(evidencePanels.every((panel) => panel.tagName !== "DETAILS")).toBe(
+      true,
+    );
+    const quotesBeforePrint = evidencePanels.map((panel) => panel.textContent);
     await act(async () => window.dispatchEvent(new Event("beforeprint")));
     await act(async () => window.dispatchEvent(new Event("beforeprint")));
-    expect(evidencePanels.every((panel) => panel.open)).toBe(true);
     await act(async () => window.dispatchEvent(new Event("afterprint")));
-    expect(evidencePanels.filter((panel) => panel.open)).toEqual([
-      evidencePanels[0],
-    ]);
+    expect(evidencePanels.map((panel) => panel.textContent)).toEqual(
+      quotesBeforePrint,
+    );
 
     const print = vi.fn();
     Object.defineProperty(window, "print", {

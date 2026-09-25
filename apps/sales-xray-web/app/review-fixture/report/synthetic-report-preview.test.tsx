@@ -11,6 +11,7 @@ import { syntheticEvidence } from "./synthetic-report";
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -51,10 +52,13 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   );
 
   await act(async () => button("Tabbed view").click());
-  await act(async () => button("Open notes: Human Connection & Trust").click());
-  const dialog = container.querySelector('[role="dialog"]');
-  expect(dialog?.textContent).toContain(syntheticEvidence.respect.quote);
-  expect(dialog?.textContent).toContain("00:31.000–00:35.000");
+  await act(async () => button("Sales skills").click());
+  const skills = container.querySelector('[data-report-mode-section="skills"]');
+  expect(skills?.hasAttribute("hidden")).toBe(false);
+  expect(skills?.textContent).toContain(syntheticEvidence.respect.quote);
+  expect(skills?.textContent).toContain("00:31.000–00:35.000");
+  expect(button("Open notes: Human Connection & Trust").hidden).toBe(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
   await act(async () =>
     button("Listen to Human Connection & Trust excerpt at 00:31.000").click(),
   );

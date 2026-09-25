@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DipakOverview } from "./dipak-overview";
 import { ReportReadingProvider } from "./report-reading-context";
+import { ReportModes } from "./report-modes";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { parseJobResponse } from "./report-contract";
 import type {
@@ -90,6 +91,74 @@ it("shows all report chapters as one expanded document in reading mode", async (
   ).toHaveLength(4);
   expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
   expect(container.querySelectorAll("[data-review-fold]")).toHaveLength(0);
+});
+
+it("keeps the actual overview and source playback inline in the tabbed report", async () => {
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <DipakOverview
+                report={report()}
+                onSelectEvidence={select}
+                showHeading={false}
+              />
+            ),
+          },
+          {
+            id: "transcript",
+            label: "Transcript",
+            content: <p>Transcript remains a separate section.</p>,
+          },
+        ]}
+      />,
+    ),
+  );
+  const viewButton = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Tabbed view"))!;
+  await act(async () => viewButton.click());
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("tabs");
+  const points = [
+    ...container.querySelectorAll<HTMLElement>("[data-review-point]"),
+  ];
+  expect(points).toHaveLength(14);
+  expect(
+    points.every(
+      (point) => point.closest("[hidden],details:not([open])") === null,
+    ),
+  ).toBe(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  const evidence = container.querySelector<HTMLElement>(
+    ".studio-finding-evidence",
+  )!;
+  expect(evidence.closest("[hidden],details:not([open])")).toBeNull();
+  expect(evidence.textContent).toContain(
+    report().strengths[0].evidence[0].quote,
+  );
+  await act(async () =>
+    evidence.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(select).toHaveBeenCalledWith(
+    report().strengths[0].evidence[0],
+    report().strengths[0].title,
+  );
+  const review = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Open review: Key takeaway"]',
+  )!;
+  await act(async () => review.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("tabs");
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement?.getAttribute("data-review-point")).toBe("14");
 });
 
 it("keeps compact cards tied to the full source reader without showing an entire chapter", async () => {
@@ -668,24 +737,24 @@ it("leads with supported qualitative skills and never renders a score", async ()
   expect(container.querySelector('[data-review-point="10"]')).not.toBeNull();
 });
 
-it("prints every review point and nested quote then restores both disclosure states", async () => {
+it("prints every review point while its evidence stays visible without a second disclosure", async () => {
   await render();
   const folds = [
     ...container.querySelectorAll<HTMLDetailsElement>("[data-review-fold]"),
   ];
   const evidence = [
-    ...container.querySelectorAll<HTMLDetailsElement>(
-      ".studio-finding-evidence",
-    ),
+    ...container.querySelectorAll<HTMLElement>(".studio-finding-evidence"),
   ];
   folds[0].open = true;
-  evidence[0].open = true;
+  expect(evidence.length).toBeGreaterThan(0);
+  expect(evidence.every((item) => item.tagName !== "DETAILS")).toBe(true);
+  const quotesBeforePrint = evidence.map((item) => item.textContent);
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
-  expect([...folds, ...evidence].every((detail) => detail.open)).toBe(true);
+  expect(folds.every((detail) => detail.open)).toBe(true);
   await act(async () => window.dispatchEvent(new Event("afterprint")));
   expect(folds.filter((detail) => detail.open)).toEqual([folds[0]]);
-  expect(evidence.filter((detail) => detail.open)).toEqual([evidence[0]]);
+  expect(evidence.map((item) => item.textContent)).toEqual(quotesBeforePrint);
 });
 
 it("shows real remaining counts and opens account access without fabricating blurred content", async () => {
