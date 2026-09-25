@@ -1,0 +1,55 @@
+.brand {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 11px;
+  padding: 2px 8px 2px 4px;
+  border-radius: var(--lx-radius-sm);
+  color: var(--lx-ink);
+  text-decoration: none;
+}
+
+.brand:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.symbol {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  fill: currentColor;
+}
+
+.wordmark {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  font-family: var(--lx-font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.beam {
+  width: 15px;
+  height: 16px;
+  margin: 0 1px 0 4px;
+  fill: none;
+}
+
+.by {
+  margin-top: 6px;
+  color: var(--lx-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: var(--lx-tracking-eyebrow);
+  white-space: nowrap;
+}

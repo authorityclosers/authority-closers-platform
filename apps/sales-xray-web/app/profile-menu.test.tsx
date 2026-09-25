@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { ThemeProvider } from "./lightbox/theme-provider";
 import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
@@ -138,6 +139,46 @@ it("starts inline account sign-in so a staged file can stay mounted", async () =
   );
   expect(requestAccountSignIn).toHaveBeenCalledOnce();
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+});
+it("adds the theme choice after the account actions only under a released theme", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })),
+  );
+  await act(async () =>
+    root.render(
+      <ThemeProvider controlEnabled>
+        <ProfileMenu
+          authenticated={false}
+          accountHref="/login"
+          placement="above"
+        />
+      </ThemeProvider>,
+    ),
+  );
+  expect(host.querySelector('[data-placement="above"]')).not.toBeNull();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("button[aria-expanded]")!.click(),
+  );
+  const region = host.querySelector('[role="region"]')!;
+  expect(region.firstElementChild?.querySelector("span")?.textContent).toBe(
+    "G",
+  );
+  const theme = region.querySelector("fieldset")!;
+  expect(theme.querySelector("legend")?.textContent).toBe("Theme");
+  expect(
+    theme.compareDocumentPosition(region.querySelector("a, button")!) &
+      Node.DOCUMENT_POSITION_PRECEDING,
+  ).toBeTruthy();
+  await act(async () => root.unmount());
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-theme-preference");
+  document.documentElement.style.colorScheme = "";
+  root = createRoot(host);
 });
 it("discards the private document only after confirmed sign out", async () => {
   const assign = vi

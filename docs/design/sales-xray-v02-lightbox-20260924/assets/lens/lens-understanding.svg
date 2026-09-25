@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Sales Xray lens, finding the key moments">
+  <style>
+    .lx-scan { animation: lx-scan 2.4s cubic-bezier(.65,0,.35,1) infinite alternate; }
+    .lx-orbit { animation: lx-orbit 6s linear infinite; transform-origin: 60px 60px; }
+    .lx-tag { animation: lx-pop 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .lx-tag.t2 { animation-delay: .8s } .lx-tag.t3 { animation-delay: 1.6s }
+    @keyframes lx-scan { from { transform: translateY(-17px) } to { transform: translateY(17px) } }
+    @keyframes lx-orbit { to { transform: rotate(360deg) } }
+    @keyframes lx-pop { 0%,100% { transform: scale(.8); opacity: .55 } 50% { transform: scale(1.15); opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .lx-scan, .lx-orbit, .lx-tag { animation: none } }
+  </style>
+  <defs>
+    <filter id="lx-glow" x="-50%" y="-300%" width="200%" height="700%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="lx-aperture" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="var(--lx-film-2, #16233A)"/>
+      <stop offset="1" stop-color="var(--lx-film, #0A1220)"/>
+    </radialGradient>
+    <linearGradient id="lx-trail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--lx-glow, #2DD4BF)" stop-opacity="0"/>
+      <stop offset="1" stop-color="var(--lx-glow, #2DD4BF)" stop-opacity=".35"/>
+    </linearGradient>
+    <clipPath id="lx-clip"><circle cx="60" cy="60" r="30"/></clipPath>
+  </defs>
+  <g class="lx-orbit">
+    <circle class="lx-tag"    cx="60"  cy="6"   r="4.5" fill="var(--lx-strength, #0F8B7E)"/>
+    <circle class="lx-tag t2" cx="106" cy="84"  r="4.5" fill="var(--lx-focus, #D97706)"/>
+    <circle class="lx-tag t3" cx="14"  cy="84"  r="4.5" fill="var(--lx-missed, #6D4AFF)"/>
+  </g>
+  <rect x="9" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+  <rect x="102" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+  <circle cx="60" cy="60" r="44" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="5"/>
+  <circle cx="60" cy="60" r="30" fill="url(#lx-aperture)"/>
+  <g clip-path="url(#lx-clip)">
+    <g opacity=".5" stroke="var(--lx-glow, #2DD4BF)" stroke-width="2" stroke-linecap="round">
+      <path d="M36 60 h4 M43 55 v10 M48 50 v20 M53 56 v8 M58 47 v26 M63 53 v14 M68 49 v22 M73 56 v8 M78 58 v4"/>
+    </g>
+    <g class="lx-scan">
+      <rect x="28" y="44" width="64" height="16" fill="url(#lx-trail)"/>
+      <rect x="30" y="58.5" width="60" height="3" rx="1.5" fill="var(--lx-glow, #2DD4BF)" filter="url(#lx-glow)"/>
+    </g>
+  </g>
+  <path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"/>
+</svg>

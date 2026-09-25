@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Sales Xray lens, ready">
+  <style>
+    .lx-float { animation: lx-float 4.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .lx-pupil { animation: lx-blink 5.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    @keyframes lx-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-2.5px) } }
+    @keyframes lx-blink { 0%,90%,100% { transform: scaleY(1) } 93% { transform: scaleY(.15) } 96% { transform: scaleY(1) } }
+    @media (prefers-reduced-motion: reduce) { .lx-float, .lx-pupil { animation: none } }
+  </style>
+  <defs>
+    <filter id="lx-glow" x="-50%" y="-200%" width="200%" height="500%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="lx-aperture" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="var(--lx-film-2, #16233A)"/>
+      <stop offset="1" stop-color="var(--lx-film, #0A1220)"/>
+    </radialGradient>
+  </defs>
+  <g class="lx-float">
+    <rect x="9" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+    <rect x="102" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+    <circle cx="60" cy="60" r="44" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="5"/>
+    <circle cx="60" cy="60" r="30" fill="url(#lx-aperture)"/>
+    <circle cx="60" cy="60" r="29" fill="none" stroke="var(--lx-glow, #2DD4BF)" stroke-opacity=".22" stroke-width="1.5"/>
+    <path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"/>
+    <rect class="lx-pupil" x="44" y="57" width="32" height="6" rx="3" fill="var(--lx-glow, #2DD4BF)" filter="url(#lx-glow)"/>
+  </g>
+</svg>

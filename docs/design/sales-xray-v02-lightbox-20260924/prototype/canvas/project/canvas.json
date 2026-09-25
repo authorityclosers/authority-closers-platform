@@ -1,0 +1,134 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Confirm.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "2 · Confirm",
+      "w": 1440,
+      "x": 1520,
+      "y": 1600
+    },
+    "Home.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "1 · New analysis (drop)",
+      "w": 1440,
+      "x": 0,
+      "y": 1600
+    },
+    "Library.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Calls library",
+      "w": 1440,
+      "x": 4560,
+      "y": 1600
+    },
+    "Main.dc.html": {
+      "h": 1240,
+      "title": "Lightbox · foundations",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Mobile-Processing.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Mobile · analysing",
+      "w": 390,
+      "x": 3510,
+      "y": 2860
+    },
+    "Mobile-Report.dc.html": {
+      "h": 1820,
+      "is_interactive": true,
+      "title": "Mobile · report + docked player",
+      "w": 390,
+      "x": 3980,
+      "y": 2860
+    },
+    "Mobile-Upload.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "Mobile · new analysis",
+      "w": 390,
+      "x": 3040,
+      "y": 2860
+    },
+    "Processing.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "3 · Analysing (truthful progress)",
+      "w": 1440,
+      "x": 3040,
+      "y": 1600
+    },
+    "Report.dc.html": {
+      "h": 4200,
+      "is_interactive": true,
+      "title": "4 · Report · the debrief",
+      "w": 1440,
+      "x": 0,
+      "y": 2860
+    },
+    "States.dc.html": {
+      "h": 1060,
+      "is_interactive": true,
+      "title": "States · moments of truth",
+      "w": 1440,
+      "x": 1520,
+      "y": 2860
+    },
+    "Report-Dark.dc.html": {
+      "x": 1520,
+      "y": 4040,
+      "w": 1440,
+      "h": 1180,
+      "title": "4b · Report · dark mode",
+      "is_interactive": true
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-24T18:45:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "debrief": {
+      "kind": "title1",
+      "maxW": 4370,
+      "text": "The debrief · states · mobile",
+      "w": 240,
+      "x": 0,
+      "y": 2590
+    },
+    "journey": {
+      "kind": "title1",
+      "maxW": 6000,
+      "text": "Desktop journey · drop → confirm → analyse → calls",
+      "w": 240,
+      "x": 0,
+      "y": 1330
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Home.dc.html",
+    "Confirm.dc.html",
+    "Processing.dc.html",
+    "Library.dc.html",
+    "Report.dc.html",
+    "States.dc.html",
+    "Mobile-Upload.dc.html",
+    "Mobile-Processing.dc.html",
+    "Mobile-Report.dc.html",
+    "Report-Dark.dc.html"
+  ],
+  "pages": [],
+  "title": "Sales Xray v0.2 Redesign"
+}

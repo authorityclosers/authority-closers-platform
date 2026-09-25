@@ -98,7 +98,7 @@ it("loads every server listed state without auto claiming or processing", async 
     host.querySelector('a[href="/calls"][aria-current="page"]'),
   ).not.toBeNull();
   expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(
-    "Saved calls",
+    "Calls",
   );
   expect(host.textContent).toContain("Analysis in progress");
   expect(host.textContent).toContain("Report ready");
