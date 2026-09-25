@@ -119,6 +119,8 @@ export function AccountAuth({
     () => window.location.hostname,
     serverHostname,
   );
+  // The server snapshot is empty until React can handle this page's clicks.
+  const interactive = hostname !== "";
   const learnerLinks = learnerAuthLinksForHost(hostname);
   const activeConfig = preview ? PREVIEW_CONFIG : config;
   const displayedStep = preview
@@ -749,7 +751,7 @@ export function AccountAuth({
                     <button
                       type="button"
                       className={styles.noticePrimary}
-                      disabled={preview}
+                      disabled={preview || !interactive}
                       onClick={() => {
                         setStep("password");
                         setError("");
@@ -1098,7 +1100,7 @@ export function AccountAuth({
             <button
               type="button"
               className={styles.password}
-              disabled={pending || preview}
+              disabled={pending || preview || !interactive}
               onClick={() => {
                 setStep("password");
                 setError("");
