@@ -76,24 +76,24 @@ it("puts the confirmed status and recovery actions before stage and file details
         { stage: "C4", state: null, label: "Not started" },
         { stage: "C5", state: null, label: "Not started" },
       ]}
-      statusText="Ready for your approval"
+      statusText="Ready to start"
       waitingForApproval
       accepted={false}
       fileName="Synthetic full recording filename.m4a"
     >
       <button type="button">Check status</button>
       <Link href="/?call=synthetic-id">This call’s link</Link>
-      <button type="button">Review analysis plan</button>
+      <button type="button">Start analysis</button>
     </AcquisitionProcessingPanel>,
   );
 
   expect(markup).toContain(">Ready to analyse</h2>");
   expect(markup).not.toContain(">Processing your call</h2>");
-  const latestStatus = markup.indexOf("Ready for your approval");
-  const guidance = markup.indexOf("analysis approval is not confirmed yet");
+  const latestStatus = markup.indexOf("Ready to start");
+  const guidance = markup.indexOf("Start analysis here");
   const checkStatus = markup.indexOf("Check status");
   const callLink = markup.indexOf("This call’s link");
-  const recoveryAction = markup.indexOf("Review analysis plan");
+  const recoveryAction = markup.indexOf(">Start analysis</button>");
   const stageTrail = markup.indexOf('aria-label="Processing stages"');
   const fileDetails = markup.indexOf(">Uploaded file</h3>");
   expect(latestStatus).toBeGreaterThan(-1);
@@ -104,7 +104,7 @@ it("puts the confirmed status and recovery actions before stage and file details
   expect(stageTrail).toBeGreaterThan(recoveryAction);
   expect(fileDetails).toBeGreaterThan(stageTrail);
   expect(markup).toContain("Synthetic full recording filename.m4a");
-  expect(markup.match(/Review analysis plan/g)).toHaveLength(1);
+  expect(markup.match(/>Start analysis<\/button>/g)).toHaveLength(1);
 });
 
 it("keeps paused C5 recovery actions and the uploaded-file card in distinct flow sections", () => {

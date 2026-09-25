@@ -4,6 +4,7 @@ import {
   submissionPath,
   type Submission,
 } from "./acquisition-client";
+import { parseProcessingPlan } from "./call-studio";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
 
 // Bound a status read, not provider execution. A timeout leaves the last saved
@@ -25,6 +26,16 @@ async function read(path: string, parent: AbortSignal) {
     clearTimeout(timeout);
     parent.removeEventListener("abort", cancel);
   }
+}
+
+export async function readProcessingPlan(
+  bound: Submission,
+  signal: AbortSignal,
+) {
+  return parseProcessingPlan(
+    await read(`${submissionPath(bound.id)}/plan`, signal),
+    bound.recordingId,
+  );
 }
 
 // Status observation is deliberately GET-only. Approval and recovery commands

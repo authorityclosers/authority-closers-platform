@@ -71,7 +71,7 @@ import { ProcessingVisual } from "./processing-visual";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
-import { observeSubmission } from "./observe-submission";
+import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
   parseReportLanguage,
   reportLanguageLabels,
@@ -759,8 +759,12 @@ export function AcquisitionStudio({
         return Promise.reject(new Error("read_only_review"));
       const language = chosenReportLanguage.current ?? "en";
       const supportsLanguage = languageCapabilities.current;
-      if (!quoteKey.current)
-        quoteKey.current = `report-plan:${bound.id}${supportsLanguage ? `:${language}` : ""}`;
+      if (!quoteKey.current) {
+        // Continuation keys permit letters, numbers, underscores, dots, colons
+        // and hyphens. Keep each language distinct without sending its `+`.
+        const languageKey = language.replaceAll("+", "_");
+        quoteKey.current = `report-plan:${bound.id}${supportsLanguage ? `:${languageKey}` : ""}`;
+      }
       const quoted = parseProcessingPlan(
         await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
           method: "POST",
@@ -811,23 +815,47 @@ export function AcquisitionStudio({
         setPlanRequiresAction(true);
         return;
       }
-      const accepted = parseProcessingPlan(
-        await acquisition(`${submissionPath(bound.id)}/plan`, {
-          method: "POST",
-          signal,
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": `accept-plan:${shown.id}`,
-          },
-          body: JSON.stringify({
-            plan_id: shown.id,
-            plan_fingerprint: shown.plan_fingerprint,
-            privacy_revision: shown.privacy_revision,
-            accepted: true,
+      let accepted: ProcessingPlan;
+      try {
+        accepted = parseProcessingPlan(
+          await acquisition(`${submissionPath(bound.id)}/plan`, {
+            method: "POST",
+            signal,
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": `accept-plan:${shown.id}`,
+            },
+            body: JSON.stringify({
+              plan_id: shown.id,
+              plan_fingerprint: shown.plan_fingerprint,
+              privacy_revision: shown.privacy_revision,
+              accepted: true,
+            }),
           }),
-        }),
-        bound.recordingId,
-      );
+          bound.recordingId,
+        );
+      } catch (error) {
+        // A failed response can arrive after the server accepted this exact
+        // plan. Reconcile with an owner read; never restart provider work.
+        const mayHaveAccepted =
+          error instanceof TypeError ||
+          (error instanceof AcquisitionError &&
+            error.status >= 500 &&
+            error.reason !== "execution_paused");
+        if (signal.aborted || !mayHaveAccepted) throw error;
+        try {
+          const saved = await readProcessingPlan(bound, signal);
+          if (
+            !saved.accepted ||
+            saved.id !== shown.id ||
+            saved.plan_fingerprint !== shown.plan_fingerprint
+          )
+            throw error;
+          accepted = saved;
+        } catch {
+          throw error;
+        }
+      }
       if (!signal.aborted) {
         if (
           accepted.id !== shown.id ||
@@ -976,6 +1004,9 @@ export function AcquisitionStudio({
   const automaticProgression = progress?.automatic_progression;
   const publishedReport = progress?.has_report;
   const processingState = progress?.state;
+  const processingTerminal = ["held", "cancelled", "completed"].includes(
+    processingState ?? "",
+  );
   useEffect(() => {
     if (
       !submission ||
@@ -983,7 +1014,7 @@ export function AcquisitionStudio({
       publishedReport ||
       localProcessingState !== "completed" ||
       automaticProgression ||
-      ["held", "cancelled", "completed"].includes(processingState ?? "") ||
+      processingTerminal ||
       consentedSubmissionId !== submission.id ||
       planRequiresAction ||
       analysisPaused ||
@@ -1053,7 +1084,7 @@ export function AcquisitionStudio({
     localProcessingState,
     automaticProgression,
     publishedReport,
-    processingState,
+    processingTerminal,
   ]);
 
   function choose(next: File | undefined) {
@@ -1322,6 +1353,57 @@ export function AcquisitionStudio({
         setPlanExpired(next.expires_at_epoch * 1000 <= Date.now());
         setPlanRequiresAction(true);
         setPollAttempt((n) => n + 1);
+      }
+    });
+  }
+
+  async function retryAnalysis() {
+    if (
+      !submission ||
+      analysisPaused ||
+      analysisWriteBlocked ||
+      result ||
+      progress?.local_state !== "completed" ||
+      processingTerminal
+    )
+      return;
+    const bound = submission;
+    await operation("Starting your report…", async (signal) => {
+      // Retry the same quote/acceptance identity. Creating a new attempt or
+      // recovering held provider work remains a separate server decision.
+      if (plan?.accepted) {
+        setPollAttempt((n) => n + 1);
+        return;
+      }
+      if (plan && plan.expires_at_epoch * 1000 <= Date.now())
+        quoteKey.current = `report-plan:${crypto.randomUUID()}`;
+      const shown =
+        plan && plan.expires_at_epoch * 1000 > Date.now()
+          ? plan
+          : await getPlan(bound, signal);
+      if (signal.aborted) return;
+      setPlan(shown);
+      setPlanExpired(shown.expires_at_epoch * 1000 <= Date.now());
+      if (
+        shown.report_language &&
+        chosenReportLanguage.current &&
+        shown.report_language !== chosenReportLanguage.current
+      ) {
+        setPlanRequiresAction(true);
+        return;
+      }
+      try {
+        await acceptPlanRequest(bound, shown, signal);
+        if (!signal.aborted) setError("");
+      } catch (error) {
+        if (
+          error instanceof AcquisitionError &&
+          error.reason === "plan_stale"
+        ) {
+          if (await refreshStalePlan(bound, signal)) return;
+        }
+        setPlanRequiresAction(true);
+        throw error;
       }
     });
   }
@@ -1946,6 +2028,74 @@ export function AcquisitionStudio({
             </aside>
           )}
           {savedCallRecovery}
+          {visibleError && !savedCallNeedsSession && (
+            <div className={`notice error ${styles.error}`} role="alert">
+              {statusIssue && !error && (
+                <p>
+                  Status could not be refreshed. This does not mean analysis
+                  failed.
+                </p>
+              )}
+              <p>
+                {visibleError instanceof AcquisitionError
+                  ? visibleError.message
+                  : visibleError}
+              </p>
+              <div className={styles.errorActions}>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setError("");
+                    if (submission) {
+                      setConsentedSubmissionId(null);
+                      setPollAttempt((n) => n + 1);
+                    } else setAttempt((n) => n + 1);
+                  }}
+                >
+                  Check again
+                </button>
+                {error &&
+                  submission &&
+                  progress?.local_state === "completed" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
+                      onClick={() =>
+                        void (processingTerminal
+                          ? freshPlan()
+                          : retryAnalysis())
+                      }
+                    >
+                      {processingTerminal
+                        ? "Request a fresh plan"
+                        : "Retry analysis"}
+                    </button>
+                  )}
+                {(!submission || !progress || (plan && !plan.accepted)) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={startAnotherCall}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" />
+                    Analyse another call
+                  </button>
+                )}
+                {visibleError instanceof AcquisitionError &&
+                  visibleError.status === 401 && (
+                    <Link className="text-button" href="/login">
+                      Sign in
+                    </Link>
+                  )}
+              </div>
+            </div>
+          )}
           <div
             className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
@@ -2657,9 +2807,9 @@ export function AcquisitionStudio({
                         disabled={
                           !!busy || analysisPaused || analysisWriteBlocked
                         }
-                        onClick={() => void freshPlan()}
+                        onClick={() => void retryAnalysis()}
                       >
-                        Review analysis plan
+                        Start analysis
                       </button>
                     )}
                   </AcquisitionProcessingPanel>
@@ -2729,68 +2879,6 @@ export function AcquisitionStudio({
                 />
               )}
           </div>
-          {visibleError && !savedCallNeedsSession && (
-            <div className={`notice error ${styles.error}`} role="alert">
-              {statusIssue && !error && (
-                <p>
-                  Status could not be refreshed. This does not mean analysis
-                  failed.
-                </p>
-              )}
-              <p>
-                {visibleError instanceof AcquisitionError
-                  ? visibleError.message
-                  : visibleError}
-              </p>
-              <div className={styles.errorActions}>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => {
-                    setError("");
-                    if (submission) {
-                      setConsentedSubmissionId(null);
-                      setPollAttempt((n) => n + 1);
-                    } else setAttempt((n) => n + 1);
-                  }}
-                >
-                  Check again
-                </button>
-                {error &&
-                  submission &&
-                  progress?.local_state === "completed" && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={
-                        !!busy || analysisPaused || analysisWriteBlocked
-                      }
-                      onClick={() => void freshPlan()}
-                    >
-                      Request a fresh plan
-                    </button>
-                  )}
-                {(!submission || !progress || (plan && !plan.accepted)) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={startAnotherCall}
-                  >
-                    <ArrowRight size={16} aria-hidden="true" />
-                    Analyse another call
-                  </button>
-                )}
-                {visibleError instanceof AcquisitionError &&
-                  visibleError.status === 401 && (
-                    <Link className="text-button" href="/login">
-                      Sign in
-                    </Link>
-                  )}
-              </div>
-            </div>
-          )}
           {result && report && (
             <SourceWaveformProvider
               submissionId={submission?.id}

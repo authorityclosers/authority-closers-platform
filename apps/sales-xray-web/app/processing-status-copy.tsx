@@ -78,7 +78,7 @@ export function ProcessingStatusCopy({
     : needsAttention
       ? "This stage needs checking before analysis can continue."
       : waitingForApproval
-        ? "Your recording is saved. Review the analysis plan to continue."
+        ? "Your recording is saved. Start analysis to generate your report."
         : projection.unknown
           ? "The latest status needs checking. No completion has been inferred."
           : progress?.local_state !== "completed"

@@ -55,8 +55,7 @@ function pageHeading(
   if (stage === "ready")
     return {
       title: "Ready to analyse",
-      description:
-        "Your call is saved. Review the next step to start analysis.",
+      description: "Your call is saved. Start analysis to get your report.",
     };
   if (stage === "processing")
     return previewHero

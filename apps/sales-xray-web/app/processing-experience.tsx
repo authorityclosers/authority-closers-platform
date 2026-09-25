@@ -44,7 +44,9 @@ export function ProcessingExperience({
   const guidance =
     accepted || progress?.automatic_progression
       ? "Analysis can continue after you leave. Keep this call’s link to return in this browser while your session and call remain available."
-      : "Keep this tab open to finish starting analysis. Your upload is saved; analysis approval is not confirmed yet.";
+      : waitingForApproval
+        ? "Start analysis here, or return to this call from Calls."
+        : "Your recording is saved. We’re confirming that analysis has started.";
   return (
     <section
       className={styles.panel}

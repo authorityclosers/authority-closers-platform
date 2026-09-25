@@ -1244,7 +1244,7 @@ it("shows the live processing stages without inventing a percentage", async () =
   expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
 });
 
-it("keeps status refresh read-only after a lost quote and requires a separate review action", async () => {
+it("keeps status refresh read-only and starts a saved upload with one retry action", async () => {
   quoteFailure = { status: 503, body: {} };
   await mount();
   await select();
@@ -1266,11 +1266,11 @@ it("keeps status refresh read-only after a lost quote and requires a separate re
       ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
     ),
   ).toHaveLength(before);
-  expect(container.textContent).toContain("Ready for your approval");
+  expect(container.textContent).toContain("Ready to start");
   expect(container.textContent).not.toContain(
     "Analysis can continue after you leave",
   );
-  await click("Review analysis plan");
+  await click("Start analysis");
   expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
     2,
   );
@@ -1278,13 +1278,11 @@ it("keeps status refresh read-only after a lost quote and requires a separate re
     calls.filter(
       ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
     ),
-  ).toHaveLength(0);
-  await click("Continue analysis");
-  expect(
-    calls.filter(
-      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
-    ),
   ).toHaveLength(1);
+  const quotes = calls.filter(({ path }) => path.endsWith("/plan/quote"));
+  expect(quotes[1].init.headers).toEqual(quotes[0].init.headers);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  expect(container.textContent).not.toContain("Continue analysis");
 });
 
 it("restores an unapproved call without quoting or accepting, including manual status checks", async () => {
@@ -1292,12 +1290,12 @@ it("restores an unapproved call without quoting or accepting, including manual s
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
   await click("Check status");
-  expect(container.textContent).toContain("Ready for your approval");
+  expect(container.textContent).toContain("Ready to start");
   expect(
     container.querySelector('[data-hero-stage="ready"] h1')?.textContent,
   ).toBe("Ready to analyse");
   expect(container.textContent).not.toContain("We're processing your call");
-  expect(container.textContent).toContain("approval is not confirmed yet");
+  expect(container.textContent).toContain("Start analysis here");
   expect(
     calls.filter(({ init }) =>
       ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
@@ -1305,7 +1303,7 @@ it("restores an unapproved call without quoting or accepting, including manual s
   ).toHaveLength(0);
 });
 
-it("exposes explicit plan review when a progress change interrupts automatic quoting", async () => {
+it("finishes the one-click start when ordinary progress changes during quoting", async () => {
   const original = vi.mocked(fetch).getMockImplementation()!;
   let finishQuote!: (value: Response) => void;
   vi.mocked(fetch).mockImplementation(async (path, init = {}) => {
@@ -1328,23 +1326,97 @@ it("exposes explicit plan review when a progress change interrupts automatic quo
   progressOverride = { ...progress, state: "active" };
   await act(async () => vi.advanceTimersByTimeAsync(3_000));
   await flush();
-  expect(container.textContent).toContain("Ready for your approval");
-  expect(button("Review analysis plan")).toBeDefined();
+  expect(container.textContent).not.toContain("Ready to start");
   await act(async () => finishQuote(response(plan)));
   await flush();
   expect(
     calls.filter(
       ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
     ),
-  ).toHaveLength(0);
-  vi.mocked(fetch).mockImplementation(original);
-  await click("Review analysis plan");
-  expect(button("Continue analysis")).toBeDefined();
+  ).toHaveLength(1);
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  expect(container.textContent).not.toContain("Continue analysis");
+});
+
+it("reconciles a lost acceptance response without a second acceptance or upload", async () => {
+  planFailure = { status: 503, body: {} };
+  savedPlanBody = {
+    ...plan,
+    accepted: true,
+    state: "active",
+    current_stage: "C2",
+  };
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
   expect(
     calls.filter(
       ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
     ),
-  ).toHaveLength(0);
+  ).toHaveLength(1);
+  expect(
+    calls.filter(({ path, init }) => path.endsWith("/plan") && !init.method),
+  ).toHaveLength(1);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  expect(container.textContent).not.toContain("This request did not finish");
+  expect(container.textContent).not.toContain("Continue analysis");
+});
+
+it.each([{ id: secondSubmissionId }, { plan_fingerprint: "c".repeat(64) }])(
+  "does not mistake a different saved plan binding %j for successful acceptance",
+  async (mismatch) => {
+    planFailure = { status: 503, body: {} };
+    savedPlanBody = {
+      ...plan,
+      ...mismatch,
+      accepted: true,
+      state: "active",
+      current_stage: "C2",
+    };
+    await mount();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    expect(container.textContent).toContain("This request did not finish");
+    expect(
+      calls.filter(
+        ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+      ),
+    ).toHaveLength(1);
+    expect(button("Retry analysis")).toBeDefined();
+  },
+);
+
+it("coalesces retry clicks and reuses the same acceptance identity", async () => {
+  planFailure = { status: 503, body: {} };
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  planFailure = null;
+  const retry = button("Retry analysis");
+  await act(async () => {
+    retry.click();
+    retry.click();
+  });
+  await flush();
+  const starts = calls.filter(
+    ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+  );
+  expect(starts).toHaveLength(2);
+  expect(starts[1].init.body).toEqual(starts[0].init.body);
+  expect(starts[1].init.headers).toEqual(starts[0].init.headers);
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });
 
 it("retains confirmed work during a refresh failure and clears the connection warning on success", async () => {
@@ -1476,50 +1548,61 @@ it("ignores an old observation after unmount and replacement of the studio", asy
   ).toHaveLength(0);
 });
 
-it("binds the selected report language to the quote and preserves it through a legacy acceptance response", async () => {
-  entryBody = {
-    ...entry,
-    report_languages: ["en", "hi-Deva+en", "mr-Deva+en"],
-    report_language_default: "en",
-  };
-  quoteBody = {
-    ...plan,
-    report_language: "mr-Deva+en",
-    coaching_prompt_revision: "coaching-v4",
-  };
-  savedPlanBody = {
-    ...(quoteBody as object),
-    accepted: true,
-    state: "completed",
-    report_ready: true,
-    report_run_id: envelope.run_id,
-  };
-  await mount();
-  await select();
-  const selectLanguage =
-    container.querySelector<HTMLSelectElement>("#report-language")!;
-  expect(selectLanguage.value).toBe("en");
-  await act(async () => {
-    selectLanguage.value = "mr-Deva+en";
-    selectLanguage.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await consent();
-  await click("Complete upload check");
-  await click("Analyse my call");
-  const quote = calls.find(({ path }) => path.endsWith("/plan/quote"))!;
-  expect(JSON.parse(String(quote.init.body))).toEqual({
-    report_language: "mr-Deva+en",
-  });
-  expect(
-    (quote.init.headers as Record<string, string>)["Idempotency-Key"],
-  ).toContain("mr-Deva+en");
-  expect(container.textContent).toContain("Report language: Marathi + English");
-  expect(
-    calls.filter(
-      ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
-    ),
-  ).toHaveLength(1);
-});
+it.each([
+  ["en", "English", "en"],
+  ["hi-Deva+en", "Hindi + English", "hi-Deva_en"],
+  ["mr-Deva+en", "Marathi + English", "mr-Deva_en"],
+])(
+  "starts %s analysis with a server-valid request key and preserves the language through a legacy acceptance response",
+  async (language, label, languageKey) => {
+    entryBody = {
+      ...entry,
+      report_languages: ["en", "hi-Deva+en", "mr-Deva+en"],
+      report_language_default: "en",
+    };
+    quoteBody = {
+      ...plan,
+      report_language: language,
+      coaching_prompt_revision: "coaching-v4",
+    };
+    savedPlanBody = {
+      ...(quoteBody as object),
+      accepted: true,
+      state: "completed",
+      report_ready: true,
+      report_run_id: envelope.run_id,
+    };
+    await mount();
+    await select();
+    const selectLanguage =
+      container.querySelector<HTMLSelectElement>("#report-language")!;
+    expect(selectLanguage.value).toBe("en");
+    await act(async () => {
+      selectLanguage.value = language;
+      selectLanguage.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    const quote = calls.find(({ path }) => path.endsWith("/plan/quote"))!;
+    expect(JSON.parse(String(quote.init.body))).toEqual({
+      report_language: language,
+    });
+    const key = (quote.init.headers as Record<string, string>)[
+      "Idempotency-Key"
+    ];
+    // Same contract as GuestOwnership.ensure_processing_continuation. A `+`
+    // here caused a 422 before an otherwise valid language quote could run.
+    expect(key).toMatch(/^[A-Za-z0-9_.:-]{1,128}$/);
+    expect(key).toBe(`report-plan:${submissionId}:${languageKey}`);
+    expect(container.textContent).toContain(`Report language: ${label}`);
+    expect(
+      calls.filter(
+        ({ path, init }) => path.endsWith("/plan") && init.method === "POST",
+      ),
+    ).toHaveLength(1);
+  },
+);
 
 it("restores the saved report language instead of today's default without another quote", async () => {
   existing = true;

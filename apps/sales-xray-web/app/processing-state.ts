@@ -83,7 +83,7 @@ export function projectProcessing(
         : unknown
           ? "Checking analysis status"
           : waitingForApproval
-            ? "Ready for your approval"
+            ? "Ready to start"
             : progress?.local_state !== "completed"
               ? "Checking your recording"
               : current
