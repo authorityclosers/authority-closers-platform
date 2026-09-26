@@ -1711,7 +1711,9 @@ class ConversationAuthority:
             "privacy_notice": approval.privacy_notice,
             "cost_label": cost_label,
             "max_cost_paise": quote.max_cost_paise,
-            "budget_cap_paise": budget_snapshot.cap_paise,
+            "budget_cap_paise": effective_budget_cap_paise(
+                bundle.budget_cap_paise, budget_snapshot.cap_paise
+            ),
             "entitlement_seconds": quote.entitlement_seconds,
             "input_sha256": quote.input_sha256,
             "expires_at_epoch": quote.expires_at_epoch,

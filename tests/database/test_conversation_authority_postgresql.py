@@ -1196,6 +1196,10 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
                 setup, key="risk22-second-quote", recording_id=second_recording_id
             )
             assert first_quote["max_cost_paise"] == second_quote["max_cost_paise"] == 60_000
+            # The displayed quote must disclose the same smaller release ceiling
+            # enforced during admission, not the carried historical Admin cap.
+            assert first_quote["budget_cap_paise"] == current_bundle.budget_cap_paise
+            assert second_quote["budget_cap_paise"] == current_bundle.budget_cap_paise
 
             outcomes = await asyncio.gather(
                 _start(
