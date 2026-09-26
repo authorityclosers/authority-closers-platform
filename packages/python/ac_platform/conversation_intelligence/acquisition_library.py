@@ -25,7 +25,11 @@ PAGE_SIZE = 20
 
 
 async def account_library(
-    ownership: GuestOwnership, actor: ActorContext, *, before: UUID | None = None
+    ownership: GuestOwnership,
+    actor: ActorContext,
+    *,
+    before: UUID | None = None,
+    shared_identity_locks: bool = False,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
@@ -35,7 +39,12 @@ async def account_library(
     Every selected row is rechecked through the same port as playback/report reads.
     """
     now = await ownership.sessions._admit()
-    await ownership.sessions._owner(None, actor, now)
+    await ownership.sessions._owner(
+        None,
+        actor,
+        now,
+        shared_identity_locks=shared_identity_locks,
+    )
     usage, claim = ConversationAcquisitionUsage, ConversationVisitorClaim
     link, recording = ConversationGuestSubmission, ConversationRecording
     permission = ConversationPermission
@@ -98,7 +107,11 @@ async def account_library(
     entries = []
     for row in rows[:PAGE_SIZE]:
         try:
-            progress = await reports.progress(row.submission_id, actor=actor)
+            progress = await reports.progress(
+                row.submission_id,
+                actor=actor,
+                shared_identity_locks=shared_identity_locks,
+            )
         except ConversationNotFound:
             # A concurrent deletion/revocation may win before the per-record locks.
             # Never return the stale selector; pagination still advances past it.

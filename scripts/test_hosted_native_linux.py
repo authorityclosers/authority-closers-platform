@@ -26,6 +26,48 @@ from ac_platform.conversation_intelligence.native_runtime import (
     SocketNativeRuntime,
 )
 
+try:
+    from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+except ImportError:
+    # The release helper transport intentionally contains only the runtime
+    # boundary and its signal parser. A full application checkout can run the
+    # exact upload preflight; the minimal helper bundle cannot import it.
+    NativeUploadPreflight = None  # type: ignore[assignment,misc]
+
+
+def _validate_source_measurement(
+    result: dict[str, object], *, source_sha256: str, source_bytes: int
+) -> None:
+    decoded = result.get("decoded")
+    if not isinstance(decoded, dict):
+        raise ValueError("unexpected_validation_result")
+    if (
+        result.get("schema") != "ac.sales-xray.source-validation/1"
+        or result.get("source_sha256") != source_sha256
+        or result.get("source_bytes") != source_bytes
+        or result.get("media_duration_ms") != 1000
+        or decoded.get("sample_count") != 16000
+        or decoded.get("channels") != 1
+    ):
+        raise ValueError("unexpected_validation_result")
+
+
+def _validate_inspection(
+    result: dict[str, object], *, source_sha256: str, source_bytes: int
+) -> None:
+    timebase = result.get("timebase")
+    native_receipt = result.get("native_receipt")
+    if not isinstance(timebase, dict) or not isinstance(native_receipt, dict):
+        raise ValueError("unexpected_synthetic_result")
+    if (
+        result.get("source_sha256") != source_sha256
+        or result.get("source_bytes") != source_bytes
+        or result.get("media_duration_ms") != 1000
+        or timebase.get("rate") != 16000
+        or native_receipt.get("rows") != 100
+    ):
+        raise ValueError("unexpected_synthetic_result")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Real Linux native-helper synthetic smoke")
@@ -57,29 +99,59 @@ def main() -> int:
                 audio.setframerate(16000)
                 audio.writeframes(samples)
             digest = hashlib.sha256(source.read_bytes()).hexdigest()
-            result = runtime.inspect(source, workspace / "result", job_id=uuid4(), rate=16000)
-            if (
-                result["source_sha256"] != digest
-                or result["media_duration_ms"] != 1000
-                or result["timebase"]["rate"] != 16000
-                or result["native_receipt"]["rows"] != 100
-            ):
-                raise ValueError("unexpected_synthetic_result")
+            successful_runs = 0
+            validated = runtime.validate_source(
+                source, workspace / "validated", job_id=uuid4(), rate=16000
+            )
+            _validate_source_measurement(
+                validated, source_sha256=digest, source_bytes=source.stat().st_size
+            )
+            successful_runs += 1
+            inspected = runtime.inspect(source, workspace / "result", job_id=uuid4(), rate=16000)
+            _validate_inspection(
+                inspected, source_sha256=digest, source_bytes=source.stat().st_size
+            )
+            successful_runs += 1
+            if (workspace / "validated" / "features.aaf").exists():
+                raise ValueError("validation_published_features")
+            if not (workspace / "validated" / "checkpoint.json").is_file():
+                raise ValueError("validation_receipt_missing")
+
+            preflight_measured = False
+            if NativeUploadPreflight is not None:
+                measured = NativeUploadPreflight(runtime).measure(source, uuid4(), digest)
+                if (
+                    measured.source.source_sha256 != digest
+                    or measured.source.duration_ms != 1000
+                    or measured.intent.source_bytes != source.stat().st_size
+                    or measured.intent.content_type != "audio/wav"
+                ):
+                    raise ValueError("unexpected_upload_measurement")
+                successful_runs += 1
+                preflight_measured = True
             wrong_image = "sha256:" + ("0" if not args.image_ref.endswith("0" * 64) else "1") * 64
             mismatch = SocketNativeRuntime(
                 socket_path=args.socket,
                 workspace_root=args.workspace_root,
                 expected_image_ref=wrong_image,
             )
-            try:
-                mismatch.inspect(source, workspace / "rejected", job_id=uuid4(), rate=16000)
-            except NativeRuntimeError:
-                pass
-            else:
-                raise ValueError("unapproved_native_image_accepted")
+            for operation, output_name in (
+                ("validate_source", "rejected-validate"),
+                ("inspect", "rejected-inspect"),
+            ):
+                try:
+                    getattr(mismatch, operation)(
+                        source, workspace / output_name, job_id=uuid4(), rate=16000
+                    )
+                except NativeRuntimeError:
+                    pass
+                else:
+                    raise ValueError("unapproved_native_image_accepted")
             # The helper must remain usable after a rejected request.
             again = runtime.inspect(source, workspace / "again", job_id=uuid4(), rate=16000)
-            if again["feature_sha256"] != result["feature_sha256"]:
+            _validate_inspection(again, source_sha256=digest, source_bytes=source.stat().st_size)
+            successful_runs += 1
+            if again["feature_sha256"] != inspected["feature_sha256"]:
                 raise ValueError("native_result_not_deterministic")
         receipt = {
             "schema": "ac.sales_xray.hosted_native_smoke/1",
@@ -88,11 +160,14 @@ def main() -> int:
             "fixture": "synthetic-1s-440hz-mono-16khz",
             "image_ref": args.image_ref,
             "source_sha256": digest,
-            "feature_sha256": result["feature_sha256"],
-            "native_receipt": result["native_receipt"],
+            "feature_sha256": inspected["feature_sha256"],
+            "native_receipt": inspected["native_receipt"],
             "profile_rate": 16000,
             "duration_ms": 1000,
-            "native_runs": 2,
+            "native_runs": successful_runs,
+            "validated": True,
+            "inspected": True,
+            "upload_preflight_measured": preflight_measured,
             "wrong_image_rejected": True,
             "helper_usable_after_rejection": True,
             "elapsed_seconds": round(time.monotonic() - started, 3),

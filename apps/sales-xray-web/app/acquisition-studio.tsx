@@ -1,7 +1,7 @@
 "use client";
 import { AnalysisAvailability } from "./analysis-availability";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,18 +10,14 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  Download,
   FileAudio,
   FileText,
   FolderOpen,
   HardDrive,
   LoaderCircle,
-  ListChecks,
-  MoreHorizontal,
   ShieldCheck,
-  Sparkles,
-  Upload,
 } from "lucide-react";
+import { formatClipRange, formatClock, isPlayableRange } from "./lightbox/time";
 import {
   CallStudio,
   parseProcessingPlan,
@@ -29,18 +25,24 @@ import {
   type CallStudioVariant,
 } from "./call-studio";
 import { AcquisitionShell } from "./acquisition-shell";
+import { CallsLibrary } from "./calls-library";
+import {
+  AcquisitionGuideRail,
+  AcquisitionLowerPanels,
+} from "./acquisition-dashboard-panels";
+import { AcquisitionFileStage } from "./acquisition-file-stage";
+import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
-import { ReportExplorer } from "./report-explorer";
+import { ReportModes } from "./report-modes";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
+import { ProspectSnapshot } from "./prospect-snapshot";
 import {
   ReportTranscript,
   formatTranscriptTime as time,
 } from "./report-transcript";
 import {
-  parseAcquisitionReport,
-  parseTranscript,
   type ReportEvidence,
   type SalesReport,
   type Transcript,
@@ -67,36 +69,66 @@ import {
   type UploadPolicy,
 } from "./acquisition-client";
 import { ProcessingVisual } from "./processing-visual";
-import { ProcessingStatusCopy } from "./processing-status-copy";
+import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
+import { useProcessingReview } from "./processing-review-port";
+import { latestStage, projectProcessing } from "./processing-state";
+import { observeSubmission, readProcessingPlan } from "./observe-submission";
+import {
+  parseReportLanguage,
+  reportLanguageLabels,
+  type ReportLanguage,
+} from "./report-language";
+import {
+  isNewCallRequested,
+  newCallHref,
+  setNewCallRequested,
+} from "./new-call-navigation";
 import { UploadCheck } from "./upload-check";
+import {
+  UploadInProgressError,
+  useUploadSession,
+  useUploadSnapshot,
+  type AnalysisStartSettled,
+} from "./hooks/upload-session";
+import { startAnalysis } from "./analysis-start";
+import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
 import { CallAudioDock } from "./call-audio-dock";
-import { SourceWaveformProvider } from "./source-waveform";
+import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
+import { ReportHeader } from "./report-header";
+import type { CallLabel } from "./call-label";
+import { readCallLabel, renameCall } from "./call-label-client";
+import {
+  revalidateContextualSourcePlayback,
+  type ContextualSourcePlayback,
+  type SourcePlaybackRange,
+} from "./source-playback-context";
 import styles from "./acquisition-studio.module.css";
 
-type Result = { report: SalesReport; transcript: Transcript; claimed: boolean };
-const stageNames: Record<string, string> = {
-  C2: "Transcribing your call",
-  C4: "Checking the conversation",
-  C5: "Writing your coaching report",
+type Result = {
+  report: SalesReport;
+  transcript: Transcript;
+  runId: string;
+  claimed: boolean;
+  /** Owner call name (C1), server-confirmed; null on older servers. */
+  label?: CallLabel | null;
 };
-const processingStages = ["C2", "C4", "C5"] as const;
-const stageLabels = { C2: "Transcript", C4: "Conversation", C5: "Report" };
-type ProcessingStage = (typeof processingStages)[number];
-
-function latestStage(progress: Progress | null, stage: ProcessingStage) {
-  return progress?.stages.findLast((row) => row.stage === stage) ?? null;
-}
-
-function stageStatusLabel(status: string | null) {
-  if (status === "completed") return "Complete";
-  if (status === "saved") return "Work saved";
-  if (status === "running") return "In progress";
-  if (status === "uncertain") return "Paused · needs attention";
-  if (status === "queued" || status === "pending") return "Queued";
-  if (status === "cancelled") return "Cancelled";
-  if (status === "failed" || status === "held") return "Needs attention";
-  return status === null ? "Not started" : "Status needs checking";
+type ExistingCallEntryState = {
+  submissionId: string;
+  state: "opening" | "restored" | "failed";
+};
+function pausedFailureMessage(failureCode: string | null): string {
+  if (
+    failureCode === "conversation_broker_service_identity_unavailable" ||
+    failureCode === "conversation_broker_service_identity_file_invalid" ||
+    failureCode === "conversation_broker_service_identity_required"
+  ) {
+    return "The approved provider credentials are unavailable. Your recording is saved; ask the AC team to refresh the provider connection before continuing.";
+  }
+  if (failureCode?.startsWith("conversation_provider_http_")) {
+    return "The approved provider returned an error. Your recording is saved; ask the AC team to check the provider connection before continuing.";
+  }
+  return "";
 }
 
 const message = (error: unknown) =>
@@ -104,17 +136,14 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
-export function savedCallsHref(embedded: boolean): string {
-  return embedded ? "/sales-xray/calls" : "/calls";
-}
-
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
   unknown: boolean,
 ): string {
   if (allowance) {
-    if (allowance.unlimited) return "Unlimited testing";
+    // No limit applies: say so plainly, never as a percentage.
+    if (allowance.unlimited) return "Unlimited analysis time";
     const minutes = Math.floor(allowance.available_seconds / 60);
     const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
     return allowance.available_seconds === 0
@@ -131,13 +160,60 @@ export function remainingAllowanceLabel(
 export function AcquisitionStudio({
   variant = "standalone",
   homeHref = "/",
+  requestedCallId,
+  deferRouteSelection = false,
 }: {
   variant?: CallStudioVariant;
   homeHref?: string;
+  /** `undefined` is reserved for static export, where the query is client-only. */
+  requestedCallId?: string | null;
+  deferRouteSelection?: boolean;
 }) {
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const accessStatus = access?.status ?? null;
+  const accessAuthenticated = access?.authenticated ?? null;
+  const accessPersonId = access?.context?.personId ?? null;
+  const accessSessionId = access?.context?.sessionId ?? null;
+  const accessTenantId = access?.context?.tenantId ?? null;
+  const accessObservation = useMemo(
+    () =>
+      accessStatus === null
+        ? null
+        : {
+            status: accessStatus,
+            authenticated: accessAuthenticated,
+            context:
+              accessPersonId && accessSessionId && accessTenantId
+                ? {
+                    personId: accessPersonId,
+                    sessionId: accessSessionId,
+                    tenantId: accessTenantId,
+                  }
+                : null,
+          },
+    [
+      accessAuthenticated,
+      accessPersonId,
+      accessSessionId,
+      accessStatus,
+      accessTenantId,
+    ],
+  );
+  const routeRequestedCallId =
+    requestedCallId === undefined
+      ? typeof window === "undefined"
+        ? null
+        : requestedSubmissionId()
+      : requestedCallId;
+  const routeHasSpecificCall = routeRequestedCallId !== null;
+  const explicitNewIntake =
+    typeof window !== "undefined" &&
+    (isNewCallRequested() || savedSubmissionId() === null);
+  const pending = usePendingAnalysis();
+  const uploadStore = useUploadSession();
+  const uploadSnapshot = useUploadSnapshot();
   const [entry, setEntry] = useState<Entry | null>(null);
   const router = useRouter();
   const [analysisPaused, setAnalysisPaused] = useState(false);
@@ -147,9 +223,51 @@ export function AcquisitionStudio({
   const [session, setSession] = useState(false);
   const [claimAvailable, setClaimAvailable] = useState(false);
   const [savedCallNeedsSession, setSavedCallNeedsSession] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [audioUrl, setAudioUrl] = useState("");
+  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [localStagedFiles, setLocalStagedFiles] = useState<File[]>([]);
+  const stagedFiles = pending?.stagedFiles ?? localStagedFiles;
+  const retainedUploadFile =
+    uploadStore &&
+    !embedded &&
+    (explicitNewIntake ||
+      (uploadSnapshot.phase !== "idle" &&
+        uploadSnapshot.phase !== "account_changed" &&
+        uploadSnapshot.phase !== "saved" &&
+        routeRequestedCallId === uploadSnapshot.intentId)) &&
+    (uploadSnapshot.phase === "preparing" ||
+      uploadSnapshot.phase === "uploading" ||
+      uploadSnapshot.phase === "interrupted")
+      ? uploadStore.fileFor(uploadSnapshot.intentId)
+      : null;
+  const file = pending
+    ? (pending.selection?.file ?? retainedUploadFile)
+    : (localFile ?? retainedUploadFile);
+  const uploadPhaseUnresolved =
+    uploadSnapshot.phase === "preparing" ||
+    uploadSnapshot.phase === "uploading" ||
+    uploadSnapshot.phase === "interrupted";
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("en");
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [localValidationError, setLocalValidationError] = useState(false);
+  const chosenReportLanguage = useRef<ReportLanguage | null>(null);
+  const languageCapabilities = useRef(false);
+  const [localAudioUrl, setLocalAudioUrl] = useState("");
+  const audioUrl = pending
+    ? (pending.selection?.audioUrl ?? "")
+    : localAudioUrl;
   const [consent, setConsent] = useState(false);
+  const [consentedPolicySha, setConsentedPolicySha] = useState<string | null>(
+    null,
+  );
+  const consentCurrent = Boolean(
+    consent &&
+      policy?.policy_sha256 &&
+      consentedPolicySha === policy.policy_sha256,
+  );
+  const clearConsent = useCallback(() => {
+    setConsent(false);
+    setConsentedPolicySha(null);
+  }, []);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -169,11 +287,35 @@ export function AcquisitionStudio({
   const [error, setError] = useState<string | AcquisitionError>("");
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
-  const [moment, setMoment] = useState<ReportEvidence | null>(null);
+  const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [deletionOnlyId, setDeletionOnlyId] = useState<string | null>(null);
+  const [clientRouteResolved, setClientRouteResolved] =
+    useState(!deferRouteSelection);
+  const [clientRequestedCallId, setClientRequestedCallId] = useState<
+    string | null
+  >(null);
+  const [dismissedCallId, setDismissedCallId] = useState<string | null>(null);
+  const [existingCallEntry, setExistingCallEntry] =
+    useState<ExistingCallEntryState | null>(null);
+  const selectedRequestedCallId =
+    requestedCallId === undefined ? clientRequestedCallId : requestedCallId;
+  const activeRequestedCallId =
+    selectedRequestedCallId && selectedRequestedCallId !== dismissedCallId
+      ? selectedRequestedCallId
+      : null;
+  const routeSelectionPending = deferRouteSelection && !clientRouteResolved;
+  const requestedCallEntryState = routeSelectionPending
+    ? "opening"
+    : activeRequestedCallId
+      ? existingCallEntry?.submissionId === activeRequestedCallId
+        ? existingCallEntry.state
+        : "opening"
+      : null;
   const [dragActive, setDragActive] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -183,9 +325,145 @@ export function AcquisitionStudio({
   const chosenId = useRef("");
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
+  const lastRequestedCallId = useRef<string | null>(null);
+  // The call a rename confirmation may update; never a later-bound call.
+  const bindingRef = useRef<string | null>(null);
+  useEffect(() => {
+    bindingRef.current = submission?.id ?? null;
+  }, [submission?.id]);
   const stalePlanRefresh = useRef<string | null>(null);
   const previewUrl = useRef("");
+  const reconciliationAttempted = useRef("");
+  const interruptedIntentId =
+    uploadSnapshot.phase === "interrupted" ? uploadSnapshot.intentId : null;
+  const interruptedSourceSha =
+    uploadSnapshot.phase === "interrupted" ? uploadSnapshot.sourceSha256 : null;
+  const activeUploadIntentId =
+    uploadSnapshot.phase === "preparing" ||
+    uploadSnapshot.phase === "uploading" ||
+    uploadSnapshot.phase === "interrupted"
+      ? uploadSnapshot.intentId
+      : null;
+  const uploadHomeHref =
+    uploadSnapshot.phase !== "idle" &&
+    uploadSnapshot.phase !== "account_changed"
+      ? uploadSnapshot.homeHref
+      : "/";
+  const uploadHomeIsNewIntake = new URL(
+    uploadHomeHref,
+    "https://sales-xray.invalid",
+  ).searchParams.has("new");
+  const uploadMatchesCurrentView =
+    !embedded &&
+    (Boolean(
+      activeUploadIntentId &&
+        (routeRequestedCallId === activeUploadIntentId ||
+          activeRequestedCallId === activeUploadIntentId ||
+          (!routeHasSpecificCall &&
+            (pending?.selection?.intentId === activeUploadIntentId ||
+              explicitNewIntake ||
+              uploadHomeIsNewIntake))),
+    ) ||
+      (uploadSnapshot.phase === "saved" &&
+        (activeRequestedCallId === uploadSnapshot.submissionId ||
+          routeRequestedCallId === uploadSnapshot.submissionId ||
+          (!routeHasSpecificCall &&
+            submission?.id === uploadSnapshot.submissionId))));
+  const uploadUnresolved = uploadPhaseUnresolved && uploadMatchesCurrentView;
+  // The root store owns an analysis start authorized by an Analyse click. This
+  // view only mirrors it, so a remount can neither drop nor repeat it.
+  const rootAnalysis =
+    uploadSnapshot.phase === "saved" &&
+    submission !== null &&
+    uploadSnapshot.submissionId === submission.id
+      ? (uploadSnapshot.analysis ?? null)
+      : null;
+  const rootAnalysisState = rootAnalysis?.state ?? null;
+  const rootAnalysisMessage =
+    rootAnalysis?.state === "needs_action" ? rootAnalysis.message : "";
+  const rootStartPending =
+    rootAnalysisState === "checking" || rootAnalysisState === "starting";
   const onToken = useCallback((value: string) => setToken(value), []);
+  const review = useProcessingReview(
+    activeRequestedCallId ?? submission?.id ?? null,
+  );
+  const reviewSelectionActive =
+    review.requested ||
+    review.localRequested ||
+    Boolean(review.frame || review.localFrame);
+  const analysisWriteBlocked =
+    review.readOnly !== false || reviewSelectionActive;
+  const localObservation = review.localFrame?.observation ?? null;
+  const observedFileSelected = Boolean(
+    localObservation?.file_name && localObservation.file_size_bytes,
+  );
+  const displayFileSelected = localObservation
+    ? observedFileSelected
+    : Boolean(file);
+  const displayFileName = localObservation
+    ? localObservation.file_name
+    : (file?.name ?? null);
+  const displayFileBytes = localObservation
+    ? localObservation.file_size_bytes
+    : (file?.size ?? null);
+  const displayReportLanguage = localObservation
+    ? localObservation.report_language
+    : reportLanguage;
+  const displayConsent = localObservation
+    ? localObservation.consent_checked
+    : consentCurrent;
+  const displayPrivacyOpen = localObservation
+    ? localObservation.privacy_open
+    : privacyOpen;
+
+  useEffect(() => {
+    if (
+      review.readOnly !== true ||
+      review.requested ||
+      review.localRequested ||
+      !entry?.enabled ||
+      submission ||
+      result ||
+      deletionOnlyId
+    )
+      return;
+    review.captureLocal({
+      phase: localValidationError
+        ? "upload.validation.error"
+        : file
+          ? "upload.file.selected"
+          : "upload.empty",
+      privacy_open: privacyOpen,
+      consent_checked: consentCurrent,
+      report_language: entry.report_languages ? reportLanguage : null,
+      verification: !policy
+        ? "checking"
+        : session
+          ? "session-present"
+          : token
+            ? "guest-challenge-complete"
+            : "guest-challenge-required",
+      // choose() intentionally retains the previously selected valid File when
+      // a replacement fails local validation. Keep that visible fact in the
+      // observation while preserving the validation-error phase.
+      file_name: file ? file.name.slice(0, 255) : null,
+      file_size_bytes: file?.size ?? null,
+    });
+  }, [
+    consentCurrent,
+    deletionOnlyId,
+    entry,
+    file,
+    localValidationError,
+    policy,
+    privacyOpen,
+    reportLanguage,
+    result,
+    review,
+    session,
+    submission,
+    token,
+  ]);
 
   useEffect(() => {
     active.current = true;
@@ -197,8 +475,99 @@ export function AcquisitionStudio({
   }, []);
 
   useEffect(() => {
+    if (!uploadStore || !uploadMatchesCurrentView) return;
+    return uploadStore.view();
+  }, [uploadMatchesCurrentView, uploadStore]);
+
+  useEffect(() => {
+    if (
+      !uploadStore ||
+      !uploadMatchesCurrentView ||
+      !interruptedIntentId ||
+      !interruptedSourceSha
+    )
+      return;
+    if (accessObservation) uploadStore.observeAccount(accessObservation);
+    const intentId = interruptedIntentId;
+    const sourceSha256 = interruptedSourceSha;
+    const recoveryKey = `${intentId}:${sourceSha256}`;
+    if (
+      reconciliationAttempted.current === recoveryKey ||
+      !uploadStore.canReconcile(intentId)
+    )
+      return;
+    reconciliationAttempted.current = recoveryKey;
+    const abort = new AbortController();
+    void reconcileSource({
+      id: intentId,
+      sha: sourceSha256,
+      signal: abort.signal,
+    })
+      .then(async (outcome) => {
+        if (abort.signal.aborted) return;
+        if (outcome.kind === "missing") {
+          uploadStore.markMissing(intentId);
+          if (active.current) {
+            clearConsent();
+            setError(
+              "The server did not find this upload. Review the current consent before trying again.",
+            );
+          }
+          return;
+        }
+        uploadStore.markReconciled(intentId, outcome.submissionId);
+        if (!active.current) return;
+        setSubmission(outcome.bound);
+        setProgress(parseProgress(outcome.raw, outcome.bound));
+        clearConsent();
+        setConsentedSubmissionId(outcome.bound.id);
+        setPlanRequiresAction(false);
+        setError("");
+        try {
+          const current = record(
+            await acquisition("/session", { signal: abort.signal }),
+          );
+          if (abort.signal.aborted || !active.current) return;
+          setAllowance(parseAllowance(current.allowance));
+          setAllowanceUnknown(false);
+        } catch {
+          // The source is already bound. Allowance is refreshed by its normal
+          // authority path when the page resumes.
+        }
+      })
+      .catch(() => {
+        if (!abort.signal.aborted && active.current)
+          setError(
+            "Upload status could not be checked. The selected recording remains in this tab.",
+          );
+      });
+    return () => {
+      abort.abort();
+      if (reconciliationAttempted.current === recoveryKey)
+        reconciliationAttempted.current = "";
+    };
+  }, [
+    clearConsent,
+    accessObservation,
+    interruptedIntentId,
+    interruptedSourceSha,
+    uploadMatchesCurrentView,
+    uploadStore,
+  ]);
+
+  useEffect(() => {
     const abort = new AbortController();
     const signal = abort.signal;
+    // Capture this navigation before any awaits. A new upload can consume the
+    // URL marker while entry/session reads are still in flight.
+    const routeRequested =
+      requestedCallId === undefined ? requestedSubmissionId() : requestedCallId;
+    const requested =
+      routeRequested && routeRequested !== dismissedCallId
+        ? routeRequested
+        : null;
+    const newCall = !requested && isNewCallRequested();
+    const saved = requested ?? (newCall ? null : savedSubmissionId());
     let timedOut = false;
     const timeout = window.setTimeout(() => {
       timedOut = true;
@@ -206,39 +575,113 @@ export function AcquisitionStudio({
     }, 12_000);
     void (async () => {
       try {
-        const config = parseEntry(await acquisition("/entry", { signal }));
+        await Promise.resolve();
         if (signal.aborted) return;
-        setEntry(config);
-        if (!config.enabled) return;
-        const terms = parsePolicy(
-          await acquisition("/upload-policy", { signal }),
-        );
-        // A library selection identifies the call to open. It is only a
-        // selector: the service still verifies the current owner's access.
-        const requested = requestedSubmissionId();
-        const saved = requested ?? savedSubmissionId();
+        if (requestedCallId === undefined && deferRouteSelection) {
+          setClientRequestedCallId(routeRequested);
+          setClientRouteResolved(true);
+        }
+        if (requested !== lastRequestedCallId.current) {
+          const previous = lastRequestedCallId.current;
+          lastRequestedCallId.current = requested;
+          if (!requested && previous && saved !== previous) {
+            // A soft navigation away from a saved call (for example to
+            // /?new=1) reuses this mounted view. Drop only the view of that
+            // call; its remembered selector and server record stay intact.
+            audio.current?.pause();
+            setSubmission(null);
+            setProgress(null);
+            setPlan(null);
+            setConsentedSubmissionId(null);
+            setPlanRequiresAction(false);
+            setResult(null);
+            setSavedCallNeedsSession(false);
+            setError("");
+            setStatusIssue("");
+            setCheckingStatus(false);
+            setMoment(null);
+            setPlaybackMessage("");
+            setDeleteConfirm(false);
+            setDeletionOnlyId(null);
+            setExistingCallEntry(null);
+            quoteKey.current = "";
+            requestedPlan.current = "";
+            stalePlanRefresh.current = null;
+          }
+          if (requested) {
+            setEntry(null);
+            setPolicy(null);
+            setAllowance(null);
+            setAllowanceUnknown(true);
+            setSession(false);
+            setClaimAvailable(false);
+            setSavedCallNeedsSession(false);
+            setSubmission(null);
+            setProgress(null);
+            setPlan(null);
+            setConsentedSubmissionId(null);
+            setPlanRequiresAction(false);
+            setResult(null);
+            setError("");
+            setStatusIssue("");
+            setDeletionOnlyId(null);
+            setExistingCallEntry({ submissionId: requested, state: "opening" });
+            chosenId.current = "";
+            quoteKey.current = "";
+            requestedPlan.current = "";
+            stalePlanRefresh.current = null;
+          }
+        }
+        let config: Entry | null = null;
+        try {
+          config = parseEntry(await acquisition("/entry", { signal }));
+        } catch (error) {
+          if (!requested) throw error;
+        }
+        if (signal.aborted) return;
+        if (config) {
+          setEntry(config);
+          languageCapabilities.current = config.report_languages !== undefined;
+          if (
+            !chosenReportLanguage.current ||
+            !config.report_languages?.includes(chosenReportLanguage.current)
+          ) {
+            chosenReportLanguage.current =
+              config.report_language_default ?? "en";
+            setReportLanguage(chosenReportLanguage.current);
+          }
+        }
+        if (!config?.enabled && !requested) return;
+        const terms =
+          config?.enabled && !requested
+            ? parsePolicy(await acquisition("/upload-policy", { signal }))
+            : null;
         let current: Record<string, unknown> | null = null;
         try {
           current = record(await acquisition("/session", { signal }));
         } catch (error) {
-          if (embedded) throw error;
-          if (!(error instanceof AcquisitionError && error.status === 401))
-            throw error;
+          if (!requested) {
+            if (embedded) throw error;
+            if (!(error instanceof AcquisitionError && error.status === 401))
+              throw error;
+          }
         }
         if (signal.aborted) return;
-        if (embedded && (!current || current.state === "guest"))
+        if (!requested && embedded && (!current || current.state === "guest"))
           throw new AcquisitionError(401);
-        setPolicy(terms);
+        if (terms) setPolicy(terms);
         setSession(current !== null);
         if (current) {
           setAllowance(parseAllowance(current.allowance));
           setAllowanceUnknown(false);
           setClaimAvailable(
-            !requested &&
+            !newCall &&
+              !requested &&
               (current.claim_available === true ||
                 current.state === "claim_required"),
           );
           if (
+            !newCall &&
             !requested &&
             (current.claim_available === true ||
               current.state === "claim_required")
@@ -257,7 +700,13 @@ export function AcquisitionStudio({
             if (bound.id !== saved) throw new Error("submission_mismatch");
             if (requested) rememberSubmission(bound.id);
             setSubmission(bound);
-            setProgress(parseProgress(loaded, bound));
+            const loadedProgress = parseProgress(loaded, bound);
+            setProgress(loadedProgress);
+            if (requested)
+              setExistingCallEntry({
+                submissionId: requested,
+                state: loadedProgress.has_report ? "opening" : "restored",
+              });
             setDeletionOnlyId(null);
           } catch (error) {
             if (signal.aborted) {
@@ -279,8 +728,13 @@ export function AcquisitionStudio({
               // checks for the saved call itself.
               setSavedCallNeedsSession(true);
               setError(
-                "That saved call belongs to another browser session. Start a new call with your available trial allowance, or sign in to recover it.",
+                "That saved call belongs to another browser session. Sign in to recover it, or start a new call.",
               );
+              if (requested)
+                setExistingCallEntry({
+                  submissionId: requested,
+                  state: "failed",
+                });
               return;
             }
             if (
@@ -291,17 +745,34 @@ export function AcquisitionStudio({
               setError(
                 "This saved call cannot be opened here. If you own it, you can still delete it.",
               );
+              if (requested)
+                setExistingCallEntry({
+                  submissionId: requested,
+                  state: "failed",
+                });
               return;
             }
             throw error;
           }
         }
       } catch (error) {
-        if (!signal.aborted) setError(message(error));
-        else if (timedOut)
+        if (!signal.aborted) {
+          setError(message(error));
+          if (requested)
+            setExistingCallEntry({
+              submissionId: requested,
+              state: "failed",
+            });
+        } else if (timedOut) {
           setError(
-            "Sales Xray is taking longer than expected to load. Check again to continue your guest analysis.",
+            "Sales Xray is taking longer than expected to load. Check again to continue your call.",
           );
+          if (requested)
+            setExistingCallEntry({
+              submissionId: requested,
+              state: "failed",
+            });
+        }
       } finally {
         window.clearTimeout(timeout);
       }
@@ -310,7 +781,13 @@ export function AcquisitionStudio({
       window.clearTimeout(timeout);
       abort.abort();
     };
-  }, [attempt, embedded]);
+  }, [
+    attempt,
+    embedded,
+    requestedCallId,
+    deferRouteSelection,
+    dismissedCallId,
+  ]);
 
   useEffect(() => {
     const sync = setTimeout(
@@ -335,21 +812,40 @@ export function AcquisitionStudio({
 
   const getPlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
-      if (!quoteKey.current) quoteKey.current = `report-plan:${bound.id}`;
-      return parseProcessingPlan(
+      if (analysisWriteBlocked)
+        return Promise.reject(new Error("read_only_review"));
+      const language = chosenReportLanguage.current ?? "en";
+      const supportsLanguage = languageCapabilities.current;
+      if (!quoteKey.current) {
+        // Continuation keys permit letters, numbers, underscores, dots, colons
+        // and hyphens. Keep each language distinct without sending its `+`.
+        const languageKey = language.replaceAll("+", "_");
+        quoteKey.current = `report-plan:${bound.id}${supportsLanguage ? `:${languageKey}` : ""}`;
+      }
+      const quoted = parseProcessingPlan(
         await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
           method: "POST",
           signal,
-          headers: { "Idempotency-Key": quoteKey.current },
+          headers: {
+            "Idempotency-Key": quoteKey.current,
+            ...(supportsLanguage ? { "Content-Type": "application/json" } : {}),
+          },
+          ...(supportsLanguage
+            ? { body: JSON.stringify({ report_language: language }) }
+            : {}),
         }),
         bound.recordingId,
       );
+      if (supportsLanguage && !quoted.report_language)
+        throw new Error("plan_language_unconfirmed");
+      return quoted;
     },
-    [],
+    [analysisWriteBlocked],
   );
 
   const refreshStalePlan = useCallback(
     async (bound: Submission, signal: AbortSignal) => {
+      if (analysisWriteBlocked) return false;
       if (stalePlanRefresh.current === bound.id) return false;
       stalePlanRefresh.current = bound.id;
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
@@ -362,12 +858,12 @@ export function AcquisitionStudio({
       setPollAttempt((n) => n + 1);
       return true;
     },
-    [getPlan],
+    [getPlan, analysisWriteBlocked],
   );
 
   const acceptPlanRequest = useCallback(
     async (bound: Submission, shown: ProcessingPlan, signal: AbortSignal) => {
-      if (analysisPaused) {
+      if (analysisPaused || analysisWriteBlocked) {
         setPlanRequiresAction(true);
         return;
       }
@@ -376,67 +872,141 @@ export function AcquisitionStudio({
         setPlanRequiresAction(true);
         return;
       }
-      const accepted = parseProcessingPlan(
-        await acquisition(`${submissionPath(bound.id)}/plan`, {
-          method: "POST",
-          signal,
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": `accept-plan:${shown.id}`,
-          },
-          body: JSON.stringify({
-            plan_id: shown.id,
-            plan_fingerprint: shown.plan_fingerprint,
-            privacy_revision: shown.privacy_revision,
-            accepted: true,
+      let accepted: ProcessingPlan;
+      try {
+        accepted = parseProcessingPlan(
+          await acquisition(`${submissionPath(bound.id)}/plan`, {
+            method: "POST",
+            signal,
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": `accept-plan:${shown.id}`,
+            },
+            body: JSON.stringify({
+              plan_id: shown.id,
+              plan_fingerprint: shown.plan_fingerprint,
+              privacy_revision: shown.privacy_revision,
+              accepted: true,
+            }),
           }),
-        }),
-        bound.recordingId,
-      );
+          bound.recordingId,
+        );
+      } catch (error) {
+        // A failed response can arrive after the server accepted this exact
+        // plan. Reconcile with an owner read; never restart provider work.
+        const mayHaveAccepted =
+          error instanceof TypeError ||
+          (error instanceof AcquisitionError &&
+            error.status >= 500 &&
+            error.reason !== "execution_paused");
+        if (signal.aborted || !mayHaveAccepted) throw error;
+        try {
+          const saved = await readProcessingPlan(bound, signal);
+          if (
+            !saved.accepted ||
+            saved.id !== shown.id ||
+            saved.plan_fingerprint !== shown.plan_fingerprint
+          )
+            throw error;
+          accepted = saved;
+        } catch {
+          throw error;
+        }
+      }
       if (!signal.aborted) {
-        setPlan(accepted);
+        if (
+          accepted.id !== shown.id ||
+          accepted.plan_fingerprint !== shown.plan_fingerprint
+        )
+          throw new Error("accepted_plan_mismatch");
+        setPlan({
+          ...accepted,
+          ...(shown.report_language
+            ? {
+                report_language: shown.report_language,
+                coaching_prompt_revision: shown.coaching_prompt_revision,
+              }
+            : {}),
+        });
         setPlanRequiresAction(false);
         setPlanExpired(false);
         setPollAttempt((n) => n + 1);
       }
     },
-    [analysisPaused],
+    [analysisPaused, analysisWriteBlocked],
   );
 
+  // Recover the saved language from the immutable plan, never from today's
+  // Admin default. This owner-read route cannot create a replacement quote.
   useEffect(() => {
-    if (!submission || result) return;
+    if (
+      !submission ||
+      !entry?.report_languages ||
+      consentedSubmissionId === submission.id
+    )
+      return;
+    const abort = new AbortController();
+    const bound = submission;
+    void (async () => {
+      try {
+        const saved = parseProcessingPlan(
+          await acquisition(`${submissionPath(bound.id)}/plan`, {
+            signal: abort.signal,
+          }),
+          bound.recordingId,
+        );
+        if (!abort.signal.aborted)
+          setPlan((current) => {
+            if (!current) return saved;
+            // An owner read may confirm an acceptance whose response was lost.
+            // Never overwrite a different plan, or demote known acceptance.
+            return current.id === saved.id &&
+              current.plan_fingerprint === saved.plan_fingerprint &&
+              (!current.accepted || saved.accepted)
+              ? saved
+              : current;
+          });
+      } catch {
+        // A legacy call may have no plan. Progress/report verification remains
+        // authoritative, and no inferred language label is shown.
+      }
+    })();
+    return () => abort.abort();
+  }, [
+    submission,
+    entry?.report_languages,
+    consentedSubmissionId,
+    result?.runId,
+  ]);
+
+  useEffect(() => {
+    if (!submission || result || review.requested) return;
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let failures = 0;
     const bound = submission;
     async function poll() {
       try {
-        const next = parseProgress(
-          await acquisition(submissionPath(bound.id), { signal: abort.signal }),
-          bound,
-        );
+        setCheckingStatus(true);
+        const observed = await observeSubmission(bound, abort.signal);
         if (abort.signal.aborted) return;
+        const next = observed.progress;
         setProgress(next);
-        if (next.has_report) {
-          const transcript = parseTranscript(
-            await acquisition(`${submissionPath(bound.id)}/transcript`, {
-              signal: abort.signal,
-            }),
-            bound.sha,
-          );
-          const verified = parseAcquisitionReport(
-            await acquisition(`${submissionPath(bound.id)}/report`, {
-              signal: abort.signal,
-            }),
-            { submissionId: bound.id, recordingId: bound.recordingId },
-            transcript,
-          );
-          if (!abort.signal.aborted) {
-            setResult({ ...verified, transcript });
-            setError("");
-          }
+        setStatusIssue("");
+        if (observed.result) {
+          setResult(observed.result);
+          setError("");
+          setExistingCallEntry({
+            submissionId: bound.id,
+            state: "restored",
+          });
           return;
         }
+        if (!next.has_report)
+          setExistingCallEntry({
+            submissionId: bound.id,
+            state: "restored",
+          });
         if (
           next.local_state === "failed" ||
           next.local_state === "cancelled" ||
@@ -445,61 +1015,35 @@ export function AcquisitionStudio({
           const paused =
             next.state === "held" ||
             next.stages.some((stage) => stage.state === "uncertain");
-          if (paused) setError("");
+          if (paused) setError(pausedFailureMessage(next.failure_code));
           else
             setError(
               "This analysis needs attention. Your call is saved; completed work remains available.",
             );
+          setExistingCallEntry({
+            submissionId: bound.id,
+            state: "restored",
+          });
           return;
-        }
-        if (
-          next.local_state === "completed" &&
-          !next.automatic_progression &&
-          requestedPlan.current !== bound.id
-        ) {
-          requestedPlan.current = bound.id;
-          const approved = await getPlan(bound, abort.signal);
-          if (!abort.signal.aborted) {
-            setPlan(approved);
-            setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
-            const canAutoApprove =
-              consentedSubmissionId === bound.id &&
-              !planRequiresAction &&
-              !analysisPaused &&
-              approved.expires_at_epoch * 1000 > Date.now();
-            if (canAutoApprove) {
-              try {
-                await acceptPlanRequest(bound, approved, abort.signal);
-              } catch (error) {
-                if (
-                  error instanceof AcquisitionError &&
-                  error.reason === "plan_stale"
-                ) {
-                  if (!(await refreshStalePlan(bound, abort.signal))) {
-                    setPlanRequiresAction(true);
-                    throw error;
-                  }
-                } else {
-                  setPlanRequiresAction(true);
-                  throw error;
-                }
-              }
-            } else {
-              setPlanRequiresAction(true);
-            }
-          }
         }
         failures = 0;
       } catch (error) {
         if (abort.signal.aborted) return;
         failures += 1;
-        setError(message(error));
+        setStatusIssue(message(error));
         if (
           failures >= 3 ||
           (error instanceof AcquisitionError &&
             [401, 403, 404, 409].includes(error.status))
-        )
+        ) {
+          setExistingCallEntry({
+            submissionId: bound.id,
+            state: "failed",
+          });
           return;
+        }
+      } finally {
+        if (!abort.signal.aborted) setCheckingStatus(false);
       }
       if (!abort.signal.aborted)
         timer = setTimeout(() => void poll(), failures ? 6000 : 3000);
@@ -509,8 +1053,84 @@ export function AcquisitionStudio({
       abort.abort();
       if (timer) clearTimeout(timer);
     };
+  }, [submission, result, pollAttempt, review.requested, rootAnalysisState]);
+
+  // Automatic acceptance is bound to the upload just consented to in this
+  // mounted page. Restoring or refreshing a call never recreates that consent.
+  const localProcessingState = progress?.local_state;
+  const automaticProgression = progress?.automatic_progression;
+  const publishedReport = progress?.has_report;
+  const processingState = progress?.state;
+  const processingTerminal = ["held", "cancelled", "completed"].includes(
+    processingState ?? "",
+  );
+  useEffect(() => {
+    if (
+      !submission ||
+      result ||
+      publishedReport ||
+      localProcessingState !== "completed" ||
+      automaticProgression ||
+      processingTerminal ||
+      consentedSubmissionId !== submission.id ||
+      planRequiresAction ||
+      analysisPaused ||
+      analysisWriteBlocked ||
+      requestedPlan.current === submission.id
+    )
+      return;
+    const abort = new AbortController();
+    const bound = submission;
+    requestedPlan.current = bound.id;
+    void (async () => {
+      try {
+        const approved = await getPlan(bound, abort.signal);
+        if (abort.signal.aborted) return;
+        setPlan(approved);
+        setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
+        if (
+          approved.report_language &&
+          approved.report_language !== chosenReportLanguage.current
+        ) {
+          setPlanRequiresAction(true);
+          return;
+        }
+        await acceptPlanRequest(bound, approved, abort.signal);
+      } catch (error) {
+        if (abort.signal.aborted) return;
+        if (
+          error instanceof AcquisitionError &&
+          error.reason === "plan_stale"
+        ) {
+          try {
+            if (await refreshStalePlan(bound, abort.signal)) return;
+          } catch (refreshError) {
+            if (!abort.signal.aborted) {
+              setPlanRequiresAction(true);
+              setError(message(refreshError));
+            }
+            return;
+          }
+        }
+        if (!abort.signal.aborted) {
+          setPlanRequiresAction(true);
+          setError(message(error));
+        }
+      }
+    })();
+    return () => {
+      abort.abort();
+      // A dependency change can interrupt an already-dispatched quote or
+      // acceptance. Do not silently start it again or hide the review action.
+      // Observation will reconcile any work the server has already accepted.
+      if (active.current)
+        setConsentedSubmissionId((current) =>
+          current === bound.id ? null : current,
+        );
+    };
   }, [
     analysisPaused,
+    analysisWriteBlocked,
     acceptPlanRequest,
     getPlan,
     refreshStalePlan,
@@ -518,14 +1138,21 @@ export function AcquisitionStudio({
     planRequiresAction,
     submission,
     result,
-    pollAttempt,
+    localProcessingState,
+    automaticProgression,
+    publishedReport,
+    processingTerminal,
   ]);
 
   function choose(next: File | undefined) {
     if (!next || inFlight.current || submission) return;
+    if (uploadUnresolved && next !== file) {
+      setError("Check the current upload before choosing another recording.");
+      return;
+    }
     setError("");
     setDeleted(false);
-    setConsent(false);
+    clearConsent();
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
     if (
@@ -537,13 +1164,68 @@ export function AcquisitionStudio({
       setError(
         "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
       );
+      setLocalValidationError(true);
       return;
     }
-    chosenId.current = crypto.randomUUID();
-    if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
-    previewUrl.current = URL.createObjectURL(next);
-    setAudioUrl(previewUrl.current);
-    setFile(next);
+    setLocalValidationError(false);
+    if (pending) pending.selectFile(next);
+    else {
+      chosenId.current = crypto.randomUUID();
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+      previewUrl.current = URL.createObjectURL(next);
+      setLocalAudioUrl(previewUrl.current);
+      setLocalFile(next);
+      setLocalStagedFiles((current) =>
+        current.some((candidate) => candidate === next)
+          ? current
+          : [...current, next],
+      );
+    }
+  }
+
+  function addFiles(nextFiles: FileList | File[]) {
+    if (inFlight.current || submission || !policy || uploadUnresolved) return;
+    const candidates = Array.from(nextFiles);
+    const valid = candidates.filter(
+      (candidate) =>
+        /\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(candidate.name) &&
+        candidate.size > 0 &&
+        candidate.size <= policy.maximum_file_bytes,
+    );
+    const hasInvalidFiles = valid.length !== candidates.length;
+    if (valid.length === 0) {
+      if (hasInvalidFiles) {
+        setError(
+          "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+        );
+        setLocalValidationError(true);
+      }
+      return;
+    }
+    if (pending) pending.addFiles(valid);
+    else
+      setLocalStagedFiles((current) => [
+        ...current,
+        ...valid.filter((candidate) => !current.includes(candidate)),
+      ]);
+    if (!file) choose(valid[0]);
+    if (hasInvalidFiles) {
+      setError(
+        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit.",
+      );
+      setLocalValidationError(true);
+    }
+  }
+
+  function removeStagedFile(removed: File) {
+    if (inFlight.current || submission || uploadUnresolved) return;
+    const remaining = stagedFiles.filter((candidate) => candidate !== removed);
+    if (file === removed) {
+      if (remaining.length > 0) choose(remaining[0]);
+      else reset();
+    }
+    if (pending) pending.removeFile(removed);
+    else setLocalStagedFiles(remaining);
   }
 
   async function operation(
@@ -567,10 +1249,39 @@ export function AcquisitionStudio({
   }
 
   async function upload() {
-    if (!file || !policy || !consent || (!session && !token)) return;
+    if (analysisWriteBlocked || !file || !policy || !consentCurrent) return;
+    if (access?.requestAnalysisAccess && !access.requestAnalysisAccess())
+      return;
+    if (!session && !token) return;
     if (embedded && !session) return;
     const selected = file;
-    await operation("Uploading and checking your call…", async (signal) => {
+    const resume =
+      uploadSnapshot.phase === "interrupted" &&
+      uploadStore?.fileFor(uploadSnapshot.intentId) === selected
+        ? uploadSnapshot
+        : null;
+    const id =
+      resume?.intentId ?? pending?.selection?.intentId ?? chosenId.current;
+    if (!id) return;
+    const uploadMeta = {
+      intentId: id,
+      fileName: selected.name,
+      totalBytes: selected.size,
+      reportLanguage:
+        resume?.reportLanguage ??
+        (entry?.report_languages ? reportLanguage : null),
+      homeHref: resume?.homeHref ?? newCallHref(homeHref),
+      sourceSha256: resume?.sourceSha256 ?? null,
+    } as const;
+    const rootOwned = Boolean(uploadStore && !embedded);
+    // Everything the analysis start may use is fixed by this click.
+    const clickLanguage =
+      uploadMeta.reportLanguage ?? chosenReportLanguage.current ?? "en";
+    const clickSupportsLanguage = languageCapabilities.current;
+    const clickPaused = analysisPaused;
+    const clickPolicySha = consentedPolicySha ?? "";
+    let sentSha = "";
+    const send = async (signal: AbortSignal) => {
       if (!session) {
         try {
           const issued = record(
@@ -581,12 +1292,14 @@ export function AcquisitionStudio({
               body: JSON.stringify({ challenge_token: token }),
             }),
           );
-          if (signal.aborted) return;
-          setSession(true);
-          setAllowance(parseAllowance(issued.allowance));
-          setAllowanceUnknown(false);
+          if (signal.aborted) throw new Error("upload_cancelled");
+          if (active.current) {
+            setSession(true);
+            setAllowance(parseAllowance(issued.allowance));
+            setAllowanceUnknown(false);
+          }
         } finally {
-          if (!signal.aborted) {
+          if (!signal.aborted && active.current) {
             setToken("");
             setCheckKey((key) => key + 1);
           }
@@ -596,43 +1309,114 @@ export function AcquisitionStudio({
         "SHA-256",
         await selected.arrayBuffer(),
       );
-      if (signal.aborted) return;
+      if (signal.aborted) throw new Error("upload_cancelled");
       const sha = Array.from(new Uint8Array(digest), (n) =>
         n.toString(16).padStart(2, "0"),
       ).join("");
-      const id = chosenId.current;
-      // Only an opaque selector is remembered. Cookies stay HttpOnly; no report,
-      // transcript, filename, audio or credential is copied to browser storage.
-      rememberSubmission(id);
-      const raw = record(
-        await acquisition(`${submissionPath(id)}/source`, {
-          method: "PUT",
-          signal,
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "X-Source-SHA256": sha,
-            "X-Upload-Policy": policy.policy_sha256,
-            "X-Upload-Consent": "accepted",
-          },
-          body: selected,
-        }),
+      uploadStore?.sourceDigest(id, sha);
+      sentSha = sha;
+      setNewCallRequested(false);
+      const outcome = await sendSource({
+        id,
+        file: selected,
+        sha,
+        policySha: policy.policy_sha256,
+        uploadConsent: {
+          accepted: consentCurrent,
+          policySha256: consentedPolicySha ?? "",
+        },
+        signal,
+        onPut: () => uploadStore?.markSending(id),
+      });
+      const bound = outcome.bound;
+      const recoveredProgress = outcome.recovered
+        ? parseProgress(outcome.raw, bound)
+        : null;
+      // GET progress does not include allowance. Refresh it from its authority,
+      // never subtract an estimated duration locally or reuse a pre-upload value.
+      const allowanceSource = outcome.recovered
+        ? record(await acquisition("/session", { signal }))
+        : outcome.raw;
+      if (signal.aborted) throw new Error("upload_cancelled");
+      if (active.current) {
+        setAllowance(parseAllowance(allowanceSource.allowance));
+        setAllowanceUnknown(false);
+        if (recoveredProgress) setProgress(recoveredProgress);
+        setSubmission(bound);
+        clearConsent();
+        // With a root store the start below is the single owner; the mounted
+        // auto-acceptance effect stays reserved for the embedded learner.
+        if (!rootOwned) setConsentedSubmissionId(bound.id);
+        setPlanRequiresAction(false);
+        setError("");
+      }
+      return outcome;
+    };
+    const start = async (
+      outcome: Awaited<ReturnType<typeof send>>,
+      signal: AbortSignal,
+      onPhase: (phase: "checking" | "starting") => void,
+    ): Promise<AnalysisStartSettled> => {
+      const started = await startAnalysis(
+        {
+          bound: outcome.bound,
+          sourceSha256: sentSha,
+          policySha256: clickPolicySha,
+          reportLanguage: clickLanguage,
+          supportsLanguage: clickSupportsLanguage,
+          paused: clickPaused,
+        },
+        signal,
+        onPhase,
       );
-      const bound = parseSubmission(raw);
-      if (bound.id !== id || bound.sha !== sha)
-        throw new Error("uploaded_source_mismatch");
-      if (signal.aborted) return;
-      setAllowance(parseAllowance(raw.allowance));
-      setAllowanceUnknown(false);
-      setSubmission(bound);
-      setConsent(false);
-      setConsentedSubmissionId(bound.id);
-      setPlanRequiresAction(false);
+      if (started.kind === "needs_action")
+        return { state: "needs_action", message: started.message };
+      if (started.plan && active.current && !signal.aborted)
+        setPlan(started.plan);
+      return { state: "accepted" };
+    };
+
+    if (uploadStore && !embedded) {
+      if (inFlight.current) return;
+      if (access) uploadStore.observeAccount(access);
+      inFlight.current = true;
+      setBusy("Preparing private upload…");
+      setError("");
+      try {
+        await uploadStore.run(uploadMeta, selected, send, start);
+      } catch (error) {
+        if (active.current) {
+          setError(
+            error instanceof UploadInProgressError
+              ? "Another recording is still uploading. Check its upload status before continuing."
+              : message(error),
+          );
+        }
+      } finally {
+        inFlight.current = false;
+        if (active.current) setBusy("");
+      }
+      return;
+    }
+
+    await operation("Preparing private upload…", async (signal) => {
+      await send(signal);
     });
+  }
+
+  function settleStartNotice() {
+    if (
+      rootAnalysisState === "needs_action" &&
+      uploadSnapshot.phase === "saved"
+    )
+      uploadStore?.settle(uploadSnapshot.intentId);
   }
 
   async function approvePlan() {
     if (
+      analysisWriteBlocked ||
       analysisPaused ||
+      rootStartPending ||
       !submission ||
       !plan ||
       plan.expires_at_epoch * 1000 <= Date.now()
@@ -643,6 +1427,7 @@ export function AcquisitionStudio({
     }
     const bound = submission;
     const shown = plan;
+    settleStartNotice();
     await operation("Starting your report…", async (signal) => {
       try {
         await acceptPlanRequest(bound, shown, signal);
@@ -659,9 +1444,16 @@ export function AcquisitionStudio({
   }
 
   async function freshPlan() {
-    if (!submission || analysisPaused) return;
+    if (
+      !submission ||
+      analysisPaused ||
+      analysisWriteBlocked ||
+      rootStartPending
+    )
+      return;
     const bound = submission;
     await operation("Checking available analysis…", async (signal) => {
+      settleStartNotice();
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
       const next = await getPlan(bound, signal);
       if (!signal.aborted) {
@@ -673,18 +1465,85 @@ export function AcquisitionStudio({
     });
   }
 
-  function reset(options?: { preserveSavedSubmission?: boolean }) {
-    if (inFlight.current) return;
+  async function retryAnalysis() {
+    if (
+      !submission ||
+      analysisPaused ||
+      analysisWriteBlocked ||
+      rootStartPending ||
+      result ||
+      progress?.local_state !== "completed" ||
+      processingTerminal
+    )
+      return;
+    const bound = submission;
+    await operation("Starting your report…", async (signal) => {
+      settleStartNotice();
+      // Retry the same quote/acceptance identity. Creating a new attempt or
+      // recovering held provider work remains a separate server decision.
+      if (plan?.accepted) {
+        setPollAttempt((n) => n + 1);
+        return;
+      }
+      if (plan && plan.expires_at_epoch * 1000 <= Date.now())
+        quoteKey.current = `report-plan:${crypto.randomUUID()}`;
+      const shown =
+        plan && plan.expires_at_epoch * 1000 > Date.now()
+          ? plan
+          : await getPlan(bound, signal);
+      if (signal.aborted) return;
+      setPlan(shown);
+      setPlanExpired(shown.expires_at_epoch * 1000 <= Date.now());
+      if (
+        shown.report_language &&
+        chosenReportLanguage.current &&
+        shown.report_language !== chosenReportLanguage.current
+      ) {
+        setPlanRequiresAction(true);
+        return;
+      }
+      try {
+        await acceptPlanRequest(bound, shown, signal);
+        if (!signal.aborted) setError("");
+      } catch (error) {
+        if (
+          error instanceof AcquisitionError &&
+          error.reason === "plan_stale"
+        ) {
+          if (await refreshStalePlan(bound, signal)) return;
+        }
+        setPlanRequiresAction(true);
+        throw error;
+      }
+    });
+  }
+
+  function reset(options?: {
+    preserveSavedSubmission?: boolean;
+    preserveQueuedFiles?: boolean;
+  }) {
+    if (inFlight.current || uploadUnresolved) return;
+    const queuedForNext = options?.preserveQueuedFiles
+      ? stagedFiles.filter((candidate) => candidate !== file)
+      : [];
+    if (activeRequestedCallId) setDismissedCallId(activeRequestedCallId);
+    setExistingCallEntry(null);
     audio.current?.pause();
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = "";
-    setFile(null);
-    setAudioUrl("");
+    setLocalFile(null);
+    if (pending) pending.clearFiles();
+    else setLocalStagedFiles([]);
+    setPrivacyOpen(false);
+    setLocalValidationError(false);
+    setLocalAudioUrl("");
     setSubmission(null);
     setProgress(null);
+    setStatusIssue("");
+    setCheckingStatus(false);
     setPlan(null);
     setResult(null);
-    setConsent(false);
+    clearConsent();
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
     setSavedCallNeedsSession(false);
@@ -700,14 +1559,32 @@ export function AcquisitionStudio({
     clearRequestedSubmission();
     if (!options?.preserveSavedSubmission) rememberSubmission(null);
     if (input.current) input.current.value = "";
+    if (queuedForNext.length > 0) {
+      if (pending) pending.addFiles(queuedForNext);
+      else {
+        setLocalStagedFiles(queuedForNext);
+        setLocalFile(queuedForNext[0]);
+        previewUrl.current = URL.createObjectURL(queuedForNext[0]);
+        setLocalAudioUrl(previewUrl.current);
+        chosenId.current = crypto.randomUUID();
+      }
+    }
   }
 
   function startAnotherCall() {
-    reset({ preserveSavedSubmission: true });
+    if (inFlight.current || uploadUnresolved) return;
+    if (uploadSnapshot.phase === "saved")
+      uploadStore?.settle(uploadSnapshot.intentId);
+    reset({ preserveSavedSubmission: true, preserveQueuedFiles: true });
+    setNewCallRequested(true);
+    // Re-read entry/session without racing an older saved-call lookup.
+    setAttempt((n) => n + 1);
   }
 
   function forgetSavedCall() {
     if (inFlight.current) return;
+    if (activeRequestedCallId) setDismissedCallId(activeRequestedCallId);
+    setExistingCallEntry(null);
     rememberSubmission(null);
     clearRequestedSubmission();
     setDeletionOnlyId(null);
@@ -717,6 +1594,7 @@ export function AcquisitionStudio({
   }
 
   async function claim() {
+    if (analysisWriteBlocked) return;
     await operation("Saving with your account…", async (signal) => {
       const claimed = record(
         await acquisition("/claim", { method: "POST", signal }),
@@ -735,7 +1613,7 @@ export function AcquisitionStudio({
 
   async function erase() {
     const deletionId = submission?.id ?? deletionOnlyId;
-    if (!deletionId || !deleteConfirm) return;
+    if (analysisWriteBlocked || !deletionId || !deleteConfirm) return;
     await operation("Deleting this call…", async (signal) => {
       const deleted = record(
         await acquisition(submissionPath(deletionId), {
@@ -787,11 +1665,52 @@ export function AcquisitionStudio({
     });
   }
 
+  /* One media session: pressing the control of the clip that is playing now
+     pauses the same audio element, and pressing it again resumes in place. */
+  function toggleActiveClip(range: { start_ms: number; end_ms: number }) {
+    const player = audio.current;
+    if (!player) return false;
+    const nowMs = player.currentTime * 1000;
+    const action = clipPressAction(range, {
+      paused: player.paused,
+      currentTimeMs: nowMs,
+      activeRange: moment,
+    });
+    if (action === "pause") {
+      player.pause();
+      setPlaybackMessage(`Paused at ${formatClock(nowMs)}`);
+      return true;
+    }
+    if (action === "resume") {
+      void player
+        .play()
+        .catch(() =>
+          setPlaybackMessage(
+            "Press play in the audio controls to hear this moment.",
+          ),
+        );
+      return true;
+    }
+    return false;
+  }
+
   function seek(evidence: ReportEvidence) {
     if (!audio.current || !result) return;
+    if (toggleActiveClip(evidence)) return;
+    seekTo(evidence);
+  }
+
+  /** A plain transcript seek: always starts the chosen segment. */
+  function seekTo(evidence: ReportEvidence) {
+    if (!audio.current || !result) return;
+    // An invalid or empty interval stays readable but is never played.
+    if (!isPlayableRange(evidence.start_ms, evidence.end_ms)) {
+      setPlaybackMessage("This excerpt has no playable time range.");
+      return;
+    }
     setMoment(evidence);
     setPlaybackMessage(
-      `Selected ${time(evidence.start_ms)}–${time(evidence.end_ms)}`,
+      `Selected ${formatClipRange(evidence.start_ms, evidence.end_ms)}`,
     );
     audio.current.currentTime = evidence.start_ms / 1000;
     void audio.current
@@ -803,694 +1722,1255 @@ export function AcquisitionStudio({
       );
   }
 
-  if (entry && !entry.enabled) {
-    const fallback = <CallStudio variant="embedded" homeHref={homeHref} />;
+  function seekWithContext(selection: ContextualSourcePlayback, title: string) {
+    if (!audio.current || !result) return;
+    const verified = revalidateContextualSourcePlayback(
+      selection,
+      result.report,
+      result.transcript,
+    );
+    if (!verified) {
+      setPlaybackMessage(
+        "This transcript context no longer matches the saved report. Use the saved evidence clip instead.",
+      );
+      return;
+    }
+    const { start_ms: startMs, end_ms: endMs } = verified.playback_range;
+    if (!isPlayableRange(startMs, endMs)) {
+      setPlaybackMessage("This excerpt has no playable time range.");
+      return;
+    }
+    if (toggleActiveClip(verified.playback_range)) return;
+    setMoment(verified.playback_range);
+    setPlaybackMessage(
+      `Playing with context · ${formatClipRange(startMs, endMs)} · ${title}`,
+    );
+    audio.current.currentTime = startMs / 1000;
+    void audio.current
+      .play()
+      .catch(() =>
+        setPlaybackMessage(
+          "Press play in the audio controls to hear this contextual clip.",
+        ),
+      );
+  }
+
+  if (
+    (review.requested && !review.frame) ||
+    (review.localRequested && !review.localFrame)
+  ) {
+    const reviewStatus = (
+      <section className="panel" role="status">
+        <h1>
+          {review.localRequested
+            ? "Opening browser-local state"
+            : "Opening observed service state"}
+        </h1>
+        <p>{review.message || "Verifying live access…"}</p>
+        <a href="/__review/">Review controls</a>
+        {activeRequestedCallId && (
+          <Link href={`?call=${activeRequestedCallId}`}>
+            Open the live call
+          </Link>
+        )}
+      </section>
+    );
     return embedded ? (
-      fallback
+      reviewStatus
     ) : (
       <AcquisitionShell
+        active={activeRequestedCallId ? "calls" : "analyse"}
         authenticated={access?.authenticated === true}
         homeHref={homeHref}
       >
-        {fallback}
+        {reviewStatus}
       </AcquisitionShell>
     );
   }
-  const report = result?.report;
-  const reportReady = Boolean(report);
-  const currentStage =
-    progress?.stages.findLast((stage) => stage.state === "running") ??
-    progress?.stages.find(
-      (stage) => stage.state === "queued" || stage.state === "pending",
-    ) ??
-    progress?.stages.findLast((stage) => stage.state !== "completed");
-  const uncertainStage = processingStages
-    .map((stage) => latestStage(progress, stage))
-    .find((stage) => stage?.state === "uncertain");
-  const pausedStage = uncertainStage ?? currentStage;
-  const processingPaused = Boolean(
-    progress && (progress.state === "held" || uncertainStage),
-  );
-  const processingNeedsAttention = Boolean(
-    processingPaused ||
-      error ||
-      (progress &&
-        (["failed", "cancelled"].includes(progress.local_state ?? "") ||
-          ["cancelled", "completed"].includes(progress.state))),
-  );
-  const hasSavedTranscript = progress?.stages.some(
-    (stage) => stage.stage === "C2" && stage.state === "completed",
-  );
-  const hasSavedAnalysis = progress?.stages.some(
-    (stage) => stage.stage === "C4" && stage.state === "completed",
-  );
-  const canReviewHeldPlan =
-    !error &&
-    progress?.state === "held" &&
-    progress.local_state === "completed" &&
-    latestStage(progress, "C2")?.state === "completed";
-  const source = submission
-    ? `${ACQUISITION}${submissionPath(submission.id)}/source`
-    : audioUrl;
-  const audioPlayer = !reportReady ? (
-    <audio
-      ref={audio}
-      src={source || undefined}
-      controls
-      preload="metadata"
-      onError={() =>
-        setPlaybackMessage(
-          submission
-            ? "Audio playback is unavailable. Your saved work is unchanged."
-            : "Preview unavailable. You can still choose a different recording.",
-        )
-      }
-      onTimeUpdate={() => {
-        if (
-          moment &&
-          audio.current &&
-          audio.current.currentTime >= moment.end_ms / 1000
-        )
-          audio.current.pause();
-      }}
-    />
-  ) : null;
+  // Only display inputs are substituted. Historical data never enters the
+  // operational React state, consent, approval or job controller above.
+  return renderWorkspace({
+    submission: review.frame?.submission ?? submission,
+    progress: review.frame?.progress ?? progress,
+    result: review.frame ? null : result,
+    plan: review.frame ? null : plan,
+    busy: review.frame
+      ? ""
+      : uploadMatchesCurrentView && uploadSnapshot.phase === "preparing"
+        ? "Preparing private upload…"
+        : uploadMatchesCurrentView && uploadSnapshot.phase === "uploading"
+          ? "Uploading privately…"
+          : rootAnalysisState === "checking"
+            ? "Checking your recording…"
+            : rootAnalysisState === "starting"
+              ? "Starting analysis…"
+              : busy,
+    error: review.frame
+      ? pausedFailureMessage(review.frame.progress.failure_code)
+      : localObservation?.phase === "upload.validation.error"
+        ? "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC within the displayed size limit."
+        : rootAnalysisState === "needs_action" &&
+            !plan?.accepted &&
+            !progress?.automatic_progression &&
+            !result
+          ? rootAnalysisMessage
+          : error,
+    statusIssue: review.frame ? "" : statusIssue,
+    checkingStatus: review.frame ? false : checkingStatus,
+    requestedCallEntryState: review.frame
+      ? "restored"
+      : requestedCallEntryState,
+  });
 
-  const savedCallRecovery =
-    savedCallNeedsSession && !submission && !deletionOnlyId ? (
-      <div
-        className={`notice ${styles.recoveryNotice} ${styles.recoveryError}`}
-        role="status"
-        aria-live="polite"
-      >
-        <p>
-          That saved call belongs to another browser session. Start a new call
-          with your available trial allowance, or sign in to recover it.
-        </p>
-        <div className={styles.errorActions}>
-          <Link className="text-button" href="/login">
-            Sign in to recover it
-          </Link>
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={!!busy}
-            onClick={startAnotherCall}
-          >
-            <ArrowRight size={16} aria-hidden="true" />
-            Start a new call
-          </button>
-        </div>
-      </div>
+  function renderWorkspace({
+    submission,
+    progress,
+    result,
+    plan,
+    busy,
+    error,
+    statusIssue,
+    checkingStatus,
+    requestedCallEntryState,
+  }: {
+    submission: Submission | null;
+    progress: Progress | null;
+    result: Result | null;
+    plan: ProcessingPlan | null;
+    busy: string;
+    error: string | AcquisitionError;
+    statusIssue: string | AcquisitionError;
+    checkingStatus: boolean;
+    requestedCallEntryState: "opening" | "restored" | "failed" | null;
+  }) {
+    if (entry && !entry.enabled && requestedCallEntryState === null) {
+      const fallback = <CallStudio variant="embedded" homeHref={homeHref} />;
+      return embedded ? (
+        fallback
+      ) : (
+        <AcquisitionShell
+          active={activeRequestedCallId ? "calls" : "analyse"}
+          authenticated={access?.authenticated === true}
+          homeHref={homeHref}
+        >
+          {fallback}
+        </AcquisitionShell>
+      );
+    }
+    const report = result?.report;
+    const reportReady = Boolean(report);
+    const processingNeedsAttention = projectProcessing(
+      progress,
+      false,
+    ).attention;
+    const canReviewHeldPlan =
+      !error &&
+      progress?.state === "held" &&
+      progress.local_state === "completed" &&
+      latestStage(progress, "C2")?.state === "completed";
+    const waitingForApproval = Boolean(
+      !rootStartPending &&
+        rootAnalysisState !== "accepted" &&
+        !plan?.accepted &&
+        !progress?.automatic_progression &&
+        progress?.local_state === "completed" &&
+        !processingNeedsAttention &&
+        !progress?.has_report &&
+        consentedSubmissionId !== submission?.id,
+    );
+    const processingProjection = projectProcessing(
+      progress,
+      waitingForApproval,
+    );
+    const visibleError =
+      error ||
+      statusIssue ||
+      (pending?.accountChanged
+        ? "Your account or workspace changed. Choose your audio files again."
+        : "");
+    const source = submission
+      ? `${ACQUISITION}${submissionPath(submission.id)}/source`
+      : audioUrl;
+    const audioPlayer = !reportReady ? (
+      <audio
+        ref={audio}
+        src={source || undefined}
+        controls
+        preload="metadata"
+        onError={() =>
+          setPlaybackMessage(
+            submission
+              ? "Audio playback is unavailable. Your saved work is unchanged."
+              : "Preview unavailable. You can still choose a different recording.",
+          )
+        }
+        onTimeUpdate={() => {
+          if (
+            moment &&
+            audio.current &&
+            audio.current.currentTime >= moment.end_ms / 1000
+          )
+            audio.current.pause();
+        }}
+      />
     ) : null;
 
-  const content = (
-    <div
-      className={`xray-app simple-app ${styles.app}`}
-      data-theme="light"
-      data-variant={variant}
-      data-stage={
-        report
-          ? "report"
-          : submission
-            ? "processing"
-            : busy
-              ? "uploading"
-              : "upload"
-      }
-      data-selected={file ? "true" : "false"}
-    >
-      <div className="studio-main">
-        <AnalysisAvailability onChange={setAnalysisPaused} />
-        <nav className="studio-steps" aria-label="Analysis steps">
-          {[
-            "Your call",
-            "Your analysis",
-            reportReady ? "Report ready" : "Your next step",
-          ].map((label, index) => (
-            <span
-              key={label}
-              aria-current={
-                (report ? 2 : submission ? 1 : 0) === index ? "step" : undefined
-              }
-            >
-              <b>{index + 1}</b>
-              {label}
-              {index < 2 && <ChevronDown size={15} />}
-            </span>
-          ))}
-        </nav>
-        {!submission && !report && (
-          <div className="studio-intro">
-            <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
-            <h1>
-              {file ? "Turn your calls into clarity." : "Add a call to review."}
-            </h1>
-            <p>
-              Upload a sales call and let Sales Xray find the insights, so you
-              can coach, improve, and close more.
-            </p>
-          </div>
-        )}
-        {!file && !submission && !report && (
-          <div className={styles.uploadAtmosphere} aria-hidden="true">
-            <span className={styles.signalOrbit} />
-            <span className={styles.signalWave} />
-            <div className={styles.uploadAtmosphereSignals}>
-              <span className={`${styles.signalChip} ${styles.signalUpload}`}>
-                <Upload size={28} aria-hidden="true" />
-                <span className={styles.signalCopy}>
-                  <strong>Upload</strong>
-                  <small>Add your call recording</small>
-                </span>
-              </span>
-              <span className={styles.signalConnector} aria-hidden="true">
-                →
-              </span>
-              <span
-                className={`${styles.signalChip} ${styles.signalChipRaised} ${styles.signalEvidence}`}
-              >
-                <AudioLines size={28} aria-hidden="true" />
-                <span className={styles.signalCopy}>
-                  <strong>We analyse</strong>
-                  <small>Find the key moments</small>
-                </span>
-              </span>
-              <span className={styles.signalConnector} aria-hidden="true">
-                →
-              </span>
-              <span
-                className={`${styles.signalChip} ${styles.signalChipLower} ${styles.signalCoaching}`}
-              >
-                <Sparkles size={28} aria-hidden="true" />
-                <span className={styles.signalCopy}>
-                  <strong>Get your results</strong>
-                  <small>Coach with clarity</small>
-                </span>
-              </span>
-            </div>
-          </div>
-        )}
-        {!entry && !error && (
-          <p role="status" className="visually-hidden" aria-live="polite">
-            Preparing the upload limits…
-          </p>
-        )}
-        {deleted && (
-          <p role="status" className="notice">
-            Deletion requested. This call is no longer available here; private
-            storage removal is queued.
-          </p>
-        )}
-        {claimAvailable && (
-          <aside className={`panel ${styles.claim}`}>
-            <ShieldCheck size={22} />
-            <div>
-              <h2>Keep this call with your AC account</h2>
-              <p>
-                Save the recording and its report to the account you just signed
-                in to.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!!busy}
-              onClick={() => void claim()}
-            >
-              Save to my account
-            </button>
-          </aside>
-        )}
-        {savedCallRecovery}
+    if (
+      requestedCallEntryState === "opening" ||
+      requestedCallEntryState === "failed"
+    ) {
+      const opening = requestedCallEntryState === "opening";
+      const entryError = error || statusIssue;
+      const needsSignIn =
+        savedCallNeedsSession ||
+        (entryError instanceof AcquisitionError && entryError.status === 401);
+      const failedMessage = savedCallNeedsSession
+        ? "That saved call belongs to another browser session. Sign in to recover it, or start a new call."
+        : deletionOnlyId
+          ? "This saved call cannot be opened here. If you own it, you can still request its deletion."
+          : entryError instanceof AcquisitionError
+            ? entryError.message
+            : typeof entryError === "string" && entryError
+              ? entryError
+              : "Sales Xray could not verify this saved call. Try again; your saved work has not been changed.";
+      const entryView = (
         <div
-          className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
+          className={`xray-app simple-app ${styles.app}`}
+          data-theme="light"
+          data-variant={variant}
+          data-stage={opening ? "opening" : "recovery"}
+          aria-busy={opening}
         >
-          <section
-            className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
-            aria-label="Your call"
-            onDragEnter={(event) => {
-              event.preventDefault();
-              if (!busy && !submission && !deletionOnlyId) setDragActive(true);
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node))
-                setDragActive(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragActive(false);
-              if (!busy && !submission && !deletionOnlyId)
-                choose(event.dataTransfer.files?.[0]);
-            }}
-          >
-            <div
-              className={styles.stepHeader}
-              aria-label="Current analysis step"
+          <div className="studio-main">
+            <section
+              className={`panel ${styles.processingPanel}`}
+              role={opening ? "status" : "alert"}
+              aria-live="polite"
+              aria-labelledby="existing-call-entry-heading"
             >
-              <span className={styles.stepNumber}>
-                {reportReady ? "03" : submission ? "02" : "01"}
-              </span>
-              <span>
-                <strong>
-                  {reportReady
-                    ? "Report ready"
-                    : submission
-                      ? "Your analysis"
-                      : "Your call"}
-                </strong>
-                <small>
-                  {reportReady
-                    ? "Explore your saved analysis"
-                    : submission
-                      ? "Saved work, processing privately"
-                      : "Select a recording to begin"}
-                </small>
-              </span>
-            </div>
-            {busy && !submission ? (
-              <div
-                className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
-                role="status"
-                aria-live="polite"
-              >
-                <ProcessingVisual phase="upload" paused={false} />
-                <div className={styles.progressCopy}>
-                  <p className={styles.progressKicker}>UPLOAD IN PROGRESS</p>
-                  <h3>Your call is on its way.</h3>
-                  <p>
-                    We’re uploading your recording and checking its format and
-                    duration. Keep this tab open until the upload finishes.
-                  </p>
-                </div>
-                <div
-                  className={styles.progressRail}
-                  aria-label="Upload and analysis stages"
-                >
-                  <div data-state="running">
-                    <span aria-hidden="true">1</span>
-                    <p>
-                      Upload + recording check
-                      <small>In progress</small>
-                    </p>
-                  </div>
-                  <div data-state="not-started">
-                    <span aria-hidden="true">2</span>
-                    <p>
-                      Transcript
-                      <small>Starts after the check</small>
-                    </p>
-                  </div>
-                  <div data-state="not-started">
-                    <span aria-hidden="true">3</span>
-                    <p>
-                      Coaching report
-                      <small>Shown when ready</small>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : deletionOnlyId && !file && !submission ? (
-              <>
-                <span className="studio-upload-icon">
-                  <FileText size={30} />
-                </span>
-                <h2>Saved call unavailable</h2>
+              {opening ? (
+                <LoaderCircle size={24} aria-hidden="true" />
+              ) : (
+                <FileText size={24} aria-hidden="true" />
+              )}
+              <div className={styles.progressCopy}>
+                <p className={styles.progressKicker}>SAVED CALL</p>
+                <h1 id="existing-call-entry-heading">
+                  {opening
+                    ? "Opening your saved call"
+                    : deletionOnlyId
+                      ? "Saved call unavailable"
+                      : "Could not open your saved call"}
+                </h1>
                 <p>
-                  This saved call cannot be opened here. If you own it, you can
-                  permanently delete it.
+                  {opening
+                    ? "Checking your access and loading the saved call…"
+                    : failedMessage}
                 </p>
-                <p className="small-text">
-                  If deletion is denied, you can forget this selector on this
-                  device. That does not delete the stored recording or report.
-                </p>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={!!busy}
-                  onClick={forgetSavedCall}
-                >
-                  Forget this saved call on this device
-                </button>
-              </>
-            ) : !file && !submission ? (
-              <div className={styles.dropZone} data-upload-dropzone>
-                <span className="studio-upload-icon">
-                  <AudioLines className={styles.audioCue} size={30} />
-                  <Upload className={styles.uploadCue} size={25} />
-                </span>
-                <h2>Start with your sales call</h2>
-                <p className={styles.dropTitle}>
-                  Drag and drop your audio file here
-                </p>
-                <label
-                  className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
-                  htmlFor="acquisition-file"
-                >
-                  or click to browse
-                </label>
-                <span className="visually-hidden">Choose audio file</span>
-                <div className={styles.formatFacts}>
-                  <span>
-                    <FileAudio size={14} aria-hidden="true" />
-                    MP3 · MPEG · WAV · M4A · OGG · FLAC
-                  </span>
-                  <span>
-                    <HardDrive size={14} aria-hidden="true" />
-                    Up to{" "}
-                    {policy
-                      ? Math.floor(policy.maximum_file_bytes / 1048576)
-                      : "32"}{" "}
-                    MB
-                  </span>
-                  <span>
-                    <Clock3 size={14} aria-hidden="true" />
-                    {policy
-                      ? `${Math.floor(policy.maximum_call_seconds / 60)} min per call`
-                      : "30 min per call"}
-                  </span>
+                {!opening && (
+                  <div className={styles.errorActions}>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => {
+                        setError("");
+                        setStatusIssue("");
+                        if (activeRequestedCallId)
+                          setExistingCallEntry({
+                            submissionId: activeRequestedCallId,
+                            state: "opening",
+                          });
+                        if (submission) {
+                          setConsentedSubmissionId(null);
+                          setPollAttempt((n) => n + 1);
+                        } else setAttempt((n) => n + 1);
+                      }}
+                    >
+                      Check again
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={!!busy}
+                      onClick={startAnotherCall}
+                    >
+                      <ArrowRight size={16} aria-hidden="true" />
+                      Start a new call
+                    </button>
+                    {needsSignIn && (
+                      <Link className="text-button" href="/login">
+                        Sign in to recover it
+                      </Link>
+                    )}
+                  </div>
+                )}
+                {!opening && deletionOnlyId && (
+                  <div className={styles.errorActions}>
+                    {!deleteConfirm ? (
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => setDeleteConfirm(true)}
+                      >
+                        Request deletion
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={!!busy || analysisWriteBlocked}
+                          onClick={() => void erase()}
+                        >
+                          Request recording deletion
+                        </button>
+                        <button
+                          className="text-button"
+                          type="button"
+                          disabled={!!busy || analysisWriteBlocked}
+                          onClick={() => setDeleteConfirm(false)}
+                        >
+                          Keep call
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="text-button"
+                      type="button"
+                      disabled={!!busy}
+                      onClick={forgetSavedCall}
+                    >
+                      Forget this saved call on this device
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      );
+      if (embedded) return entryView;
+      return (
+        <AcquisitionShell
+          active={activeRequestedCallId ? "calls" : "analyse"}
+          authenticated={access?.authenticated === true}
+          homeHref={homeHref}
+          mobileFit
+          allowance={allowance}
+        >
+          {entryView}
+        </AcquisitionShell>
+      );
+    }
+
+    const savedCallRecovery =
+      savedCallNeedsSession && !submission && !deletionOnlyId ? (
+        <div
+          className={`notice ${styles.recoveryNotice} ${styles.recoveryError}`}
+          role="status"
+          aria-live="polite"
+        >
+          <p>
+            That saved call belongs to another browser session. Sign in to
+            recover it, or start a new call.
+          </p>
+          <div className={styles.errorActions}>
+            <Link className="text-button" href="/login">
+              Sign in to recover it
+            </Link>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!!busy}
+              onClick={startAnotherCall}
+            >
+              <ArrowRight size={16} aria-hidden="true" />
+              Start a new call
+            </button>
+          </div>
+        </div>
+      ) : null;
+
+    const content = (
+      <div
+        className={`xray-app simple-app ${styles.app}`}
+        data-theme="light"
+        data-variant={variant}
+        data-stage={
+          localObservation?.phase === "upload.validation.error"
+            ? "upload-error"
+            : report
+              ? "report"
+              : submission
+                ? "processing"
+                : busy
+                  ? "uploading"
+                  : "upload"
+        }
+        data-selected={displayFileSelected ? "true" : "false"}
+        onClickCapture={
+          reviewSelectionActive
+            ? (event) => {
+                // Review allows native readers/details and navigation; buttons
+                // cannot mutate the live controller from an observed frame.
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest("button")
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }
+            : undefined
+        }
+      >
+        {(review.frame || review.localFrame) && (
+          <nav
+            className={styles.reviewNotice}
+            aria-label="Observed state navigation"
+          >
+            <div>
+              <strong>
+                {review.localFrame?.label ??
+                  `Observed processing · ${review.frame?.progress.state ?? "state"}`}
+              </strong>
+              {(() => {
+                const navigation =
+                  review.localFrame?.navigation ?? review.frame?.navigation;
+                return (
+                  <small>
+                    {navigation
+                      ? `Observed state ${navigation.position} of ${navigation.total}.`
+                      : "Only states actually captured in this session can be visited."}
+                    {review.localFrame
+                      ? " Display only; the file and consent value are not restored or applied."
+                      : " Live API data is rechecked before each state is opened."}
+                  </small>
+                );
+              })()}
+            </div>
+            {(() => {
+              const navigation =
+                review.localFrame?.navigation ?? review.frame?.navigation;
+              return (
+                <div className={styles.reviewNavigationLinks}>
+                  {navigation?.previousUrl ? (
+                    <a href={navigation.previousUrl}>Previous state</a>
+                  ) : (
+                    <span aria-disabled="true">Previous state</span>
+                  )}
+                  {navigation?.nextUrl ? (
+                    <a href={navigation.nextUrl}>Next state</a>
+                  ) : (
+                    <span aria-disabled="true">Next state</span>
+                  )}
+                  <a href="/__review/">All states</a>
                 </div>
-                <p className="visually-hidden">
-                  {policy
-                    ? `Up to ${Math.floor(policy.maximum_file_bytes / 1048576)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
-                    : "Checking file limits…"}
+              );
+            })()}
+          </nav>
+        )}
+        <div className="studio-main">
+          <AnalysisAvailability onChange={setAnalysisPaused} />
+          <nav className="studio-steps" aria-label="Analysis steps">
+            {[
+              "Your call",
+              "Your analysis",
+              reportReady ? "Report ready" : "Your next step",
+            ].map((label, index) => (
+              <span
+                key={label}
+                aria-current={
+                  (report ? 2 : submission ? 1 : 0) === index
+                    ? "step"
+                    : undefined
+                }
+              >
+                <b>{index + 1}</b>
+                {label}
+                {index < 2 && <ChevronDown size={15} />}
+              </span>
+            ))}
+          </nav>
+          {!entry && !error && (
+            <p role="status" className="visually-hidden" aria-live="polite">
+              Preparing the upload limits…
+            </p>
+          )}
+          {deleted && (
+            <p role="status" className="notice">
+              Deletion requested. This call is no longer available here; private
+              storage removal is queued.
+            </p>
+          )}
+          {claimAvailable && (
+            <aside className={`panel ${styles.claim}`}>
+              <ShieldCheck size={22} />
+              <div>
+                <h2>Keep this call with your AC account</h2>
+                <p>
+                  Save the recording and its report to the account you just
+                  signed in to.
                 </p>
               </div>
-            ) : (
-              <>
-                {!submission && !result && (
-                  <p className={styles.selectionHeading}>
-                    <span>1</span> Select your call recording
-                  </p>
-                )}
-                <div className="studio-file">
-                  <span className="studio-upload-icon">
-                    <AudioLines size={25} />
-                  </span>
-                  <div>
-                    <h2>{file?.name || "Your saved sales call"}</h2>
-                    <p>
-                      {result
-                        ? time(result.transcript.duration_ms)
-                        : file
-                          ? `Selected locally · ${(file.size / 1048576).toFixed(1)} MB`
-                          : "Private original recording"}
-                    </p>
-                  </div>
-                  {!submission && (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!!busy || analysisWriteBlocked}
+                onClick={() => void claim()}
+              >
+                Save to my account
+              </button>
+            </aside>
+          )}
+          {savedCallRecovery}
+          {visibleError && !savedCallNeedsSession && (
+            <div className={`notice error ${styles.error}`} role="alert">
+              {statusIssue && !error && (
+                <p>
+                  Status could not be refreshed. This does not mean analysis
+                  failed.
+                </p>
+              )}
+              <p>
+                {visibleError instanceof AcquisitionError
+                  ? visibleError.message
+                  : visibleError}
+              </p>
+              <div className={styles.errorActions}>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setError("");
+                    if (submission) {
+                      setConsentedSubmissionId(null);
+                      setPollAttempt((n) => n + 1);
+                    } else setAttempt((n) => n + 1);
+                  }}
+                >
+                  Check again
+                </button>
+                {error &&
+                  submission &&
+                  progress?.local_state === "completed" && (
                     <button
                       type="button"
                       className="secondary-button"
-                      aria-label="Change selected call"
-                      disabled={!!busy}
-                      onClick={() => reset()}
+                      disabled={
+                        !!busy || analysisPaused || analysisWriteBlocked
+                      }
+                      onClick={() =>
+                        void (processingTerminal
+                          ? freshPlan()
+                          : retryAnalysis())
+                      }
                     >
-                      Change file
+                      {processingTerminal
+                        ? "Request a fresh plan"
+                        : "Retry analysis"}
                     </button>
                   )}
-                </div>
-                {!submission && !result ? (
-                  <details className={styles.previewDetails}>
-                    <summary>Preview recording</summary>
-                    {audioPlayer}
-                  </details>
-                ) : (
+                {(!submission || !progress || (plan && !plan.accepted)) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={startAnotherCall}
+                  >
+                    <ArrowRight size={16} aria-hidden="true" />
+                    Analyse another call
+                  </button>
+                )}
+                {visibleError instanceof AcquisitionError &&
+                  visibleError.status === 401 && (
+                    <Link className="text-button" href="/login">
+                      Sign in
+                    </Link>
+                  )}
+              </div>
+            </div>
+          )}
+          <div
+            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
+          >
+            <div className={styles.primaryColumn}>
+              <section
+                className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
+                aria-label="Your call"
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  if (!busy && !submission && !deletionOnlyId)
+                    setDragActive(true);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={(event) => {
+                  if (
+                    !event.currentTarget.contains(event.relatedTarget as Node)
+                  )
+                    setDragActive(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragActive(false);
+                  if (!busy && !submission && !deletionOnlyId)
+                    addFiles(event.dataTransfer.files);
+                }}
+              >
+                {!submission && !deletionOnlyId && (
+                  <div className={styles.uploadCardHeader}>
+                    <div className={styles.uploadCardTitle}>
+                      <svg
+                        className={styles.animatedWaveMark}
+                        viewBox="0 0 46 46"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          cx="23"
+                          cy="23"
+                          r="19"
+                          stroke="currentColor"
+                          strokeOpacity=".12"
+                          strokeDasharray="2 5"
+                        />
+                        <path
+                          d="M3 23h5m30 0h5"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeOpacity=".4"
+                        />
+                        <g className={styles.waveBars} fill="currentColor">
+                          <rect x="9" y="18" width="2.8" height="10" rx="1.4" />
+                          <rect
+                            x="14.5"
+                            y="12"
+                            width="2.8"
+                            height="22"
+                            rx="1.4"
+                          />
+                          <rect x="20" y="6" width="2.8" height="34" rx="1.4" />
+                          <rect
+                            x="25.5"
+                            y="14"
+                            width="2.8"
+                            height="18"
+                            rx="1.4"
+                          />
+                          <rect
+                            x="31"
+                            y="10"
+                            width="2.8"
+                            height="26"
+                            rx="1.4"
+                          />
+                          <rect
+                            x="36.5"
+                            y="18"
+                            width="2.8"
+                            height="10"
+                            rx="1.4"
+                          />
+                        </g>
+                      </svg>
+                      <h2>Add a call to review</h2>
+                    </div>
+                    <span className={styles.allowanceBadge}>
+                      <ShieldCheck size={19} aria-hidden="true" />
+                      {remainingAllowanceLabel(
+                        allowance,
+                        entry?.allowance_seconds ?? null,
+                        allowanceUnknown,
+                      )}
+                    </span>
+                  </div>
+                )}
+                {/* The empty state already has its card heading; a step
+                    header only earns its space once a call exists. */}
+                {reportReady || submission ? (
                   <div
-                    className={styles.savedPlayback}
-                    data-expanded={playbackExpanded}
+                    className={styles.stepHeader}
+                    aria-label="Current analysis step"
+                  >
+                    <span className={styles.stepNumber}>
+                      {reportReady ? "03" : "02"}
+                    </span>
+                    <span>
+                      <strong>
+                        {reportReady ? "Report ready" : "Your analysis"}
+                      </strong>
+                      <small>
+                        {reportReady
+                          ? "Explore your saved analysis"
+                          : "Saved work, processing privately"}
+                      </small>
+                    </span>
+                  </div>
+                ) : null}
+                {busy && !submission ? (
+                  <div
+                    className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <ProcessingVisual phase="upload" paused={false} />
+                    <div className={styles.progressCopy}>
+                      <p className={styles.progressKicker}>
+                        UPLOAD IN PROGRESS
+                      </p>
+                      <h3>Your call is on its way.</h3>
+                      <p>
+                        We’re uploading your recording and checking its format
+                        and duration. Keep this tab open until the upload
+                        finishes.
+                      </p>
+                    </div>
+                    <div
+                      className={styles.progressRail}
+                      aria-label="Upload and analysis stages"
+                    >
+                      <div data-state="running">
+                        <span aria-hidden="true">1</span>
+                        <p>
+                          Upload + recording check
+                          <small>In progress</small>
+                        </p>
+                      </div>
+                      <div data-state="not-started">
+                        <span aria-hidden="true">2</span>
+                        <p>
+                          Transcript
+                          <small>Starts after the check</small>
+                        </p>
+                      </div>
+                      <div data-state="not-started">
+                        <span aria-hidden="true">3</span>
+                        <p>
+                          Coaching report
+                          <small>Shown when ready</small>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : deletionOnlyId && !displayFileSelected && !submission ? (
+                  <>
+                    <span className="studio-upload-icon">
+                      <FileText size={30} />
+                    </span>
+                    <h2>Saved call unavailable</h2>
+                    <p>
+                      This saved call cannot be opened here. If you own it, you
+                      can permanently delete it.
+                    </p>
+                    <p className="small-text">
+                      If deletion is denied, you can forget this selector on
+                      this device. That does not delete the stored recording or
+                      report.
+                    </p>
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={!!busy}
+                      onClick={forgetSavedCall}
+                    >
+                      Forget this saved call on this device
+                    </button>
+                  </>
+                ) : !submission && !deletionOnlyId && !localObservation ? (
+                  <AcquisitionFileStage
+                    files={stagedFiles}
+                    selectedFile={file}
+                    onSelect={choose}
+                    onRemove={removeStagedFile}
+                    onClear={() => reset()}
+                    onAddFiles={addFiles}
+                    maxBytes={policy?.maximum_file_bytes}
+                    maxMinutes={
+                      policy
+                        ? Math.floor(policy.maximum_call_seconds / 60)
+                        : undefined
+                    }
+                    disabled={!policy || !!busy || reviewSelectionActive}
+                  />
+                ) : !displayFileSelected && !submission ? (
+                  <div className={styles.dropZone} data-upload-dropzone>
+                    <span className="studio-upload-icon">
+                      <svg
+                        className={styles.animatedUploadMark}
+                        viewBox="0 0 64 64"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className={styles.uploadOrbit}
+                          cx="32"
+                          cy="32"
+                          r="29"
+                          stroke="currentColor"
+                          strokeOpacity=".26"
+                          strokeDasharray="2 7"
+                        />
+                        <path
+                          className={styles.uploadCloud}
+                          d="M18 44h27a10 10 0 0 0 2-19.8A16 16 0 0 0 16 28a8 8 0 0 0 2 16Z"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <g
+                          className={styles.uploadArrow}
+                          stroke="currentColor"
+                          strokeWidth="2.7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M32 48V28" />
+                          <path d="m25 35 7-7 7 7" />
+                        </g>
+                        <circle
+                          cx="11"
+                          cy="16"
+                          r="1.4"
+                          fill="currentColor"
+                          fillOpacity=".48"
+                        />
+                        <circle
+                          cx="53"
+                          cy="49"
+                          r="1.4"
+                          fill="currentColor"
+                          fillOpacity=".48"
+                        />
+                      </svg>
+                    </span>
+                    <p className={styles.dropTitle}>
+                      Drag and drop your audio file here
+                    </p>
+                    <label
+                      className={`${styles.dropSelect} ${!policy ? styles.disabled : ""}`}
+                      htmlFor="acquisition-file"
+                    >
+                      or click to browse
+                    </label>
+                    <span className="visually-hidden">Choose audio file</span>
+                    <div className={styles.formatFacts}>
+                      <span>
+                        <FileAudio size={14} aria-hidden="true" />
+                        MP3 · MPEG · WAV · M4A · OGG · FLAC
+                      </span>
+                      <span>
+                        <HardDrive size={14} aria-hidden="true" />
+                        Up to{" "}
+                        {policy
+                          ? Math.floor(policy.maximum_file_bytes / 1048576)
+                          : "32"}{" "}
+                        MB
+                      </span>
+                      <span>
+                        <Clock3 size={14} aria-hidden="true" />
+                        {policy
+                          ? `${Math.floor(policy.maximum_call_seconds / 60)} min per call`
+                          : "30 min per call"}
+                      </span>
+                    </div>
+                    <p className="visually-hidden">
+                      {policy
+                        ? `Up to ${Math.floor(policy.maximum_file_bytes / 1048576)} MB · ${Math.floor(policy.maximum_call_seconds / 60)} minutes per call`
+                        : "Checking file limits…"}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {!submission && !result && (
+                      <p className={styles.selectionHeading}>
+                        <span>1</span> Select your call recording
+                      </p>
+                    )}
+                    <div className="studio-file">
+                      <span className="studio-upload-icon">
+                        <AudioLines size={25} />
+                      </span>
+                      <div>
+                        <h2>{displayFileName || "Your saved sales call"}</h2>
+                        <p>
+                          {result
+                            ? time(result.transcript.duration_ms)
+                            : displayFileSelected
+                              ? file
+                                ? `Selected locally · ${(file.size / 1048576).toFixed(1)} MB`
+                                : displayFileBytes !== null
+                                  ? `Observed locally · ${(displayFileBytes / 1048576).toFixed(1)} MB`
+                                  : "File selection observed locally"
+                              : "Private original recording"}
+                        </p>
+                      </div>
+                      {!submission && (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          aria-label="Change selected call"
+                          disabled={!!busy || reviewSelectionActive}
+                          onClick={() => reset()}
+                        >
+                          Change file
+                        </button>
+                      )}
+                    </div>
+                    {!submission && !result ? (
+                      <details className={styles.previewDetails}>
+                        <summary>Preview recording</summary>
+                        {file ? (
+                          audioPlayer
+                        ) : (
+                          <p className="small-text">
+                            Audio playback is not part of this browser-local
+                            observation. Select the actual file again to play
+                            it.
+                          </p>
+                        )}
+                      </details>
+                    ) : (
+                      <div
+                        className={styles.savedPlayback}
+                        data-expanded={playbackExpanded}
+                      >
+                        <button
+                          type="button"
+                          className={styles.playbackToggle}
+                          aria-expanded={playbackExpanded}
+                          aria-controls="acquisition-saved-audio"
+                          onClick={() => setPlaybackExpanded((value) => !value)}
+                        >
+                          {playbackExpanded ? "Hide player" : "Playback"}
+                        </button>
+                        <div id="acquisition-saved-audio">{audioPlayer}</div>
+                      </div>
+                    )}
+                    <p className={`small-text ${styles.previewHint}`}>
+                      {submission
+                        ? "Select any timestamp to listen to that moment."
+                        : "Listen to check this is the right call. Selecting a file does not upload it."}
+                    </p>
+                    {playbackMessage && (
+                      <p role="status" className="small-text">
+                        {playbackMessage}
+                      </p>
+                    )}
+                  </>
+                )}
+                <input
+                  ref={input}
+                  className="visually-hidden"
+                  id="acquisition-file"
+                  type="file"
+                  accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
+                  aria-label="Choose sales call audio"
+                  disabled={
+                    !policy ||
+                    !!busy ||
+                    !!submission ||
+                    !!deletionOnlyId ||
+                    reviewSelectionActive
+                  }
+                  onChange={(event) => choose(event.target.files?.[0])}
+                />
+                {!deletionOnlyId && policy && (
+                  <div className={styles.allowance}>
+                    <ShieldCheck size={16} />
+                    <span>
+                      {remainingAllowanceLabel(
+                        allowance,
+                        entry?.allowance_seconds ?? null,
+                        allowanceUnknown,
+                      )}
+                    </span>
+                  </div>
+                )}
+                {displayFileSelected &&
+                  !busy &&
+                  !deletionOnlyId &&
+                  policy &&
+                  !submission && (
+                    <div className="studio-consent">
+                      <p className={styles.verifyHeading}>
+                        <span>2</span> Verify and continue
+                      </p>
+                      <h3>Upload privately</h3>
+                      {entry?.report_languages && (
+                        <div className={styles.reportLanguage}>
+                          <label htmlFor="report-language">
+                            Report language
+                          </label>
+                          <select
+                            id="report-language"
+                            value={displayReportLanguage ?? ""}
+                            disabled={!!busy || reviewSelectionActive}
+                            onChange={(event) => {
+                              const selected = parseReportLanguage(
+                                event.target.value,
+                              );
+                              chosenReportLanguage.current = selected;
+                              setReportLanguage(selected);
+                            }}
+                          >
+                            {localObservation && (
+                              <option value="">
+                                No language selection observed
+                              </option>
+                            )}
+                            {displayReportLanguage &&
+                              !entry.report_languages.includes(
+                                displayReportLanguage,
+                              ) && (
+                                <option
+                                  value={displayReportLanguage}
+                                  key={displayReportLanguage}
+                                >
+                                  {reportLanguageLabels[displayReportLanguage]}{" "}
+                                  (observed)
+                                </option>
+                              )}
+                            {entry.report_languages.map((language) => (
+                              <option key={language} value={language}>
+                                {reportLanguageLabels[language]}
+                              </option>
+                            ))}
+                          </select>
+                          <p>
+                            Hindi and Marathi use Devanagari with natural
+                            English sales terms. Original transcript quotes stay
+                            unchanged.
+                          </p>
+                        </div>
+                      )}
+                      <p className={styles.freeBadge}>
+                        <span aria-hidden="true">
+                          <Check size={13} />
+                        </span>
+                        Free analysis · included in your trial
+                      </p>
+                      <details
+                        className={styles.privacyDetails}
+                        open={displayPrivacyOpen}
+                        onClick={(event) => {
+                          if (reviewSelectionActive) event.preventDefault();
+                        }}
+                        onToggle={(event) => {
+                          if (!reviewSelectionActive)
+                            setPrivacyOpen(event.currentTarget.open);
+                        }}
+                      >
+                        <summary>Privacy details</summary>
+                        <p>{policy.description}</p>
+                        <p>
+                          Your recording is retained for {policy.retention_days}{" "}
+                          days so this review can finish and remain available.
+                          You can request deletion from Privacy &amp; support.
+                        </p>
+                        <p>
+                          {policy.privacy_details ||
+                            "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
+                        </p>
+                      </details>
+                      <label className={styles.consentLabel}>
+                        <input
+                          type="checkbox"
+                          checked={displayConsent}
+                          disabled={!!busy || reviewSelectionActive}
+                          aria-describedby={
+                            localObservation
+                              ? "observed-consent-note"
+                              : undefined
+                          }
+                          onChange={(event) => {
+                            const accepted = event.target.checked;
+                            setConsent(accepted);
+                            setConsentedPolicySha(
+                              accepted ? (policy?.policy_sha256 ?? null) : null,
+                            );
+                          }}
+                        />
+                        <span>
+                          I agree to the{" "}
+                          <a href="https://app.authorityclosers.com/terms">
+                            Terms
+                          </a>{" "}
+                          and{" "}
+                          <a href="https://app.authorityclosers.com/privacy">
+                            Privacy Policy
+                          </a>
+                          .
+                        </span>
+                      </label>
+                      {localObservation && (
+                        <p className="small-text" id="observed-consent-note">
+                          Observed checkbox value only. This does not count as
+                          consent or approval.
+                        </p>
+                      )}
+                      <div className={styles.uploadActions}>
+                        {localObservation ? (
+                          <p className="small-text" role="status">
+                            {localObservation.verification === "checking"
+                              ? "Upload verification was still checking when this state was observed."
+                              : localObservation.verification ===
+                                  "session-present"
+                                ? "An account or guest session was present at capture; no credentials were restored."
+                                : localObservation.verification ===
+                                    "guest-challenge-complete"
+                                  ? "Guest verification was completed locally at capture. Its token is not restored or reused."
+                                  : "Guest verification was required at capture. The challenge is not run in read-only review."}
+                          </p>
+                        ) : (
+                          !analysisWriteBlocked &&
+                          !embedded &&
+                          !(
+                            access?.authenticated === false &&
+                            access.requestAnalysisAccess
+                          ) &&
+                          !session &&
+                          entry?.site_key &&
+                          entry.challenge_action && (
+                            <UploadCheck
+                              key={checkKey}
+                              siteKey={entry.site_key}
+                              action={entry.challenge_action}
+                              onToken={onToken}
+                            />
+                          )
+                        )}
+                        <button
+                          type="button"
+                          className="primary-button studio-wide"
+                          disabled={
+                            analysisWriteBlocked ||
+                            !consentCurrent ||
+                            (!(
+                              access?.authenticated === false &&
+                              access.requestAnalysisAccess
+                            ) &&
+                              !session &&
+                              !token) ||
+                            !!busy ||
+                            (allowance?.available_seconds === 0 &&
+                              !allowance?.unlimited)
+                          }
+                          onClick={() => void upload()}
+                        >
+                          {busy ? (
+                            <LoaderCircle className="spin" size={17} />
+                          ) : (
+                            <ArrowRight size={17} aria-hidden="true" />
+                          )}
+                          {busy || "Analyse my call"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                {submission && !report && plan && !plan.accepted && (
+                  <div className="studio-consent">
+                    <h3>Ready to continue</h3>
+                    {plan.report_language && (
+                      <p>
+                        Report language:{" "}
+                        <strong>
+                          {reportLanguageLabels[plan.report_language]}
+                        </strong>
+                        . This choice is saved with this analysis plan.
+                      </p>
+                    )}
+                    <p>
+                      Your saved call is ready for the next review step.
+                      Continue with this same recording to start the analysis.
+                    </p>
+                    <p className="small-text">
+                      This step is available until{" "}
+                      {new Date(plan.expires_at_epoch * 1000).toLocaleString()}.
+                    </p>
+                    <details className={styles.privacyDetails}>
+                      <summary>Privacy details</summary>
+                      <ul>
+                        {plan.stages.map((stage) => (
+                          <li key={stage.stage}>{stage.privacy_notice}</li>
+                        ))}
+                      </ul>
+                    </details>
+                    <button
+                      type="button"
+                      className="primary-button studio-wide"
+                      disabled={
+                        !!busy ||
+                        planExpired ||
+                        analysisPaused ||
+                        analysisWriteBlocked
+                      }
+                      onClick={() => void approvePlan()}
+                    >
+                      {busy ? (
+                        <LoaderCircle className="spin" size={17} />
+                      ) : (
+                        <AudioLines size={17} />
+                      )}
+                      {busy || "Continue analysis"}
+                    </button>
+                    {planExpired && (
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={
+                          !!busy || analysisPaused || analysisWriteBlocked
+                        }
+                        onClick={() => void freshPlan()}
+                      >
+                        Refresh expired plan
+                      </button>
+                    )}
+                  </div>
+                )}
+                {submission && !report && (!plan || plan.accepted) && (
+                  <AcquisitionProcessingPanel
+                    submissionId={submission.id}
+                    progress={progress}
+                    waitingForApproval={waitingForApproval}
+                    accepted={plan?.accepted ?? false}
+                    refreshProblem={!!statusIssue}
+                    stageRows={processingProjection.rows}
+                    statusText={processingProjection.title}
+                    fileName={displayFileName ?? undefined}
+                    fileMeta={
+                      displayFileBytes !== null
+                        ? `${(displayFileBytes / 1048576).toFixed(1)} MB`
+                        : undefined
+                    }
+                    allowanceLabel={remainingAllowanceLabel(
+                      allowance,
+                      entry?.allowance_seconds ?? null,
+                      allowanceUnknown,
+                    )}
+                    paused={processingProjection.attention}
                   >
                     <button
                       type="button"
-                      className={styles.playbackToggle}
-                      aria-expanded={playbackExpanded}
-                      aria-controls="acquisition-saved-audio"
-                      onClick={() => setPlaybackExpanded((value) => !value)}
+                      className="secondary-button"
+                      disabled={!!busy || checkingStatus}
+                      onClick={() => {
+                        setConsentedSubmissionId(null);
+                        setPollAttempt((n) => n + 1);
+                      }}
                     >
-                      {playbackExpanded ? "Hide player" : "Playback"}
+                      {checkingStatus ? "Checking status…" : "Check status"}
                     </button>
-                    <div id="acquisition-saved-audio">{audioPlayer}</div>
-                  </div>
-                )}
-                <p className={`small-text ${styles.previewHint}`}>
-                  {submission
-                    ? "Select any timestamp to listen to that moment."
-                    : "Listen to check this is the right call. Selecting a file does not upload it."}
-                </p>
-                {playbackMessage && (
-                  <p role="status" className="small-text">
-                    {playbackMessage}
-                  </p>
-                )}
-              </>
-            )}
-            <input
-              ref={input}
-              className="visually-hidden"
-              id="acquisition-file"
-              type="file"
-              accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
-              aria-label="Choose sales call audio"
-              disabled={!policy || !!busy || !!submission || !!deletionOnlyId}
-              onChange={(event) => choose(event.target.files?.[0])}
-            />
-            {!deletionOnlyId && policy && (
-              <div className={styles.allowance}>
-                <ShieldCheck size={16} />
-                <span>
-                  {remainingAllowanceLabel(
-                    allowance,
-                    entry?.allowance_seconds ?? null,
-                    allowanceUnknown,
-                  )}
-                </span>
-              </div>
-            )}
-            {file && !busy && !deletionOnlyId && policy && !submission && (
-              <div className="studio-consent">
-                <p className={styles.verifyHeading}>
-                  <span>2</span> Verify and continue
-                </p>
-                <h3>Upload privately</h3>
-                <p className={styles.freeBadge}>
-                  <span aria-hidden="true">
-                    <Check size={13} />
-                  </span>
-                  Free analysis · included in your trial
-                </p>
-                <details className={styles.privacyDetails}>
-                  <summary>Privacy details</summary>
-                  <p>{policy.description}</p>
-                  <p>
-                    Your recording is retained for {policy.retention_days} days
-                    so this review can finish and remain available. You can
-                    request deletion from Privacy &amp; support.
-                  </p>
-                  <p>
-                    {policy.privacy_details ||
-                      "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
-                  </p>
-                </details>
-                <label className={styles.consentLabel}>
-                  <input
-                    type="checkbox"
-                    checked={consent}
-                    disabled={!!busy}
-                    onChange={(event) => setConsent(event.target.checked)}
-                  />
-                  <span>
-                    I agree to the{" "}
-                    <a href="https://app.authorityclosers.com/terms">Terms</a>{" "}
-                    and{" "}
-                    <a href="https://app.authorityclosers.com/privacy">
-                      Privacy Policy
-                    </a>
-                    .
-                  </span>
-                </label>
-                <div className={styles.uploadActions}>
-                  {!embedded &&
-                    !session &&
-                    entry?.site_key &&
-                    entry.challenge_action && (
-                      <UploadCheck
-                        key={checkKey}
-                        siteKey={entry.site_key}
-                        action={entry.challenge_action}
-                        onToken={onToken}
-                      />
-                    )}
-                  <button
-                    type="button"
-                    className="primary-button studio-wide"
-                    disabled={
-                      !consent ||
-                      (!session && !token) ||
-                      !!busy ||
-                      (allowance?.available_seconds === 0 &&
-                        !allowance?.unlimited)
-                    }
-                    onClick={() => void upload()}
-                  >
-                    {busy ? (
-                      <LoaderCircle className="spin" size={17} />
-                    ) : (
-                      <ArrowRight size={17} aria-hidden="true" />
-                    )}
-                    {busy || "Analyse my call"}
-                  </button>
-                </div>
-              </div>
-            )}
-            {submission && !report && plan && !plan.accepted && (
-              <div className="studio-consent">
-                <h3>Ready to continue</h3>
-                <p>
-                  Your saved call is ready for the next review step. Continue
-                  with this same recording to start the analysis.
-                </p>
-                <p className="small-text">
-                  This step is available until{" "}
-                  {new Date(plan.expires_at_epoch * 1000).toLocaleString()}.
-                </p>
-                <details className={styles.privacyDetails}>
-                  <summary>Privacy details</summary>
-                  <ul>
-                    {plan.stages.map((stage) => (
-                      <li key={stage.stage}>{stage.privacy_notice}</li>
-                    ))}
-                  </ul>
-                </details>
-                <button
-                  type="button"
-                  className="primary-button studio-wide"
-                  disabled={!!busy || planExpired || analysisPaused}
-                  onClick={() => void approvePlan()}
-                >
-                  {busy ? (
-                    <LoaderCircle className="spin" size={17} />
-                  ) : (
-                    <AudioLines size={17} />
-                  )}
-                  {busy || "Continue analysis"}
-                </button>
-                {planExpired && (
-                  <button
-                    className="text-button"
-                    type="button"
-                    disabled={!!busy || analysisPaused}
-                    onClick={() => void freshPlan()}
-                  >
-                    Refresh expired plan
-                  </button>
-                )}
-              </div>
-            )}
-            {submission && !report && (!plan || plan.accepted) && (
-              <div
-                className={`studio-progress ${styles.processingPanel}`}
-                data-paused={processingNeedsAttention}
-                role="status"
-                aria-live="polite"
-              >
-                <ProcessingVisual
-                  phase={
-                    processingPaused
-                      ? pausedStage?.stage === "C2" ||
-                        pausedStage?.stage === "C4" ||
-                        pausedStage?.stage === "C5"
-                        ? pausedStage.stage
-                        : "processing"
-                      : currentStage?.stage === "C2" ||
-                          currentStage?.stage === "C4" ||
-                          currentStage?.stage === "C5"
-                        ? currentStage.stage
-                        : "processing"
-                  }
-                  paused={processingNeedsAttention}
-                />
-                <ProcessingStatusCopy
-                  submissionId={submission.id}
-                  progress={progress}
-                  paused={processingPaused}
-                  needsAttention={processingNeedsAttention}
-                  title={
-                    progress?.local_state !== "completed"
-                      ? "Checking your recording"
-                      : currentStage
-                        ? stageNames[currentStage.stage]
-                        : "Preparing your analysis"
-                  }
-                />
-                <div
-                  className={styles.progressRail}
-                  aria-label="Processing stages"
-                >
-                  {processingStages.map((stage, index) => {
-                    const latestStatus =
-                      latestStage(progress, stage)?.state ?? null;
-                    // C4 can have more chunks than the API currently exposes.
-                    const status =
-                      stage === "C4" &&
-                      latestStatus === "completed" &&
-                      !latestStage(progress, "C5")
-                        ? "saved"
-                        : latestStatus;
-                    return (
-                      <div
-                        key={stage}
-                        data-stage={stage}
-                        data-state={status ?? "not-started"}
-                        data-complete={status === "completed"}
-                        aria-label={`${stageNames[stage]}: ${stageStatusLabel(status)}`}
-                      >
-                        <span aria-hidden="true">
-                          {status === "completed" ? (
-                            <Check size={13} />
-                          ) : (
-                            index + 1
-                          )}
-                        </span>
-                        <p>
-                          {stageLabels[stage]}
-                          <small>{stageStatusLabel(status)}</small>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className={styles.progressGuidance}>
-                  <p className="eyebrow">
-                    {processingNeedsAttention
-                      ? "YOUR SAVED WORK"
-                      : "WHILE YOU WAIT"}
-                  </p>
-                  <ul>
-                    <li>
-                      {processingNeedsAttention
-                        ? hasSavedTranscript
-                          ? "The completed transcript stays attached to this call."
-                          : "A completed transcript has not been confirmed yet."
-                        : "Keep this tab open or return later from this browser."}
-                    </li>
-                    {hasSavedAnalysis && (
-                      <li>
-                        Some conversation analysis is saved with this call.
-                      </li>
-                    )}
-                    <li>
-                      {processingNeedsAttention
-                        ? "You do not need to upload the recording again."
-                        : null}
-                    </li>
-                  </ul>
-                  <div className={styles.progressActions}>
                     <Link
-                      href={savedCallsHref(embedded)}
+                      href={`${embedded ? "/sales-xray" : "/"}?call=${submission.id}`}
                       className="secondary-button"
                     >
                       <FolderOpen size={17} aria-hidden="true" />
-                      Open saved calls
+                      This call’s link
                     </Link>
                     {processingNeedsAttention && (
                       <button
@@ -1507,215 +2987,34 @@ export function AcquisitionStudio({
                       <button
                         className="secondary-button"
                         type="button"
-                        disabled={!!busy || analysisPaused}
+                        disabled={
+                          !!busy || analysisPaused || analysisWriteBlocked
+                        }
                         onClick={() => void freshPlan()}
                       >
-                        {busy ? (
-                          <LoaderCircle className="spin" size={17} />
-                        ) : (
-                          <FileText size={17} />
-                        )}
+                        <FileText size={17} aria-hidden="true" />
                         {busy || "Review and continue analysis"}
                       </button>
                     )}
-                  </div>
-                  {canReviewHeldPlan && (
-                    <p className={styles.resumeNotice}>
-                      Nothing restarts until you review and continue.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            {(submission || deletionOnlyId) && (
-              <div className={styles.callActions}>
-                <details className={styles.privacyActions}>
-                  <summary>Privacy &amp; support</summary>
-                  <div>
-                    <p>
-                      Need this call removed?{" "}
-                      <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
-                        Email the AC team
-                      </a>{" "}
-                      or request deletion here.
-                    </p>
-                    {!deleteConfirm ? (
+                    {waitingForApproval && !plan && (
                       <button
-                        className="text-button"
                         type="button"
-                        disabled={!!busy}
-                        onClick={() => setDeleteConfirm(true)}
+                        className="primary-button"
+                        disabled={
+                          !!busy || analysisPaused || analysisWriteBlocked
+                        }
+                        onClick={() => void retryAnalysis()}
                       >
-                        Request deletion
+                        Start analysis
                       </button>
-                    ) : (
-                      <>
-                        <p>
-                          Remove this recording and its report? This cannot be
-                          undone.
-                        </p>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          disabled={!!busy}
-                          onClick={() => void erase()}
-                        >
-                          Request recording deletion
-                        </button>
-                        <button
-                          type="button"
-                          className="text-button"
-                          disabled={!!busy}
-                          onClick={() => setDeleteConfirm(false)}
-                        >
-                          Keep call
-                        </button>
-                      </>
                     )}
-                  </div>
-                </details>
-              </div>
-            )}
-          </section>
-          {!submission && !report && (
-            <aside className={`panel ${styles.expect}`}>
-              <p className="eyebrow">WHAT YOU’LL GET</p>
-              <h2>What you’ll get</h2>
-              <ol>
-                <li>
-                  <FileText size={22} aria-hidden="true" />
-                  <div>
-                    <h3>A clear call overview</h3>
-                    <p>
-                      Understand the outcome, your strengths and the most useful
-                      improvements.
-                    </p>
-                  </div>
-                </li>
-                <li>
-                  <ListChecks size={22} aria-hidden="true" />
-                  <div>
-                    <h3>Feedback you can hear</h3>
-                    <p>
-                      Jump from a finding to the exact moment in your recording.
-                    </p>
-                  </div>
-                </li>
-                <li>
-                  <Sparkles size={22} aria-hidden="true" />
-                  <div>
-                    <h3>Your next-call focus</h3>
-                    <p>Turn the feedback into one practical rehearsal.</p>
-                  </div>
-                </li>
-              </ol>
-              <p className={styles.draftNote}>
-                AI-generated coaching based on Dipak’s principles. Each report
-                remains a draft until reviewed.
-              </p>
-            </aside>
-          )}
-        </div>
-        {error && !savedCallNeedsSession && (
-          <div className={`notice error ${styles.error}`} role="alert">
-            <p>{error instanceof AcquisitionError ? error.message : error}</p>
-            <div className={styles.errorActions}>
-              <button
-                className="secondary-button"
-                type="button"
-                disabled={!!busy}
-                onClick={() => {
-                  setError("");
-                  if (submission) setPollAttempt((n) => n + 1);
-                  else setAttempt((n) => n + 1);
-                }}
-              >
-                Check again
-              </button>
-              {submission && progress?.local_state === "completed" && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!!busy || analysisPaused}
-                  onClick={() => void freshPlan()}
-                >
-                  Request a fresh plan
-                </button>
-              )}
-              {submission && (!progress || (plan && !plan.accepted)) && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!!busy}
-                  onClick={startAnotherCall}
-                >
-                  <ArrowRight size={16} aria-hidden="true" />
-                  Analyse another call
-                </button>
-              )}
-              {error instanceof AcquisitionError && error.status === 401 && (
-                <Link className="text-button" href="/login">
-                  Sign in
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-        {result && report && (
-          <SourceWaveformProvider
-            submissionId={submission?.id}
-            audioRef={audio}
-          >
-            <section
-              className={`studio-report panel ${styles.report}`}
-              aria-label="Sales call report"
-            >
-              <div className={styles.reportHeader}>
-                <div className={styles.reportHeading}>
-                  <h1>Your call, clearly.</h1>
-                  <p>
-                    Actionable insights. Real conversations. A stronger you.
-                  </p>
-                </div>
-                <details className={styles.reportMoreActions}>
-                  <summary
-                    aria-label="More report actions"
-                    title="More report actions"
-                  >
-                    <MoreHorizontal size={19} aria-hidden="true" />
-                  </summary>
-                  <div className={styles.reportMoreMenu} role="menu">
-                    {!result.claimed && (
-                      <Link href="/login" role="menuitem">
-                        Sign in to save this call
-                      </Link>
-                    )}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={!!busy || !submission}
-                      onClick={() => void downloadReport()}
-                    >
-                      <Download size={16} aria-hidden="true" />
-                      Download report
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={!!busy}
-                      onClick={() => reset()}
-                    >
-                      <ArrowRight size={16} aria-hidden="true" />
-                      Analyse another call
-                    </button>
-                    <p className={styles.reportMetadata}>
-                      Draft coaching; not adjudicated by Dipak. Speaker labels
-                      are unverified.
-                      {` Source: ${report.source_label}. Duration: ${time(result.transcript.duration_ms)}.`}
-                    </p>
-                    {submission && (
-                      <div className={styles.reportPrivacyMenu}>
-                        <strong>Privacy &amp; support</strong>
+                  </AcquisitionProcessingPanel>
+                )}
+                {(submission || deletionOnlyId) && (
+                  <div className={styles.callActions}>
+                    <details className={styles.privacyActions}>
+                      <summary>Privacy &amp; support</summary>
+                      <div>
                         <p>
                           Need this call removed?{" "}
                           <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
@@ -1725,9 +3024,9 @@ export function AcquisitionStudio({
                         </p>
                         {!deleteConfirm ? (
                           <button
-                            className={styles.reportMenuTextButton}
+                            className="text-button"
                             type="button"
-                            disabled={!!busy}
+                            disabled={!!busy || analysisWriteBlocked}
                             onClick={() => setDeleteConfirm(true)}
                           >
                             Request deletion
@@ -1740,14 +3039,15 @@ export function AcquisitionStudio({
                             </p>
                             <button
                               type="button"
-                              disabled={!!busy}
+                              className="secondary-button"
+                              disabled={!!busy || analysisWriteBlocked}
                               onClick={() => void erase()}
                             >
                               Request recording deletion
                             </button>
                             <button
-                              className={styles.reportMenuTextButton}
                               type="button"
+                              className="text-button"
                               disabled={!!busy}
                               onClick={() => setDeleteConfirm(false)}
                             >
@@ -1756,105 +3056,238 @@ export function AcquisitionStudio({
                           </>
                         )}
                       </div>
-                    )}
+                    </details>
                   </div>
-                </details>
-              </div>
-              <ReportExplorer
-                label="Explore your sales report"
-                panels={[
-                  {
-                    id: "overview",
-                    label: "Overview",
-                    content: (
-                      <DipakOverview
-                        showHeading={false}
-                        report={report}
-                        onSelectEvidence={seek}
-                        onUnlock={() => router.push("/login")}
-                        durationMs={result.transcript.duration_ms}
-                      />
-                    ),
-                  },
-                  {
-                    id: "moments",
-                    label: "Moments",
-                    content: (
-                      <ReportMoments
-                        report={report}
-                        onSelectEvidence={seek}
-                        transcriptSlot={
-                          <ReportTranscript
-                            transcript={result.transcript}
-                            language="en"
-                            onSelect={(segment) =>
-                              seek({
-                                segment_id: segment.id,
-                                quote: segment.text,
-                                start_ms: segment.start_ms,
-                                end_ms: segment.end_ms,
-                              })
-                            }
-                          />
-                        }
-                      />
-                    ),
-                  },
-                  {
-                    id: "skills",
-                    label: "Sales skills",
-                    content: <SalesSkills dimensions={report.dimensions} />,
-                  },
-                  {
-                    id: "next-call-plan",
-                    label: "Next-call plan",
-                    content: (
-                      <NextCallPlan
-                        report={report}
-                        onSelectEvidence={seek}
-                        onUnlock={() => router.push("/login")}
-                      />
-                    ),
-                  },
-                ]}
-              />
-            </section>
-            <CallAudioDock
+                )}
+              </section>
+              {embedded && !submission && !report && !deletionOnlyId && (
+                <AcquisitionLowerPanels compact={displayFileSelected} />
+              )}
+              {!embedded &&
+                entry?.enabled === true &&
+                access?.authenticated === true &&
+                !displayFileSelected &&
+                !submission &&
+                !report &&
+                !deletionOnlyId && <CallsLibrary preview />}
+            </div>
+            {(embedded || stagedFiles.length >= 2) &&
+              !report &&
+              !deletionOnlyId &&
+              !submission && (
+                <AcquisitionGuideRail
+                  stage={displayFileSelected ? "selected" : "empty"}
+                  stagedFiles={stagedFiles}
+                  maximumFileBytes={policy?.maximum_file_bytes}
+                />
+              )}
+          </div>
+          {result && report && (
+            <SourceWaveformProvider
+              submissionId={submission?.id}
               audioRef={audio}
-              src={source}
-              durationMs={result.transcript.duration_ms}
-              title={file?.name ?? "Your saved sales call"}
-              embedded={embedded}
-              onTimeUpdate={() => {
-                if (
-                  moment &&
-                  audio.current &&
-                  audio.current.currentTime >= moment.end_ms / 1000
-                ) {
-                  audio.current.pause();
+              activeRange={moment}
+            >
+              <section
+                className={`studio-report panel ${styles.report}`}
+                aria-label="Sales call report"
+                data-lx-surface="light"
+              >
+                <ReportHeader
+                  key={submission?.id ?? "unbound"}
+                  label={result.label ?? null}
+                  rename={
+                    submission
+                      ? {
+                          save: (name, revision, signal) =>
+                            renameCall(submission.id, name, revision, signal),
+                          refresh: (signal) =>
+                            readCallLabel(submission.id, signal),
+                          // Apply only to the call it was issued for.
+                          confirmed: (label) =>
+                            setResult((current) =>
+                              current && bindingRef.current === submission.id
+                                ? { ...current, label }
+                                : current,
+                            ),
+                        }
+                      : undefined
+                  }
+                  durationMs={result.transcript.duration_ms}
+                  languageLabel={
+                    plan?.report_language && plan.report_run_id === result.runId
+                      ? reportLanguageLabels[plan.report_language]
+                      : null
+                  }
+                  sourceLabel={report.source_label}
+                  claimed={result.claimed}
+                  busy={!!busy}
+                  canDownload={!!submission}
+                  canRequestDeletion={!!submission}
+                  deletionDisabled={analysisWriteBlocked}
+                  onAnalyseAnother={startAnotherCall}
+                  onDownload={() => void downloadReport()}
+                  onRequestDeletion={() => setDeleteConfirm(true)}
+                />
+                {submission && deleteConfirm && (
+                  <div className={styles.reportDeleteConfirm} role="alert">
+                    <p>
+                      Remove this recording and its report? This cannot be
+                      undone.
+                    </p>
+                    <div>
+                      <button
+                        className={`${styles.reportAction} ${styles.reportActionDanger}`}
+                        type="button"
+                        disabled={!!busy || analysisWriteBlocked}
+                        onClick={() => void erase()}
+                      >
+                        Request recording deletion
+                      </button>
+                      <button
+                        className={styles.reportAction}
+                        type="button"
+                        disabled={!!busy}
+                        onClick={() => setDeleteConfirm(false)}
+                      >
+                        Keep call
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <ReportModes
+                  label="Explore your sales report"
+                  boundCallId={submission?.id}
+                  panels={[
+                    {
+                      id: "overview",
+                      label: "Overview",
+                      content: (
+                        <DipakOverview
+                          showHeading={false}
+                          report={report}
+                          onSelectEvidence={seek}
+                          transcript={result.transcript}
+                          onSelectContextualPlayback={seekWithContext}
+                          onUnlock={() => router.push("/login")}
+                          durationMs={result.transcript.duration_ms}
+                        />
+                      ),
+                    },
+                    {
+                      id: "prospect",
+                      label: "Prospect",
+                      content: (
+                        <ProspectSnapshot
+                          report={report}
+                          onSelectEvidence={seek}
+                          onUnlock={() => router.push("/login")}
+                        />
+                      ),
+                    },
+                    {
+                      id: "moments",
+                      label: "Moments",
+                      content: (
+                        <ReportMoments
+                          report={report}
+                          onSelectEvidence={seek}
+                        />
+                      ),
+                    },
+                    {
+                      id: "skills",
+                      label: "Sales skills",
+                      compactLabel: "Skills",
+                      content: (
+                        <SalesSkills
+                          dimensions={report.dimensions}
+                          onSelectEvidence={seek}
+                        />
+                      ),
+                    },
+                    {
+                      id: "next-call-plan",
+                      label: "Next-call plan",
+                      compactLabel: "Next-call",
+                      content: (
+                        <NextCallPlan
+                          report={report}
+                          onSelectEvidence={seek}
+                          onUnlock={() => router.push("/login")}
+                        />
+                      ),
+                    },
+                    {
+                      id: "transcript",
+                      label: "Transcript",
+                      content: (
+                        <ReportTranscript
+                          transcript={result.transcript}
+                          language="en"
+                          onSelect={(segment) =>
+                            seekTo({
+                              segment_id: segment.id,
+                              quote: segment.text,
+                              start_ms: segment.start_ms,
+                              end_ms: segment.end_ms,
+                            })
+                          }
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              </section>
+              <CallAudioDock
+                audioRef={audio}
+                src={source}
+                durationMs={result.transcript.duration_ms}
+                title={file?.name ?? "Your saved sales call"}
+                embedded={embedded}
+                onPlay={() => setMoment(null)}
+                onTimeUpdate={() => {
+                  if (
+                    moment &&
+                    audio.current &&
+                    audio.current.currentTime >= moment.end_ms / 1000
+                  ) {
+                    audio.current.pause();
+                  }
+                }}
+                onSeek={() => setMoment(null)}
+                onError={() =>
+                  setPlaybackMessage(
+                    "Audio playback is unavailable. Your report remains below.",
+                  )
                 }
-              }}
-              onSeek={() => setMoment(null)}
-              onError={() =>
-                setPlaybackMessage(
-                  "Audio playback is unavailable. Your report remains below.",
-                )
-              }
-            />
-          </SourceWaveformProvider>
-        )}
+              />
+            </SourceWaveformProvider>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
 
-  if (embedded) return content;
-  return (
-    <AcquisitionShell
-      authenticated={access?.authenticated === true}
-      homeHref={homeHref}
-      mobileFit
-    >
-      {content}
-    </AcquisitionShell>
-  );
+    if (embedded) return content;
+    return (
+      <AcquisitionShell
+        active={activeRequestedCallId || reportReady ? "calls" : "analyse"}
+        authenticated={access?.authenticated === true}
+        homeHref={homeHref}
+        mobileFit
+        allowance={allowance}
+        heroStage={
+          !result && !busy && !deletionOnlyId
+            ? submission
+              ? waitingForApproval && !plan?.accepted
+                ? "ready"
+                : "processing"
+              : "welcome"
+            : undefined
+        }
+      >
+        {content}
+      </AcquisitionShell>
+    );
+  }
 }

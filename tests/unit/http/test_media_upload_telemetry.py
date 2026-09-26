@@ -10,12 +10,217 @@ from fastapi.testclient import TestClient
 
 import ac_platform.http.media as media_http
 from ac_platform.application.settings import Settings
-from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.auth import AuthenticatedTransaction, RequestOriginDenied
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.media.api_contracts import MediaAssetResponse, UploadIntentResponse
+from ac_platform.media.api_contracts import (
+    MediaAssetResponse,
+    ProfileAvatarResponse,
+    UploadIntentResponse,
+)
 from ac_platform.media.models import MediaLifecycle, MediaPurpose
 from ac_platform.media.runtime import MediaRuntime
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryEvent, TelemetryRecorder
+
+
+@pytest.mark.parametrize(
+    ("host", "origin"),
+    [
+        ("app.test", "https://app.test"),
+        ("sales.test", "https://sales.test"),
+    ],
+)
+def test_filesystem_avatar_origin_selection_uses_exact_hosted_surface(host, origin):
+    settings = Settings(
+        environment="test",
+        public_app_url="https://app.test",
+        sales_xray_app_url="https://sales.test",
+    )
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/v1/profile/avatar",
+            "raw_path": b"/v1/profile/avatar",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [(b"host", host.encode()), (b"origin", origin.encode())],
+            "client": ("127.0.0.1", 1234),
+            "server": (host, 443),
+        }
+    )
+
+    assert media_http._filesystem_avatar_surface_origin(request, settings) == origin
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("app.test", "https://app.test"),
+        ("sales.test", "https://sales.test"),
+    ],
+)
+def test_filesystem_avatar_read_selects_hosted_surface_without_origin(host, expected):
+    settings = Settings(
+        environment="test",
+        public_app_url="https://app.test",
+        sales_xray_app_url="https://sales.test",
+    )
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",  # The API ignores forwarded/request scheme and uses configured HTTPS.
+            "path": "/v1/profile/avatar",
+            "raw_path": b"/v1/profile/avatar",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [
+                (b"host", host.encode()),
+                (b"x-forwarded-host", b"attacker.test"),
+                (b"x-forwarded-proto", b"http"),
+            ],
+            "client": ("127.0.0.1", 1234),
+            "server": (host, 80),
+        }
+    )
+
+    assert (
+        media_http._filesystem_avatar_surface_origin(request, settings, require_origin=False)
+        == expected
+    )
+
+
+def test_filesystem_avatar_read_rejects_unconfigured_host_even_with_forwarded_configured_host():
+    settings = Settings(
+        environment="test",
+        public_app_url="https://app.test",
+        sales_xray_app_url="https://sales.test",
+    )
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "https",
+            "path": "/v1/profile/avatar",
+            "raw_path": b"/v1/profile/avatar",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [
+                (b"host", b"attacker.test"),
+                (b"x-forwarded-host", b"app.test"),
+                (b"x-forwarded-proto", b"https"),
+            ],
+            "client": ("127.0.0.1", 1234),
+            "server": ("attacker.test", 443),
+        }
+    )
+
+    with pytest.raises(RequestOriginDenied):
+        media_http._filesystem_avatar_surface_origin(request, settings, require_origin=False)
+
+
+def test_profile_avatar_get_mints_same_surface_url_without_origin(monkeypatch):
+    actor = ActorContext(person_id=uuid4(), tenant_id=uuid4(), session_id=uuid4())
+    calls = []
+
+    class Database:
+        async def run_sync(self, callback):
+            return callback(None)
+
+    class AvatarService:
+        def get_profile_avatar_for_origin(self, _database, _actor, *, origin):
+            calls.append(origin)
+            return ProfileAvatarResponse()
+
+    class AvatarRuntime:
+        service = AvatarService()
+        storage = SimpleNamespace(origin="https://app.test")
+
+    async def require_actor(_request: Request):
+        yield AuthenticatedTransaction(
+            database=Database(),
+            identity=SimpleNamespace(),
+            resolved=SimpleNamespace(actor=actor),
+            token="synthetic-test-only",  # noqa: S106
+        )
+
+    runtime = SimpleNamespace(
+        service=SimpleNamespace(),
+        filesystem_avatar_runtime=AvatarRuntime(),
+        local_avatar_runtime=None,
+        telemetry=TelemetryRecorder(InMemoryTelemetrySink()),
+    )
+    application = FastAPI()
+    media_http.install_media_http(
+        application,
+        settings=Settings(
+            environment="test",
+            public_app_url="https://app.test",
+            sales_xray_app_url="https://sales.test",
+        ),
+        sessions=None,
+        require_actor=require_actor,
+        runtime=runtime,
+    )
+
+    with TestClient(application, base_url="https://app.test") as client:
+        response = client.get(
+            "https://sales.test/v1/profile/avatar",
+            headers={"x-forwarded-host": "attacker.test", "x-forwarded-proto": "http"},
+        )
+        with pytest.raises(RequestOriginDenied):
+            client.get(
+                "https://attacker.test/v1/profile/avatar",
+                headers={"x-forwarded-host": "sales.test", "x-forwarded-proto": "https"},
+            )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert calls == ["https://sales.test"]
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "attacker.test",
+        "app.test:444",
+        "attacker@app.test",
+        "app.test/path",
+        "app.test?query=1",
+        "app.test#fragment",
+    ],
+)
+def test_filesystem_avatar_origin_selection_rejects_host_origin_mismatch(host):
+    settings = Settings(
+        environment="test",
+        public_app_url="https://app.test",
+        sales_xray_app_url="https://sales.test",
+    )
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/v1/profile/avatar",
+            "raw_path": b"/v1/profile/avatar",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [
+                (b"host", host.encode()),
+                (b"origin", b"https://app.test"),
+            ],
+            "client": ("127.0.0.1", 1234),
+            "server": ("app.test", 443),
+        }
+    )
+
+    with pytest.raises(RequestOriginDenied):
+        media_http._filesystem_avatar_surface_origin(request, settings)
 
 
 @pytest.mark.parametrize("path", ["/v1/media/uploads", "/v1/profile/avatar"])
@@ -182,8 +387,16 @@ def test_filesystem_avatar_routes_keep_video_service_isolated(monkeypatch, tmp_p
             self.completed = completed
             self.calls = []
 
-        def create_upload_intent(self, database, actor_value, request, *, idempotency_key):
-            self.calls.append(("create", request.purpose, idempotency_key))
+        def create_upload_intent(
+            self,
+            database,
+            actor_value,
+            request,
+            *,
+            idempotency_key,
+            upload_origin=None,
+        ):
+            self.calls.append(("create", request.purpose, idempotency_key, upload_origin))
             return self.intent
 
         def complete_upload(
@@ -233,6 +446,7 @@ def test_filesystem_avatar_routes_keep_video_service_isolated(monkeypatch, tmp_p
     settings = Settings(
         environment="test",
         public_app_url="https://app.test",
+        sales_xray_app_url="https://sales.test",
         media_filesystem_enabled=True,
         media_filesystem_root=str(tmp_path / "video-objects"),
         media_filesystem_avatar_root=str(tmp_path / "avatar-objects"),
@@ -255,7 +469,7 @@ def test_filesystem_avatar_routes_keep_video_service_isolated(monkeypatch, tmp_p
     )
 
     headers = {"origin": "https://app.test", "idempotency-key": "synthetic-command"}
-    with TestClient(application) as client:
+    with TestClient(application, base_url="https://app.test") as client:
         video_create = client.post(
             "/v1/media/uploads",
             json={
@@ -276,6 +490,20 @@ def test_filesystem_avatar_routes_keep_video_service_isolated(monkeypatch, tmp_p
             },
             headers=headers,
         )
+        sales_avatar_create = client.post(
+            "https://sales.test/v1/profile/avatar",
+            json={
+                "purpose": "avatar",
+                "filename": "sales-photo.png",
+                "content_type": "image/png",
+                "content_length": 1,
+            },
+            headers={
+                **headers,
+                "origin": "https://sales.test",
+                "idempotency-key": "sales-synthetic-command",
+            },
+        )
         video_complete = client.post(
             f"/v1/media/uploads/{video_upload_id}/complete",
             json={"actual_bytes": 1},
@@ -289,13 +517,20 @@ def test_filesystem_avatar_routes_keep_video_service_isolated(monkeypatch, tmp_p
 
     assert video_create.status_code == 201
     assert avatar_create.status_code == 201
+    assert sales_avatar_create.status_code == 201
     assert video_complete.status_code == 200
     assert avatar_complete.status_code == 200
     assert video_service.calls == [
-        ("create", MediaPurpose.VIDEO, "synthetic-command"),
+        ("create", MediaPurpose.VIDEO, "synthetic-command", None),
         ("complete", video_upload_id, None, "synthetic-command"),
     ]
     assert avatar_service.calls == [
-        ("create", MediaPurpose.AVATAR, "synthetic-command"),
+        ("create", MediaPurpose.AVATAR, "synthetic-command", "https://app.test"),
+        (
+            "create",
+            MediaPurpose.AVATAR,
+            "sales-synthetic-command",
+            "https://sales.test",
+        ),
         ("complete", avatar_upload_id, MediaPurpose.AVATAR, "synthetic-command"),
     ]

@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     effective_budget_cap_paise,
 )
 from ac_platform.conversation_intelligence.inference import (
+    INFERENCE_JOB,
     TRANSCRIPT_RECIPE_BY_ROUTE,
     TRANSCRIPT_RECIPES,
     ConversationInference,
@@ -63,6 +64,10 @@ from ac_platform.conversation_intelligence.processing_actor import (
     actor_from_row,
     same_actor,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
@@ -70,18 +75,67 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StagePlan,
     StageRequest,
 )
-from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V3,
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    FACT_PROMPT_COMPACT,
+    FACT_PROMPT_LEGACY,
+    load_report_profile,
+)
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    is_account_profile_hold,
+)
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 C5_AUTO_REPAIR_ATTEMPTS = 1
+NEW_PLAN_COACHING_PROMPT_REVISION: Literal["coaching-v3"] = COACHING_PROMPT_V3
+_PROCESSING_DIAGNOSTIC_PHASES = frozenset(
+    {"approval_evaluation", "quote_usage_reservation", "request_stage"}
+)
+
+
+def _processing_failure_diagnostic(phase: str, error: BaseException) -> str | None:
+    """Map known local exception types to bounded, content-free diagnostics."""
+
+    if phase not in _PROCESSING_DIAGNOSTIC_PHASES:
+        return None
+    if isinstance(error, ConversationDenied):
+        category = "authorization_denied"
+    elif isinstance(error, ConversationConflict):
+        category = "state_conflict"
+    elif isinstance(error, ConversationNotFound):
+        category = "resource_unavailable"
+    elif isinstance(error, InferenceTaskError):
+        category = "local_input_invalid"
+    elif isinstance(error, ConversationError):
+        category = "conversation_error"
+    else:
+        return None
+    return f"processing_{phase}_{category}"
+
+
+def _implemented_text_provider(stage: str, provider: str) -> bool:
+    """Return the fixed text-provider/stage combinations implemented here."""
+
+    if stage == "C4":
+        return provider in {"groq", "gemini"}
+    if stage == "C5":
+        return provider in {"groq", "gemini", "openai"}
+    return False
 
 
 def planned_c5_requests(stage: StageApproval) -> int:
-    """Reserve one bounded C5 repair only when the pinned approval permits it."""
+    """Reserve one C5 attempt, except routes explicitly approved for one repair."""
 
+    # OpenAI is intentionally a one-shot C5 route during this canary. A later
+    # repair would be another paid effect, so it is not included in its plan.
+    if stage.provider_id == "openai":
+        return 1
     return 1 + min(C5_AUTO_REPAIR_ATTEMPTS, max(0, stage.max_requests - 1))
 
 
@@ -107,7 +161,11 @@ def c5_repair_intent(task: ConversationInferenceTask, job: Job) -> C5RepairInten
     if task.stage != "C5" or task.state != "uncertain":
         return None
     request = task.intent.get("request") if isinstance(task.intent, dict) else None
-    if not isinstance(request, dict) or request.get("repair") is not None:
+    if (
+        not isinstance(request, dict)
+        or request.get("repair") is not None
+        or request.get("provider") == "openai"
+    ):
         return None
     receipt = job.provider_receipt
     if (
@@ -157,6 +215,12 @@ class PlanManifest(BaseModel):
     stages: tuple[StageApproval, StageApproval, StageApproval]
     profile: dict[str, Any] = Field(repr=False)
     max_input_chars: Literal[16000] = 16000
+    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY
+    coaching_prompt_revision: Literal[
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+    ] = COACHING_PROMPT_LEGACY
+    report_language: ReportLanguage | None = None
+    qualitative_pack_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
@@ -205,6 +269,15 @@ class PlanManifest(BaseModel):
             or self.max_cost_paise != maximum_plan_cost(self.stages) + repair_cost
         ):
             raise ValueError("processing_plan_bounds_invalid")
+        if self.coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
+            if (
+                self.report_language is None
+                or self.qualitative_pack_sha256
+                != load_qualitative_pack_for_revision(self.coaching_prompt_revision).sha256
+            ):
+                raise ValueError("processing_plan_coaching_options_invalid")
+        elif self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None:
+            raise ValueError("processing_plan_coaching_options_invalid")
         return self
 
     def as_dict(self) -> dict[str, Any]:
@@ -219,6 +292,14 @@ class PlanManifest(BaseModel):
             value.pop("automatic_c5_repair_cost_paise", None)
         if self.output_profile == "detailed":
             value.pop("output_profile", None)
+        if self.fact_prompt_revision == FACT_PROMPT_LEGACY:
+            value.pop("fact_prompt_revision", None)
+        if self.coaching_prompt_revision == COACHING_PROMPT_LEGACY:
+            value.pop("coaching_prompt_revision", None)
+        if self.report_language is None:
+            value.pop("report_language", None)
+        if self.qualitative_pack_sha256 is None:
+            value.pop("qualitative_pack_sha256", None)
         return value
 
 
@@ -235,6 +316,24 @@ class PlanAcceptance(BaseModel):
         if value is not True:
             raise ValueError("Explicit acceptance is required.")
         return True
+
+
+class PlanLanguagePreference(BaseModel):
+    """One optional caller preference; it cannot select an engine or pack."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    report_language: ReportLanguage
+
+
+def parse_report_language_preference(raw: bytes) -> ReportLanguage | None:
+    """Parse the bounded, exact optional language body used by quote routes."""
+
+    if not raw:
+        return None
+    try:
+        return PlanLanguagePreference.model_validate_json(raw).report_language
+    except ValueError:
+        raise ValueError("The report language preference is invalid.") from None
 
 
 def manifest_for(row: ConversationProcessingPlan) -> PlanManifest:
@@ -414,8 +513,21 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         )
         or (plan.checkpoint.stage == "C4" and plan.request.chunk_index > approval.max_requests)
         or (
+            plan.checkpoint.stage == "C4"
+            and plan.request.fact_prompt_revision != value.fact_prompt_revision
+        )
+        or (
             plan.checkpoint.stage == "C5"
             and content_hash(plan.profile) != content_hash(value.profile)
+        )
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.coaching_prompt_revision != value.coaching_prompt_revision
+        )
+        or (plan.checkpoint.stage == "C5" and plan.request.report_language != value.report_language)
+        or (
+            plan.checkpoint.stage == "C5"
+            and plan.request.qualitative_pack_sha256 != value.qualitative_pack_sha256
         )
         or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
@@ -457,6 +569,16 @@ class ConversationProcessingPlans:
     ) -> None:
         self.app, self.db, self.authority, self.storage = app, app.database, authority, storage
         self.inference = ConversationInference(app, authority=authority)
+        self.failure_diagnostic_code: str | None = None
+
+    async def _diagnosed_processing_call(self, phase: str, operation: Any) -> Any:
+        """Capture a bounded phase/category code while preserving the original error."""
+
+        try:
+            return await operation()
+        except (ConversationError, InferenceTaskError) as error:
+            self.failure_diagnostic_code = _processing_failure_diagnostic(phase, error)
+            raise
 
     async def _row(
         self, actor: ConversationActor, recording_id: UUID, identifier: UUID | None = None
@@ -492,15 +614,24 @@ class ConversationProcessingPlans:
         return None if job is None else c5_repair_intent(task, job)
 
     @staticmethod
-    def view(row: ConversationProcessingPlan) -> dict[str, Any]:
+    def view(
+        row: ConversationProcessingPlan,
+        *,
+        include_report_options: bool = False,
+    ) -> dict[str, Any]:
         value = manifest_for(row)
-        return {
+        account_profile_hold = (
+            row.state == "active"
+            and row.acceptance_command_id is not None
+            and row.progress.get("failure_code") == "account_profile_required"
+        )
+        result = {
             "id": str(row.id),
             "recording_id": str(row.recording_id),
             "plan_fingerprint": row.plan_sha256,
             "privacy_revision": PLAN_PRIVACY_REVISION,
             "accepted": row.acceptance_command_id is not None,
-            "state": row.state,
+            "state": "held" if account_profile_hold else row.state,
             "automatic_progression": True,
             "cost_label": plan_cost_label(value.max_cost_paise),
             "max_cost_paise": value.max_cost_paise,
@@ -527,8 +658,43 @@ class ConversationProcessingPlans:
             "current_stage": row.progress.get("current_stage"),
             "report_ready": row.state == "completed" and bool(row.progress.get("report_run_id")),
             "report_run_id": row.progress.get("report_run_id"),
-            "failure_code": row.progress.get("failure_code"),
+            "failure_code": (
+                "account_profile_required"
+                if account_profile_hold
+                else row.progress.get("failure_code")
+            ),
         }
+        if include_report_options:
+            result["report_language"] = value.report_language or "en"
+            result["coaching_prompt_revision"] = value.coaching_prompt_revision
+        return result
+
+    @staticmethod
+    async def latest_submission_view(
+        database: AsyncSession,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        recording_id: UUID,
+        processing_lease_id: UUID,
+    ) -> dict[str, Any]:
+        """Read the latest retained plan for an owner-verified submission."""
+
+        row = await database.scalar(
+            select(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.recording_id == recording_id,
+                ConversationProcessingPlan.tenant_id == tenant_id,
+                ConversationProcessingPlan.person_id == person_id,
+                ConversationProcessingPlan.processing_lease_id == processing_lease_id,
+                ConversationProcessingPlan.erased_at.is_(None),
+            )
+            .order_by(ConversationProcessingPlan.created_at.desc())
+            .limit(1)
+        )
+        if row is None:
+            raise ConversationNotFound("No processing plan has been prepared for this call.")
+        return ConversationProcessingPlans.view(row, include_report_options=True)
 
     async def get(self, actor: ConversationActor, recording_id: UUID) -> dict[str, Any]:
         return self.view(await self._row(actor, recording_id))
@@ -540,6 +706,7 @@ class ConversationProcessingPlans:
         *,
         key: str,
         continuation_grant_id: UUID | None = None,
+        report_language: ReportLanguage | None = None,
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
@@ -561,9 +728,21 @@ class ConversationProcessingPlans:
             **actor_binding(actor),
             "authority_sha256": bundle.digest,
         }
+        if report_language is not None:
+            if not isinstance(report_language, str) or report_language not in {
+                "en",
+                "hi-Deva+en",
+                "mr-Deva+en",
+            }:
+                raise ConversationDenied("Choose a supported report language.")
+            command["report_language"] = report_language
+        include_report_options = report_language is not None
         replay = await self.app._replay(actor, key, "processing_plan_quote", command)
         if replay is not None and replay.result_id is not None:
-            return self.view(await self._row(actor, recording_id, replay.result_id))
+            return self.view(
+                await self._row(actor, recording_id, replay.result_id),
+                include_report_options=include_report_options,
+            )
         active = await self.db.scalar(
             select(ConversationProcessingPlan).where(
                 ConversationProcessingPlan.recording_id == recording_id,
@@ -571,7 +750,7 @@ class ConversationProcessingPlans:
             )
         )
         if active is not None:
-            return self.view(active)
+            return self.view(active, include_report_options=include_report_options)
         approvals: dict[str, StageApproval]
         if isinstance(actor, ProcessingActor):
             derived_approvals = {
@@ -609,7 +788,7 @@ class ConversationProcessingPlans:
         ):
             item = approvals[stage]
             if (
-                item.provider_id not in {"groq", "gemini"}
+                not _implemented_text_provider(stage, item.provider_id)
                 or item.max_completion_tokens < 256
                 or source.duration_ms > item.max_source_duration_ms
             ):
@@ -628,6 +807,18 @@ class ConversationProcessingPlans:
             )
         settings_row, analysis_settings = await latest_analysis_settings(
             self.db, self.authority.operations_tenant_id
+        )
+        coaching_prompt_revision = analysis_settings.c5_coaching_prompt_revision
+        selected_language = report_language or analysis_settings.report_language_default
+        if coaching_prompt_revision == COACHING_PROMPT_V3 and selected_language != "en":
+            raise ConversationDenied(
+                "Non-English report language requires the coaching-v4 or coaching-v5 "
+                "qualitative engine."
+            )
+        qualitative_pack_sha256 = (
+            load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
+            if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+            else None
         )
         c4, c5 = approvals["C4"], approvals["C5"]
         if settings_row is not None:
@@ -695,6 +886,15 @@ class ConversationProcessingPlans:
                 duration_ms=source.duration_ms,
                 stages=(c2, c4, c5),
                 profile=profile,
+                fact_prompt_revision=FACT_PROMPT_COMPACT,
+                coaching_prompt_revision=coaching_prompt_revision,
+                report_language=(
+                    selected_language
+                    if coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
+                    or report_language is not None
+                    else None
+                ),
+                qualitative_pack_sha256=qualitative_pack_sha256,
                 created_at_epoch=int(now.timestamp()),
                 expires_at_epoch=min(
                     int(now.timestamp()) + 3600,
@@ -735,7 +935,7 @@ class ConversationProcessingPlans:
         self.db.add(row)
         await self.db.flush()
         await self.app._receipt(actor, key, "processing_plan_quote", command, row.id, now)
-        return self.view(row)
+        return self.view(row, include_report_options=include_report_options)
 
     async def accept(
         self, actor: ConversationActor, recording_id: UUID, payload: PlanAcceptance, *, key: str
@@ -800,13 +1000,16 @@ class ConversationProcessingPlans:
             for item in value.stages
             if item.stage == stage.checkpoint.stage
         )
-        bundle, stage_approval = await self.authority.approval(
-            self.app,
-            actor,
-            recording,
-            stage,
-            utc(self.app.clock()),
-            configuration_sha256=selected_configuration_sha256,
+        bundle, stage_approval = await self._diagnosed_processing_call(
+            "approval_evaluation",
+            lambda: self.authority.approval(
+                self.app,
+                actor,
+                recording,
+                stage,
+                utc(self.app.clock()),
+                configuration_sha256=selected_configuration_sha256,
+            ),
         )
         existing = await self.db.scalar(
             select(ConversationInferenceTask).where(
@@ -817,6 +1020,10 @@ class ConversationProcessingPlans:
         if existing is not None:
             if existing.erased_at is not None or existing.generation != row.generation:
                 raise ConversationConflict("The saved stage is no longer reusable.")
+            # The coordinator must observe terminal tasks to publish their
+            # exact hold or select the separately authorized bounded C5 repair.
+            # Returning the retained task here never dispatches it again;
+            # fresh stage requests are fenced by inference.request_stage.
             if existing.state == "completed":
                 if existing.checkpoint_id is None:
                     raise ConversationConflict("The saved stage checkpoint is unavailable.")
@@ -852,8 +1059,11 @@ class ConversationProcessingPlans:
             if reused is not None:
                 return reused
         key = f"plan:{row.id}:{stage.checkpoint.cache_key}"
-        quote_view = await self.authority.issue(
-            self.app, actor, row.recording_id, key=key, request=request
+        quote_view = await self._diagnosed_processing_call(
+            "quote_usage_reservation",
+            lambda: self.authority.issue(
+                self.app, actor, row.recording_id, key=key, request=request
+            ),
         )
         quote_id = UUID(quote_view["id"])
         link = await self.db.get(ConversationPlanStageAuthorization, quote_id)
@@ -870,16 +1080,51 @@ class ConversationProcessingPlans:
                 )
             )
             await self.db.flush()
-        run = await self.inference.request_stage(
-            actor,
-            row.recording_id,
-            quote_id,
-            key=f"run:{row.id}:{stage.checkpoint.cache_key}",
-            request=request,
+        run = await self._diagnosed_processing_call(
+            "request_stage",
+            lambda: self.inference.request_stage(
+                actor,
+                row.recording_id,
+                quote_id,
+                key=f"run:{row.id}:{stage.checkpoint.cache_key}",
+                request=request,
+            ),
         )
         task = await self.db.get(ConversationInferenceTask, UUID(run["id"]))
         assert task is not None
         return task
+
+    async def _account_profile_hold_stage(
+        self,
+        row: ConversationProcessingPlan,
+        tasks: list[ConversationInferenceTask],
+    ) -> str | None:
+        """Identify a selected plan task held before its external effect began."""
+
+        for task in tasks:
+            if (
+                task.state != "queued"
+                or task.erased_at is not None
+                or task.tenant_id != row.tenant_id
+                or task.person_id != row.person_id
+                or task.recording_id != row.recording_id
+                or task.generation != row.generation
+            ):
+                continue
+            job = await self.db.get(Job, task.job_id)
+            if (
+                job is not None
+                and job.tenant_id == row.tenant_id
+                and job.kind == INFERENCE_JOB
+                and job.external_side_effect
+                and job.payload == {"schema": 1, "run_id": str(task.run_id)}
+                and job.dispatch_started_at is None
+                and job.delivery_ambiguous_at is None
+                and job.provider_receipt is None
+                and is_account_profile_hold(job)
+            ):
+                return task.stage
+        return None
 
     async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
@@ -900,6 +1145,7 @@ class ConversationProcessingPlans:
                 transcript_checkpoint_id=c2.checkpoint_id,
                 provider=c4.provider_id,
                 model=c4.model_id,
+                fact_prompt_revision=value.fact_prompt_revision,
                 max_input_chars=value.max_input_chars,
                 max_completion_tokens=stage_completion_limit(
                     "C4", c4.max_completion_tokens, provider=c4.provider_id, model=c4.model_id
@@ -940,6 +1186,9 @@ class ConversationProcessingPlans:
                     ),
                     output_profile=value.output_profile,
                     profile=value.profile,
+                    coaching_prompt_revision=value.coaching_prompt_revision,
+                    report_language=value.report_language,
+                    qualitative_pack_sha256=value.qualitative_pack_sha256,
                 )
                 judge = await self._enqueue(
                     actor,
@@ -979,6 +1228,14 @@ class ConversationProcessingPlans:
                     if repair_progress is not None:
                         row.progress["c5_repair"] = repair_progress
                     return
+        profile_hold_stage = await self._account_profile_hold_stage(row, tasks)
+        if profile_hold_stage is not None:
+            row.progress = {
+                "current_stage": profile_hold_stage,
+                "failure_code": "account_profile_required",
+            }
+            row.next_check_at = utc(self.app.clock()) + timedelta(seconds=2)
+            return
         bad = next(
             (item for item in tasks if item.state in {"failed", "uncertain", "cancelled"}), None
         )
@@ -1020,6 +1277,7 @@ class ProcessingPlanScheduler:
                 return False
             identifier, recording_id = candidate.id, candidate.recording_id
             actor = actor_from_row(candidate)
+            plans: ConversationProcessingPlans | None = None
             try:
                 async with db.begin_nested():
                     app = ConversationApplication(db)
@@ -1035,9 +1293,8 @@ class ProcessingPlanScheduler:
                     )
                     if row is None or row.state != "active":
                         return False
-                    await ConversationProcessingPlans(app, self.authority, self.storage).advance(
-                        actor, row
-                    )
+                    plans = ConversationProcessingPlans(app, self.authority, self.storage)
+                    await plans.advance(actor, row)
             except (ConversationError, InferenceTaskError):
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
@@ -1050,4 +1307,6 @@ class ProcessingPlanScheduler:
                 if row is not None and row.state == "active":
                     row.state = "held"
                     row.progress = {"failure_code": "processing_authorization_or_input_unavailable"}
+                    if plans is not None and plans.failure_diagnostic_code is not None:
+                        row.progress["diagnostic_code"] = plans.failure_diagnostic_code
             return True

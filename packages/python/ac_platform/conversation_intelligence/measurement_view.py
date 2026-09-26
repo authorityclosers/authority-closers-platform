@@ -28,6 +28,11 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationRecording,
 )
+from ac_platform.conversation_intelligence.signals import (
+    MAX_ROWS,
+    MAX_ROWS_PER_CHANNEL,
+    MAX_SECONDS,
+)
 from ac_platform.kernel.authz import ActorContext
 
 MEASUREMENT_VIEW_SCHEMA: Literal["ac.sales-xray.measurement-view/1"] = (
@@ -39,6 +44,7 @@ SIGNALLAB_UNAVAILABLE_REASON: Literal["source_inspected_adapter_not_implemented"
     "source_inspected_adapter_not_implemented"
 )
 MAX_PLOT_POINTS = 1200
+MAX_MEASUREMENT_DURATION_MS = MAX_SECONDS * 1000
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -374,6 +380,25 @@ def _display_views(
     return channels
 
 
+def _validate_measurement_layout(
+    *,
+    sample_count: int,
+    hop_samples: int,
+    source_channels: int,
+    duration_ms: int,
+) -> int:
+    """Validate the persisted native row and duration bounds before shaping it."""
+
+    expected_rows = ((sample_count + hop_samples - 1) // hop_samples) * source_channels
+    if (
+        duration_ms > MAX_MEASUREMENT_DURATION_MS
+        or expected_rows > MAX_ROWS
+        or expected_rows // source_channels > MAX_ROWS_PER_CHANNEL
+    ):
+        raise _conflict()
+    return expected_rows
+
+
 class ConversationMeasurements:
     """Read one authorized recording's persisted C1 measurement summary."""
 
@@ -549,9 +574,12 @@ class ConversationMeasurements:
         hop_samples = _require_int(acoustics.get("hop_samples"), positive=True)
         expected_window_samples = decoded_rate * 40 // 1000
         expected_hop_samples = decoded_rate * 10 // 1000
-        expected_rows = (
-            (sample_count + expected_hop_samples - 1) // expected_hop_samples
-        ) * source_channels
+        expected_rows = _validate_measurement_layout(
+            sample_count=sample_count,
+            hop_samples=expected_hop_samples,
+            source_channels=source_channels,
+            duration_ms=duration_ms,
+        )
         if (
             window_samples != expected_window_samples
             or hop_samples != expected_hop_samples
@@ -559,7 +587,6 @@ class ConversationMeasurements:
             or acoustics.get("row_bytes") != 66
             or acoustics.get("rows") != expected_rows
             or acoustics.get("uncompressed_payload_bytes") != expected_rows * 66
-            or expected_rows > 360_000
         ):
             raise _conflict()
         window_ms = window_samples / decoded_rate * 1000

@@ -23,6 +23,12 @@ from ac_platform.conversation_intelligence.gemini_tasks import (
     gemini_prompt_view,
     prepare_gemini_body,
 )
+from ac_platform.conversation_intelligence.openai_tasks import (
+    OpenAITaskError,
+    decode_openai_object,
+    openai_prompt_view,
+    prepare_openai_body,
+)
 from ac_platform.conversation_intelligence.providers import (
     MAX_JSON_BYTES,
     ProviderError,
@@ -30,10 +36,18 @@ from ac_platform.conversation_intelligence.providers import (
     deepgram_transcript,
     scribe_transcript,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.conversation_intelligence.reports import (
     COACHING_CONTEXT_MARKER,
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    COACHING_PROMPT_V5_MARKER,
+    FACT_PROMPT_COMPACT_MARKER,
+    FACT_PROMPT_LEGACY,
     GROQ_MODEL,
+    CoachingPromptRevision,
     FactPacket,
     ReportError,
     TranscriptChunk,
@@ -49,7 +63,7 @@ from ac_platform.conversation_intelligence.reports import (
 
 TaskName = Literal["asr", "facts", "coaching"]
 Checkpoint = Literal["C2", "C4", "C5"]
-PayloadKind = Literal["source_reference", "groq_json", "gemini_json"]
+PayloadKind = Literal["source_reference", "groq_json", "gemini_json", "openai_json"]
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
@@ -124,6 +138,11 @@ def _text_prompt_view(
 ) -> Mapping[str, Any]:
     if provider == "groq":
         return body
+    if provider == "openai":
+        try:
+            return openai_prompt_view(body, model=model, maximum=maximum, task=task)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
@@ -133,10 +152,15 @@ def _text_prompt_view(
 
 
 def _text_provider_body(
-    prompt: Mapping[str, Any], provider: str, *, task: str
+    prompt: Mapping[str, Any], provider: str, *, task: str, reasoning_effort: str = "low"
 ) -> Mapping[str, Any]:
     if provider == "groq":
         return prompt
+    if provider == "openai":
+        try:
+            return prepare_openai_body(prompt, task=task, reasoning_effort=reasoning_effort)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
@@ -145,9 +169,32 @@ def _text_provider_body(
         raise InferenceTaskError(str(exc)) from None
 
 
+def _compact_fact_input(task_input: PreparedTaskInput) -> bool:
+    if task_input.task != "facts":
+        return False
+    assert task_input.max_completion_tokens is not None
+    body = _text_prompt_view(
+        task_input.as_provider_body(),
+        provider=task_input.provider,
+        model=task_input.model,
+        maximum=task_input.max_completion_tokens,
+        task="facts",
+    )
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not messages:
+        _fail("task_prompt_invalid")
+    system = messages[0].get("content") if isinstance(messages[0], Mapping) else None
+    return isinstance(system, str) and FACT_PROMPT_COMPACT_MARKER in system
+
+
 def _text_response(result: ProviderResult) -> Mapping[str, Any]:
     if result.provider == "groq":
         return result.data
+    if result.provider == "openai":
+        try:
+            return decode_openai_object(result.data, expected_model=result.model)
+        except OpenAITaskError as exc:
+            raise InferenceTaskError(str(exc)) from None
     try:
         return decode_gemini_object(result.data)
     except GeminiTaskError as exc:
@@ -293,6 +340,7 @@ class PreparedTaskInput:
             "source_reference",
             "groq_json",
             "gemini_json",
+            "openai_json",
         }:
             _fail("invalid_payload_kind")
         payload_limit = (
@@ -343,6 +391,7 @@ class PreparedTaskInput:
             if (self.provider, self.payload_kind) not in {
                 ("groq", "groq_json"),
                 ("gemini", "gemini_json"),
+                ("openai", "openai_json"),
             }:
                 _fail("text_input_invalid")
             if self.operation != _TEXT_OPERATION or not self.transcript_revision:
@@ -416,7 +465,7 @@ class PreparedTaskInput:
     def as_provider_body(self) -> dict[str, Any]:
         """Return a fresh native provider body; retain the exact canonical bytes."""
 
-        if self.payload_kind not in {"groq_json", "gemini_json"}:
+        if self.payload_kind not in {"groq_json", "gemini_json", "openai_json"}:
             _fail("provider_body_not_json")
         try:
             body = json.loads(self.payload)
@@ -810,6 +859,7 @@ def prepare_fact_inputs(
     model: str = GROQ_MODEL,
     max_input_chars: int = 16_000,
     max_completion_tokens: int = 1_400,
+    prompt_revision: Literal["facts-v1", "facts-v2"] = FACT_PROMPT_LEGACY,
 ) -> tuple[PreparedTaskInput, ...]:
     """Prepare immutable C4 style-independent fact requests for every chunk."""
 
@@ -820,6 +870,7 @@ def prepare_fact_inputs(
             max_input_chars=max_input_chars,
             max_completion_tokens=max_completion_tokens,
             model=model,
+            prompt_revision=prompt_revision,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
@@ -914,7 +965,13 @@ def validate_fact_result(
     )
     chunk = _chunk_for_input(task_input, transcript)
     try:
-        packet = parse_fact_packet(_text_response(result), transcript, chunk=chunk)
+        packet = parse_fact_packet(
+            _text_response(result),
+            transcript,
+            chunk=chunk,
+            compact=_compact_fact_input(task_input),
+            max_completion_tokens=task_input.max_completion_tokens or 1_400,
+        )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     return _output(
@@ -936,6 +993,10 @@ def prepare_coaching_input(
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
     output_profile: Literal["standard", "detailed"] = "detailed",
+    coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_LEGACY,
+    report_language: ReportLanguage = "en",
+    qualitative_pack_sha256: str | None = None,
+    reasoning_effort: str = "low",
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -955,11 +1016,20 @@ def prepare_coaching_input(
             model=model,
             provider=provider,
             detailed_overview=output_profile == "detailed",
+            coaching_prompt_revision=coaching_prompt_revision,
+            report_language=report_language,
+            qualitative_pack_sha256=qualitative_pack_sha256,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     payload = _canonical_json(
-        _text_provider_body(prompt, provider, task="coaching"), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+        _text_provider_body(
+            prompt,
+            provider,
+            task="coaching",
+            reasoning_effort=reasoning_effort,
+        ),
+        max_bytes=_MAX_TEXT_PAYLOAD_BYTES,
     )
     return PreparedTaskInput(
         task="coaching",
@@ -971,7 +1041,13 @@ def prepare_coaching_input(
         transcript_revision=str(validated["transcript_revision"]),
         profile_revision=profile_revision,
         input_sha256=hashlib.sha256(payload).hexdigest(),
-        payload_kind="gemini_json" if provider == "gemini" else "groq_json",
+        payload_kind=(
+            "gemini_json"
+            if provider == "gemini"
+            else "openai_json"
+            if provider == "openai"
+            else "groq_json"
+        ),
         payload=payload,
         max_completion_tokens=max_completion_tokens,
     )
@@ -1000,10 +1076,6 @@ def validate_coaching_result(
         expected_provider=task_input.provider,
         expected_operation=_TEXT_OPERATION,
     )
-    try:
-        draft = parse_groq_response(_text_response(result), transcript, profile=resolved_profile)
-    except ReportError as exc:
-        raise InferenceTaskError(str(exc)) from None
     # Legacy saved tasks remain readable. Newly quoted format-specific inputs
     # cannot silently complete with a broad legacy report that omits the overview.
     assert task_input.max_completion_tokens is not None
@@ -1014,6 +1086,19 @@ def validate_coaching_result(
         maximum=task_input.max_completion_tokens,
         task="coaching",
     )
+    try:
+        draft = parse_groq_response(
+            _text_response(result),
+            transcript,
+            profile=resolved_profile,
+            coaching_prompt_revision=(
+                COACHING_PROMPT_V5
+                if COACHING_PROMPT_V5_MARKER in prompt["messages"][0]["content"]
+                else COACHING_PROMPT_V4
+            ),
+        )
+    except ReportError as exc:
+        raise InferenceTaskError(str(exc)) from None
     if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
         _fail("report_overview_missing")
     return _output(

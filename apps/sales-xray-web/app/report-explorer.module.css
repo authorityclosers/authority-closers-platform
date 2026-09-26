@@ -1,12 +1,11 @@
 .explorer {
   min-width: 0;
   margin-block: 0;
+  font-family: var(--report-font);
 }
 
 .tabs {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: relative;
   display: flex;
   gap: 24px;
   max-width: 100%;
@@ -29,7 +28,8 @@
   color: #5d7080;
   font: inherit;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 650;
+  letter-spacing: -0.005em;
   line-height: 1.25;
   cursor: pointer;
   transition:
@@ -37,6 +37,10 @@
     border-color 140ms ease,
     color 140ms ease,
     transform 140ms ease;
+}
+
+.compactLabel {
+  display: none;
 }
 
 .tabs button::after {
@@ -61,6 +65,7 @@
 
 .tabs button[aria-selected="true"] {
   color: #172b3a;
+  font-weight: 700;
 }
 
 .tabs button[aria-selected="true"]::after {
@@ -77,6 +82,7 @@
 .panel {
   min-width: 0;
   padding-block-start: 12px;
+  scroll-margin-block-start: 60px;
 }
 
 .panel > section + section {
@@ -91,15 +97,23 @@
 
 @media (max-width: 640px) {
   .tabs {
-    top: 0;
     gap: 0;
     justify-content: space-between;
   }
 
   .tabs button {
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
     padding-inline: 1px;
-    font-size: 12px;
+    font-size: 14px;
+  }
+
+  .fullLabel {
+    display: none;
+  }
+
+  .compactLabel {
+    display: inline;
   }
 }
 

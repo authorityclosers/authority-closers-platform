@@ -1,4 +1,4 @@
-"""Persist a reviewed analysis-settings revision through the Admin service.
+"""Inspect or persist analysis-settings revisions through the Admin service.
 
 The CLI uses the same verified AC Admin identity and append-only receipt path as
 the HTTP surface. It never edits production tables directly or changes accepted
@@ -42,12 +42,19 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--tenant-id", required=True, type=UUID)
     command.add_argument("--person-id", required=True, type=UUID)
     command.add_argument("--session-id", required=True, type=UUID)
-    command.add_argument("--expected-revision", required=True, type=int)
-    command.add_argument("--idempotency-key", required=True)
-    command.add_argument("--c4-max-requests", required=True, type=int)
-    command.add_argument("--c4-max-completion-tokens", required=True, type=int)
-    command.add_argument("--c5-max-completion-tokens", required=True, type=int)
-    command.add_argument("--c5-output-profile", required=True, choices=("standard", "detailed"))
+    command.add_argument("--action", choices=("show", "history", "save"), default="save")
+    command.add_argument("--limit", type=int, default=10)
+    command.add_argument("--before-revision", type=int)
+    command.add_argument("--expected-revision", type=int)
+    command.add_argument("--idempotency-key")
+    command.add_argument("--c4-max-requests", type=int)
+    command.add_argument("--c4-max-completion-tokens", type=int)
+    command.add_argument("--c5-max-completion-tokens", type=int)
+    command.add_argument("--c5-output-profile", choices=("standard", "detailed"))
+    command.add_argument(
+        "--c5-coaching-prompt-revision", choices=("coaching-v3", "coaching-v4", "coaching-v5")
+    )
+    command.add_argument("--report-language-default", choices=("en", "hi-Deva+en", "mr-Deva+en"))
     return command
 
 
@@ -58,12 +65,38 @@ def validate_environment(args: argparse.Namespace) -> str:
     configured = os.getenv("AC_ENVIRONMENT", "").strip().lower()
     if configured and configured != environment:
         raise CommandError("The explicit environment must match AC_ENVIRONMENT.")
-    if environment == "production" and not args.allow_production:
+    if environment == "production" and args.action == "save" and not args.allow_production:
         raise CommandError("Production requires --allow-production.")
     if not os.getenv("AC_DATABASE_URL", "").strip():
         raise CommandError("An explicit AC_DATABASE_URL is required.")
-    if not isinstance(args.idempotency_key, str) or not 1 <= len(args.idempotency_key) <= 128:
-        raise CommandError("The idempotency key must be 1 to 128 characters.")
+    mutation_values = (
+        args.expected_revision,
+        args.idempotency_key,
+        args.c4_max_requests,
+        args.c4_max_completion_tokens,
+        args.c5_max_completion_tokens,
+        args.c5_output_profile,
+    )
+    if args.action == "save":
+        if any(value is None for value in mutation_values):
+            raise CommandError("Save requires a revision, idempotency key and all settings.")
+        if not 1 <= len(args.idempotency_key) <= 128:
+            raise CommandError("The idempotency key must be 1 to 128 characters.")
+        if args.expected_revision < 0:
+            raise CommandError("Use the current nonnegative revision.")
+    elif any(
+        value is not None
+        for value in (
+            *mutation_values,
+            args.c5_coaching_prompt_revision,
+            args.report_language_default,
+        )
+    ):
+        raise CommandError("Read actions do not accept save arguments.")
+    if args.action != "history" and (args.limit != 10 or args.before_revision is not None):
+        raise CommandError("History pagination requires --action history.")
+    if not 1 <= args.limit <= 50 or (args.before_revision is not None and args.before_revision < 1):
+        raise CommandError("Use a limit from 1 to 50 and a positive history revision.")
     return environment
 
 
@@ -75,11 +108,25 @@ async def save(args: argparse.Namespace) -> dict[str, object]:
         raise CommandError("The tenant must match the configured AC operations workspace.")
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
-    values = AnalysisSettings(
-        c4_max_requests=args.c4_max_requests,
-        c4_max_completion_tokens=args.c4_max_completion_tokens,
-        c5_max_completion_tokens=args.c5_max_completion_tokens,
-        c5_output_profile=args.c5_output_profile,
+    values = (
+        AnalysisSettings.model_validate(
+            {
+                "c4_max_requests": args.c4_max_requests,
+                "c4_max_completion_tokens": args.c4_max_completion_tokens,
+                "c5_max_completion_tokens": args.c5_max_completion_tokens,
+                "c5_output_profile": args.c5_output_profile,
+                **{
+                    key: value
+                    for key, value in {
+                        "c5_coaching_prompt_revision": args.c5_coaching_prompt_revision,
+                        "report_language_default": args.report_language_default,
+                    }.items()
+                    if value is not None
+                },
+            }
+        )
+        if args.action == "save"
+        else None
     )
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:
@@ -91,15 +138,24 @@ async def save(args: argparse.Namespace) -> dict[str, object]:
                 tenant_id=args.tenant_id,
                 permissions=frozenset({"admin_surface"}),
             )
-            result = await ConversationAnalysisSettingsAdmin(
+            service = ConversationAnalysisSettingsAdmin(
                 ConversationApplication(database),
                 operations_tenant_id=operations_tenant_id,
-            ).save(
-                actor,
-                values,
-                expected_revision=args.expected_revision,
-                key=args.idempotency_key,
             )
+            if args.action == "show":
+                result = await service.current(actor)
+            elif args.action == "history":
+                result = await service.history(
+                    actor, limit=args.limit, before_revision=args.before_revision
+                )
+            else:
+                assert values is not None
+                result = await service.save(
+                    actor,
+                    values,
+                    expected_revision=args.expected_revision,
+                    key=args.idempotency_key,
+                )
     finally:
         await engine.dispose()
     return result

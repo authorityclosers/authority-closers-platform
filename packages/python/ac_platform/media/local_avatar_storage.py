@@ -8,10 +8,11 @@ import re
 import stat
 import threading
 from collections.abc import Iterator
+from copy import copy
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from ac_platform.media.errors import MediaConflict, MediaStorageUnavailable
 from ac_platform.media.signing import MediaSigner
@@ -165,6 +166,7 @@ class LocalAvatarStorage:
                 "bytes": content_length,
                 "mime": content_type,
                 "checksum": checksum_sha256,
+                **({"origin": self.origin} if getattr(self, "_origin_bound", False) else {}),
             },
             now=now,
             lifetime=expiry - now,
@@ -314,8 +316,28 @@ class FilesystemAvatarStorage(LocalAvatarStorage):
         signer: MediaSigner,
         fallback: PrivateObjectStorage,
         origin: str,
+        upload_origins: tuple[str, ...] | None = None,
         max_store_bytes: int = 512 * 1024 * 1024,
     ) -> None:
+        origins = (origin,) if upload_origins is None else upload_origins
+        if (
+            not isinstance(origins, tuple)
+            or not origins
+            or any(not isinstance(value, str) or value != value.rstrip("/") for value in origins)
+            or len(set(origins)) != len(origins)
+            or origin not in origins
+            or any(
+                (parsed := urlsplit(value)).scheme != "https"
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                for value in origins
+            )
+        ):
+            raise MediaStorageUnavailable("The filesystem avatar origins are invalid.")
         super().__init__(
             root=root,
             signer=signer,
@@ -328,6 +350,17 @@ class FilesystemAvatarStorage(LocalAvatarStorage):
             marker=b"AC private filesystem avatar objects v1\n",
             max_store_bytes=max_store_bytes,
         )
+        self.upload_origins = origins
+        self._origin_bound = True
+
+    def for_upload_origin(self, origin: str) -> FilesystemAvatarStorage:
+        """Return a request-scoped adapter bound to one configured app origin."""
+
+        if origin not in self.upload_origins:
+            raise MediaStorageUnavailable("The filesystem avatar origin is not configured.")
+        scoped = copy(self)
+        scoped.origin = origin
+        return scoped
 
 
 __all__ = [

@@ -27,13 +27,22 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
-from ac_platform.conversation_intelligence.signals import MAX_SECONDS, iter_features
+from ac_platform.conversation_intelligence.signals import (
+    _HEADER,
+    _RAW_ROW,
+    _ROW,
+    MAX_SECONDS,
+    iter_features,
+)
 
 HOSTED_C1_RATE: Literal[16000] = 16000
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 MAX_CHECKPOINT_BYTES = 2 * 1024 * 1024
 MAX_RUNTIME_SECONDS = 750.0
+HOSTED_NATIVE_MEMORY_BYTES = 1024 * 1024 * 1024
+HOSTED_NATIVE_WORK_BYTES = 768 * 1024 * 1024
+HOSTED_NATIVE_FSIZE_BYTES = 512 * 1024 * 1024
 NATIVE_RUNTIME_SCHEMA = "ac.sales-xray.native-runtime/1"
 MAX_REQUEST_BYTES = 16 * 1024
 MAX_RESPONSE_BYTES = 4 * 1024
@@ -116,7 +125,7 @@ assert all(int(status[name].strip(), 16) == 0 for name in ("CapEff", "CapPrm", "
 assert status["NoNewPrivs"].strip() == "1" and status["Seccomp"].strip() == "2"
 assert set(os.listdir("/sys/class/net")) == {"lo"}
 cgroup = Path("/sys/fs/cgroup")
-assert 0 < int((cgroup / "memory.max").read_text()) <= 805306368
+assert 0 < int((cgroup / "memory.max").read_text()) <= 1073741824
 assert int((cgroup / "memory.swap.max").read_text()) == 0
 assert 0 < int((cgroup / "pids.max").read_text()) <= 32
 quota, period = (cgroup / "cpu.max").read_text().split()
@@ -126,7 +135,7 @@ for line in Path("/proc/self/mountinfo").read_text().splitlines():
     fields = line.split()
     mounts[fields[4]] = (set(fields[5].split(",")), fields[fields.index("-") + 1])
 assert "ro" in mounts["/"][0] and "ro" in mounts["/input/source.media"][0]
-for mount, size in (("/work", 536870912), ("/tmp", 16777216)):
+for mount, size in (("/work", 805306368), ("/tmp", 16777216)):
     assert mounts[mount][1] == "tmpfs"
     assert {"rw", "nosuid", "nodev", "noexec"} <= mounts[mount][0]
     filesystem = os.statvfs(mount)
@@ -146,6 +155,39 @@ names = ("features.aaf", "checkpoint.json") if operation == "inspect" else ("che
 for name in names:
     shutil.copyfile(Path("/work/checkpoint") / name, published / name)
 """
+
+
+def estimate_workspace_bytes(
+    seconds: int,
+    channels: int,
+    source_bytes: int,
+    *,
+    rate: Literal[16000] = HOSTED_C1_RATE,
+) -> int:
+    """Return the simultaneous temporary bytes required by hosted C1.
+
+    The decoder may emit one provisional second while container metadata carries
+    codec padding.  PCM, native f64 rows, packed features, and the private source
+    snapshot coexist until the checkpoint is published, so this estimate is a
+    deliberately additive upper bound for the `/work` tmpfs contract.
+    """
+    if (
+        type(seconds) is not int
+        or not 1 <= seconds <= MAX_SECONDS
+        or type(channels) is not int
+        or channels not in (1, 2)
+        or type(source_bytes) is not int
+        or not 0 < source_bytes <= MAX_SOURCE_BYTES
+        or rate != HOSTED_C1_RATE
+    ):
+        raise ValueError("native_workspace_bound_invalid")
+    sample_count = seconds * rate
+    hop_samples = rate * 10 // 1000
+    rows = ((sample_count + hop_samples - 1) // hop_samples) * channels
+    decoded_pcm = (sample_count + rate) * channels * 4
+    native_raw = rows * _RAW_ROW.size
+    packed_features = _HEADER.size + rows * _ROW.size
+    return source_bytes + decoded_pcm + native_raw + packed_features
 
 
 def _reject_json_constant(_: str) -> None:
@@ -690,18 +732,18 @@ class DockerNativeRuntime:
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges:true",
             "--pids-limit=32",
-            "--memory=768m",
-            "--memory-swap=768m",
+            "--memory=1g",
+            "--memory-swap=1g",
             "--cpus=1",
             "--ulimit",
             "nofile=64:64",
             "--ulimit",
             "core=0:0",
             "--ulimit",
-            "fsize=268435456:268435456",
+            "fsize=536870912:536870912",
             "--log-driver=none",
             "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777",
-            "--tmpfs=/work:rw,noexec,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=0700",
+            "--tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700",
             "--mount",
             f"type=bind,source={source},target=/input/source.media,readonly,bind-propagation=rprivate",
             "--mount",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import Link from "next/link";
 import {
   AudioLines,
@@ -9,7 +9,6 @@ import {
   ChevronDown,
   FileText,
   LoaderCircle,
-  Play,
   Printer,
   Upload,
   X,
@@ -20,10 +19,23 @@ import { ReportExplorer } from "./report-explorer";
 import { REPORT_NAVIGATION_COPY } from "./report-navigation-copy";
 import { DipakOverview } from "./dipak-overview";
 import { FindingEvidence } from "./finding-evidence";
+import {
+  ClipPlayIcon,
+  ClipPlayState,
+  SourceWaveformProvider,
+  clipPressAction,
+  type ClipRange,
+} from "./source-waveform";
 import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
+import {
+  formatClipRange,
+  isPlayableRange,
+  spokenClipRange,
+} from "./lightbox/time";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
 import { AccountNavigation } from "./account-navigation";
+import { parseReportLanguage } from "./report-language";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -36,6 +48,10 @@ import {
   type Finding,
   type Job,
 } from "./report-contract";
+import {
+  revalidateContextualSourcePlayback,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
 
 type Quote = {
   id: string;
@@ -57,6 +73,9 @@ const time = (ms: number) =>
     .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
     .toString()
     .padStart(2, "0")}`;
+
+// Shared interval presentation: never an equal-endpoint "11:33–11:33".
+const evidenceTime = formatClipRange;
 type ProcessingPlanStage = {
   stage: "C2" | "C4" | "C5";
   provider: string;
@@ -66,6 +85,13 @@ type ProcessingPlanStage = {
   privacy_notice: string;
 };
 export type ProcessingPlan = {
+  report_language?: import("./report-language").ReportLanguage;
+  coaching_prompt_revision?:
+    | "coaching-v1"
+    | "coaching-v2"
+    | "coaching-v3"
+    | "coaching-v4"
+    | "coaching-v5";
   id: string;
   recording_id: string;
   plan_fingerprint: string;
@@ -74,6 +100,7 @@ export type ProcessingPlan = {
   state: "quoted" | "active" | "held" | "completed" | "cancelled";
   cost_label: string;
   max_cost_paise: number;
+  automatic_c5_repair_cost_paise: number;
   max_entitlement_seconds: number;
   expires_at_epoch: number;
   stages: ProcessingPlanStage[];
@@ -189,6 +216,7 @@ export function parseProcessingPlan(
     "state",
     "cost_label",
     "max_cost_paise",
+    "automatic_c5_repair_cost_paise",
     "max_entitlement_seconds",
     "expires_at_epoch",
     "stages",
@@ -197,6 +225,8 @@ export function parseProcessingPlan(
     "report_run_id",
     "automatic_progression",
     "failure_code",
+    "report_language",
+    "coaching_prompt_revision",
   ];
   if (Object.keys(plan).some((key) => !expectedKeys.includes(key)))
     throw new ReportContractError("plan_unknown_field");
@@ -224,6 +254,15 @@ export function parseProcessingPlan(
     0,
     2_147_483_647,
   );
+  const automaticRepairCost =
+    plan.automatic_c5_repair_cost_paise === undefined
+      ? 0
+      : planInteger(
+          plan.automatic_c5_repair_cost_paise,
+          "plan_repair_cost_limit",
+          0,
+          2_147_483_647,
+        );
   const costLabel =
     maximumCost === 0
       ? "₹0 · approved allowance"
@@ -308,7 +347,34 @@ export function parseProcessingPlan(
     plan.failure_code === null
       ? null
       : planText(plan.failure_code, "plan_failure_code", 128);
+  const languageOptions: Pick<
+    ProcessingPlan,
+    "report_language" | "coaching_prompt_revision"
+  > = {};
+  if (
+    plan.report_language !== undefined ||
+    plan.coaching_prompt_revision !== undefined
+  ) {
+    languageOptions.report_language = parseReportLanguage(plan.report_language);
+    if (
+      ![
+        "coaching-v1",
+        "coaching-v2",
+        "coaching-v3",
+        "coaching-v4",
+        "coaching-v5",
+      ].includes(String(plan.coaching_prompt_revision)) ||
+      (!["coaching-v4", "coaching-v5"].includes(
+        String(plan.coaching_prompt_revision),
+      ) &&
+        languageOptions.report_language !== "en")
+    )
+      throw new ReportContractError("plan_language_revision_invalid");
+    languageOptions.coaching_prompt_revision =
+      plan.coaching_prompt_revision as ProcessingPlan["coaching_prompt_revision"];
+  }
   return {
+    ...languageOptions,
     id,
     recording_id: recordingId,
     plan_fingerprint: fingerprint,
@@ -317,6 +383,7 @@ export function parseProcessingPlan(
     state,
     cost_label: costLabel,
     max_cost_paise: maximumCost,
+    automatic_c5_repair_cost_paise: automaticRepairCost,
     max_entitlement_seconds: maxEntitlement,
     expires_at_epoch: expires,
     stages,
@@ -348,6 +415,8 @@ function processingStageLabel(stage: string | null): string {
 }
 
 function processingPlanMessage(plan: ProcessingPlan): string {
+  if (plan.state === "held" && plan.failure_code === "account_profile_required")
+    return "Processing is paused until your AC contact profile is complete. Your approved plan and completed work are saved; no new analysis has been started.";
   if (plan.state === "held")
     return "Processing is paused. Saved results remain available; review the approval before continuing.";
   if (plan.state === "cancelled")
@@ -510,8 +579,12 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     null,
   );
   const [momentStatus, setMomentStatus] = useState("");
+  // The clip this studio started on its one player; shared Listen controls read it.
+  const [activeRange, setActiveRange] = useState<ClipRange | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
+  const momentEndMs = useRef<number | null>(null);
+  const programmaticSeekTargetMs = useRef<number | null>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
@@ -570,6 +643,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const shouldPollJob = Boolean(
     job &&
       !job.report &&
+      !job.executionHold &&
       !reportBlocked &&
       !["failed", "cancelled", "completed"].includes(job.state),
   );
@@ -767,6 +841,9 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   ]);
 
   function clearAudioPlayback() {
+    momentEndMs.current = null;
+    programmaticSeekTargetMs.current = null;
+    setActiveRange(null);
     try {
       audio.current?.pause();
     } catch {
@@ -1121,28 +1198,145 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     : duration
       ? time(duration)
       : "Not available";
-  function seekToMoment(moment: EvidenceMoment) {
+  function seekToMoment(
+    moment: Pick<EvidenceMoment, "key" | "start_ms" | "end_ms">,
+    statusLabel = copy.playingMoment,
+  ) {
+    // An invalid or empty interval is readable but never playable.
+    if (!isPlayableRange(moment.start_ms, moment.end_ms)) {
+      setMomentStatus(copy.playbackUnavailable);
+      return;
+    }
     setSelectedMomentKey(moment.key);
     const player = audio.current;
     if (!player || !player.isConnected) {
       setMomentStatus(copy.playbackUnavailable);
       return;
     }
+    setActiveRange({ start_ms: moment.start_ms, end_ms: moment.end_ms });
     try {
+      momentEndMs.current = moment.end_ms;
+      programmaticSeekTargetMs.current = moment.start_ms;
       player.currentTime = moment.start_ms / 1000;
       const playback = player.play();
       if (!playback || typeof playback.then !== "function") {
+        momentEndMs.current = null;
+        programmaticSeekTargetMs.current = null;
         setMomentStatus(copy.playbackBlocked);
         return;
       }
       void playback
         .then(() =>
-          setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
+          setMomentStatus(`${statusLabel} · ${time(moment.start_ms)}.`),
         )
-        .catch(() => setMomentStatus(copy.playbackBlocked));
+        .catch(() => {
+          momentEndMs.current = null;
+          programmaticSeekTargetMs.current = null;
+          setMomentStatus(copy.playbackBlocked);
+        });
     } catch {
+      momentEndMs.current = null;
+      programmaticSeekTargetMs.current = null;
       setMomentStatus(copy.playbackUnavailable);
     }
+  }
+  /**
+   * A visible Listen control: pause the clip it started, resume it in place,
+   * or start it. Transcript rows keep calling seekToMoment directly.
+   */
+  function pressClip(
+    moment: Pick<EvidenceMoment, "key" | "start_ms" | "end_ms">,
+    statusLabel = copy.playingMoment,
+  ) {
+    const player = audio.current;
+    if (player?.isConnected) {
+      const nowMs = player.currentTime * 1000;
+      const action = clipPressAction(moment, {
+        paused: player.paused,
+        currentTimeMs: nowMs,
+        activeRange,
+      });
+      if (action === "pause") {
+        player.pause();
+        setMomentStatus(`Paused · ${time(nowMs)}.`);
+        return;
+      }
+      if (action === "resume") {
+        momentEndMs.current = moment.end_ms;
+        const playback = player.play();
+        if (playback && typeof playback.then === "function")
+          void playback.catch(() => setMomentStatus(copy.playbackBlocked));
+        return;
+      }
+    }
+    seekToMoment(moment, statusLabel);
+  }
+  function playWithContext(selection: ContextualSourcePlayback, title: string) {
+    const report = job?.report;
+    const transcript = activeTranscript;
+    if (!report || !transcript) {
+      setMomentStatus(copy.playbackUnavailable);
+      return;
+    }
+    const verified = revalidateContextualSourcePlayback(
+      selection,
+      report,
+      transcript,
+    );
+    if (!verified) {
+      setMomentStatus(
+        "Transcript context no longer matches this saved report. Use its saved evidence instead.",
+      );
+      return;
+    }
+    pressClip(
+      {
+        key: `context:${verified.evidence.segment_id}:${verified.playback_range.start_ms}:${verified.playback_range.end_ms}`,
+        ...verified.playback_range,
+      },
+      `Playing with context · ${title}`,
+    );
+  }
+  function allowFullCallSeek(event: SyntheticEvent<HTMLAudioElement>) {
+    const player = event.currentTarget;
+    if (audio.current !== player) return;
+    const expectedMs = programmaticSeekTargetMs.current;
+    if (
+      expectedMs !== null &&
+      Math.abs(player.currentTime * 1000 - expectedMs) <= 40
+    ) {
+      programmaticSeekTargetMs.current = null;
+      return;
+    }
+    programmaticSeekTargetMs.current = null;
+    // Nothing owns the player: an ordinary full-recording seek.
+    if (momentEndMs.current === null && activeRange === null) return;
+    // A manual seek in the player is the full-recording escape, also after a
+    // clip has completed: no clip owns the playback any more.
+    momentEndMs.current = null;
+    setSelectedMomentKey(null);
+    setActiveRange(null);
+    setMomentStatus("");
+  }
+  function stopAtMomentEnd(event: SyntheticEvent<HTMLAudioElement>) {
+    const endMs = momentEndMs.current;
+    const player = event.currentTarget;
+    if (
+      endMs === null ||
+      audio.current !== player ||
+      player.currentTime * 1000 < endMs
+    )
+      return;
+    momentEndMs.current = null;
+    // This final seek is the studio's own; it must not read as a manual escape.
+    programmaticSeekTargetMs.current = endMs;
+    try {
+      player.currentTime = endMs / 1000;
+    } catch {
+      // Pause at the best available media position if the browser rejects a final seek.
+    }
+    player.pause();
+    setMomentStatus("");
   }
   function restart() {
     ++attempt.current;
@@ -1167,7 +1361,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
 
   function renderFindings(title: string, rows: Finding[]) {
     return (
-      <section key={title}>
+      <section key={title} className="studio-legacy-findings">
         <h2 lang="en">{title}</h2>
         {rows.length ? (
           rows.map((finding, i) => (
@@ -1177,22 +1371,27 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <FindingEvidence count={finding.evidence.length}>
                 {finding.evidence.map((e, j) => (
                   <blockquote key={j}>
-                    <button
-                      className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
-                      type="button"
-                      aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
-                      onClick={() =>
-                        seekToMoment({
-                          ...e,
-                          findingTitle: finding.title,
-                          key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
-                        })
-                      }
-                    >
-                      <Play size={12} aria-hidden="true" />
-                      {time(e.start_ms)}–{time(e.end_ms)}
-                    </button>{" "}
-                    <small>{e.segment_id}</small> “{e.quote}”
+                    <ClipPlayState startMs={e.start_ms} endMs={e.end_ms}>
+                      {(playing) => (
+                        <button
+                          className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
+                          type="button"
+                          aria-label={`${playing ? "Pause" : copy.playMoment}, ${spokenClipRange(e.start_ms, e.end_ms)}: ${e.quote}`}
+                          data-clip-playing={playing || undefined}
+                          onClick={() =>
+                            pressClip({
+                              start_ms: e.start_ms,
+                              end_ms: e.end_ms,
+                              key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
+                            })
+                          }
+                        >
+                          <ClipPlayIcon playing={playing} size={12} />
+                          {evidenceTime(e.start_ms, e.end_ms)}
+                        </button>
+                      )}
+                    </ClipPlayState>{" "}
+                    “{e.quote}”
                   </blockquote>
                 ))}
               </FindingEvidence>
@@ -1312,6 +1511,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Listen here to check you chose the right recording. Selecting
@@ -1354,6 +1555,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                       setDuration(value * 1000);
                   }}
                   onError={() => setMomentStatus(copy.playbackUnavailable)}
+                  onSeeking={allowFullCallSeek}
+                  onTimeUpdate={stopAtMomentEnd}
                 />
                 <p className="small-text">
                   Select a timestamp in the report to replay that part of your
@@ -1471,7 +1674,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             )}
             {job && !job.report && !plan && (
               <div className="studio-progress" role="status">
-                {reportBlocked ? (
+                {reportBlocked || job.executionHold ? (
                   <X size={24} />
                 ) : job.state === "completed" ? (
                   <Check size={24} />
@@ -1486,17 +1689,21 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <h3>
                   {reportBlocked
                     ? "The report could not be verified"
-                    : job.state === "completed"
-                      ? "Local audio analysis is ready"
-                      : job.state === "failed"
-                        ? "The report needs attention"
-                        : "Your call is being processed"}
+                    : job.executionHold
+                      ? "Complete your account profile to continue"
+                      : job.state === "completed"
+                        ? "Local audio analysis is ready"
+                        : job.state === "failed"
+                          ? "The report needs attention"
+                          : "Your call is being processed"}
                 </h3>
                 <p>
                   {reportBlocked
                     ? "No report is shown until it matches this recording."
-                    : job.message ||
-                      "The server has accepted your call. This page will show the report when it is ready."}
+                    : job.executionHold
+                      ? "Processing is paused until your AC contact profile is complete. No further analysis is running."
+                      : job.message ||
+                        "The server has accepted your call. This page will show the report when it is ready."}
                 </p>
                 <p className="small-text">
                   {reportBlocked
@@ -1532,13 +1739,16 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <h3>
                   {reportBlocked
                     ? "The approved plan could not be verified"
-                    : plan.state === "held" || plan.state === "cancelled"
-                      ? "The report needs a fresh plan"
-                      : plan.report_ready
-                        ? "Your report is being loaded"
-                        : plan.state === "completed"
-                          ? "The report was not saved"
-                          : processingStageLabel(plan.current_stage)}
+                    : plan.state === "held" &&
+                        plan.failure_code === "account_profile_required"
+                      ? "Complete your account profile to continue"
+                      : plan.state === "held" || plan.state === "cancelled"
+                        ? "The report needs a fresh plan"
+                        : plan.report_ready
+                          ? "Your report is being loaded"
+                          : plan.state === "completed"
+                            ? "The report was not saved"
+                            : processingStageLabel(plan.current_stage)}
                 </h3>
                 <p>
                   {reportBlocked
@@ -1596,15 +1806,16 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   Per-stage completion receipts are not included in this
                   response.
                 </p>
-                {(plan.state === "held" || plan.state === "cancelled") && (
-                  <button
-                    className="secondary-button"
-                    disabled={!!busy}
-                    onClick={() => void requestFreshProcessingPlan()}
-                  >
-                    Request a fresh plan
-                  </button>
-                )}
+                {(plan.state === "held" || plan.state === "cancelled") &&
+                  plan.failure_code !== "account_profile_required" && (
+                    <button
+                      className="secondary-button"
+                      disabled={!!busy}
+                      onClick={() => void requestFreshProcessingPlan()}
+                    >
+                      Request a fresh plan
+                    </button>
+                  )}
               </div>
             )}
             {error && (
@@ -1753,11 +1964,19 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
           <section
             className="studio-report panel"
             aria-label="Sales call report"
+            data-lx-surface="light"
           >
             <p className="eyebrow" lang="en">
               {sections.heading}
             </p>
             <h1 lang="en">{sections.title}</h1>
+            {job.recovery && (
+              <p className="notice" role="status">
+                Recovered draft · version {job.recovery.version}. This uses a
+                retained response; it is not a new analysis or a human-approved
+                assessment.
+              </p>
+            )}
             <p className="studio-report-summary">{job.report.summary}</p>
             <div className="studio-report-actions">
               <button
@@ -1769,165 +1988,189 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 {copy.printReport}
               </button>
             </div>
-            <ReportExplorer
-              key={job.id}
-              label={navigation.label}
-              panels={[
-                {
-                  id: "overview",
-                  label: navigation.overview,
-                  content: (
-                    <DipakOverview
-                      report={job.report}
-                      onSelectEvidence={(item, title) =>
-                        seekToMoment({
-                          ...item,
-                          findingTitle: title,
-                          key: `${item.segment_id}:${item.start_ms}:${item.end_ms}`,
-                        })
-                      }
-                    />
-                  ),
-                },
-                {
-                  id: "factors",
-                  label: navigation.factors,
-                  content: (
-                    <ReportFactors
-                      dimensions={job.report.dimensions}
-                      language="en"
-                    />
-                  ),
-                },
-                {
-                  id: "moments",
-                  label: navigation.moments,
-                  content: (
-                    <section
-                      className="studio-moment-browser"
-                      aria-labelledby="source-moments-title"
-                      lang="en"
-                    >
-                      <div className="studio-moment-browser-heading">
-                        <div>
-                          <p className="eyebrow">SOURCE-BOUND AUDIO</p>
-                          <h2 id="source-moments-title">
-                            {copy.sourceMomentsHeading}
-                          </h2>
-                          <p>{copy.sourceMomentsIntro}</p>
+            {/* The report's shared Listen controls read this studio's own player.
+                No submission id: this owner has no acquisition waveform route. */}
+            <SourceWaveformProvider
+              audioRef={audio}
+              activeRange={activeRange}
+              mediaKey={audioUrl}
+            >
+              <ReportExplorer
+                key={job.id}
+                label={navigation.label}
+                panels={[
+                  {
+                    id: "overview",
+                    label: navigation.overview,
+                    content: (
+                      <DipakOverview
+                        report={job.report}
+                        transcript={activeTranscript ?? undefined}
+                        onSelectEvidence={(item) =>
+                          pressClip({
+                            start_ms: item.start_ms,
+                            end_ms: item.end_ms,
+                            key: `${item.segment_id}:${item.start_ms}:${item.end_ms}`,
+                          })
+                        }
+                        onSelectContextualPlayback={playWithContext}
+                      />
+                    ),
+                  },
+                  {
+                    id: "factors",
+                    label: navigation.factors,
+                    content: (
+                      <ReportFactors
+                        dimensions={job.report.dimensions}
+                        language="en"
+                      />
+                    ),
+                  },
+                  {
+                    id: "moments",
+                    label: navigation.moments,
+                    content: (
+                      <section
+                        className="studio-moment-browser"
+                        aria-labelledby="source-moments-title"
+                        lang="en"
+                      >
+                        <div className="studio-moment-browser-heading">
+                          <div>
+                            <p className="eyebrow">SOURCE-BOUND AUDIO</p>
+                            <h2 id="source-moments-title">
+                              {copy.sourceMomentsHeading}
+                            </h2>
+                            <p>{copy.sourceMomentsIntro}</p>
+                          </div>
+                          <span className="pill subtle">
+                            {durationLabel} ·{" "}
+                            {activeTranscript?.segments.length ?? 0} transcript
+                            segments
+                          </span>
                         </div>
-                        <span className="pill subtle">
-                          {durationLabel} ·{" "}
-                          {activeTranscript?.segments.length ?? 0} transcript
-                          segments
-                        </span>
-                      </div>
-                      {reportMoments.length ? (
-                        <div className="studio-moment-list">
-                          {reportMoments.map((moment) => (
-                            <button
-                              className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
-                              key={moment.key}
-                              type="button"
-                              aria-pressed={selectedMomentKey === moment.key}
-                              aria-label={`${copy.playMoment}, ${time(moment.start_ms)} to ${time(moment.end_ms)}: ${moment.quote}`}
-                              onClick={() => seekToMoment(moment)}
-                            >
-                              <span className="studio-moment-time">
-                                <Play size={12} aria-hidden="true" />
-                                {time(moment.start_ms)}–{time(moment.end_ms)}
-                              </span>
-                              <span className="studio-moment-copy">
-                                <strong>{moment.findingTitle}</strong>
-                                <span>“{moment.quote}”</span>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="small-text">
-                          No source-linked moments were produced for this draft.
-                        </p>
-                      )}
-                      {momentStatus && (
-                        <p className="studio-playback-status" role="status">
-                          {momentStatus}
-                        </p>
-                      )}
-                    </section>
-                  ),
-                },
-                ...(activeTranscript
-                  ? [
-                      {
-                        id: "transcript",
-                        label: navigation.transcript,
-                        content: (
-                          <>
-                            {activeTranscript && (
-                              <ReportTranscript
-                                key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
-                                transcript={activeTranscript}
-                                language="en"
-                                onSelect={(segment) =>
-                                  seekToMoment({
-                                    segment_id: segment.id,
-                                    quote: segment.text,
-                                    start_ms: segment.start_ms,
-                                    end_ms: segment.end_ms,
-                                    findingTitle: "Transcript",
-                                    key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
-                                  })
-                                }
-                              />
-                            )}
-                          </>
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(activeRecordingId
-                  ? [
-                      {
-                        id: "sound",
-                        label: navigation.sound,
-                        content: (
-                          <>
-                            {activeRecordingId && (
-                              <RecordingMeasurements
-                                key={`${activeRecordingId}:${job.report.source_sha256}`}
-                                recordingId={activeRecordingId}
-                                sourceSha256={job.report.source_sha256}
-                                language="en"
-                              />
-                            )}
-                          </>
-                        ),
-                      },
-                    ]
-                  : []),
-                {
-                  id: "next",
-                  label: navigation.next,
-                  content: (
-                    <>
-                      {renderFindings(
-                        sections.improvements,
-                        job.report.improvements,
-                      )}
-                      {renderFindings(
-                        sections.objections,
-                        job.report.objection_analysis,
-                      )}
-                      {renderFindings(
-                        sections.closing,
-                        job.report.closing_analysis,
-                      )}
-                    </>
-                  ),
-                },
-              ]}
-            />
+                        {reportMoments.length ? (
+                          <div className="studio-moment-list">
+                            {reportMoments.map((moment) => (
+                              <ClipPlayState
+                                key={moment.key}
+                                startMs={moment.start_ms}
+                                endMs={moment.end_ms}
+                              >
+                                {(playing) => (
+                                  <button
+                                    className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
+                                    type="button"
+                                    aria-pressed={
+                                      selectedMomentKey === moment.key
+                                    }
+                                    aria-label={`${playing ? "Pause" : copy.playMoment}, ${spokenClipRange(moment.start_ms, moment.end_ms)}: ${moment.quote}`}
+                                    data-clip-playing={playing || undefined}
+                                    onClick={() => pressClip(moment)}
+                                  >
+                                    <span className="studio-moment-time">
+                                      <ClipPlayIcon
+                                        playing={playing}
+                                        size={12}
+                                      />
+                                      {evidenceTime(
+                                        moment.start_ms,
+                                        moment.end_ms,
+                                      )}
+                                    </span>
+                                    <span className="studio-moment-copy">
+                                      <strong>{moment.findingTitle}</strong>
+                                      <span>“{moment.quote}”</span>
+                                    </span>
+                                  </button>
+                                )}
+                              </ClipPlayState>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="small-text">
+                            No source-linked moments were produced for this
+                            draft.
+                          </p>
+                        )}
+                        {momentStatus && (
+                          <p className="studio-playback-status" role="status">
+                            {momentStatus}
+                          </p>
+                        )}
+                      </section>
+                    ),
+                  },
+                  ...(activeTranscript
+                    ? [
+                        {
+                          id: "transcript",
+                          label: navigation.transcript,
+                          content: (
+                            <>
+                              {activeTranscript && (
+                                <ReportTranscript
+                                  key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
+                                  transcript={activeTranscript}
+                                  language="en"
+                                  onSelect={(segment) =>
+                                    seekToMoment({
+                                      start_ms: segment.start_ms,
+                                      end_ms: segment.end_ms,
+                                      key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
+                                    })
+                                  }
+                                />
+                              )}
+                            </>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(activeRecordingId
+                    ? [
+                        {
+                          id: "sound",
+                          label: navigation.sound,
+                          content: (
+                            <>
+                              {activeRecordingId && (
+                                <RecordingMeasurements
+                                  key={`${activeRecordingId}:${job.report.source_sha256}`}
+                                  recordingId={activeRecordingId}
+                                  sourceSha256={job.report.source_sha256}
+                                  language="en"
+                                />
+                              )}
+                            </>
+                          ),
+                        },
+                      ]
+                    : []),
+                  {
+                    id: "next",
+                    label: navigation.next,
+                    content: (
+                      <>
+                        {renderFindings(
+                          sections.improvements,
+                          job.report.improvements,
+                        )}
+                        {renderFindings(
+                          sections.objections,
+                          job.report.objection_analysis,
+                        )}
+                        {renderFindings(
+                          sections.closing,
+                          job.report.closing_analysis,
+                        )}
+                      </>
+                    ),
+                  },
+                ]}
+              />
+            </SourceWaveformProvider>
             <details className="studio-report-details">
               <summary lang="en">{sections.details}</summary>
               <p lang="en">

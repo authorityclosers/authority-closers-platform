@@ -6,7 +6,11 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
+from ac_platform.conversation_intelligence.acquisition_reports import (
+    AcquisitionReports,
+    _progress_failure_code,
+    _safe_progress_failure_code,
+)
 from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
 from ac_platform.conversation_intelligence.inference import ConversationInference, binding_for
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
@@ -23,6 +27,53 @@ def _recording() -> SimpleNamespace:
         content_type="audio/wav",
         permission_id=uuid4(),
     )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("conversation_provider_execution_timeout", "conversation_provider_execution_timeout"),
+        ("conversation_report_payload_missing_field", "conversation_report_payload_missing_field"),
+        ("conversation_provider_http_503", "conversation_provider_http_503"),
+        ("stage_uncertain", "stage_uncertain"),
+        ("provider response contained a secret", None),
+        ("conversation_secret_value", None),
+        (None, None),
+    ],
+)
+def test_progress_failure_code_exposes_only_stable_allowlisted_values(
+    value: object, expected: str | None
+) -> None:
+    assert _safe_progress_failure_code(value) == expected
+
+
+def test_progress_failure_code_does_not_replay_a_superseded_generation() -> None:
+    old_failed = SimpleNamespace(generation=1, state="failed")
+    current_completed = SimpleNamespace(generation=2, state="completed")
+    current_plan = SimpleNamespace(generation=2, state="completed", progress={})
+
+    assert (
+        _progress_failure_code(
+            current_plan,
+            [
+                (old_failed, "conversation_provider_execution_timeout"),
+                (current_completed, None),
+            ],
+            generation=2,
+            has_report=False,
+        )
+        is None
+    )
+
+
+def test_progress_failure_code_clears_while_current_plan_is_active() -> None:
+    current_plan = SimpleNamespace(
+        generation=2,
+        state="active",
+        progress={"failure_code": "stage_uncertain"},
+    )
+
+    assert _progress_failure_code(current_plan, [], generation=2, has_report=False) is None
 
 
 @pytest.mark.asyncio

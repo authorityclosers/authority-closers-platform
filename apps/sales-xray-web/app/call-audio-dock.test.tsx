@@ -76,6 +76,72 @@ it("uses one real audio element for playback, speed, mute and evidence pause cal
   ).toBe("00:14 of 20:53");
 });
 
+it("shows a measured playhead and one readable clock without waveform data or autoplay", async () => {
+  const audio = createRef<HTMLAudioElement>();
+  const play = vi.spyOn(HTMLMediaElement.prototype, "play");
+  await act(async () =>
+    root.render(
+      <CallAudioDock
+        audioRef={audio}
+        src="/authorized/source"
+        durationMs={60000}
+      />,
+    ),
+  );
+  expect(play).not.toHaveBeenCalled();
+  expect(audio.current?.autoplay).toBe(false);
+  const seek = container.querySelector<HTMLInputElement>(
+    '[aria-label="Seek recording"]',
+  )!;
+  const timeline = seek.parentElement!;
+  expect(
+    timeline.querySelector('[aria-label="Audio level preview unavailable"]'),
+  ).not.toBeNull();
+  expect(timeline.style.getPropertyValue("--progress")).toBe("0");
+  await act(async () => {
+    audio.current!.currentTime = 15;
+    audio.current?.dispatchEvent(new Event("timeupdate"));
+  });
+  expect(timeline.style.getPropertyValue("--progress")).toBe("0.25");
+  expect(
+    timeline.querySelectorAll('[aria-hidden="true"]').length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(seek.getAttribute("aria-valuetext")).toBe("00:15 of 01:00");
+  expect(seek.step).toBe("1");
+  // The visible clock renders once and is plain text, not a live region.
+  expect(container.textContent?.split("01:00")).toHaveLength(2);
+  expect(container.querySelector("output, [aria-live]")).toBeNull();
+});
+
+it("resumes the full call from the dock after an excerpt without a second player", async () => {
+  const audio = createRef<HTMLAudioElement>();
+  const onPlay = vi.fn();
+  await act(async () =>
+    root.render(
+      <CallAudioDock
+        audioRef={audio}
+        src="/authorized/source"
+        durationMs={60000}
+        onPlay={onPlay}
+      />,
+    ),
+  );
+  const play = vi.spyOn(audio.current!, "play").mockImplementation(async () => {
+    audio.current?.dispatchEvent(new Event("play"));
+  });
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Play recording"]')!
+      .click(),
+  );
+  // The host clears any excerpt bound in onPlay before playback starts.
+  expect(onPlay).toHaveBeenCalledOnce();
+  expect(onPlay.mock.invocationCallOrder[0]).toBeLessThan(
+    play.mock.invocationCallOrder[0],
+  );
+  expect(container.querySelectorAll("audio")).toHaveLength(1);
+});
+
 it("keeps report-safe playback failures readable without fabricating waveform data", async () => {
   const audio = createRef<HTMLAudioElement>();
   await act(async () =>

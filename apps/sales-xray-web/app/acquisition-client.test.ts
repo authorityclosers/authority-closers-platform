@@ -76,6 +76,25 @@ describe("acquisition permission recovery", () => {
   );
 
   it.each([
+    JSON.stringify({
+      detail:
+        "Your remaining trial minutes are not enough for this recording. Contact AC for more access.",
+    }),
+  ])("explains an insufficient remaining trial allowance", async (body) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(body, { status: 403 })),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}/source`, { method: "PUT" }),
+    ).rejects.toMatchObject({
+      status: 403,
+      reason: "trial_allowance_insufficient",
+      message: expect.stringContaining("remaining trial allowance"),
+    });
+  });
+
+  it.each([
     JSON.stringify({ detail: "private-provider-context" }),
     JSON.stringify({ detail: `${allowanceDetail} private-provider-context` }),
     JSON.stringify([{ detail: allowanceDetail }]),
@@ -111,6 +130,78 @@ describe("acquisition permission recovery", () => {
       message: new AcquisitionError(403).message,
     });
   });
+
+  it("preserves the server request reference without exposing arbitrary denial text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ detail: "private infrastructure detail" }),
+            {
+              status: 403,
+              headers: { "x-request-id": "req-safe-123" },
+            },
+          ),
+        ),
+      ),
+    );
+    let error: AcquisitionError | undefined;
+    try {
+      await acquisition(path);
+    } catch (value) {
+      error = value as AcquisitionError;
+    }
+    expect(error).toMatchObject({
+      requestId: "req-safe-123",
+      message: expect.stringContaining("Request reference: req-safe-123"),
+    });
+    expect(error?.message).not.toContain("private infrastructure detail");
+  });
+
+  it.each([
+    [
+      "The audio length could not be verified. Try another file.",
+      "source_verification",
+      "We couldn’t verify this recording’s audio.",
+    ],
+    [
+      "Choose one bounded audio file up to 32 MiB and accept the current upload terms.",
+      "source_invalid",
+      "Choose one bounded audio file and accept the current upload terms.",
+    ],
+    [
+      "The complete recording was not received.",
+      "source_incomplete",
+      "The complete recording was not received.",
+    ],
+    [
+      "The recording could not be verified in private storage.",
+      "source_storage",
+      "The recording could not be verified in private storage.",
+    ],
+  ] as const)(
+    "translates a controlled source denial (%s)",
+    async (detail, reason, copy) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ detail }), {
+            status: 422,
+            headers: { "x-request-id": "req-source-123" },
+          }),
+        ),
+      );
+      await expect(
+        acquisition(`/submissions/${submissionId}/source`),
+      ).rejects.toMatchObject({
+        status: 422,
+        reason,
+        requestId: "req-source-123",
+        message: expect.stringContaining(copy),
+      });
+    },
+  );
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {
@@ -123,6 +214,26 @@ describe("acquisition source-bound presentation", () => {
     expect(parsed.report.overview).toEqual(envelope.report.content.overview);
     expect(parsed.report.report_sections).toEqual([]);
     expect(parsed.report.strengths).toEqual(envelope.report.content.strengths);
+    // An envelope from a server without labels still opens (C1 is additive).
+    expect(parsed.label).toBeNull();
+  });
+  it("opens a report envelope that carries the C1 call name", () => {
+    const parsed = parseAcquisitionReport(
+      { ...envelope, display_name: "Renewal review", display_name_revision: 5 },
+      { submissionId, recordingId },
+      parseTranscript(transcript, transcript.source_sha256),
+    );
+    expect(parsed.label).toEqual({
+      displayName: "Renewal review",
+      revision: 5,
+    });
+    expect(() =>
+      parseAcquisitionReport(
+        { ...envelope, display_name: "Half present" },
+        { submissionId, recordingId },
+        parseTranscript(transcript, transcript.source_sha256),
+      ),
+    ).toThrow("report_envelope_label");
   });
   it.each([
     "source",

@@ -23,6 +23,7 @@ from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.identity.models import DeletionRequestStatus, PersonStatus, SessionAudience
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
+from ac_platform.identity.sales_xray_profile import erase_sales_xray_profile
 from ac_platform.identity.services import (
     AccountUnavailableError,
     AmbiguousProviderIdentityError,
@@ -163,6 +164,9 @@ class RegisteredIdentity:
 
     person: PersonSnapshot
     session: IssuedSession
+    consent_changed: bool = False
+    previous_consent_version: str | None = None
+    previous_consented_at: datetime | None = None
 
 
 class AsyncIdentityApplication:
@@ -436,6 +440,66 @@ class AsyncIdentityApplication:
             membership=membership,
         )
 
+    async def resolve_actor_read_only(
+        self,
+        token: str,
+        *,
+        require_tenant: bool = False,
+        expected_audience: SessionAudience = SessionAudience.ACCOUNT,
+        now: datetime | None = None,
+    ) -> ResolvedActorContext:
+        """Resolve an actor without updating session activity or taking write locks.
+
+        Read-only surfaces use this while a long-lived source response retains
+        shared identity/recording fences.  This method takes shared Person,
+        Session, Tenant and Membership locks in the canonical order before
+        returning the actor; it avoids the normal authentication write that
+        advances ``last_seen_at``.
+        """
+
+        self._require_transaction()
+        current_time = _now(now)
+        token_hash = self._token_hash(token)
+        candidate = await self._repository.find_session_by_token_hash(token_hash)
+        if candidate is None:
+            raise InvalidSessionTokenError("session token is invalid")
+        # Preserve the canonical Person -> Session lock order used by all
+        # identity mutations.  Plain reads here would allow revocation or
+        # deletion to race with the later membership check.
+        person = await self._repository.get_person_for_share(candidate.person_id)
+        if person is None:
+            raise IdentityResolutionError("canonical person does not exist")
+        if person.status != PersonStatus.ACTIVE.value:
+            raise AccountUnavailableError("suspended or deleted accounts cannot authenticate")
+        require_verified_person(person)
+        session = await self._repository.get_session_for_share(candidate.id)
+        if (
+            session is None
+            or session.person_id != person.id
+            or not hmac.compare_digest(session.token_hash, token_hash)
+            or session.audience != expected_audience.value
+            or (
+                expected_audience is SessionAudience.REVIEWER
+                and session.selected_tenant_id is not None
+            )
+        ):
+            raise InvalidSessionTokenError("session token is invalid")
+        self._validate_session_state(session, current_time)
+        tenant: Tenant | None = None
+        membership: Membership | None = None
+        if session.selected_tenant_id is not None:
+            tenant, membership = await self._lock_active_membership(
+                person.id, session.selected_tenant_id
+            )
+        elif require_tenant:
+            raise TenantScopeDeniedError("an explicit active tenant context is required")
+        return self._resolved_actor(
+            person,
+            session,
+            tenant=tenant,
+            membership=membership,
+        )
+
     async def select_tenant(
         self,
         token: str,
@@ -671,6 +735,7 @@ class AsyncIdentityApplication:
         *,
         pkce_verifier: str,
         consent_version: str,
+        allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
@@ -708,14 +773,22 @@ class AsyncIdentityApplication:
             if not matches or matches[0].person_id != person.id:
                 raise IdentityResolutionError("provider identity changed during registration")
             identity = matches[0]
-            if person.consent_version not in {None, normalized_consent_version}:
+            if (
+                person.consent_version not in {None, normalized_consent_version}
+                and not allow_consent_supersession
+            ):
                 raise ProviderConsentVersionConflictError(
                     "provider identity has a different recorded consent version"
                 )
             await self._consume_authorization_callback(
                 transaction_id, validated, current_time=current_time
             )
-            if person.consent_version is None or person.consented_at is None:
+            previous_consent_version = person.consent_version
+            previous_consented_at = person.consented_at
+            consent_changed = person.consent_version != normalized_consent_version or (
+                person.consented_at is None
+            )
+            if consent_changed:
                 person = replace(
                     person,
                     consent_version=normalized_consent_version,
@@ -736,7 +809,13 @@ class AsyncIdentityApplication:
                 user_agent=user_agent,
                 ip_address=ip_address,
             )
-            return RegisteredIdentity(person=person, session=issued)
+            return RegisteredIdentity(
+                person=person,
+                session=issued,
+                consent_changed=consent_changed,
+                previous_consent_version=previous_consent_version,
+                previous_consented_at=previous_consented_at,
+            )
         await self._consume_authorization_callback(
             transaction_id, validated, current_time=current_time
         )
@@ -760,7 +839,13 @@ class AsyncIdentityApplication:
             user_agent=user_agent,
             ip_address=ip_address,
         )
-        return RegisteredIdentity(person=person, session=issued)
+        return RegisteredIdentity(
+            person=person,
+            session=issued,
+            consent_changed=True,
+            previous_consent_version=None,
+            previous_consented_at=None,
+        )
 
     async def authenticate_provider(
         self,
@@ -1003,6 +1088,7 @@ class AsyncIdentityApplication:
             )
             if not privacy_complete:
                 return request
+        await erase_sales_xray_profile(self._session, person_id=person.id)
         if person.status != PersonStatus.DELETED.value:
             await self._repository.save_person(
                 replace(

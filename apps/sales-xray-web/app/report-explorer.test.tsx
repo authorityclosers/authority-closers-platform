@@ -1,6 +1,6 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportExplorer } from "./report-explorer";
 
 (
@@ -9,6 +9,7 @@ import { ReportExplorer } from "./report-explorer";
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
 });
 
 function Search() {
@@ -38,7 +40,12 @@ async function render(label = "Explore report", second = "Transcript") {
             content: <p>Observed summary</p>,
           },
           { id: "transcript", label: second, content: <Search /> },
-          { id: "sound", label: "Sound", content: <p>Saved sound</p> },
+          {
+            id: "sound",
+            label: "Sound",
+            compactLabel: "Audio",
+            content: <p>Saved sound</p>,
+          },
         ]}
       />,
     ),
@@ -90,6 +97,8 @@ it("supports roving keyboard focus, wraparound and labelled panels", async () =>
     const panel = document.getElementById(tab.getAttribute("aria-controls")!);
     expect(panel?.getAttribute("aria-labelledby")).toBe(tab.id);
   }
+  expect(tabs()[2].getAttribute("aria-label")).toBe("Sound (Audio)");
+  expect(tabs()[2].textContent).toContain("Audio");
 });
 
 it("falls back to a permitted panel if the selected section is removed", async () => {
@@ -111,4 +120,91 @@ it("falls back to a permitted panel if the selected section is removed", async (
   );
   expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
   expect(container.textContent).not.toContain("Saved sound");
+});
+
+const callId = "c2793fdf-4948-47e4-a4bc-973f2b7720bc";
+async function renderBound() {
+  await act(async () =>
+    root.render(
+      <ReportExplorer
+        label="Saved report"
+        boundCallId={callId}
+        panels={[
+          { id: "overview", label: "Overview", content: <p>Summary</p> },
+          { id: "prospect", label: "Prospect", content: <Search /> },
+          {
+            id: "moments",
+            label: "Moments",
+            content: <audio aria-label="Source audio" />,
+          },
+        ]}
+      />,
+    ),
+  );
+}
+
+it("restores a bookmarked section and follows history without remounting panels or reading the API", async () => {
+  window.history.replaceState(null, "", `/?call=${callId}&section=prospect`);
+  const fetch = vi.spyOn(window, "fetch");
+  await renderBound();
+  expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
+  const source = container.querySelector("audio")!;
+  const search = container.querySelector<HTMLButtonElement>(
+    '[role="tabpanel"]:not([hidden]) button',
+  )!;
+  await act(async () => search.click());
+  await act(async () => tabs()[2].click());
+  expect(window.location.search).toBe(`?call=${callId}&section=moments`);
+  await act(async () => {
+    // popstate is the browser's Back/Forward delivery contract.
+    window.history.replaceState(null, "", `/?call=${callId}&section=prospect`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
+  expect(search.textContent).toBe("Literal source phrase");
+  expect(container.querySelector("audio")).toBe(source);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("replaces the current report entry for clicks and keyboard browsing without stealing focus on history updates", async () => {
+  window.history.replaceState(null, "", `/?call=${callId}&section=overview`);
+  await renderBound();
+  const push = vi.spyOn(window.history, "pushState");
+  const replace = vi.spyOn(window.history, "replaceState");
+  await act(async () => tabs()[1].click());
+  expect(push).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledTimes(1);
+  await act(async () => tabs()[1].click());
+  expect(push).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledTimes(1);
+  await act(async () => tabs()[2].click());
+  expect(replace).toHaveBeenCalledTimes(2);
+  await act(async () =>
+    tabs()[2].dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    ),
+  );
+  expect(push).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledTimes(3);
+  expect(document.activeElement).toBe(tabs()[0]);
+  await act(async () => {
+    window.history.replaceState(null, "", `/?call=${callId}&section=prospect`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
+  expect(document.activeElement).toBe(tabs()[0]);
+});
+
+it("does not use section or stage selectors for another call", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/?call=7b6443d3-9b2d-4f97-9e70-5e82e54f8738&section=prospect&stage=C2",
+  );
+  await renderBound();
+  expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+  const original = window.location.href;
+  await act(async () => tabs()[1].click());
+  expect(window.location.href).toBe(original);
+  expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
 });

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales Xray v0.2 · Lightbox foundations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&amp;family=Plus+Jakarta+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400..700&amp;family=Noto+Serif+Devanagari:wght@400..600&amp;display=swap">
+<style>
+body{margin:0;background:#F6F5F1;color:#0B1424;font-family:"Plus Jakarta Sans","Noto Sans Devanagari",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#087E79}a:hover{color:#06635F}
+@keyframes lxFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes lxBlink{0%,90%,100%{transform:scaleY(1)}93%{transform:scaleY(.15)}96%{transform:scaleY(1)}}
+@keyframes lxEq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes lxScanY{from{transform:translateY(-17px)}to{transform:translateY(17px)}}
+@keyframes lxPen{0%{stroke-dashoffset:34}60%,100%{stroke-dashoffset:0}}
+@keyframes lxSmile{0%,20%{stroke-dashoffset:40}60%,100%{stroke-dashoffset:0}}
+@keyframes lxBreathe{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes lxSweep{0%{transform:translateX(-80px)}100%{transform:translateX(560px)}}
+.lx-float{animation:lxFloat 4.8s ease-in-out infinite}
+.lx-blink{animation:lxBlink 5.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.lx-eq{animation:lxEq 1.1s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.lx-scan{animation:lxScanY 2.4s cubic-bezier(.65,0,.35,1) infinite alternate}
+.lx-pen{stroke-dasharray:34;animation:lxPen 1.5s ease-in-out infinite}
+.lx-smile{stroke-dasharray:40;animation:lxSmile 3s cubic-bezier(.2,.8,.2,1) infinite}
+.lx-breathe{animation:lxBreathe 3.6s ease-in-out infinite}
+.lx-sweep{animation:lxSweep 4s linear infinite}
+.lx-quote{font-family:"Newsreader","Noto Serif Devanagari",Georgia,serif}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1240px; box-sizing: border-box; padding: 64px; background: #F6F5F1; display: flex; flex-direction: column; gap: 40px">
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 560px; gap: 48px; align-items: end">
+    <div style="display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <svg width="36" height="36" viewBox="0 0 512 512" aria-hidden="true"><polygon points="32,432 192,48 280,48 120,432" fill="#152638"></polygon><polygon points="308,112 440,432 144,432 184,328 296,328 260,224" fill="#152638"></polygon></svg>
+        <span style="font-size: 12px; font-weight: 800; letter-spacing: 0.16em; color: #087E79">SALES XRAY v0.2 · DESIGN LANGUAGE</span>
+      </div>
+      <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 76px; line-height: .98; letter-spacing: -0.045em">Lightbox</h1>
+      <p style="margin: 0; font-size: 19px; line-height: 1.5; color: #334158; max-width: 640px">A calm light table for sales calls. The call is the film; the moments light up; the coaching sits in the margin. Evidence first, truthful progress, one focus.</p>
+    </div>
+    <div style="position: relative; height: 200px; border-radius: 26px; overflow: hidden; background-color: #0A1220; background-image: radial-gradient(ellipse at 50% 40%, rgba(45,212,191,.22), rgba(10,18,32,0) 62%), linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: auto, 28px 28px, 28px 28px; display: flex; align-items: center; justify-content: center">
+      <div class="lx-sweep" aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 80px; height: 200px; background: linear-gradient(90deg, rgba(45,212,191,0), rgba(45,212,191,.2), rgba(45,212,191,0))"></div>
+      <svg class="lx-float" width="120" height="120" viewBox="0 0 120 120" aria-label="The Sales Xray lens">
+        <defs><filter id="gM0" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="2.4" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter><radialGradient id="aM0" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#050A14"></stop></radialGradient></defs>
+        <rect x="9" y="50" width="9" height="20" rx="4.5" fill="#E8EDF5"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#E8EDF5"></rect>
+        <circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#E8EDF5" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aM0)"></circle>
+        <path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"></path>
+        <rect class="lx-blink" x="44" y="57" width="32" height="6" rx="3" fill="#2DD4BF" filter="url(#gM0)"></rect>
+      </svg>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">Evidence first</span><span style="font-size: 13.5px; line-height: 1.5; color: #56637A">Every claim carries a playable quote. No quote, no claim.</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">Truthful progress</span><span style="font-size: 13.5px; line-height: 1.5; color: #56637A">Only confirmed steps light up. Never a fake bar or ETA.</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">One focus</span><span style="font-size: 13.5px; line-height: 1.5; color: #56637A">Exactly one “change first”. The rest supports it.</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">Your words, untouched</span><span style="font-size: 13.5px; line-height: 1.5; color: #56637A">Quotes stay in the language and script they were spoken.</span></div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em">Calm, then alive</span><span style="font-size: 13.5px; line-height: 1.5; color: #56637A">Still at rest; motion only answers a person or a real event.</span></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 32px">
+    <section style="display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; color: #6B7486">COLOUR</h2>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #0B1424"></div><span style="font-size: 12px; font-weight: 800">Ink</span><span style="font-size: 11px; color: #6B7486">#0B1424</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #0A1220; box-shadow: inset 0 0 0 1px rgba(45,212,191,.25)"></div><span style="font-size: 12px; font-weight: 800">Film</span><span style="font-size: 11px; color: #6B7486">#0A1220</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #56637A"></div><span style="font-size: 12px; font-weight: 800">Muted</span><span style="font-size: 11px; color: #6B7486">#56637A</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #F6F5F1; border: 1px solid #E6E3DA; box-sizing: border-box"></div><span style="font-size: 12px; font-weight: 800">Paper</span><span style="font-size: 11px; color: #6B7486">#F6F5F1</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #087E79"></div><span style="font-size: 12px; font-weight: 800">Teal</span><span style="font-size: 11px; color: #6B7486">#087E79</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><div style="height: 64px; border-radius: 14px; background: #2DD4BF"></div><span style="font-size: 12px; font-weight: 800">Glow · on film</span><span style="font-size: 11px; color: #6B7486">#2DD4BF</span></div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #E6F5F2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#087E79" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M7.8 12.6l2.7 2.6 5.7-6.2"></path></svg><span style="font-size: 12.5px; font-weight: 800; color: #06635F">Strength</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #FEF3E2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r=".9" fill="#B45309"></circle></svg><span style="font-size: 12.5px; font-weight: 800; color: #92400E">Change first</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #EFEBFF"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B3FD6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8l9.2 9.2-9.2 9.2L2.8 12z"></path><path d="M12 8.2v4.6"></path><circle cx="12" cy="16" r=".95" fill="#5B3FD6" stroke="none"></circle></svg><span style="font-size: 12.5px; font-weight: 800; color: #4A31B8">Missed</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #FDECF1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#BE2A55" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5h16v10H11l-4.5 3.5v-3.5H4z"></path><path d="M9 9l6 3M15 9l-6 3"></path></svg><span style="font-size: 12.5px; font-weight: 800; color: #9B1D44">Objection</span></div>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: #FBFAF7; border: 1.5px dashed #AEB6C4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#56637A" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke-dasharray="2.6 2.9"></circle><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2.9-1.2 1.8"></path></svg><span style="font-size: 12.5px; font-weight: 800; color: #334158">Hypothesis</span></div>
+      </div>
+      <div style="display: flex; gap: 22px; align-items: center; padding: 14px 16px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px; font-size: 12.5px; font-weight: 700; color: #334158">
+        <span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #6B7486">SKILL EVIDENCE</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="#0B1424"></circle></svg>Evidence found</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#0B1424" stroke-width="1.8"></circle><path d="M12 4.5a7.5 7.5 0 0 1 0 15z" fill="#0B1424"></path></svg>Mixed</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#0B1424" stroke-width="1.8" stroke-dasharray="1.2 3.2" stroke-linecap="round"></circle></svg>Need more evidence</span>
+        <span style="display: inline-flex; align-items: center; gap: 7px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="#0B1424" stroke-width="1.8"></circle><path d="M8.5 12h7" stroke="#0B1424" stroke-width="1.8" stroke-linecap="round"></path></svg>Not relevant</span>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 14px">
+      <h2 style="margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; color: #6B7486">TYPE</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 20px 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-family: 'Bricolage Grotesque', sans-serif; font-size: 40px; font-weight: 800; letter-spacing: -0.035em; line-height: 1">See what happened.</span><span style="font-size: 11px; font-weight: 700; color: #6B7486">Bricolage Grotesque · display</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px"><span style="font-size: 16px; line-height: 1.55; color: #334158">Clear, friendly interface text that stays readable at small sizes.</span><span style="flex: none; font-size: 11px; font-weight: 700; color: #6B7486">Plus Jakarta Sans · UI</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px"><span class="lx-quote" lang="hi-Latn" style="font-size: 22px; font-style: italic; line-height: 1.35">“Theek hai, aap batana phir.”</span><span style="flex: none; font-size: 11px; font-weight: 700; color: #6B7486">Newsreader · verdict and quotes</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px"><span class="lx-quote" lang="hi" style="font-size: 22px; line-height: 1.6">“बजट थोड़ा ऊपर जा रहा है।”</span><span style="flex: none; font-size: 11px; font-weight: 700; color: #6B7486">Noto Serif Devanagari · upright, never italic</span></div>
+      </div>
+    </section>
+  </div>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .14em; color: #6B7486">THE LENS · ONE CHARACTER, SIX HONEST STATES</h2>
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px">
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg class="lx-float" width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><filter id="gL1" x="-50%" y="-200%" width="200%" height="500%"><feGaussianBlur stdDeviation="2.4" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter><radialGradient id="aL1" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs><rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aL1)"></circle><path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"></path><rect class="lx-blink" x="44" y="57" width="32" height="6" rx="3" fill="#2DD4BF" filter="url(#gL1)"></rect></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Ready</span><span style="font-size: 11.5px; color: #6B7486">Upload, empty</span></figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><radialGradient id="aL2" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs><rect x="13" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="98" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="40" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="27" fill="url(#aL2)"></circle><g fill="#2DD4BF"><rect class="lx-eq" x="46" y="50" width="4" height="20" rx="2"></rect><rect class="lx-eq" x="52.5" y="46" width="4" height="28" rx="2" style="animation-delay: -.15s"></rect><rect class="lx-eq" x="59" y="43" width="4" height="34" rx="2" style="animation-delay: -.45s"></rect><rect class="lx-eq" x="65.5" y="46" width="4" height="28" rx="2" style="animation-delay: -.3s"></rect><rect class="lx-eq" x="72" y="50" width="4" height="20" rx="2" style="animation-delay: -.6s"></rect></g></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Listening</span><span style="font-size: 11.5px; color: #6B7486">Transcription</span></figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><filter id="gL3" x="-50%" y="-300%" width="200%" height="700%"><feGaussianBlur stdDeviation="2.2" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter><radialGradient id="aL3" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient><clipPath id="cL3"><circle cx="60" cy="60" r="30"></circle></clipPath></defs><rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aL3)"></circle><g clip-path="url(#cL3)"><g opacity=".5" stroke="#2DD4BF" stroke-width="2" stroke-linecap="round"><path d="M36 60 h4 M43 55 v10 M48 50 v20 M53 56 v8 M58 47 v26 M63 53 v14 M68 49 v22 M73 56 v8 M78 58 v4"></path></g><g class="lx-scan"><rect x="30" y="58.5" width="60" height="3" rx="1.5" fill="#2DD4BF" filter="url(#gL3)"></rect></g></g></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Understanding</span><span style="font-size: 11.5px; color: #6B7486">Finding moments</span></figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><radialGradient id="aL4" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs><rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aL4)"></circle><path class="lx-pen" d="M43 63 q5 -8 9 0 t9 0 t9 0 t6 -2" fill="none" stroke="#2DD4BF" stroke-width="3.5" stroke-linecap="round"></path></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Writing</span><span style="font-size: 11.5px; color: #6B7486">Coaching report</span></figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><radialGradient id="aL5" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs><rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aL5)"></circle><path class="lx-smile" d="M46 57 Q60 71 74 57" fill="none" stroke="#2DD4BF" stroke-width="5" stroke-linecap="round"></path><path d="M100 14 l2.4 6.6 6.6 2.4 -6.6 2.4 -2.4 6.6 -2.4 -6.6 -6.6 -2.4 6.6 -2.4z" fill="#D97706"></path><path d="M16 18 l1.8 4.9 4.9 1.8 -4.9 1.8 -1.8 4.9 -1.8 -4.9 -4.9 -1.8 4.9 -1.8z" fill="#087E79"></path></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Done</span><span style="font-size: 11.5px; color: #6B7486">Report ready</span></figcaption>
+      </figure>
+      <figure style="margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 10px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 18px">
+        <svg width="96" height="96" viewBox="0 0 120 120" aria-hidden="true"><defs><radialGradient id="aL6" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs><g transform="rotate(-7 60 60)"><rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aL6)"></circle><rect class="lx-breathe" x="49" y="58" width="22" height="5" rx="2.5" fill="#D97706"></rect></g><circle cx="96" cy="22" r="14" fill="#FEF3C7" stroke="#D97706" stroke-width="3"></circle><rect x="90.5" y="16" width="4" height="12" rx="1.5" fill="#92400E"></rect><rect x="97.5" y="16" width="4" height="12" rx="1.5" fill="#92400E"></rect></svg>
+        <figcaption style="text-align: center; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 800">Paused</span><span style="font-size: 11.5px; color: #6B7486">Needs attention</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #6B7486">MOTION · QUICK</span><span style="font-size: 15px; font-weight: 800">120 ms · hover, press</span><span style="font-size: 12.5px; color: #56637A">cubic-bezier(.2,.8,.2,1)</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #6B7486">MOTION · MOVE</span><span style="font-size: 15px; font-weight: 800">240 ms · open, slide</span><span style="font-size: 12.5px; color: #56637A">cubic-bezier(.16,1,.3,1)</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #6B7486">MOTION · DEVELOP</span><span style="font-size: 15px; font-weight: 800">700 ms · report reveal</span><span style="font-size: 12.5px; color: #56637A">blur 6→0, 60 ms stagger</span></div>
+    <div style="display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #6B7486">REDUCED MOTION</span><span style="font-size: 15px; font-weight: 800">Fades only, 120 ms</span><span style="font-size: 12.5px; color: #56637A">loops stop; lens holds its pose</span></div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

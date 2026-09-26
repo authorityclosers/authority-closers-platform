@@ -188,6 +188,148 @@ def test_sales_xray_static_preview_is_built_before_application_validation() -> N
     assert python_tests["steps"].index(shard_install) < python_tests["steps"].index(shard_preview)
 
 
+def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> None:
+    workflow = yaml.safe_load((WORKFLOWS / "application.yml").read_text(encoding="utf-8"))
+    gate_id = "validate-sales-xray-acquisition-browser"
+    gate = workflow["jobs"][gate_id]
+    assert "if" not in gate and not gate.get("continue-on-error", False)
+    service = gate["services"]["postgres"]
+    database = make_url(gate["env"]["AC_CONVERSATION_POSTGRES_TEST_URL"])
+    assert (database.host, database.port, database.database, database.username) == (
+        "127.0.0.1",
+        5432,
+        "ac_sales_xray_browser",
+        "ac_owner",
+    )
+    assert service["env"] == {
+        "POSTGRES_DB": "ac_sales_xray_browser",
+        "POSTGRES_USER": "ac_owner",
+        "POSTGRES_PASSWORD": "local-owner-only",
+    }
+    assert service["ports"] == ["5432:5432"]
+    assert service["image"].startswith("postgres@sha256:")
+    assert "pg_isready -U ac_owner -d ac_sales_xray_browser" in service["options"]
+    assert gate["env"]["AC_TEST_DATABASE_URL"] == gate["env"]["AC_CONVERSATION_POSTGRES_TEST_URL"]
+    assert gate["env"]["AC_EXTERNAL_SIDE_EFFECTS_HOLD"] == "true"
+
+    names = [step.get("name") for step in gate["steps"]]
+    install = _required_step(gate, "Install locked browser-gate dependencies")
+    codecs = _required_step(gate, "Install FFmpeg prerequisites for acquisition browser")
+    browser = _required_step(gate, "Install locked acquisition browser")
+    native = _required_step(gate, "Build verified AudioAtlas for acquisition browser")
+    build = _required_step(gate, "Build Sales Xray production standalone")
+    required = _required_step(gate, "Require Sales Xray acquisition browser journey")
+    receipt = next(
+        step
+        for step in gate["steps"]
+        if step.get("name") == "Upload sanitized Sales Xray acquisition receipt"
+    )
+    assert receipt["if"] == "always()"
+    assert receipt["uses"].startswith("actions/upload-artifact@")
+    assert receipt["with"]["if-no-files-found"] == "error"
+    assert "sales-xray-acquisition-browser-receipt.json" in receipt["with"]["path"]
+    assert "proof.json" in receipt["with"]["path"]
+    assert names.index(install["name"]) < names.index(codecs["name"]) < names.index(browser["name"])
+    assert [shlex.split(line) for line in codecs["run"].splitlines()] == [
+        ["set", "-euo", "pipefail"],
+        ["sudo", "apt-get", "update"],
+        [
+            "sudo",
+            "apt-get",
+            "install",
+            "--yes",
+            "--no-install-recommends",
+            "ffmpeg",
+        ],
+        ["command", "-v", "ffmpeg"],
+        ["command", "-v", "ffprobe"],
+        ["ffmpeg", "-version"],
+        ["ffprobe", "-version"],
+    ]
+    assert names.index(browser["name"]) < names.index(native["name"])
+    assert names.index(native["name"]) < names.index(build["name"])
+    assert [shlex.split(line) for line in native["run"].splitlines()] == [
+        ["set", "-euo", "pipefail"],
+        ["command", "-v", "g++"],
+        ["g++", "--version"],
+        [
+            "uv",
+            "run",
+            "--frozen",
+            "python",
+            "-c",
+            "from ac_platform.conversation_intelligence.signals import build_native, "
+            "_native_executable; built = build_native(); "
+            "assert _native_executable(None) == built.resolve()",
+        ],
+    ]
+    assert names.index(build["name"]) < names.index(required["name"])
+    assert shlex.split(build["run"]) == ["pnpm", "--filter", "@ac/sales-xray-web", "build"]
+    assert build["env"] == {
+        "AC_CONVERSATION_API_ORIGIN": "http://127.0.0.1:18116",
+        "NEXT_TELEMETRY_DISABLED": "1",
+    }
+    assert "AC_SALES_XRAY_STATIC_PREVIEW" not in build.get("env", {})
+    assert shlex.split(required["run"]) == [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/ci/verify_sales_xray_acquisition_browser.py",
+        "--evidence-dir",
+        "${{ runner.temp }}/sales-xray-acquisition-browser-${{ github.sha }}",
+    ]
+    assert required["timeout-minutes"] == 20
+    wrapper = (ROOT / "scripts/ci/verify_sales_xray_acquisition_browser.py").read_text("utf-8")
+    assert '"--basetemp"' in wrapper
+    browser_test = (ROOT / "tests/e2e/test_sales_xray_acquisition_browser.py").read_text("utf-8")
+    assert "source upload failed:" in browser_test
+    assert '" ".join(detail.split())[:240]' in browser_test
+    assert "test_compiled_account_required_upload_profile_otp_report_relogin_and_deletion" in (
+        wrapper
+    )
+    for assertion in (
+        "pre-auth requests contain no source upload or processing plan",
+        "email OTP delivered through local outbox and verified",
+        "required account name and mobile profile completed",
+        "originally selected audio bytes upload only after profile completion",
+        "uploaded source hash matches originally selected audio bytes",
+        "acquisition allowance settled exactly once",
+        "new browser context signs in again with email OTP",
+    ):
+        assert assertion in wrapper
+    assert browser_test.count(".set_files(") == 1
+    assert "page.expect_file_chooser()" in browser_test
+    assert "request.post_data_buffer" in browser_test
+    assert "record_request(request)" in browser_test
+    assert "external_mutating_requests == []" in browser_test
+    assert "actual password login and two-workspace chooser" not in wrapper
+
+    validation = workflow["jobs"]["validate"]
+    assert gate_id in validation["needs"]
+    aggregate = next(
+        step
+        for step in validation["steps"]
+        if step.get("name") == "Require every validation component to pass"
+    )
+    assert aggregate["if"] == "always()"
+    assert aggregate["env"]["SALES_XRAY_ACQUISITION_BROWSER_RESULT"] == (
+        "${{ needs.validate-sales-xray-acquisition-browser.result }}"
+    )
+    assert '"$SALES_XRAY_ACQUISITION_BROWSER_RESULT"' in aggregate["run"]
+
+
+def test_sales_xray_acquisition_browser_wrapper_fails_closed_on_skips_and_sanitizes_receipt() -> (
+    None
+):
+    wrapper = (ROOT / "scripts/ci/verify_sales_xray_acquisition_browser.py").read_text("utf-8")
+    assert "The required Sales Xray acquisition browser test case is missing" in wrapper
+    assert "Exactly the required Sales Xray browser case must pass without skips" in wrapper
+    assert "sales-xray-acquisition-browser-receipt.json" in wrapper
+    assert '"provider_network_calls": 0' in wrapper
+    assert "The required browser-network receipt is missing" in wrapper
+
+
 def test_conversation_native_build_is_verified_before_application_validation() -> None:
     job = _validation_job("application.yml")
     native = _required_step(job, "Build verified AudioAtlas for conversation regressions")

@@ -6,21 +6,32 @@ from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.activation_contract import StageApproval
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.inference import DEEPGRAM_TRANSCRIPT_RECIPE
+from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
     PlanAcceptance,
     PlanManifest,
+    _implemented_text_provider,
+    _processing_failure_diagnostic,
     automatic_c5_repair_cost,
     c5_repair_intent,
     manifest_for,
     maximum_plan_cost_with_repair,
+    parse_report_language_preference,
     plan_cost_label,
+    planned_c5_requests,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
+from ac_platform.conversation_intelligence.reports import FACT_PROMPT_COMPACT
 from tests.unit.conversation_intelligence.test_activation_contract import (
     PERSON_ID,
     TENANT_ID,
@@ -90,6 +101,57 @@ def test_one_explicit_boolean_click_is_required(value: object) -> None:
         )
 
 
+def test_optional_report_language_body_is_exact_and_legacy_empty_body_defaults() -> None:
+    assert parse_report_language_preference(b"") is None
+    for language in ("en", "hi-Deva+en", "mr-Deva+en"):
+        assert (
+            parse_report_language_preference(canonical({"report_language": language})) == language
+        )
+    for raw in (
+        b"not-json",
+        canonical({}),
+        canonical({"report_language": "Hindi"}),
+        canonical({"report_language": "mr-Deva+en", "coaching_prompt_revision": "coaching-v4"}),
+    ):
+        with pytest.raises(ValueError, match="report language preference"):
+            parse_report_language_preference(raw)
+
+
+@pytest.mark.parametrize(
+    ("phase", "error", "expected"),
+    [
+        (
+            "approval_evaluation",
+            ConversationDenied("private denial detail"),
+            "processing_approval_evaluation_authorization_denied",
+        ),
+        (
+            "quote_usage_reservation",
+            ConversationConflict("private conflict detail"),
+            "processing_quote_usage_reservation_state_conflict",
+        ),
+        (
+            "request_stage",
+            ConversationNotFound("private resource detail"),
+            "processing_request_stage_resource_unavailable",
+        ),
+        (
+            "request_stage",
+            InferenceTaskError("private local validation detail"),
+            "processing_request_stage_local_input_invalid",
+        ),
+    ],
+)
+def test_enqueue_diagnostics_are_phase_bounded_and_content_free(
+    phase: str, error: BaseException, expected: str
+) -> None:
+    diagnostic = _processing_failure_diagnostic(phase, error)
+    assert diagnostic == expected
+    assert "private" not in diagnostic
+    assert _processing_failure_diagnostic("unexpected_phase", error) is None
+    assert _processing_failure_diagnostic(phase, RuntimeError("arbitrary error")) is None
+
+
 @pytest.mark.parametrize("field", ["provider", "model", "max_cost_paise", "profile"])
 def test_learner_acceptance_cannot_change_provider_or_scope(field: str) -> None:
     with pytest.raises(ValueError):
@@ -109,6 +171,38 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
     assert value.max_entitlement_seconds == 0
+
+
+def test_saved_legacy_plan_omits_compact_prompt_revision_and_new_plan_roundtrips_it() -> None:
+    legacy = manifest_for(saved_plan())
+    assert legacy.fact_prompt_revision != FACT_PROMPT_COMPACT
+    assert "fact_prompt_revision" not in legacy.as_dict()
+
+    compact = legacy.model_copy(update={"fact_prompt_revision": FACT_PROMPT_COMPACT})
+    data = compact.as_dict()
+    assert data["fact_prompt_revision"] == FACT_PROMPT_COMPACT
+    assert PlanManifest.model_validate_json(canonical(data)).fact_prompt_revision == (
+        FACT_PROMPT_COMPACT
+    )
+
+
+def test_openai_is_admitted_only_for_c5_and_has_no_automatic_repair():
+    assert _implemented_text_provider("C5", "openai") is True
+    assert _implemented_text_provider("C4", "openai") is False
+    assert _implemented_text_provider("C2", "openai") is False
+    stage = saved_plan().manifest["stages"][2]
+    approval = StageApproval.model_validate_json(canonical(stage)).model_copy(
+        update={
+            "provider_id": "openai",
+            "model_id": "gpt-6-luna",
+            "max_requests": 2,
+            "max_cost_paise": 1_000,
+            "zero_cost_basis": "paid_pricing_evidence",
+            "free_allowance_ref": None,
+        }
+    )
+    assert planned_c5_requests(approval) == 1
+    assert automatic_c5_repair_cost(approval) == 0
 
 
 def test_saved_plan_accepts_the_explicit_deepgram_c2_route() -> None:
@@ -210,6 +304,9 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
     assert repair is not None
     assert repair.attempt == 1
     assert repair.original_run_id == task.run_id
+    task.intent["request"]["provider"] = "openai"
+    assert c5_repair_intent(task, job) is None
+    task.intent["request"].pop("provider")
     job.last_error = "conversation_provider_execution_timeout"
     assert c5_repair_intent(task, job) is None
 
@@ -217,6 +314,7 @@ def test_c5_repair_requires_a_returned_known_validation_failure() -> None:
 @pytest.mark.parametrize(
     "failure_code",
     [
+        "conversation_report_evidence_invalid",
         "conversation_gemini_response_json_invalid",
         "conversation_report_payload_missing_field",
         "conversation_report_overview_invalid",

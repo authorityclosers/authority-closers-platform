@@ -41,7 +41,15 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
     load_report_profile,
@@ -98,20 +106,48 @@ class StageRequest(BaseModel):
     transcript_checkpoint_id: UUID
     fact_checkpoint_ids: tuple[UUID, ...] = Field(default=(), max_length=64)
     chunk_index: int = Field(default=1, strict=True, ge=1, le=64)
-    provider: Literal["groq", "gemini"] = Field(
+    provider: Literal["groq", "gemini", "openai"] = Field(
         default="groq", exclude_if=lambda value: value == "groq"
     )
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
     max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=8_000)
+    fact_prompt_revision: Literal["facts-v1", "facts-v2"] = Field(
+        default=FACT_PROMPT_LEGACY,
+        exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
+    )
+    coaching_prompt_revision: Literal[
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+    ] = Field(
+        default=COACHING_PROMPT_LEGACY, exclude_if=lambda value: value == COACHING_PROMPT_LEGACY
+    )
+    report_language: ReportLanguage | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    qualitative_pack_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+        exclude_if=lambda value: value is None,
+    )
     output_profile: Literal["standard", "detailed"] = Field(
         default="detailed", exclude_if=lambda value: value == "detailed"
     )
     profile: dict[str, Any] | None = Field(default=None, repr=False)
     repair: C5RepairIntent | None = Field(default=None, exclude_if=lambda value: value is None)
+    acquisition_c5_benchmark_approval_id: UUID | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
+        if self.provider == "openai" and self.stage != "C5":
+            raise ValueError("OpenAI is approved for coaching only.")
+        if self.provider == "openai" and self.repair is not None:
+            raise ValueError("OpenAI coaching repair is not authorized.")
+        if self.acquisition_c5_benchmark_approval_id is not None and (
+            self.stage != "C5" or self.provider != "openai"
+        ):
+            raise ValueError("Acquisition benchmark authority is C5-only.")
         if self.max_completion_tokens > completion_ceiling(self.provider, self.model, self.stage):
             raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
@@ -120,8 +156,30 @@ class StageRequest(BaseModel):
             raise ValueError("Facts cannot select a coaching output profile.")
         if self.stage == "C4" and self.repair is not None:
             raise ValueError("Facts cannot use coaching repair.")
+        if self.stage == "C5" and self.fact_prompt_revision != FACT_PROMPT_LEGACY:
+            raise ValueError("Coaching cannot select a fact prompt revision.")
+        if self.stage == "C4" and self.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
+            raise ValueError("Facts cannot select a coaching prompt revision.")
+        if self.stage == "C4" and (
+            self.report_language is not None or self.qualitative_pack_sha256 is not None
+        ):
+            raise ValueError("Facts cannot select coaching configuration.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):
             raise ValueError("Coaching requires complete fact checkpoints.")
+        if self.stage == "C5" and self.coaching_prompt_revision in {
+            COACHING_PROMPT_V4,
+            COACHING_PROMPT_V5,
+        }:
+            if (
+                self.report_language is None
+                or self.qualitative_pack_sha256
+                != load_qualitative_pack_for_revision(self.coaching_prompt_revision).sha256
+            ):
+                raise ValueError("Coaching requires the current qualitative pack and language.")
+        elif self.stage == "C5" and (
+            self.report_language not in {None, "en"} or self.qualitative_pack_sha256 is not None
+        ):
+            raise ValueError("This coaching prompt revision cannot select language or a pack.")
         if len(set(self.fact_checkpoint_ids)) != len(self.fact_checkpoint_ids):
             raise ValueError("Duplicate fact checkpoint.")
         if self.profile is not None and len(canonical(self.profile)) > 128 * 1024:
@@ -134,6 +192,8 @@ def repair_coaching_input(prepared: PreparedTaskInput, repair: C5RepairIntent) -
 
     if prepared.task != "coaching":
         raise ConversationConflict("Only a coaching response can be repaired.")
+    if prepared.provider == "openai":
+        raise ConversationConflict("OpenAI coaching repair is not authorized.")
     body = prepared.as_provider_body()
     if prepared.provider == "groq":
         messages = body.get("messages")
@@ -177,6 +237,16 @@ def _repair_system_content(system: str, repair: C5RepairIntent) -> str:
         "transcript, facts and frozen profile. Preserve uncertainty; do not add unsupported "
         "claims, scores, approvals, identities or new provenance. This is a format repair."
     )
+    if repair.failure_code == "conversation_report_evidence_invalid":
+        instruction += (
+            " Evidence correction: prefer {segment_id} alone for a whole source segment "
+            "of at most 2000 characters. Only use {segment_id,quote_start,quote_end} for "
+            "a shorter excerpt. These offsets are zero-based Python Unicode code-point "
+            "indices into that segment's text, with an exclusive end. They are never "
+            "audio timestamps. Require 0 <= quote_start < quote_end <= len(segment.text), "
+            "and an excerpt of at most 2000 characters. Do not copy start_ms/end_ms "
+            "into quote_start/quote_end. The server supplies native timestamps."
+        )
     return f"{head}\n{instruction}\n{marker}{profile}"
 
 
@@ -408,6 +478,7 @@ class ReportingPipeline:
                 model=request.model,
                 max_input_chars=request.max_input_chars,
                 max_completion_tokens=request.max_completion_tokens,
+                prompt_revision=request.fact_prompt_revision,
             )
             if len(inputs) > 64 or request.chunk_index > len(inputs):
                 raise ConversationConflict("The selected fact chunk is unavailable.")
@@ -481,6 +552,9 @@ class ReportingPipeline:
             model=request.model,
             max_completion_tokens=request.max_completion_tokens,
             output_profile=request.output_profile,
+            coaching_prompt_revision=request.coaching_prompt_revision,
+            report_language=request.report_language or "en",
+            qualitative_pack_sha256=request.qualitative_pack_sha256,
         )
         if request.repair is not None:
             prepared = repair_coaching_input(prepared, request.repair)
@@ -490,8 +564,20 @@ class ReportingPipeline:
             "model": prepared.model,
             "profile_sha256": content_hash(profile),
         }
+        if request.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
+            c5_config["coaching_prompt_revision"] = request.coaching_prompt_revision
+        if request.coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
+            c5_config["report_language"] = request.report_language
+            c5_config["qualitative_pack_sha256"] = request.qualitative_pack_sha256
         if request.repair is not None:
             c5_config["repair"] = request.repair.model_dump(mode="json")
+        if request.acquisition_c5_benchmark_approval_id is not None:
+            # Keep the one-off benchmark distinct in the checkpoint lineage;
+            # this identifier is execution metadata and is never added to the
+            # prepared provider prompt.
+            c5_config["acquisition_c5_benchmark_approval_id"] = str(
+                request.acquisition_c5_benchmark_approval_id
+            )
         template = build_checkpoint(
             binding,
             "C5",

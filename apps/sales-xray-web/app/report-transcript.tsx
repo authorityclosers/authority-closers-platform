@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formatClock } from "./lightbox/time";
 import type { Transcript, TranscriptSegment } from "./report-contract";
 import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
+import { useReportInline, useReportReading } from "./report-reading-context";
 import styles from "./report-transcript.module.css";
 
 const PAGE_SIZE = 50;
@@ -19,11 +21,9 @@ function speakerLabel(
   return speakerId ?? unlabelledLabel;
 }
 
+/** Visible times are mm:ss (h:mm:ss from one hour); seeks keep source milliseconds. */
 export function formatTranscriptTime(milliseconds: number): string {
-  const minutes = Math.floor(milliseconds / 60_000);
-  const seconds = Math.floor(milliseconds / 1_000) % 60;
-  const millis = milliseconds % 1_000;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+  return formatClock(milliseconds);
 }
 
 export type ReportTranscriptProps = {
@@ -37,6 +37,8 @@ export function ReportTranscript({
   onSelect,
   language = "en",
 }: ReportTranscriptProps) {
+  const reading = useReportReading();
+  const inline = useReportInline();
   const copy = getReportUiCopy(language);
   const [query, setQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState(ALL_SPEAKERS);
@@ -55,6 +57,7 @@ export function ReportTranscript({
   }, [copy.unlabelledSpeaker, transcript]);
 
   const filteredSegments = useMemo(() => {
+    if (reading) return transcript.segments;
     const normalizedQuery = query.trim().toLowerCase();
     return transcript.segments.filter((segment) => {
       const matchesSpeaker =
@@ -65,20 +68,28 @@ export function ReportTranscript({
         segment.text.toLowerCase().includes(normalizedQuery);
       return matchesSpeaker && matchesPhrase;
     });
-  }, [query, selectedSpeaker, transcript]);
+  }, [query, reading, selectedSpeaker, transcript]);
 
-  const visibleCount =
-    pagination.key === paginationKey ? pagination.count : PAGE_SIZE;
+  const visibleCount = reading
+    ? filteredSegments.length
+    : pagination.key === paginationKey
+      ? pagination.count
+      : PAGE_SIZE;
   const visibleSegments = filteredSegments.slice(0, visibleCount);
   const remainingCount = filteredSegments.length - visibleSegments.length;
-  const resultLabel =
-    query.trim() || selectedSpeaker !== ALL_SPEAKERS
+  const resultLabel = reading
+    ? `${filteredSegments.length} ${copy.segmentsLabel}`
+    : query.trim() || selectedSpeaker !== ALL_SPEAKERS
       ? `${filteredSegments.length} ${copy.matchingSegments}`
       : `${filteredSegments.length} ${copy.segmentsLabel}`;
 
   return (
-    <details className={styles.root}>
-      <summary className={styles.summary}>
+    <details
+      className={styles.root}
+      open={inline}
+      data-reading={reading || undefined}
+    >
+      <summary className={styles.summary} hidden={inline}>
         <span>{copy.transcriptTitle}</span>
         <span className={styles.summaryMeta}>
           {transcript.segments.length} {copy.segmentsLabel}
@@ -89,6 +100,7 @@ export function ReportTranscript({
           className={styles.controls}
           role="search"
           aria-label={copy.searchLabel}
+          hidden={reading}
         >
           <label className={styles.field}>
             <span>{copy.searchLabel}</span>

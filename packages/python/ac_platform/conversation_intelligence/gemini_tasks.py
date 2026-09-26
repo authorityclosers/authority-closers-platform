@@ -11,50 +11,99 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
+from ac_platform.conversation_intelligence.admin_pricing import (
+    PRICING_SNAPSHOTS,
+    estimate_provider_usage,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.coaching_schema import (
+    coaching_generation_json_schema,
+    coaching_response_json_schema,
+)
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
+_STRUCTURED_MARKER_V2 = "AC_TASK_ADAPTER: gemini-json-v2\nMODEL: "
+_STRUCTURED_MARKER = "AC_TASK_ADAPTER: gemini-json-v3\nMODEL: "
+_EVIDENCE_MARKER = "AC_TASK_ADAPTER: gemini-json-v4\nMODEL: "
+_DEPTH_MARKER = "COACHING_DEPTH: evidence-meaning-action-v5."
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 96_000
+GEMINI_FLASH_STRUCTURED_COACHING_TOTAL_LIMIT = 256_000
 
 
 class GeminiTaskError(ValueError):
     """Content-free adapter failure."""
 
 
-def _config(maximum: int, *, model: str = "", task: str = "facts") -> dict[str, Any]:
+def _config(
+    maximum: int,
+    *,
+    model: str = "",
+    task: str = "facts",
+    structured_coaching: bool = False,
+    structured_schema_version: int = 3,
+) -> dict[str, Any]:
     ceiling = completion_ceiling("gemini", model, "C5" if task == "coaching" else "C4")
     if type(maximum) is not int or not 256 <= maximum <= ceiling:
         raise GeminiTaskError("invalid_max_completion_tokens")
     # A total output cap also bounds thinking. LOW leaves room for the report;
     # exhaustion is rejected, never retried with a larger automatic allowance.
-    return {
+    config: dict[str, Any] = {
         "candidateCount": 1,
         "maxOutputTokens": maximum,
         "responseMimeType": "application/json",
         "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": False},
     }
+    if structured_coaching:
+        if task != "coaching":
+            raise GeminiTaskError("task_prompt_invalid")
+        if structured_schema_version not in {2, 3, 4}:
+            raise GeminiTaskError("task_prompt_invalid")
+        config["responseJsonSchema"] = (
+            coaching_response_json_schema()
+            if structured_schema_version == 2
+            else coaching_generation_json_schema(
+                revision="coaching-v5" if structured_schema_version == 4 else "coaching-v4"
+            )
+        )
+    return config
 
 
-def _require_prompt_budget(system: str, user: str, *, model: str, task: str, maximum: int) -> None:
+def _require_prompt_budget(
+    system: str,
+    user: str,
+    *,
+    model: str,
+    task: str,
+    maximum: int,
+    response_schema: Mapping[str, Any] | None = None,
+) -> None:
     if task not in {"facts", "coaching"}:
         raise GeminiTaskError("task_prompt_invalid")
     input_bytes = len((system + user).encode("utf-8"))
+    if response_schema is not None:
+        # Structured generation instructions consume input too. Preserve the
+        # existing approval envelope instead of silently adding free context.
+        input_bytes += len(canonical(dict(response_schema)))
     if model == "gemini-3.8-flash" and task == "coaching":
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
-        # The 96k TOTAL envelope includes full C2 context and deduplicated C4.
-        # At most 87,872 input bytes + 8,000 output tokens + 128 overhead. At the
-        # frozen $0.75/$3.75 per-million input/output rates and INR100/USD,
-        # maximum 8000 output allocation, this is under 960 paise on the conservative
-        # byte-as-token basis, within the fresh INR10 C5 approval requirement.
+        # Retained v1 requests keep their 48k/96k bounds. Structured v2 can
+        # carry a complete long-call transcript within 256k total units, but
+        # both quote admission and dispatch independently require its actual
+        # conservative cost to fit the exact pinned paid approval.
         used = input_bytes + maximum + 128
         limit = (
-            GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT
+            (
+                GEMINI_FLASH_STRUCTURED_COACHING_TOTAL_LIMIT
+                if response_schema is not None
+                else GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT
+            )
             if maximum > 4_000
             else GEMINI_FLASH_COACHING_TOTAL_LIMIT
         )
@@ -80,10 +129,35 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         or not all(isinstance(item.get("content"), str) for item in messages)
     ):
         raise GeminiTaskError("task_prompt_invalid")
-    config = _config(prompt["max_completion_tokens"], model=model, task=task)
-    system = _MARKER + model + "\n" + messages[0]["content"]
+    # The larger Flash input envelope has reviewed schema headroom. Preserve
+    # the existing smaller Pro route until its own allowance is reviewed.
+    structured_coaching = (
+        model == "gemini-3.8-flash"
+        and task == "coaching"
+        and OVERVIEW_MARKER in messages[0]["content"]
+    )
+    config = _config(
+        prompt["max_completion_tokens"],
+        model=model,
+        task=task,
+        structured_coaching=structured_coaching,
+        structured_schema_version=4 if _DEPTH_MARKER in messages[0]["content"] else 3,
+    )
+    marker = (
+        (_EVIDENCE_MARKER if _DEPTH_MARKER in messages[0]["content"] else _STRUCTURED_MARKER)
+        if structured_coaching
+        else _MARKER
+    )
+    system = marker + model + "\n" + messages[0]["content"]
     user = messages[1]["content"]
-    _require_prompt_budget(system, user, model=model, task=task, maximum=config["maxOutputTokens"])
+    _require_prompt_budget(
+        system,
+        user,
+        model=model,
+        task=task,
+        maximum=config["maxOutputTokens"],
+        response_schema=config.get("responseJsonSchema"),
+    )
     return {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -100,10 +174,6 @@ def gemini_prompt_view(
     try:
         if set(body) != {"systemInstruction", "contents", "generationConfig"}:
             raise ValueError
-        if canonical(body["generationConfig"]) != canonical(
-            _config(maximum, model=model, task=task)
-        ):
-            raise ValueError
         instruction = body["systemInstruction"]
         contents = body["contents"]
         if set(instruction) != {"parts"} or len(contents) != 1:
@@ -118,12 +188,50 @@ def gemini_prompt_view(
             if not isinstance(value, str) or not value.strip():
                 raise ValueError
             texts.append(value)
-        prefix = _MARKER + model + "\n"
+        legacy_structured = texts[0].startswith(_STRUCTURED_MARKER_V2)
+        evidence_structured = texts[0].startswith(_EVIDENCE_MARKER)
+        structured_coaching = (
+            legacy_structured or evidence_structured or texts[0].startswith(_STRUCTURED_MARKER)
+        )
+        if structured_coaching and (
+            model != "gemini-3.8-flash" or task != "coaching" or OVERVIEW_MARKER not in texts[0]
+        ):
+            raise ValueError
+        marker = _STRUCTURED_MARKER_V2 if legacy_structured else _STRUCTURED_MARKER
+        if evidence_structured:
+            marker = _EVIDENCE_MARKER
+        if structured_coaching and evidence_structured != (_DEPTH_MARKER in texts[0]):
+            raise ValueError
+        if (
+            model == "gemini-3.8-flash"
+            and task == "coaching"
+            and OVERVIEW_MARKER in texts[0]
+            and _DEPTH_MARKER in texts[0]
+            and not evidence_structured
+        ):
+            raise ValueError
+        prefix = (marker if structured_coaching else _MARKER) + model + "\n"
         if not texts[0].startswith(prefix):
+            raise ValueError
+        config = _config(
+            maximum,
+            model=model,
+            task=task,
+            structured_coaching=structured_coaching,
+            structured_schema_version=4 if evidence_structured else (2 if legacy_structured else 3),
+        )
+        if canonical(body["generationConfig"]) != canonical(config):
             raise ValueError
     except (KeyError, IndexError, TypeError, ValueError):
         raise GeminiTaskError("task_payload_metadata_mismatch") from None
-    _require_prompt_budget(texts[0], texts[1], model=model, task=task, maximum=maximum)
+    _require_prompt_budget(
+        texts[0],
+        texts[1],
+        model=model,
+        task=task,
+        maximum=maximum,
+        response_schema=config.get("responseJsonSchema"),
+    )
     return {
         "model": model,
         "max_completion_tokens": maximum,
@@ -132,6 +240,52 @@ def gemini_prompt_view(
             {"role": "user", "content": texts[1]},
         ],
     }
+
+
+def require_long_coaching_cost_approval(
+    body: Mapping[str, Any],
+    *,
+    model: str,
+    maximum: int,
+    cost_basis: str,
+    cost_paise: int,
+    pricing_ref: str,
+    price_evidence_sha256: str,
+) -> None:
+    """Admit added long-call context only inside its exact reviewed cost cap.
+
+    This is a pre-dispatch upper bound, not billing or settlement. One UTF-8
+    input byte is allocated one token, including the schema and wrapper. The
+    provider's total output cap already includes thinking. Old bounded inputs
+    retain their prior approval rules and saved request bytes.
+    """
+    if model != "gemini-3.8-flash":
+        return
+    gemini_prompt_view(body, model=model, maximum=maximum, task="coaching")
+    config = body["generationConfig"]
+    if "responseJsonSchema" not in config or maximum <= 4_000:
+        return
+    system = body["systemInstruction"]["parts"][0]["text"]
+    user = body["contents"][0]["parts"][0]["text"]
+    input_units = (
+        len((system + user).encode("utf-8")) + len(canonical(config["responseJsonSchema"])) + 128
+    )
+    if input_units + maximum <= GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT:
+        return
+    snapshot = PRICING_SNAPSHOTS[("gemini", model)]
+    estimate = estimate_provider_usage(
+        "gemini",
+        model,
+        {"promptTokenCount": input_units, "candidatesTokenCount": maximum},
+    )["paise"]
+    if (
+        cost_basis != "paid_pricing_evidence"
+        or pricing_ref != snapshot.pricing_ref
+        or price_evidence_sha256 != snapshot.evidence_sha256
+        or type(estimate) is not int
+        or estimate > cost_paise
+    ):
+        raise GeminiTaskError("long_coaching_cost_approval_required")
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

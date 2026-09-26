@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import { createReviewService } from "./sales-xray-review-service.mjs";
+import { reviewHtml, reviewScript } from "./sales-xray-review-controls.mjs";
 
 export const PRODUCTION_UPSTREAM_ORIGIN =
   "https://salesxray.authorityclosers.com";
@@ -18,6 +20,7 @@ export const MAX_AUTH_RESPONSE_BYTES = 1024 ** 2;
 export const LOCAL_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 export const API_REQUEST_TIMEOUT_MS = 30 * 1000;
 export const UPLOAD_REQUEST_TIMEOUT_MS = 3 * 60 * 1000;
+export const MAX_REVIEW_REQUEST_BODY_BYTES = 4096;
 
 const LOCAL_SESSION_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UPSTREAM_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
@@ -54,6 +57,12 @@ const FORBIDDEN_INCOMING_HEADERS = new Set([
   "x-forwarded-proto",
   "forwarded",
 ]);
+const REVIEW_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+const REVIEW_FRAME_PATH =
+  /^\/__review\/api\/frames\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const LOCAL_REVIEW_FRAME_PATH =
+  /^\/__review\/api\/local\/frames\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function jsonHeaders() {
   return {
@@ -275,7 +284,7 @@ export class EphemeralSessionStore {
   }
 }
 
-export function resolveApiRoute(method, pathname, search = "") {
+function resolveApiRouteBase(method, pathname, search = "") {
   const verb = method.toUpperCase();
   const exact = (allowedVerb, path) =>
     verb === allowedVerb && pathname === path;
@@ -408,6 +417,36 @@ export function resolveApiRoute(method, pathname, search = "") {
   if (run && verb === "GET" && noQuery) return api();
 
   return { kind: "blocked" };
+}
+
+export function resolveApiRoute(
+  method,
+  pathname,
+  search = "",
+  { analysisReadOnly = false } = {},
+) {
+  const route = resolveApiRouteBase(method, pathname, search);
+  if (!analysisReadOnly) return route;
+
+  const verb = method.toUpperCase();
+  if (route.kind === "api" && verb === "GET") return route;
+  if (
+    route.kind === "api" &&
+    search.length === 0 &&
+    verb === "POST" &&
+    ["/v1/auth/password/login", "/v1/auth/logout", "/v1/context"].includes(
+      pathname,
+    )
+  )
+    return route;
+  return { kind: "blocked" };
+}
+
+export function parseCliBoolean(value, optionName, defaultValue = false) {
+  if (value === undefined) return defaultValue;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`--${optionName} must be exactly true or false.`);
 }
 
 function getSetCookieHeaders(headers) {
@@ -635,6 +674,86 @@ async function readBody(request, maxBytes) {
   return Buffer.concat(chunks);
 }
 
+function writeReviewAsset(response, body, contentType) {
+  response.writeHead(200, {
+    "cache-control": "no-store",
+    "content-length": Buffer.byteLength(body),
+    "content-security-policy": REVIEW_CSP,
+    "content-type": contentType,
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+  });
+  response.end(body);
+}
+
+function writeReviewJson(response, status, body, extraHeaders = {}) {
+  writeJson(response, status, body, {
+    "content-security-policy":
+      "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    ...extraHeaders,
+  });
+}
+
+function isReviewPath(pathname) {
+  return pathname === "/__review" || pathname.startsWith("/__review/");
+}
+
+function isReviewApiPath(pathname, method) {
+  return (
+    (method === "POST" &&
+      [
+        "/__review/api/start",
+        "/__review/api/reset",
+        "/__review/api/local/observe",
+      ].includes(pathname)) ||
+    (method === "GET" &&
+      (pathname === "/__review/api/catalog" ||
+        pathname === "/__review/api/local/catalog" ||
+        REVIEW_FRAME_PATH.test(pathname) ||
+        LOCAL_REVIEW_FRAME_PATH.test(pathname)))
+  );
+}
+
+function isReviewMembershipDenial(method, pathname, status) {
+  if (method !== "GET") return false;
+  const membershipRead = [
+    "/v1/me",
+    "/v1/me/workspaces",
+    "/v1/conversation/workspace",
+  ].includes(pathname);
+  const submissionRead = new RegExp(
+    `^/v1/conversation/acquisition/submissions/${UUID}$`,
+  ).test(pathname);
+  return (
+    (membershipRead && [401, 403].includes(status)) ||
+    (submissionRead && [401, 403, 404].includes(status))
+  );
+}
+
+function isReviewTransition(method, pathname) {
+  return (
+    method === "POST" &&
+    ["/v1/auth/password/login", "/v1/auth/logout", "/v1/context"].includes(
+      pathname,
+    )
+  );
+}
+
+function parseReviewBody(raw) {
+  if (!raw?.length) return { error: "A JSON request body is required." };
+  let value;
+  try {
+    value = JSON.parse(raw.toString("utf8"));
+  } catch {
+    return { error: "The review request body must be valid JSON." };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return { error: "The review request body must be a JSON object." };
+  return { value };
+}
+
 function responseHeaders(
   upstream,
   {
@@ -642,6 +761,7 @@ function responseHeaders(
     clearLocalCookie,
     allowLocationOrigin,
     rewriteLocationOrigin,
+    localCanvas = false,
   } = {},
 ) {
   const headers = {};
@@ -652,7 +772,9 @@ function responseHeaders(
   headers["cache-control"] = "no-store";
   headers["referrer-policy"] = "no-referrer";
   headers["x-content-type-options"] = "nosniff";
-  headers["x-frame-options"] = "DENY";
+  headers["x-frame-options"] = localCanvas ? "SAMEORIGIN" : "DENY";
+  if (localCanvas)
+    headers["content-security-policy"] = "frame-ancestors 'self'";
   headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()";
   if (allowLocationOrigin && rewriteLocationOrigin) {
     const location = upstream.headers.get("location");
@@ -743,9 +865,16 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   for (const name of [
     "next-router-state-tree",
     "next-router-prefetch",
+    "next-router-segment-prefetch",
+    "next-hmr-refresh",
     "next-url",
     "rsc",
     "x-nextjs-data",
+    // React development Flight data references a separate HMR debug stream.
+    // These IDs bind the two streams; stripping them leaves navigation pending
+    // even after the RSC and stylesheet responses have completed successfully.
+    "x-nextjs-request-id",
+    "x-nextjs-html-request-id",
   ]) {
     const value = request.headers[name];
     if (value)
@@ -767,6 +896,7 @@ async function proxyInner(request, response, innerOrigin, fetcher) {
   }
   sendUpstreamResponse(response, upstream, {
     head: request.method === "HEAD",
+    localCanvas: true,
     allowLocationOrigin: innerOrigin,
     rewriteLocationOrigin: new URL(
       request.headers.host
@@ -780,16 +910,49 @@ export function createSalesXrayProductionBridge({
   browserOrigin = DEFAULT_BROWSER_ORIGIN,
   innerOrigin = DEFAULT_INNER_ORIGIN,
   upstreamOrigin = PRODUCTION_UPSTREAM_ORIGIN,
+  analysisReadOnly = false,
   fetcher = globalThis.fetch,
   sessionStore = new EphemeralSessionStore(),
 } = {}) {
+  if (typeof analysisReadOnly !== "boolean")
+    throw new Error("analysisReadOnly must be a boolean.");
   const config = validateBridgeConfig({
     browserOrigin,
     innerOrigin,
     upstreamOrigin,
   });
+  config.analysisReadOnly = analysisReadOnly;
   if (typeof fetcher !== "function")
     throw new Error("A fetch implementation is required.");
+
+  const reviewService = analysisReadOnly
+    ? createReviewService({ fetcher, upstreamOrigin: config.upstreamOrigin })
+    : null;
+  const reviewTransitions = new Map();
+  const resetReviewSession = (localHandle) => {
+    if (localHandle) reviewService?.store.reset(localHandle);
+  };
+  const beginReviewTransition = (localHandle) => {
+    if (!reviewService || !localHandle) return false;
+    resetReviewSession(localHandle);
+    reviewTransitions.set(
+      localHandle,
+      (reviewTransitions.get(localHandle) ?? 0) + 1,
+    );
+    return true;
+  };
+  const finishReviewTransition = (localHandle) => {
+    if (!reviewService || !localHandle) return;
+    resetReviewSession(localHandle);
+    const remaining = (reviewTransitions.get(localHandle) ?? 1) - 1;
+    if (remaining <= 0) reviewTransitions.delete(localHandle);
+    else reviewTransitions.set(localHandle, remaining);
+  };
+  const resetReviewEpoch = (localHandle, epoch) => {
+    if (!reviewService || !localHandle || !epoch) return;
+    if (reviewService.store.scope(localHandle)?.epoch === epoch)
+      resetReviewSession(localHandle);
+  };
 
   const handle = async (request, response) => {
     if (!isLoopbackAddress(request.socket.remoteAddress)) {
@@ -844,6 +1007,128 @@ export function createSalesXrayProductionBridge({
       return;
     }
     const incoming = new URL(request.url, config.browserOrigin);
+    if (isReviewPath(incoming.pathname)) {
+      if (!config.analysisReadOnly || !reviewService) {
+        localError(response, 404, "That local review route is not enabled.");
+        return;
+      }
+      if (incoming.pathname === "/__review/" && !incoming.search) {
+        if (request.method !== "GET") {
+          writeReviewJson(response, 405, {
+            detail: "Only GET is allowed for this review asset.",
+          });
+          return;
+        }
+        writeReviewAsset(response, reviewHtml, "text/html; charset=utf-8");
+        return;
+      }
+      if (incoming.pathname === "/__review/controls.js" && !incoming.search) {
+        if (request.method !== "GET") {
+          writeReviewJson(response, 405, {
+            detail: "Only GET is allowed for this review asset.",
+          });
+          return;
+        }
+        writeReviewAsset(
+          response,
+          reviewScript,
+          "text/javascript; charset=utf-8",
+        );
+        return;
+      }
+      if (!incoming.pathname.startsWith("/__review/api/")) {
+        localError(response, 404, "Unknown local review asset.");
+        return;
+      }
+      if (!isReviewApiPath(incoming.pathname, request.method)) {
+        writeReviewJson(response, 404, { detail: "Unknown review action." });
+        return;
+      }
+
+      const localHandleResult = readLocalSessionHandle(request.headers.cookie);
+      if (localHandleResult.kind === "invalid") {
+        writeReviewJson(response, 400, {
+          detail: "The local Sales Xray session handle is invalid.",
+        });
+        return;
+      }
+      const localHandle =
+        localHandleResult.kind === "present" ? localHandleResult.handle : null;
+      const upstreamCookie = localHandle ? sessionStore.get(localHandle) : null;
+      if (localHandle && !upstreamCookie) {
+        resetReviewSession(localHandle);
+        writeReviewJson(
+          response,
+          401,
+          { detail: "Your local Sales Xray session expired." },
+          { "set-cookie": clearSessionCookie() },
+        );
+        return;
+      }
+      if (!localHandle) {
+        writeReviewJson(response, 401, {
+          detail: "Sign in to the local workspace to review a saved call.",
+        });
+        return;
+      }
+      if (reviewTransitions.has(localHandle)) {
+        writeReviewJson(response, 409, {
+          detail: "Review is unavailable while the workspace session changes.",
+        });
+        return;
+      }
+
+      let body;
+      if (request.method === "POST") {
+        const contentType = request.headers["content-type"] ?? "";
+        if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+          writeReviewJson(response, 415, {
+            detail: "Review actions require an application/json body.",
+          });
+          return;
+        }
+        let raw;
+        try {
+          raw = await readBody(request, MAX_REVIEW_REQUEST_BODY_BYTES);
+        } catch (error) {
+          writeReviewJson(response, error.status === 413 ? 413 : 400, {
+            detail: error.message,
+          });
+          return;
+        }
+        const parsed = parseReviewBody(raw);
+        if (parsed.error) {
+          writeReviewJson(response, 400, { detail: parsed.error });
+          return;
+        }
+        body = parsed.value;
+        const bodyKeys = Object.keys(body);
+        if (
+          (incoming.pathname === "/__review/api/start" &&
+            (bodyKeys.length !== 1 || bodyKeys[0] !== "call_id")) ||
+          (incoming.pathname === "/__review/api/reset" &&
+            bodyKeys.length !== 0) ||
+          (incoming.pathname === "/__review/api/local/observe" &&
+            (bodyKeys.length !== 1 || bodyKeys[0] !== "observation"))
+        ) {
+          writeReviewJson(response, 400, {
+            detail: "Use the exact start or reset review request shape.",
+          });
+          return;
+        }
+      }
+
+      const result = await reviewService.handle({
+        pathname: incoming.pathname,
+        search: incoming.search,
+        method: request.method,
+        session: localHandle,
+        headers: upstreamRequestHeaders(request, upstreamCookie),
+        body,
+      });
+      writeReviewJson(response, result.status, result.body);
+      return;
+    }
     if (request.method === "OPTIONS") {
       response.writeHead(204, {
         ...jsonHeaders(),
@@ -856,11 +1141,19 @@ export function createSalesXrayProductionBridge({
       return;
     }
     if (incoming.pathname === "/health") {
+      if (
+        config.analysisReadOnly &&
+        !["GET", "HEAD"].includes(request.method)
+      ) {
+        localError(response, 405, "Health is read-only on this bridge.");
+        return;
+      }
       writeJson(response, 200, {
         status: "ok",
         service: "sales-xray-local-production-bridge",
         mode: "development-only",
         data_mode: "production-live",
+        analysis_read_only: config.analysisReadOnly,
         upstream_origin: config.upstreamOrigin,
         session: "ephemeral-http-only-local-handle",
         provider_processing: "no automatic jobs",
@@ -877,6 +1170,7 @@ export function createSalesXrayProductionBridge({
       request.method,
       incoming.pathname,
       incoming.search,
+      { analysisReadOnly: config.analysisReadOnly },
     );
     if (route.kind === "oauth") {
       response.writeHead(303, {
@@ -906,8 +1200,12 @@ export function createSalesXrayProductionBridge({
     }
     const localHandle =
       localHandleResult.kind === "present" ? localHandleResult.handle : null;
+    const reviewEpochAtRequestStart = localHandle
+      ? reviewService?.store.scope(localHandle)?.epoch
+      : undefined;
     const upstreamCookie = localHandle ? sessionStore.get(localHandle) : null;
     if (localHandle && !upstreamCookie) {
+      resetReviewSession(localHandle);
       response.writeHead(401, {
         ...jsonHeaders(),
         "set-cookie": clearSessionCookie(),
@@ -933,6 +1231,21 @@ export function createSalesXrayProductionBridge({
       return;
     }
 
+    const reviewTransitionStarted = isReviewTransition(
+      request.method,
+      incoming.pathname,
+    )
+      ? beginReviewTransition(localHandle)
+      : false;
+    let reviewTransitionOpen = reviewTransitionStarted;
+    const finishLocalReviewTransition = () => {
+      if (!reviewTransitionOpen) return;
+      finishReviewTransition(localHandle);
+      reviewTransitionOpen = false;
+    };
+    const purgeDeniedReviewEpoch = () =>
+      resetReviewEpoch(localHandle, reviewEpochAtRequestStart);
+
     const target = new URL(
       incoming.pathname + incoming.search,
       config.upstreamOrigin,
@@ -956,6 +1269,7 @@ export function createSalesXrayProductionBridge({
         ),
       });
     } catch {
+      finishLocalReviewTransition();
       localError(
         response,
         502,
@@ -964,11 +1278,22 @@ export function createSalesXrayProductionBridge({
       return;
     }
 
+    const membershipDenied = isReviewMembershipDenial(
+      request.method,
+      incoming.pathname,
+      upstream.status,
+    );
+    if (membershipDenied) purgeDeniedReviewEpoch();
+    const finishMembershipDenial = () => {
+      if (membershipDenied) purgeDeniedReviewEpoch();
+    };
+
     const loginCookie =
       route.auth === "login"
         ? readUpstreamSessionCookie(upstream.headers)
         : null;
     if (route.auth === "login" && loginCookie?.kind === "invalid") {
+      finishLocalReviewTransition();
       localError(
         response,
         502,
@@ -981,6 +1306,7 @@ export function createSalesXrayProductionBridge({
       upstream.ok &&
       loginCookie?.kind !== "present"
     ) {
+      finishLocalReviewTransition();
       localError(
         response,
         502,
@@ -996,6 +1322,7 @@ export function createSalesXrayProductionBridge({
       readUpstreamSessionCookie(upstream.headers, UPSTREAM_GUEST_COOKIE)
         .kind !== "present"
     ) {
+      finishLocalReviewTransition();
       localError(
         response,
         502,
@@ -1021,13 +1348,25 @@ export function createSalesXrayProductionBridge({
     }
 
     if (route.auth === "login") {
-      const raw = Buffer.from(await upstream.arrayBuffer());
+      let raw;
+      try {
+        raw = Buffer.from(await upstream.arrayBuffer());
+      } catch {
+        finishLocalReviewTransition();
+        localError(
+          response,
+          502,
+          "Production login returned an unreadable response.",
+        );
+        return;
+      }
       if (
         raw.length > MAX_AUTH_RESPONSE_BYTES ||
         /(?:access|refresh|id)?[_-]?token|authorization\s*:/i.test(
           raw.toString("utf8"),
         )
       ) {
+        finishLocalReviewTransition();
         localError(
           response,
           502,
@@ -1035,21 +1374,24 @@ export function createSalesXrayProductionBridge({
         );
         return;
       }
+      const authenticatedLocalHandle =
+        upstream.ok && loginCookie?.kind === "present"
+          ? sessionStore.create(
+              loginCookie.value,
+              UPSTREAM_SESSION_COOKIE,
+              upstreamCookie ?? {},
+            )
+          : undefined;
+      resetReviewSession(authenticatedLocalHandle);
       const headers = responseHeaders(upstream, {
-        localCookie:
-          upstream.ok && loginCookie?.kind === "present"
-            ? sessionStore.create(
-                loginCookie.value,
-                UPSTREAM_SESSION_COOKIE,
-                upstreamCookie ?? {},
-              )
-            : undefined,
+        localCookie: authenticatedLocalHandle,
       });
       delete headers["content-length"];
       headers["content-length"] = raw.length;
       response.writeHead(upstream.status, headers);
       response.end(raw);
       if (upstream.ok && localHandle) sessionStore.delete(localHandle);
+      finishLocalReviewTransition();
       return;
     }
 
@@ -1061,11 +1403,14 @@ export function createSalesXrayProductionBridge({
       localHandle &&
       !upstreamCookie?.[UPSTREAM_GUEST_COOKIE]
     ) {
+      resetReviewSession(localHandle);
       sessionStore.delete(localHandle);
       sendUpstreamResponse(response, upstream, {
         clearLocalCookie: true,
         head: request.method === "HEAD",
       });
+      finishMembershipDenial();
+      finishLocalReviewTransition();
       return;
     }
     if (
@@ -1074,20 +1419,25 @@ export function createSalesXrayProductionBridge({
       upstream.status === 204 &&
       localHandle
     ) {
+      resetReviewSession(localHandle);
       sessionStore.delete(localHandle);
       sendUpstreamResponse(response, upstream, {
         clearLocalCookie: true,
         head: request.method === "HEAD",
       });
+      finishMembershipDenial();
+      finishLocalReviewTransition();
       return;
     }
     sendUpstreamResponse(response, upstream, {
       head: request.method === "HEAD",
       localCookie,
     });
+    finishMembershipDenial();
+    finishLocalReviewTransition();
   };
 
-  return { config, handle, sessionStore };
+  return { config, handle, sessionStore, reviewService };
 }
 
 export function createServer(options = {}) {
@@ -1132,14 +1482,22 @@ if (
     const args = parseCli(process.argv.slice(2));
     const browserOrigin = args.get("browser-origin") ?? DEFAULT_BROWSER_ORIGIN;
     const innerOrigin = args.get("inner-origin") ?? DEFAULT_INNER_ORIGIN;
+    const analysisReadOnly = parseCliBoolean(
+      args.get("analysis-read-only"),
+      "analysis-read-only",
+    );
     const browserPort = new URL(browserOrigin).port || "3016";
     const port = Number(args.get("port") ?? browserPort);
     if (!Number.isInteger(port) || port < 1024 || port > 65535)
       throw new Error("port must be an integer between 1024 and 65535.");
-    const { server, bridge } = createServer({ browserOrigin, innerOrigin });
+    const { server, bridge } = createServer({
+      browserOrigin,
+      innerOrigin,
+      analysisReadOnly,
+    });
     server.listen(port, "127.0.0.1", () => {
       process.stdout.write(
-        `Sales Xray local bridge listening on ${bridge.config.browserOrigin}; production origin is pinned.\n`,
+        `Sales Xray local bridge listening on ${bridge.config.browserOrigin}; production origin is pinned; analysis read-only=${bridge.config.analysisReadOnly}.\n`,
       );
     });
     const shutdown = () => {

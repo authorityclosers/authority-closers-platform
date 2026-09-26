@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 import signal
 import sys
 from collections.abc import Mapping, Sequence
@@ -59,6 +60,16 @@ _ALLOWED_ENV = frozenset(
         "PYTHON_SETUPTOOLS_VERSION",
     }
 )
+_SAFE_FAILURE_CODE = re.compile(r"^worker_[a-z0-9_]+$")
+
+
+def safe_failure_code(error: BaseException) -> str | None:
+    """Return only stable internal codes; never echo provider/DB payloads."""
+
+    candidate = str(error).strip()
+    if _SAFE_FAILURE_CODE.fullmatch(candidate):
+        return candidate
+    return None
 
 
 def validate_service_environment(environment: Mapping[str, str]) -> None:
@@ -195,9 +206,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         asyncio.run(serve(config))
         print("worker_stopped")
         return 0
-    except Exception:
-        # No traceback, DSN, provider body, transcript or credential in stdout/logs.
-        print("worker_service_failed", file=sys.stderr)
+    except Exception as error:
+        # Keep payloads/DSNs/provider bodies out of logs, but retain stable
+        # admission/configuration codes so a restart loop is diagnosable.
+        code = safe_failure_code(error)
+        suffix = f":{code}" if code is not None else ""
+        print(f"worker_service_failed{suffix}", file=sys.stderr)
         return 1
 
 

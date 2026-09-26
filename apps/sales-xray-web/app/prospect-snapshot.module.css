@@ -1,0 +1,521 @@
+.snapshot {
+  --ink: #172b3a;
+  --muted: #536978;
+  --line: #d5e1e2;
+  --teal: #087b79;
+  --mint: #edf8f5;
+  --violet: #5944a1;
+  --violet-soft: #f6f3ff;
+  --canvas: #f7f9fa;
+  display: grid;
+  container-type: inline-size;
+  container-name: prospect-snapshot;
+  gap: 16px;
+  min-width: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.snapshot :where(h2, h3, h4, p) {
+  margin-top: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 0;
+  padding: 4px 2px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.headingCopy {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin-bottom: 5px;
+  color: #a63835;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+}
+
+.header h2 {
+  margin-bottom: 5px;
+  font-size: clamp(22px, 3vw, 29px);
+  font-weight: 780;
+  letter-spacing: -0.04em;
+  line-height: 1.18;
+}
+
+.header p:last-child {
+  max-width: 70ch;
+  margin-bottom: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.headerIcon,
+.number,
+.lockIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.headerIcon {
+  width: 52px;
+  height: 52px;
+  border: 1px solid #d4ece7;
+  border-radius: 16px;
+  background: var(--mint);
+  color: var(--teal);
+}
+
+.cards {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid #dce6e8;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgb(23 43 58 / 4%);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e6ecee;
+  background: linear-gradient(105deg, #f1faf7, #fff 72%);
+  border-radius: 16px 16px 0 0;
+}
+
+.cardHeader > div {
+  min-width: 0;
+}
+
+.number {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #dff4ee;
+  color: #086e6b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cardHeader .eyebrow {
+  margin-bottom: 2px;
+  color: var(--teal);
+}
+
+.cardHeader h3 {
+  margin-bottom: 0;
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr);
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.snapshot[data-reading="true"] .columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sourcePanel,
+.hypothesis {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 16px;
+}
+
+.sourcePanel {
+  background: #fbfdfd;
+}
+
+.sectionLabel {
+  margin-bottom: 5px;
+  color: #126a67;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.observation {
+  margin-bottom: 16px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+
+.verbatim {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.verbatim h4 {
+  margin-bottom: 0;
+  color: #3e5969;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.excerpt {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d8ece7;
+  border-radius: 12px;
+  background: var(--mint);
+}
+
+.excerpt blockquote {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  color: #164d4b;
+  font-size: 16px;
+  font-weight: 610;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.excerpt blockquote svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--teal);
+}
+
+.excerpt figcaption {
+  min-width: 0;
+}
+
+.sourceAction {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1px solid #cde2dd;
+  border-radius: 11px;
+  background: #fff;
+  color: #123e49;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.play {
+  display: grid;
+  flex: 0 0 34px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #d8f1e9;
+  color: #087b79;
+}
+
+.actionCopy {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.actionCopy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.actionCopy small {
+  color: #536978;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.sourceAction > svg {
+  flex: 0 0 auto;
+  color: #526b78;
+}
+
+.sourceAction:hover,
+.unlock:hover {
+  border-color: #7bbab0;
+  background: #f8fffc;
+}
+
+.sourceAction:focus-visible,
+.unlock:focus-visible {
+  outline: 3px solid #536ace;
+  outline-offset: 3px;
+}
+
+.hypothesis {
+  align-self: stretch;
+  border-color: #e3ddf3;
+  background: var(--violet-soft);
+}
+
+.hypothesisLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--violet);
+}
+
+.hypothesisLabel .sectionLabel {
+  margin-bottom: 0;
+  color: var(--violet);
+}
+
+.hypothesisTag {
+  display: inline-flex;
+  margin: 10px 0;
+  padding: 4px 9px;
+  border: 1px solid #d8cef0;
+  border-radius: 999px;
+  background: #fff;
+  color: #5944a1;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.hypothesisText {
+  margin-bottom: 12px;
+  color: #262342;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.hypothesisNote {
+  margin-bottom: 0;
+  color: #5f587e;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.empty,
+.boundary,
+.locked {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  border-radius: 14px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  border: 1px dashed #bfd1d7;
+  background: var(--canvas);
+  color: #465f6d;
+}
+
+.empty > svg {
+  flex: 0 0 auto;
+  color: #6d7782;
+}
+
+.empty h3 {
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.empty p,
+.boundary p,
+.locked p {
+  margin-bottom: 0;
+}
+
+.boundary {
+  display: block;
+  border: 1px solid #e4e8eb;
+  background: #f8f9fa;
+  color: var(--muted);
+}
+
+.boundary strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #334c5b;
+  font-size: 13px;
+}
+
+.locked {
+  align-items: center;
+  border: 1px solid #f0d8d7;
+  background: #fff8f7;
+}
+
+.lockIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #fae8e6;
+  color: #aa3b38;
+}
+
+.lockCopy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lockCopy strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #573a3c;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.lockCopy p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.unlock {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #e5b9b6;
+  border-radius: 10px;
+  background: #fff;
+  color: #8e3030;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@media (max-width: 680px) {
+  .snapshot {
+    gap: 12px;
+  }
+
+  .header {
+    align-items: flex-start;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .headerIcon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+  }
+
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .sourcePanel,
+  .hypothesis {
+    padding: 13px;
+  }
+
+  .cardHeader {
+    padding: 13px 12px;
+  }
+
+  .number {
+    width: 36px;
+    height: 36px;
+  }
+
+  .locked {
+    flex-wrap: wrap;
+  }
+
+  .lockCopy {
+    flex-basis: calc(100% - 54px);
+  }
+
+  .unlock {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sourceAction,
+  .unlock {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}
+
+@container prospect-snapshot (max-width: 660px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+}
+
+@container prospect-snapshot (max-width: 520px) {
+  .header {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .headerIcon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .locked {
+    flex-wrap: wrap;
+  }
+
+  .lockCopy {
+    flex-basis: calc(100% - 54px);
+  }
+
+  .unlock {
+    width: 100%;
+  }
+}

@@ -25,6 +25,12 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
+    benchmark_for_submission,
+    build_benchmark_request,
+    record_owner_benchmark_receipt,
+    validate_benchmark_scope,
+)
 from ac_platform.conversation_intelligence.acquisition_library import account_library
 from ac_platform.conversation_intelligence.acquisition_processing import (
     AcquisitionProcessing,
@@ -42,14 +48,19 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import (
     ConversationProcessingPlans,
     PlanAcceptance,
+    parse_report_language_preference,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
+from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     ObjectKey,
@@ -67,6 +78,7 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 
@@ -82,16 +94,32 @@ class _Owner:
     ownership: GuestOwnership
     token: str | None = field(repr=False)
     actor: ActorContext | None
+    shared_identity_locks: bool = False
 
     @property
     def arguments(self) -> dict[str, Any]:
-        return {"token": self.token, "actor": self.actor}
+        value: dict[str, Any] = {"token": self.token, "actor": self.actor}
+        if self.shared_identity_locks:
+            value["shared_identity_locks"] = True
+        return value
+
+
+class AcquisitionC5BenchmarkAcceptance(QuoteAcceptance):
+    """Owner accepts one server-issued, exact-source benchmark quote."""
+
+    quote_id: UUID
 
 
 def _is_postgres_deadlock(error: DBAPIError) -> bool:
     """Recognize only PostgreSQL's serialization code for a deadlock."""
 
     return getattr(error.orig, "sqlstate", None) == "40P01"
+
+
+def _actor_binding(actor: ActorContext | None) -> tuple[UUID, UUID, UUID | None] | None:
+    if actor is None:
+        return None
+    return actor.person_id, actor.session_id, actor.tenant_id
 
 
 def _preflight_with_deadline(
@@ -233,7 +261,129 @@ def install_submission_http(
             raise fail(401, "Your account session is unavailable. Sign in again.") from None
 
     dependency = Depends(current_owner, scope="function")
-    streaming_dependency = Depends(current_owner, scope="request")
+    read_require_actor = getattr(require_actor, "read_only", require_actor)
+
+    async def acquisition_benchmark_context(
+        submission_id: UUID,
+        key: str,
+        owner: _Owner,
+    ) -> tuple[ConversationApplication, Any, Any, Any, Any, Any]:
+        if owner.actor is None:
+            raise fail(401, "Sign in to the public Academy account to continue.")
+        if owner.actor.tenant_id != settings.public_learner_tenant_id:
+            raise fail(403, "The public Academy account is required for this benchmark.")
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
+        if runtime.authority is None:
+            raise fail(409, "The approved benchmark provider route is unavailable.")
+
+        # Expired processing authority is recovered only through the existing
+        # owner-authenticated continuation contract. The lease itself is never
+        # rewritten and the benchmark bundle does not manufacture continuation.
+        await owner.ownership.ensure_processing_continuation(
+            submission_id, key=key, **owner.arguments
+        )
+        processor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
+        if (
+            processor.tenant_id != scope.tenant_id
+            or processor.person_id != scope.processing_person_id
+            or processor.processing_lease_id != scope.processing_lease_id
+        ):
+            raise fail(409, "The current processing lease differs from this saved call.")
+        app = ConversationApplication(owner.ownership.database)
+        now = app.clock()
+        bundle = await runtime.authority.admit(app, processor)
+        benchmark = benchmark_for_submission(
+            bundle,
+            tenant_id=scope.tenant_id,
+            owner_person_id=owner.actor.person_id,
+            submission_id=scope.submission_id,
+            recording_id=scope.recording_id,
+            processing_person_id=scope.processing_person_id,
+            processing_lease_id=scope.processing_lease_id,
+            usage_id=scope.usage_id,
+            source_sha256=scope.source_sha256,
+        )
+        recording = await app._recording(processor, scope.recording_id)
+        await validate_benchmark_scope(app, processor, recording, bundle, benchmark, now)
+        stage_request = await build_benchmark_request(app, processor, bundle, benchmark, recording)
+        return app, processor, recording, bundle, benchmark, stage_request
+
+    async def require_empty_benchmark_quote_body(request: Request) -> None:
+        total = 0
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    total += len(block)
+                    if total:
+                        raise fail(422, "The benchmark quote uses its server-approved source only.")
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The benchmark quote request was interrupted.") from None
+
+    @asynccontextmanager
+    async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(read_require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise fail(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise fail(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+            ) from None
+
+    async def read_only_owner(request: Request) -> AsyncIterator[_Owner]:
+        host = guard(request, Response(), write=False)
+        if host == "learner":
+            try:
+                async with learner_read_account(request) as auth:
+                    yield _Owner(
+                        ownership(auth.database),
+                        None,
+                        auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
+            except ConversationError as error:
+                # Translate read denials after the account transaction unwinds,
+                # including source requests rejected before streaming starts.
+                raise fail(error.status, str(error)) from None
+            return
+        try:
+            current = _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=False)
+            account = _session_cookie(request, settings, required=False)
+            if account is not None:
+                async with asynccontextmanager(read_require_actor)(request) as auth:
+                    yield _Owner(
+                        ownership(auth.database),
+                        current,
+                        auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
+            else:
+                if current is None:
+                    raise fail(401, "Start an upload session to continue.")
+                async with sessions() as database, database.begin():
+                    yield _Owner(
+                        ownership(database),
+                        current,
+                        None,
+                        shared_identity_locks=True,
+                    )
+        except _InvalidRawCookie:
+            raise fail(401, "This upload session is unavailable.") from None
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Your account session is unavailable. Sign in again.") from None
+
+    read_dependency = Depends(read_only_owner, scope="function")
+    streaming_dependency = Depends(read_only_owner, scope="request")
 
     async def progress_with_deadlock_retry(submission_id: UUID, owner: _Owner) -> dict[str, Any]:
         """Retry one complete progress read after a PostgreSQL deadlock rollback."""
@@ -249,10 +399,38 @@ def install_submission_http(
             # opening the one bounded retry so no failed transaction is reused.
             await owner.ownership.database.rollback()
             async with sessions() as database, database.begin():
-                retry_owner = _Owner(ownership(database), owner.token, owner.actor)
+                retry_owner = _Owner(
+                    ownership(database),
+                    owner.token,
+                    owner.actor,
+                    owner.shared_identity_locks,
+                )
                 return await AcquisitionReports(retry_owner.ownership).progress(
                     submission_id, **retry_owner.arguments
                 )
+
+    async def quote_language_preference(request: Request) -> ReportLanguage | None:
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(10):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 1024:
+                        raise fail(413, "The report preference is too large.")
+                    raw.extend(block)
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The report preference was interrupted. Try again.") from None
+        if not raw:
+            return None
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise fail(415, "Choose a report language using JSON.")
+        try:
+            return parse_report_language_preference(bytes(raw))
+        except ValueError:
+            raise fail(422, "Choose one supported report language.") from None
 
     @router.get("/submissions")
     async def saved_calls(
@@ -261,13 +439,16 @@ def install_submission_http(
         host = guard(request, response, library=True)
         try:
             context = (
-                learner_account(request)
+                learner_read_account(request)
                 if host == "learner"
-                else asynccontextmanager(require_actor)(request)
+                else asynccontextmanager(read_require_actor)(request)
             )
             async with context as auth:
                 return await account_library(
-                    ownership(auth.database), auth.resolved.actor, before=before
+                    ownership(auth.database),
+                    auth.resolved.actor,
+                    before=before,
+                    shared_identity_locks=True,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -278,7 +459,7 @@ def install_submission_http(
     async def policy(request: Request, response: Response) -> dict[str, Any]:
         host = guard(request, response)
         if host == "learner":
-            async with learner_account(request):
+            async with learner_read_account(request):
                 pass
         return upload_policy(runtime.policy)
 
@@ -310,7 +491,10 @@ def install_submission_http(
             )
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
+        actor_binding: tuple[UUID, UUID, UUID | None] | None = None
         async with asynccontextmanager(current_owner)(request) as owner:
+            await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+            actor_binding = _actor_binding(owner.actor)
             allowance = await owner.ownership.sessions.allowance(**owner.arguments)
             available_seconds = allowance["available_seconds"]
             if (
@@ -385,6 +569,11 @@ def install_submission_http(
                         bounded_preflight.measure, path, submission_id, hashes[0]
                     )
                     async with asynccontextmanager(current_owner)(request) as owner:
+                        await require_sales_xray_write_profile(
+                            owner.ownership.database, owner.actor
+                        )
+                        if _actor_binding(owner.actor) != actor_binding:
+                            raise fail(409, "Your account or tenant changed during upload.")
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
                             measured, policy_sha256=policies[0], **owner.arguments
@@ -416,21 +605,21 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}")
     async def progress(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await progress_with_deadlock_retry(submission_id, owner)
 
     @router.get("/submissions/{submission_id}/report")
     async def report(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
 
     @router.get("/submissions/{submission_id}/report.docx")
     async def download_report(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> Response:
         guard(request, response)
         try:
@@ -454,7 +643,7 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}/transcript")
     async def transcript(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).transcript(
@@ -463,7 +652,7 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}/waveform")
     async def waveform(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
         return await AcquisitionReports(owner.ownership).waveform(submission_id, **owner.arguments)
@@ -488,16 +677,13 @@ def install_submission_http(
         owner: _Owner = dependency,
     ) -> dict[str, Any]:
         guard(request, response, write=True)
-        try:
-            async with asyncio.timeout(10):
-                async for block in request.stream():
-                    if block:
-                        raise fail(422, "The analysis plan comes from the approved configuration.")
-        except (TimeoutError, ClientDisconnect):
-            raise fail(408, "The analysis request was interrupted. Try again.") from None
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+        report_language = await quote_language_preference(request)
         if runtime.authority is None:
             raise fail(409, "Your recording is private. Provider analysis is not enabled yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
         continuation_grant_id = await owner.ownership.ensure_processing_continuation(
             submission_id, key=key, **owner.arguments
         )
@@ -509,7 +695,25 @@ def install_submission_http(
             scope.recording_id,
             key=key,
             continuation_grant_id=continuation_grant_id,
+            report_language=report_language,
         )
+
+    @router.get("/submissions/{submission_id}/plan")
+    async def read_plan(
+        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
+    ) -> dict[str, Any]:
+        guard(request, response)
+        scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        try:
+            return await ConversationProcessingPlans.latest_submission_view(
+                owner.ownership.database,
+                tenant_id=scope.tenant_id,
+                person_id=scope.processing_person_id,
+                recording_id=scope.recording_id,
+                processing_lease_id=scope.processing_lease_id,
+            )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
 
     @router.post("/submissions/{submission_id}/plan", status_code=202)
     async def accept_plan(
@@ -520,6 +724,7 @@ def install_submission_http(
         owner: _Owner = dependency,
     ) -> dict[str, Any]:
         guard(request, response, write=True)
+        await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
         if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
             raise fail(415, "Approve the displayed analysis plan.")
         raw = bytearray()
@@ -537,6 +742,8 @@ def install_submission_http(
         if runtime.authority is None:
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        if not scope.claimed_account:
+            raise fail(403, "Claim this saved call with the same AC account before processing it.")
         await owner.ownership.ensure_processing_continuation(
             submission_id, key=key, **owner.arguments
         )
@@ -544,6 +751,145 @@ def install_submission_http(
         return await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
+
+    @router.post("/submissions/{submission_id}/c5-benchmark/quote", status_code=201)
+    async def quote_acquisition_c5_benchmark(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        await require_empty_benchmark_quote_body(request)
+        (
+            app,
+            processor,
+            recording,
+            _bundle,
+            benchmark,
+            stage_request,
+        ) = await acquisition_benchmark_context(submission_id, key, owner)
+        assert runtime.authority is not None and owner.actor is not None
+        quote = await runtime.authority.issue(
+            app,
+            processor,
+            recording.id,
+            key=key,
+            request=stage_request,
+        )
+        now = app.clock()
+        await record_owner_benchmark_receipt(
+            app,
+            owner.actor,
+            processor,
+            recording,
+            benchmark,
+            UUID(quote["id"]),
+            quote["quote_fingerprint"],
+            now,
+            accepted=False,
+        )
+        return {
+            **quote,
+            "purpose": "acquisition_c5_benchmark",
+            "benchmark_approval_id": str(benchmark.id),
+        }
+
+    @router.post("/submissions/{submission_id}/c5-benchmark", status_code=202)
+    async def accept_acquisition_c5_benchmark(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        key: str = Header(alias="Idempotency-Key", min_length=1, max_length=128),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
+            raise fail(415, "Approve the exact displayed benchmark quote.")
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 8192:
+                        raise fail(413, "The benchmark acceptance is too large.")
+                    raw.extend(block)
+            payload = AcquisitionC5BenchmarkAcceptance.model_validate_json(raw)
+        except (ValidationError, ValueError):
+            raise fail(422, "Approve the exact displayed benchmark quote.") from None
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The benchmark acceptance was interrupted.") from None
+
+        (
+            app,
+            processor,
+            recording,
+            bundle,
+            benchmark,
+            stage_request,
+        ) = await acquisition_benchmark_context(submission_id, key, owner)
+        assert runtime.authority is not None and owner.actor is not None
+        inference = ConversationInference(app, authority=runtime.authority)
+        plan = await ReportingPipeline(inference).plan(recording, stage_request)
+        row, quote, _permission = await inference._quote(
+            processor,
+            recording,
+            payload.quote_id,
+            plan,
+            app.clock(),
+            require_acceptance=False,
+        )
+        if (
+            payload.accepted is not True
+            or payload.quote_fingerprint != quote.fingerprint
+            or payload.privacy_revision != quote.privacy_revision
+        ):
+            raise fail(409, "Approve the exact displayed benchmark quote and privacy terms.")
+        await validate_benchmark_scope(
+            app,
+            processor,
+            recording,
+            bundle,
+            benchmark,
+            app.clock(),
+            quote=row,
+            require_owner_quote=True,
+        )
+        await record_owner_benchmark_receipt(
+            app,
+            owner.actor,
+            processor,
+            recording,
+            benchmark,
+            payload.quote_id,
+            quote.fingerprint,
+            app.clock(),
+            accepted=True,
+        )
+        acceptance = QuoteAcceptance(
+            quote_fingerprint=payload.quote_fingerprint,
+            privacy_revision=payload.privacy_revision,
+            accepted=True,
+        )
+        await inference.accept(
+            processor,
+            recording.id,
+            payload.quote_id,
+            acceptance,
+            request=stage_request,
+        )
+        started = await inference.request_stage(
+            processor,
+            recording.id,
+            payload.quote_id,
+            key=key,
+            request=stage_request,
+        )
+        return {
+            **started,
+            "purpose": "acquisition_c5_benchmark",
+            "benchmark_approval_id": str(benchmark.id),
+        }
 
     @router.get("/submissions/{submission_id}/source")
     async def playback(

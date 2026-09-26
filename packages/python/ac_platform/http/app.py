@@ -53,6 +53,7 @@ from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 from ac_platform.http.reviewer_auth import install_reviewer_identity_http
+from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -138,6 +139,11 @@ def create_app(
         settings=settings,
         sessions=session_factory,
         provider=configured_identity_provider,
+    )
+    install_sales_xray_profile_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
     )
     install_course_http(
         application,
@@ -321,6 +327,7 @@ def create_app(
         settings=settings,
         sessions=session_factory,
         require_actor=require_actor,
+        tester_policy=tester_policy,
     )
     application.add_middleware(
         RequestBodyLimitMiddleware,

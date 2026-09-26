@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -30,11 +31,17 @@ from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, MembershipStatus
 
-InternalTesterScope = Literal["account_minutes", "analysis_count", "ip_session_issuance"]
+InternalTesterScope = Literal[
+    "account_minutes",
+    "analysis_count",
+    "ip_session_issuance",
+    "provider_stage_request_count",
+]
 INTERNAL_TESTER_SCOPES: tuple[InternalTesterScope, ...] = (
     "account_minutes",
     "analysis_count",
     "ip_session_issuance",
+    "provider_stage_request_count",
 )
 _SESSION_TOKEN = re.compile(r"^[A-Za-z0-9_-]{43,512}$")
 
@@ -69,6 +76,45 @@ class InternalTesterPolicy:
             None,
         )
 
+    async def for_learner_account(
+        self,
+        database: AsyncSession,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        bundle: HostedApprovalBundle | None = None,
+    ) -> InternalTesterApproval | None:
+        """Resolve the current account-minute scope for an exact learner."""
+
+        if type(tenant_id) is not UUID or type(person_id) is not UUID:
+            return None
+        person = await database.scalar(
+            select(Person).where(Person.id == person_id).execution_options(populate_existing=True)
+        )
+        membership = await database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.person_id == person_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+            or membership is None
+            or membership.status != MembershipStatus.ACTIVE.value
+            or membership.role != "learner"
+            or membership.ended_at is not None
+        ):
+            return None
+        try:
+            return self._approval(bundle or self.current(), person.email or "", "account_minutes")
+        except (TypeError, ValueError, OSError):
+            # An unavailable or stale approval cannot confer unlimited access.
+            return None
+
     async def for_actor(
         self,
         database: AsyncSession,
@@ -81,6 +127,14 @@ class InternalTesterPolicy:
 
         if isinstance(actor, ProcessingActor) or actor.tenant_id is None:
             return None
+        if scope == "provider_stage_request_count":
+            return await self.for_human_owner(
+                database,
+                tenant_id=actor.tenant_id,
+                person_id=actor.person_id,
+                scope=scope,
+                bundle=bundle,
+            )
         person = await database.scalar(
             select(Person)
             .where(Person.id == actor.person_id)
@@ -91,6 +145,54 @@ class InternalTesterPolicy:
             .where(
                 Membership.tenant_id == actor.tenant_id,
                 Membership.person_id == actor.person_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+            or membership is None
+            or membership.status != MembershipStatus.ACTIVE.value
+            or membership.role == "processing"
+            or membership.ended_at is not None
+        ):
+            return None
+        try:
+            return self._approval(bundle or self.current(), person.email or "", scope)
+        except (TypeError, ValueError, OSError):
+            # A stale or unavailable release approval must fail closed.
+            return None
+
+    async def for_human_owner(
+        self,
+        database: AsyncSession,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        scope: InternalTesterScope,
+        bundle: HostedApprovalBundle | None = None,
+    ) -> InternalTesterApproval | None:
+        """Resolve a tester scope for an already source-bound human owner.
+
+        Processing callers must resolve ``person_id`` through the canonical
+        submission usage and claim rows before calling this method. Only the
+        provider-stage request-count scope is available to such processing
+        callers; a shared processing identity never supplies tester authority.
+        """
+
+        if scope != "provider_stage_request_count":
+            return None
+        if type(tenant_id) is not UUID or type(person_id) is not UUID:
+            return None
+        person = await database.scalar(
+            select(Person).where(Person.id == person_id).execution_options(populate_existing=True)
+        )
+        membership = await database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.person_id == person_id,
             )
             .execution_options(populate_existing=True)
         )

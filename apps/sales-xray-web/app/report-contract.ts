@@ -1,3 +1,4 @@
+import { parseCallLabel, type CallLabel } from "./call-label";
 import {
   parseDetailedOverview,
   type DetailedOverview,
@@ -45,6 +46,7 @@ export type ReportDimension = {
   status: string;
   observation: string;
   citations: ReportCitation[];
+  evidence?: ReportEvidence[];
 };
 export type ReportSection = {
   number: number;
@@ -70,6 +72,14 @@ export type SalesReport = {
   transcript_revision: string;
   dimensions: ReportDimension[];
   report_sections: ReportSection[];
+};
+
+export type RecoveryMetadata = {
+  version: number;
+  validation_state: "needs_correction" | "revalidated" | "corrected";
+  provider_calls: 0;
+  human_approved: false;
+  official_score: false;
 };
 
 const PREVIEW_LIMITS = {
@@ -156,6 +166,8 @@ export type Job = {
   id: string;
   state: string;
   message: string;
+  executionHold?: "account_profile_required";
+  recovery?: RecoveryMetadata;
   report?: SalesReport;
 };
 
@@ -331,12 +343,23 @@ function parseFinding(
   };
 }
 
-function parseDimensions(value: unknown): ReportDimension[] {
+function parseDimensions(
+  value: unknown,
+  durationMs: number,
+  bindingTranscript?: Transcript,
+): ReportDimension[] {
   return array(value, "report_dimensions", 8, 8).map((entry, index) => {
     const dimension = object(entry, `report_dimension_${index}`);
     keys(
       dimension,
-      ["dimension_id", "label", "status", "observation", "citations"],
+      [
+        "dimension_id",
+        "label",
+        "status",
+        "observation",
+        "citations",
+        "evidence",
+      ],
       `report_dimension_${index}`,
     );
     const status = text(
@@ -346,7 +369,43 @@ function parseDimensions(value: unknown): ReportDimension[] {
     );
     if (!DIMENSION_STATES.has(status))
       throw new ReportContractError(`report_dimension_${index}_status_invalid`);
-    return {
+    const evidence =
+      dimension.evidence === undefined
+        ? undefined
+        : array(
+            dimension.evidence,
+            `report_dimension_${index}_evidence`,
+            0,
+            8,
+          ).map((entry, evidenceIndex) => {
+            const code = `report_dimension_${index}_evidence_${evidenceIndex}`;
+            const parsed = parseEvidence(
+              entry,
+              code,
+              durationMs,
+              bindingTranscript,
+            );
+            identifier(parsed.segment_id, `${code}_segment_id`);
+            const segment = bindingTranscript?.segments.find(
+              (candidate) => candidate.id === parsed.segment_id,
+            );
+            if (
+              segment &&
+              (parsed.start_ms !== segment.start_ms ||
+                parsed.end_ms !== segment.end_ms)
+            )
+              throw new ReportContractError(`${code}_segment_timing_mismatch`);
+            return parsed;
+          });
+    if (
+      evidence !== undefined &&
+      (status === "observed" || status === "conflicted") &&
+      evidence.length === 0
+    )
+      throw new ReportContractError(
+        `report_dimension_${index}_evidence_required`,
+      );
+    const parsed: ReportDimension = {
       dimension_id: text(
         dimension.dimension_id,
         `report_dimension_${index}_id`,
@@ -371,6 +430,8 @@ function parseDimensions(value: unknown): ReportDimension[] {
         ),
       ),
     };
+    if (evidence !== undefined) parsed.evidence = evidence;
+    return parsed;
   });
 }
 
@@ -407,6 +468,49 @@ function parseSections(value: unknown): ReportSection[] {
       ),
     };
   });
+}
+
+function parseRecoveryMetadata(value: unknown): RecoveryMetadata {
+  const recovery = object(value, "report_recovery");
+  keys(
+    recovery,
+    [
+      "version",
+      "validation_state",
+      "provider_calls",
+      "human_approved",
+      "official_score",
+    ],
+    "report_recovery",
+  );
+  const version = integer(
+    recovery.version,
+    "report_recovery_version",
+    1,
+    2_147_483_647,
+  );
+  const validationState = text(
+    recovery.validation_state,
+    "report_recovery_validation_state",
+    32,
+  );
+  if (
+    !["needs_correction", "revalidated", "corrected"].includes(validationState)
+  )
+    throw new ReportContractError("report_recovery_validation_state_invalid");
+  if (recovery.provider_calls !== 0)
+    throw new ReportContractError("report_recovery_provider_calls_invalid");
+  if (recovery.human_approved !== false)
+    throw new ReportContractError("report_recovery_human_approved_invalid");
+  if (recovery.official_score !== false)
+    throw new ReportContractError("report_recovery_official_score_invalid");
+  return {
+    version,
+    validation_state: validationState as RecoveryMetadata["validation_state"],
+    provider_calls: 0,
+    human_approved: false,
+    official_score: false,
+  };
 }
 
 function parseReport(
@@ -516,7 +620,11 @@ function parseReport(
     source_label: text(report.source_label, "report_source_label", 256),
     source_sha256: sourceSha256,
     transcript_revision: transcriptRevision,
-    dimensions: parseDimensions(report.dimensions),
+    dimensions: parseDimensions(
+      report.dimensions,
+      binding.durationMs,
+      binding.transcript,
+    ),
     report_sections: projected ? [] : parseSections(report.report_sections),
   };
   if (report.overview !== undefined && report.overview !== null) {
@@ -558,7 +666,13 @@ export function parseAcquisitionReport(
   value: unknown,
   expected: { submissionId: string; recordingId: string },
   transcript: Transcript,
-): { report: SalesReport; claimed: boolean } {
+): {
+  report: SalesReport;
+  runId: string;
+  claimed: boolean;
+  recovery?: RecoveryMetadata;
+  label: CallLabel | null;
+} {
   const envelope = object(value, "report_envelope");
   keys(
     envelope,
@@ -571,9 +685,19 @@ export function parseAcquisitionReport(
       "transcript_revision",
       "source_label",
       "report",
+      "recovery",
+      "display_name",
+      "display_name_revision",
     ],
     "report_envelope",
   );
+  // The owner's call name (C1) travels with the envelope; absent on older servers.
+  let label: CallLabel | null;
+  try {
+    label = parseCallLabel(envelope);
+  } catch {
+    throw new ReportContractError("report_envelope_label");
+  }
   if (
     envelope.schema !== "ac.sales-xray.report-envelope/2" ||
     envelope.submission_id !== expected.submissionId ||
@@ -582,7 +706,11 @@ export function parseAcquisitionReport(
     envelope.transcript_revision !== transcript.revision
   )
     throw new ReportContractError("report_envelope_binding");
-  identifier(envelope.run_id, "report_run");
+  const runId = identifier(envelope.run_id, "report_run");
+  const recovery =
+    envelope.recovery === undefined
+      ? undefined
+      : parseRecoveryMetadata(envelope.recovery);
   const projection = object(envelope.report, "report_projection");
   keys(
     projection,
@@ -646,7 +774,9 @@ export function parseAcquisitionReport(
       throw new ReportContractError("report_preview_account_invalid");
     report.preview = parsePreview(projection.preview, report);
   }
-  return { claimed, report };
+  return recovery === undefined
+    ? { claimed, report, runId, label }
+    : { claimed, report, runId, recovery, label };
 }
 
 export function parseJobResponse(
@@ -680,6 +810,8 @@ export function parseJobStatus(
       "message",
       "provider_calls",
       "report",
+      "execution_hold",
+      "recovery",
     ],
     "job",
   );
@@ -700,10 +832,24 @@ export function parseJobStatus(
   }
   if (job.recipe_revision !== undefined)
     text(job.recipe_revision, "job_recipe_revision", 128);
+  if (
+    job.execution_hold !== undefined &&
+    job.execution_hold !== null &&
+    job.execution_hold !== "account_profile_required"
+  )
+    throw new ReportContractError("job_execution_hold_invalid");
+  const recovery =
+    job.recovery === undefined
+      ? undefined
+      : parseRecoveryMetadata(job.recovery);
   return {
     id: text(job.id, "job_id", 128),
     state,
     message: optionalText(job.message, "job_message", 2_000),
+    ...(job.execution_hold === "account_profile_required"
+      ? { executionHold: "account_profile_required" as const }
+      : {}),
+    ...(recovery === undefined ? {} : { recovery }),
   };
 }
 

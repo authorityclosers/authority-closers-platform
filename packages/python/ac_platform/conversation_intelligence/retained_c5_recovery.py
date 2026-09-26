@@ -16,7 +16,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -52,10 +52,20 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    ReportLanguage,
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.recovery_models import (
     ConversationRetainedC5Version,
 )
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_LEGACY,
+    COACHING_PROMPT_REFINED,
+    COACHING_PROMPT_V3,
+    COACHING_PROMPT_V4,
+    COACHING_PROMPT_V5,
+    REPORT_VALIDATOR_REVISION,
     FactPacket,
     load_report_profile,
 )
@@ -73,6 +83,91 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _PATH = re.compile(r"(?:^|/)(?:[^/~]|~[01])+(?:/(?:[^/~]|~[01])+)*\Z")
 _REVIEW_ORIGIN = "Codex automated proposal"
 _RECOVERY_SCHEMA = "ac.sales-xray.retained-c5-recovery-proof/1"
+C5PromptRevision = Literal[
+    "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+]
+
+
+def _coaching_prompt_revision(request: dict[str, Any]) -> C5PromptRevision:
+    """Read the versioned C5 wording from a saved request, defaulting legacy."""
+
+    value = request.get("coaching_prompt_revision", COACHING_PROMPT_LEGACY)
+    if not isinstance(value, str) or value not in {
+        COACHING_PROMPT_LEGACY,
+        COACHING_PROMPT_REFINED,
+        COACHING_PROMPT_V3,
+        COACHING_PROMPT_V4,
+        COACHING_PROMPT_V5,
+    }:
+        raise ValueError("The stored C5 prompt revision is invalid.")
+    return value
+
+
+def _coaching_prompt_options(
+    request: dict[str, Any],
+) -> tuple[C5PromptRevision, ReportLanguage, str | None]:
+    """Validate saved C5 wording options and bind each version to its bundled pack."""
+
+    revision = _coaching_prompt_revision(request)
+    language = request.get("report_language")
+    pack_sha256 = request.get("qualitative_pack_sha256")
+    if revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
+        if not isinstance(language, str) or language not in {
+            "en",
+            "hi-Deva+en",
+            "mr-Deva+en",
+        }:
+            raise ValueError("The stored C5 report language is invalid.")
+        if pack_sha256 != load_qualitative_pack_for_revision(revision).sha256:
+            raise ValueError("The stored C5 qualitative pack does not match.")
+        return revision, cast(ReportLanguage, language), cast(str, pack_sha256)
+    if (language is not None and language != "en") or pack_sha256 is not None:
+        raise ValueError("The stored C5 prompt options are incompatible.")
+    return revision, "en", None
+
+
+def _rebuild_prepared_c5_input(
+    transcript: dict[str, Any],
+    fact_packets: tuple[FactPacket, ...],
+    *,
+    profile: dict[str, Any],
+    input_metadata: dict[str, Any],
+    request: dict[str, Any],
+) -> PreparedTaskInput:
+    provider = input_metadata.get("provider")
+    model = input_metadata.get("model")
+    maximum = input_metadata.get("max_completion_tokens")
+    output_profile = request.get("output_profile", "detailed")
+    revision, language, pack_sha256 = _coaching_prompt_options(request)
+    if (
+        not isinstance(provider, str)
+        or not isinstance(model, str)
+        or type(maximum) is not int
+        or output_profile not in {"standard", "detailed"}
+    ):
+        raise ValueError("The stored C5 request is incomplete.")
+    prepared = prepare_coaching_input(
+        transcript,
+        fact_packets,
+        provider=provider,
+        model=model,
+        max_completion_tokens=maximum,
+        profile=profile,
+        output_profile=output_profile,
+        coaching_prompt_revision=revision,
+        report_language=language,
+        qualitative_pack_sha256=pack_sha256,
+    )
+    saved_repair = request.get("repair")
+    if saved_repair is not None:
+        from ac_platform.conversation_intelligence.contracts import C5RepairIntent
+        from ac_platform.conversation_intelligence.reporting_pipeline import repair_coaching_input
+
+        # Reproduce the request that actually ran, including the single saved
+        # repair instruction. The caller still checks the exact input digest;
+        # this neither starts another attempt nor relaxes report validation.
+        prepared = repair_coaching_input(prepared, C5RepairIntent.model_validate(saved_repair))
+    return prepared
 
 
 class RetainedC5Correction(BaseModel):
@@ -618,31 +713,22 @@ class RetainedC5RecoveryService:
             profile = request.get("profile")
             if not isinstance(profile, dict):
                 profile = load_report_profile()
+            # Validate the saved revision/language/pack even when private
+            # historical bytes are supplied; those bytes do not authorize a
+            # different or now-mismatched accepted prompt configuration.
+            _coaching_prompt_options(request)
             if historical_input is None:
                 # Admin HTTP can use this only when the current prompt builder
                 # reproduces the exact stored input hash.  A prompt or profile
                 # drift fails closed and requires the CLI's private historical
                 # byte source instead of silently validating a new request.
                 fact_packets = tuple(FactPacket.model_validate(row.payload) for row in c4)
-                provider = input_metadata.get("provider")
-                model = input_metadata.get("model")
-                maximum = input_metadata.get("max_completion_tokens")
-                output_profile = request.get("output_profile", "detailed")
-                if (
-                    not isinstance(provider, str)
-                    or not isinstance(model, str)
-                    or type(maximum) is not int
-                    or output_profile not in {"standard", "detailed"}
-                ):
-                    raise ValueError
-                prepared = prepare_coaching_input(
+                prepared = _rebuild_prepared_c5_input(
                     transcript,
                     fact_packets,
-                    provider=provider,
-                    model=model,
-                    max_completion_tokens=maximum,
                     profile=profile,
-                    output_profile=output_profile,
+                    input_metadata=input_metadata,
+                    request=request,
                 )
             else:
                 prepared = PreparedTaskInput.from_dict(input_metadata, payload=historical_input)
@@ -713,6 +799,7 @@ class RetainedC5RecoveryService:
     ) -> dict[str, Any]:
         return {
             "schema_id": _RECOVERY_SCHEMA,
+            "validator_revision": REPORT_VALIDATOR_REVISION,
             "recovery_version_id": str(version_id),
             "validation_mode": "retained_c5_response_revalidation",
             "provider_calls": 0,
@@ -841,10 +928,18 @@ class RetainedC5RecoveryService:
                 bound.recording,
                 message="The retained recovery version was already created.",
             )
+        # The request identity stays stable so an old command key replays its
+        # original receipt, even after an upgrade. A fresh command revalidates
+        # under the current admission contract instead of caching an earlier
+        # validator's negative result forever. _load_bound holds the run lock,
+        # serializing version allocation and same-revision deduplication.
+        fingerprint = content_hash(
+            {**command_intent, "validator_revision": REPORT_VALIDATOR_REVISION}
+        )
         existing = await self.database.scalar(
             select(ConversationRetainedC5Version).where(
                 ConversationRetainedC5Version.run_id == run_id,
-                ConversationRetainedC5Version.fingerprint == content_hash(command_intent),
+                ConversationRetainedC5Version.fingerprint == fingerprint,
             )
         )
         if existing is not None:
@@ -939,7 +1034,6 @@ class RetainedC5RecoveryService:
         )
         version_number = int(next_version or 1)
         version_id = uuid4()
-        fingerprint = content_hash(command_intent)
         report_sha256 = "0" * 64 if normalized is None else content_hash(normalized)
         proof = self._proof(
             bound,

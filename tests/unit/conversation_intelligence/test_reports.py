@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+import ac_platform.conversation_intelligence.reports as reports_module
 from ac_platform.conversation_intelligence.reports import (
     GROQ_MODEL,
     MAX_AGGREGATE_OVERVIEW_CHARS,
+    REPORT_VALIDATOR_REVISION,
     AggregateFactPacket,
     ReportError,
     build_fact_groq_prompts,
@@ -202,7 +206,7 @@ def test_parser_rejects_mixed_or_incomplete_legacy_feedback_shapes() -> None:
         parse_report_draft(payload, transcript)
 
 
-def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
+def test_parser_rejects_numeric_and_unbound_evidence_but_keeps_provider_additions() -> None:
     transcript = _transcript()
     bad_quote = _payload(transcript)
     bad_quote["strengths"][0]["evidence"][0]["quote"] = "not in the segment"
@@ -221,8 +225,83 @@ def test_parser_rejects_unknown_numeric_and_unbound_evidence() -> None:
 
     unknown = _payload(transcript)
     unknown["unexpected"] = "provider expansion"
-    with pytest.raises(ReportError, match="report_payload_invalid"):
-        parse_report_draft(unknown, transcript)
+    output = parse_report_draft(unknown, transcript)
+    assert output.provider_extras == {"unexpected": "provider expansion"}
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "pain_points",
+        "painPoints",
+        "key_talking_points",
+        "keyTalkingPoints",
+        "turning_point",
+        "turningPoint",
+        "prank",
+    ],
+)
+def test_numeric_key_guard_allows_only_reviewed_exact_language_labels(key: str) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload[key] = "bounded provider annotation"
+
+    result = parse_report_draft(payload, transcript)
+
+    assert result.provider_extras[key] == "bounded provider annotation"
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "score",
+        "salesScore",
+        "quality_score",
+        "overall_score",
+        "grade",
+        "rating",
+        "rank",
+        "numeric",
+        "percent",
+        "percentage",
+        "points",
+        "total_points",
+        "earned_points",
+        "pain_points_count",
+        "key_talking_points1",
+        "turning_point_total",
+        "sales_scores",
+        "ratings",
+        "rankings",
+        "score1",
+        "score2026",
+        "overallgrade",
+        "overallratings",
+        "scorecard",
+        "customerscore",
+        "coachrating",
+        "prospectrank",
+        "foo_prank",
+        "painful_points",
+    ],
+)
+def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: str) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload[key] = 1
+
+    with pytest.raises(ReportError, match="report_numeric_field_forbidden"):
+        parse_report_draft(payload, transcript)
+
+
+def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/5"
+    # OpenAI extends prompt-provider admission only; parser/adaptation semantics
+    # remain revision 5. The combined module was reviewed before repinning.
+    source = Path(reports_module.__file__).read_text(encoding="utf-8")
+    assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
+        "7bc877f94353babc42801f1436b43857d0ff89b8f774dbbac58258d96bd3231f"
+    )
 
 
 @pytest.mark.parametrize(

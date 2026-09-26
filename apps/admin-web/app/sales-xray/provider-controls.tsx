@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Plus, RefreshCw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { z } from "zod";
 
@@ -2201,7 +2201,7 @@ export function ProviderControlsPanel() {
   );
 }
 
-export function ProviderControls() {
+export function ProviderControls({ children }: { children?: ReactNode }) {
   return (
     <AdminShell
       active="sales-xray"
@@ -2215,6 +2215,7 @@ export function ProviderControls() {
         <ExecutionControlsPanel />
         <AnalysisSettingsPanel />
         <ProviderControlsPanel />
+        {children}
       </div>
     </AdminShell>
   );

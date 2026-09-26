@@ -63,6 +63,17 @@ def test_telemetry_recorder_accepts_only_safe_low_cardinality_attributes() -> No
     assert event.category is TelemetryCategory.OPERATIONAL
 
 
+def test_numeric_email_login_code_delivery_can_record_its_worker_outcome() -> None:
+    sink = InMemoryTelemetrySink()
+    event = TelemetryRecorder(sink).emit(
+        "worker.job.succeeded",
+        {"job_kind": "email.identity_login_code.v1", "attempt": 1, "outcome": "succeeded"},
+        category=TelemetryCategory.OPERATIONAL,
+    )
+    assert sink.events == [event]
+    assert event.attributes["job_kind"] == "email.identity_login_code.v1"
+
+
 @pytest.mark.parametrize("identifier_key", ["job_id", "person_id", "request_id", "trace_id"])
 def test_arbitrary_identifier_attributes_are_rejected(identifier_key: str) -> None:
     with pytest.raises(ValueError, match="not allowlisted"):

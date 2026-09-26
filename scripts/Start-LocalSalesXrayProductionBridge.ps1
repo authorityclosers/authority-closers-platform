@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$NoBrowser,
+    [switch]$ReviewOnly,
     [ValidateRange(1024, 65535)]
     [int]$BrowserPort = 3016,
     [ValidateRange(1024, 65535)]
@@ -158,6 +159,7 @@ try {
         NODE_ENV = "development"
         AC_CONVERSATION_API_ORIGIN = ""
         AC_SALES_XRAY_DEV_LIVE_DATA = "true"
+        AC_SALES_XRAY_REVIEW = $(if ($ReviewOnly) { "1" } else { "0" })
         NEXT_TRACE_SPAN_THRESHOLD_MS = "9007199254740991"
         NODE_DEBUG = ""
     }
@@ -181,6 +183,7 @@ try {
             (Join-Path $RepositoryRoot "scripts\sales-xray-production-bridge.mjs"),
             "--browser-origin", $BrowserOrigin,
             "--inner-origin", $InnerOrigin,
+            "--analysis-read-only", $ReviewOnly.IsPresent.ToString().ToLowerInvariant(),
             "--port", "$BrowserPort"
         ) `
         -WorkingDirectory $RepositoryRoot `
@@ -196,6 +199,7 @@ try {
         browser_origin = $BrowserOrigin
         inner_origin = $InnerOrigin
         production_origin = $ProductionOrigin
+        analysis_read_only = $ReviewOnly.IsPresent
         processes = @(
             @{ name = "sales-xray"; id = $InnerProcess.Id; started_at_file_time_utc = $InnerProcess.StartTime.ToFileTimeUtc() },
             @{ name = "bridge"; id = $BridgeProcess.Id; started_at_file_time_utc = $BridgeProcess.StartTime.ToFileTimeUtc() }
@@ -214,6 +218,7 @@ try {
         $Value.status -eq "ok" -and
         $Value.mode -eq "development-only" -and
         $Value.data_mode -eq "production-live" -and
+        $Value.analysis_read_only -eq $ReviewOnly.IsPresent -and
         $Value.upstream_origin -eq $ProductionOrigin
     }
 }
@@ -232,5 +237,6 @@ Write-Host "UI:       $BrowserOrigin/login"
 Write-Host "Data:     live production API through $ProductionOrigin"
 Write-Host "Sessions: ephemeral HttpOnly local handle; sign in normally in this browser"
 Write-Host "Provider: no automatic analysis jobs are started by the bridge"
+Write-Host "Review:   analysis read-only=$($ReviewOnly.IsPresent)"
 Write-Host "Stop:     pwsh -NoProfile -File scripts/Stop-LocalSalesXrayProductionBridge.ps1"
 if (-not $NoBrowser) { Start-Process $BrowserOrigin }

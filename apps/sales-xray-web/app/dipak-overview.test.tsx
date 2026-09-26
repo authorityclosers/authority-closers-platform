@@ -2,12 +2,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DipakOverview } from "./dipak-overview";
+import { ReportReadingProvider } from "./report-reading-context";
+import { ReportModes } from "./report-modes";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { parseJobResponse } from "./report-contract";
 import type {
   Finding,
   GuestReportPreview,
   SalesReport,
+  Transcript,
 } from "./report-contract";
 
 (
@@ -16,6 +19,7 @@ import type {
 let root: Root;
 let container: HTMLDivElement;
 const select = vi.fn();
+const selectContext = vi.fn();
 function finding(title: string, start: number): Finding {
   return {
     title,
@@ -64,6 +68,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   select.mockClear();
+  selectContext.mockClear();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -74,6 +79,142 @@ async function render(value = report()) {
     root.render(<DipakOverview report={value} onSelectEvidence={select} />),
   );
 }
+
+it("shows all report chapters as one expanded document in reading mode", async () => {
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading>
+        <DipakOverview report={report()} onSelectEvidence={select} />
+      </ReportReadingProvider>,
+    ),
+  );
+
+  expect(
+    container.querySelectorAll("[data-chapter]:not([hidden])"),
+  ).toHaveLength(4);
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
+  expect(container.querySelectorAll("[data-review-fold]")).toHaveLength(0);
+});
+
+it("composes one open overview: takeaway, facts, Keep/Change/Outcome/Next and replay locations", async () => {
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        showHeading={false}
+        report={report()}
+        onSelectEvidence={select}
+        durationMs={fixture.transcript.duration_ms}
+      />,
+    ),
+  );
+  const summary = container.querySelector(
+    'section[aria-label="Call overview"]',
+  )!;
+  const parts = [...summary.children].map(
+    (child) =>
+      child.getAttribute("data-overview-card") ??
+      child.getAttribute("aria-label") ??
+      child.className,
+  );
+  // Takeaway, then the facts line, then the paired readout, then replay.
+  expect(parts[0]).toBe("0");
+  expect(parts[1]).toBe("Call metrics");
+  const readout = summary.querySelectorAll("[data-tone]");
+  expect([...readout].map((row) => row.getAttribute("data-tone"))).toEqual([
+    "keep",
+    "change",
+    "outcome",
+    "next",
+  ]);
+  // One replay dataset for the facts count, the strip and its list.
+  const strip = summary.querySelector("[data-replay-strip]")!;
+  const count = summary.querySelector(
+    '[aria-label="Call metrics"] div:nth-child(2) dd',
+  )?.textContent;
+  expect(strip.querySelectorAll("ol li")).toHaveLength(Number(count));
+  // Two fixture clips end after the 00:05 transcript: listed, never playable.
+  expect(strip.querySelectorAll("ol button")).toHaveLength(Number(count) - 2);
+  expect(strip.querySelectorAll("[data-replay-beyond]")).toHaveLength(2);
+  // No invented stages, scores or sentiment; "not a score" is the only mention.
+  expect(
+    summary.textContent?.replace("positions only, not a score", ""),
+  ).not.toMatch(/score|%|probability|positive|negative|stage/i);
+  // This fixture's transcript is shorter than two clip ends: disclosed, not hidden.
+  expect(strip.textContent).toContain(
+    "2 clip ranges extend past the 00:05 recording",
+  );
+  // Every review destination and all eight skills remain in the document.
+  expect(container.querySelectorAll("[data-review-point]")).toHaveLength(14);
+});
+
+it("keeps the actual overview and source playback inline in the tabbed report", async () => {
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <DipakOverview
+                report={report()}
+                onSelectEvidence={select}
+                showHeading={false}
+              />
+            ),
+          },
+          {
+            id: "transcript",
+            label: "Transcript",
+            content: <p>Transcript remains a separate section.</p>,
+          },
+        ]}
+      />,
+    ),
+  );
+  const viewButton = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Tabbed view"))!;
+  await act(async () => viewButton.click());
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("tabs");
+  const points = [
+    ...container.querySelectorAll<HTMLElement>("[data-review-point]"),
+  ];
+  expect(points).toHaveLength(14);
+  expect(
+    points.every(
+      (point) => point.closest("[hidden],details:not([open])") === null,
+    ),
+  ).toBe(true);
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  const evidence = container.querySelector<HTMLElement>(
+    ".studio-finding-evidence",
+  )!;
+  expect(evidence.closest("[hidden],details:not([open])")).toBeNull();
+  expect(evidence.textContent).toContain(
+    report().strengths[0].evidence[0].quote,
+  );
+  await act(async () =>
+    evidence.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(select).toHaveBeenCalledWith(
+    report().strengths[0].evidence[0],
+    report().strengths[0].title,
+  );
+  const review = container.querySelector<HTMLButtonElement>(
+    '[data-overview-card="0"] [data-open-review]',
+  )!;
+  expect(review.textContent).toContain("Read the final verdict");
+  await act(async () => review.click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe("tabs");
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement?.getAttribute("data-review-point")).toBe("14");
+});
 
 it("keeps compact cards tied to the full source reader without showing an entire chapter", async () => {
   const value = report();
@@ -90,9 +231,11 @@ it("keeps compact cards tied to the full source reader without showing an entire
   const dashboard = container.querySelector(
     'section[aria-label="Call overview"]',
   )!;
-  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(6);
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+  expect(dashboard.querySelector('[aria-label="Overview pages"]')).toBeNull();
+  expect(dashboard.querySelector('[aria-label="Overview cards"]')).toBeNull();
   const opener = dashboard.querySelector<HTMLButtonElement>(
-    '[aria-label="Open review: Key takeaway"]',
+    '[data-overview-card="0"] [data-open-review]',
   )!;
   opener.focus();
   await act(async () => opener.click());
@@ -114,7 +257,7 @@ it("keeps compact cards tied to the full source reader without showing an entire
   expect(document.activeElement).toBe(opener);
 });
 
-it("keeps all actual review points reachable through compact pagination and next/previous", async () => {
+it("keeps the compact overview focused on five useful actions without a review pager", async () => {
   await act(async () =>
     root.render(
       <DipakOverview
@@ -127,57 +270,45 @@ it("keeps all actual review points reachable through compact pagination and next
   const dashboard = container.querySelector(
     'section[aria-label="Call overview"]',
   )!;
-  const nextPage = dashboard.querySelector<HTMLButtonElement>(
-    '[aria-label="Next review points"]',
-  )!;
-  const seen: string[] = [];
-  do {
-    for (const item of dashboard.querySelectorAll(
-      "li:not([hidden]) [data-insight-number]",
-    ))
-      seen.push(item.getAttribute("data-insight-number")!);
-    if (nextPage.disabled) break;
-    await act(async () => nextPage.click());
-  } while (true);
-  expect(seen).toEqual([
-    "01",
-    "02",
-    "03",
-    "04",
-    "05",
-    "06",
-    "07",
-    "08",
-    "09",
-    "10",
-    "11",
-    "12",
-    "13",
-    "14",
-  ]);
+  expect(dashboard.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+  expect(
+    dashboard.querySelector('[aria-label="Review point pages"]'),
+  ).toBeNull();
   await act(async () =>
     dashboard
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Open review: Keep doing this"]',
+        '[data-overview-card="1"] [data-open-review]',
       )!
       .click(),
   );
-  for (let index = 0; index < seen.length; index++) {
-    expect(
-      container
-        .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
-        ?.getAttribute("data-review-point"),
-    ).toBe(seen[index]);
-    if (index < seen.length - 1)
-      await act(async () =>
-        container
-          .querySelector<HTMLButtonElement>("[data-review-next]")!
-          .click(),
-      );
-  }
   expect(
-    container.querySelector<HTMLButtonElement>("[data-review-next]")!.disabled,
-  ).toBe(true);
+    container
+      .querySelector('[role="dialog"] [data-review-point]:not([hidden])')
+      ?.getAttribute("data-review-point"),
+  ).toBe("01");
+});
+
+it("shows one overview metrics row with a deduplicated playable highlight count", async () => {
+  const value = report();
+  value.strengths[0].evidence[0] = value.improvements[0].evidence[0];
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        showHeading={false}
+      />,
+    ),
+  );
+
+  expect(
+    container.querySelectorAll('[aria-label="Call metrics"]'),
+  ).toHaveLength(1);
+  const dashboardMetrics = container.querySelector(
+    'section[aria-label="Call overview"] [aria-label="Call metrics"]',
+  );
+  expect(dashboardMetrics?.textContent).toContain("Replay clips5");
+  expect(container.textContent).not.toContain("Source moments");
 });
 
 it("plays only the exact supported strength from the compact Keep card", async () => {
@@ -215,6 +346,170 @@ it("plays only the exact supported strength from the compact Keep card", async (
   ).not.toContain("Listen");
 });
 
+it("keeps saved rewatch evidence exact and offers explicitly labelled adjacent transcript context", async () => {
+  const value = report();
+  const evidence = value.improvements[0].evidence[0];
+  const transcript: Transcript = {
+    source_sha256: value.source_sha256,
+    revision: value.transcript_revision,
+    timebase_id: "decoded-audio-ms-v1",
+    duration_ms: 10_000,
+    segments: [
+      {
+        id: "s3000",
+        speaker_id: "speaker-2",
+        start_ms: 3_000,
+        end_ms: 3_900,
+        text: "कल timing discuss करूया.",
+      },
+      {
+        id: evidence.segment_id,
+        speaker_id: "speaker-1",
+        start_ms: evidence.start_ms,
+        end_ms: evidence.end_ms,
+        text: evidence.quote,
+      },
+      {
+        id: "s5000",
+        speaker_id: "speaker-2",
+        start_ms: 5_000,
+        end_ms: 5_900,
+        text: "हो, मी confirm करतो.",
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        transcript={transcript}
+        onSelectEvidence={select}
+        onSelectContextualPlayback={selectContext}
+      />,
+    ),
+  );
+
+  expect(container.textContent).toContain("Context before · Speaker 1");
+  expect(container.textContent).toContain("Saved evidence · Speaker 2");
+  expect(container.textContent).toContain("Context after · Speaker 1");
+  expect(container.textContent).toContain(evidence.quote);
+  expect(container.textContent).toContain("कल timing discuss करूया.");
+  expect(container.textContent).toContain("हो, मी confirm करतो.");
+  const sourceQuoteSpans = [
+    ...container.querySelectorAll<HTMLElement>(
+      '[aria-label^="Transcript context"] span',
+    ),
+  ];
+  expect(sourceQuoteSpans).toHaveLength(3);
+  expect(sourceQuoteSpans[0].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[0].getAttribute("data-script")).toBe("deva");
+  expect(sourceQuoteSpans[1].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[1].getAttribute("data-script")).toBe("deva");
+  expect(sourceQuoteSpans[2].getAttribute("lang")).toBe("und-Deva");
+  expect(sourceQuoteSpans[2].getAttribute("data-script")).toBe("deva");
+
+  const savedClip = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Practise this"))!;
+  await act(async () => savedClip.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    evidence,
+    value.improvements[0].title,
+  );
+
+  const contextualClip = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label^="Play with context,"]',
+    ),
+  ][0];
+  expect(contextualClip?.getAttribute("aria-label")).toContain(
+    "00:03 to 00:05",
+  );
+  await act(async () => contextualClip?.click());
+  expect(selectContext).toHaveBeenCalledOnce();
+  const [selection, title] = selectContext.mock.calls[0];
+  expect(title).toBe(value.improvements[0].title);
+  expect(selection.evidence).toEqual(evidence);
+  expect(selection.playback_range).toEqual({
+    start_ms: 3_000,
+    end_ms: 5_900,
+  });
+  expect(selection.evidence.start_ms).toBe(evidence.start_ms);
+  expect(selection.evidence.end_ms).toBe(evidence.end_ms);
+});
+
+it("includes the reply after a saved reaction while preserving the exact citation", async () => {
+  const value = report();
+  const evidence = {
+    segment_id: "reaction-evidence",
+    start_ms: 2_000,
+    end_ms: 2_800,
+    quote: "That sounds good.",
+  };
+  value.improvements[0].evidence = [evidence];
+  const transcript: Transcript = {
+    source_sha256: value.source_sha256,
+    revision: value.transcript_revision,
+    timebase_id: "decoded-audio-ms-v1",
+    duration_ms: 5_000,
+    segments: [
+      {
+        id: "reaction-question",
+        speaker_id: "speaker_0",
+        start_ms: 1_000,
+        end_ms: 1_900,
+        text: "Would you like a short outline?",
+      },
+      {
+        id: evidence.segment_id,
+        speaker_id: "speaker_1",
+        start_ms: evidence.start_ms,
+        end_ms: evidence.end_ms,
+        text: evidence.quote,
+      },
+      {
+        id: "reaction-reply",
+        speaker_id: "speaker_0",
+        start_ms: 2_900,
+        end_ms: 4_100,
+        text: "Please email the details tomorrow.",
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        transcript={transcript}
+        onSelectEvidence={select}
+        onSelectContextualPlayback={selectContext}
+      />,
+    ),
+  );
+
+  const savedClip = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent?.includes("Practise this"))!;
+  await act(async () => savedClip.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    evidence,
+    value.improvements[0].title,
+  );
+
+  const contextualClip = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Play with context,"]',
+  )!;
+  await act(async () => contextualClip.click());
+  expect(selectContext).toHaveBeenCalledOnce();
+  const [selection] = selectContext.mock.calls[0];
+  expect(selection.context_after?.text).toBe(
+    "Please email the details tomorrow.",
+  );
+  expect(selection.playback_range).toEqual({ start_ms: 1_000, end_ms: 4_100 });
+  expect(selection.evidence).toEqual(evidence);
+  expect(selection.evidence.end_ms).toBe(2_800);
+});
+
 it("links improvement tabs and supports arrow-key navigation without modifying evidence", async () => {
   const value = parseJobResponse(
     {
@@ -241,7 +536,7 @@ it("links improvement tabs and supports arrow-key navigation without modifying e
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Open review: First thing to change"]',
+        '[data-overview-card="2"] [data-open-review]',
       )!
       .click(),
   );
@@ -370,7 +665,7 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
   );
 });
 
-it("keeps source context behind an explicit disclosure", async () => {
+it("keeps source context once, behind the final-verdict disclosure", async () => {
   const value = parseJobResponse(
     {
       id: "synthetic-run",
@@ -386,12 +681,22 @@ it("keeps source context behind an explicit disclosure", async () => {
   ).report!;
   await render(value);
   const details = container.querySelector<HTMLDetailsElement>(
-    "[data-source-details]",
+    'details[data-review-point="14"]',
   );
   expect(details).not.toBeNull();
   expect(details?.open).toBe(false);
-  expect(details?.textContent).toContain(value.overview!.diagnosis!.text);
-  expect(details?.textContent).toContain(value.overview!.outcome!.text);
+  const context = details?.querySelector('[aria-label="Source context"]');
+  expect(context?.textContent).toContain(value.overview!.diagnosis!.text);
+  expect(context?.textContent).toContain(value.overview!.outcome!.text);
+  expect(
+    container.querySelectorAll('[aria-label="Source context"]'),
+  ).toHaveLength(1);
+  expect(
+    context?.querySelectorAll(".studio-finding-evidence blockquote"),
+  ).toHaveLength(
+    value.overview!.diagnosis!.evidence.length +
+      value.overview!.outcome!.evidence.length,
+  );
 });
 
 it("opens source context for print and restores its closed state", async () => {
@@ -410,7 +715,7 @@ it("opens source context for print and restores its closed state", async () => {
   ).report!;
   await render(value);
   const details = container.querySelector<HTMLDetailsElement>(
-    "[data-source-details]",
+    'details[data-review-point="14"]',
   )!;
   expect(details.open).toBe(false);
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
@@ -571,7 +876,7 @@ it("replays literal mixed-script evidence with its exact source span and no HTML
   );
   expect(container.querySelector("script")).toBeNull();
   const button = container.querySelector<HTMLButtonElement>(
-    '[data-review-point="01"] button[aria-label^="Play source moment"]',
+    '[data-review-point="01"] button[aria-label^="Listen"]',
   )!;
   await act(async () => button.click());
   expect(select).toHaveBeenCalledExactlyOnceWith(
@@ -661,24 +966,24 @@ it("leads with supported qualitative skills and never renders a score", async ()
   expect(container.querySelector('[data-review-point="10"]')).not.toBeNull();
 });
 
-it("prints every review point and nested quote then restores both disclosure states", async () => {
+it("prints every review point while its evidence stays visible without a second disclosure", async () => {
   await render();
   const folds = [
     ...container.querySelectorAll<HTMLDetailsElement>("[data-review-fold]"),
   ];
   const evidence = [
-    ...container.querySelectorAll<HTMLDetailsElement>(
-      ".studio-finding-evidence",
-    ),
+    ...container.querySelectorAll<HTMLElement>(".studio-finding-evidence"),
   ];
   folds[0].open = true;
-  evidence[0].open = true;
+  expect(evidence.length).toBeGreaterThan(0);
+  expect(evidence.every((item) => item.tagName !== "DETAILS")).toBe(true);
+  const quotesBeforePrint = evidence.map((item) => item.textContent);
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
   await act(async () => window.dispatchEvent(new Event("beforeprint")));
-  expect([...folds, ...evidence].every((detail) => detail.open)).toBe(true);
+  expect(folds.every((detail) => detail.open)).toBe(true);
   await act(async () => window.dispatchEvent(new Event("afterprint")));
   expect(folds.filter((detail) => detail.open)).toEqual([folds[0]]);
-  expect(evidence.filter((detail) => detail.open)).toEqual([evidence[0]]);
+  expect(evidence.map((item) => item.textContent)).toEqual(quotesBeforePrint);
 });
 
 it("shows real remaining counts and opens account access without fabricating blurred content", async () => {
@@ -744,6 +1049,218 @@ it("shows no unlock cards for complete accounts or single/empty guest sections",
   await render();
   expect(container.querySelector("[data-preview-section]")).toBeNull();
   expect(container.textContent).not.toContain("Unlock remaining insights");
+});
+
+/** The synthetic fixture with all three priority fixes, so all fourteen points render. */
+function detailedReport(): SalesReport {
+  const source = structuredClone(fixture.report);
+  source.improvements = Array.from({ length: 3 }, (_, index) => ({
+    ...structuredClone(source.improvements[0]),
+    title: `Priority ${index + 1}`,
+  }));
+  source.overview.improvement_details = Array.from(
+    { length: 3 },
+    (_, index) => ({
+      ...structuredClone(source.overview.improvement_details[0]),
+      finding_index: index,
+    }),
+  );
+  return parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: source,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+}
+
+function primaryQuotes(value: SalesReport): string[] {
+  const detail = value.overview!;
+  return [
+    ...value.strengths,
+    ...value.improvements,
+    ...value.missed_opportunities,
+    ...value.objection_analysis,
+    ...value.closing_analysis,
+    ...[
+      detail.diagnosis,
+      detail.outcome,
+      ...detail.prospect_interpretations.map((item) => item.source),
+      ...detail.ethics_notes,
+    ].flatMap((note) => (note ? [note] : [])),
+  ].flatMap((item) => item.evidence.map((evidence) => evidence.quote));
+}
+
+async function renderModes(value: SalesReport, view: "reading" | "tabs") {
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={[
+          {
+            id: "overview",
+            label: "Overview",
+            content: (
+              <DipakOverview
+                report={value}
+                onSelectEvidence={select}
+                showHeading={false}
+                durationMs={fixture.transcript.duration_ms}
+              />
+            ),
+          },
+          {
+            id: "transcript",
+            label: "Transcript",
+            content: <p>Transcript remains a separate section.</p>,
+          },
+        ]}
+      />,
+    ),
+  );
+  if (view === "tabs")
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent?.includes("Tabbed view"))!
+        .click(),
+    );
+  expect(
+    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
+  ).toBe(view);
+  return container.querySelector<HTMLElement>(
+    '[data-report-mode-section="overview"]',
+  )!;
+}
+
+it.each(["reading", "tabs"] as const)(
+  "shows one summary, all fourteen points and every primary quote in %s view",
+  async (view) => {
+    const value = detailedReport();
+    const overview = await renderModes(value, view);
+    expect(overview.hidden).toBe(false);
+    expect(
+      overview.querySelectorAll('section[aria-label="Call overview"]'),
+    ).toHaveLength(1);
+    expect(overview.querySelectorAll("[data-overview-card]")).toHaveLength(5);
+    const points = [
+      ...overview.querySelectorAll<HTMLElement>("[data-review-point]"),
+    ];
+    expect(points.map((point) => point.dataset.reviewPoint)).toEqual(
+      Array.from({ length: 14 }, (_, index) =>
+        String(index + 1).padStart(2, "0"),
+      ),
+    );
+    expect(
+      points.every(
+        (point) => point.closest("[hidden],details:not([open])") === null,
+      ),
+    ).toBe(true);
+    // Report modes already navigate; no hidden review map, replay shortcut or modal.
+    expect(
+      overview.querySelector(
+        "[data-insight-number], [data-source-moment], dialog",
+      ),
+    ).toBeNull();
+    const text = overview.textContent ?? "";
+    for (const quote of primaryQuotes(value)) expect(text).toContain(quote);
+    expect(text.split(value.summary)).toHaveLength(2);
+    expect(text.split(value.verdict)).toHaveLength(2);
+    expect(text).not.toContain(value.source_label);
+    expect(text).not.toContain(value.transcript_revision);
+    expect(text).not.toContain(value.source_sha256);
+  },
+);
+
+it("keeps summary counts labelled, readable and non-interactive", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "reading");
+  const metrics = overview.querySelector<HTMLElement>(
+    '[aria-label="Call metrics"]',
+  )!;
+  expect(metrics.tagName).toBe("DL");
+  expect(
+    [...metrics.querySelectorAll("dt")].map((term) => term.textContent),
+  ).toEqual(["Call length", "Replay clips", "Suggested changes"]);
+  expect(
+    [...metrics.querySelectorAll("dd")].map((value) => value.textContent),
+  ).toEqual(["00:05", String(value.overview!.rewatch.length), "3"]);
+  expect(metrics.querySelector("button, a, [role='button']")).toBeNull();
+  expect(overview.textContent?.split("Call length")).toHaveLength(2);
+});
+
+it("starts only the exact supported excerpt with one click from each summary row", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "reading");
+  const listen = (card: string) =>
+    [
+      ...overview.querySelectorAll<HTMLButtonElement>(
+        `[data-overview-card="${card}"] button`,
+      ),
+    ].find((button) => button.textContent?.trim() === "Listen")!;
+  await act(async () => listen("2").click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.improvements[0].evidence[0],
+    value.improvements[0].title,
+  );
+  await act(async () => listen("3").click());
+  expect(select).toHaveBeenLastCalledWith(
+    value.overview!.outcome!.evidence[0],
+    "Observed outcome",
+  );
+  expect(select).toHaveBeenCalledTimes(2);
+  expect(
+    overview.querySelector('[data-overview-card="3"]')?.textContent,
+  ).toContain("Follow-up");
+});
+
+it("gives every summary action a named destination that opens its review point", async () => {
+  const value = detailedReport();
+  const overview = await renderModes(value, "tabs");
+  const actions = [
+    ...overview.querySelectorAll<HTMLButtonElement>("[data-open-review]"),
+  ];
+  expect(
+    actions.map((action) => [
+      action.textContent?.trim(),
+      action.dataset.openReview,
+    ]),
+  ).toEqual([
+    ["Read the final verdict", "14"],
+    ["See why it works", "01"],
+    ["See what happened", "02"],
+    ["See the outcome evidence", "14"],
+    ["See the full focus", "11"],
+  ]);
+  await act(async () => actions[2].click());
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(document.activeElement?.getAttribute("data-review-point")).toBe("02");
+  expect(select).not.toHaveBeenCalled();
+});
+
+it("shows a sub-second excerpt as one location while seeking its exact bounds", async () => {
+  const value = report();
+  value.strengths[0].evidence[0] = {
+    ...value.strengths[0].evidence[0],
+    start_ms: 61_900,
+    end_ms: 62_100,
+  };
+  await render(value);
+  const button = container.querySelector<HTMLButtonElement>(
+    '[data-review-point="01"] button[aria-label^="Listen"]',
+  )!;
+  expect(button.textContent).toContain("at 01:01");
+  expect(button.textContent).not.toContain("01:01–01:02");
+  await act(async () => button.click());
+  expect(select).toHaveBeenCalledExactlyOnceWith(
+    value.strengths[0].evidence[0],
+    value.strengths[0].title,
+  );
+  expect(select.mock.calls[0][0].start_ms).toBe(61_900);
 });
 
 it("renders retained objection and closing findings with their actual source controls", async () => {

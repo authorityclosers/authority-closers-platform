@@ -196,9 +196,11 @@ function InventoryRow({
                 : ""}
               {stage.usage_estimate_paise !== null
                 ? ` · estimate ${formatCost(stage.usage_estimate_paise)} @ ₹${stage.pricing_snapshot?.usd_to_inr ?? "?"}/USD · source ${stage.pricing_snapshot?.source_date ?? "unknown"}`
-                : stage.usage_estimate_state === "rate_unavailable"
-                  ? " · estimate unavailable: no approved rate"
-                  : ""}
+                : stage.usage_estimate_basis === "provider_model_unverified"
+                  ? " · estimate unavailable: returned model needs review"
+                  : stage.usage_estimate_state === "rate_unavailable"
+                    ? " · estimate unavailable: no approved rate"
+                    : ""}
             </span>
           ))}
         </div>

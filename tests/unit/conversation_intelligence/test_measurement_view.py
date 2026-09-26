@@ -6,9 +6,15 @@ import pytest
 
 from ac_platform.conversation_intelligence.application import ConversationConflict
 from ac_platform.conversation_intelligence.measurement_view import (
+    MAX_MEASUREMENT_DURATION_MS,
     ConversationMeasurements,
     _channel_view,
     _display_views,
+    _validate_measurement_layout,
+)
+from ac_platform.conversation_intelligence.signals import (
+    MAX_ROWS,
+    MAX_ROWS_PER_CHANNEL,
 )
 
 
@@ -107,6 +113,45 @@ def test_display_views_rejects_point_after_decoded_duration() -> None:
             hop_ms=10,
             duration_ms=1000,
         )
+
+
+def test_measurement_layout_allows_one_hour_mono_and_stereo_native_payloads() -> None:
+    sample_count = 16_000 * 3_600
+    for source_channels, expected_rows in (
+        (1, MAX_ROWS_PER_CHANNEL),
+        (2, MAX_ROWS),
+    ):
+        assert (
+            _validate_measurement_layout(
+                sample_count=sample_count,
+                hop_samples=160,
+                source_channels=source_channels,
+                duration_ms=MAX_MEASUREMENT_DURATION_MS,
+            )
+            == expected_rows
+        )
+
+
+def test_measurement_layout_rejects_duration_and_row_overflow() -> None:
+    with pytest.raises(ConversationConflict):
+        _validate_measurement_layout(
+            sample_count=16_000 * 3_600,
+            hop_samples=160,
+            source_channels=1,
+            duration_ms=MAX_MEASUREMENT_DURATION_MS + 1,
+        )
+
+    # One extra decoded sample creates one more frame per channel while the
+    # rounded duration remains exactly one hour; the total row cap must still
+    # reject the two-channel artifact.
+    for source_channels in (1, 2):
+        with pytest.raises(ConversationConflict):
+            _validate_measurement_layout(
+                sample_count=16_000 * 3_600 + 1,
+                hop_samples=160,
+                source_channels=source_channels,
+                duration_ms=MAX_MEASUREMENT_DURATION_MS,
+            )
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 180" role="img" aria-label="No saved calls yet">
+  <style>
+    .lx-strip { animation: lx-drift 7s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    .lx-strip.b { animation-delay: -2.3s } .lx-strip.c { animation-delay: -4.6s }
+    .lx-look { animation: lx-look 5s ease-in-out infinite; }
+    @keyframes lx-drift { 0%,100% { transform: translateY(0) rotate(var(--r, 0deg)) } 50% { transform: translateY(-4px) rotate(var(--r, 0deg)) } }
+    @keyframes lx-look { 0%,40%,100% { transform: translateX(0) } 55%,85% { transform: translateX(-6px) } }
+    @media (prefers-reduced-motion: reduce) { .lx-strip, .lx-look { animation: none } }
+  </style>
+  <defs>
+    <radialGradient id="lx-aperture" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="var(--lx-film-2, #16233A)"/>
+      <stop offset="1" stop-color="var(--lx-film, #0A1220)"/>
+    </radialGradient>
+    <pattern id="lx-sprocket" width="14" height="44" patternUnits="userSpaceOnUse">
+      <rect x="4" y="4" width="6" height="5" rx="1.2" fill="var(--lx-paper, #FFFFFF)" opacity=".85"/>
+      <rect x="4" y="35" width="6" height="5" rx="1.2" fill="var(--lx-paper, #FFFFFF)" opacity=".85"/>
+    </pattern>
+  </defs>
+  <ellipse cx="140" cy="166" rx="112" ry="8" fill="var(--lx-ink, #0E1726)" opacity=".06"/>
+  <g class="lx-strip c" style="--r:-8deg">
+    <rect x="22" y="92" width="112" height="44" rx="6" fill="var(--lx-film, #0A1220)" opacity=".9"/>
+    <rect x="22" y="92" width="112" height="44" rx="6" fill="url(#lx-sprocket)"/>
+    <path d="M34 114h6M44 108v12M52 104v20M60 110v8M68 106v16M76 111v6M84 108v12M92 112v4" stroke="var(--lx-glow, #2DD4BF)" stroke-opacity=".35" stroke-width="2.4" stroke-linecap="round"/>
+  </g>
+  <g class="lx-strip b" style="--r:6deg">
+    <rect x="148" y="98" width="112" height="44" rx="6" fill="var(--lx-film, #0A1220)" opacity=".8"/>
+    <rect x="148" y="98" width="112" height="44" rx="6" fill="url(#lx-sprocket)"/>
+    <path d="M160 120h6M170 114v12M178 110v20M186 116v8M194 112v16M202 117v6M210 114v12M218 118v4" stroke="var(--lx-glow, #2DD4BF)" stroke-opacity=".25" stroke-width="2.4" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(96 16)">
+    <rect x="3" y="36" width="8" height="18" rx="4" fill="var(--lx-ink, #0E1726)"/>
+    <rect x="77" y="36" width="8" height="18" rx="4" fill="var(--lx-ink, #0E1726)"/>
+    <circle cx="44" cy="45" r="36" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="4.5"/>
+    <circle cx="44" cy="45" r="24" fill="url(#lx-aperture)"/>
+    <path d="M30 35 A18 18 0 0 1 41 29" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="2.6" stroke-linecap="round"/>
+    <g class="lx-look"><rect x="33" y="47" width="22" height="5" rx="2.5" fill="var(--lx-glow, #2DD4BF)"/></g>
+  </g>
+</svg>

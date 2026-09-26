@@ -4,38 +4,49 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  CircleHelp,
   FileText,
   Flag,
-  Lightbulb,
   Maximize2,
-  Play,
-  Quote,
   Search,
-  TrendingUp,
   X,
 } from "lucide-react";
+import {
+  ClipListenButton,
+  ClipPlayIcon,
+  ClipPlayState,
+} from "./source-waveform";
 import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
-import { formatTranscriptTime } from "./report-transcript";
+import { Glyph, type GlyphName } from "./lightbox/glyph";
+import { sourceTextAttributes } from "./lightbox/script";
+import { formatClipRange, formatClock } from "./lightbox/time";
+import {
+  useReportInline,
+  useReportNavigation,
+  useReportReading,
+} from "./report-reading-context";
 import styles from "./report-moments.module.css";
 
 const PAGE_SIZE = 4;
 const sources = {
-  rewatch: { label: "Rewatch", icon: FileText, tone: "teal" },
-  strengths: { label: "Strength", icon: TrendingUp, tone: "blue" },
-  improvements: { label: "Improvement", icon: Lightbulb, tone: "violet" },
+  rewatch: { label: "Rewatch", glyph: "seek-moment", tone: "rewatch" },
+  strengths: { label: "Strength", glyph: "strength", tone: "strength" },
+  improvements: { label: "Improvement", glyph: "focus", tone: "focus" },
   missed_opportunities: {
     label: "Missed opportunity",
-    icon: Flag,
-    tone: "orange",
+    glyph: "missed",
+    tone: "missed",
   },
   objection_analysis: {
     label: "Objection analysis",
-    icon: CircleHelp,
-    tone: "violet",
+    glyph: "objection",
+    tone: "objection",
   },
-  closing_analysis: { label: "Closing analysis", icon: Flag, tone: "blue" },
-} as const;
+  // The glyph set has no closing mark; the flag keeps a distinct shape.
+  closing_analysis: { label: "Closing analysis", glyph: null, tone: "closing" },
+} as const satisfies Record<
+  string,
+  { label: string; glyph: GlyphName | null; tone: string }
+>;
 type SourceKind = keyof typeof sources;
 type Moment = {
   id: string;
@@ -45,7 +56,29 @@ type Moment = {
   purpose?: "must_watch" | "watch" | "repeat";
   evidence: ReportEvidence;
 };
-const purposes = { must_watch: "Must watch", watch: "Watch", repeat: "Repeat" };
+type LinkedFinding = {
+  label: string;
+  title: string;
+  note?: { label: string; text: string };
+};
+
+/** Plain-language labels for the supplied rewatch purpose. */
+export const rewatchPurposeLabels = {
+  must_watch: "Must watch",
+  watch: "Worth a watch",
+  repeat: "Repeat this",
+} as const;
+
+/**
+ * One readable clock for a clip. A sub-second span is a single location, so
+ * rounding never shows a false interval; seeking keeps the exact milliseconds.
+ */
+export function formatClipTime({
+  start_ms,
+  end_ms,
+}: Pick<ReportEvidence, "start_ms" | "end_ms">) {
+  return formatClipRange(start_ms, end_ms);
+}
 
 /** Preserve report order and each finding's provenance, including shared clips. */
 function suppliedMoments(report: SalesReport): Moment[] {
@@ -80,21 +113,151 @@ function suppliedMoments(report: SalesReport): Moment[] {
   );
 }
 
-/** Same supplied dataset as the browser; repeated citations retain their contexts. */
-export function countReportMoments(report: SalesReport): number {
-  return suppliedMoments(report).length;
+/** One distinct replayable interval and every supplied finding that cites it. */
+export type ReplayClip = { evidence: ReportEvidence; titles: string[] };
+
+/**
+ * The same supplied dataset as the moments browser, grouped by identical
+ * interval and ordered by time. The count, replay strip and list share it.
+ */
+export function reportReplayClips(report: SalesReport): ReplayClip[] {
+  const clips = new Map<string, ReplayClip>();
+  for (const { evidence, title } of suppliedMoments(report)) {
+    const key = `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`;
+    const clip = clips.get(key);
+    if (!clip) clips.set(key, { evidence, titles: [title] });
+    else if (!clip.titles.includes(title)) clip.titles.push(title);
+  }
+  return [...clips.values()].sort(
+    (a, b) =>
+      a.evidence.start_ms - b.evidence.start_ms ||
+      a.evidence.end_ms - b.evidence.end_ms,
+  );
 }
 
-function timeRange(evidence: ReportEvidence) {
-  return `${formatTranscriptTime(evidence.start_ms)} – ${formatTranscriptTime(evidence.end_ms)}`;
+/** Same supplied dataset as the browser; repeated citations retain their contexts. */
+export function countReportMoments(report: SalesReport): number {
+  return reportReplayClips(report).length;
+}
+
+const sameClip = (a: ReportEvidence, b: ReportEvidence) =>
+  a.segment_id === b.segment_id &&
+  a.start_ms === b.start_ms &&
+  a.end_ms === b.end_ms;
+
+/**
+ * Detailed findings that cite this exact clip. A join on the saved source span,
+ * never an inference; historical moments already carry their own finding.
+ */
+function linkedFindings(
+  report: SalesReport,
+  evidence: ReportEvidence,
+): LinkedFinding[] {
+  const detail = report.overview;
+  if (!detail) return [];
+  const cites = (finding: Finding) =>
+    finding.evidence.some((item) => sameClip(item, evidence));
+  return [
+    ...report.strengths.flatMap((finding, index) => {
+      if (!cites(finding)) return [];
+      const golden = detail.golden_moments.find((moment) => {
+        const cited = finding.evidence[moment.evidence_index];
+        return (
+          moment.strength_index === index &&
+          cited !== undefined &&
+          sameClip(cited, evidence)
+        );
+      });
+      return [
+        golden
+          ? {
+              label: "Golden moment",
+              title: finding.title,
+              note: { label: "Why it worked", text: golden.why_effective },
+            }
+          : { label: "Strength", title: finding.title },
+      ];
+    }),
+    ...report.improvements.flatMap((finding, index) => {
+      if (!cites(finding)) return [];
+      const fix = detail.improvement_details.find(
+        (item) => item.finding_index === index,
+      );
+      return [
+        {
+          label: index === 0 ? "Change first" : "Priority fix",
+          title: finding.title,
+          ...(fix && {
+            note: { label: "Try this", text: fix.replacement_behavior },
+          }),
+        },
+      ];
+    }),
+    ...report.missed_opportunities.flatMap((finding, index) => {
+      if (!cites(finding)) return [];
+      const missed = detail.missed_details.find(
+        (item) => item.finding_index === index,
+      );
+      return [
+        {
+          label: "Missed opportunity",
+          title: finding.title,
+          ...(missed && {
+            note: { label: "Explore next", text: missed.follow_up },
+          }),
+        },
+      ];
+    }),
+    ...report.objection_analysis
+      .filter(cites)
+      .map((finding) => ({ label: "Objection", title: finding.title })),
+    ...report.closing_analysis
+      .filter(cites)
+      .map((finding) => ({ label: "Closing", title: finding.title })),
+  ];
 }
 
 function MomentIcon({ kind }: { kind: SourceKind }) {
-  const { icon: Icon, tone } = sources[kind];
+  const { glyph, tone } = sources[kind];
   return (
     <span className={styles.icon} data-tone={tone} aria-hidden="true">
-      <Icon size={21} strokeWidth={1.8} />
+      {glyph ? (
+        <Glyph name={glyph} size={20} />
+      ) : (
+        <Flag size={20} strokeWidth={1.75} />
+      )}
     </span>
+  );
+}
+
+function KindLabel({ moment }: { moment: Moment }) {
+  return (
+    <span className={styles.kind} data-tone={sources[moment.kind].tone}>
+      {sources[moment.kind].label}
+      {moment.purpose ? ` · ${rewatchPurposeLabels[moment.purpose]}` : ""}
+    </span>
+  );
+}
+
+function Linked({ items }: { items: LinkedFinding[] }) {
+  if (!items.length) return null;
+  return (
+    <div className={styles.linked}>
+      <p className={styles.linkedHeading}>Also noted in this report</p>
+      <ul>
+        {items.map((item, index) => (
+          <li key={`${item.label}:${index}`}>
+            <span className={styles.linkedLabel}>{item.label}</span>
+            <span className={styles.linkedTitle}>{item.title}</span>
+            {item.note && (
+              <span className={styles.linkedNote}>
+                <strong>{item.note.label}:</strong> {item.note.text}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -195,6 +358,9 @@ function MomentsBrowser({
   onSelectEvidence,
   transcriptSlot,
 }: ReportMomentsProps) {
+  const reading = useReportReading();
+  const inline = useReportInline();
+  const navigateToReport = useReportNavigation();
   const id = useId();
   const moments = suppliedMoments(report);
   const [filter, setFilter] = useState<SourceKind | "all">("all");
@@ -215,7 +381,9 @@ function MomentsBrowser({
   const page = Math.floor(index / PAGE_SIZE);
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
   const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const hasTranscript = transcriptSlot !== undefined && transcriptSlot !== null;
+  const hasTranscript =
+    Boolean(navigateToReport) ||
+    (transcriptSlot !== undefined && transcriptSlot !== null);
 
   function select(next: number) {
     const target = filtered[next];
@@ -262,13 +430,15 @@ function MomentsBrowser({
       className={styles.root}
       aria-label="Source moments"
       data-report-moments
+      data-reading={reading || undefined}
+      data-inline={inline || undefined}
     >
       <div className={styles.screen}>
         <header className={styles.toolbar}>
           <div className={styles.toolbarTitle}>
-            <h2>
+            <p className={styles.toolbarHeading}>
               Key moments <span>({moments.length})</span>
-            </h2>
+            </p>
             {kinds.length > 1 && (
               <label className={styles.filter}>
                 <span className={styles.visuallyHidden}>Moment source</span>
@@ -294,7 +464,10 @@ function MomentsBrowser({
             <button
               type="button"
               className={styles.transcriptButton}
-              onClick={() => setTranscriptOpen(true)}
+              onClick={() => {
+                if (navigateToReport) navigateToReport("transcript");
+                else setTranscriptOpen(true);
+              }}
               aria-label="Search full transcript"
             >
               <Search size={17} aria-hidden="true" /> Transcript
@@ -324,7 +497,7 @@ function MomentsBrowser({
                         <strong>{item.title}</strong>
                         <span>
                           {sources[item.kind].label} ·{" "}
-                          {formatTranscriptTime(item.evidence.start_ms)}
+                          {formatClock(item.evidence.start_ms)}
                         </span>
                       </span>
                     </button>
@@ -365,53 +538,51 @@ function MomentsBrowser({
               <div className={styles.momentHeading}>
                 <MomentIcon kind={moment.kind} />
                 <div>
-                  <span
-                    className={styles.kind}
-                    data-tone={sources[moment.kind].tone}
-                  >
-                    {sources[moment.kind].label}
-                    {moment.purpose ? ` · ${purposes[moment.purpose]}` : ""}
-                  </span>
+                  <KindLabel moment={moment} />
                   <h3 id={`${id}-title`}>{moment.title}</h3>
                   <span className={styles.time}>
-                    {timeRange(moment.evidence)}
+                    {formatClipTime(moment.evidence)}
                   </span>
                 </div>
               </div>
-              <div className={styles.preview}>
-                <blockquote className={styles.quote}>
-                  <Quote size={23} aria-hidden="true" />
-                  <p>{moment.evidence.quote}</p>
-                </blockquote>
-                {moment.explanation && (
-                  <div className={styles.observation}>
-                    <h4>Report observation</h4>
-                    <p>{moment.explanation}</p>
-                  </div>
-                )}
-              </div>
-              <p
-                className={styles.provenance}
-                title={`Source: ${report.source_label}`}
-              >
-                Source: {report.source_label}
-              </p>
+              <blockquote className={styles.quote}>
+                <p {...sourceTextAttributes(moment.evidence.quote)}>
+                  {moment.evidence.quote}
+                </p>
+              </blockquote>
+              {moment.explanation && (
+                <div className={styles.observation}>
+                  <h4>Report observation</h4>
+                  <p>{moment.explanation}</p>
+                </div>
+              )}
+              <Linked items={linkedFindings(report, moment.evidence)} />
               <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={styles.listen}
-                  onClick={listen}
+                <ClipPlayState
+                  startMs={moment.evidence.start_ms}
+                  endMs={moment.evidence.end_ms}
                 >
-                  <Play size={17} fill="currentColor" aria-hidden="true" />{" "}
-                  Listen
-                </button>
-                <button
-                  type="button"
-                  className={styles.review}
-                  onClick={() => setReviewOpen(true)}
-                >
-                  <Maximize2 size={17} aria-hidden="true" /> Open review
-                </button>
+                  {(playing) => (
+                    <button
+                      type="button"
+                      className={styles.listen}
+                      onClick={listen}
+                      aria-pressed={playing}
+                    >
+                      <ClipPlayIcon playing={playing} size={17} />{" "}
+                      {playing ? "Pause" : "Listen"}
+                    </button>
+                  )}
+                </ClipPlayState>
+                {!inline && (
+                  <button
+                    type="button"
+                    className={styles.review}
+                    onClick={() => setReviewOpen(true)}
+                  >
+                    <Maximize2 size={17} aria-hidden="true" /> Open review
+                  </button>
+                )}
               </div>
             </article>
           </div>
@@ -431,7 +602,7 @@ function MomentsBrowser({
         )}
       </div>
 
-      {moment && (
+      {moment && !inline && (
         <MomentsSheet
           open={reviewOpen}
           contentKey={moment.id}
@@ -440,36 +611,40 @@ function MomentsBrowser({
           footer={navigation(true)}
         >
           <div className={styles.fullMoment} data-full-moment={moment.id}>
-            <span className={styles.kind} data-tone={sources[moment.kind].tone}>
-              {sources[moment.kind].label}
-              {moment.purpose ? ` · ${purposes[moment.purpose]}` : ""}
-            </span>
+            <KindLabel moment={moment} />
             <h3 tabIndex={-1}>{moment.title}</h3>
-            <p className={styles.time}>{timeRange(moment.evidence)}</p>
-            <blockquote>{moment.evidence.quote}</blockquote>
+            <p className={styles.time}>{formatClipTime(moment.evidence)}</p>
+            <blockquote {...sourceTextAttributes(moment.evidence.quote)}>
+              {moment.evidence.quote}
+            </blockquote>
             {moment.explanation && (
               <>
                 <h4>Report observation</h4>
                 <p>{moment.explanation}</p>
               </>
             )}
-            <dl className={styles.sourceDetails}>
-              <dt>Source</dt>
-              <dd>{report.source_label}</dd>
-              <dt>Transcript revision</dt>
-              <dd>{report.transcript_revision}</dd>
-              <dt>Source segment</dt>
-              <dd>{moment.evidence.segment_id}</dd>
-              <dt>Source fingerprint</dt>
-              <dd>{report.source_sha256}</dd>
-            </dl>
-            <button type="button" className={styles.listen} onClick={listen}>
-              <Play size={17} aria-hidden="true" /> Listen to this excerpt
-            </button>
+            <Linked items={linkedFindings(report, moment.evidence)} />
+            <p className={styles.provenance}>From this call</p>
+            <ClipPlayState
+              startMs={moment.evidence.start_ms}
+              endMs={moment.evidence.end_ms}
+            >
+              {(playing) => (
+                <button
+                  type="button"
+                  className={styles.listen}
+                  onClick={listen}
+                  aria-pressed={playing}
+                >
+                  <ClipPlayIcon playing={playing} size={17} />{" "}
+                  {playing ? "Pause this excerpt" : "Listen to this excerpt"}
+                </button>
+              )}
+            </ClipPlayState>
           </div>
         </MomentsSheet>
       )}
-      {hasTranscript && (
+      {hasTranscript && !navigateToReport && (
         <MomentsSheet
           open={transcriptOpen}
           title="Full transcript"
@@ -479,28 +654,52 @@ function MomentsBrowser({
         </MomentsSheet>
       )}
 
-      {/* Independent of interactive filters/pages, so printing retains every supplied item. */}
+      {/* The reading flow and print: every supplied item, independent of filters and pages. */}
       <div className={styles.print} data-moments-print>
-        <h2>Source moments</h2>
-        <p>
-          Source: {report.source_label} · Transcript revision:{" "}
-          {report.transcript_revision}
-        </p>
-        <p>Source fingerprint: {report.source_sha256}</p>
-        {!moments.length && <p>No source moments supplied.</p>}
-        {moments.map((item, position) => (
-          <article key={item.id}>
-            <h3>
-              {position + 1}. {sources[item.kind].label}: {item.title}
-            </h3>
-            {item.purpose && <p>{purposes[item.purpose]}</p>}
-            <p>
-              {timeRange(item.evidence)} · Segment: {item.evidence.segment_id}
-            </p>
-            <blockquote>{item.evidence.quote}</blockquote>
-            {item.explanation && <p>{item.explanation}</p>}
-          </article>
-        ))}
+        {moments.length ? (
+          <p className={styles.printIntro}>
+            Quotes are exactly as spoken in this call. Listen plays that excerpt
+            in the call player.
+          </p>
+        ) : (
+          <p>No source moments supplied.</p>
+        )}
+        <ol className={styles.timeline}>
+          {moments.map((item) => {
+            const clip = formatClipTime(item.evidence);
+            return (
+              <li key={item.id} data-tone={sources[item.kind].tone}>
+                <article className={styles.card}>
+                  <p className={styles.cardMeta}>
+                    <MomentIcon kind={item.kind} />
+                    <KindLabel moment={item} />
+                  </p>
+                  <h3>{item.title}</h3>
+                  <blockquote className={styles.cardQuote}>
+                    <p {...sourceTextAttributes(item.evidence.quote)}>
+                      {item.evidence.quote}
+                    </p>
+                  </blockquote>
+                  {item.explanation && (
+                    <p className={styles.cardNote}>{item.explanation}</p>
+                  )}
+                  <Linked items={linkedFindings(report, item.evidence)} />
+                  <ClipListenButton
+                    className={styles.readingListen}
+                    startMs={item.evidence.start_ms}
+                    endMs={item.evidence.end_ms}
+                    iconSize={15}
+                    onClick={() => onSelectEvidence(item.evidence, item.title)}
+                    label={`${clip}: ${item.title}`}
+                  >
+                    {" "}
+                    <span className={styles.clock}>{clip}</span>
+                  </ClipListenButton>
+                </article>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );

@@ -10,29 +10,54 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ArrowRight,
   ArrowUpRight,
+  Flag,
   Gem,
   LockKeyhole,
   Play,
-  Target,
-  TrendingUp,
 } from "lucide-react";
 import type {
   Finding,
   PreviewSection,
   ReportEvidence,
   SalesReport,
+  Transcript,
 } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
-import { SourceWaveform } from "./source-waveform";
+import {
+  ClipListenButton,
+  ClipPlayIcon,
+  ClipPlayState,
+  SourceWaveform,
+} from "./source-waveform";
 import { ReviewDialog } from "./review-dialog";
-import { OverviewDashboard } from "./overview-dashboard";
-import { countReportMoments } from "./report-moments";
+import {
+  countReportMoments,
+  formatClipTime,
+  reportReplayClips,
+  rewatchPurposeLabels,
+} from "./report-moments";
+import { ReplayStrip } from "./replay-strip";
+import { useReportNavigation, useReportInline } from "./report-reading-context";
+import { Glyph } from "./lightbox/glyph";
+import { sourceTextAttributes } from "./lightbox/script";
+import { formatClipRange, formatClock, spokenClipRange } from "./lightbox/time";
+import {
+  buildContextualSourcePlayback,
+  formatContextSpeakerLabel,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
+  transcript?: Transcript;
+  onSelectContextualPlayback?: (
+    selection: ContextualSourcePlayback,
+    title: string,
+  ) => void;
   onUnlock?: () => void;
   durationMs?: number;
   showHeading?: boolean;
@@ -41,26 +66,15 @@ type Props = {
 type ChapterId = "start" | "read" | "practice" | "close";
 const FocusedReview = createContext<string | null>(null);
 
-const time = (ms: number) =>
-  `${Math.floor(ms / 60000)
-    .toString()
-    .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
-    .toString()
-    .padStart(2, "0")}`;
-
-function SkillMark() {
-  return (
-    <svg className={styles.skillMark} viewBox="0 0 72 72" aria-hidden="true">
-      <path d="M10 55.5 24 41l10 8 18-24 10 9" />
-      <path d="M48 25h14v14" />
-      <circle cx="10" cy="55.5" r="3" />
-      <circle cx="24" cy="41" r="3" />
-      <circle cx="34" cy="49" r="3" />
-      <circle cx="52" cy="25" r="3" />
-      <circle cx="62" cy="34" r="3" />
-    </svg>
-  );
-}
+/** Display names for the supplied outcome kind; never a derived result. */
+const outcomeLabels = {
+  closed: "Closed",
+  follow_up: "Follow-up",
+  no_sale: "No sale",
+  future_date: "Future date",
+  disqualified: "Disqualified",
+  unclear: "Unclear",
+} as const;
 
 function ReviewBlock({
   number,
@@ -78,6 +92,7 @@ function ReviewBlock({
   expanded?: boolean;
 }) {
   const focused = useContext(FocusedReview);
+  const reading = useReportInline();
   const header = (
     <>
       <span className={styles.number}>{number}</span>
@@ -87,7 +102,12 @@ function ReviewBlock({
       </div>
     </>
   );
-  if (!expanded && !focused && !["01", "02", "08", "11"].includes(number)) {
+  if (
+    !expanded &&
+    !reading &&
+    !focused &&
+    !["01", "02", "08", "11"].includes(number)
+  ) {
     return (
       <details
         className={`${styles.block} ${styles.fold}`}
@@ -133,6 +153,7 @@ function ImprovementDetailTabs({
   evidence: ReactNode;
   impact: ReactNode;
 }) {
+  const reading = useReportInline();
   const prefix = useId();
   const tabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const [tab, setTab] = useState<"happened" | "matters" | "try">("happened");
@@ -142,11 +163,16 @@ function ImprovementDetailTabs({
     ["try", "Try this"],
   ] as const;
   return (
-    <div className={styles.improvementTabs} data-improvement-tabs>
+    <div
+      className={styles.improvementTabs}
+      data-improvement-tabs
+      data-reading={reading || undefined}
+    >
       <div
         className={styles.improvementTabList}
         role="tablist"
         aria-label="Improvement detail"
+        hidden={reading}
       >
         {tabs.map(([id, label], index) => (
           <button
@@ -184,29 +210,35 @@ function ImprovementDetailTabs({
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-happened`}
-        aria-labelledby={`${prefix}-tab-happened`}
-        hidden={tab !== "happened"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-happened`}
+        aria-label={reading ? "What happened" : undefined}
+        hidden={!reading && tab !== "happened"}
       >
+        {reading && <h4>What happened</h4>}
         {whatHappened}
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-matters`}
-        aria-labelledby={`${prefix}-tab-matters`}
-        hidden={tab !== "matters"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-matters`}
+        aria-label={reading ? "Why it matters" : undefined}
+        hidden={!reading && tab !== "matters"}
       >
+        {reading && <h4>Why it matters</h4>}
         <p>{whyItMatters}</p>
       </div>
       <div
         className={styles.improvementTabPanel}
-        role="tabpanel"
+        role={reading ? "region" : "tabpanel"}
         id={`${prefix}-panel-try`}
-        aria-labelledby={`${prefix}-tab-try`}
-        hidden={tab !== "try"}
+        aria-labelledby={reading ? undefined : `${prefix}-tab-try`}
+        aria-label={reading ? "Try this" : undefined}
+        hidden={!reading && tab !== "try"}
       >
+        {reading && <h4>Try this</h4>}
         <p>{tryThis}</p>
       </div>
       {impact}
@@ -215,14 +247,28 @@ function ImprovementDetailTabs({
   );
 }
 
+function BusinessImpact({ missing }: { missing: string }) {
+  return (
+    <div className={styles.impact}>
+      <strong>Business impact</strong>
+      <p>Insufficient data for a reliable estimate.</p>
+      <small>{missing}</small>
+    </div>
+  );
+}
+
 /** A source-preserving presentation of Dipak's template, not a second judge. */
 export function DipakOverview({
   report,
   onSelectEvidence,
+  transcript,
+  onSelectContextualPlayback,
   onUnlock,
   durationMs,
   showHeading = true,
 }: Props) {
+  const reading = useReportInline();
+  const navigateToReport = useReportNavigation();
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -231,7 +277,7 @@ export function DipakOverview({
       previous = new Map(
         [
           ...(overview.current?.querySelectorAll<HTMLDetailsElement>(
-            "[data-review-fold], [data-source-details]",
+            "[data-review-fold]",
           ) ?? []),
         ].map((detail) => [detail, detail.open]),
       );
@@ -258,13 +304,18 @@ export function DipakOverview({
   const [activeReviewNumber, setActiveReviewNumber] = useState<string | null>(
     null,
   );
-  const [activeTakeaway, setActiveTakeaway] = useState(0);
   const lastInsightButton = useRef<HTMLButtonElement | null>(null);
   const focusId = `${prefix}-focus`;
   const fixesId = `${prefix}-fixes`;
   const rewatchId = `${prefix}-rewatch`;
+  // The review map and its replay shortcut only serve the standalone reader;
+  // both report modes already provide section navigation and inline playback.
+  const showMap = showHeading && !reading;
+  const Title = showHeading ? "h2" : "h3";
+  const RowTitle = showHeading ? "h3" : "h4";
 
   const primary = report.improvements[0];
+  const strength = report.strengths[0];
   const detail = report.overview;
   const priorities = report.improvements.slice(0, 3);
   const supportedDimensions = report.dimensions.filter(
@@ -308,11 +359,7 @@ export function DipakOverview({
     ? detail.rewatch.map((moment) => ({
         finding: { title: moment.text },
         evidence: moment.evidence[0],
-        label: {
-          must_watch: "Must watch",
-          watch: "Watch this",
-          repeat: "Learn from this",
-        }[moment.purpose],
+        label: rewatchPurposeLabels[moment.purpose],
         kind: { must_watch: "priority", watch: "watch", repeat: "positive" }[
           moment.purpose
         ],
@@ -373,7 +420,10 @@ export function DipakOverview({
   function focusInsight(number: string, chapter: ChapterId) {
     setActiveReviewNumber(number);
     setActiveChapter(chapter);
-    if (!showHeading) return; // The focused dialog owns focus, never page scroll.
+    if (!showHeading && navigateToReport) {
+      navigateToReport("overview", number);
+      return;
+    }
     window.setTimeout(() => {
       const item = overview.current?.querySelector<HTMLElement>(
         `[data-review-point="${number}"]`,
@@ -391,6 +441,16 @@ export function DipakOverview({
     }, 0);
   }
 
+  function openReview(number: string) {
+    const item = insightRailItems.find((point) => point.number === number);
+    if (!item) return;
+    lastInsightButton.current =
+      document.activeElement instanceof HTMLButtonElement
+        ? document.activeElement
+        : null;
+    focusInsight(item.number, item.chapter);
+  }
+
   function closeReader() {
     setActiveReviewNumber(null);
     setActiveChapter(null);
@@ -402,30 +462,76 @@ export function DipakOverview({
     }, 0);
   }
 
+  /** A summary action with a named destination inside this report. */
+  function reviewLink(number: string, text: string) {
+    return (
+      <button
+        className={styles.textAction}
+        type="button"
+        data-open-review={number}
+        onClick={() => openReview(number)}
+      >
+        {text} <ArrowRight size={15} aria-hidden="true" />
+      </button>
+    );
+  }
+
+  /** Plays only this saved span in the shared call player. */
+  function listen(item: ReportEvidence, title: string) {
+    const clip = formatClipTime(item);
+    return (
+      <span className={styles.listenGroup}>
+        <ClipListenButton
+          className={styles.listen}
+          startMs={item.start_ms}
+          endMs={item.end_ms}
+          onClick={() => onSelectEvidence(item, title)}
+          label={`${clip}: ${title}`}
+        />
+        <span className={styles.clock} aria-hidden="true">
+          {clip}
+        </span>
+      </span>
+    );
+  }
+
   function evidence(finding: Finding) {
     return (
       <FindingEvidence count={finding.evidence.length}>
-        {finding.evidence.map((item, index) => (
-          <blockquote key={`${item.segment_id}-${index}`}>
-            <div className={styles.evidenceControls}>
-              <span className={styles.evidenceQuote}>{item.quote}</span>
-              <button
-                className={styles.timestamp}
-                type="button"
-                onClick={() => onSelectEvidence(item, finding.title)}
-                aria-label={`Play source moment, ${time(item.start_ms)} to ${time(item.end_ms)}: ${item.quote}`}
+        {finding.evidence.map((item, index) => {
+          const clip = formatClipTime(item);
+          return (
+            <blockquote
+              key={`${item.segment_id}-${index}`}
+              className={styles.evidence}
+            >
+              <span
+                className={styles.evidenceQuote}
+                {...sourceTextAttributes(item.quote)}
               >
-                <Play size={12} aria-hidden="true" />
-                {time(item.start_ms)}–{time(item.end_ms)}
-              </button>
-              <SourceWaveform
-                className={styles.evidenceWaveform}
-                startMs={item.start_ms}
-                endMs={item.end_ms}
-              />
-            </div>
-          </blockquote>
-        ))}
+                {item.quote}
+              </span>
+              <span className={styles.evidenceControls}>
+                <ClipListenButton
+                  className={styles.timestamp}
+                  startMs={item.start_ms}
+                  endMs={item.end_ms}
+                  iconSize={12}
+                  onClick={() => onSelectEvidence(item, finding.title)}
+                  label={`${clip}: ${item.quote}`}
+                >
+                  {" "}
+                  <span className={styles.clock}>{clip}</span>
+                </ClipListenButton>
+                <SourceWaveform
+                  className={styles.evidenceWaveform}
+                  startMs={item.start_ms}
+                  endMs={item.end_ms}
+                />
+              </span>
+            </blockquote>
+          );
+        })}
       </FindingEvidence>
     );
   }
@@ -487,285 +593,248 @@ export function DipakOverview({
       className={styles.overview}
       aria-label="Dipak’s call review"
       data-report-workspace
-      data-compact={!showHeading}
+      data-reading={reading || undefined}
     >
-      {!showHeading && (
-        <OverviewDashboard
-          report={report}
-          durationMs={durationMs}
-          momentCount={countReportMoments(report)}
-          reviewPoints={insightRailItems}
-          onSelectEvidence={onSelectEvidence}
-          onOpenReview={(number) => {
-            const item = insightRailItems.find(
-              (point) => point.number === number,
-            );
-            if (item) {
-              lastInsightButton.current =
-                document.activeElement instanceof HTMLButtonElement
-                  ? document.activeElement
-                  : null;
-              focusInsight(item.number, item.chapter);
-            }
-          }}
-        />
-      )}
+      {/* The one call summary: takeaway, what to repeat, what to change, outcome and next move. */}
       <section
-        className={styles.resultLead}
-        aria-label="Report summary"
+        className={styles.summary}
+        aria-label="Call overview"
         data-summary-card="summary"
       >
-        <div className={styles.resultLeadCopy} hidden={!showHeading}>
-          <p className={styles.eyebrow}>CALL REVIEW</p>
-          <h1>Your call, clearly.</h1>
-          <p className={styles.heroSubcopy}>{report.summary}</p>
-          <span className={styles.visuallyHidden}>{report.verdict}</span>
-        </div>
-        <div className={styles.reportMetrics} aria-label="Call metrics">
-          <div className={styles.metric}>
-            <span>Call duration</span>
-            <strong>{durationMs ? time(durationMs) : "Not supplied"}</strong>
-          </div>
-          <div className={styles.metric}>
-            <span>Source-linked moments</span>
-            <strong>{rewatch.length}</strong>
-          </div>
-          <div className={styles.metric}>
-            <span>Review points</span>
-            <strong>{insightRailItems.length}</strong>
-          </div>
-          <div className={`${styles.metric} ${styles.metricAction}`}>
-            <span>Suggested actions</span>
-            <strong>{report.improvements.length}</strong>
-          </div>
-        </div>
-        <div className={styles.heroMeta} aria-label="Report status">
-          <span className={styles.statusPill}>Draft report</span>
-        </div>
-        {(detail?.diagnosis || detail?.outcome) && (
-          <details className={styles.sourceDetails} data-source-details>
-            <summary className={styles.sourceDetailsSummary}>
-              <span>Read source context</span>
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </summary>
-            <div className={styles.sourceContext} aria-label="Source context">
-              {detail.diagnosis && sourceNote(detail.diagnosis, "Diagnosis")}
-              {detail.outcome &&
-                sourceNote(detail.outcome, "Observed outcome · draft")}
-            </div>
-          </details>
+        {showHeading && (
+          <header className={styles.lead}>
+            <p className={styles.eyebrow}>Call review</p>
+            <h1>Your call, clearly.</h1>
+          </header>
         )}
-      </section>
-
-      <section className={styles.takeawayGrid} aria-label="Call takeaways">
-        <article
-          className={`${styles.takeawayCard} ${styles.takeawayCardLead}`}
-          data-takeaway-index="0"
-          data-active={activeTakeaway === 0}
-        >
-          <p className={styles.eyebrow}>KEY TAKEAWAY</p>
-          <h2>{detail?.diagnosis?.text ?? report.verdict}</h2>
-          <p>{report.summary}</p>
-          <button
-            className={styles.takeawayAction}
-            type="button"
-            onClick={() => focusInsight("14", "close")}
-          >
-            Open review <ArrowUpRight size={16} aria-hidden="true" />
-          </button>
-        </article>
-        <article
-          className={`${styles.takeawayCard} ${styles.takeawayCardMint}`}
-          data-takeaway-index="1"
-          data-active={activeTakeaway === 1}
-        >
-          <p className={styles.eyebrow}>KEEP DOING THIS</p>
-          <h2>
-            {report.strengths[0]?.title ?? "No supported strength recorded"}
-          </h2>
-          <p>
-            {report.strengths[0]?.explanation ??
-              "The saved report does not include a supported strength yet."}
-          </p>
-        </article>
-        <article
-          className={`${styles.takeawayCard} ${styles.takeawayCardOrange}`}
-          data-takeaway-index="2"
-          data-active={activeTakeaway === 2}
-        >
-          <p className={styles.eyebrow}>FIRST CHANGE</p>
-          <h2>{primary?.title ?? "No supported improvement recorded"}</h2>
-          <p>
-            {primaryDetail?.replacement_behavior ??
-              primary?.explanation ??
-              "No first change was supplied."}
-          </p>
-          {primary && (
-            <button
-              className={styles.inlineAction}
-              type="button"
-              onClick={() => focusInsight("02", "start")}
-            >
-              Read the evidence <ArrowUpRight size={15} aria-hidden="true" />
-            </button>
-          )}
-        </article>
-        <article
-          className={`${styles.takeawayCard} ${styles.takeawayCardBlue}`}
-          data-takeaway-index="3"
-          data-active={activeTakeaway === 3}
-        >
-          <p className={styles.eyebrow}>OUTCOME</p>
-          <h2>
-            {detail?.outcome?.text ??
-              "Outcome stays grounded in the saved evidence."}
-          </h2>
-          <p>
-            {detail?.outcome
-              ? "Observed outcome from this call."
-              : "No separate outcome statement was supplied."}
-          </p>
-        </article>
-        <article
-          className={`${styles.takeawayCard} ${styles.takeawayCardViolet}`}
-          data-takeaway-index="4"
-          data-active={activeTakeaway === 4}
-        >
-          <p className={styles.eyebrow}>NEXT-CALL PLAN</p>
-          <h2>
-            {detail?.next_call_focus?.behavior ??
-              primary?.title ??
-              "Choose one supported practice move."}
-          </h2>
-          <p>
-            {detail?.practice?.instructions ??
-              "Open the review points to connect the next move to its source."}
-          </p>
-          <button
-            className={styles.inlineAction}
-            type="button"
-            onClick={() => focusInsight("11", "practice")}
-          >
-            Open plan <ArrowUpRight size={15} aria-hidden="true" />
-          </button>
-        </article>
-        <div className={styles.takeawayControls} aria-label="Takeaway cards">
-          <button
-            type="button"
-            aria-label="Previous takeaway"
-            onClick={() => setActiveTakeaway((index) => (index + 4) % 5)}
-          >
-            ←
-          </button>
-          <div className={styles.takeawayDots} aria-hidden="true">
-            {[0, 1, 2, 3, 4].map((index) => (
-              <span key={index} data-active={activeTakeaway === index} />
-            ))}
+        <article className={styles.takeaway} data-overview-card="0">
+          <div className={styles.takeawayMeta}>
+            <p className={styles.eyebrow}>Key takeaway</p>
+            <span className={styles.status}>Draft report</span>
           </div>
-          <button
-            type="button"
-            aria-label="Next takeaway"
-            onClick={() => setActiveTakeaway((index) => (index + 1) % 5)}
+          <Title className={styles.verdictLine}>{report.verdict}</Title>
+          <p className={styles.lede}>{report.summary}</p>
+          <div className={styles.rowActions}>
+            {reviewLink("14", "Read the final verdict")}
+          </div>
+        </article>
+        {/* Facts line: each value names exactly what it counts. */}
+        <dl className={styles.metrics} aria-label="Call metrics">
+          <div>
+            <dt>Call length</dt>
+            <dd>{durationMs ? formatClock(durationMs) : "Not supplied"}</dd>
+          </div>
+          <div>
+            <dt>Replay clips</dt>
+            <dd>{countReportMoments(report)}</dd>
+          </div>
+          <div>
+            <dt>Suggested changes</dt>
+            <dd>{report.improvements.length}</dd>
+          </div>
+        </dl>
+        <div className={styles.summaryRows}>
+          <article
+            className={styles.summaryRow}
+            data-overview-card="1"
+            data-tone="keep"
           >
-            →
-          </button>
-        </div>
-        <div
-          className={styles.takeawayPills}
-          role="tablist"
-          aria-label="Takeaway categories"
-        >
-          {["Takeaway", "Keep", "Change", "Outcome", "Practice"].map(
-            (label, index) => (
-              <button
-                key={label}
-                type="button"
-                role="tab"
-                aria-selected={activeTakeaway === index}
-                onClick={() => setActiveTakeaway(index)}
-              >
-                {label}
-              </button>
-            ),
-          )}
-        </div>
-      </section>
-
-      <div className={styles.workspaceLayout}>
-        <div className={styles.aboveFold}>
-          <section className={styles.sourceMoment} aria-label="Source moment">
-            <span className={styles.sourcePlay} aria-hidden="true">
-              <Play size={18} />
-            </span>
-            <div className={styles.sourceMomentCopy}>
-              {sourceMoment ? (
-                <>
-                  <strong>{sourceMoment.finding.title}</strong>
-                  <span>
-                    {sourceMoment.label} ·{" "}
-                    {time(sourceMoment.evidence.start_ms)}–
-                    {time(sourceMoment.evidence.end_ms)}
-                  </span>
-                </>
-              ) : (
-                <span>No source-linked moment is available to replay yet.</span>
+            <p className={styles.rowLabel}>
+              <Glyph name="strength" size={16} /> Keep doing
+            </p>
+            <div className={styles.rowBody}>
+              <RowTitle className={styles.rowTitle}>
+                {strength?.title ?? "No strength supplied"}
+              </RowTitle>
+              <p>
+                {strength?.explanation ??
+                  "This report has no supported strength to show yet."}
+              </p>
+              {strength && (
+                <div className={styles.rowActions}>
+                  {strength.evidence[0] &&
+                    listen(strength.evidence[0], strength.title)}
+                  {reviewLink("01", "See why it works")}
+                </div>
               )}
             </div>
-            {sourceMoment && (
-              <button
-                className={styles.sourceMomentButton}
-                type="button"
-                data-source-moment
-                onClick={() =>
-                  onSelectEvidence(
-                    sourceMoment.evidence,
-                    sourceMoment.finding.title,
-                  )
-                }
-                aria-label={`Play source moment, ${time(sourceMoment.evidence.start_ms)} to ${time(sourceMoment.evidence.end_ms)}: ${sourceMoment.finding.title}`}
-              >
-                Play source moment <Play size={14} aria-hidden="true" />
-              </button>
-            )}
-          </section>
-        </div>
-
-        <aside className={styles.insightRail} aria-label="Review points">
-          <div className={styles.insightRailHeading}>
-            <div>
-              <p className={styles.eyebrow}>REVIEW MAP</p>
-              <h3>Review points</h3>
+          </article>
+          <article
+            className={styles.summaryRow}
+            data-overview-card="2"
+            data-tone="change"
+          >
+            <p className={styles.rowLabel}>
+              <Glyph name="focus" size={16} /> Change first
+            </p>
+            <div className={styles.rowBody}>
+              <RowTitle className={styles.rowTitle}>
+                {primary?.title ?? "No change supplied"}
+              </RowTitle>
+              <p>
+                {primaryDetail ? (
+                  <>
+                    <strong>Try this:</strong>{" "}
+                    {primaryDetail.replacement_behavior}
+                  </>
+                ) : (
+                  (primary?.explanation ??
+                  "This report has no supported improvement to show yet.")
+                )}
+              </p>
+              {primary && (
+                <div className={styles.rowActions}>
+                  {primary.evidence[0] &&
+                    listen(primary.evidence[0], primary.title)}
+                  {reviewLink("02", "See what happened")}
+                </div>
+              )}
             </div>
-            <span>Open a point to read its evidence.</span>
-          </div>
-          <ol>
-            {insightRailItems.map((item) => (
-              <li key={item.number}>
-                <button
-                  type="button"
-                  data-insight-number={item.number}
-                  aria-controls={`${prefix}-chapter-panel-${item.chapter}`}
-                  aria-current={
-                    activeReviewNumber === item.number ? "true" : undefined
+          </article>
+          <article
+            className={styles.summaryRow}
+            data-overview-card="3"
+            data-tone="outcome"
+          >
+            <p className={styles.rowLabel}>
+              <Flag size={16} strokeWidth={1.75} aria-hidden="true" /> Outcome
+            </p>
+            <div className={styles.rowBody}>
+              {detail?.outcome && (
+                <span className={styles.badge}>
+                  {outcomeLabels[detail.outcome.kind]}
+                </span>
+              )}
+              <RowTitle className={styles.rowTitle}>
+                {detail?.outcome?.text ?? "No outcome supplied"}
+              </RowTitle>
+              <p>
+                {detail?.outcome
+                  ? "What the saved evidence shows—not a predicted result."
+                  : "This report has no separate outcome statement."}
+              </p>
+              {detail?.outcome && (
+                <div className={styles.rowActions}>
+                  {detail.outcome.evidence[0] &&
+                    listen(detail.outcome.evidence[0], "Observed outcome")}
+                  {reviewLink("14", "See the outcome evidence")}
+                </div>
+              )}
+            </div>
+          </article>
+          <article
+            className={styles.summaryRow}
+            data-overview-card="4"
+            data-tone="next"
+          >
+            <p className={styles.rowLabel}>
+              <Glyph name="chapter-plan" size={16} /> Next call
+            </p>
+            <div className={styles.rowBody}>
+              <RowTitle className={styles.rowTitle}>
+                {detail?.next_call_focus?.behavior ??
+                  primary?.title ??
+                  "No focus supplied"}
+              </RowTitle>
+              <p>
+                {detail?.practice?.instructions ??
+                  "Review the source before choosing your next practice move."}
+              </p>
+              {(detail?.next_call_focus || primary) && (
+                <div className={styles.rowActions}>
+                  {reviewLink("11", "See the full focus")}
+                </div>
+              )}
+            </div>
+          </article>
+        </div>
+        <div className={styles.replay}>
+          <ReplayStrip
+            clips={reportReplayClips(report)}
+            durationMs={durationMs}
+            onSelect={onSelectEvidence}
+          />
+        </div>
+      </section>
+
+      <div className={styles.workspaceLayout} data-map={showMap || undefined}>
+        {showMap && (
+          <div className={styles.aboveFold}>
+            <section className={styles.sourceMoment} aria-label="Source moment">
+              <span className={styles.sourcePlay} aria-hidden="true">
+                <Play size={18} fill="currentColor" />
+              </span>
+              <div className={styles.sourceMomentCopy}>
+                {sourceMoment ? (
+                  <>
+                    <strong>{sourceMoment.finding.title}</strong>
+                    <span>
+                      {sourceMoment.label} ·{" "}
+                      {formatClipTime(sourceMoment.evidence)}
+                    </span>
+                  </>
+                ) : (
+                  <span>
+                    No source-linked moment is available to replay yet.
+                  </span>
+                )}
+              </div>
+              {sourceMoment && (
+                <ClipListenButton
+                  className={styles.sourceMomentButton}
+                  data={{ "data-source-moment": "" }}
+                  startMs={sourceMoment.evidence.start_ms}
+                  endMs={sourceMoment.evidence.end_ms}
+                  iconSize={14}
+                  onClick={() =>
+                    onSelectEvidence(
+                      sourceMoment.evidence,
+                      sourceMoment.finding.title,
+                    )
                   }
-                  onClick={(event) => {
-                    lastInsightButton.current = event.currentTarget;
-                    focusInsight(item.number, item.chapter);
-                  }}
-                >
-                  <span className={styles.insightNumber}>{item.number}</span>
-                  <span>{item.label}</span>
-                  <ArrowUpRight size={14} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ol>
-        </aside>
+                  label={`${formatClipTime(sourceMoment.evidence)}: ${sourceMoment.finding.title}`}
+                />
+              )}
+            </section>
+          </div>
+        )}
+
+        {showMap && (
+          <aside className={styles.insightRail} aria-label="Review points">
+            <div className={styles.insightRailHeading}>
+              <p className={styles.eyebrow}>Review map</p>
+              <h3>Review points</h3>
+              <span>Open a point to read its evidence.</span>
+            </div>
+            <ol>
+              {insightRailItems.map((item) => (
+                <li key={item.number}>
+                  <button
+                    type="button"
+                    data-insight-number={item.number}
+                    aria-controls={`${prefix}-chapter-panel-${item.chapter}`}
+                    aria-current={
+                      activeReviewNumber === item.number ? "true" : undefined
+                    }
+                    onClick={(event) => {
+                      lastInsightButton.current = event.currentTarget;
+                      focusInsight(item.number, item.chapter);
+                    }}
+                  >
+                    <span className={styles.insightNumber}>{item.number}</span>
+                    <span>{item.label}</span>
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </aside>
+        )}
 
         <div className={styles.detailArea}>
           <ReviewDialog
-            open={Boolean(activeChapter)}
-            icon={<Target />}
+            open={!reading && Boolean(activeChapter)}
+            icon={<Glyph name="focus" size={22} />}
             tone={
               ["02", "03", "04"].includes(activeReviewNumber ?? "")
                 ? "orange"
@@ -786,11 +855,12 @@ export function DipakOverview({
             previousDisabled={activeReviewIndex === 0}
             nextDisabled={activeReviewIndex === insightRailItems.length - 1}
           >
-            {activeChapter && (
+            {activeChapter && !reading && (
               <button
                 className={styles.backToOverview}
                 type="button"
                 data-back-to-overview
+                hidden={!showHeading}
                 onClick={closeReader}
               >
                 <ArrowUpRight size={15} aria-hidden="true" />
@@ -798,12 +868,12 @@ export function DipakOverview({
               </button>
             )}
             <FocusedReview.Provider
-              value={!showHeading ? activeReviewNumber : null}
+              value={!reading && !showHeading ? activeReviewNumber : null}
             >
               <div
                 className={styles.chapterStack}
-                data-focused={!showHeading && !!activeChapter}
-                hidden={!activeChapter}
+                data-focused={!reading && !showHeading && !!activeChapter}
+                hidden={!reading && !activeChapter}
               >
                 <section
                   className={styles.chapter}
@@ -812,17 +882,17 @@ export function DipakOverview({
                   role="region"
                   aria-label="Start here"
                   tabIndex={0}
-                  hidden={activeChapter !== "start"}
+                  hidden={!reading && activeChapter !== "start"}
                 >
                   <div className={styles.chapterHeading}>
-                    <span className={styles.chapterRange}>01—04</span>
-                    <div>
-                      <p className={styles.eyebrow}>START HERE</p>
-                      <h3>Keep the useful. Pick one change.</h3>
-                    </div>
-                    <span className={styles.chapterNote}>
+                    <p className={styles.chapterEyebrow}>
+                      <span className={styles.chapterRange}>01—04</span>
+                      Start here
+                    </p>
+                    <h3>Keep the useful. Pick one change.</h3>
+                    <p className={styles.chapterNote}>
                       The shortest path through this report
-                    </span>
+                    </p>
                   </div>
 
                   <ReviewBlock
@@ -833,23 +903,22 @@ export function DipakOverview({
                   >
                     {report.strengths.length ? (
                       <div className={styles.strengths}>
-                        {report.strengths.map((finding, index) => (
-                          <div key={index}>
-                            {findingCard(finding, index)}
-                            {detail?.strength_details.find(
-                              (item) => item.finding_index === index,
-                            ) && (
-                              <p className={styles.why}>
-                                <strong>Why it matters:</strong>{" "}
-                                {
-                                  detail.strength_details.find(
-                                    (item) => item.finding_index === index,
-                                  )!.why_it_matters
-                                }
-                              </p>
-                            )}
-                          </div>
-                        ))}
+                        {report.strengths.map((finding, index) => {
+                          const why = detail?.strength_details.find(
+                            (item) => item.finding_index === index,
+                          );
+                          return (
+                            <div key={index}>
+                              {findingCard(finding, index)}
+                              {why && (
+                                <p className={styles.why}>
+                                  <strong>Why it matters:</strong>{" "}
+                                  {why.why_it_matters}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className={styles.empty}>
@@ -861,7 +930,7 @@ export function DipakOverview({
 
                   <div id={fixesId} className={styles.anchor}>
                     <div className={styles.groupHeading}>
-                      <Target size={19} aria-hidden="true" />
+                      <Glyph name="focus" size={18} />
                       <h3>Your priority fixes</h3>
                       <span>Start with the first</span>
                     </div>
@@ -887,22 +956,14 @@ export function DipakOverview({
                                 tryThis={fix.replacement_behavior}
                                 evidence={evidence(finding)}
                                 impact={
-                                  <div className={styles.impact}>
-                                    <TrendingUp size={16} aria-hidden="true" />
-                                    <div>
-                                      <strong>Business impact</strong>
-                                      <p>
-                                        Insufficient data for a reliable
-                                        estimate.
-                                      </p>
-                                      <small>
-                                        {fix.business_impact.missing_inputs.join(
-                                          " · ",
-                                        ) ||
-                                          "Lead volume, conversion history and time or revenue data are needed to calculate this."}
-                                      </small>
-                                    </div>
-                                  </div>
+                                  <BusinessImpact
+                                    missing={
+                                      fix.business_impact.missing_inputs.join(
+                                        " · ",
+                                      ) ||
+                                      "Lead volume, conversion history and time or revenue data are needed to calculate this."
+                                    }
+                                  />
                                 }
                               />
                             ) : (
@@ -912,20 +973,7 @@ export function DipakOverview({
                                 </p>
                                 <p>{finding.explanation}</p>
                                 {evidence(finding)}
-                                <div className={styles.impact}>
-                                  <TrendingUp size={16} aria-hidden="true" />
-                                  <div>
-                                    <strong>Business impact</strong>
-                                    <p>
-                                      Insufficient data for a reliable estimate.
-                                    </p>
-                                    <small>
-                                      Lead volume, conversion history and time
-                                      or revenue data are needed to calculate
-                                      this.
-                                    </small>
-                                  </div>
-                                </div>
+                                <BusinessImpact missing="Lead volume, conversion history and time or revenue data are needed to calculate this." />
                               </>
                             );
                           })()}
@@ -948,17 +996,17 @@ export function DipakOverview({
                   role="region"
                   aria-label="Read the conversation"
                   tabIndex={0}
-                  hidden={activeChapter !== "read"}
+                  hidden={!reading && activeChapter !== "read"}
                 >
                   <div className={styles.chapterHeading}>
-                    <span className={styles.chapterRange}>05—09</span>
-                    <div>
-                      <p className={styles.eyebrow}>READ THE CONVERSATION</p>
-                      <h3>See where the call opened up or narrowed.</h3>
-                    </div>
-                    <span className={styles.chapterNote}>
+                    <p className={styles.chapterEyebrow}>
+                      <span className={styles.chapterRange}>05—09</span>
+                      Read the conversation
+                    </p>
+                    <h3>See where the call opened up or narrowed.</h3>
+                    <p className={styles.chapterNote}>
                       Moments stay linked to the source
-                    </span>
+                    </p>
                   </div>
 
                   <ReviewBlock
@@ -1048,7 +1096,7 @@ export function DipakOverview({
                         {detail.prospect_interpretations.map((item, index) => (
                           <div className={styles.interpretation} key={index}>
                             {sourceNote(item.source, "What was said")}
-                            <div>
+                            <div className={styles.inference}>
                               <p className={styles.label}>
                                 Possible concern · inference
                               </p>
@@ -1076,27 +1124,173 @@ export function DipakOverview({
                       {rewatch.length ? (
                         <div className={styles.rewatch}>
                           {rewatch.map(
-                            ({ finding, evidence: item, label, kind }) => (
-                              <button
-                                type="button"
-                                key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
-                                data-kind={kind}
-                                onClick={() =>
-                                  onSelectEvidence(item, finding.title)
-                                }
-                              >
-                                <span className={styles.play}>
-                                  <Play size={17} aria-hidden="true" />
-                                </span>
-                                <span className={styles.clipCopy}>
-                                  <small>{label}</small>
-                                  <strong>{finding.title}</strong>
-                                </span>
-                                <span className={styles.clipTime}>
-                                  {time(item.start_ms)}–{time(item.end_ms)}
-                                </span>
-                              </button>
-                            ),
+                            ({ finding, evidence: item, label, kind }) => {
+                              const contextualPlayback = transcript
+                                ? buildContextualSourcePlayback(
+                                    report,
+                                    transcript,
+                                    item,
+                                  )
+                                : null;
+                              const hasContext = Boolean(
+                                contextualPlayback?.context_before ||
+                                  contextualPlayback?.context_after,
+                              );
+                              return (
+                                <div
+                                  className={styles.rewatchItem}
+                                  key={`${item.segment_id}:${item.start_ms}:${item.end_ms}`}
+                                >
+                                  <ClipPlayState
+                                    startMs={item.start_ms}
+                                    endMs={item.end_ms}
+                                  >
+                                    {(playing) => (
+                                      <button
+                                        type="button"
+                                        data-kind={kind}
+                                        aria-pressed={playing}
+                                        onClick={() =>
+                                          onSelectEvidence(item, finding.title)
+                                        }
+                                      >
+                                        <span className={styles.visuallyHidden}>
+                                          {playing ? "Pause: " : "Listen: "}
+                                        </span>
+                                        <span
+                                          className={styles.play}
+                                          aria-hidden="true"
+                                        >
+                                          <ClipPlayIcon
+                                            playing={playing}
+                                            size={15}
+                                          />
+                                        </span>
+                                        <span className={styles.clipCopy}>
+                                          <small>{label}</small>
+                                          <strong>{finding.title}</strong>
+                                        </span>
+                                        <span className={styles.clipTime}>
+                                          {formatClipTime(item)}
+                                        </span>
+                                      </button>
+                                    )}
+                                  </ClipPlayState>
+                                  {hasContext &&
+                                    onSelectContextualPlayback &&
+                                    contextualPlayback &&
+                                    transcript && (
+                                      <div
+                                        className={styles.contextPanel}
+                                        aria-label={`Transcript context for ${finding.title}`}
+                                      >
+                                        {contextualPlayback.context_before && (
+                                          <p>
+                                            <strong>
+                                              Context before ·{" "}
+                                              {formatContextSpeakerLabel(
+                                                transcript,
+                                                contextualPlayback
+                                                  .context_before.speaker_id,
+                                              )}
+                                            </strong>
+                                            <span
+                                              {...sourceTextAttributes(
+                                                contextualPlayback
+                                                  .context_before.text,
+                                              )}
+                                            >
+                                              {
+                                                contextualPlayback
+                                                  .context_before.text
+                                              }
+                                            </span>
+                                          </p>
+                                        )}
+                                        <blockquote>
+                                          <strong>
+                                            Saved evidence ·{" "}
+                                            {formatContextSpeakerLabel(
+                                              transcript,
+                                              contextualPlayback.evidence_speaker_id,
+                                            )}
+                                          </strong>
+                                          <span
+                                            {...sourceTextAttributes(
+                                              item.quote,
+                                            )}
+                                          >
+                                            {item.quote}
+                                          </span>
+                                        </blockquote>
+                                        {contextualPlayback.context_after && (
+                                          <p>
+                                            <strong>
+                                              Context after ·{" "}
+                                              {formatContextSpeakerLabel(
+                                                transcript,
+                                                contextualPlayback.context_after
+                                                  .speaker_id,
+                                              )}
+                                            </strong>
+                                            <span
+                                              {...sourceTextAttributes(
+                                                contextualPlayback.context_after
+                                                  .text,
+                                              )}
+                                            >
+                                              {
+                                                contextualPlayback.context_after
+                                                  .text
+                                              }
+                                            </span>
+                                          </p>
+                                        )}
+                                        <small>
+                                          Adjacent transcript context is
+                                          separate from the saved evidence.
+                                        </small>
+                                        <ClipPlayState
+                                          startMs={
+                                            contextualPlayback.playback_range
+                                              .start_ms
+                                          }
+                                          endMs={
+                                            contextualPlayback.playback_range
+                                              .end_ms
+                                          }
+                                        >
+                                          {(playing) => (
+                                            <button
+                                              className={styles.playWithContext}
+                                              type="button"
+                                              aria-pressed={playing}
+                                              aria-label={`${playing ? "Pause context playback" : "Play with context"}, ${spokenClipRange(contextualPlayback.playback_range.start_ms, contextualPlayback.playback_range.end_ms)}: ${finding.title}`}
+                                              onClick={() =>
+                                                onSelectContextualPlayback(
+                                                  contextualPlayback,
+                                                  finding.title,
+                                                )
+                                              }
+                                            >
+                                              {playing
+                                                ? "Pause context playback"
+                                                : "Play with context"}{" "}
+                                              ·{" "}
+                                              {formatClipRange(
+                                                contextualPlayback
+                                                  .playback_range.start_ms,
+                                                contextualPlayback
+                                                  .playback_range.end_ms,
+                                              )}
+                                            </button>
+                                          )}
+                                        </ClipPlayState>
+                                      </div>
+                                    )}
+                                </div>
+                              );
+                            },
                           )}
                         </div>
                       ) : (
@@ -1129,7 +1323,7 @@ export function DipakOverview({
                             "After",
                           )}
                         </div>
-                        <p className={styles.why}>
+                        <p className={`${styles.why} ${styles.inference}`}>
                           <strong>Possible effect · inference:</strong>{" "}
                           {detail.conversation_change.possible_effect}
                         </p>
@@ -1150,17 +1344,15 @@ export function DipakOverview({
                   role="region"
                   aria-label="Practice and reflect"
                   tabIndex={0}
-                  hidden={activeChapter !== "practice"}
+                  hidden={!reading && activeChapter !== "practice"}
                 >
                   <div className={styles.chapterHeading}>
-                    <span className={styles.chapterRange}>10—12</span>
-                    <div>
-                      <p className={styles.eyebrow}>PRACTICE AND REFLECT</p>
-                      <h3>Turn the observation into a next-call move.</h3>
-                    </div>
-                    <span className={styles.chapterNote}>
-                      Based on this call
-                    </span>
+                    <p className={styles.chapterEyebrow}>
+                      <span className={styles.chapterRange}>10—12</span>
+                      Practice and reflect
+                    </p>
+                    <h3>Turn the observation into a next-call move.</h3>
+                    <p className={styles.chapterNote}>Based on this call</p>
                   </div>
 
                   <ReviewBlock
@@ -1172,24 +1364,11 @@ export function DipakOverview({
                   >
                     {supportedDimensions.length > 0 ? (
                       <div className={styles.skillLead} data-skill-summary>
-                        <div className={styles.skillLeadIntro}>
-                          <span
-                            className={styles.skillMarkWrap}
-                            aria-hidden="true"
-                          >
-                            <SkillMark />
-                          </span>
-                          <div>
-                            <p className={styles.eyebrow}>
-                              WHAT THIS CALL SHOWED
-                            </p>
-                            <p>
-                              A small set of supported observations to carry
-                              into your next conversation. Use them as a
-                              starting point for practice.
-                            </p>
-                          </div>
-                        </div>
+                        <p className={styles.skillIntro}>
+                          A small set of supported observations to carry into
+                          your next conversation. Use them as a starting point
+                          for practice.
+                        </p>
                         <div className={styles.skillGrid}>
                           {supportedDimensions.map((dimension) => (
                             <article key={dimension.dimension_id}>
@@ -1210,10 +1389,12 @@ export function DipakOverview({
                     <section
                       className={styles.ethicsBlock}
                       aria-label="Ethics observations"
-                      hidden={!showHeading && activeReviewNumber !== "10"}
+                      hidden={
+                        !reading && !showHeading && activeReviewNumber !== "10"
+                      }
                     >
                       <div className={styles.ethicsHeading}>
-                        <p className={styles.eyebrow}>HUMAN REVIEW NOTE</p>
+                        <p className={styles.eyebrow}>Human review note</p>
                         <h3>Ethics observations</h3>
                         <p>
                           Source-linked notes for a human reviewer; no verdict
@@ -1241,7 +1422,7 @@ export function DipakOverview({
                     >
                       {primary ? (
                         <div className={styles.focus}>
-                          <Target size={24} aria-hidden="true" />
+                          <Glyph name="focus" size={22} />
                           <div>
                             <h4>{primary.title}</h4>
                             <p>
@@ -1295,17 +1476,17 @@ export function DipakOverview({
                   role="region"
                   aria-label="Close the loop"
                   tabIndex={0}
-                  hidden={activeChapter !== "close"}
+                  hidden={!reading && activeChapter !== "close"}
                 >
                   <div className={styles.chapterHeading}>
-                    <span className={styles.chapterRange}>13—14</span>
-                    <div>
-                      <p className={styles.eyebrow}>CLOSE THE LOOP</p>
-                      <h3>Leave with a grounded takeaway.</h3>
-                    </div>
-                    <span className={styles.chapterNote}>
+                    <p className={styles.chapterEyebrow}>
+                      <span className={styles.chapterRange}>13—14</span>
+                      Close the loop
+                    </p>
+                    <h3>Leave with a grounded takeaway.</h3>
+                    <p className={styles.chapterNote}>
                       A single call cannot show a trend
-                    </span>
+                    </p>
                   </div>
 
                   <ReviewBlock number="13" title="Across-call pattern">
@@ -1316,18 +1497,12 @@ export function DipakOverview({
                   </ReviewBlock>
 
                   <ReviewBlock number="14" title="Final verdict">
-                    {!showHeading && (
+                    {!reading && !showHeading && (
+                      // The focused reader is modal, so it repeats the summary it covers.
                       <div className={styles.compactSourceContext}>
                         <h4>Call summary</h4>
                         <p>{report.summary}</p>
                         <p>{report.verdict}</p>
-                        {detail?.diagnosis &&
-                          sourceNote(detail.diagnosis, "Diagnosis")}
-                        {detail?.outcome &&
-                          sourceNote(
-                            detail.outcome,
-                            "Observed outcome · draft",
-                          )}
                       </div>
                     )}
                     <p className={styles.verdict}>
@@ -1355,6 +1530,21 @@ export function DipakOverview({
                         </p>
                       )
                     )}
+                    {(detail?.diagnosis || detail?.outcome) && (
+                      <div
+                        className={styles.sourceContext}
+                        role="group"
+                        aria-label="Source context"
+                      >
+                        {detail.diagnosis &&
+                          sourceNote(detail.diagnosis, "Diagnosis")}
+                        {detail.outcome &&
+                          sourceNote(
+                            detail.outcome,
+                            "Observed outcome · draft",
+                          )}
+                      </div>
+                    )}
                   </ReviewBlock>
                   {(
                     [
@@ -1368,7 +1558,11 @@ export function DipakOverview({
                           key={section}
                           className={styles.block}
                           aria-label={title}
-                          hidden={!showHeading && activeReviewNumber !== "14"}
+                          hidden={
+                            !reading &&
+                            !showHeading &&
+                            activeReviewNumber !== "14"
+                          }
                         >
                           <div className={styles.blockHeading}>
                             <h3>{title}</h3>

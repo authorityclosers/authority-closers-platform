@@ -755,6 +755,16 @@ load_sales_xray_hosted_inputs() {
     # shellcheck disable=SC2016
     with_release_secrets \
       sh -euc '
+        # During a mixed-version upgrade this function is also called against
+        # the previous release while draining it. Older release validators do
+        # not know the metadata-repair option, so probe the target validator
+        # before adding the optional flag. This keeps the release transition
+        # backwards-compatible without weakening validation for new releases.
+        if python3 "$1" --help 2>/dev/null | grep -q -- "--repair-worker-metadata"; then
+          exec python3 "$1" compose-inputs "$2" "$3" \
+            --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}" \
+            --repair-worker-metadata
+        fi
         exec python3 "$1" compose-inputs "$2" "$3" \
           --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}"
       ' sh "$validator" "$target_release" "$target_environment"
@@ -919,6 +929,7 @@ compose_for() {
         -u AC_XRAY_DEEPGRAM_IDENTITY_DIR \
         -u AC_XRAY_GROQ_IDENTITY_DIR \
         -u AC_XRAY_GEMINI_IDENTITY_DIR \
+        -u AC_XRAY_OPENAI_IDENTITY_DIR \
         -u AC_XRAY_CHALLENGE_SECRET_FILE \
         -u AC_XRAY_CHALLENGE_SITE_KEY \
         -u AC_XRAY_ACQUISITION_ENABLED \

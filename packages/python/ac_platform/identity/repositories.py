@@ -45,6 +45,7 @@ from ac_platform.identity.services import (
     ProviderIdentitySnapshot,
     SessionRevisionConflictError,
     StoredSession,
+    provider_issuer_lookup_values,
 )
 from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, TenantStatus
 
@@ -204,9 +205,10 @@ class SqlAlchemyIdentityStore(IdentityStore):
     def find_provider_identities(
         self, issuer: str, subject: str
     ) -> Sequence[ProviderIdentitySnapshot]:
+        issuers = provider_issuer_lookup_values(issuer)
         rows = self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .execution_options(populate_existing=True)
         )
@@ -578,6 +580,20 @@ class AsyncSqlAlchemyIdentityRepository:
         )
         return None if row is None else _person_snapshot(row)
 
+    async def get_person_for_share(self, person_id: UUID) -> PersonSnapshot | None:
+        """Take the shared canonical-person fence for read-only auth."""
+
+        row = cast(
+            Person | None,
+            await self._session.scalar(
+                select(Person)
+                .where(Person.id == person_id)
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _person_snapshot(row)
+
     async def find_people_by_exact_email_for_update(self, email: str) -> Sequence[PersonSnapshot]:
         """Lock every canonical person with this already-normalized email."""
 
@@ -737,9 +753,10 @@ class AsyncSqlAlchemyIdentityRepository:
     async def find_provider_identities(
         self, issuer: str, subject: str
     ) -> Sequence[ProviderIdentitySnapshot]:
+        issuers = provider_issuer_lookup_values(issuer)
         rows = await self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .execution_options(populate_existing=True)
         )
@@ -750,9 +767,10 @@ class AsyncSqlAlchemyIdentityRepository:
     ) -> Sequence[ProviderIdentitySnapshot]:
         """Resolve and lock the canonical provider key without ambiguity."""
 
+        issuers = provider_issuer_lookup_values(issuer)
         rows = await self._session.scalars(
             select(ProviderIdentity)
-            .where(ProviderIdentity.issuer == issuer, ProviderIdentity.subject == subject)
+            .where(ProviderIdentity.issuer.in_(issuers), ProviderIdentity.subject == subject)
             .order_by(ProviderIdentity.id)
             .with_for_update()
             .execution_options(populate_existing=True)
@@ -1000,6 +1018,20 @@ class AsyncSqlAlchemyIdentityRepository:
                 select(SessionRow)
                 .where(SessionRow.id == session_id)
                 .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _session_snapshot(row)
+
+    async def get_session_for_share(self, session_id: UUID) -> StoredSession | None:
+        """Take the shared session fence for read-only auth."""
+
+        row = cast(
+            SessionRow | None,
+            await self._session.scalar(
+                select(SessionRow)
+                .where(SessionRow.id == session_id)
+                .with_for_update(read=True)
                 .execution_options(populate_existing=True)
             ),
         )

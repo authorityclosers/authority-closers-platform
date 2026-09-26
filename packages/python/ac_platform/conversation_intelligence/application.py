@@ -17,6 +17,7 @@ from sqlalchemy.orm import SessionTransactionOrigin
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
+    TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
@@ -29,6 +30,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     Quote,
     reserve,
 )
+from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -54,6 +56,7 @@ from ac_platform.conversation_intelligence.storage import (
     RecordingObjectStorage,
     StorageError,
 )
+from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
@@ -590,6 +593,15 @@ class ConversationApplication:
             self.database, tenant_id=recording.tenant_id, person_id=actor.person_id
         )
         account = MinuteAccount.from_dict(minute_row.snapshot)
+        additional_allowance_seconds = 0
+        if authority is not None:
+            additional_allowance_seconds = await audited_admin_grant_seconds(
+                self.database,
+                account=account,
+                tenant_id=recording.tenant_id,
+                person_id=actor.person_id,
+                operations_tenant_id=authority.operations_tenant_id,
+            )
         if (
             not account.unlimited
             and acquisition_used
@@ -597,10 +609,10 @@ class ConversationApplication:
                 acquisition_used
                 + sum(item.committed_seconds for item in account.reservations)
                 + quote.entitlement_seconds
-                > ALLOWANCE_SECONDS
+                > ALLOWANCE_SECONDS + additional_allowance_seconds
             )
         ):
-            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
+            raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         try:
             transition = reserve(
@@ -698,6 +710,7 @@ class ConversationApplication:
             "id": str(run.id),
             "recording_id": str(run.recording_id),
             "state": state,
+            "execution_hold": "account_profile_required" if is_account_profile_hold(job) else None,
             "recipe_revision": run.recipe_revision,
             # Confirmed responses only; an ambiguous dispatch has no receipt.
             "provider_calls": int(job is not None and receipt is not None and not retained_reuse),

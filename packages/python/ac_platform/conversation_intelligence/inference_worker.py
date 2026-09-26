@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
 )
+from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.inference_tasks import (
     InferenceTaskError,
     validate_coaching_result,
@@ -59,16 +60,23 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
-from ac_platform.conversation_intelligence.processing_actor import actor_from_row
+from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.storage import (
+    CHUNK_BYTES,
     ObjectKey,
     ObjectKind,
     PrivateLocalRecordingStorage,
     StorageError,
 )
 from ac_platform.conversation_intelligence.worker import Work, _drain, _FencedExecutor
+from ac_platform.conversation_intelligence.worker_account_gate import (
+    AccountProfileRequired,
+    hold_current_job_for_account_profile,
+    require_person_profile,
+    require_recording_owner_profile,
+)
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
@@ -95,6 +103,9 @@ _RECEIPT_USAGE_KEYS = frozenset(
         "total_tokens",
         "input_tokens",
         "output_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "reasoning_tokens",
     }
 )
 
@@ -145,6 +156,16 @@ def _is_provisional_receipt(value: Any) -> bool:
     return isinstance(value, Mapping) and value.get("validation_state") == "provider_returned"
 
 
+def _response_model_receipt(result: ProviderResult) -> dict[str, Any]:
+    if result.provider != "openai":
+        return {}
+    reported = _safe_receipt_identifier(result.data.get("model"))
+    return {
+        "reported_model": reported,
+        "model_verified": reported is not None and reported == result.model,
+    }
+
+
 def _provider_returned_receipt(
     result: ProviderResult,
     *,
@@ -159,6 +180,7 @@ def _provider_returned_receipt(
         "idempotency_key": idempotency_key,
         "provider": _safe_receipt_identifier(result.provider),
         "model": _safe_receipt_identifier(result.model),
+        **_response_model_receipt(result),
         "input_sha256": _safe_receipt_digest(result.input_sha256),
         "response_sha256": _safe_receipt_digest(result.response_sha256),
         "provider_request_id": _safe_receipt_request_id(result.request_id),
@@ -178,6 +200,7 @@ def _provider_returned_receipt(
 # provider errors can contain a response body, transcript or credential URL.
 _VALIDATION_FAILURES = frozenset(
     {
+        "report_evidence_invalid",
         "report_evidence_quote_mismatch",
         "report_evidence_segment_invalid",
         "fact_evidence_outside_chunk",
@@ -196,12 +219,26 @@ _VALIDATION_FAILURES = frozenset(
         "gemini_response_blocked",
         "gemini_response_incomplete",
         "gemini_response_json_invalid",
+        "openai_response_incomplete",
+        "openai_response_model_mismatch",
+        "openai_response_incomplete_or_stored",
+        "openai_response_invalid",
+        "openai_response_json_invalid",
+        "openai_response_refused",
+        "openai_response_tool_or_message_invalid",
+        "openai_response_empty_or_oversized",
     }
 )
 
 
 def provider_failure_code(error: BaseException) -> str:
     """Map failures to content-free codes without changing recovery policy."""
+    if isinstance(error, InferenceBrokerError):
+        # Broker and provider transport failures are already validated against
+        # the broker's stable, content-free error-code allowlist. Preserve that
+        # code so operators can distinguish credential, transport and provider
+        # failures without retaining response bodies or secrets.
+        return f"conversation_{error.code}"
     if isinstance(error, InferenceTaskError):
         if len(error.args) == 1 and type(error.args[0]) is str:
             code = error.args[0]
@@ -254,6 +291,17 @@ class ConversationInferenceWorker:
     ) -> None:
         self.sessions, self.storage, self.broker, self.clock = sessions, storage, broker, clock
         self.authority = authority
+
+    async def _require_customer_profile(self, db: AsyncSession, scope: Scope) -> None:
+        actor = actor_from_row(scope.task)
+        if isinstance(actor, ProcessingActor):
+            await require_recording_owner_profile(
+                db,
+                scope.recording,
+                now=self.clock(),
+            )
+        else:
+            await require_person_profile(db, person_id=actor.person_id)
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
@@ -463,7 +511,10 @@ class ConversationInferenceWorker:
                 scope.task.run_id,
                 ObjectKind.PROVIDER_RESPONSE,
             ),
-            (result.raw_json,),
+            (
+                result.raw_json[offset : offset + CHUNK_BYTES]
+                for offset in range(0, len(result.raw_json), CHUNK_BYTES)
+            ),
             expected_sha256=result.response_sha256,
             expected_bytes=len(result.raw_json),
         )
@@ -535,6 +586,7 @@ class ConversationInferenceWorker:
                         environment=self.authority.environment,
                         operations_tenant_id=self.authority.operations_tenant_id,
                     )
+                await self._require_customer_profile(db, scope)
                 dispatch_now = self.clock()
                 transition = mark_dispatched(
                     before,
@@ -554,10 +606,11 @@ class ConversationInferenceWorker:
                 scope.task.state = scope.run.state = "running"
                 reservation = transition.reservation
 
-            # Keep the durable effect fence across the provider call and raw
-            # response write, but end that transaction before committing the
-            # provider-returned receipt. Validation must never be able to roll
-            # that evidence back.
+            # Keep the durable effect fence across the provider call, receipt
+            # commit and raw response write. Close the dispatch transaction
+            # before the receipt commit so its separate transaction cannot
+            # wait on the dispatch row lock. Validation must never be able to
+            # roll that evidence back.
             async with self.sessions() as db, db.begin():
                 job = await JobRepository(db).lock_for_dispatch(
                     work.job_id,
@@ -576,12 +629,20 @@ class ConversationInferenceWorker:
                         operations_tenant_id=self.authority.operations_tenant_id,
                     ):
                         scope = await self._scope(db, job, allow_started_effect=True)
+                # The second check is the last admission immediately before
+                # the provider call. If it fails after the durable dispatch
+                # marker, the normal ambiguity path preserves the reservation.
+                await self._require_customer_profile(db, scope)
                 # Restore, revocation and deletion wait on these canonical locks
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
                     result = await self.broker.execute(reservation, payload)
-                await fenced.run(self._save_raw, scope, result)
 
+            # Persist bounded provider-effect evidence before writing the raw
+            # response object.  If local storage fails after the provider has
+            # returned, the receipt still fences any redispatch and preserves
+            # the request/response hashes and provider request id for typed
+            # reconciliation.
             await self._record_provider_returned_receipt(
                 work,
                 result=result,
@@ -589,6 +650,7 @@ class ConversationInferenceWorker:
                 run_id=scope.task.run_id,
                 stage=scope.task.stage,
             )
+            await fenced.run(self._save_raw, scope, result)
 
             async with self.sessions() as db, db.begin():
                 job = await JobRepository(db).lock_for_dispatch(
@@ -642,6 +704,7 @@ class ConversationInferenceWorker:
                     "idempotency_key": key,
                     "provider": result.provider,
                     "model": result.model,
+                    **_response_model_receipt(result),
                     "input_sha256": result.input_sha256,
                     "response_sha256": result.response_sha256,
                     "provider_request_id": output.request_id,
@@ -747,6 +810,44 @@ class ConversationInferenceWorker:
             # A pause racing claim rolls back before a dispatch marker. Keep
             # every source/checkpoint/reservation intact; normal lease recovery
             # can reclaim this job after resume. Do not call failure/refund code.
+            return True
+        except AccountProfileRequired as error:
+            held = False
+            async with self.sessions() as db, db.begin():
+                held = await hold_current_job_for_account_profile(
+                    db,
+                    job_id=work.job_id,
+                    lease_token=work.lease_token,
+                    recovery_generation=work.recovery_generation,
+                    expected_kind=work.kind,
+                    hold_reason=error.hold_reason,
+                    now=self.clock(),
+                )
+            if not held:
+                # A profile change after the committed dispatch marker cannot
+                # be represented as a no-effect hold. Preserve the existing
+                # uncertain-effect and reserved-balance reconciliation path.
+                async with self.sessions() as db, db.begin():
+                    job = await db.scalar(
+                        select(Job)
+                        .where(Job.id == work.job_id)
+                        .with_for_update()
+                        .execution_options(populate_existing=True)
+                    )
+                    started = bool(
+                        job is not None
+                        and job.status == "leased"
+                        and job.lease_token == work.lease_token
+                        and job.dispatch_started_at is not None
+                    )
+                if started:
+                    cleanup = asyncio.create_task(
+                        self._fail(
+                            work,
+                            failure_code="conversation_account_profile_changed_after_dispatch",
+                        )
+                    )
+                    await _drain(cleanup)
             return True
         except BaseException as error:
             # A failed cleanup may itself be fenced by restore/lease loss. The

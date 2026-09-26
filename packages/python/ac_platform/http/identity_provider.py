@@ -208,6 +208,7 @@ class GoogleOIDCProvider:
         nonce = claims.get("nonce")
         email = claims.get("email")
         email_verified = claims.get("email_verified")
+        display_name = claims.get("name")
         if not isinstance(issuer, str) or issuer not in {
             "accounts.google.com",
             "https://accounts.google.com",
@@ -232,6 +233,7 @@ class GoogleOIDCProvider:
             authorization_type=transaction.authorization_type,
             email=email,
             email_verified=True,
+            display_name=display_name if isinstance(display_name, str) else None,
         )
 
 
