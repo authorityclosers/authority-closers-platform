@@ -327,6 +327,102 @@ describe("root upload session", () => {
     });
   });
 
+  describe("report-ready reconciliation", () => {
+    const owner = { personId: "p1", sessionId: "s1", tenantId: "t1" };
+    const other = { personId: "p2", sessionId: "s2", tenantId: "t1" };
+    const signedIn = (context: typeof owner) => ({
+      status: "ready",
+      authenticated: true,
+      context,
+    });
+
+    it("keeps the status through acceptance and clears it only for the same call and owner", async () => {
+      const store = new UploadSessionStore();
+      store.observeAccount(signedIn(owner));
+      const started = deferred<AnalysisStartSettled>();
+      await store.run(
+        firstMeta,
+        new File(["audio"], "call.wav"),
+        async () => ({ submissionId: firstMeta.intentId }),
+        () => started.promise,
+      );
+      await vi.waitFor(() =>
+        expect(store.startingSubmissionId()).toBe(firstMeta.intentId),
+      );
+
+      // A pending start is never dropped, even by a ready report.
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toMatchObject({ phase: "saved" });
+
+      started.resolve({ state: "accepted" });
+      await vi.waitFor(() =>
+        expect(store.getSnapshot()).toMatchObject({
+          analysis: { state: "accepted" },
+        }),
+      );
+      // An unrelated older call being ready says nothing about this upload.
+      store.settleReportReady(secondMeta.intentId, owner);
+      // A read for a different identity cannot confirm this upload.
+      store.settleReportReady(firstMeta.intentId, other);
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "saved",
+        submissionId: firstMeta.intentId,
+        analysis: { state: "accepted" },
+      });
+
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toEqual({ phase: "idle" });
+    });
+
+    it("does not clear an upload whose starting identity was never confirmed", async () => {
+      const store = new UploadSessionStore();
+      await store.run(
+        firstMeta,
+        new File(["audio"], "call.wav"),
+        async () => ({ submissionId: firstMeta.intentId }),
+      );
+      store.observeAccount(signedIn(owner));
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "saved",
+        submissionId: firstMeta.intentId,
+      });
+    });
+
+    it("never clears an in-flight, unconfirmed or account-changed state", async () => {
+      const store = new UploadSessionStore();
+      store.observeAccount(signedIn(owner));
+      const file = new File(["audio"], "call.wav");
+      const pending = deferred<{ submissionId: string }>();
+      const running = store.run(firstMeta, file, () => pending.promise);
+      store.markSending(firstMeta.intentId);
+
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toMatchObject({ phase: "uploading" });
+      expect(store.fileFor(firstMeta.intentId)).toBe(file);
+
+      pending.reject(new TypeError("transport interrupted"));
+      await expect(running).rejects.toThrow("transport interrupted");
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toMatchObject({
+        phase: "interrupted",
+        reconciliation: "unknown",
+      });
+
+      store.observeAccount(signedIn(other));
+      expect(store.getSnapshot()).toEqual({
+        phase: "account_changed",
+        viewed: false,
+      });
+      store.settleReportReady(firstMeta.intentId, other);
+      store.settleReportReady(firstMeta.intentId, owner);
+      expect(store.getSnapshot()).toEqual({
+        phase: "account_changed",
+        viewed: false,
+      });
+    });
+  });
+
   it("requires explicit confirmation to sign out with an unresolved upload", async () => {
     const store = new UploadSessionStore();
     const file = new File(["audio"], "call.wav");

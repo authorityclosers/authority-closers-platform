@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "./acquisition-shell";
-import { useUploadSnapshot } from "./hooks/upload-session";
+import { useUploadSession, useUploadSnapshot } from "./hooks/upload-session";
 import {
   acquisition,
   parseSubmissionLibraryPage,
@@ -170,6 +170,7 @@ function CallsLibraryContent({
   const embedded = variant === "embedded";
   const Main = "div";
   const access = useWorkspaceAccess();
+  const uploadStore = useUploadSession();
   const uploadSnapshot = useUploadSnapshot();
   const router = useRouter();
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
@@ -392,6 +393,32 @@ function CallsLibraryContent({
     lastSavedUploadId.current = uploadSnapshot.submissionId;
     refreshHandler.current(identityKey, true);
   }, [access?.authenticated, identityKey, uploadSnapshot]);
+
+  // The row read for this identity is the confirmation the root upload status
+  // waits for; the store checks the call and the identity that started it.
+  useEffect(() => {
+    const context = access?.context;
+    if (
+      !uploadStore ||
+      uploadSnapshot.phase !== "saved" ||
+      access?.authenticated !== true ||
+      !context
+    )
+      return;
+    const savedId = uploadSnapshot.submissionId;
+    if (
+      submissions.some(
+        (submission) => submission.id === savedId && submission.hasReport,
+      )
+    )
+      uploadStore.settleReportReady(savedId, context);
+  }, [
+    access?.authenticated,
+    access?.context,
+    submissions,
+    uploadSnapshot,
+    uploadStore,
+  ]);
 
   useEffect(() => {
     const refreshIfProcessing = () => {

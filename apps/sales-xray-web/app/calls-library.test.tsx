@@ -18,6 +18,7 @@ import {
   useUploadSession,
   type UploadSessionStore,
 } from "./hooks/upload-session";
+import { UploadIndicator } from "./shell/upload-indicator";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
 (
@@ -72,6 +73,7 @@ function renderLibrary(
     context?: { personId: string; sessionId: string; tenantId: string } | null;
     preview?: boolean;
     capture?: (store: UploadSessionStore | null) => void;
+    indicator?: boolean;
   } = {},
 ) {
   const authenticated = options.authenticated ?? true;
@@ -79,6 +81,7 @@ function renderLibrary(
   return root.render(
     <UploadSessionProvider>
       {options.capture ? <StoreCapture capture={options.capture} /> : null}
+      {options.indicator ? <UploadIndicator /> : null}
       <WorkspaceAccessProvider
         value={{
           status: authenticated ? "ready" : "unauthenticated",
@@ -610,6 +613,197 @@ it("refreshes the visible library after a background upload and shows its ready 
     host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
   ).toContain("Report ready");
   expect(openSelectedCall).not.toHaveBeenCalled();
+});
+
+const uploadOwner = {
+  personId: "person-one",
+  sessionId: "session-one",
+  tenantId: "tenant-one",
+};
+const uploadMeta = (intentId: string) => ({
+  intentId,
+  fileName: "call.wav",
+  totalBytes: 4,
+  reportLanguage: "en",
+  homeHref: "/?new=1",
+  sourceSha256: null,
+});
+
+it("clears the root upload status only once the exact uploaded call lists a ready report", async () => {
+  const capturedStore: { current: UploadSessionStore | null } = {
+    current: null,
+  };
+  fetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([row(firstId, true)])), { status: 200 }),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(page([row(secondId), row(firstId, true)])),
+        { status: 200 },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(page([row(secondId, true), row(firstId, true)])),
+        { status: 200 },
+      ),
+    );
+  await act(async () =>
+    renderLibrary({
+      context: uploadOwner,
+      indicator: true,
+      capture: (store) => {
+        capturedStore.current = store;
+      },
+    }),
+  );
+  await flush();
+  const store = capturedStore.current;
+  if (!store) throw new Error("upload_store_not_mounted");
+
+  await act(async () => {
+    await store.run(
+      uploadMeta("fresh-upload"),
+      new File(["call"], "call.wav", { type: "audio/wav" }),
+      async () => ({ submissionId: secondId }),
+      async () => ({ state: "accepted" }),
+    );
+  });
+  await flush();
+
+  // Accepted and processing: an older ready call does not end this status.
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(store.getSnapshot()).toMatchObject({
+    phase: "saved",
+    submissionId: secondId,
+    analysis: { state: "accepted" },
+  });
+  expect(
+    host.querySelector('[data-upload-indicator="saved"]')?.textContent,
+  ).toContain("Analysis started");
+
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await flush();
+
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(
+    host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
+  ).toContain("Report ready");
+  expect(store.getSnapshot()).toEqual({ phase: "idle" });
+  expect(host.querySelector("[data-upload-indicator]")).toBeNull();
+  expect(openSelectedCall).not.toHaveBeenCalled();
+});
+
+it("keeps a newer in-flight upload when an earlier saved call becomes ready", async () => {
+  const capturedStore: { current: UploadSessionStore | null } = {
+    current: null,
+  };
+  fetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([])), { status: 200 }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([row(secondId)])), { status: 200 }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([row(secondId, true)])), {
+        status: 200,
+      }),
+    );
+  await act(async () =>
+    renderLibrary({
+      context: uploadOwner,
+      indicator: true,
+      capture: (store) => {
+        capturedStore.current = store;
+      },
+    }),
+  );
+  await flush();
+  const store = capturedStore.current;
+  if (!store) throw new Error("upload_store_not_mounted");
+
+  await act(async () => {
+    await store.run(
+      uploadMeta("earlier-upload"),
+      new File(["call"], "call.wav", { type: "audio/wav" }),
+      async () => ({ submissionId: secondId }),
+    );
+  });
+  await flush();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+
+  const nextFile = new File(["next"], "next.wav", { type: "audio/wav" });
+  await act(async () => {
+    void store
+      .run(
+        uploadMeta("newer-upload"),
+        nextFile,
+        () => new Promise<{ submissionId: string }>(() => {}),
+      )
+      .catch(() => {});
+    await Promise.resolve();
+    store.markSending("newer-upload");
+  });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await flush();
+
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(
+    host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
+  ).toContain("Report ready");
+  expect(store.getSnapshot()).toMatchObject({
+    phase: "uploading",
+    intentId: "newer-upload",
+  });
+  expect(store.fileFor("newer-upload")).toBe(nextFile);
+  expect(
+    host.querySelector('[data-upload-indicator="uploading"]'),
+  ).not.toBeNull();
+});
+
+it("keeps the upload status when the ready row was read without a confirmed identity", async () => {
+  const capturedStore: { current: UploadSessionStore | null } = {
+    current: null,
+  };
+  fetchMock
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([])), { status: 200 }),
+    )
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify(page([row(secondId, true)])), {
+        status: 200,
+      }),
+    );
+  await act(async () =>
+    renderLibrary({
+      context: null,
+      capture: (store) => {
+        capturedStore.current = store;
+      },
+    }),
+  );
+  await flush();
+  const store = capturedStore.current;
+  if (!store) throw new Error("upload_store_not_mounted");
+
+  await act(async () => {
+    await store.run(
+      uploadMeta("unbound-upload"),
+      new File(["call"], "call.wav", { type: "audio/wav" }),
+      async () => ({ submissionId: secondId }),
+    );
+  });
+  await flush();
+
+  expect(
+    host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
+  ).toContain("Report ready");
+  expect(store.getSnapshot()).toMatchObject({
+    phase: "saved",
+    submissionId: secondId,
+  });
 });
 
 it("cancels stale account reads, ignores late results, and clears rows on logout", async () => {

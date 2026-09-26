@@ -57,15 +57,25 @@ export type UploadSnapshot =
   | (ActiveUpload & Readonly<{ viewed: boolean }>)
   | Readonly<{ phase: "account_changed"; viewed: false }>;
 
+export type UploadAccountContext = Readonly<{
+  personId: string;
+  sessionId: string;
+  tenantId: string;
+}>;
+
 export type UploadAccountObservation = Readonly<{
   status: string;
   authenticated: boolean | null;
-  context: Readonly<{
-    personId: string;
-    sessionId: string;
-    tenantId: string;
-  }> | null;
+  context: UploadAccountContext | null;
 }>;
+
+function accountKeyOf(context: UploadAccountContext) {
+  return JSON.stringify([
+    context.personId,
+    context.sessionId,
+    context.tenantId,
+  ]);
+}
 
 export class UploadCancelledError extends Error {
   constructor() {
@@ -130,11 +140,7 @@ export class UploadSessionStore {
   /** Bind transport memory to the existing server-confirmed workspace. */
   observeAccount(observation: UploadAccountObservation) {
     const nextKey = observation.context
-      ? JSON.stringify([
-          observation.context.personId,
-          observation.context.sessionId,
-          observation.context.tenantId,
-        ])
+      ? accountKeyOf(observation.context)
       : observation.status === "unauthenticated"
         ? null
         : undefined;
@@ -409,6 +415,27 @@ export class UploadSessionStore {
       this.uploadOwnerObserved = false;
       this.publish(null);
     }
+  }
+
+  /**
+   * Clears the saved outcome once a server read, made for `context`, lists
+   * this exact call with a ready report. Acceptance alone never clears it, a
+   * pending start is never dropped, and a read for another identity than the
+   * one that started the upload is ignored.
+   */
+  settleReportReady(submissionId: string, context: UploadAccountContext) {
+    const current = this.snapshot;
+    const key = accountKeyOf(context);
+    if (
+      current.phase !== "saved" ||
+      current.submissionId !== submissionId ||
+      !this.accountObserved ||
+      !this.uploadOwnerObserved ||
+      this.accountKey !== key ||
+      this.uploadOwnerKey !== key
+    )
+      return;
+    this.settle(current.intentId);
   }
 
   /** A view that shows the upload itself hides the minimized indicator. */
