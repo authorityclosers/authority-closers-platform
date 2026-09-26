@@ -376,11 +376,9 @@ describe("root upload session", () => {
 
     it("does not clear an upload whose starting identity was never confirmed", async () => {
       const store = new UploadSessionStore();
-      await store.run(
-        firstMeta,
-        new File(["audio"], "call.wav"),
-        async () => ({ submissionId: firstMeta.intentId }),
-      );
+      await store.run(firstMeta, new File(["audio"], "call.wav"), async () => ({
+        submissionId: firstMeta.intentId,
+      }));
       store.observeAccount(signedIn(owner));
       store.settleReportReady(firstMeta.intentId, owner);
       expect(store.getSnapshot()).toMatchObject({

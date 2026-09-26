@@ -638,10 +638,9 @@ it("clears the root upload status only once the exact uploaded call lists a read
       new Response(JSON.stringify(page([row(firstId, true)])), { status: 200 }),
     )
     .mockResolvedValueOnce(
-      new Response(
-        JSON.stringify(page([row(secondId), row(firstId, true)])),
-        { status: 200 },
-      ),
+      new Response(JSON.stringify(page([row(secondId), row(firstId, true)])), {
+        status: 200,
+      }),
     )
     .mockResolvedValueOnce(
       new Response(
