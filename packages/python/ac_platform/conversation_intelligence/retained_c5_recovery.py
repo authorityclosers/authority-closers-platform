@@ -146,7 +146,7 @@ def _rebuild_prepared_c5_input(
         or output_profile not in {"standard", "detailed"}
     ):
         raise ValueError("The stored C5 request is incomplete.")
-    return prepare_coaching_input(
+    prepared = prepare_coaching_input(
         transcript,
         fact_packets,
         provider=provider,
@@ -158,6 +158,16 @@ def _rebuild_prepared_c5_input(
         report_language=language,
         qualitative_pack_sha256=pack_sha256,
     )
+    saved_repair = request.get("repair")
+    if saved_repair is not None:
+        from ac_platform.conversation_intelligence.contracts import C5RepairIntent
+        from ac_platform.conversation_intelligence.reporting_pipeline import repair_coaching_input
+
+        # Reproduce the request that actually ran, including the single saved
+        # repair instruction. The caller still checks the exact input digest;
+        # this neither starts another attempt nor relaxes report validation.
+        prepared = repair_coaching_input(prepared, C5RepairIntent.model_validate(saved_repair))
+    return prepared
 
 
 class RetainedC5Correction(BaseModel):
