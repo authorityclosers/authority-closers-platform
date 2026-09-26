@@ -152,6 +152,13 @@ async function navigateToCall(callId: string) {
   await act(async () => root.render(page));
   await flush();
 }
+/** Soft navigation to the New analysis link: same mounted tree, new props. */
+async function navigateToNewCall() {
+  window.history.replaceState(null, "", "/?new=1");
+  const page = await Page({ searchParams: Promise.resolve({ new: "1" }) });
+  await act(async () => root.render(page));
+  await flush();
+}
 async function select() {
   sourcePutAttempted = false;
   const input =
@@ -1187,6 +1194,99 @@ it("drops the prior report before restoring a different call selector", async ()
   await flush();
   expect(container.textContent).toContain(secondReportSummary);
   expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
+it("soft navigation from an open saved report to New analysis shows a fresh upload screen", async () => {
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector('[aria-label="Call audio player"]'),
+  ).not.toBeNull();
+  const savedReads = calls.filter(({ path }) =>
+    path.includes(`/submissions/${submissionId}`),
+  ).length;
+
+  await navigateToNewCall();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  expect(container.querySelector('[aria-label="Call audio player"]')).toBeNull();
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  expect(
+    calls.filter(({ path }) => path.includes(`/submissions/${submissionId}`)),
+  ).toHaveLength(savedReads);
+  // The saved call itself is untouched: no writes, and still remembered.
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+
+  // Back/reopen restores the same saved report in the same mounted view.
+  await navigateToCall(submissionId);
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+  expect(container.textContent).toContain(envelope.report.content.summary);
+  expect(
+    calls.filter(({ init }) => init.method && init.method !== "GET"),
+  ).toHaveLength(0);
+});
+
+it("a stale saved-call read that settles after New analysis cannot restore its report", async () => {
+  existing = true;
+  accepted = true;
+  await navigateToCall(submissionId);
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).not.toBeNull();
+
+  let releaseSavedRead!: () => void;
+  const savedReadGate = new Promise<void>((resolve) => {
+    releaseSavedRead = resolve;
+  });
+  const originalFetch = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (...args) => {
+    const [path, init] = args;
+    if (
+      String(path).endsWith(`/submissions/${secondSubmissionId}`) &&
+      init?.method !== "DELETE"
+    )
+      await savedReadGate;
+    return originalFetch(...args);
+  });
+  await navigateToCall(secondSubmissionId);
+  expect(container.querySelector('[data-stage="opening"]')).not.toBeNull();
+
+  await navigateToNewCall();
+  await act(async () => releaseSavedRead());
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  expect(container.querySelector('[data-stage="opening"]')).toBeNull();
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  expect(container.textContent).not.toContain(secondReportSummary);
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  expect(calls.some(({ path }) => path.endsWith("/report"))).toBe(true);
+  expect(
+    calls.filter(
+      ({ path }) =>
+        path.includes(`/submissions/${secondSubmissionId}/`) &&
+        path.endsWith("/report"),
+    ),
+  ).toHaveLength(0);
   expect(
     calls.filter(({ init }) => init.method && init.method !== "GET"),
   ).toHaveLength(0);

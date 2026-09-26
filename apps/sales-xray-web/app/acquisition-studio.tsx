@@ -582,7 +582,32 @@ export function AcquisitionStudio({
           setClientRouteResolved(true);
         }
         if (requested !== lastRequestedCallId.current) {
+          const previous = lastRequestedCallId.current;
           lastRequestedCallId.current = requested;
+          if (!requested && previous && saved !== previous) {
+            // A soft navigation away from a saved call (for example to
+            // /?new=1) reuses this mounted view. Drop only the view of that
+            // call; its remembered selector and server record stay intact.
+            audio.current?.pause();
+            setSubmission(null);
+            setProgress(null);
+            setPlan(null);
+            setConsentedSubmissionId(null);
+            setPlanRequiresAction(false);
+            setResult(null);
+            setSavedCallNeedsSession(false);
+            setError("");
+            setStatusIssue("");
+            setCheckingStatus(false);
+            setMoment(null);
+            setPlaybackMessage("");
+            setDeleteConfirm(false);
+            setDeletionOnlyId(null);
+            setExistingCallEntry(null);
+            quoteKey.current = "";
+            requestedPlan.current = "";
+            stalePlanRefresh.current = null;
+          }
           if (requested) {
             setEntry(null);
             setPolicy(null);
