@@ -405,11 +405,13 @@ export function ReportModes({
   useEffect(() => {
     const settle = cancelSettle;
     const onPopState = () => {
+      // Browser chrome can navigate without sending reader-input events to
+      // this page. Every history move cancels the previous jump's correction.
+      settle.current?.();
       const point = returnRef.current;
       if (!point || window.location.href !== point.href) return;
       returnRef.current = null;
       setReturnPointState(null);
-      settle.current?.();
       restoring.current = true;
       restoreOrigin(point, () => {
         restoring.current = false;

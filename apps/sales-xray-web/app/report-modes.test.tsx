@@ -860,3 +860,77 @@ it("restores a Back origin with a section without a competing section scroll", a
     restoreScroll();
   }
 });
+
+it("browser Back cancels an unfinished reading-section jump without a return point", async () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
+    (callback) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    },
+  );
+  vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((frame) => {
+    frames.delete(frame);
+  });
+  const tick = async () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    await act(async () => pending.forEach((callback) => callback(0)));
+  };
+  let scrollTop = 0;
+  const restoreScroll = replacePrototype(
+    "scrollIntoView",
+    function (this: HTMLElement) {
+      scrollTop = this.id.endsWith("heading-moments") ? 500 : 0;
+    },
+  );
+  const restoreRect = replacePrototype(
+    "getBoundingClientRect",
+    function (this: HTMLElement) {
+      const top = this.id.endsWith("heading-moments") ? 2000 - scrollTop : 0;
+      return { top, bottom: top + 100, width: 320, height: 100 } as DOMRect;
+    },
+  );
+  try {
+    const origin = `?call=${call}&view=reading&section=overview`;
+    window.history.replaceState(null, "", `/${origin}`);
+    await act(async () =>
+      root.render(
+        <div data-fixture-scrollport style={{ overflowY: "auto" }}>
+          <ReportModes panels={panels()} boundCallId={call} />
+        </div>,
+      ),
+    );
+    const scroller = container.querySelector<HTMLElement>(
+      "[data-fixture-scrollport]",
+    )!;
+    const correction = vi.fn(({ top }: ScrollToOptions) => {
+      scrollTop = top ?? scrollTop;
+    });
+    Object.defineProperties(scroller, {
+      scrollTop: { configurable: true, get: () => scrollTop },
+      scrollHeight: { configurable: true, value: 4000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTo: { configurable: true, value: correction },
+    });
+    await tick();
+    const link = container.querySelector<HTMLAnchorElement>(
+      'nav a[aria-label="Moments"]',
+    )!;
+    await act(async () => link.click());
+    await tick();
+    expect(scrollTop).toBe(500);
+    expect(container.querySelector("[data-report-return]")).toBeNull();
+    // Browser chrome does not send pointer/key events to cancel the page's motion.
+    await act(async () => window.history.back());
+    await settle();
+    for (let index = 0; index < 12; index += 1) await tick();
+    expect(window.location.search).toBe(origin);
+    expect(scrollTop).toBe(0);
+    expect(correction).not.toHaveBeenCalled();
+  } finally {
+    restoreScroll();
+    restoreRect();
+  }
+});
