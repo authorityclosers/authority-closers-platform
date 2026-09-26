@@ -1217,7 +1217,9 @@ it("soft navigation from an open saved report to New analysis shows a fresh uplo
   expect(
     container.querySelector('[aria-label="Sales call report"]'),
   ).toBeNull();
-  expect(container.querySelector('[aria-label="Call audio player"]')).toBeNull();
+  expect(
+    container.querySelector('[aria-label="Call audio player"]'),
+  ).toBeNull();
   expect(container.textContent).not.toContain(envelope.report.content.summary);
   expect(
     container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
