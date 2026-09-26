@@ -295,6 +295,48 @@ def _repair_worker_service_metadata(path: Path) -> None:
         raise _fail("worker service manifest is not readable by the hosted worker")
 
 
+def _repair_approval_metadata(path: Path, expected_sha256: str) -> None:
+    """Repair only a verified approval's group/mode; preserve its exact bytes.
+
+    Both API and dedicated worker bind-mount this non-secret, root-owned file
+    and run as UID/GID 10001. Operator-group readability alone is insufficient.
+    An open descriptor keeps the checked inode bound to the metadata operation.
+    """
+
+    if os.name != "posix":
+        return
+    raw = _regular_bytes(path, MAX_REFERENCE_BYTES, trusted=True)
+    if _sha256(raw) != expected_sha256:
+        raise _fail("approval digest differs before metadata repair")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            _trusted_metadata(info, file=True)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or stream.read(MAX_REFERENCE_BYTES + 1) != raw
+            ):
+                raise _fail("approval changed before metadata repair")
+            os.fchown(stream.fileno(), 0, WORKER_GID)
+            os.fchmod(stream.fileno(), WORKER_SERVICE_MODE)
+            verified = os.fstat(stream.fileno())
+            installed = path.lstat()
+            if (
+                verified.st_uid != 0
+                or verified.st_gid != WORKER_GID
+                or stat.S_IMODE(verified.st_mode) != WORKER_SERVICE_MODE
+                or (installed.st_dev, installed.st_ino) != (verified.st_dev, verified.st_ino)
+            ):
+                raise _fail("approval metadata repair did not preserve the checked file")
+            stream.seek(0)
+            if stream.read(MAX_REFERENCE_BYTES + 1) != raw:
+                raise _fail("approval bytes changed during metadata repair")
+    except OSError as exc:
+        raise _fail("approval metadata could not be repaired") from exc
+
+
 def _release_identity(release: Path) -> str:
     if (
         not release.is_absolute()
@@ -656,6 +698,10 @@ def compose_inputs(
         managed_operations_tenant,
     )
     if repair_worker_metadata:
+        _repair_approval_metadata(
+            _checked_absolute(descriptor["approval_file"], "approval_file"),
+            descriptor["approval_sha256"],
+        )
         _repair_worker_service_metadata(service_path)
     return overlay, env_path, descriptor["compose_profile"]
 
@@ -669,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repair-worker-metadata",
         action="store_true",
-        help="repair only the root-owned worker manifest mode/group before Compose",
+        help="repair root-owned worker manifest and approval mode/group before Compose",
     )
     args = parser.parse_args(argv)
     try:

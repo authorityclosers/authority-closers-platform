@@ -542,7 +542,21 @@ def test_openai_identity_metadata_requires_a_token_only_leaf(activation_root: Pa
         _VALIDATOR._validate_openai_identity_metadata(identity_dir)
 
 
-def test_hosted_projection_repairs_worker_manifest_readability(
+def _runtime_read(path: Path) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(  # noqa: S603 - fixed synthetic fixture; drop privileges only
+        [
+            sys.executable,
+            "-c",
+            "import os,pathlib,sys;os.setgroups([]);os.setgid(10001);os.setuid(10001);"
+            "sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).read_bytes())",
+            str(path),
+        ],
+        capture_output=True,
+        check=False,
+    )
+
+
+def test_hosted_projection_repairs_worker_and_approval_readability(
     activation_root: Path,
 ) -> None:
     if os.name != "posix" or os.geteuid() != 0:
@@ -550,6 +564,17 @@ def test_hosted_projection_repairs_worker_manifest_readability(
     release, paths = _make_release(activation_root)
     os.chown(paths["service"], 0, 0)
     paths["service"].chmod(0o440)
+    # Reproduce the operator-group-only approval seen on staging. The runtime
+    # has no supplementary operator group, even though root can validate it.
+    activation_root.chmod(0o755)
+    os.chown(paths["approval"], 0, 987)
+    paths["approval"].chmod(0o440)
+    original = paths["approval"].read_bytes()
+    assert _runtime_read(paths["approval"]).returncode != 0
+
+    # Read-only projection must not repair metadata as a hidden side effect.
+    assert _validator_result(release).returncode == 0
+    assert paths["approval"].stat().st_gid == 987
 
     result = subprocess.run(  # noqa: S603 - fixed validator and synthetic test inputs
         [
@@ -572,6 +597,50 @@ def test_hosted_projection_repairs_worker_manifest_readability(
     assert metadata.st_uid == 0
     assert metadata.st_gid == 10001
     assert stat.S_IMODE(metadata.st_mode) == 0o440
+    approval_metadata = paths["approval"].stat()
+    assert approval_metadata.st_uid == 0
+    assert approval_metadata.st_gid == 10001
+    assert stat.S_IMODE(approval_metadata.st_mode) == 0o440
+    assert paths["approval"].read_bytes() == original
+    runtime = _runtime_read(paths["approval"])
+    assert runtime.returncode == 0, runtime.stderr
+    assert runtime.stdout == original
+
+
+@pytest.mark.parametrize("fault", ["digest", "symlink", "hardlink", "owner", "writable"])
+def test_approval_metadata_repair_refuses_untrusted_files_without_mutation(
+    activation_root: Path, fault: str
+) -> None:
+    if os.name != "posix" or os.geteuid() != 0:
+        pytest.skip("approval ownership is a POSIX root projection")
+    path = activation_root / "approval.json"
+    original = b'{"fixture":"no provider authority"}\n'
+    path.write_bytes(original)
+    path.chmod(0o440)
+    os.chown(path, 0, 987)
+    digest = hashlib.sha256(original).hexdigest()
+    if fault == "digest":
+        digest = "0" * 64
+    elif fault == "symlink":
+        target = activation_root / "original.json"
+        path.rename(target)
+        path.symlink_to(target)
+    elif fault == "hardlink":
+        os.link(path, activation_root / "second.json")
+    elif fault == "owner":
+        os.chown(path, 10001, 987)
+    elif fault == "writable":
+        path.chmod(0o640)
+    before = path.stat()
+    with pytest.raises(_VALIDATOR.ActivationError):
+        _VALIDATOR._repair_approval_metadata(path, digest)
+    after = path.stat()
+    assert (after.st_uid, after.st_gid, after.st_mode) == (
+        before.st_uid,
+        before.st_gid,
+        before.st_mode,
+    )
+    assert path.read_bytes() == original
 
 
 def test_hosted_validator_supports_the_production_policy_shape(activation_root: Path) -> None:
