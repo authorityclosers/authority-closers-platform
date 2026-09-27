@@ -24,7 +24,14 @@ if (configured) {
     );
   apiOrigin = url.origin;
 }
+// Development-only: extra hostnames allowed to load dev assets and live reload
+// (for example a Cloudflare-Access-protected dev address). Unset in deployments.
+const devAllowedOrigins = (process.env.AC_SALES_XRAY_DEV_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const config: NextConfig = {
+  ...(devAllowedOrigins.length ? { allowedDevOrigins: devAllowedOrigins } : {}),
   output: staticPreview ? "export" : "standalone",
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),

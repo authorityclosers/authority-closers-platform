@@ -42,3 +42,20 @@ it("does not expose canonical rewrites to the local read-only review build", asy
   const { default: config } = await import("./next.config");
   expect(await config.rewrites?.()).toEqual([]);
 });
+
+it("allows extra dev origins only when explicitly configured", async () => {
+  vi.stubEnv("AC_SALES_XRAY_DEV_ALLOWED_ORIGINS", "");
+  vi.resetModules();
+  const { default: unset } = await import("./next.config");
+  expect(unset.allowedDevOrigins).toBeUndefined();
+  vi.stubEnv(
+    "AC_SALES_XRAY_DEV_ALLOWED_ORIGINS",
+    " salesxray-dev.example.test , ,other.example.test",
+  );
+  vi.resetModules();
+  const { default: configured } = await import("./next.config");
+  expect(configured.allowedDevOrigins).toEqual([
+    "salesxray-dev.example.test",
+    "other.example.test",
+  ]);
+});
