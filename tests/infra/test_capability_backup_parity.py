@@ -52,6 +52,8 @@ EMAIL_LOGIN_CODES = "20260923_0045"
 SALES_XRAY_PROFILES = "20260923_0046"
 COACHING_DEPTH = "20260924_0047"
 EMAIL_ACKNOWLEDGEMENT = "20260924_0048"
+COACHING_V6_SELECTION = "20260925_0049"
+SUBMISSION_LABELS = "20260925_0050"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -84,6 +86,8 @@ HEADS = (
     SALES_XRAY_PROFILES,
     COACHING_DEPTH,
     EMAIL_ACKNOWLEDGEMENT,
+    COACHING_V6_SELECTION,
+    SUBMISSION_LABELS,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -93,6 +97,7 @@ TABLELESS_VERSIONED_HEADS = (
     ANALYSIS_LANGUAGE,
     COACHING_DEPTH,
     EMAIL_ACKNOWLEDGEMENT,
+    COACHING_V6_SELECTION,
 )
 NEW_TABLES = {
     PRACTICE: (
@@ -171,6 +176,7 @@ NEW_TABLES = {
     "20260915_0043": ("conversation_retained_c5_versions",),
     EMAIL_LOGIN_CODES: ("email_login_codes",),
     SALES_XRAY_PROFILES: ("sales_xray_profiles",),
+    SUBMISSION_LABELS: ("conversation_submission_label_revisions",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -602,6 +608,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         100,
         100,
         100,
+        100,
+        101,
     )
     expected_contracts = (
         None,
@@ -635,6 +643,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v26",
         "ac-postgres-parity-v27",
         "ac-postgres-parity-v28",
+        "ac-postgres-parity-v29",
+        "ac-postgres-parity-v30",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS
