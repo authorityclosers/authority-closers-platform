@@ -410,8 +410,25 @@ class ConversationInferenceWorker:
             or run.generation != task.generation
         ):
             raise ConversationConflict("The recording or provider run changed.")
+        request_intent = task.intent.get("request") if isinstance(task.intent, dict) else None
+        if isinstance(request_intent, dict):
+            from ac_platform.conversation_intelligence.coaching_validation_gate import (
+                coaching_revision_runtime_block,
+            )
+
+            revision = request_intent.get("coaching_prompt_revision")
+            if isinstance(revision, str) and (block := coaching_revision_runtime_block(revision)):
+                raise ConversationDenied(block)
         service = ConversationInference(application, authority=self.authority)
         plan = await service.plan_task(recording, task)
+        from ac_platform.conversation_intelligence.coaching_validation_gate import (
+            coaching_revision_runtime_block,
+        )
+
+        if isinstance(plan, StagePlan) and (
+            block := coaching_revision_runtime_block(plan.request.coaching_prompt_revision)
+        ):
+            raise ConversationDenied(block)
         if (
             task.intent is None
             or content_hash(task.intent) != task.intent_sha256

@@ -14,7 +14,10 @@ from typing import Any, NoReturn
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.coaching_schema import coaching_generation_json_schema
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
-from ac_platform.conversation_intelligence.reports import COACHING_PROMPT_V5_MARKER
+from ac_platform.conversation_intelligence.reports import (
+    COACHING_PROMPT_V5_MARKER,
+    COACHING_PROMPT_V6_MARKER,
+)
 
 OPENAI_TASK_MODELS = frozenset({"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"})
 OPENAI_REASONING_EFFORTS = {
@@ -39,7 +42,15 @@ def _fail(code: str) -> NoReturn:
 def _schema_for_prompt(system: str) -> tuple[str, dict[str, Any]]:
     if OVERVIEW_MARKER not in system:
         _fail("openai_c5_detailed_overview_required")
-    revision = "coaching-v5" if COACHING_PROMPT_V5_MARKER in system else "coaching-v4"
+    if COACHING_PROMPT_V6_MARKER in system and COACHING_PROMPT_V5_MARKER in system:
+        _fail("openai_c5_revision_marker_invalid")
+    revision = (
+        "coaching-v6"
+        if COACHING_PROMPT_V6_MARKER in system
+        else "coaching-v5"
+        if COACHING_PROMPT_V5_MARKER in system
+        else "coaching-v4"
+    )
     schema = coaching_generation_json_schema(revision=revision)
 
     def strict(value: Any) -> Any:
@@ -106,9 +117,7 @@ def prepare_openai_body(
         "text": {
             "format": {
                 "type": "json_schema",
-                "name": "sales_xray_coaching_v5"
-                if revision == "coaching-v5"
-                else "sales_xray_coaching_v4",
+                "name": f"sales_xray_{revision.replace('-', '_')}",
                 "strict": True,
                 "schema": schema,
             }
@@ -171,7 +180,7 @@ def openai_prompt_view(
     revision, schema = _schema_for_prompt(instructions)
     expected_format = {
         "type": "json_schema",
-        "name": "sales_xray_coaching_v5" if revision == "coaching-v5" else "sales_xray_coaching_v4",
+        "name": f"sales_xray_{revision.replace('-', '_')}",
         "strict": True,
         "schema": schema,
     }

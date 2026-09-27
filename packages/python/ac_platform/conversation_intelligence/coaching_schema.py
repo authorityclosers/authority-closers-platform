@@ -41,6 +41,7 @@ _OUTCOME_KINDS = (
 _REWATCH_PURPOSES = ("must_watch", "watch", "repeat")
 _COACHING_V4 = "coaching-v4"
 _COACHING_V5 = "coaching-v5"
+_COACHING_V6 = "coaching-v6"
 
 
 def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any]:
@@ -52,7 +53,7 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
     server resolves those references to quote and timing fields.
     """
 
-    if revision not in {_COACHING_V4, _COACHING_V5}:
+    if revision not in {_COACHING_V4, _COACHING_V5, _COACHING_V6}:
         raise ValueError("coaching_schema_revision_invalid")
 
     def obj(properties: dict[str, Any], required: tuple[str, ...]) -> dict[str, Any]:
@@ -245,7 +246,7 @@ def coaching_response_json_schema(revision: str = _COACHING_V4) -> dict[str, Any
         "status": {"type": "string", "enum": list(_DIMENSION_STATES)},
         "observation": {"type": "string"},
     }
-    if revision == _COACHING_V5:
+    if revision in {_COACHING_V5, _COACHING_V6}:
         # JSON Schema's anyOf keeps the status-dependent evidence rule in the
         # local validation schema. The Gemini generation schema below removes
         # cardinality hints, so the report parser independently enforces it.

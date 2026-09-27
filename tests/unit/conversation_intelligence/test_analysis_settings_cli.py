@@ -84,3 +84,28 @@ def test_original_save_invocation_remains_supported() -> None:
         )
     )
     assert validate_environment(args) == "production"
+
+
+def test_v6_is_not_available_for_admin_selection() -> None:
+    with pytest.raises(CommandError):
+        parser().parse_args(
+            arguments(
+                "--allow-production",
+                "--expected-revision",
+                "0",
+                "--idempotency-key",
+                "save-v6-settings",
+                "--c4-max-requests",
+                "4",
+                "--c4-max-completion-tokens",
+                "1400",
+                "--c5-max-completion-tokens",
+                "3200",
+                "--c5-output-profile",
+                "detailed",
+                "--c5-coaching-prompt-revision",
+                "coaching-v6",
+                "--report-language-default",
+                "mr-Deva+en",
+            )
+        )

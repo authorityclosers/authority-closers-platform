@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import Column, MetaData, Table, Uuid, create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -49,6 +49,9 @@ class _AsyncSessionAdapter:
     async def scalar(self, statement: object) -> Any:
         return self.session.scalar(statement)  # type: ignore[arg-type]
 
+    async def execute(self, statement: object) -> Any:
+        return self.session.execute(statement)  # type: ignore[arg-type]
+
     async def flush(self) -> None:
         self.session.flush()
 
@@ -81,6 +84,14 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     )
     Person.__table__.create(engine)
     SalesXrayProfile.__table__.create(engine)
+    # The profile-only fixture has no conversation schema. The account-deletion
+    # hook still executes its label-history purge in this same transaction.
+    label_revisions = Table(
+        "conversation_submission_label_revisions",
+        MetaData(),
+        Column("actor_person_id", Uuid, nullable=False),
+    )
+    label_revisions.create(engine)
     session = Session(engine, expire_on_commit=False)
     session.add_all(
         [
@@ -107,6 +118,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         yield _AsyncSessionAdapter(session), session
     finally:
         session.close()
+        label_revisions.drop(engine)
         SalesXrayProfile.__table__.drop(engine)
         Person.__table__.drop(engine)
         engine.dispose()

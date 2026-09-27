@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 import ac_platform.http.conversation_analysis as analysis_module
 from ac_platform.conversation_intelligence.analysis_settings import AnalysisSettings
+from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
 from ac_platform.conversation_intelligence.reports import load_report_profile
@@ -105,6 +106,28 @@ async def test_openai_c5_http_selection_uses_canonical_settings_and_saved_checkp
     assert request.report_language == "en"
     assert request.qualitative_pack_sha256 is not None
     assert request.profile == load_report_profile()
+    assert seen == [TENANT_ID]
+
+
+@pytest.mark.asyncio
+async def test_http_selection_blocks_v6_before_constructing_runtime_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selection = analysis_module.AnalysisSelection(
+        stage="C5",
+        transcript_checkpoint_id=TRANSCRIPT_ID,
+        fact_checkpoint_ids=(FACT_ID,),
+    )
+    seen = patch_settings(monkeypatch, settings(revision="coaching-v6"))
+
+    with pytest.raises(ConversationError, match="AC-SVAL-01 Gate 2"):
+        await selection.stage_request(
+            FakeApplication(),
+            SimpleNamespace(tenant_id=TENANT_ID, person_id=PERSON_ID),
+            RECORDING_ID,
+            FakeAuthority(openai_bundle()),
+        )
+
     assert seen == [TENANT_ID]
 
 

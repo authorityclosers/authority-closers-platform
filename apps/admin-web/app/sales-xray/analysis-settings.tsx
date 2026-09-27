@@ -69,9 +69,15 @@ export function AnalysisSettingsPanel() {
 
   async function save() {
     if (!state || !draft || busy) return;
+    if (draft.c5_coaching_prompt_revision === "coaching-v6") {
+      setError(
+        "Coaching v6 is an unvalidated candidate. Runtime use is blocked until AC-SVAL-01 Gate 2 evidence and approval are recorded. Select coaching-v5 or another available revision.",
+      );
+      return;
+    }
     if (!settingsSchema.safeParse(draft).success) {
       setError(
-        "Use whole numbers within the displayed limits. Hindi and Marathi reports require the qualitative v0.2 engine.",
+        "Use whole numbers within the displayed limits. Hindi and Marathi reports require a qualitative report engine.",
       );
       return;
     }
@@ -252,10 +258,16 @@ export function AnalysisSettingsPanel() {
                     c5_coaching_prompt_revision: event.target.value as
                       | "coaching-v3"
                       | "coaching-v4"
-                      | "coaching-v5",
+                      | "coaching-v5"
+                      | "coaching-v6",
                   })
                 }
               >
+                {draft.c5_coaching_prompt_revision === "coaching-v6" && (
+                  <option value="coaching-v6" disabled>
+                    Qualitative coaching · v6 (blocked pending AC-SVAL Gate 2)
+                  </option>
+                )}
                 {bounds.c5_coaching_prompt_revision.values.map((value) => (
                   <option key={value} value={value}>
                     {value === "coaching-v5"
@@ -268,7 +280,8 @@ export function AnalysisSettingsPanel() {
               </select>
               <small>
                 Saving selects the engine for new plans. Existing reports and
-                accepted plans keep their original version.
+                accepted plans keep their original version. Coaching v6 is
+                blocked pending AC-SVAL-01 Gate 2 validation and approval.
               </small>
             </label>
             <label className={styles.field}>

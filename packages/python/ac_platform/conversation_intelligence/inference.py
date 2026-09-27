@@ -518,6 +518,13 @@ class ConversationInference:
         now = await self.application.admit(actor)
         if self.authority is not None:
             await self.authority.require_execution_enabled(self.application)
+        if request is not None:
+            from ac_platform.conversation_intelligence.coaching_validation_gate import (
+                coaching_revision_runtime_block,
+            )
+
+            if block := coaching_revision_runtime_block(request.coaching_prompt_revision):
+                raise ConversationDenied(block)
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
         if recording.state != "ready":

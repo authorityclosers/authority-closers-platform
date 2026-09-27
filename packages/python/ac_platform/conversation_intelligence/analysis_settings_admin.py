@@ -90,6 +90,12 @@ class ConversationAnalysisSettingsAdmin:
         key: str,
     ) -> dict[str, Any]:
         await self.admit(actor)
+        from ac_platform.conversation_intelligence.coaching_validation_gate import (
+            coaching_revision_runtime_block,
+        )
+
+        if block := coaching_revision_runtime_block(settings.c5_coaching_prompt_revision):
+            raise ConversationError(block)
         if type(expected_revision) is not int or expected_revision < 0:
             raise ConversationError("Use the current analysis-settings revision.")
         tenant_id = actor.tenant_id
@@ -119,7 +125,7 @@ class ConversationAnalysisSettingsAdmin:
             raise ConversationConflict("Analysis settings changed. Reload before saving.")
         if (
             row is not None
-            and row.c5_coaching_prompt_revision in {"coaching-v4", "coaching-v5"}
+            and row.c5_coaching_prompt_revision in {"coaching-v4", "coaching-v5", "coaching-v6"}
             and not {"c5_coaching_prompt_revision", "report_language_default"}.issubset(
                 settings.model_fields_set
             )

@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.application import ConversationConflict
+import ac_platform.conversation_intelligence.inference_worker as worker_module
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_coaching_input,
@@ -288,3 +294,58 @@ def test_save_raw_streams_provider_response_in_storage_chunks(tmp_path) -> None:
 
     key = ObjectKey(tenant_id, recording_id, run_id, ObjectKind.PROVIDER_RESPONSE)
     assert b"".join(storage.iter_bytes(key, expected_sha256=result_value.response_sha256)) == raw
+
+
+@pytest.mark.asyncio
+async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_id, job_id = uuid4(), uuid4()
+    tenant_id, person_id, recording_id = uuid4(), uuid4(), uuid4()
+    task = SimpleNamespace(
+        run_id=run_id,
+        job_id=job_id,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        recording_id=recording_id,
+        state="queued",
+        erased_at=None,
+        generation=1,
+        stage="C5",
+        intent={"request": {"coaching_prompt_revision": "coaching-v6"}},
+    )
+    run = SimpleNamespace(
+        state="queued",
+        generation=1,
+        job_id=job_id,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        recording_id=recording_id,
+    )
+    recording = SimpleNamespace(state="ready", generation=1, id=recording_id)
+    application = SimpleNamespace(
+        admit=AsyncMock(return_value=datetime.now(UTC)),
+        get=AsyncMock(),
+        _recording=AsyncMock(return_value=recording),
+    )
+    database = SimpleNamespace(scalar=AsyncMock(side_effect=[task, task, run]))
+    monkeypatch.setattr(
+        worker_module,
+        "ConversationApplication",
+        lambda _database, *, clock: application,
+    )
+    monkeypatch.setattr(worker_module, "actor_from_row", lambda _task: object())
+    worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
+    worker.clock = lambda: datetime.now(UTC)
+    worker.authority = None
+    job = SimpleNamespace(
+        payload={"schema": 1, "run_id": str(run_id)},
+        id=job_id,
+        tenant_id=tenant_id,
+    )
+
+    with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
+        await worker._scope(database, job)
+
+    assert database.scalar.await_count == 3
+    application.get.assert_awaited_once()

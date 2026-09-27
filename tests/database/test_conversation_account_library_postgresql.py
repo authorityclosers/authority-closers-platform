@@ -192,7 +192,15 @@ def test_account_library_discovers_claimed_and_direct_calls_without_reassignment
                 assert all(row["duration_seconds"] == 1 and not row["has_report"] for row in rows)
                 assert all(
                     set(row)
-                    == {"submission_id", "created_at", "duration_seconds", "state", "has_report"}
+                    == {
+                        "submission_id",
+                        "created_at",
+                        "duration_seconds",
+                        "display_name",
+                        "display_name_revision",
+                        "state",
+                        "has_report",
+                    }
                     for row in rows
                 )
                 assert response.json()["next_cursor"] is None

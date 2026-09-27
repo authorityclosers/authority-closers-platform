@@ -146,7 +146,7 @@ it("requires the versioned engine for Marathi and sends the exact selected setti
   await change("Default report language", "mr-Deva+en");
   await save();
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-    "require the qualitative v0.2 engine",
+    "require a qualitative report engine",
   );
   expect(
     fetcher.mock.calls.filter(([, init]) => init.method === "POST"),
@@ -220,6 +220,69 @@ it.each(["en", "hi-Deva+en", "mr-Deva+en"])(
   },
 );
 
+it("blocks a persisted coaching-v6 value and can replace it with a supported engine", async () => {
+  const blocked = {
+    ...current,
+    settings: {
+      ...current.settings,
+      c5_coaching_prompt_revision: "coaching-v6",
+    },
+  };
+  const fetcher = vi.fn(async (_url: string, init: RequestInit) =>
+    json(
+      init.method === "POST"
+        ? {
+            ...current,
+            revision: 6,
+            settings: JSON.parse(init.body as string).settings,
+          }
+        : blocked,
+    ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(createElement(AnalysisSettingsPanel)));
+  const engine = host.querySelector<HTMLSelectElement>(
+    '[aria-label="Report engine"]',
+  )!;
+  expect(engine.value).toBe("coaching-v6");
+  expect(
+    engine.querySelector<HTMLOptionElement>('option[value="coaching-v6"]')
+      ?.disabled,
+  ).toBe(true);
+  await act(async () => {
+    [...host.querySelectorAll("button")]
+      .find((button) =>
+        button.textContent?.includes("Save future plan limits"),
+      )!
+      .click();
+  });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "AC-SVAL-01 Gate 2",
+  );
+  expect(
+    fetcher.mock.calls.filter(([, init]) => init.method === "POST"),
+  ).toHaveLength(0);
+  await act(async () => {
+    engine.value = "coaching-v5";
+    engine.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => {
+    [...host.querySelectorAll("button")]
+      .find((button) =>
+        button.textContent?.includes("Save future plan limits"),
+      )!
+      .click();
+  });
+  const writes = fetcher.mock.calls.filter(
+    ([, init]) => init.method === "POST",
+  );
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(writes[0][1].body as string)).toMatchObject({
+    expected_revision: 5,
+    settings: { c5_coaching_prompt_revision: "coaching-v5" },
+  });
+});
+
 it("still rejects unrecognized engines and out-of-bound settings", () => {
   expect(responseSchema.safeParse(current).success).toBe(true);
   expect(
@@ -227,7 +290,7 @@ it("still rejects unrecognized engines and out-of-bound settings", () => {
       ...current,
       settings: {
         ...current.settings,
-        c5_coaching_prompt_revision: "coaching-v6",
+        c5_coaching_prompt_revision: "coaching-v7",
       },
     }).success,
   ).toBe(false);
@@ -236,7 +299,7 @@ it("still rejects unrecognized engines and out-of-bound settings", () => {
       ...current,
       bounds: {
         ...current.bounds,
-        c5_coaching_prompt_revision: { values: ["coaching-v5", "coaching-v6"] },
+        c5_coaching_prompt_revision: { values: ["coaching-v6", "coaching-v7"] },
       },
     }).success,
   ).toBe(false);

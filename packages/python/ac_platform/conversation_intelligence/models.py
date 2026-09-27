@@ -318,7 +318,8 @@ class ConversationAnalysisSettings(Base):
         ),
         CheckConstraint("c5_output_profile IN ('standard','detailed')", name="known_c5_profile"),
         CheckConstraint(
-            "c5_coaching_prompt_revision IN ('coaching-v3','coaching-v4','coaching-v5')",
+            "c5_coaching_prompt_revision IN "
+            "('coaching-v3','coaching-v4','coaching-v5','coaching-v6')",
             name="known_c5_prompt",
         ),
         CheckConstraint(
@@ -326,7 +327,7 @@ class ConversationAnalysisSettings(Base):
             name="known_report_language",
         ),
         CheckConstraint(
-            "c5_coaching_prompt_revision IN ('coaching-v4','coaching-v5') "
+            "c5_coaching_prompt_revision IN ('coaching-v4','coaching-v5','coaching-v6') "
             "OR report_language_default = 'en'",
             name="language_prompt_compatible",
         ),

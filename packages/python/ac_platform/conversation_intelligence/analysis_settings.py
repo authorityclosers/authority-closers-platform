@@ -28,9 +28,9 @@ class AnalysisSettings(BaseModel):
     c4_max_completion_tokens: int = Field(ge=256, le=4_000)
     c5_max_completion_tokens: int = Field(ge=256, le=8_000)
     c5_output_profile: AnalysisOutputProfile
-    c5_coaching_prompt_revision: Literal["coaching-v3", "coaching-v4", "coaching-v5"] = Field(
-        default="coaching-v3", exclude_if=lambda value: value == "coaching-v3"
-    )
+    c5_coaching_prompt_revision: Literal[
+        "coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"
+    ] = Field(default="coaching-v3", exclude_if=lambda value: value == "coaching-v3")
     report_language_default: ReportLanguage = Field(
         default="en", exclude_if=lambda value: value == "en"
     )
@@ -38,10 +38,12 @@ class AnalysisSettings(BaseModel):
     @model_validator(mode="after")
     def language_requires_versioned_prompt(self) -> AnalysisSettings:
         if (
-            self.c5_coaching_prompt_revision not in {"coaching-v4", "coaching-v5"}
+            self.c5_coaching_prompt_revision not in {"coaching-v4", "coaching-v5", "coaching-v6"}
             and self.report_language_default != "en"
         ):
-            raise ValueError("Select coaching-v4 or coaching-v5 for a non-English report default.")
+            raise ValueError(
+                "Select coaching-v4, coaching-v5 or coaching-v6 for a non-English report default."
+            )
         return self
 
     def effective_values(self) -> dict[str, object]:
@@ -80,7 +82,8 @@ def settings_from_row(row: ConversationAnalysisSettings | None) -> AnalysisSetti
         c5_max_completion_tokens=row.c5_max_completion_tokens,
         c5_output_profile=cast(AnalysisOutputProfile, row.c5_output_profile),
         c5_coaching_prompt_revision=cast(
-            Literal["coaching-v3", "coaching-v4", "coaching-v5"], row.c5_coaching_prompt_revision
+            Literal["coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"],
+            row.c5_coaching_prompt_revision,
         ),
         report_language_default=cast(ReportLanguage, row.report_language_default),
     )

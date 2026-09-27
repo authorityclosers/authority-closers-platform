@@ -18,7 +18,7 @@ from uuid import UUID
 
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import ClientDisconnect
@@ -67,6 +67,13 @@ from ac_platform.conversation_intelligence.storage import (
     ObjectKind,
     StorageError,
 )
+from ac_platform.conversation_intelligence.submission_labels import (
+    SubmissionLabel,
+    format_revision_etag,
+    parse_revision_etag,
+    read_submission_label,
+    update_submission_label,
+)
 from ac_platform.conversation_intelligence.worker import _FencedExecutor
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -108,6 +115,14 @@ class AcquisitionC5BenchmarkAcceptance(QuoteAcceptance):
     """Owner accepts one server-issued, exact-source benchmark quote."""
 
     quote_id: UUID
+
+
+class SubmissionLabelUpdate(BaseModel):
+    """Strict request body for an owner-authored private call label."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    display_name: str | None
 
 
 def _is_postgres_deadlock(error: DBAPIError) -> bool:
@@ -385,13 +400,22 @@ def install_submission_http(
     read_dependency = Depends(read_only_owner, scope="function")
     streaming_dependency = Depends(read_only_owner, scope="request")
 
-    async def progress_with_deadlock_retry(submission_id: UUID, owner: _Owner) -> dict[str, Any]:
-        """Retry one complete progress read after a PostgreSQL deadlock rollback."""
+    async def progress_with_deadlock_retry(
+        submission_id: UUID, owner: _Owner
+    ) -> tuple[dict[str, Any], SubmissionLabel]:
+        """Retry progress and its private label together after a PostgreSQL deadlock."""
+
+        async def read(current: _Owner) -> tuple[dict[str, Any], SubmissionLabel]:
+            progress = await AcquisitionReports(current.ownership).progress(
+                submission_id, **current.arguments
+            )
+            label = await read_submission_label(
+                current.ownership, submission_id, **current.arguments
+            )
+            return progress, label
 
         try:
-            return await AcquisitionReports(owner.ownership).progress(
-                submission_id, **owner.arguments
-            )
+            return await read(owner)
         except DBAPIError as error:
             if not _is_postgres_deadlock(error):
                 raise
@@ -405,9 +429,7 @@ def install_submission_http(
                     owner.actor,
                     owner.shared_identity_locks,
                 )
-                return await AcquisitionReports(retry_owner.ownership).progress(
-                    submission_id, **retry_owner.arguments
-                )
+                return await read(retry_owner)
 
     async def quote_language_preference(request: Request) -> ReportLanguage | None:
         raw = bytearray()
@@ -608,14 +630,72 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        return await progress_with_deadlock_retry(submission_id, owner)
+        result, label = await progress_with_deadlock_retry(submission_id, owner)
+        return {
+            **result,
+            "display_name": label.display_name,
+            "display_name_revision": label.revision,
+        }
 
     @router.get("/submissions/{submission_id}/report")
     async def report(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        return await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
+        result = await AcquisitionReports(owner.ownership).report(submission_id, **owner.arguments)
+        label = await read_submission_label(owner.ownership, submission_id, **owner.arguments)
+        return {
+            **result,
+            "display_name": label.display_name,
+            "display_name_revision": label.revision,
+        }
+
+    @router.patch("/submissions/{submission_id}/label")
+    async def rename_submission(
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        if_match: str | None = Header(default=None, alias="If-Match"),
+        owner: _Owner = dependency,
+    ) -> dict[str, Any]:
+        guard(request, response, write=True)
+        try:
+            expected_revision = parse_revision_etag(if_match)
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        content_types = request.headers.getlist("content-type")
+        if (
+            len(content_types) != 1
+            or content_types[0].split(";", 1)[0].strip().lower() != "application/json"
+        ):
+            raise fail(415, "Choose a call name using JSON.")
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > 2048:
+                        raise fail(413, "The call name is too large.")
+                    raw.extend(block)
+            payload = SubmissionLabelUpdate.model_validate_json(bytes(raw))
+        except (ValidationError, ValueError):
+            raise fail(422, "Choose a valid call name.") from None
+        except (TimeoutError, ClientDisconnect):
+            raise fail(408, "The call name update was interrupted. Try again.") from None
+        request_id = getattr(request.state, "request_id", None)
+        try:
+            label = await update_submission_label(
+                owner.ownership,
+                submission_id,
+                actor=owner.actor,
+                expected_revision=expected_revision,
+                display_name=payload.display_name,
+                request_id=request_id if isinstance(request_id, str) else None,
+                shared_identity_locks=owner.shared_identity_locks,
+            )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        response.headers["ETag"] = format_revision_etag(label.revision)
+        return {"display_name": label.display_name, "display_name_revision": label.revision}
 
     @router.get("/submissions/{submission_id}/report.docx")
     async def download_report(

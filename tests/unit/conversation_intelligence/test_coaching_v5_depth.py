@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
 from typing import Any
 
 import pytest
 
+from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.coaching_schema import (
     coaching_generation_json_schema,
     coaching_response_json_schema,
@@ -268,4 +270,35 @@ def test_v5_prompt_rejects_a_v4_pack_hash_and_unknown_revision_pack() -> None:
             qualitative_pack_sha256=v4_pack.sha256,
         )
     with pytest.raises(ValueError, match="qualitative_pack_revision_unknown"):
-        load_qualitative_pack_for_revision("coaching-v6")
+        load_qualitative_pack_for_revision("coaching-v7")
+
+
+def test_historical_prompt_bytes_match_the_pinned_1ee_revision() -> None:
+    """Prompt digests captured from pinned 1ee6a6d; v6 must be additive only."""
+    transcript = _transcript()
+    chunks = plan_transcript_chunks(transcript, max_input_chars=900)
+    packets = [
+        parse_fact_packet(
+            {
+                "overview": "The source asks about price and decision timing.",
+                "observations": [],
+                "uncertainties": [],
+            },
+            transcript,
+            chunk=chunk,
+        )
+        for chunk in chunks
+    ]
+    expected = {
+        "coaching-v1": "0f36008d427457f2f6257169da44a2fc132befd77090125b94830c364291d65b",
+        "coaching-v2": "cc1a72a3c53ab1c0e4a12a8290ff10426f2a5cba74f26f2a1f2fd62d5ff92abc",
+        "coaching-v3": "48f227f28c096cd14cc8fb47f1564dcbec959250661261cac58edfc7126c3fde",
+        "coaching-v4": "fb54cb104c1fa810c05f996d0686accd8333387135853438fb0d33bff7ce79bb",
+        "coaching-v5": "b487064287b8da3ae577e461ae6bdde9b33b94b6a2303a8fd9c48bcdff27acde",
+    }
+    for revision, digest in expected.items():
+        options: dict[str, Any] = {"coaching_prompt_revision": revision}
+        if revision in {"coaching-v4", "coaching-v5"}:
+            options["qualitative_pack_sha256"] = load_qualitative_pack_for_revision(revision).sha256
+        prompt = build_report_groq_prompt(transcript, packets, **options)
+        assert hashlib.sha256(canonical(prompt)).hexdigest() == digest

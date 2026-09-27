@@ -44,11 +44,13 @@ from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import (
     ReportLanguage,
     load_qualitative_pack_for_revision,
+    supports_coaching_v6_route,
 )
 from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_LEGACY,
     COACHING_PROMPT_V4,
     COACHING_PROMPT_V5,
+    COACHING_PROMPT_V6,
     FACT_PROMPT_LEGACY,
     GROQ_MODEL,
     FactPacket,
@@ -117,7 +119,7 @@ class StageRequest(BaseModel):
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
     coaching_prompt_revision: Literal[
-        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5"
+        "coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4", "coaching-v5", "coaching-v6"
     ] = Field(
         default=COACHING_PROMPT_LEGACY, exclude_if=lambda value: value == COACHING_PROMPT_LEGACY
     )
@@ -160,6 +162,12 @@ class StageRequest(BaseModel):
             raise ValueError("Coaching cannot select a fact prompt revision.")
         if self.stage == "C4" and self.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
             raise ValueError("Facts cannot select a coaching prompt revision.")
+        if (
+            self.stage == "C5"
+            and self.coaching_prompt_revision == COACHING_PROMPT_V6
+            and not supports_coaching_v6_route(self.provider, self.model)
+        ):
+            raise ValueError("coaching-v6-route-unsupported")
         if self.stage == "C4" and (
             self.report_language is not None or self.qualitative_pack_sha256 is not None
         ):
@@ -169,6 +177,7 @@ class StageRequest(BaseModel):
         if self.stage == "C5" and self.coaching_prompt_revision in {
             COACHING_PROMPT_V4,
             COACHING_PROMPT_V5,
+            COACHING_PROMPT_V6,
         }:
             if (
                 self.report_language is None
@@ -566,7 +575,11 @@ class ReportingPipeline:
         }
         if request.coaching_prompt_revision != COACHING_PROMPT_LEGACY:
             c5_config["coaching_prompt_revision"] = request.coaching_prompt_revision
-        if request.coaching_prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}:
+        if request.coaching_prompt_revision in {
+            COACHING_PROMPT_V4,
+            COACHING_PROMPT_V5,
+            COACHING_PROMPT_V6,
+        }:
             c5_config["report_language"] = request.report_language
             c5_config["qualitative_pack_sha256"] = request.qualitative_pack_sha256
         if request.repair is not None:

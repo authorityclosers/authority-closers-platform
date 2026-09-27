@@ -105,6 +105,12 @@ class AnalysisSelection(BaseModel):
             app.database, authority.operations_tenant_id
         )
         prompt_revision = analysis_settings.c5_coaching_prompt_revision
+        from ac_platform.conversation_intelligence.coaching_validation_gate import (
+            coaching_revision_runtime_block,
+        )
+
+        if block := coaching_revision_runtime_block(prompt_revision):
+            raise ConversationError(block)
         output_profile = analysis_settings.c5_output_profile
         if approval.provider_id == "openai" and (
             prompt_revision not in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}

@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
     ConversationRecording,
 )
+from ac_platform.conversation_intelligence.submission_labels import read_submission_label
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
@@ -112,6 +113,12 @@ async def account_library(
                 actor=actor,
                 shared_identity_locks=shared_identity_locks,
             )
+            label = await read_submission_label(
+                ownership,
+                row.submission_id,
+                actor=actor,
+                shared_identity_locks=shared_identity_locks,
+            )
         except ConversationNotFound:
             # A concurrent deletion/revocation may win before the per-record locks.
             # Never return the stale selector; pagination still advances past it.
@@ -121,6 +128,8 @@ async def account_library(
                 "submission_id": str(row.submission_id),
                 "created_at": row.created_at.isoformat(),
                 "duration_seconds": row.reserved_seconds,
+                "display_name": label.display_name,
+                "display_name_revision": label.revision,
                 "state": progress["state"],
                 "has_report": progress["has_report"],
             }

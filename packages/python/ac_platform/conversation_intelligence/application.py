@@ -1061,6 +1061,13 @@ class ConversationApplication:
                 )
             ).all():
                 review.proposal, review.erased_at = None, now
+        from ac_platform.conversation_intelligence.submission_labels import (
+            erase_submission_labels_for_recording,
+        )
+
+        await erase_submission_labels_for_recording(
+            self.database, tenant_id=recording.tenant_id, recording_id=recording.id
+        )
         recording.state, recording.deleted_at = "deleted", now
         # Flush all retention clears before acknowledging the deletion job so
         # the durable erasure is visible before the worker lease is completed.

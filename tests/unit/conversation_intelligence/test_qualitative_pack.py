@@ -9,8 +9,10 @@ from pydantic import ValidationError
 from ac_platform.conversation_intelligence.qualitative_pack import (
     QualitativePack,
     load_qualitative_pack,
+    load_qualitative_pack_for_revision,
     qualitative_pack_manifest,
     report_language_instruction,
+    supports_coaching_v6_route,
 )
 
 
@@ -52,6 +54,32 @@ def test_manifest_does_not_mutate_pack_or_later_plan() -> None:
     assert qualitative_pack_manifest(pack) == original
     with pytest.raises(ValidationError):
         pack.rules[0].instruction = "changed"
+
+
+def test_v6_pack_is_explicit_source_pinned_and_remains_a_candidate() -> None:
+    pack = load_qualitative_pack_for_revision("coaching-v6")
+    assert pack.id == "sx-qualitative-v6-r1"
+    assert pack.scope == "single_call"
+    assert pack.numeric_evaluation is False
+    assert [rule.id for rule in pack.rules] == [f"SXQ{n:02}" for n in range(1, 11)]
+    assert len(pack.compile()) < 6_000
+
+    root = Path(__file__).resolve().parents[3]
+    intake = json.loads((root / "docs/plans/sales-xray-v02/source-intake.json").read_text())
+    registered = {source["id"]: source for source in intake["sources"]}
+    for source in pack.sources:
+        expected = registered[source.id]
+        assert source.drive_id == expected["drive_id"]
+        assert source.captured_text_sha256 == expected["captured_text_sha256"]
+        assert expected["approval"] == "candidate_not_runtime_policy"
+
+
+def test_v6_route_capability_stays_inside_existing_request_envelopes() -> None:
+    assert supports_coaching_v6_route("gemini", "gemini-3.8-flash")
+    for model in ("gpt-6-luna", "gpt-6-sol", "gpt-6-astra"):
+        assert supports_coaching_v6_route("openai", model)
+    assert not supports_coaching_v6_route("groq", "openai/gpt-oss-120b")
+    assert not supports_coaching_v6_route("gemini", "gemini-3.1-pro-preview")
 
 
 def test_unknown_pack_and_language_are_rejected_without_fallback() -> None:

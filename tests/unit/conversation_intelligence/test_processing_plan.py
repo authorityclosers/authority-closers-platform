@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 
 from ac_platform.conversation_intelligence.activation_contract import StageApproval
+from ac_platform.conversation_intelligence.analysis_settings import AnalysisSettings
 from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationDenied,
@@ -18,6 +20,7 @@ from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskE
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
+    ConversationProcessingPlans,
     PlanAcceptance,
     PlanManifest,
     _implemented_text_provider,
@@ -30,8 +33,12 @@ from ac_platform.conversation_intelligence.processing_plan import (
     plan_cost_label,
     planned_c5_requests,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
 from ac_platform.conversation_intelligence.reports import FACT_PROMPT_COMPACT
+from ac_platform.kernel.authz import ActorContext
 from tests.unit.conversation_intelligence.test_activation_contract import (
     PERSON_ID,
     TENANT_ID,
@@ -186,6 +193,133 @@ def test_saved_legacy_plan_omits_compact_prompt_revision_and_new_plan_roundtrips
     )
 
 
+def test_explicit_v6_plan_binds_language_and_exact_pack_hash_without_changing_defaults() -> None:
+    original = manifest_for(saved_plan())
+    assert original.coaching_prompt_revision == "coaching-v1"
+    assert original.qualitative_pack_sha256 is None
+    assert "coaching_prompt_revision" not in original.as_dict()
+
+    pack = load_qualitative_pack_for_revision("coaching-v6")
+    data = original.as_dict()
+    data["stages"][2].update(provider_id="openai", model_id="gpt-6-luna")
+    data.update(
+        {
+            "coaching_prompt_revision": "coaching-v6",
+            "report_language": "mr-Deva+en",
+            "qualitative_pack_sha256": pack.sha256,
+        }
+    )
+    selected = PlanManifest.model_validate_json(canonical(data))
+    assert selected.coaching_prompt_revision == "coaching-v6"
+    assert selected.report_language == "mr-Deva+en"
+    assert selected.qualitative_pack_sha256 == pack.sha256
+    assert selected.as_dict()["coaching_prompt_revision"] == "coaching-v6"
+
+    data["qualitative_pack_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="processing_plan_coaching_options_invalid"):
+        PlanManifest.model_validate_json(canonical(data))
+
+
+def plan_with_coaching_revision(revision: str) -> ConversationProcessingPlan:
+    row = saved_plan()
+    data = manifest_for(row).as_dict()
+    if revision == "coaching-v6":
+        data["stages"][2].update(provider_id="openai", model_id="gpt-6-luna")
+    data["coaching_prompt_revision"] = revision
+    if revision in {"coaching-v4", "coaching-v5", "coaching-v6"}:
+        pack = load_qualitative_pack_for_revision(revision)
+        data.update({"report_language": "en", "qualitative_pack_sha256": pack.sha256})
+    value = PlanManifest.model_validate_json(canonical(data))
+    row.manifest = value.as_dict()
+    row.plan_sha256 = content_hash(value.as_dict())
+    return row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("existing", "revision", "blocked"),
+    [
+        ("replay", "coaching-v6", True),
+        ("active", "coaching-v6", True),
+        ("replay", "coaching-v5", False),
+        ("active", "coaching-v5", False),
+        ("replay", "coaching-v1", False),
+    ],
+)
+async def test_quote_gates_stored_v6_replay_and_active_plan_without_blocking_frozen_history(
+    existing: str, revision: str, blocked: bool, monkeypatch
+) -> None:
+    row = plan_with_coaching_revision(revision)
+    recording = SimpleNamespace(
+        id=row.recording_id,
+        tenant_id=row.tenant_id,
+        person_id=row.person_id,
+        generation=row.generation,
+        source_sha256="a" * 64,
+        source_revision=1,
+    )
+    source = SimpleNamespace(
+        duration_ms=60_000,
+        checkpoint=SimpleNamespace(cache_key="c" * 64),
+    )
+    bundle = SimpleNamespace(digest="b" * 64)
+    c2 = _stage(stage="C2")
+
+    class Database:
+        async def scalar(self, _statement):
+            return row if existing == "active" else None
+
+    replay = SimpleNamespace(result_id=row.id) if existing == "replay" else None
+    app = SimpleNamespace(
+        admit=AsyncMock(return_value=datetime.fromtimestamp(1_700_000_000, UTC)),
+        get=AsyncMock(return_value=None),
+        _recording=AsyncMock(return_value=recording),
+        _replay=AsyncMock(return_value=replay),
+    )
+    authority = SimpleNamespace(approval=AsyncMock(return_value=(bundle, c2)))
+    inference = SimpleNamespace(plan_transcription=AsyncMock(return_value=source))
+    current_v6_settings = AsyncMock(
+        return_value=(
+            None,
+            AnalysisSettings(
+                c4_max_requests=64,
+                c4_max_completion_tokens=1_400,
+                c5_max_completion_tokens=3_200,
+                c5_output_profile="detailed",
+                c5_coaching_prompt_revision="coaching-v6",
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.processing_plan.latest_analysis_settings",
+        current_v6_settings,
+    )
+    plans = object.__new__(ConversationProcessingPlans)
+    plans.app = app
+    plans.db = Database()
+    plans.authority = authority
+    plans.inference = inference
+    plans._row = AsyncMock(return_value=row)
+    plans.view = Mock(return_value={"plan_id": str(row.id)})
+
+    if blocked:
+        with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
+            await plans.quote(
+                ActorContext(PERSON_ID, uuid4(), TENANT_ID), row.recording_id, key="reuse"
+            )
+        plans.view.assert_not_called()
+    else:
+        result = await plans.quote(
+            ActorContext(PERSON_ID, uuid4(), TENANT_ID), row.recording_id, key="reuse"
+        )
+        assert result == {"plan_id": str(row.id)}
+        plans.view.assert_called_once()
+
+    assert app._replay.await_count == 1
+    assert plans._row.await_count == int(existing == "replay")
+    assert current_v6_settings.await_count == 0
+
+
 def test_openai_is_admitted_only_for_c5_and_has_no_automatic_repair():
     assert _implemented_text_provider("C5", "openai") is True
     assert _implemented_text_provider("C4", "openai") is False
@@ -222,6 +356,105 @@ def test_saved_plan_accepts_the_explicit_deepgram_c2_route() -> None:
         "nova-3",
     )
     assert parsed.stages[0].recipe_revision == DEEPGRAM_TRANSCRIPT_RECIPE
+
+
+@pytest.mark.asyncio
+async def test_v6_quote_is_blocked_before_allowance_reads_or_plan_creation(monkeypatch) -> None:
+    now = datetime.fromtimestamp(1_700_000_000, UTC)
+    actor = ActorContext(PERSON_ID, uuid4(), TENANT_ID)
+    recording = SimpleNamespace(
+        id=uuid4(),
+        tenant_id=TENANT_ID,
+        person_id=PERSON_ID,
+        generation=1,
+        source_sha256="a" * 64,
+        source_revision=1,
+    )
+    source = SimpleNamespace(
+        duration_ms=60_000,
+        checkpoint=SimpleNamespace(cache_key="c" * 64),
+    )
+    c2 = _stage(stage="C2")
+    c4 = _stage(stage="C4", entitlement_seconds=0, max_completion_tokens=1_400).model_copy(
+        update={"recipe_revision": FACT_RECIPE}
+    )
+    c5 = _stage(
+        stage="C5",
+        entitlement_seconds=0,
+        max_completion_tokens=1_400,
+        profile_sha256=content_hash(
+            {"revision": "frozen-fixture-v1", "weights_actual": 95, "weights_declared": 100}
+        ),
+    ).model_copy(update={"model_id": "openai/gpt-oss-120b", "recipe_revision": COACHING_RECIPE})
+    bundle = SimpleNamespace(
+        digest="b" * 64,
+        stages=(c2, c4, c5),
+        expires_at_epoch=1_800_000_000,
+        budget_scope_id=uuid4(),
+        budget_cap_paise=0,
+    )
+    authority = SimpleNamespace(
+        operations_tenant_id=TENANT_ID,
+        approval=AsyncMock(return_value=(bundle, c2)),
+        validate_route=AsyncMock(),
+    )
+
+    class Database:
+        def __init__(self) -> None:
+            self.get_calls: list[object] = []
+            self.add_calls: list[object] = []
+
+        async def scalar(self, _statement):
+            return None
+
+        async def get(self, model, key):
+            self.get_calls.append((model, key))
+            raise AssertionError("v6 runtime gate must precede allowance reads")
+
+        def add(self, value) -> None:
+            self.add_calls.append(value)
+
+        async def flush(self) -> None:
+            raise AssertionError("blocked v6 must not flush a plan")
+
+    database = Database()
+    app = SimpleNamespace(
+        admit=AsyncMock(return_value=now),
+        get=AsyncMock(return_value=None),
+        _recording=AsyncMock(return_value=recording),
+        _replay=AsyncMock(return_value=None),
+        _receipt=AsyncMock(),
+    )
+    inference = SimpleNamespace(plan_transcription=AsyncMock(return_value=source))
+    plans = object.__new__(ConversationProcessingPlans)
+    plans.app = app
+    plans.db = database
+    plans.authority = authority
+    plans.inference = inference
+
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.processing_plan.latest_analysis_settings",
+        AsyncMock(
+            return_value=(
+                None,
+                AnalysisSettings(
+                    c4_max_requests=64,
+                    c4_max_completion_tokens=1_400,
+                    c5_max_completion_tokens=3_200,
+                    c5_output_profile="detailed",
+                    c5_coaching_prompt_revision="coaching-v6",
+                ),
+            )
+        ),
+    )
+
+    with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
+        await plans.quote(actor, recording.id, key="v6-groq-route")
+
+    assert database.get_calls == []
+    assert database.add_calls == []
+    assert app._receipt.await_count == 0
+    assert authority.validate_route.await_count == 2
 
 
 def test_paid_plan_adds_one_asr_all_fact_requests_and_one_judge() -> None:

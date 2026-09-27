@@ -72,20 +72,21 @@ def successor_case():
 
 
 @pytest.mark.parametrize("language", ["en", "hi-Deva+en", "mr-Deva+en"])
-def test_settings_allow_explicit_successor_without_altering_default(language):
+@pytest.mark.parametrize("revision", ["coaching-v5", "coaching-v6"])
+def test_settings_allow_explicit_successor_without_altering_default(language, revision):
     value = AnalysisSettings.model_validate(
         {
             **DEFAULT_ANALYSIS_SETTINGS.model_dump(),
-            "c5_coaching_prompt_revision": "coaching-v5",
+            "c5_coaching_prompt_revision": revision,
             "report_language_default": language,
         }
     )
-    assert value.c5_coaching_prompt_revision == "coaching-v5"
+    assert value.c5_coaching_prompt_revision == revision
     assert DEFAULT_ANALYSIS_SETTINGS.c5_coaching_prompt_revision == "coaching-v3"
     assert value.c5_max_completion_tokens == DEFAULT_ANALYSIS_SETTINGS.c5_max_completion_tokens
 
 
-@pytest.mark.parametrize("revision", ["coaching-v4", "coaching-v5"])
+@pytest.mark.parametrize("revision", ["coaching-v4", "coaching-v5", "coaching-v6"])
 def test_stage_and_recovery_bind_each_version_to_its_own_pack(revision):
     options = {
         "coaching_prompt_revision": revision,
@@ -93,9 +94,15 @@ def test_stage_and_recovery_bind_each_version_to_its_own_pack(revision):
         "qualitative_pack_sha256": load_qualitative_pack_for_revision(revision).sha256,
     }
     stage = dict(stage="C5", transcript_checkpoint_id=uuid4(), fact_checkpoint_ids=(uuid4(),))
+    if revision == "coaching-v6":
+        stage.update(provider="gemini", model="gemini-3.8-flash")
     assert StageRequest(**stage, **options).coaching_prompt_revision == revision
     assert _coaching_prompt_options(options) == tuple(options.values())
-    other = "coaching-v5" if revision == "coaching-v4" else "coaching-v4"
+    other = {
+        "coaching-v4": "coaching-v5",
+        "coaching-v5": "coaching-v6",
+        "coaching-v6": "coaching-v4",
+    }[revision]
     wrong = {**options, "qualitative_pack_sha256": load_qualitative_pack_for_revision(other).sha256}
     with pytest.raises(ValueError):
         StageRequest(**stage, **wrong)

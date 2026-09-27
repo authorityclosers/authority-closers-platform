@@ -4,6 +4,13 @@ export const coachingRevisionSchema = z.enum([
   "coaching-v3",
   "coaching-v4",
   "coaching-v5",
+  "coaching-v6",
+]);
+
+const selectableCoachingRevisionSchema = z.enum([
+  "coaching-v3",
+  "coaching-v4",
+  "coaching-v5",
 ]);
 
 export const settingsSchema = z
@@ -23,7 +30,7 @@ export const settingsSchema = z
       value.c5_coaching_prompt_revision !== "coaching-v3" ||
       value.report_language_default === "en",
     {
-      message: "Hindi and Marathi reports require the qualitative v0.2 engine.",
+      message: "Hindi and Marathi reports require a qualitative report engine.",
       path: ["report_language_default"],
     },
   );
@@ -51,7 +58,7 @@ export const responseSchema = z
         }),
         c5_coaching_prompt_revision: z
           .object({
-            values: z.array(coachingRevisionSchema),
+            values: z.array(selectableCoachingRevisionSchema),
           })
           .default({ values: ["coaching-v3"] }),
         report_language_default: z

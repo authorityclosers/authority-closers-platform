@@ -18,8 +18,24 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 ReportLanguage = Literal["en", "hi-Deva+en", "mr-Deva+en"]
 QUALITATIVE_PACK_ID = "sx-qualitative-20260922-r1"
 QUALITATIVE_PACK_V5_ID = "sx-qualitative-20260924-r1"
+QUALITATIVE_PACK_V6_ID = "sx-qualitative-v6-r1"
 _PACK_PATH = Path(__file__).with_name("profiles") / "sales_xray_qualitative_20260922.json"
 _PACK_V5_PATH = Path(__file__).with_name("profiles") / "sales_xray_qualitative_20260924.json"
+_PACK_V6_PATH = Path(__file__).with_name("profiles") / "sales_xray_qualitative_v6_r1.json"
+_COACHING_V6_C5_ROUTES = frozenset(
+    {
+        ("gemini", "gemini-3.8-flash"),
+        ("openai", "gpt-6-luna"),
+        ("openai", "gpt-6-sol"),
+        ("openai", "gpt-6-astra"),
+    }
+)
+
+
+def supports_coaching_v6_route(provider: str, model: str) -> bool:
+    """Return whether the current offline adapters fit v6's bounded request size."""
+
+    return (provider, model) in _COACHING_V6_C5_ROUTES
 
 
 class _Immutable(BaseModel):
@@ -45,7 +61,11 @@ class QualitativeRule(_Immutable):
 
 class QualitativePack(_Immutable):
     schema_id: Literal["ac.sales-xray.qualitative-pack/1"]
-    id: Literal["sx-qualitative-20260922-r1", "sx-qualitative-20260924-r1"]
+    id: Literal[
+        "sx-qualitative-20260922-r1",
+        "sx-qualitative-20260924-r1",
+        "sx-qualitative-v6-r1",
+    ]
     scope: Literal["single_call"]
     numeric_evaluation: Literal[False]
     sources: tuple[PackSource, ...] = Field(min_length=1, max_length=8)
@@ -97,6 +117,11 @@ def load_qualitative_pack_for_revision(revision: str) -> QualitativePack:
         if pack.id != QUALITATIVE_PACK_V5_ID:
             raise ValueError("qualitative_pack_id_mismatch")
         return pack
+    if revision == "coaching-v6":
+        pack = QualitativePack.model_validate_json(_PACK_V6_PATH.read_bytes())
+        if pack.id != QUALITATIVE_PACK_V6_ID:
+            raise ValueError("qualitative_pack_id_mismatch")
+        return pack
     raise ValueError("qualitative_pack_revision_unknown")
 
 
@@ -135,3 +160,17 @@ def qualitative_pack_manifest(pack: QualitativePack) -> dict[str, object]:
         "rule_ids": [rule.id for rule in pack.rules],
         "sources": json.loads(pack.model_dump_json())["sources"],
     }
+
+
+__all__ = [
+    "QUALITATIVE_PACK_ID",
+    "QUALITATIVE_PACK_V5_ID",
+    "QUALITATIVE_PACK_V6_ID",
+    "QualitativePack",
+    "ReportLanguage",
+    "load_qualitative_pack",
+    "load_qualitative_pack_for_revision",
+    "qualitative_pack_manifest",
+    "report_language_instruction",
+    "supports_coaching_v6_route",
+]

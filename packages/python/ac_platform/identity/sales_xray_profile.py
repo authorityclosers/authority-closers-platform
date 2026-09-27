@@ -153,8 +153,13 @@ async def erase_sales_xray_profile(
     profile = await session.scalar(
         select(SalesXrayProfile).where(SalesXrayProfile.person_id == person_id).with_for_update()
     )
+    from ac_platform.conversation_intelligence.submission_labels import (
+        erase_submission_labels_for_person,
+    )
+
+    removed_labels = await erase_submission_labels_for_person(session, person_id=person_id)
     if profile is None:
-        return False
+        return removed_labels > 0
     await session.delete(profile)
     await session.flush()
     return True

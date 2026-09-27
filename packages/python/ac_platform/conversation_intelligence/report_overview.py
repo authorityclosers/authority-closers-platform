@@ -329,3 +329,21 @@ OVERVIEW_V5_FORMAT = {
     ),
     "ethics_notes": "[SourceNote],at most 3;observations only",
 }
+
+# Keep v5's request string immutable. V6 removes its prose-length target while
+# retaining the same validated overview fields and evidence rules.
+OVERVIEW_V6_INSTRUCTION = (
+    OVERVIEW_V5_INSTRUCTION
+    + " Every required final-assessment field must truthfully describe the supported evidence; "
+    "state missing support instead of inventing a correction. Do not impose a sentence-count or "
+    "length target on assessment. If improvements is empty, both next_call_focus and practice "
+    "must be null; otherwise both refer to improvement_index 0. No numerical evaluation or human "
+    "review claim."
+)
+OVERVIEW_V6_FORMAT = {
+    **OVERVIEW_V5_FORMAT,
+    "final_assessment": (
+        "{repeat,fix_first,next_focus,assessment: required truthful strings; "
+        "no sentence-count target}"
+    ),
+}
