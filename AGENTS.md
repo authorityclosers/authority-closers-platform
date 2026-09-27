@@ -15,6 +15,30 @@
 - Every code change must leave tests and implementation evidence.
 
 
+# DELIVERY CONSTITUTION (binding for every agent and person)
+
+1. One task at a time. A task is one small, reviewable change tied to one tracked
+   issue. Do not start a second task, widen scope, or refactor on the side; record
+   other findings as proposed tasks.
+2. Start every task from the latest `main`:
+   `git fetch origin && git switch -c task/<issue>-<short-name> origin/main`.
+   Never build on old, integration, release or other task branches. Do not
+   create extra git worktrees.
+3. `main` is the only long-lived branch. A task branch lives only until its pull
+   request merges or closes, then it is deleted.
+4. Done means: the change works on the dev environment, tests and evidence for the
+   changed areas pass, the pull request against `main` explains what changed and
+   how to check it on dev, and CI is green. Then stop and wait for the owner.
+5. The owner approves by merging. Agents never merge, deploy, promote, or change
+   GitHub, Cloudflare, server or billing settings.
+6. Releases move one way: merge to `main` -> CI builds images once -> staging
+   deploys automatically -> the owner promotes the same build to production from
+   Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
+   between environments.
+7. Use included subscriptions only. Stop on usage limits; never fall back to API
+   keys or paid credits. Only one agent runs at a time.
+8. Secrets never go in git, prompts, logs, task comments or pull requests.
+
 # CODEX SOURCE FETCH ORDER
 
 Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
