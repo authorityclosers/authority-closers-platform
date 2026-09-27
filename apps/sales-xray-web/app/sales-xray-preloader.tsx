@@ -53,8 +53,10 @@ function loadPreloaderScript() {
 
 export function SalesXrayPreloader({
   phase = "session",
+  openingExistingCall = false,
 }: {
   phase?: PreloaderPhase;
+  openingExistingCall?: boolean;
 }) {
   const element = useRef<PreloaderElement>(null);
   const [defined, setDefined] = useState(false);
@@ -122,8 +124,16 @@ export function SalesXrayPreloader({
           <p className={styles.fallbackEyebrow}>
             AUTHORITY CLOSERS · SALES XRAY
           </p>
-          <h1 id="sales-xray-preloader-heading">Getting Sales Xray ready.</h1>
-          <p>Checking access to your workspace…</p>
+          <h1 id="sales-xray-preloader-heading">
+            {openingExistingCall
+              ? "Opening your saved call"
+              : "Getting Sales Xray ready."}
+          </h1>
+          <p>
+            {openingExistingCall
+              ? "Checking workspace access before loading this saved call…"
+              : "Checking access to your workspace…"}
+          </p>
         </section>
       </div>
       {createElement("ac-preloader", {

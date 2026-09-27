@@ -1,0 +1,405 @@
+/* Report navigation colours come only from semantic Lightbox tokens, so the tab
+   strip, section list and return control always match the surface they sit on.
+   The workspace is a light report surface (data-lx-surface, tokens.css). */
+.workspace {
+  --report-ink: var(--lx-ink);
+  --report-muted: var(--lx-muted);
+  --report-border: var(--lx-line);
+  --report-teal: var(--lx-teal);
+  --report-active-ink: var(--lx-strength-ink);
+  min-width: 0;
+  color: var(--report-ink);
+  /* Every report section shares the accepted Lightbox UI face. */
+  font-family: var(--lx-font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* The single sticky report navigation row (both views): sections scroll
+   sideways at narrow widths or 200% zoom; the view choice stays trailing. */
+.navRow {
+  position: sticky;
+  z-index: 5;
+  top: var(--report-nav-sticky-top, 0px);
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--report-border);
+  background: var(--lx-paper);
+}
+
+.toolbar {
+  display: flex;
+  flex: none;
+  margin: 0;
+}
+
+.toolbar > button {
+  display: inline-flex;
+  min-width: 96px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid var(--report-border);
+  background: var(--lx-surface);
+  color: var(--report-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toolbar > button:first-child {
+  border-radius: 9px 0 0 9px;
+}
+
+.toolbar > button:last-child {
+  margin-left: -1px;
+  border-radius: 0 9px 9px 0;
+}
+
+.toolbar > button[aria-pressed="true"] {
+  position: relative;
+  z-index: 1;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-soft);
+  color: var(--report-active-ink);
+}
+
+.toolbar svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Sections use the full report width in both views. */
+.layout {
+  display: block;
+  min-width: 0;
+}
+
+/* Reading view: section links in the same horizontal row as the tabs. */
+.contents {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.contents::-webkit-scrollbar {
+  display: none;
+}
+
+.contents a {
+  display: inline-flex;
+  flex: none;
+  min-height: 46px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--report-muted);
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.contents a:hover {
+  color: var(--report-ink);
+}
+
+.contents a[aria-current="location"] {
+  border-bottom-color: var(--report-teal);
+  color: var(--report-active-ink);
+}
+
+.visuallyHiddenHeading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sectionIcon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: currentColor;
+  stroke-width: 1.9;
+}
+
+.fullLabel {
+  min-width: 0;
+}
+
+.compactLabel {
+  display: none;
+}
+
+/* One horizontal tablist with an underline indicator; it scrolls sideways
+   rather than stacking when the viewport (or 200% zoom) is narrow. */
+.tabNavigation {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabNavigation::-webkit-scrollbar {
+  display: none;
+}
+
+.tabNavigation button {
+  display: inline-flex;
+  flex: none;
+  min-height: 46px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--report-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.tabNavigation button:hover {
+  color: var(--report-ink);
+}
+
+.tabNavigation button[aria-selected="true"] {
+  border-bottom-color: var(--report-teal);
+  color: var(--report-active-ink);
+}
+
+/* Destination feedback after a jump: a short tint that fades out. */
+.workspace :global([data-arrived="true"]) {
+  animation: arrived 1.6s ease-out;
+  border-radius: 8px;
+}
+
+@keyframes arrived {
+  0%,
+  35% {
+    background-color: var(--lx-teal-soft);
+    box-shadow: 0 0 0 6px var(--lx-teal-soft);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.returnBar {
+  position: fixed;
+  z-index: 45;
+  right: 28px;
+  bottom: var(
+    --report-return-bottom,
+    calc(108px + env(safe-area-inset-bottom, 0px))
+  );
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+}
+
+.returnButton,
+.returnDismiss {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--report-active-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.returnButton {
+  padding: 0 10px 0 16px;
+}
+
+.returnDismiss {
+  padding: 0 12px 0 8px;
+  border-left: 1px solid var(--lx-teal-edge);
+  color: var(--report-muted);
+}
+
+.returnButton svg,
+.returnDismiss svg {
+  width: 16px;
+  height: 16px;
+}
+
+.returnButton:hover,
+.returnDismiss:hover {
+  background: var(--lx-teal-tint);
+}
+
+.returnButton:focus-visible,
+.returnDismiss:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: inset var(--lx-ring-focus);
+}
+
+.contents a:focus-visible,
+.tabNavigation button:focus-visible,
+.toolbar button:focus-visible,
+.section:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.sections {
+  min-width: 0;
+}
+
+/* Measured offsets include any shell bar overlapping the report scrollport. */
+.section {
+  min-width: 0;
+  padding-block: 0 28px;
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
+}
+
+.section + .section {
+  padding-top: 24px;
+  border-top: 1px solid var(--report-border);
+}
+
+.section > h2 {
+  margin: 0 0 14px;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
+}
+
+.section[hidden] {
+  display: none;
+}
+
+.workspace[data-view="tabs"] .section {
+  padding: 0;
+  border: 0;
+}
+
+/* Narrow: the view choice gets its own line above the scrolling sections. */
+@media (max-width: 760px) {
+  .navRow {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toolbar {
+    order: -1;
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 6px;
+  }
+}
+
+@media (max-width: 640px) {
+  .tabNavigation button,
+  .contents a {
+    min-height: 44px;
+    gap: 7px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .sectionIcon {
+    width: 16px;
+    height: 16px;
+    flex-basis: 16px;
+  }
+
+  .section {
+    padding-block: 14px 22px;
+    scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
+  }
+
+  .section + .section {
+    padding-top: 22px;
+  }
+
+  .section > h2 {
+    margin-bottom: 14px;
+    font-size: 21px;
+    scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
+  }
+
+  .toolbar > button {
+    min-height: 44px;
+    min-width: 94px;
+  }
+}
+
+/* Keep the shortcut above the audio dock and mobile navigation. Its custom
+   offset is measured from the dock at runtime, including narrow dock layouts. */
+@media (max-width: 899.98px) and (min-height: 560.02px) {
+  :global([data-lightbox-shell]) .returnBar {
+    right: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace *,
+  .workspace *::before,
+  .workspace *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@media print {
+  .navRow,
+  .toolbar,
+  .contents,
+  .tabNavigation {
+    display: none;
+  }
+
+  .section,
+  .section[hidden] {
+    display: block !important;
+    padding-block: 0;
+  }
+}

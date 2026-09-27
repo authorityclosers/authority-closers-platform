@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Sales Xray lens, analysis paused">
+  <style>
+    .lx-breathe { animation: lx-breathe 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    @keyframes lx-breathe { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .lx-breathe { animation: none; opacity: .85 } }
+  </style>
+  <defs>
+    <radialGradient id="lx-aperture" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="var(--lx-film-2, #16233A)"/>
+      <stop offset="1" stop-color="var(--lx-film, #0A1220)"/>
+    </radialGradient>
+  </defs>
+  <g transform="rotate(-7 60 60)">
+    <rect x="9" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+    <rect x="102" y="50" width="9" height="20" rx="4.5" fill="var(--lx-ink, #0E1726)"/>
+    <circle cx="60" cy="60" r="44" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="5"/>
+    <circle cx="60" cy="60" r="30" fill="url(#lx-aperture)"/>
+    <path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"/>
+    <rect class="lx-breathe" x="49" y="58" width="22" height="5" rx="2.5" fill="var(--lx-focus, #D97706)"/>
+  </g>
+  <circle cx="96" cy="22" r="14" fill="var(--lx-focus-soft, #FEF3C7)" stroke="var(--lx-focus, #D97706)" stroke-width="3"/>
+  <rect x="90.5" y="16" width="4" height="12" rx="1.5" fill="var(--lx-focus-ink, #92400E)"/>
+  <rect x="97.5" y="16" width="4" height="12" rx="1.5" fill="var(--lx-focus-ink, #92400E)"/>
+</svg>

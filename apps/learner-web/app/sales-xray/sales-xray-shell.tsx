@@ -6,9 +6,11 @@ import { LearnerShell } from "../components/site-shell";
 export function SalesXrayShell({
   children,
   current,
+  openingExistingCall = false,
 }: {
   children: ReactNode;
   current: "analyse" | "calls" | "recordings";
+  openingExistingCall?: boolean;
 }) {
   return (
     <LearnerShell current="sales-xray">
@@ -41,7 +43,12 @@ export function SalesXrayShell({
             Earlier recordings
           </Link>
         </nav>
-        <StandaloneStudio variant="embedded">{children}</StandaloneStudio>
+        <StandaloneStudio
+          variant="embedded"
+          openingExistingCall={openingExistingCall}
+        >
+          {children}
+        </StandaloneStudio>
       </main>
     </LearnerShell>
   );

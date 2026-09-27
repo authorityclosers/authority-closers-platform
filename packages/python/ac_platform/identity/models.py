@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -360,6 +361,68 @@ class EmailChallenge(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     person: Mapped[Person] = relationship(back_populates="email_challenges")
+
+
+class EmailLoginCode(Base):
+    """Current numeric sign-in challenge and durable per-email send window.
+
+    A row may exist before a canonical person: account creation is deferred
+    until the mailbox code is consumed with the current explicit age and Terms
+    acknowledgement. Legacy rows default to an unattested state and cannot
+    create or first-verify a learner. ``generation_id`` fences already-enqueued
+    mail when a resend supersedes the current code.
+    """
+
+    __tablename__ = "email_login_codes"
+    __table_args__ = (
+        CheckConstraint("length(trim(normalized_email)) > 0", name="email_nonblank"),
+        CheckConstraint("length(token_hash) = 32", name="token_hash_length"),
+        CheckConstraint("length(trim(encrypted_code)) > 0", name="encrypted_code_nonblank"),
+        CheckConstraint("expires_at > issued_at", name="expiry_after_issue"),
+        CheckConstraint(
+            "consumed_at IS NULL OR consumed_at >= issued_at",
+            name="consumed_after_issue",
+        ),
+        CheckConstraint("failed_attempts BETWEEN 0 AND 5", name="failed_attempts_bounds"),
+        CheckConstraint("sends_in_window BETWEEN 1 AND 5", name="sends_in_window_bounds"),
+        UniqueConstraint("normalized_email", name="uq_email_login_codes_email"),
+        UniqueConstraint("generation_id", name="uq_email_login_codes_generation"),
+        Index("ix_email_login_codes_expiry", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    generation_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    normalized_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32), nullable=False)
+    encrypted_code: Mapped[str] = mapped_column(String(256), nullable=False)
+    consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    age_attested: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    send_window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    sends_in_window: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
 
 
 class ReviewerAuthChallenge(Base):
@@ -716,6 +779,7 @@ __all__ = [
     "DeletionRequestStatus",
     "EmailChallenge",
     "EmailChallengeKind",
+    "EmailLoginCode",
     "ReviewerAuthChallenge",
     "IdentityCommandIdempotency",
     "OnboardingStatus",

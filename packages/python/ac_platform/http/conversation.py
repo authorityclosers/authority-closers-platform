@@ -31,6 +31,7 @@ from ac_platform.http.auth import (
 from ac_platform.http.conversation_analysis import install_analysis_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime, install_intake_routes
 from ac_platform.http.conversation_measurements import install_measurement_routes
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 from ac_platform.identity.services import IdentityResolutionError, SessionNotFoundError
 
 
@@ -129,6 +130,7 @@ def install_conversation_http(
         ) -> Any:
             admitted(request, response)
             require_safe_origin(request, settings)
+            await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
             return await result(
                 ConversationApplication(auth.database).register(
                     auth.resolved.actor,
@@ -175,6 +177,7 @@ def install_conversation_http(
         ) -> Any:
             admitted(request, response)
             require_safe_origin(request, settings)
+            await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
             if (
                 intake_runtime is not None
                 and payload.recipe_revision != intake_runtime.policy.acoustic_recipe

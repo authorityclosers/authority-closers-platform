@@ -1,0 +1,181 @@
+{
+  "schema_id": "ac.sales-xray.qualitative-pack/1",
+  "id": "sx-qualitative-20260922-r1",
+  "scope": "single_call",
+  "numeric_evaluation": false,
+  "sources": [
+    {
+      "id": "brain-2",
+      "drive_id": "1-dQpveXRW5n6EXlb5cuOk6TEoWs6gwZTjipFsgMfuQc",
+      "captured_text_sha256": "4b68ee14f09cf5d32f9af056e408ffa2e3a6f59133eb8ff2e93ef2d657dbfaa6"
+    },
+    {
+      "id": "brain-2-1",
+      "drive_id": "1oWcdr_SqT-xxHbVrWpYw7S16wfEWHpkn6LFeL4CmjCA",
+      "captured_text_sha256": "870dd8a7a06d9eafc4e0e0d4088e82a172a9247f6b61c8fd5d6870c57c0c23f2"
+    },
+    {
+      "id": "context-sep22",
+      "drive_id": "1KdSYvWv-IJSkew81eVNxNniWqcJpxAm81lz0xfemRaI",
+      "captured_text_sha256": "fa2012ed41ca3b5eb8f2a8ad3dcf854e5f693173400bc9dc39bd4bbc1e951285"
+    }
+  ],
+  "rules": [
+    {
+      "id": "SXQ01",
+      "instruction": "Evidence-linked findings must separate observed behavior, interpretation and supported impact. Explain uncertainty where material. Do not present inferred motives, ability to pay, trust or personality as facts.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "2.1",
+            "2.2",
+            "2.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ02",
+      "instruction": "Preserve exact accepted evidence, especially negations, names, numbers, prices, dates, decision makers, attempted actions and commitments. Never translate or rewrite source quotations for the report language.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "2.4"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ03",
+      "instruction": "Preserve both sides of contradictory statements. Distinguish unknown, insufficient evidence and not applicable from poor performance. Unverified speaker identity and incomplete source coverage limit conclusions; a selective fact index does not establish absence.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "2.5",
+            "2.6",
+            "2.7",
+            "2.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ04",
+      "instruction": "Distinguish interaction purpose, seller role, medium and sequence. Apply expectations to the evidenced purpose: do not demand a purchase from a setter or early discovery conversation. A reference to an earlier call does not verify that call; do not invent prior discovery or later attendance.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "3",
+            "4"
+          ]
+        },
+        {
+          "source_id": "context-sep22",
+          "sections": [
+            "Module 01: 4-5",
+            "Appointment setter: purpose and role"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ05",
+      "instruction": "Treat objections as statements to understand. Consider competing meanings, their evidence and a useful clarifying question. Expensive does not establish inability to pay; stakeholder consultation is not automatically an excuse. Preserve changed qualification instead of weaponizing earlier answers.",
+      "sources": [
+        {
+          "source_id": "brain-2-1",
+          "sections": [
+            "Module 01: 1-2",
+            "Module 01: 5-6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ06",
+      "instruction": "Judge discovery by useful context and solution relevance, not a fixed question count or rigid sequence. A requested brief product overview is not a premature full presentation. Credit questions and attempts already made; connect recommendations to the evidenced need.",
+      "sources": [
+        {
+          "source_id": "brain-2-1",
+          "sections": [
+            "Module 01: 7-10"
+          ]
+        },
+        {
+          "source_id": "context-sep22",
+          "sections": [
+            "Module 01: 6-9",
+            "Module 01: 12-17"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ07",
+      "instruction": "Attribute commercial amounts and estimates to their source. Do not invent ROI, revenue loss, urgency, offer claims, commitments or a sale. Conversation quality and the commercial outcome are distinct. Preserve proposed, pending, agreed and declined states.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "1",
+            "6",
+            "39"
+          ]
+        },
+        {
+          "source_id": "context-sep22",
+          "sections": [
+            "Module 01: 15"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ08",
+      "instruction": "Use only the supplied evidence modality. A transcript cannot establish measured tone, pacing or vocal emotion; audio alone cannot establish eye contact, slide quality or visual engagement. Silence has no universal meaning. Say what cannot be determined.",
+      "sources": [
+        {
+          "source_id": "context-sep22",
+          "sections": [
+            "Module 01: 2",
+            "Module 01: 21-23"
+          ]
+        },
+        {
+          "source_id": "brain-2-1",
+          "sections": [
+            "Module 01: 11"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ09",
+      "instruction": "Give source-grounded strengths and consequential improvements. Select one feasible next-call focus with a specific practice and source-grounded alternative phrase. Explain a possible upstream cause as interpretation. Suggested wording must not invent product facts or masquerade as a quotation.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "27-31"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "SXQ10",
+      "instruction": "This report covers one call. Do not claim a recurring pattern, mastery, regression, improvement over time or response to prior coaching without separately supplied longitudinal evidence. Keep this-call advice distinct from prospect facts and agreed next steps.",
+      "sources": [
+        {
+          "source_id": "brain-2",
+          "sections": [
+            "32"
+          ]
+        }
+      ]
+    }
+  ]
+}

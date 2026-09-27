@@ -76,16 +76,16 @@ def _candidate_violations(dockerfile: str, readme: str) -> set[str]:
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
         "--pids-limit=32",
-        "--memory=768m",
-        "--memory-swap=768m",
+        "--memory=1g",
+        "--memory-swap=1g",
         "--cpus=1",
         "--ulimit=nofile=64:64",
         "--ulimit=core=0:0",
-        "--ulimit=fsize=268435456:268435456",
+        "--ulimit=fsize=536870912:536870912",
         "--log-driver=none",
         "--pull=never",
         "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777",
-        "--tmpfs=/work:rw,noexec,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=0700",
+        "--tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700",
         "target=/input/source.media,readonly,bind-propagation=rprivate",
         "target=/output,bind-propagation=rprivate",
         '"--rate", "16000"',
@@ -183,7 +183,7 @@ def test_fixed_preflight_rejects_simulated_weaker_effective_controls(weakened: s
             preflight.append(node)
     metadata = {
         "/proc/self/status": "CapEff:0\nCapPrm:0\nCapBnd:0\nCapAmb:0\nNoNewPrivs:1\nSeccomp:2",
-        "/sys/fs/cgroup/memory.max": "805306368",
+        "/sys/fs/cgroup/memory.max": "1073741824",
         "/sys/fs/cgroup/memory.swap.max": "0",
         "/sys/fs/cgroup/pids.max": "32",
         "/sys/fs/cgroup/cpu.max": "100000 100000",
@@ -200,7 +200,7 @@ def test_fixed_preflight_rejects_simulated_weaker_effective_controls(weakened: s
         "capability": ("/proc/self/status", "CapEff:0", "CapEff:1"),
         "privileges": ("/proc/self/status", "NoNewPrivs:1", "NoNewPrivs:0"),
         "seccomp": ("/proc/self/status", "Seccomp:2", "Seccomp:0"),
-        "memory": ("/sys/fs/cgroup/memory.max", "805306368", "1610612736"),
+        "memory": ("/sys/fs/cgroup/memory.max", "1073741824", "2147483648"),
         "swap": ("/sys/fs/cgroup/memory.swap.max", "0", "4096"),
         "pids": ("/sys/fs/cgroup/pids.max", "32", "64"),
         "cpu": ("/sys/fs/cgroup/cpu.max", "100000 100000", "200000 100000"),
@@ -226,7 +226,7 @@ def test_fixed_preflight_rejects_simulated_weaker_effective_controls(weakened: s
         def read_text(self) -> str:
             return metadata[self.path]
 
-    sizes = {"/work": 536870912, "/tmp": 16777216, "/output": 67108864}  # noqa: S108
+    sizes = {"/work": 805306368, "/tmp": 16777216, "/output": 67108864}  # noqa: S108
     if weakened == "scratch-size":
         sizes["/work"] *= 2
     if weakened == "output-size":
@@ -263,7 +263,7 @@ def test_fixed_preflight_rejects_simulated_weaker_effective_controls(weakened: s
         "--read-only",
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
-        "--memory=768m",
+        "--memory=1g",
         "--pids-limit=32",
         "--cpus=1",
         "target=/input/source.media,readonly,bind-propagation=rprivate",

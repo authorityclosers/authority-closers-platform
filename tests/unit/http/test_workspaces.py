@@ -175,12 +175,12 @@ async def test_workspaces_are_exact_active_own_choices_without_auto_selection(
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["pragma"] == "no-cache"
     assert "set-cookie" not in response.headers
-    # The standard require_actor dependency retains its existing activity stamp;
-    # listing itself cannot select context, grant a role or change domain state.
-    assert len(statements) == 1 and statements[0].startswith("UPDATE sessions SET")
+    # Workspace listing is read-only, so it cannot select context, grant a role
+    # or change session activity while another retained read is in flight.
+    assert statements == []
     with Session(state.engine) as db:
         identity = db.get(IdentitySession, state.session)
-        assert identity.selected_tenant_id is None and identity.revision == 1
+        assert identity.selected_tenant_id is None and identity.revision == 0
         assert set(
             db.scalars(select(Membership.role).where(Membership.person_id == state.person))
         ) == {"learner"}

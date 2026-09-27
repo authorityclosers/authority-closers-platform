@@ -18,6 +18,10 @@
   list-style: none;
 }
 
+.summary[hidden] {
+  display: none;
+}
+
 .summary::-webkit-details-marker {
   display: none;
 }
@@ -59,6 +63,9 @@
   align-items: end;
   gap: 12px;
   padding-top: 2px;
+}
+.controls[hidden] {
+  display: none;
 }
 
 .field {

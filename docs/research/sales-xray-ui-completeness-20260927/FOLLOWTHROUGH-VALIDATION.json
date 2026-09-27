@@ -1,0 +1,73 @@
+{
+  "schema": "sales-xray-ui-contract-followthrough/1",
+  "utc": "2026-09-26T19:26:24.684591+00:00",
+  "source_head": "e488f952b1aafc10761f304630965d8233a2e39b",
+  "validation": "pass",
+  "errors": [],
+  "counts": {
+    "requirements": 25,
+    "unresolved_decisions": 12,
+    "queue_targets": 22,
+    "desktop_mobile_references_checked": 44,
+    "local_links_checked": 22,
+    "qualified_source_anchors_checked": 67
+  },
+  "prior_audits": {
+    "LOCAL-SOURCE-AUDIT.md": {
+      "sha256": "bb2e44b69845bbfe02449f86e65e829c2cc094989f48614e8adb57091fb2c22a",
+      "unchanged": true
+    },
+    "RESEARCH-REPORT.md": {
+      "sha256": "e86d6474bce8b94b7e35df2faee0ab5a71c0927a06975d8466b1f30163c7092c",
+      "unchanged": true
+    }
+  },
+  "document_sha256": {
+    "UPDATED-REQUIREMENTS.md": "d71f811a7839a87c4a0c2f6a1f7b1e69a6937f4b4236b1f33b1e11b89b91206f",
+    "JOURNEY-CONTRACTS.md": "264be87e576f33501d43df255bada270a1a2d891eb5e47bb43b00aa8bd2ca5db",
+    "EVIDENCE-DATA-CONTRACTS.md": "de59f30b3579ff111d305066cb0bddd909dbaf7ef53d668c38ebc74fdd35f8d1",
+    "OPERATIONS-SETTINGS-CONTRACTS.md": "9ae0787be989e2d0ccb2d63158553334e4c97c1fa348a6ee2f3aa8416fd39cff",
+    "NEXT-DESIGN-QUEUE.md": "96e2eca5b7f685aa9b67a95d539fa1e80f49798186dd3db944a5e690b79154ac",
+    "FOLLOWTHROUGH.md": "9df2d17d53ce2cdac566331c728da3997475ee6cb831bd9ecfec52d83427a70a"
+  },
+  "source_sha256": {
+    "apps/admin-web/app/reviewer/components/reviewer-auth-forms.tsx": "ff4fc216c73c14bc6f687a8c7b276c65f31a525f02d33663a0a49fd8db6f981c",
+    "apps/admin-web/app/reviewer/invite/page.tsx": "7907f2c77b33c79b9aa47687f11c6acb2530dac0e83ecb53e2cfdbcac9ab755d",
+    "apps/admin-web/app/reviewer/layout.tsx": "b64ccdec703da9af119fe52405a7a645ae26c7f3ddbd83b7c228e2be9d170be5",
+    "apps/admin-web/app/reviewer/review/[assignmentId]/page.tsx": "a3bb872b0ce5e2aeac34ab92fb4de579a6340421bbf30ea17b7482bfbebf8f12",
+    "apps/admin-web/app/reviewer/review/reviewer-assignment-adapter.tsx": "4f1fcf5ffbef153e92abd4e6f6fa3194fd863e8049fe9ee1d59535faa65196b6",
+    "apps/admin-web/app/reviewer/review/reviewer-navigation.ts": "df3f58d5d2041ffcded40f2a2006d47dfadab91708c74b14d3b7d618d24c1c7d",
+    "apps/admin-web/app/reviewer/reviewer-api.ts": "bfca13232057672c963843ff87e2ee87f139f22cf802b4275915268780ce0223",
+    "apps/admin-web/app/reviewer/reviewer-auth.ts": "dbf745f11b730609764b05c04376643c78f601a862c972e90c8ab51fd8369a9a",
+    "apps/admin-web/app/reviewer/reviewer-session.tsx": "19f6e3d14dc1ed6dc43cc31b4dcf7de0080277083cd65acd39dc8adb84d3522f",
+    "apps/admin-web/app/sales-xray/analysis-settings-history.tsx": "c05aa46ebdf5f5418e9bef190e4ddd3afc9adef9a9aecc0f2cf655c17173c523",
+    "apps/admin-web/app/sales-xray/benchmark-center.tsx": "2ff8f2022376c4e3594b837ca7a858e21e2d20022f28d0ca8db09f9860c6ebef",
+    "apps/admin-web/app/sales-xray/minute-account-admin.tsx": "b18de0d0ba42e4d455f273d12c37522f7dd61debe1fe68e09e308df8f096671b",
+    "apps/admin-web/app/sales-xray/provider-controls.tsx": "ab926920917ad40a859596a8288c1cab1c51d7d2ca01327e1a67e8ae460ecdf0",
+    "apps/admin-web/app/sales-xray/review/page.tsx": "14f5e7e725f1e2e785cecc20cc779dc29c405cf448f7d5779568c77a12937121",
+    "apps/admin-web/app/sales-xray/review/review-invitation-api.ts": "6a3cdcec27f02ee1c6d60c8f83aae411214d007d67fee5109983cffc04501ba4",
+    "apps/admin-web/app/sales-xray/review/review-invitation-panel.tsx": "3bdc72872b5142010d416a7442515b9c6f3143061f282d3bc9a502ee52dc99db",
+    "apps/learner-web/app/sales-xray/page.tsx": "eafd840bc23a6f5cdbe5b28fe861bc890d585beccffdd7c14fbd22183a01db19",
+    "apps/learner-web/app/sales-xray/recordings/page.tsx": "766d31a9c901fbaf4e030d9200c5e3fb8eec12365865c09e7f13e68515a13a01",
+    "apps/learner-web/app/sales-xray/review/[assignmentId]/page.tsx": "8fd5c2cdc9d8b14061137760c8da51fd2b06a7b69a5b340ab65a96444900d78a",
+    "apps/learner-web/app/sales-xray/review/invite/page.tsx": "1a257dcad7953b235ea9ef0f0a8343d0297ce35c613f047d9a669cb0a617072f",
+    "apps/learner-web/app/sales-xray/review/legacy-routes.test.ts": "0fbaebc4539658f486c6e401aee0aeb3186a501496f2349903c941d885cd4182",
+    "apps/learner-web/app/sales-xray/sales-xray-shell.tsx": "fa7fad6ff7ffa43e910c5a6f83f70df50e42258d5d6602328f8656da966c17c7",
+    "apps/sales-xray-web/app/account-auth.tsx": "1c9c6126ede89004a435443158e7d152a57e1754050a070538e795c1c9ba3ce7",
+    "apps/sales-xray-web/app/account-view.tsx": "a021c79706259b5382f4206ce2ac312bd7e40ac84a5fddf3ab15ef80c839faed",
+    "apps/sales-xray-web/app/account/page.tsx": "1a2f8ac33a091d0f2f9235914bda7d628ce552ed88dcb0219c9df9ea750f6909",
+    "apps/sales-xray-web/app/acquisition-studio.tsx": "fb70df3c81b217e1d6326d8a7cdcc30d5fdaedfb96fc4a10e4f2dcc5d707fa48",
+    "apps/sales-xray-web/app/analysis-start.ts": "5b6c219249560394e3b7ca4db40b1745c12e1cdd7bde5132e4e0cb217eb04a72",
+    "apps/sales-xray-web/app/auth/complete/auth-complete-client.tsx": "c1e450afcb62996a3604bdf12de1a859fc7c116b3da4c1c47ee0ff1f23af4b36",
+    "apps/sales-xray-web/app/dipak-overview.tsx": "92158b49d30cbe1bc10b00f2ca757f110627a42eda14938776ed7d7e46971bb3",
+    "apps/sales-xray-web/app/existing-call-entry.ts": "d184c40705cbc4dcf0412ae35229b82db95f7d50abc0e048581f6fdba625bb2a",
+    "apps/sales-xray-web/app/hooks/upload-session.tsx": "bf3368528e594b9a4474336707225d9aa1e2d40c85bed90bd93a4baa723b9444",
+    "apps/sales-xray-web/app/page.tsx": "2928884196d71b593a311aacfeb78a7dacf8bdf2f28a24857e79fd2cf4103b7f",
+    "apps/sales-xray-web/app/report-contract.ts": "240ef7c979170244c9a89ebd797d9f83f1e7b06f6d886409e0f6a66f8b61d822",
+    "apps/sales-xray-web/app/report-explorer.tsx": "8243b2b641b316c9a6e526610251dfa4ced7569858fd298c21eaccdc13eba4b0",
+    "apps/sales-xray-web/app/report-modes.tsx": "6937cf73c7e9bb082a1bd5ecd897d5b6591a167da86d6a19ba27b19bd4a1aed7",
+    "apps/sales-xray-web/app/report-navigation.ts": "3c71e4385be07af3b555032c653ec4f93c30a332d4815a4fac27512b598eb414",
+    "apps/sales-xray-web/app/standalone-studio.tsx": "5040f8097a542430dcf1887a1155d03168d6e2f682f9625e82986495b07b7f15"
+  },
+  "scope": "Documentation references and source text only; no product tests/provider calls/runtime verification."
+}

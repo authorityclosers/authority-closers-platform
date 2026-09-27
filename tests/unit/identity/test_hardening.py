@@ -22,6 +22,7 @@ from ac_platform.identity.application import (
     _drain_account_deletion_hook,
 )
 from ac_platform.identity.factories import create_production_identity_services
+from ac_platform.identity.models import ProviderIdentity
 from ac_platform.identity.repositories import (
     AsyncSqlAlchemyIdentityRepository,
     SqlAlchemyIdentityStore,
@@ -236,6 +237,36 @@ def test_sqlalchemy_identity_store_round_trips_hashed_session_metadata() -> None
 
             loaded = store.find_session_by_token_hash(b"h" * 32)
             assert loaded == stored
+    finally:
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+
+
+def test_sqlalchemy_identity_store_resolves_legacy_google_issuer_aliases() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    model_metadata().create_all(engine)
+    try:
+        person_id = uuid4()
+        subject = "legacy-google-subject"
+        with DbSession(engine) as session:
+            store = SqlAlchemyIdentityStore(session)
+            store.save_person(_verified_person(person_id))
+            session.add(
+                ProviderIdentity(
+                    id=uuid4(),
+                    person_id=person_id,
+                    issuer="accounts.google.com",
+                    subject=subject,
+                    created_at=NOW,
+                )
+            )
+            session.commit()
+
+            for issuer in ("accounts.google.com", "https://accounts.google.com"):
+                matches = store.find_provider_identities(issuer, subject)
+                assert len(matches) == 1
+                assert matches[0].person_id == person_id
+                assert matches[0].issuer == "accounts.google.com"
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()

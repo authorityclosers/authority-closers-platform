@@ -337,6 +337,46 @@ def test_transactional_email_family_renders_branded_responsive_html_and_text(
     assert "unsubscribe" not in rendered.text.lower()
 
 
+def test_numeric_email_login_code_template_is_one_time_and_contains_no_login_link() -> None:
+    rendered = render_email(
+        EmailMessage(
+            to="learner@example.test",
+            template="identity-email-login-code",
+            idempotency_key="email-login/test-current-code",
+            variables={
+                "first_name": "there",
+                "code": "042731",
+                "expires_at": "2026-08-31T18:30:00+00:00",
+            },
+            communication_class="verification_security",
+        )
+    )
+
+    assert rendered.subject == "Your Authority Closers sign-in code"
+    assert "042731" in rendered.text
+    assert "042731" in rendered.html
+    assert "expires" in rendered.text
+    assert "href=" not in rendered.html
+    assert "#token=" not in rendered.text
+
+
+def test_numeric_email_login_code_template_rejects_non_six_digit_values() -> None:
+    with pytest.raises(PermanentProviderError, match="six digits"):
+        render_email(
+            EmailMessage(
+                to="learner@example.test",
+                template="identity-email-login-code",
+                idempotency_key="email-login/malformed-code",
+                variables={
+                    "first_name": "there",
+                    "code": "12345",
+                    "expires_at": "2026-08-31T18:30:00+00:00",
+                },
+                communication_class="verification_security",
+            )
+        )
+
+
 @pytest.mark.parametrize(
     "expires_at",
     ["not-a-date", "2026-08-31T18:30:00"],

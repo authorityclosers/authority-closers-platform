@@ -51,6 +51,23 @@ def is_admin_budget_approval_ref(value: str, bundle_digest: str) -> bool:
     return len(suffix) == 64 and all(character in "0123456789abcdef" for character in suffix)
 
 
+def is_any_admin_budget_approval_ref(value: str) -> bool:
+    """Recognize an audited Admin cap from any earlier release digest."""
+
+    parts = (
+        value.removeprefix("ref:budget-admin/").split("/")
+        if isinstance(value, str) and value.startswith("ref:budget-admin/")
+        else []
+    )
+    return (
+        len(parts) == 2
+        and len(parts[0]) == 64
+        and all(character in "0123456789abcdef" for character in parts[0])
+        and len(parts[1]) == 64
+        and all(character in "0123456789abcdef" for character in parts[1])
+    )
+
+
 def _bounded_reason(reason: str) -> str:
     if not isinstance(reason, str) or not reason.strip() or len(reason) > 512:
         raise ConversationError("A bounded budget-change reason is required.")
@@ -202,5 +219,6 @@ __all__ = [
     "ADMIN_BUDGET_CEILING_PAISE",
     "ConversationBudgetAdmin",
     "admin_budget_approval_ref",
+    "is_any_admin_budget_approval_ref",
     "is_admin_budget_approval_ref",
 ]

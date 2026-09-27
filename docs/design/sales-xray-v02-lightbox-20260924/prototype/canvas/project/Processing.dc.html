@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales Xray v0.2 · Analysing</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&amp;family=Plus+Jakarta+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400..700&amp;display=swap">
+<style>
+body{margin:0;background:#F6F5F1;color:#0B1424;font-family:"Plus Jakarta Sans","Noto Sans Devanagari",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#087E79}a:hover{color:#06635F}
+@keyframes lxScanY{from{transform:translateY(-17px)}to{transform:translateY(17px)}}
+@keyframes lxOrbit{to{transform:rotate(360deg)}}
+@keyframes lxPop{0%,100%{transform:scale(.8);opacity:.55}50%{transform:scale(1.15);opacity:1}}
+@keyframes lxRing{0%{box-shadow:0 0 0 0 rgba(45,212,191,.55)}100%{box-shadow:0 0 0 12px rgba(45,212,191,0)}}
+@keyframes lxSweepWide{0%{transform:translateX(-140px)}100%{transform:translateX(1040px)}}
+@keyframes lxDots{0%,20%{opacity:.2}50%{opacity:1}80%,100%{opacity:.2}}
+.lx-scan{animation:lxScanY 2.4s cubic-bezier(.65,0,.35,1) infinite alternate}
+.lx-orbit{animation:lxOrbit 6s linear infinite;transform-origin:60px 60px}
+.lx-tag{animation:lxPop 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.lx-ring{animation:lxRing 1.8s ease-out infinite}
+.lx-wsweep{animation:lxSweepWide 5.5s linear infinite}
+.lx-d1{animation:lxDots 1.4s infinite}.lx-d2{animation:lxDots 1.4s .2s infinite}.lx-d3{animation:lxDots 1.4s .4s infinite}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; background: #F6F5F1; overflow: hidden">
+
+  <aside style="width: 248px; flex: none; box-sizing: border-box; height: 900px; background: #FFFFFF; border-right: 1px solid #E6E3DA; display: flex; flex-direction: column; gap: 22px; padding: 22px 16px 18px">
+    <div style="display: flex; align-items: center; gap: 11px; padding: 2px 8px">
+      <svg width="30" height="30" viewBox="0 0 512 512" aria-hidden="true"><polygon points="32,432 192,48 280,48 120,432" fill="#152638"></polygon><polygon points="308,112 440,432 144,432 184,328 296,328 260,224" fill="#152638"></polygon></svg>
+      <div style="display: flex; flex-direction: column; line-height: 1">
+        <div style="display: flex; align-items: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; color: #0B1424">Sales&#160;<svg width="15" height="16" viewBox="0 0 15 16" aria-hidden="true" style="margin: 0 1px"><defs><linearGradient id="bmP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#087E79"></stop><stop offset="1" stop-color="#24B5A8"></stop></linearGradient></defs><path d="M2 2l11 12M13 2L2 14" stroke="url(#bmP)" stroke-width="3.2" stroke-linecap="round"></path></svg>ray</div>
+        <span style="font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; color: #6B7486; margin-top: 6px">BY AUTHORITY CLOSERS</span>
+      </div>
+    </div>
+    <a href="Home.dc.html" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 12px; background: #0B1424; color: #FFFFFF; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 6px 16px -8px rgba(11,20,36,.5)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New analysis</a>
+    <nav aria-label="Main" style="display: flex; flex-direction: column; gap: 2px">
+      <a href="Library.dc.html" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; color: #334158; font-weight: 600; font-size: 14px; text-decoration: none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18"></path><path d="M6 18v-5M10 18V8M14 18v-8M18 18v-3"></path></svg>Calls<span style="margin-left: auto; font-size: 12px; font-weight: 700; color: #6B7486">12</span></a>
+      <a href="Home.dc.html" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; color: #334158; font-weight: 600; font-size: 14px; text-decoration: none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19.5c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5"></path></svg>Account</a>
+    </nav>
+    <div style="flex-grow: 1"></div>
+    <div style="border: 1px solid #E6E3DA; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #FBFAF7">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 12px; font-weight: 700; color: #334158">Trial minutes</span><span style="font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums">24 of 60 left</span></div>
+      <div style="height: 6px; border-radius: 99px; background: #E9E6DD; overflow: hidden"><div style="width: 40%; height: 6px; border-radius: 99px; background: linear-gradient(90deg,#087E79,#24B5A8)"></div></div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px">
+      <div style="width: 34px; height: 34px; border-radius: 50%; background: #E6F5F2; color: #06635F; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px">RK</div>
+      <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; font-weight: 700">Rohan Kulkarni</span><span style="font-size: 11.5px; color: #6B7486">AC account</span></div>
+    </div>
+  </aside>
+
+  <main style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0">
+    <header style="height: 64px; flex: none; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 0 48px; border-bottom: 1px solid #ECE9E1">
+      <span style="font-size: 13px; font-weight: 600; color: #6B7486">Calls <span style="color: #CFCABE">/</span> <span style="color: #0B1424">Site visit follow-up · Mehta</span></span>
+      <button type="button" style="display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid #E6E3DA; background: #FFFFFF; font: 700 13px 'Plus Jakarta Sans'; color: #334158"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"></rect><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"></path></svg>Copy link to this call</button>
+    </header>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 22px; padding: 30px 48px; box-sizing: border-box">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #087E79">STEP 3 OF 3 · ANALYSING</span>
+          <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; line-height: 1.06; letter-spacing: -0.03em">Reading between the lines<span class="lx-d1">.</span><span class="lx-d2">.</span><span class="lx-d3">.</span></h1>
+        </div>
+        <span role="status" style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #56637A"><span style="width: 8px; height: 8px; border-radius: 50%; background: #087E79"></span>Last confirmed update 8 seconds ago</span>
+      </div>
+
+      <section aria-label="Analysis progress" style="position: relative; display: grid; grid-template-columns: 300px minmax(0, 1fr); border-radius: 28px; overflow: hidden; background-color: #0A1220; background-image: radial-gradient(ellipse at 18% 40%, rgba(45,212,191,.20), rgba(10,18,32,0) 55%), linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: auto, 32px 32px, 32px 32px; box-shadow: 0 34px 70px -34px rgba(10,18,32,.6)">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 34px 20px; border-right: 1px solid rgba(255,255,255,.07)">
+          <svg width="176" height="176" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <filter id="gP" x="-50%" y="-300%" width="200%" height="700%"><feGaussianBlur stdDeviation="2.2" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+              <radialGradient id="aP" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#050A14"></stop></radialGradient>
+              <linearGradient id="tP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2DD4BF" stop-opacity="0"></stop><stop offset="1" stop-color="#2DD4BF" stop-opacity=".35"></stop></linearGradient>
+              <clipPath id="cP"><circle cx="60" cy="60" r="30"></circle></clipPath>
+            </defs>
+            <g class="lx-orbit">
+              <circle class="lx-tag" cx="60" cy="7" r="4.5" fill="#2DD4BF"></circle>
+              <circle class="lx-tag" cx="106" cy="84" r="4.5" fill="#F59E0B" style="animation-delay: .8s"></circle>
+              <circle class="lx-tag" cx="14" cy="84" r="4.5" fill="#8B74FF" style="animation-delay: 1.6s"></circle>
+            </g>
+            <rect x="9" y="50" width="9" height="20" rx="4.5" fill="#E8EDF5"></rect>
+            <rect x="102" y="50" width="9" height="20" rx="4.5" fill="#E8EDF5"></rect>
+            <circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#E8EDF5" stroke-width="5"></circle>
+            <circle cx="60" cy="60" r="30" fill="url(#aP)"></circle>
+            <g clip-path="url(#cP)">
+              <g opacity=".5" stroke="#2DD4BF" stroke-width="2" stroke-linecap="round"><path d="M36 60 h4 M43 55 v10 M48 50 v20 M53 56 v8 M58 47 v26 M63 53 v14 M68 49 v22 M73 56 v8 M78 58 v4"></path></g>
+              <g class="lx-scan"><rect x="28" y="44" width="64" height="16" fill="url(#tP)"></rect><rect x="30" y="58.5" width="60" height="3" rx="1.5" fill="#2DD4BF" filter="url(#gP)"></rect></g>
+            </g>
+            <path d="M42 47 A22 22 0 0 1 56 39" fill="none" stroke="#FFFFFF" stroke-opacity=".38" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center">
+            <span style="font-size: 15px; font-weight: 800; color: #FFFFFF">Finding the key moments</span>
+            <span style="font-size: 12.5px; line-height: 1.5; color: #9FB0C8; max-width: 220px">Strengths, objections and openings, each tied to a moment you can replay.</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; padding: 30px 34px 26px; gap: 6px">
+          <div style="display: flex; gap: 16px; align-items: flex-start; padding: 12px 0">
+            <span style="width: 34px; height: 34px; flex: none; border-radius: 50%; background: #2DD4BF; color: #0A1220; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 800; color: #FFFFFF">Recording checked</span><span style="font-size: 13px; color: #9FB0C8">18:42 long · verified and stored privately</span></div>
+            <span style="font-size: 12px; font-weight: 700; color: #2DD4BF">Saved</span>
+          </div>
+          <div style="margin-left: 16px; width: 2px; height: 10px; background: #2DD4BF; border-radius: 2px"></div>
+          <div style="display: flex; gap: 16px; align-items: flex-start; padding: 12px 0">
+            <span style="width: 34px; height: 34px; flex: none; border-radius: 50%; background: #2DD4BF; color: #0A1220; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 800; color: #FFFFFF">Listened</span><span style="font-size: 13px; color: #9FB0C8">Transcript saved · Hindi + English</span></div>
+            <span style="font-size: 12px; font-weight: 700; color: #2DD4BF">Saved</span>
+          </div>
+          <div style="margin-left: 16px; width: 2px; height: 10px; background: linear-gradient(#2DD4BF, rgba(45,212,191,.2)); border-radius: 2px"></div>
+          <div style="display: flex; gap: 16px; align-items: flex-start; padding: 14px 16px; margin: 0 -16px; border-radius: 16px; background: rgba(45,212,191,.08); border: 1px solid rgba(45,212,191,.25)">
+            <span class="lx-ring" style="width: 34px; height: 34px; flex: none; border-radius: 50%; border: 2px solid #2DD4BF; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><span style="width: 10px; height: 10px; border-radius: 50%; background: #2DD4BF"></span></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 800; color: #FFFFFF">Understanding the conversation</span><span style="font-size: 13px; color: #C9D4E3">Working now. This step is confirmed by the server, not estimated.</span></div>
+            <span style="font-size: 12px; font-weight: 700; color: #FFFFFF; background: rgba(45,212,191,.18); padding: 3px 9px; border-radius: 99px">In progress</span>
+          </div>
+          <div style="margin-left: 16px; width: 2px; height: 10px; background: rgba(255,255,255,.12); border-radius: 2px"></div>
+          <div style="display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; opacity: .72">
+            <span style="width: 34px; height: 34px; flex: none; border-radius: 50%; border: 2px dashed rgba(201,212,227,.45); box-sizing: border-box"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 15px; font-weight: 800; color: #FFFFFF">Writing your coaching</span><span style="font-size: 13px; color: #9FB0C8">Starts as soon as understanding is saved</span></div>
+            <span style="font-size: 12px; font-weight: 700; color: #9FB0C8">Next</span>
+          </div>
+
+          <div style="position: relative; margin-top: 14px; height: 70px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); overflow: hidden">
+            <svg width="100%" height="70" viewBox="0 0 800 70" preserveAspectRatio="none" aria-label="Measured loudness of your recording">
+              <path d="{{wave}}" stroke="#5E7391" stroke-width="3" stroke-linecap="round" fill="none"></path>
+            </svg>
+            <div class="lx-wsweep" aria-hidden="true" style="position: absolute; top: 0; left: 0; width: 140px; height: 70px; background: linear-gradient(90deg, rgba(45,212,191,0), rgba(45,212,191,.28), rgba(45,212,191,0)); mix-blend-mode: screen"></div>
+            <span style="position: absolute; left: 12px; bottom: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; color: rgba(201,212,227,.6)">YOUR RECORDING · MEASURED</span>
+          </div>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px">
+        <div style="display: flex; gap: 14px; align-items: center; padding: 18px 20px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 20px">
+          <span style="width: 44px; height: 44px; flex: none; border-radius: 14px; background: #E6F5F2; color: #087E79; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"></path><path d="M9 9.5l2 2 4-4"></path></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 14.5px; font-weight: 800">You can close this tab</span><span style="font-size: 13px; line-height: 1.45; color: #6B7486">We keep working. Your report will appear in Calls.</span></div>
+          <a href="Library.dc.html" style="flex: none; display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 11px; border: 1px solid #E6E3DA; font-size: 13px; font-weight: 700; color: #0B1424; text-decoration: none">Go to Calls</a>
+        </div>
+        <div style="display: flex; gap: 14px; align-items: center; padding: 18px 20px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 20px">
+          <span style="width: 44px; height: 44px; flex: none; border-radius: 14px; background: #FEF3E2; color: #B45309; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z"></path></svg></span>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 3px"><span style="font-size: 14.5px; font-weight: 800">While you wait</span><span style="font-size: 13px; line-height: 1.45; color: #6B7486">Think of the one moment you would replay. See if your report agrees.</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var d = '';
+    for (var i = 0; i < 160; i++) {
+      var x = 4 + i * 5;
+      var e = Math.abs(Math.sin(i * 0.37) * 0.55 + Math.sin(i * 0.11 + 1.3) * 0.35 + Math.sin(i * 1.7) * 0.18);
+      var gap = (i > 52 && i < 57) || (i > 118 && i < 122) ? 0.06 : 1;
+      var h = Math.max(2, Math.min(30, e * 30 * gap));
+      d += 'M' + x + ' ' + (35 - h).toFixed(1) + 'V' + (35 + h).toFixed(1);
+    }
+    return { wave: d };
+  }
+}
+</script>
+</body>
+</html>

@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.application import ConversationConflict
+import ac_platform.conversation_intelligence.inference_worker as worker_module
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationDenied,
+)
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_coaching_input,
@@ -18,9 +25,38 @@ from ac_platform.conversation_intelligence.inference_tasks import (
 from ac_platform.conversation_intelligence.inference_worker import (
     ConversationInferenceWorker,
     Scope,
+    _provider_returned_receipt,
+    _safe_receipt_usage,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import FactPacket, load_report_profile
+from ac_platform.conversation_intelligence.storage import (
+    CHUNK_BYTES,
+    ObjectKey,
+    ObjectKind,
+    PrivateLocalRecordingStorage,
+)
+
+
+@pytest.mark.parametrize("reported", ["gpt-6-luna", "gpt-6-sol", None, "unsafe model text"])
+def test_openai_returned_receipt_distinguishes_requested_and_reported_model(reported) -> None:
+    result = _result(
+        {"model": reported},
+        provider="openai",
+        model="gpt-6-luna",
+        input_sha256="a" * 64,
+    )
+    receipt = _provider_returned_receipt(
+        result, idempotency_key="synthetic-key", run_id=uuid4(), stage="C5"
+    )
+    assert receipt["model"] == "gpt-6-luna"
+    assert receipt["reported_model"] == (
+        reported if reported in {"gpt-6-luna", "gpt-6-sol"} else None
+    )
+    assert receipt["model_verified"] is (reported == "gpt-6-luna")
+    assert receipt["validation_state"] == "provider_returned"
+    assert receipt["actual_cost_paise"] is None
+    assert receipt["response_sha256"] == hashlib.sha256(result.raw_json).hexdigest()
 
 
 def _transcript() -> dict[str, Any]:
@@ -85,6 +121,27 @@ def _scope(
             plan=plan,
         ),
     )
+
+
+def test_openai_usage_receipt_preserves_cache_and_reasoning_breakdown() -> None:
+    assert _safe_receipt_usage(
+        {
+            "input_tokens": 100,
+            "output_tokens": 30,
+            "total_tokens": 130,
+            "cached_tokens": 20,
+            "cache_write_tokens": 10,
+            "reasoning_tokens": 5,
+            "unrecognized": 999,
+        }
+    ) == {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130,
+        "cached_tokens": 20,
+        "cache_write_tokens": 10,
+        "reasoning_tokens": 5,
+    }
 
 
 def test_text_stages_send_prepared_bytes_without_reading_audio() -> None:
@@ -206,3 +263,89 @@ def test_unknown_stage_cannot_become_a_provider_payload() -> None:
 
     with pytest.raises(ConversationConflict, match="stage is invalid"):
         worker._payload(_scope("C6", SimpleNamespace(payload=b"prepared")))
+
+
+def test_save_raw_streams_provider_response_in_storage_chunks(tmp_path) -> None:
+    storage = PrivateLocalRecordingStorage(tmp_path / "objects")
+    worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
+    worker.storage = storage
+    tenant_id, recording_id, run_id = uuid4(), uuid4(), uuid4()
+    scope = cast(
+        Scope,
+        SimpleNamespace(
+            task=SimpleNamespace(tenant_id=tenant_id, run_id=run_id),
+            recording=SimpleNamespace(id=recording_id),
+        ),
+    )
+    raw = b"provider-response" * ((CHUNK_BYTES // 17) + 2)
+    raw = raw[: CHUNK_BYTES + 17]
+    result_value = ProviderResult(
+        provider="elevenlabs",
+        model="scribe_v2",
+        request_id="synthetic-large-response",
+        response_sha256=hashlib.sha256(raw).hexdigest(),
+        raw_json=raw,
+        data={},
+        usage={"total_tokens": 0},
+        input_sha256="a" * 64,
+    )
+
+    worker._save_raw(scope, result_value)
+
+    key = ObjectKey(tenant_id, recording_id, run_id, ObjectKind.PROVIDER_RESPONSE)
+    assert b"".join(storage.iter_bytes(key, expected_sha256=result_value.response_sha256)) == raw
+
+
+@pytest.mark.asyncio
+async def test_worker_holds_a_queued_v6_task_before_reconstructing_provider_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_id, job_id = uuid4(), uuid4()
+    tenant_id, person_id, recording_id = uuid4(), uuid4(), uuid4()
+    task = SimpleNamespace(
+        run_id=run_id,
+        job_id=job_id,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        recording_id=recording_id,
+        state="queued",
+        erased_at=None,
+        generation=1,
+        stage="C5",
+        intent={"request": {"coaching_prompt_revision": "coaching-v6"}},
+    )
+    run = SimpleNamespace(
+        state="queued",
+        generation=1,
+        job_id=job_id,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        recording_id=recording_id,
+    )
+    recording = SimpleNamespace(state="ready", generation=1, id=recording_id)
+    application = SimpleNamespace(
+        admit=AsyncMock(return_value=datetime.now(UTC)),
+        get=AsyncMock(),
+        _recording=AsyncMock(return_value=recording),
+    )
+    database = SimpleNamespace(scalar=AsyncMock(side_effect=[task, task, run]))
+    monkeypatch.setattr(
+        worker_module,
+        "ConversationApplication",
+        lambda _database, *, clock: application,
+    )
+    monkeypatch.setattr(worker_module, "actor_from_row", lambda _task: object())
+    worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
+    worker.clock = lambda: datetime.now(UTC)
+    worker.authority = None
+    job = SimpleNamespace(
+        payload={"schema": 1, "run_id": str(run_id)},
+        id=job_id,
+        tenant_id=tenant_id,
+    )
+
+    with pytest.raises(ConversationDenied, match="AC-SVAL-01 Gate 2"):
+        await worker._scope(database, job)
+
+    assert database.scalar.await_count == 3
+    application.get.assert_awaited_once()

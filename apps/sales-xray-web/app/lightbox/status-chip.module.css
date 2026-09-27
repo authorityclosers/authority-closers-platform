@@ -1,0 +1,57 @@
+.chip {
+  --chip-ink: var(--lx-muted);
+  --chip-bg: var(--lx-sunken);
+
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--chip-bg);
+  color: var(--chip-ink);
+  font: var(--lx-text-meta);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.chip[data-tone="ready"] {
+  --chip-ink: var(--lx-strength-ink);
+  --chip-bg: var(--lx-strength-soft);
+}
+.chip[data-tone="analysing"] {
+  --chip-ink: var(--lx-closing-ink);
+  --chip-bg: var(--lx-closing-soft);
+}
+.chip[data-tone="needs-you"],
+.chip[data-tone="paused"] {
+  --chip-ink: var(--lx-focus-ink);
+  --chip-bg: var(--lx-focus-soft);
+}
+.chip[data-tone="danger"] {
+  --chip-ink: var(--lx-danger);
+  --chip-bg: var(--lx-danger-soft);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: lxLiveDot 1.6s ease-out infinite;
+}
+
+@keyframes lxLiveDot {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}

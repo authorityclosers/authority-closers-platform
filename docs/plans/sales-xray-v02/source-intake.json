@@ -1,0 +1,219 @@
+{
+  "schema": "sales-xray-v02-source-intake/1",
+  "date": "2026-09-23",
+  "baseline": {
+    "source_sha": "c8f16cb2330008ada6374663d0a7d2442aec6532",
+    "runtime_sha": "270a4b57e39646ba6b5e171614bc9ef114091d09"
+  },
+  "sources": [
+    {
+      "id": "brain-2",
+      "drive_id": "1-dQpveXRW5n6EXlb5cuOk6TEoWs6gwZTjipFsgMfuQc",
+      "title": "Brain 2.0 — 19 September",
+      "url": "https://docs.google.com/document/d/1-dQpveXRW5n6EXlb5cuOk6TEoWs6gwZTjipFsgMfuQc/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "4b68ee14f09cf5d32f9af056e408ffa2e3a6f59133eb8ff2e93ef2d657dbfaa6",
+      "captured_text_bytes": 63107
+    },
+    {
+      "id": "brain-2-1",
+      "drive_id": "1oWcdr_SqT-xxHbVrWpYw7S16wfEWHpkn6LFeL4CmjCA",
+      "title": "Brain 2.1 — 20 September",
+      "url": "https://docs.google.com/document/d/1oWcdr_SqT-xxHbVrWpYw7S16wfEWHpkn6LFeL4CmjCA/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "870dd8a7a06d9eafc4e0e0d4088e82a172a9247f6b61c8fd5d6870c57c0c23f2",
+      "captured_text_bytes": 191088
+    },
+    {
+      "id": "brain-3",
+      "drive_id": "1h-wzZ4d_YoMUXk3t_5yAWrawZp686XMefUwJK_T5ajw",
+      "title": "Brain 3.0 — 21 September",
+      "url": "https://docs.google.com/document/d/1h-wzZ4d_YoMUXk3t_5yAWrawZp686XMefUwJK_T5ajw/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "2baa10889734f300c137b774edb06dcbd284bcfbb18ebda4779c3a0f12f758da",
+      "captured_text_bytes": 389451
+    },
+    {
+      "id": "context-sep22",
+      "drive_id": "1KdSYvWv-IJSkew81eVNxNniWqcJpxAm81lz0xfemRaI",
+      "title": "Context and role overlays — 22 September",
+      "url": "https://docs.google.com/document/d/1KdSYvWv-IJSkew81eVNxNniWqcJpxAm81lz0xfemRaI/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "fa2012ed41ca3b5eb8f2a8ad3dcf854e5f693173400bc9dc39bd4bbc1e951285",
+      "captured_text_bytes": 96892
+    },
+    {
+      "id": "detailed-report-sep19",
+      "drive_id": "1lnS3-xqDpWax-Yc7kDTEda0Uyg4Ln0S5XgB7qpEVrWg",
+      "title": "Detailed report V1 — 19 September",
+      "url": "https://docs.google.com/document/d/1lnS3-xqDpWax-Yc7kDTEda0Uyg4Ln0S5XgB7qpEVrWg/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "d6c3455790a11124dacc2f7534a61ca0600b61c212dc4b6eb6fdfb02eb9df624",
+      "captured_text_bytes": 41634
+    },
+    {
+      "id": "prospect-info",
+      "drive_id": "1xXOJwBObFfYjeL9wV5dBDV-bULq2zFCcDwP3tY1Qfjg",
+      "title": "Prospect information",
+      "url": "https://docs.google.com/document/d/1xXOJwBObFfYjeL9wV5dBDV-bULq2zFCcDwP3tY1Qfjg/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "ff525646c216b817a4cc91f53f8fae7f19cb3585c93e5bf8d8c2f4b6bbf4a72f",
+      "captured_text_bytes": 29453
+    },
+    {
+      "id": "report-structure",
+      "drive_id": "1wN9Kzmg8c8LfDGAWUnjYk09syzf1jhmDWFVSkYX6SkU",
+      "title": "Report structure",
+      "url": "https://docs.google.com/document/d/1wN9Kzmg8c8LfDGAWUnjYk09syzf1jhmDWFVSkYX6SkU/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "dde9916212df1fb7f7b29a7fdb182ce44eac08b51106a70fd7b9ffa0e195162b",
+      "captured_text_bytes": 25414
+    },
+    {
+      "id": "data-dump-brain-v2",
+      "drive_id": "1a6m0U-Xh2NF6GdB4jjF-epAuRKmSRS_FiouS_9L0EiY",
+      "title": "Knowledge-dump master rulebook",
+      "url": "https://docs.google.com/document/d/1a6m0U-Xh2NF6GdB4jjF-epAuRKmSRS_FiouS_9L0EiY/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "de27589dab82ddb1e7979db3d6880c19431c6c91f7db56e81ccf9f00ecb595d1",
+      "captured_text_bytes": 63084
+    },
+    {
+      "id": "layout-spec",
+      "drive_id": "15bVqrTCb9LdMZ3g3gKs_228xYRzUHiNossXr8DWkM8M",
+      "title": "Report/Prospect/Coaching layout specification",
+      "url": "https://docs.google.com/document/d/15bVqrTCb9LdMZ3g3gKs_228xYRzUHiNossXr8DWkM8M/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "ad41bb6bb381d31c5af011b0c18f391e81781a145e99755216fb2ddc87ac3d7e",
+      "captured_text_bytes": 30946
+    },
+    {
+      "id": "ux-rulebook",
+      "drive_id": "1NQ-3tYQRRHtOYvwUKz2EGSLfzW6vCgHO_PyTBj5o02s",
+      "title": "UX rulebook",
+      "url": "https://docs.google.com/document/d/1NQ-3tYQRRHtOYvwUKz2EGSLfzW6vCgHO_PyTBj5o02s/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "7f61a88895c41a520abfe9b38586f20b06107a9796add1bf67571cfb11bb68cb",
+      "captured_text_bytes": 13934
+    },
+    {
+      "id": "main-ai-brain",
+      "drive_id": "1M5CESNBAPhcJmaQwXyWaOaOtbiitSds9Gtufz-4GRB4",
+      "title": "Main Brain roadmap",
+      "url": "https://docs.google.com/document/d/1M5CESNBAPhcJmaQwXyWaOaOtbiitSds9Gtufz-4GRB4/edit",
+      "review_scope": "full",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "134d5a217d5c9f488413917324d152bc085bfaf33d32056d124d98d50b15b2f4",
+      "captured_text_bytes": 10262
+    },
+    {
+      "id": "main-training-rulebook",
+      "drive_id": "1_dz_4YK-c7ombMXfKU1kKlMx2tAUrcdkfnYRXa2T1fA",
+      "title": "Main training rulebook",
+      "url": "https://docs.google.com/document/d/1_dz_4YK-c7ombMXfKU1kKlMx2tAUrcdkfnYRXa2T1fA/edit",
+      "review_scope": "focused",
+      "approval": "candidate_not_runtime_policy",
+      "captured_text_sha256": "861de3b7b3e26e3286aba8864173a6af7bab135fe4a06a738aa1ed65473bce47",
+      "captured_text_bytes": 13742
+    }
+  ],
+  "research_package": {
+    "sha256": "43d206b36f631bb11de1051d01b5e3bf7a01bd39a2c2e7bba47f28b3a06a14b3",
+    "entries": 17,
+    "requirements": 50,
+    "packages": 24,
+    "decisions": 12,
+    "gates": 24,
+    "status": "prior_research_proposals"
+  },
+  "sheet": {
+    "id": "1S6Bq2Kppq0Wzisq9tgKwiISU7U4RUVLRd7Fg6VOy5WY",
+    "ranges": [
+      "START!A1:L45",
+      "DECISIONS!A1:S30",
+      "ENGINES!A1:N24"
+    ],
+    "mutated": false
+  },
+  "decisions": [
+    {
+      "id": "V02-D02",
+      "authority": "user",
+      "status": "direction_received",
+      "ui_language": "en",
+      "initial_report_modes": [
+        "en",
+        "hi-Deva+en",
+        "mr-Deva+en"
+      ],
+      "quote_policy": "preserve_original",
+      "unselected_report_mode": "en",
+      "unselected_report_mode_basis": "backward_compatibility_implementation_default",
+      "future_languages": "extensible_requires_quality_evidence"
+    }
+  ],
+  "layout_folders": [
+    {
+      "id": "13pW5SgcxMKS_H43KH9TTCoo5SsfZuQ6e",
+      "name": "Home",
+      "images": 3
+    },
+    {
+      "id": "17zpFwCUeJWfvexsbtp3QxsHJZbQrlA9L",
+      "name": "Calls",
+      "images": 2
+    },
+    {
+      "id": "1auTpAoPRa1vxNUu9pcaLCm7sO16y_U-z",
+      "name": "Reports",
+      "images": 8
+    },
+    {
+      "id": "1IyzqEmmmU3rHtRnidnS-cBZRpdKkGJ7L",
+      "name": "Prospects",
+      "images": 7
+    },
+    {
+      "id": "1fgu6tLeQHahv50O4sYpDhfr0njOmQNz0",
+      "name": "Coaching",
+      "images": 10
+    },
+    {
+      "id": "1kmQzR8NY1lyg9gQ4q9MroWAQh8NmEhia",
+      "name": "Insights",
+      "images": 0
+    },
+    {
+      "id": "1OmvvJmw6a3qQC2x36hP7fUBtq1F4XTmA",
+      "name": "Settings",
+      "images": 0
+    }
+  ],
+  "reviewed_image_ids": [
+    "1TbEZaUacYgs2EkSSw54_JT5xX1d3gy8L",
+    "1WA8yovEv5ituFGTkozyq3iqrW3J8KN78",
+    "1c0ivLoCYskjEvXJ4agHfqVjhIokUBSJQ",
+    "138QrzJvld7mGWQFKPYFmaVElb5qLsMBX",
+    "193Ia8a_wZtfJCQn8P24smdd4-udfqya6",
+    "1CLM1IV89DCIfrjfwp7F3rO0O08kMupou",
+    "1BPnRoqHoZ53Vdt-ZGoOuPRPvazQmPEgA",
+    "1xWaxdi7Aed8Ts7jth-kwUwKx1Fu2Q6c6",
+    "1alqdldETy3XK0zAOvtDOKdgUIxwxNzha",
+    "1lOsz3J4JpkuAGafq4oiyxX5uU6Q-DsCR"
+  ],
+  "limitations": [
+    "Not a line-by-line adoption review of the whole knowledge dump",
+    "Voice notes read through existing chat interpretation; no independent transcription",
+    "No v0.2 runtime implementation or activation in this intake"
+  ]
+}

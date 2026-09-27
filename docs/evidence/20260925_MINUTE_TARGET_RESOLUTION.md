@@ -1,0 +1,11 @@
+# Exact learner target resolution for minute administration
+
+The operations API now has `POST /v1/admin/conversation-minute-accounts/resolve-target`. It accepts only `{ "query": "..." }`, rejects extra body fields and query parameters, and requires the current persisted `platform_access_manage` capability through `platform_projection` before searching. It does not extend the `learner_diagnose` surface.
+
+The target search uses only `Settings.public_learner_tenant_id`. It accepts an exact normalized email or canonical public username, and rejects raw UUIDs, phone-like strings, and non-username partial names. A match must have an active person, a verified email, an active tenant, and an active learner membership. Lookup runs with equality predicates and returns at most one target; zero or ambiguous matches return `{ "target": null }`. The response contains the canonical tenant/person IDs, a display name, public username, and masked email. It never returns raw email or phone data.
+
+Successful lookups and valid no-match lookups append an audit event in the configured operations tenant, attributed to the current actor/session. The event stores lookup kind, zero/one result count, and configured target tenant. It does not store the search query; the audit reason is a fixed source-owned description. Invalid input, unauthorized calls, missing public-tenant configuration, and extra request parameters do not perform a target lookup or append this read event.
+
+The service reuses the canonical `normalize_email` and `normalize_username` helpers, but performs its own tenant- and eligibility-scoped query rather than calling the broader learner-diagnosis lookup. This keeps minute-account authority separate from `learner_diagnose`.
+
+Ruff formatting and lint checks pass for the resolver module, operations adapter, and test files. The query and display-name privacy unit tests pass (10 passed). Mypy reports no issues in the two changed source modules. The schema-isolated PostgreSQL integration test passes using the healthy existing `D:\Projects\authority-closers-platform\.venv\Scripts\python.exe` with `PYTHONPATH=packages/python`: 1 passed, 3 deselected in 24.05 seconds. An earlier attempt with the intake worktree's damaged venv stopped in Alembic metadata discovery before running migration or resolver code; that shared environment was left unchanged.

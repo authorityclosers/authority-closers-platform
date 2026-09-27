@@ -1,0 +1,67 @@
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lx-space-2) var(--lx-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--lx-muted);
+  font: var(--lx-text-ui);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lx-space-2);
+}
+
+.step + .step::before {
+  width: 28px;
+  height: 1px;
+  margin-right: var(--lx-space-1);
+  background: var(--lx-line-strong);
+  content: "";
+}
+
+.marker {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1.5px solid var(--lx-line-strong);
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.step[data-step-state="current"] {
+  color: var(--lx-ink);
+}
+
+.step[data-step-state="current"] .marker {
+  border-color: var(--lx-ink);
+  background: var(--lx-ink);
+  color: var(--lx-surface);
+}
+
+.step[data-step-state="done"] {
+  color: var(--lx-strength-ink);
+}
+
+.step[data-step-state="done"] .marker {
+  border-color: transparent;
+  background: var(--lx-strength-soft);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

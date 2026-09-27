@@ -1,0 +1,160 @@
+.page {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: clamp(28px, 6vw, 64px) 0 120px;
+  color: #1f2929;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #46605b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page h1 {
+  margin: 0;
+  font-family: var(--font-newsreader, Georgia, serif);
+  font-size: clamp(2.15rem, 5vw, 3.2rem);
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.intro {
+  max-width: 62ch;
+  margin: 18px 0 28px;
+  color: #4a5755;
+  line-height: 1.6;
+}
+
+.primary {
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid #174e46;
+  border-radius: 8px;
+  background: #174e46;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.details,
+.confirm {
+  margin-top: 24px;
+  padding: clamp(18px, 4vw, 28px);
+  border: 1px solid #d4ded9;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgb(24 54 48 / 6%);
+}
+
+.details h2 {
+  margin: 0 0 18px;
+  font-size: 1.05rem;
+}
+
+.details dl {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.details dl > div {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+}
+
+.details dt {
+  color: #596763;
+  font-size: 0.9rem;
+}
+
+.details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+
+.digest {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.83rem;
+  font-weight: 500;
+}
+
+.privacy,
+.tokenNote {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #f2f6f4;
+  line-height: 1.55;
+}
+
+.tokenNote {
+  color: #4a5755;
+  font-size: 0.9rem;
+}
+
+.confirm {
+  display: grid;
+  gap: 18px;
+}
+
+.consent {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  line-height: 1.5;
+}
+
+.consent input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #174e46;
+}
+
+.notice,
+.error,
+.reference {
+  margin: 20px 0 0;
+  line-height: 1.55;
+}
+
+.notice {
+  padding: 16px;
+  border-left: 4px solid #174e46;
+  background: #eff7f2;
+}
+
+.error {
+  padding: 16px;
+  border-left: 4px solid #963b2d;
+  background: #fff2ef;
+  color: #682a22;
+}
+
+.reference {
+  color: #596763;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .details dl > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

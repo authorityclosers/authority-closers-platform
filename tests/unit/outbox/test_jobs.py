@@ -741,7 +741,7 @@ async def test_job_retry_and_outbox_reconcile_reject_cross_transaction_audit() -
         )
 
 
-async def test_manual_job_retry_writes_actor_audit_in_the_same_uow() -> None:
+async def test_manual_job_retry_requires_typed_reconciliation_for_provider_evidence() -> None:
     session = _session()
     tenant_id = uuid4()
     row = _job(status=JobStatus.DEAD_LETTER.value)
@@ -760,27 +760,56 @@ async def test_manual_job_retry_writes_actor_audit_in_the_same_uow() -> None:
         permissions=frozenset({"job_retry"}),
     )
 
+    with pytest.raises(ReconciliationRequiredError, match="typed reconciliation"):
+        await JobRepository(session).retry(
+            row,
+            actor=actor,
+            reason="provider state reviewed",
+            audit=audit,
+        )
+
+    assert row.status == JobStatus.DEAD_LETTER.value
+    assert row.provider_idempotency_key == row.dedupe_key
+    assert row.dispatch_started_at == datetime(2026, 8, 30, 11, 58, tzinfo=UTC)
+    assert row.delivery_ambiguous_at == datetime(2026, 8, 30, 12, tzinfo=UTC)
+    audit.append_for_actor.assert_not_awaited()  # type: ignore[attr-defined]
+
+
+async def test_manual_job_retry_requeues_confirmed_pre_dispatch_job() -> None:
+    session = _session()
+    tenant_id = uuid4()
+    row = _job(status=JobStatus.DEAD_LETTER.value)
+    row.tenant_id = tenant_id
+    row.external_side_effect = True
+    row.provider_idempotency_key = None
+    row.dispatch_started_at = None
+    row.delivery_ambiguous_at = None
+    row.provider_receipt = None
+    row.provider_receipt_digest = None
+    row.receipt_recorded_at = None
+    session.scalar.side_effect = [row, _state()]
+    audit = AuditRepository(session)
+    audit.append_for_actor = AsyncMock()  # type: ignore[method-assign]
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=tenant_id,
+        permissions=frozenset({"job_retry"}),
+    )
+
     retried = await JobRepository(session).retry(
         row,
         actor=actor,
-        reason="provider state reviewed",
+        reason="provider dispatch was confirmed absent",
         audit=audit,
     )
 
     assert retried.status == JobStatus.QUEUED.value
     assert retried.attempt_count == 0
-    assert retried.reconciled_by == actor.person_id
-    assert retried.reconciliation_reason == "provider state reviewed"
     assert retried.provider_idempotency_key is None
     assert retried.dispatch_started_at is None
     assert retried.delivery_ambiguous_at is None
     audit.append_for_actor.assert_awaited_once()  # type: ignore[attr-defined]
-    prior_evidence = audit.append_for_actor.await_args.kwargs["payload"]["prior_effect_evidence"]
-    assert prior_evidence == {
-        "dispatch_started_at": "2026-08-30T11:58:00+00:00",
-        "delivery_ambiguous_at": "2026-08-30T12:00:00+00:00",
-        "provider_idempotency_key": row.dedupe_key,
-    }
 
 
 async def test_global_job_retry_requires_configured_control_tenant_and_global_permission() -> None:

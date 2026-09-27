@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.inference_worker import (
     ConversationInferenceWorker,
@@ -18,6 +19,14 @@ from ac_platform.conversation_intelligence.storage import StorageError
 @pytest.mark.parametrize(
     ("error", "expected"),
     [
+        (
+            InferenceTaskError("report_evidence_invalid"),
+            "conversation_report_evidence_invalid",
+        ),
+        (
+            InferenceTaskError("report_evidence_invalid: private words"),
+            "conversation_provider_result_validation_failed",
+        ),
         (
             InferenceTaskError("report_dimension_status_invalid"),
             "conversation_report_dimension_status_invalid",
@@ -64,6 +73,10 @@ from ac_platform.conversation_intelligence.storage import StorageError
         ),
         (TimeoutError("private response"), "conversation_provider_execution_timeout"),
         (StorageError("private path"), "conversation_provider_storage_failed"),
+        (
+            InferenceBrokerError("broker_service_identity_unavailable"),
+            "conversation_broker_service_identity_unavailable",
+        ),
     ],
 )
 def test_only_explicitly_allowlisted_validation_codes_are_retained(

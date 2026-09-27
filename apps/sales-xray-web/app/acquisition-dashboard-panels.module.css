@@ -1,0 +1,1424 @@
+.rail,
+.lowerPanels {
+  --panel-ink: #101a3f;
+  --panel-subtle: #566d9a;
+  --panel-line: #dce5fa;
+  color: var(--panel-ink);
+}
+
+.rail *,
+.lowerPanels * {
+  box-sizing: border-box;
+}
+
+.rail {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--panel-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 5px 24px rgb(48 88 166 / 5%);
+}
+
+.guide {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 16px 14px;
+}
+
+.cardHeading,
+.lowerHeading,
+.sampleHeading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.cardHeading {
+  gap: 11px;
+  margin: 0 1px 13px;
+}
+
+.headingIcon,
+.lowerHeading > svg {
+  flex: none;
+  color: #111b50;
+}
+
+.cardHeading h2,
+.lowerHeading h2,
+.sampleHeading h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--panel-ink);
+  font-size: clamp(17px, 1.5vw, 22px);
+  font-weight: 790;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+}
+
+.progressCount {
+  color: #4664a2;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.progressTrack {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5eaf4;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #087f7c, #17aea5);
+  transition: width 200ms ease;
+}
+
+.stepList {
+  margin: 13px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 65px;
+  padding: 9px 2px;
+  border-top: 1px solid #e0e8f8;
+}
+
+.stepMark {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1.7px solid #7890bd;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.stepDone {
+  border-color: #078b89;
+  background: #078b89;
+  color: #fff;
+}
+
+.step strong,
+.step small {
+  display: block;
+}
+
+.step strong {
+  color: #152750;
+  font-size: 14px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.step small {
+  margin-top: 2px;
+  color: var(--panel-subtle);
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.helpCard {
+  margin-top: auto;
+  padding: 16px 13px 12px;
+  border: 1px solid #d3edea;
+  border-radius: 11px;
+  background: linear-gradient(125deg, #f1fffb 0%, #edfafb 56%, #e7f6f7 100%);
+}
+
+.helpIntro {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.helpIntro > svg {
+  color: #078f8d;
+}
+
+.helpIntro h3 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  letter-spacing: -0.035em;
+}
+
+.helpIntro p {
+  margin: 0;
+  color: var(--panel-subtle);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cardAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 33px;
+  margin-top: 13px;
+  padding: 5px 10px;
+  border: 1px solid #d6dffc;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(42 68 172 / 9%);
+  color: #134fc2;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+  text-align: center;
+}
+
+.cardAction::-webkit-details-marker {
+  display: none;
+}
+
+.cardAction:hover,
+.cardAction:focus-visible {
+  border-color: #98b8f7;
+  outline: none;
+  box-shadow: 0 0 0 3px #cbdcff;
+}
+
+.helpTips {
+  margin: 12px 0 0;
+  padding-left: 19px;
+  color: #435e7f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.helpTips li + li {
+  margin-top: 5px;
+}
+
+.sampleCard {
+  display: flex;
+  flex-direction: column;
+  padding: 13px 12px 12px;
+  background: linear-gradient(155deg, #fff 0%, #fcfbff 100%);
+}
+
+@media (min-width: 1280px) {
+  .guide {
+    min-height: 535px;
+  }
+
+  .sampleCard {
+    min-height: 315px;
+  }
+
+  .lowerPanels > .card {
+    min-height: 437px;
+  }
+}
+
+.sampleHeading {
+  gap: 8px;
+  margin: 2px 2px 10px;
+}
+
+.sampleHeading > svg {
+  flex: none;
+  color: #6439e7;
+}
+
+.sampleHeading h2 {
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+
+.sampleHeading > span {
+  color: #6546b8;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sampleQuote {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 7px;
+  padding: 12px 10px;
+  border-radius: 10px;
+  background: #f1efff;
+}
+
+.quoteGlyph {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #6e5af2;
+  font-family: Georgia, serif;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.sampleQuote p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.43;
+}
+
+.sampleMoments {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  padding: 10px 11px 2px;
+  font-size: 11px;
+}
+
+.sampleMoments strong {
+  margin-bottom: 2px;
+  color: #244598;
+  font-size: 11px;
+}
+
+.sampleMoments span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sampleMoments i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.mintDot {
+  background: #099a91;
+}
+.orangeDot {
+  background: #f1891d;
+}
+.violetDot {
+  background: #693af0;
+}
+
+.sampleDisclaimer {
+  margin: 7px 11px 0;
+  color: #71809d;
+  font-size: 10px;
+}
+
+.sampleExplore {
+  margin-top: auto;
+}
+
+.sampleExplore p {
+  margin: 10px 7px 0;
+  color: var(--panel-subtle);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.lowerPanels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.9fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.lowerPanels > .card {
+  padding: 14px 14px 12px;
+}
+
+.lowerHeading {
+  gap: 12px;
+  min-height: 40px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dce5fa;
+}
+
+.lowerHeading h2 {
+  font-size: 18px;
+}
+
+.lowerHeading a {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  color: #008783;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lowerHeading a:hover,
+.lowerHeading a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.callColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 55px 68px;
+  gap: 6px;
+  padding: 9px 0 7px;
+  border-bottom: 1px solid #e0e8f8;
+  color: #5471aa;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.callList,
+.activityList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.callRow {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) 58px 55px 68px;
+  gap: 6px;
+  align-items: center;
+  min-height: 51px;
+  border-bottom: 1px solid #e0e8f8;
+  color: var(--panel-subtle);
+  font-size: 10px;
+}
+
+.callRow:last-child,
+.activityRow:last-child {
+  border-bottom: 0;
+}
+
+.rowIcon,
+.emptyIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8f9f6;
+  color: #008e87;
+}
+
+.rowIcon {
+  width: 27px;
+  height: 27px;
+}
+
+.callName,
+.activityName {
+  min-width: 0;
+}
+
+.callName strong,
+.callName a,
+.activityName strong,
+.activityName a {
+  display: block;
+  overflow: hidden;
+  color: #172957;
+  font-size: 11px;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.callName small,
+.activityName small {
+  display: block;
+  overflow: hidden;
+  color: var(--panel-subtle);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 55px;
+  border-bottom: 1px solid #e0e8f8;
+}
+
+.activityRow time {
+  color: #5471aa;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.emptyState {
+  display: grid;
+  min-height: 156px;
+  align-content: center;
+  justify-items: center;
+  padding: 20px 8px;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 43px;
+  height: 43px;
+  margin-bottom: 9px;
+}
+
+.emptyState strong {
+  font-size: 13px;
+}
+
+.emptyState p {
+  max-width: 28ch;
+  margin: 4px 0 0;
+  color: var(--panel-subtle);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+@media (min-width: 721px) and (max-width: 1199px) {
+  .rail {
+    gap: 8px;
+  }
+
+  .guide {
+    height: 355px;
+    padding: 9px 10px 8px;
+  }
+
+  .cardHeading {
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .headingIcon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .cardHeading h2 {
+    font-size: 17px;
+  }
+
+  .progressCount {
+    font-size: 12px;
+  }
+
+  .progressTrack {
+    height: 8px;
+  }
+
+  .stepList {
+    margin: 7px 0 3px;
+  }
+
+  .step {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 48px;
+    padding: 3px 1px;
+  }
+
+  .stepMark {
+    width: 23px;
+    height: 23px;
+  }
+
+  .step strong {
+    font-size: 11.5px;
+  }
+
+  .step small {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .helpCard {
+    padding: 7px 8px;
+  }
+
+  .helpIntro {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .helpIntro > svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .helpIntro h3 {
+    font-size: 12px;
+  }
+
+  .helpIntro p {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .cardAction {
+    min-height: 26px;
+    margin-top: 6px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .sampleCard {
+    height: 223px;
+    padding: 8px 9px;
+  }
+
+  .sampleHeading {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .sampleHeading > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sampleHeading h2 {
+    font-size: 13px;
+  }
+
+  .sampleHeading > span {
+    font-size: 9px;
+  }
+
+  .sampleQuote {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .quoteGlyph {
+    width: 22px;
+    height: 22px;
+    font-size: 23px;
+  }
+
+  .sampleQuote p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .sampleMoments {
+    gap: 3px;
+    padding: 5px 7px 0;
+    font-size: 9px;
+  }
+
+  .sampleMoments strong {
+    font-size: 9px;
+  }
+
+  .sampleDisclaimer {
+    margin: 3px 7px 0;
+    font-size: 8px;
+  }
+
+  .lowerPanels {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .lowerPanels > .card {
+    height: 284px;
+    padding: 10px;
+  }
+
+  .lowerHeading {
+    gap: 6px;
+  }
+
+  .lowerHeading > svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .lowerHeading h2 {
+    font-size: 13px;
+  }
+
+  .lowerHeading a {
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .lowerHeading a svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .callColumns {
+    grid-template-columns: minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 7px;
+  }
+
+  .callRow {
+    grid-template-columns: 22px minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 8px;
+  }
+
+  .callRow .rowIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .callName strong,
+  .callName a,
+  .activityName strong,
+  .activityName a {
+    font-size: 9px;
+  }
+
+  .callName small,
+  .activityName small,
+  .activityRow time {
+    font-size: 8px;
+  }
+
+  .activityRow {
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+    gap: 5px;
+  }
+
+  .activityRow .rowIcon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .emptyState {
+    min-height: 140px;
+    padding: 12px 5px;
+  }
+
+  .emptyState strong {
+    font-size: 11px;
+  }
+
+  .emptyState p {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lowerPanels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 801px) {
+  .rail {
+    height: min(864px, calc(100dvh - 220px));
+    grid-template-rows: minmax(0, 1.7fr) minmax(0, 1fr);
+  }
+
+  .guide,
+  .sampleCard {
+    min-height: 0;
+    height: auto;
+  }
+
+  .lowerPanels > .card {
+    min-height: 0;
+    height: clamp(220px, calc(100dvh - 626px), 437px);
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 801px) and (max-height: 960px) {
+  .guide {
+    padding: 10px 11px 9px;
+  }
+
+  .cardHeading {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .headingIcon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .cardHeading h2 {
+    font-size: 18px;
+  }
+
+  .progressTrack {
+    height: 9px;
+  }
+
+  .stepList {
+    margin: 8px 0 3px;
+  }
+
+  .step {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 45px;
+    padding: 4px 1px;
+  }
+
+  .stepMark {
+    width: 23px;
+    height: 23px;
+  }
+
+  .step strong {
+    font-size: 12px;
+  }
+
+  .step small {
+    margin-top: 1px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .helpCard {
+    padding: 8px 9px;
+  }
+
+  .helpIntro {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .helpIntro > svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .helpIntro h3 {
+    font-size: 13px;
+  }
+
+  .helpIntro p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .cardAction {
+    min-height: 27px;
+    margin-top: 7px;
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .sampleCard {
+    padding: 9px 10px;
+  }
+
+  .sampleHeading {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .sampleHeading > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .sampleHeading h2 {
+    font-size: 14px;
+  }
+
+  .sampleQuote {
+    grid-template-columns: 25px minmax(0, 1fr);
+    gap: 6px;
+    padding: 7px 8px;
+  }
+
+  .quoteGlyph {
+    width: 23px;
+    height: 23px;
+    font-size: 24px;
+  }
+
+  .sampleQuote p {
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+
+  .sampleMoments {
+    gap: 3px;
+    padding: 6px 8px 0;
+    font-size: 9.5px;
+  }
+
+  .sampleMoments strong {
+    font-size: 9.5px;
+  }
+
+  .sampleDisclaimer {
+    margin: 4px 8px 0;
+    font-size: 8.5px;
+  }
+
+  .lowerPanels > .card {
+    padding: 10px;
+  }
+
+  .lowerHeading {
+    min-height: 36px;
+    padding-bottom: 9px;
+  }
+
+  .emptyState {
+    min-height: 110px;
+    padding: 9px 5px;
+  }
+}
+
+/* Synthetic review frames keep the rail readable without offering live actions. */
+.rail[data-static-preview="true"] {
+  height: auto;
+  grid-template-rows: none;
+  gap: 8px;
+}
+
+.rail[data-static-preview="true"] .guide,
+.rail[data-static-preview="true"] .sampleCard {
+  height: auto;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .rail {
+    gap: 8px;
+  }
+
+  .guide {
+    min-height: 0;
+    height: 330px;
+    padding: 9px 10px 8px;
+  }
+
+  .cardHeading {
+    gap: 7px;
+    margin-bottom: 7px;
+  }
+
+  .headingIcon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .cardHeading h2 {
+    font-size: 17px;
+  }
+
+  .progressCount {
+    font-size: 12px;
+  }
+
+  .progressTrack {
+    height: 8px;
+  }
+
+  .stepList {
+    margin: 6px 0 2px;
+  }
+
+  .step {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 43px;
+    padding: 3px 1px;
+  }
+
+  .stepMark {
+    width: 23px;
+    height: 23px;
+  }
+
+  .step strong {
+    font-size: 11.5px;
+  }
+
+  .step small {
+    margin-top: 1px;
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .helpCard {
+    padding: 7px 8px;
+  }
+
+  .helpIntro {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .helpIntro > svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .helpIntro h3 {
+    font-size: 12px;
+  }
+
+  .helpIntro p {
+    font-size: 9.5px;
+    line-height: 1.2;
+  }
+
+  .cardAction {
+    min-height: 26px;
+    margin-top: 6px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .sampleCard {
+    min-height: 0;
+    height: 210px;
+    padding: 8px 9px;
+  }
+
+  .sampleHeading {
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .sampleHeading > svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sampleHeading h2 {
+    font-size: 13px;
+  }
+
+  .sampleHeading > span {
+    font-size: 9px;
+  }
+
+  .sampleQuote {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .quoteGlyph {
+    width: 22px;
+    height: 22px;
+    font-size: 23px;
+  }
+
+  .sampleQuote p {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .sampleMoments {
+    gap: 3px;
+    padding: 5px 7px 0;
+    font-size: 9px;
+  }
+
+  .sampleMoments strong {
+    font-size: 9px;
+  }
+
+  .sampleDisclaimer {
+    margin: 3px 7px 0;
+    font-size: 8px;
+  }
+
+  .lowerPanels {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .lowerPanels > .card {
+    min-height: 0;
+    height: 220px;
+    padding: 9px;
+  }
+
+  .lowerHeading {
+    gap: 6px;
+    min-height: 34px;
+    padding-bottom: 8px;
+  }
+
+  .lowerHeading > svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .lowerHeading h2 {
+    font-size: 13px;
+  }
+
+  .lowerHeading a {
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .lowerHeading a svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .callColumns {
+    grid-template-columns: minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    font-size: 7px;
+  }
+
+  .callRow {
+    grid-template-columns: 22px minmax(0, 1fr) 39px 39px 43px;
+    gap: 3px;
+    min-height: 39px;
+    font-size: 8px;
+  }
+
+  .callRow .rowIcon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .callName strong,
+  .callName a,
+  .activityName strong,
+  .activityName a {
+    font-size: 9px;
+  }
+
+  .callName small,
+  .activityName small,
+  .activityRow time {
+    font-size: 8px;
+  }
+
+  .activityRow {
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+    gap: 5px;
+    min-height: 39px;
+  }
+
+  .activityRow .rowIcon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .emptyState {
+    min-height: 110px;
+    padding: 9px 5px;
+  }
+
+  .emptyIcon {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 5px;
+  }
+
+  .emptyState strong {
+    font-size: 11px;
+  }
+
+  .emptyState p {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .rail {
+    height: calc(100dvh - 172px);
+    grid-template-rows: minmax(0, 1.57fr) minmax(0, 1fr);
+  }
+
+  .guide,
+  .sampleCard {
+    height: auto;
+  }
+
+  .lowerPanels > .card {
+    height: clamp(220px, calc(100dvh - 480px), 320px);
+  }
+
+  .lowerPanels[data-compact="true"] > .card {
+    height: clamp(180px, calc(100dvh - 529px), 271px);
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 801px) and (max-height: 960px) {
+  .lowerPanels[data-compact="true"] > .card {
+    height: clamp(200px, calc(100dvh - 685px), 280px);
+  }
+}
+
+@media (min-width: 1024px) and (min-height: 961px) and (max-height: 1100px) {
+  .lowerPanels[data-compact="true"] > .card {
+    height: clamp(280px, calc(100dvh - 700px), 390px);
+  }
+}
+
+.queueOverview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 91px;
+  padding: 6px 4px 13px;
+  border-bottom: 1px solid #dce5fa;
+}
+
+.queueCount {
+  display: grid;
+  width: 76px;
+  height: 76px;
+  flex: none;
+  place-items: center;
+  border: 7px solid #07978e;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px #dcf9f4;
+  color: #172957;
+  font-size: 28px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
+.queueOverview strong,
+.queueOverview small,
+.queueChecks strong,
+.queueChecks small,
+.nextSteps strong,
+.nextSteps small {
+  display: block;
+}
+
+.queueOverview strong {
+  font-size: 16px;
+  letter-spacing: -0.035em;
+}
+
+.queueOverview small {
+  margin-top: 4px;
+  color: var(--panel-subtle);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.queueChecks,
+.nextSteps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queueChecks li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 59px;
+  padding: 8px 3px;
+  border-bottom: 1px solid #e0e8f8;
+}
+
+.queueChecks li:last-child {
+  border-bottom: 0;
+}
+
+.queueCheckIcon {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid #aabbe0;
+  border-radius: 50%;
+  background: #f2f6ff;
+  color: #5270a9;
+}
+
+.queueCheckGood {
+  border-color: #078f89;
+  background: #078f89;
+  color: #fff;
+}
+
+.queueChecks strong {
+  color: #172957;
+  font-size: 13px;
+  font-weight: 710;
+  line-height: 1.2;
+}
+
+.queueChecks small {
+  margin-top: 3px;
+  color: var(--panel-subtle);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.nextCard {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 15px 15px 12px;
+}
+
+.nextCard .sampleHeading > svg {
+  color: #087f84;
+}
+
+.nextSteps {
+  display: grid;
+  flex: 1;
+  align-content: space-around;
+  gap: 4px;
+}
+
+.nextSteps li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+}
+
+.nextSteps li > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e2f8f4;
+  color: #078f89;
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.nextSteps li:nth-child(2) > span {
+  background: #eee9ff;
+  color: #6a42d9;
+}
+
+.nextSteps li:nth-child(3) > span {
+  background: #fff1df;
+  color: #da6f17;
+}
+
+.nextSteps strong {
+  color: #172957;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.nextSteps small {
+  margin-top: 3px;
+  color: var(--panel-subtle);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+@media (min-width: 1024px) and (max-height: 960px) {
+  .queueOverview {
+    gap: 11px;
+    min-height: 67px;
+    padding: 3px 2px 7px;
+  }
+
+  .queueCount {
+    width: 56px;
+    height: 56px;
+    border-width: 5px;
+    font-size: 22px;
+  }
+
+  .queueOverview strong {
+    font-size: 13px;
+  }
+  .queueOverview small {
+    margin-top: 2px;
+    font-size: 10px;
+  }
+
+  .queueChecks li {
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 8px;
+    min-height: 44px;
+    padding: 4px 2px;
+  }
+
+  .queueCheckIcon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .queueChecks strong {
+    font-size: 11px;
+  }
+  .queueChecks small {
+    margin-top: 1px;
+    font-size: 9px;
+  }
+
+  .nextCard {
+    padding: 9px 10px;
+  }
+
+  .nextSteps li {
+    grid-template-columns: 25px minmax(0, 1fr);
+    gap: 7px;
+    min-height: 48px;
+  }
+
+  .nextSteps li > span {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .nextSteps strong {
+    font-size: 11px;
+  }
+  .nextSteps small {
+    margin-top: 1px;
+    font-size: 9px;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .nextCard {
+    height: 210px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .nextCard {
+    min-height: 210px;
+  }
+}

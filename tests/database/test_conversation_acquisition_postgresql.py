@@ -92,7 +92,10 @@ def test_existing_run_usage_is_preserved_when_guest_claims_account(postgres_harn
                 await app.reserve(source(3400), token=guest.token)
                 await app.claim(guest.token, state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 80
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(81), actor=state.actor)
                 last = await app.reserve(source(80), actor=state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
@@ -120,7 +123,10 @@ def test_existing_upload_cannot_bypass_claimed_guest_minutes(postgres_harness):
             async with AsyncSession(engine) as db, db.begin():
                 # The existing fixture has 180 untouched seconds and would
                 # accept this 120-second job without the combined allowance.
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await application(db, state).request_run(
                         state.actor, intent, key="must-not-enqueue"
                     )
@@ -225,7 +231,10 @@ def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
                 await app.claim(guest.token, state.actor)
                 assert await app.reserve(original_source, actor=state.actor) == original_usage
                 assert (await app.allowance(actor=state.actor))["committed_seconds"] == 4000
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(1), actor=state.actor)
                 await app.settle(original_usage, charged_seconds=4000, receipt_sha256="d" * 64)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
@@ -255,7 +264,10 @@ def test_claim_preserves_guest_and_account_usage_and_replay(postgres_harness):
                 assert await app.allowance(token=guest.token, actor=state.actor) == allowance
                 with pytest.raises(ConversationDenied):
                     await app.allowance(token=guest.token)
-                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                with pytest.raises(
+                    ConversationDenied,
+                    match="remaining trial minutes are not enough for this recording",
+                ):
                     await app.reserve(source(601), actor=state.actor)
             # A different browser and a policy revision never grant another 60 minutes.
             second = await issue(engine, state)
@@ -334,10 +346,10 @@ def test_authenticated_requests_keep_identity_lock_order(postgres_harness, monke
             identity_locked, competing_admission = asyncio.Event(), asyncio.Event()
             original_admit = ConversationApplication.admit
 
-            async def observed_admit(app, actor):
+            async def observed_admit(app, actor, *, shared_identity_locks=False):
                 if asyncio.current_task().get_name() == "competing-acquisition":
                     competing_admission.set()
-                return await original_admit(app, actor)
+                return await original_admit(app, actor, shared_identity_locks=shared_identity_locks)
 
             monkeypatch.setattr(ConversationApplication, "admit", observed_admit)
 
@@ -750,17 +762,40 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                 client.cookies.set(
                     "ac_xray_guest", guest.token, domain="salesxray.example.test", path="/"
                 )
+                start_params = {
+                    "action": "authenticate",
+                    "surface": "sales_xray",
+                    "consent": "true",
+                    "consent_version": settings.learner_consent_version,
+                    "return_path": f"/auth/complete?flow={uuid4()}",
+                }
+                partial_start = await client.get("/v1/auth/google/start", params=start_params)
+                assert partial_start.status_code == 303
+                partial_state = parse_qs(urlsplit(partial_start.headers["location"]).query)[
+                    "state"
+                ][0]
+                partial_callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": partial_state, "code": "synthetic-code"},
+                )
+                partial_flow = parse_qs(urlsplit(start_params["return_path"]).query)["flow"][0]
+                assert partial_callback.status_code == 303
+                assert partial_callback.headers["location"] == (
+                    origin + f"/auth/complete?flow={partial_flow}&auth_result=failed"
+                )
+                assert settings.session_cookie_name not in client.cookies
+                async with sessions() as db:
+                    assert await db.scalar(select(func.count()).select_from(Person)) == before
+
+                # Starting this Google registration represents a current full acknowledgement.
+                start_params["age_attested"] = "true"
                 person_id = None
                 for _ in range(2 if verified else 1):
+                    flow_id = uuid4()
+                    start_params["return_path"] = f"/auth/complete?flow={flow_id}"
                     start = await client.get(
                         "/v1/auth/google/start",
-                        params={
-                            "action": "authenticate",
-                            "surface": "sales_xray",
-                            "consent": "true",
-                            "consent_version": settings.learner_consent_version,
-                            "return_path": "/?report=synthetic-owned-report&continue=claim",
-                        },
+                        params=start_params,
                     )
                     assert start.status_code == 303
                     callback_state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
@@ -769,7 +804,10 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                         params={"state": callback_state, "code": "synthetic-code"},
                     )
                     if not verified:
-                        assert callback.status_code == 401, callback.text
+                        assert callback.status_code == 303, callback.text
+                        assert callback.headers["location"] == (
+                            origin + f"/auth/complete?flow={flow_id}&auth_result=failed"
+                        )
                         assert settings.session_cookie_name not in client.cookies
                         async with sessions() as db:
                             assert (
@@ -779,8 +817,22 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                     assert callback.status_code == 303, callback.text
                     assert (
                         callback.headers["location"]
-                        == origin + "/?report=synthetic-owned-report&continue=claim"
+                        == origin + f"/auth/complete?flow={flow_id}&auth_result=success"
                     )
+                    wrong_completion = await client.post(
+                        "/v1/auth/google/completion",
+                        json={"flow_id": str(uuid4())},
+                        headers={"Origin": origin},
+                    )
+                    assert wrong_completion.status_code == 200, wrong_completion.text
+                    assert wrong_completion.json() == {"matched": False}
+                    completion = await client.post(
+                        "/v1/auth/google/completion",
+                        json={"flow_id": str(flow_id)},
+                        headers={"Origin": origin},
+                    )
+                    assert completion.status_code == 200, completion.text
+                    assert completion.json() == {"matched": True}
                     me = await client.get("/v1/me")
                     assert me.status_code == 200, me.text
                     assert me.json()["selected_tenant_id"] == str(state.tenant_id)

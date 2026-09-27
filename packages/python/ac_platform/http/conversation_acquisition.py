@@ -107,6 +107,24 @@ def install_acquisition_http(
                 "Sign in to the public Academy to use this upload workspace.",
             ) from None
 
+    read_require_actor = getattr(require_actor, "read_only", require_actor)
+
+    @asynccontextmanager
+    async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(read_require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise fail(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise fail(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+            ) from None
+
     def token(request: Request, *, required: bool = True) -> str | None:
         try:
             return _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=required)
@@ -172,9 +190,12 @@ def install_acquisition_http(
     async def read_session(request: Request, response: Response) -> Any:
         host = admit(request, response)
         if host == "learner":
-            async with learner_account(request) as auth:
+            async with learner_read_account(request) as auth:
                 allowance = await result(
-                    service(auth.database).allowance(actor=auth.resolved.actor)
+                    service(auth.database).allowance(
+                        actor=auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
                 )
             return {"state": "account", "allowance": allowance}
         # The account cookie is optional for this read, but if it is present
@@ -183,18 +204,32 @@ def install_acquisition_http(
         account_token = _session_cookie(request, settings, required=False)
         current = token(request, required=False)
         if account_token is not None:
-            async with asynccontextmanager(require_actor)(request) as auth:
+            async with asynccontextmanager(read_require_actor)(request) as auth:
                 app = service(auth.database)
                 if current is None:
-                    allowance = await result(app.allowance(actor=auth.resolved.actor))
+                    allowance = await result(
+                        app.allowance(
+                            actor=auth.resolved.actor,
+                            shared_identity_locks=True,
+                        )
+                    )
                     return {"state": "account", "allowance": allowance}
                 try:
-                    allowance = await app.allowance(token=current, actor=auth.resolved.actor)
+                    allowance = await app.allowance(
+                        token=current,
+                        actor=auth.resolved.actor,
+                        shared_identity_locks=True,
+                    )
                 except ConversationConflict:
                     # An unclaimed visitor remains the current owner until
                     # the explicit POST /claim action.  Resolve its allowance
                     # without granting the account any visitor ownership.
-                    allowance = await result(app.allowance(token=current))
+                    allowance = await result(
+                        app.allowance(
+                            token=current,
+                            shared_identity_locks=True,
+                        )
+                    )
                     return {"state": "claim_required", "allowance": allowance}
                 except ConversationError as error:
                     raise fail(error.status, str(error)) from None

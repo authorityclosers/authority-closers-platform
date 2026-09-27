@@ -230,6 +230,32 @@ def install_conversation_admin_http(
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
+    @router.get("/analysis-settings/history")
+    async def analysis_settings_history(
+        request: Request,
+        response: Response,
+        limit: Annotated[int, Query(ge=1, le=50)] = 10,
+        before_revision: Annotated[int | None, Query(ge=1)] = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        require_admin_surface(request, settings)
+        response.headers["Cache-Control"] = "private, no-store"
+        allowed = {"limit", "before_revision"}
+        if set(request.query_params) - allowed or any(
+            len(request.query_params.getlist(name)) != 1 for name in request.query_params
+        ):
+            raise HTTPException(422, "History accepts one limit and before_revision.")
+        operations_tenant_id = settings.operations_tenant_id
+        if operations_tenant_id is None:
+            raise HTTPException(503, "Analysis settings are not configured.")
+        try:
+            return await ConversationAnalysisSettingsAdmin(
+                ConversationApplication(auth.database),
+                operations_tenant_id=operations_tenant_id,
+            ).history(auth.resolved.actor, limit=limit, before_revision=before_revision)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
     @router.post("/analysis-settings", status_code=201)
     async def save_analysis_settings(
         intent: AnalysisSettingsIntent,

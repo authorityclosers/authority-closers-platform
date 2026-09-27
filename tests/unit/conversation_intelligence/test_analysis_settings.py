@@ -15,6 +15,7 @@ from ac_platform.conversation_intelligence.analysis_settings import (
 from ac_platform.conversation_intelligence.analysis_settings_admin import (
     ConversationAnalysisSettingsAdmin,
 )
+from ac_platform.conversation_intelligence.application import ConversationError
 from ac_platform.conversation_intelligence.processing_plan import PlanManifest
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.http.conversation_admin import AnalysisSettingsIntent
@@ -44,10 +45,37 @@ def test_settings_view_exposes_defaults_without_inventing_a_revision() -> None:
     view = settings_view(None, DEFAULT_ANALYSIS_SETTINGS)
     assert view["revision"] == 0
     assert view["created_at"] is None
-    assert view["settings"] == DEFAULT_ANALYSIS_SETTINGS.model_dump()
+    assert view["settings"] == DEFAULT_ANALYSIS_SETTINGS.effective_values()
     assert view["bounds"]["c5_output_profile"]["values"] == ["standard", "detailed"]
+    assert view["bounds"]["c5_coaching_prompt_revision"]["values"] == [
+        "coaching-v3",
+        "coaching-v4",
+        "coaching-v5",
+    ]
     assert "starting values only" in view["message"]
     assert "pinned provider approval" in view["message"]
+
+
+def test_legacy_receipt_shape_is_unchanged_while_reads_show_effective_defaults() -> None:
+    assert DEFAULT_ANALYSIS_SETTINGS.model_dump() == {
+        "c4_max_requests": 64,
+        "c4_max_completion_tokens": 1400,
+        "c5_max_completion_tokens": 3200,
+        "c5_output_profile": "detailed",
+    }
+    assert DEFAULT_ANALYSIS_SETTINGS.effective_values()["report_language_default"] == "en"
+    assert (
+        DEFAULT_ANALYSIS_SETTINGS.effective_values()["c5_coaching_prompt_revision"] == "coaching-v3"
+    )
+
+
+@pytest.mark.parametrize("language", ["hi-Deva+en", "mr-Deva+en"])
+def test_new_language_requires_explicit_qualitative_engine(language: str) -> None:
+    data = {**DEFAULT_ANALYSIS_SETTINGS.model_dump(), "report_language_default": language}
+    with pytest.raises(ValueError, match="coaching-v4"):
+        AnalysisSettings.model_validate(data)
+    values = AnalysisSettings.model_validate({**data, "c5_coaching_prompt_revision": "coaching-v4"})
+    assert values.model_dump()["report_language_default"] == language
 
 
 def test_standard_output_is_a_c5_only_stage_option() -> None:
@@ -123,3 +151,28 @@ async def test_replayed_admin_save_returns_the_original_revision() -> None:
     assert value["revision"] == 3
     assert value["settings"]["c5_output_profile"] == "standard"
     application._replay.assert_awaited_once()
+
+
+async def test_admin_save_blocks_v6_before_lock_or_receipt() -> None:
+    application = SimpleNamespace(database=object())
+    service = ConversationAnalysisSettingsAdmin(
+        application=application, operations_tenant_id=uuid4()
+    )
+    service.admit = AsyncMock()
+    settings = AnalysisSettings(
+        c4_max_requests=2,
+        c4_max_completion_tokens=1024,
+        c5_max_completion_tokens=4096,
+        c5_output_profile="standard",
+        c5_coaching_prompt_revision="coaching-v6",
+    )
+
+    with pytest.raises(ConversationError, match="AC-SVAL-01 Gate 2"):
+        await service.save(
+            ActorContext(uuid4(), uuid4(), service.operations_tenant_id),
+            settings,
+            expected_revision=0,
+            key="blocked-v6-candidate",
+        )
+
+    service.admit.assert_awaited_once()

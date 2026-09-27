@@ -30,6 +30,7 @@ it("strictly parses the bounded account library contract", () => {
         durationSeconds: 61,
         state: "processing",
         hasReport: false,
+        label: null,
       },
       {
         id: secondId,
@@ -37,10 +38,32 @@ it("strictly parses the bounded account library contract", () => {
         durationSeconds: 61,
         state: "processing",
         hasReport: false,
+        label: null,
       },
     ],
     nextCursor: cursor,
   });
+});
+
+it("accepts the C1 call-label fields and still rejects invalid labels", () => {
+  expect(
+    parseSubmissionLibraryPage({
+      submissions: [
+        { ...row(), display_name: "Renewal review", display_name_revision: 2 },
+        { ...row(secondId), display_name: null, display_name_revision: 0 },
+      ],
+      next_cursor: null,
+    }).submissions.map((submission) => submission.label),
+  ).toEqual([
+    { displayName: "Renewal review", revision: 2 },
+    { displayName: null, revision: 0 },
+  ]);
+  expect(() =>
+    parseSubmissionLibraryPage({
+      submissions: [{ ...row(), display_name: "Half present" }],
+      next_cursor: null,
+    }),
+  ).toThrow();
 });
 
 it.each([

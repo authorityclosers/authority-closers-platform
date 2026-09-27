@@ -183,6 +183,52 @@ it("shows a saved upload with completed audio checks as report pending", async (
   }
 });
 
+it("explains missing model verification while retaining the recording and reconciliation state", async () => {
+  vi.mocked(loadAdminRecordings).mockResolvedValue({
+    items: [
+      {
+        ...recording,
+        latest_run: {
+          ...recording.latest_run,
+          provider_stages: [
+            {
+              ...recording.latest_run.provider_stages[0]!,
+              stage: "C5",
+              state: "failed",
+              provider: "openai",
+              model: "gpt-6-luna",
+              usage_estimate_state: "usage_unavailable",
+              usage_estimate_basis: "provider_model_unverified",
+              usage_estimate_paise: null,
+              pricing_snapshot: null,
+            },
+          ],
+        },
+      },
+    ],
+    next_cursor: null,
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(<RecordingsInventory onSelectRun={vi.fn()} />),
+    );
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain(
+        "estimate unavailable: returned model needs review",
+      ),
+    );
+    expect(container.textContent).toContain("Alex Seller");
+    expect(container.textContent).toContain("openai / gpt-6-luna");
+    expect(container.textContent).toContain("charge pending reconciliation");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
 it("offers the authorized admin a direct report read while keeping invite separate", async () => {
   vi.mocked(loadAdminRecordings).mockResolvedValue({
     items: [

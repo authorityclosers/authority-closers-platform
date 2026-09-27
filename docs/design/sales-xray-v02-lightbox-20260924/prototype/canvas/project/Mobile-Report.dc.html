@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales Xray v0.2 · Mobile report</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&amp;family=Plus+Jakarta+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400..700&amp;family=Noto+Serif+Devanagari:wght@400..600&amp;display=swap">
+<style>
+body{margin:0;background:#F6F5F1;color:#0B1424;font-family:"Plus Jakarta Sans","Noto Sans Devanagari",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#087E79}a:hover{color:#06635F}
+@keyframes lxEq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+.lx-eq{animation:lxEq 1s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.lx-quote{font-family:"Newsreader","Noto Serif Devanagari",Georgia,serif}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 1820px; position: relative; background: #F6F5F1; overflow: hidden; display: flex; flex-direction: column">
+  <header style="height: 60px; flex: none; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px">
+    <a href="Library.dc.html" aria-label="Back to calls" style="width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #0B1424"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></a>
+    <span style="flex-grow: 1; font-size: 14px; font-weight: 700; color: #56637A">Calls</span>
+    <button type="button" aria-label="Download" style="width: 40px; height: 40px; border-radius: 12px; border: none; background: transparent; color: #0B1424; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11.5M7.5 11L12 15.5l4.5-4.5"></path><path d="M4 16v1.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V16"></path></svg></button>
+    <button type="button" aria-label="More actions" style="width: 40px; height: 40px; border-radius: 12px; border: none; background: transparent; color: #0B1424; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
+  </header>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 0">
+    <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.14em; color: #087E79">CALL REPORT · DRAFT COACHING</span>
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.06; letter-spacing: -0.03em">Site visit follow-up · Mehta</h1>
+    <div style="display: flex; gap: 6px; overflow: hidden; font-size: 12px; font-weight: 700; color: #334158">
+      <span style="flex: none; padding: 5px 10px; border-radius: 99px; background: #FFFFFF; border: 1px solid #E6E3DA">Today</span>
+      <span style="flex: none; padding: 5px 10px; border-radius: 99px; background: #FFFFFF; border: 1px solid #E6E3DA">18:42</span>
+      <span style="flex: none; padding: 5px 10px; border-radius: 99px; background: #EAF0FF; color: #1F4FB8">Follow-up, no date</span>
+      <span style="flex: none; padding: 5px 10px; border-radius: 99px; background: #FFFFFF; border: 1px solid #E6E3DA">English report</span>
+    </div>
+  </div>
+
+  <nav aria-label="Report chapters" style="margin-top: 16px; padding: 10px 18px; display: flex; gap: 6px; overflow: hidden; background: rgba(246,245,241,.92); border-top: 1px solid #ECE9E1; border-bottom: 1px solid #ECE9E1">
+    <a href="#verdict" style="flex: none; height: 34px; padding: 0 12px; border-radius: 99px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; color: #56637A; text-decoration: none">Verdict</a>
+    <a href="#moments" aria-current="true" style="flex: none; height: 34px; padding: 0 12px; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px; background: #0B1424; color: #FFFFFF; font-size: 13px; font-weight: 800; text-decoration: none">Moments <span style="opacity: .7">6</span></a>
+    <a href="#skills" style="flex: none; height: 34px; padding: 0 12px; border-radius: 99px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; color: #56637A; text-decoration: none">Skills 8</a>
+    <a href="#prospect" style="flex: none; height: 34px; padding: 0 12px; border-radius: 99px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; color: #56637A; text-decoration: none">Prospect</a>
+    <a href="#plan" style="flex: none; height: 34px; padding: 0 12px; border-radius: 99px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 700; color: #56637A; text-decoration: none">Next call</a>
+  </nav>
+
+  <div style="display: flex; flex-direction: column; gap: 22px; padding: 20px 18px 0">
+    <section id="verdict" style="display: flex; flex-direction: column; gap: 14px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.14em; color: #6B7486">THE VERDICT</span>
+      <p class="lx-quote" style="margin: 0; font-size: 24px; line-height: 1.3; color: #0B1424">You built real trust with Mr Mehta and stayed calm on budget — but the call ended without a committed next step.</p>
+      <article style="display: flex; flex-direction: column; gap: 10px; padding: 16px; background: linear-gradient(180deg, #FFF7EA, #FFFFFF 60%); border: 1.5px solid #F2C27A; border-radius: 18px">
+        <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 800; letter-spacing: .1em; color: #B45309"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r=".9" fill="currentColor"></circle></svg>CHANGE FIRST</span>
+        <h2 style="margin: 0; font-size: 17px; line-height: 1.3; font-weight: 800">Leave with a date, not a “let me know”</h2>
+        <button type="button" style="display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid #F6D9AE; background: #FFF6E6"><span style="flex: none; font: 800 11.5px 'Plus Jakarta Sans'; color: #92400E; margin-top: 2px">▶ 16:05</span><span class="lx-quote" lang="hi-Latn" style="font-size: 15px; line-height: 1.4; font-style: italic">“Theek hai, aap batana phir.”</span></button>
+      </article>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <article style="display: flex; flex-direction: column; gap: 6px; padding: 14px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: #087E79">KEEP DOING</span><span style="font-size: 14px; line-height: 1.35; font-weight: 800">Gave him room to consult family</span></article>
+        <article style="display: flex; flex-direction: column; gap: 6px; padding: 14px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 16px"><span style="font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: #5B3FD6">MISSED OPENING</span><span style="font-size: 14px; line-height: 1.35; font-weight: 800">Asked about possession twice</span></article>
+      </div>
+    </section>
+
+    <section id="moments" style="display: flex; flex-direction: column; gap: 14px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: 0.14em; color: #6B7486">MOMENTS THAT MATTERED</span>
+      <article style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #F3C9D5; box-shadow: 0 16px 30px -22px rgba(190,42,85,.5)">
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; background: #BE2A55; color: #FFFFFF; font: 800 12px 'Plus Jakarta Sans'"><svg width="13" height="11" viewBox="0 0 14 12" fill="#FFFFFF" aria-hidden="true"><rect class="lx-eq" x="0" y="2" width="2.6" height="8" rx="1.2"></rect><rect class="lx-eq" x="3.8" y="0" width="2.6" height="12" rx="1.2" style="animation-delay: -.3s"></rect><rect class="lx-eq" x="7.6" y="1" width="2.6" height="10" rx="1.2" style="animation-delay: -.6s"></rect><rect class="lx-eq" x="11.4" y="3" width="2.6" height="6" rx="1.2" style="animation-delay: -.15s"></rect></svg>07:02 · Objection</span>
+          <span style="font-size: 11px; font-weight: 800; color: #92400E; background: #FEF3E2; padding: 3px 8px; border-radius: 99px">Must rewatch</span>
+        </div>
+        <span style="font-size: 10.5px; font-weight: 800; letter-spacing: .14em; color: #6B7486">PROSPECT</span>
+        <p class="lx-quote" lang="hi" style="margin: 0; font-size: 19px; line-height: 1.6">“बजट थोड़ा ऊपर जा रहा है, 1.2 तक ही सोच रहे थे।”</p>
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #334158">You acknowledged the number and moved to value without discounting. Next time, ask what 1.2 is based on.</p>
+      </article>
+      <article style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E6E3DA">
+        <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; border: 1px solid #DDD5FF; background: #F6F3FF; color: #4A31B8; font: 800 12px 'Plus Jakarta Sans'">▶ 09:47 · Missed opening</span>
+        <p class="lx-quote" lang="hi" style="margin: 0; font-size: 19px; line-height: 1.6">“पज़ेशन कब तक मिलेगा actually? बच्चों का स्कूल June से है।”</p>
+        <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 14px; background: #F6F3FF; border: 1px solid #E4DDFF">
+          <span style="font-size: 11px; font-weight: 800; color: #4A31B8">TRY THIS NEXT TIME</span>
+          <p class="lx-quote" lang="hi-Latn" style="margin: 0; font-size: 16.5px; line-height: 1.45">“June tak shift hona zaroori hai na? Chaliye, usi hisaab se plan dekhte hain.”</p>
+          <button type="button" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid #DDD5FF; background: #FFFFFF; color: #4A31B8; font: 800 12.5px 'Plus Jakarta Sans'">Copy phrase</button>
+        </div>
+      </article>
+      <button type="button" style="height: 44px; border-radius: 12px; border: 1px solid #E6E3DA; background: #FFFFFF; font: 700 14px 'Plus Jakarta Sans'; color: #0B1424">Show all 6 moments</button>
+    </section>
+
+    <section id="plan" style="display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 22px; background-color: #0A1220; background-image: radial-gradient(ellipse at 90% 0%, rgba(245,158,11,.22), rgba(10,18,32,0) 55%); color: #FFFFFF">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #FBBF24">YOUR NEXT CALL · ONE FOCUS</span>
+      <p style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-size: 21px; line-height: 1.22; font-weight: 700">Before you hang up, agree a day and time for the next step.</p>
+      <p class="lx-quote" lang="hi-Latn" style="margin: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); font-size: 16.5px; line-height: 1.45">“Kya hum Saturday 11 baje family ke saath ek site visit fix kar sakte hain?”</p>
+    </section>
+  </div>
+
+  <div style="flex-grow: 1"></div>
+
+  <section aria-label="Call player" style="position: absolute; left: 10px; right: 10px; bottom: 86px; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 20px; background: #0A1220; box-shadow: 0 18px 40px -16px rgba(10,18,32,.7)">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <button type="button" aria-label="Pause" style="width: 42px; height: 42px; flex: none; border-radius: 50%; border: none; background: #2DD4BF; color: #0A1220; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1.2"></rect><rect x="13.5" y="5" width="4" height="14" rx="1.2"></rect></svg></button>
+      <div style="position: relative; flex-grow: 1; height: 36px">
+        <svg width="100%" height="26" viewBox="0 0 260 26" preserveAspectRatio="none" style="position: absolute; left: 0; bottom: 0" aria-hidden="true"><path d="{{rest}}" stroke="#3A4C66" stroke-width="2" stroke-linecap="round"></path><path d="{{played}}" stroke="#2DD4BF" stroke-width="2" stroke-linecap="round"></path></svg>
+        <span style="position: absolute; left: calc(17.7% - 5px); top: 0; width: 10px; height: 10px; border-radius: 50%; background: #2DD4BF"></span>
+        <span style="position: absolute; left: calc(37.6% - 6px); top: -1px; width: 12px; height: 12px; border-radius: 50%; background: #F0527F; border: 2px solid #FFFFFF; box-sizing: border-box"></span>
+        <span style="position: absolute; left: calc(52.3% - 5px); top: 0; width: 9px; height: 9px; transform: rotate(45deg); border-radius: 2px; background: #8B74FF"></span>
+        <span style="position: absolute; left: calc(66.8% - 5px); top: 0; width: 10px; height: 10px; border-radius: 50%; background: #2DD4BF"></span>
+        <span style="position: absolute; left: calc(75.7% - 5px); top: 0; width: 9px; height: 9px; transform: rotate(45deg); border-radius: 2px; background: #8B74FF"></span>
+        <span style="position: absolute; left: calc(86% - 5px); top: 0; width: 10px; height: 10px; border-radius: 50%; background: #F59E0B"></span>
+      </div>
+      <span style="flex: none; font-size: 12.5px; font-weight: 800; color: #FFFFFF; font-variant-numeric: tabular-nums">07:14</span>
+    </div>
+  </section>
+
+  <nav aria-label="Main" style="position: absolute; left: 0; right: 0; bottom: 0; height: 76px; box-sizing: border-box; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px 12px 14px; background: #FFFFFF; border-top: 1px solid #E6E3DA">
+    <a href="Mobile-Upload.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 14px; color: #56637A; font-size: 11.5px; font-weight: 700; text-decoration: none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New</a>
+    <a href="Library.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 14px; background: #EEF6F4; color: #06635F; font-size: 11.5px; font-weight: 800; text-decoration: none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18"></path><path d="M6 18v-5M10 18V8M14 18v-8M18 18v-3"></path></svg>Calls</a>
+    <a href="Mobile-Upload.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 14px; color: #56637A; font-size: 11.5px; font-weight: 700; text-decoration: none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19.5c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5"></path></svg>Account</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var played = '', rest = '';
+    for (var i = 0; i < 86; i++) {
+      var x = 2 + i * 3;
+      var e = Math.abs(Math.sin(i * 0.42) * 0.5 + Math.sin(i * 0.13 + 0.8) * 0.4 + Math.sin(i * 2.1) * 0.16);
+      var h = Math.max(1, Math.min(11, e * 11));
+      var seg = 'M' + x + ' ' + (13 - h).toFixed(1) + 'V' + (13 + h).toFixed(1);
+      if (i <= 33) played += seg; else rest += seg;
+    }
+    return { played: played, rest: rest };
+  }
+}
+</script>
+</body>
+</html>

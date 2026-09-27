@@ -1,0 +1,310 @@
+/*
+ * Sales Xray v0.2 "Lightbox" design tokens: the app derivative.
+ * Source: docs/design/sales-xray-v02-lightbox-20260924/tokens.css, which stays unchanged.
+ * Imported once from app/layout.tsx. The learner-web embed receives the light values
+ * through the isolated block at the top of app/styles.css instead of this file.
+ *
+ * Documented exceptions to the source (asserted by app/lightbox/tokens.test.ts):
+ * - Light --lx-muted-2 is #646D7F (source #6B7486 measures 4.31:1 on paper). It passes
+ *   4.5:1 on paper, paper-2 and surface. Never use it on --lx-sunken.
+ * - Added --lx-strength-ink (light #06736F, dark #2DD4BF): teal text on --lx-strength-soft
+ *   measures 4.38:1 in the source.
+ * - Added --lx-objection-ink (light #BE2A55, dark #FF8CAE): dark objection text on
+ *   --lx-objection-soft measures 4.42:1 with the source value.
+ * - Added --lx-on-teal (light #FFFFFF, dark #0A1220): text on --lx-teal buttons, which is
+ *   the glow colour in dark.
+ * - Added --lx-glow-ink, referenced by the source Lens assets but missing from the source.
+ * - Added --lx-film-lens-outline and --lx-film-lens-fill: the Lens on film uses the
+ *   board colours in both themes.
+ * - Dark --lx-closing-ink is #BFD0FF (the light value is unreadable on dark surfaces).
+ * - Dark values added for --lx-info, --lx-info-soft, --lx-warning, --lx-warning-soft and
+ *   --lx-hypothesis so status and inference text keep 4.5:1 in dark.
+ * - Added the [data-script="deva"] rule: Devanagari source quotes carry an unknown-language
+ *   script tag, so :lang(hi|mr) alone cannot keep them upright.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- Neutrals ---------- */
+  --lx-ink: #0b1424; /* primary text, strong UI */
+  --lx-ink-2: #1e2b40; /* quote text on light surfaces */
+  --lx-ink-3: #334158; /* secondary text */
+  --lx-muted: #56637a; /* tertiary text; 5.6:1 on paper */
+  --lx-muted-2: #646d7f; /* captions/meta; 4.8:1 on paper - never below 12px, never on sunken */
+  --lx-line: #e6e3da; /* hairlines on paper/surface */
+  --lx-line-soft: #ece9e1;
+  --lx-line-strong: #cfcabe;
+  --lx-paper: #f6f5f1; /* app ground */
+  --lx-paper-2: #fbfaf7; /* nested/secondary surface */
+  --lx-surface: #ffffff; /* cards */
+  --lx-sunken: #ece9e1; /* segmented controls, "still unknown" wells */
+
+  /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
+  --lx-film: #0a1220;
+  --lx-film-2: #16233a;
+  --lx-film-line: rgba(255, 255, 255, 0.06);
+  --lx-film-grid: rgba(255, 255, 255, 0.045);
+  --lx-film-text: #ffffff;
+  --lx-film-text-2: #c9d4e3;
+  --lx-film-text-3: #9fb0c8;
+  --lx-film-wave: #3a4c66; /* unplayed waveform */
+  --lx-film-lens-outline: #e8edf5;
+  --lx-film-lens-fill: #ffffff;
+
+  /* ---------- Brand ---------- */
+  --lx-teal: #087e79; /* primary action, links, strength */
+  --lx-teal-hover: #06635f;
+  --lx-teal-2: #24b5a8; /* wordmark gradient end */
+  --lx-teal-soft: #e6f5f2;
+  --lx-teal-tint: #f2faf8;
+  --lx-teal-edge: #d5ece8;
+  --lx-glow: #2dd4bf; /* ONLY on film backgrounds (contrast), never text on light */
+  --lx-glow-ink: #0f8b7e; /* Lens sound waves */
+  --lx-on-teal: #ffffff; /* text on teal actions */
+
+  /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
+  --lx-strength: #087e79;
+  --lx-strength-soft: #e6f5f2;
+  --lx-strength-edge: #cde8e3;
+  --lx-strength-on-film: #2dd4bf;
+  --lx-strength-ink: #06736f;
+  --lx-focus: #b45309;
+  --lx-focus-soft: #fef3e2;
+  --lx-focus-edge: #f2c27a;
+  --lx-focus-on-film: #f59e0b;
+  --lx-focus-ink: #92400e;
+  --lx-missed: #5b3fd6;
+  --lx-missed-soft: #efebff;
+  --lx-missed-edge: #ddd5ff;
+  --lx-missed-on-film: #8b74ff;
+  --lx-missed-ink: #4a31b8;
+  --lx-objection: #be2a55;
+  --lx-objection-soft: #fdecf1;
+  --lx-objection-edge: #f3c9d5;
+  --lx-objection-on-film: #f0527f;
+  --lx-objection-ink: #be2a55;
+  --lx-closing: #2453d6;
+  --lx-closing-soft: #eaf0ff;
+  --lx-closing-ink: #1f4fb8;
+  --lx-hypothesis: #56637a;
+  --lx-hypothesis-edge: #aeb6c4; /* dashed border */
+
+  /* ---------- Status ---------- */
+  --lx-success: var(--lx-teal);
+  --lx-info: #2453d6;
+  --lx-info-soft: #eaf0ff;
+  --lx-warning: #b45309;
+  --lx-warning-soft: #fef3e2;
+  --lx-danger: #b42318;
+  --lx-danger-soft: #fdecea;
+  --lx-danger-edge: #f1c7c2;
+
+  /* ---------- Type ---------- */
+  --lx-font-display:
+    "Bricolage Grotesque Variable", "Bricolage Grotesque",
+    "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --lx-font-ui:
+    "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
+    "Noto Sans Devanagari Variable", "Noto Sans Devanagari", system-ui,
+    sans-serif;
+  --lx-font-quote:
+    "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable",
+    "Noto Serif Devanagari", Georgia, serif;
+
+  --lx-text-display-xl: 700 76px/0.98 var(--lx-font-display); /* marketing / foundations only */
+  --lx-text-display: 800 46px/1.04 var(--lx-font-display); /* page H1 desktop */
+  --lx-text-h1: 800 42px/1.04 var(--lx-font-display);
+  --lx-text-h2: 800 30px/1.1 var(--lx-font-display); /* report section titles */
+  --lx-text-verdict: 400 34px/1.28 var(--lx-font-quote); /* the verdict sentence */
+  --lx-text-quote-lg: 400 22px/1.42 var(--lx-font-quote); /* moment quotes */
+  --lx-text-quote: 400 15px/1.4 var(--lx-font-quote); /* quote chips */
+  --lx-text-body: 500 15px/1.65 var(--lx-font-ui);
+  --lx-text-ui: 600 14px/1.45 var(--lx-font-ui);
+  --lx-text-meta: 600 12.5px/1.45 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 12px/1.2 var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
+  --lx-tracking-display: -0.035em;
+  --lx-tracking-eyebrow: 0.14em;
+  --lx-leading-devanagari: 1.65; /* raise line-height for :lang(hi), :lang(mr) */
+
+  /* ---------- Space (4px grid) ---------- */
+  --lx-space-1: 4px;
+  --lx-space-2: 8px;
+  --lx-space-3: 12px;
+  --lx-space-4: 16px;
+  --lx-space-5: 20px;
+  --lx-space-6: 24px;
+  --lx-space-8: 32px;
+  --lx-space-10: 40px;
+  --lx-space-12: 48px;
+  --lx-space-14: 56px;
+  --lx-space-18: 72px;
+
+  /* ---------- Radius ---------- */
+  --lx-radius-xs: 6px; /* tiny tags */
+  --lx-radius-sm: 10px; /* buttons, inputs */
+  --lx-radius-md: 14px; /* chips-in-cards, inner wells */
+  --lx-radius-lg: 20px; /* cards */
+  --lx-radius-xl: 26px; /* film panels */
+  --lx-radius-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --lx-shadow-1: 0 1px 2px rgba(11, 20, 36, 0.05);
+  --lx-shadow-2: 0 10px 26px -18px rgba(11, 20, 36, 0.45);
+  --lx-shadow-film: 0 30px 60px -32px rgba(10, 18, 32, 0.65);
+  --lx-shadow-cta: 0 14px 30px -14px rgba(8, 126, 121, 0.8);
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+
+  /* ---------- Motion ---------- */
+  --lx-ease-quick: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --lx-ease-move: cubic-bezier(0.16, 1, 0.3, 1);
+  --lx-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lx-ease-scan: cubic-bezier(0.65, 0, 0.35, 1);
+  --lx-dur-quick: 120ms;
+  --lx-dur-move: 240ms;
+  --lx-dur-reveal: 420ms;
+  --lx-dur-develop: 700ms;
+  --lx-stagger: 60ms;
+
+  /* ---------- Layout ---------- */
+  --lx-rail-w: 248px;
+  --lx-rail-w-collapsed: 72px;
+  --lx-topbar-h: 64px;
+  --lx-content-max: 880px; /* report reading column */
+  --lx-chapter-rail-w: 196px;
+  --lx-bottom-nav-h: 76px;
+  --lx-mini-player-h: 62px;
+}
+
+/* Devanagari: never synthesise italics, always give it more leading. */
+:lang(hi),
+:lang(mr),
+:lang(hi-Deva),
+:lang(mr-Deva) {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+/* Source quotes are tagged by script (lang="und-Deva") until source-language metadata exists. */
+[data-script="deva"] {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+/* ---------- Dark theme (System / Light / Dark control; release requires the P6 theme matrix) ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --lx-ink: #e8edf5;
+  --lx-ink-2: #d6deea;
+  --lx-ink-3: #b7c2d3;
+  --lx-muted: #93a0b5;
+  --lx-muted-2: #8390a6;
+  --lx-line: #223049;
+  --lx-line-soft: #1b2740;
+  --lx-line-strong: #2e3e5c;
+  --lx-paper: #070d18;
+  --lx-paper-2: #0c1424;
+  --lx-surface: #101a2c;
+  --lx-sunken: #0c1424;
+  --lx-teal: #2dd4bf;
+  --lx-teal-hover: #5eead4;
+  --lx-teal-soft: rgba(45, 212, 191, 0.12);
+  --lx-teal-tint: rgba(45, 212, 191, 0.08);
+  --lx-teal-edge: rgba(45, 212, 191, 0.28);
+  --lx-on-teal: #0a1220;
+  --lx-strength: #2dd4bf;
+  --lx-strength-soft: rgba(45, 212, 191, 0.12);
+  --lx-strength-ink: #2dd4bf;
+  --lx-focus: #f59e0b;
+  --lx-focus-soft: rgba(245, 158, 11, 0.12);
+  --lx-focus-ink: #fbbf24;
+  --lx-missed: #a18fff;
+  --lx-missed-soft: rgba(139, 116, 255, 0.14);
+  --lx-missed-ink: #c4b8ff;
+  --lx-objection: #f0527f;
+  --lx-objection-soft: rgba(240, 82, 127, 0.14);
+  --lx-objection-ink: #ff8cae;
+  --lx-closing: #7ea2ff;
+  --lx-closing-soft: rgba(126, 162, 255, 0.14);
+  --lx-closing-ink: #bfd0ff;
+  --lx-hypothesis: #93a0b5;
+  --lx-info: #7ea2ff;
+  --lx-info-soft: rgba(126, 162, 255, 0.14);
+  --lx-warning: #f59e0b;
+  --lx-warning-soft: rgba(245, 158, 11, 0.12);
+  --lx-danger: #f97066;
+  --lx-danger-soft: rgba(249, 112, 102, 0.12);
+}
+
+/* ---------- Light report surface ----------
+ * The report document stays light in every app theme until a dark report theme
+ * passes the P6 matrix: report modules still carry fixed light colours. This
+ * surface re-declares every token the dark block overrides (plus the tokens
+ * that resolve var() at :root), so theme tokens never mix with fixed light text
+ * inside a report. Values mirror :root; asserted by app/lightbox/tokens.test.ts.
+ */
+[data-lx-surface="light"] {
+  color-scheme: light;
+  --lx-ink: #0b1424;
+  --lx-ink-2: #1e2b40;
+  --lx-ink-3: #334158;
+  --lx-muted: #56637a;
+  --lx-muted-2: #646d7f;
+  --lx-line: #e6e3da;
+  --lx-line-soft: #ece9e1;
+  --lx-line-strong: #cfcabe;
+  --lx-paper: #f6f5f1;
+  --lx-paper-2: #fbfaf7;
+  --lx-surface: #ffffff;
+  --lx-sunken: #ece9e1;
+  --lx-teal: #087e79;
+  --lx-teal-hover: #06635f;
+  --lx-teal-soft: #e6f5f2;
+  --lx-teal-tint: #f2faf8;
+  --lx-teal-edge: #d5ece8;
+  --lx-on-teal: #ffffff;
+  --lx-strength: #087e79;
+  --lx-strength-soft: #e6f5f2;
+  --lx-strength-ink: #06736f;
+  --lx-focus: #b45309;
+  --lx-focus-soft: #fef3e2;
+  --lx-focus-ink: #92400e;
+  --lx-missed: #5b3fd6;
+  --lx-missed-soft: #efebff;
+  --lx-missed-ink: #4a31b8;
+  --lx-objection: #be2a55;
+  --lx-objection-soft: #fdecf1;
+  --lx-objection-ink: #be2a55;
+  --lx-closing: #2453d6;
+  --lx-closing-soft: #eaf0ff;
+  --lx-closing-ink: #1f4fb8;
+  --lx-hypothesis: #56637a;
+  --lx-success: var(--lx-teal);
+  --lx-info: #2453d6;
+  --lx-info-soft: #eaf0ff;
+  --lx-warning: #b45309;
+  --lx-warning-soft: #fef3e2;
+  --lx-danger: #b42318;
+  --lx-danger-soft: #fdecea;
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+  background-color: var(--lx-paper);
+  color: var(--lx-ink);
+}
+
+/* On a dark app ground the outermost light report reads as a deliberate sheet. */
+:root[data-theme="dark"]
+  [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
+  padding: var(--lx-space-6);
+  border-radius: var(--lx-radius-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lx-dur-move: 120ms;
+    --lx-dur-reveal: 120ms;
+    --lx-dur-develop: 120ms;
+    --lx-stagger: 0ms;
+  }
+}

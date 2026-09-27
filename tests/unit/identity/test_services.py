@@ -45,6 +45,7 @@ from ac_platform.identity.services import (
     SessionService,
     TenantScopeDeniedError,
     VerifiedProviderAssertion,
+    validate_verified_provider_assertion,
 )
 
 NOW = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
@@ -99,6 +100,121 @@ def _identity_fixture(
     )
     assertion = _assertion()
     return store, person_id, assertion
+
+
+@pytest.mark.parametrize(
+    ("raw_name", "expected"),
+    [
+        ("  Ada   Lovelace  ", "Ada Lovelace"),
+        ("", None),
+        ("A\x00B", None),
+        ("x" * 201, None),
+        (None, None),
+    ],
+)
+def test_optional_provider_display_name_is_normalized_or_ignored(raw_name, expected) -> None:
+    validated = validate_verified_provider_assertion(replace(_assertion(), display_name=raw_name))
+
+    assert validated.display_name == expected
+
+
+def test_google_issuer_spellings_share_one_validated_provider_key() -> None:
+    canonical = "https://accounts.google.com"
+    assertions = [
+        validate_verified_provider_assertion(
+            replace(_assertion(), issuer=issuer, subject="google-subject")
+        )
+        for issuer in (canonical, "accounts.google.com")
+    ]
+
+    assert [assertion.issuer for assertion in assertions] == [canonical, canonical]
+    assert assertions[0].replay_key == assertions[1].replay_key
+
+
+def test_verified_provider_assertion_preserves_legacy_positional_field_order() -> None:
+    assertion = VerifiedProviderAssertion(
+        "https://issuer.example",
+        "provider-subject",
+        "authority-closers-web",
+        "state-1",
+        "nonce-1",
+        ProviderAuthorizationType.AUTHENTICATE,
+        EMAIL,
+        True,
+        "assertion-id-1",
+        "legacy-replay-key",
+    )
+
+    assert assertion.assertion_id == "assertion-id-1"
+    assert assertion.replay_key == "legacy-replay-key"
+    assert assertion.display_name is None
+
+
+def test_google_issuer_alias_resolves_legacy_link_without_creating_duplicate() -> None:
+    person_id = uuid4()
+    store = InMemoryIdentityStore([_verified_person(person_id)])
+    store.unsafe_add_provider_identity(
+        ProviderIdentitySnapshot(
+            id=uuid4(),
+            person_id=person_id,
+            issuer="accounts.google.com",
+            subject="google-subject",
+            created_at=NOW,
+        )
+    )
+    service = ProviderAuthenticationService(store, token_pepper=PEPPER)
+
+    for index, issuer in enumerate(("accounts.google.com", "https://accounts.google.com")):
+        transaction = service.begin_provider_authorization(
+            audience="authority-closers-web", now=NOW + timedelta(seconds=index)
+        )
+        assertion = replace(
+            _assertion(state=transaction.state, nonce=transaction.nonce),
+            issuer=issuer,
+            subject="google-subject",
+        )
+        issued = service.authenticate(
+            assertion,
+            transaction_id=transaction.transaction_id,
+            pkce_verifier=transaction.pkce_verifier,
+            now=NOW + timedelta(seconds=index),
+        )
+        assert issued.metadata.person_id == person_id
+
+    assert len(store.provider_identities) == 1
+
+
+def test_google_issuer_alias_rows_for_different_people_fail_closed() -> None:
+    first_person, second_person = uuid4(), uuid4()
+    store = InMemoryIdentityStore([_verified_person(first_person), _verified_person(second_person)])
+    for person_id, issuer in (
+        (first_person, "accounts.google.com"),
+        (second_person, "https://accounts.google.com"),
+    ):
+        store.unsafe_add_provider_identity(
+            ProviderIdentitySnapshot(
+                id=uuid4(),
+                person_id=person_id,
+                issuer=issuer,
+                subject="conflicting-google-subject",
+                created_at=NOW,
+            )
+        )
+    service = ProviderAuthenticationService(store, token_pepper=PEPPER)
+    transaction = service.begin_provider_authorization(audience="authority-closers-web", now=NOW)
+    assertion = replace(
+        _assertion(state=transaction.state, nonce=transaction.nonce),
+        issuer="accounts.google.com",
+        subject="conflicting-google-subject",
+    )
+
+    with pytest.raises(AmbiguousProviderIdentityError):
+        service.authenticate(
+            assertion,
+            transaction_id=transaction.transaction_id,
+            pkce_verifier=transaction.pkce_verifier,
+            now=NOW,
+        )
 
 
 def _auth_transaction(

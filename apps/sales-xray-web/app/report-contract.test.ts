@@ -3,6 +3,7 @@ import {
   encodeConversationId,
   parseAcquisitionReport,
   parseJobResponse,
+  parseJobStatus,
   parseSavedRecordings,
   parseTranscript,
   REPORT_REVIEW_STATUS,
@@ -70,6 +71,42 @@ function job(report: unknown = validReport()) {
 }
 
 describe("CallStudio report contract", () => {
+  it("accepts the nullable server hold without changing report source checks", () => {
+    const payload = { ...job(), execution_hold: null };
+    expect(parseJobResponse(payload, binding).report).toBeDefined();
+    expect(() =>
+      parseJobResponse(payload, { ...binding, sourceSha256: "11".repeat(32) }),
+    ).toThrow("report_source_mismatch");
+    expect(
+      parseJobStatus({
+        ...job(null),
+        execution_hold: "account_profile_required",
+      }).executionHold,
+    ).toBe("account_profile_required");
+    expect(() =>
+      parseJobStatus({ ...job(null), execution_hold: "untrusted_hold" }),
+    ).toThrow("job_execution_hold_invalid");
+  });
+
+  it("validates recovery metadata on legacy saved-run reports", () => {
+    const recovery = {
+      version: 1,
+      validation_state: "revalidated",
+      provider_calls: 0,
+      human_approved: false,
+      official_score: false,
+    };
+    expect(parseJobResponse({ ...job(), recovery }, binding).recovery).toEqual(
+      recovery,
+    );
+    expect(() =>
+      parseJobResponse(
+        { ...job(), recovery: { ...recovery, human_approved: true } },
+        binding,
+      ),
+    ).toThrow("report_recovery_human_approved_invalid");
+  });
+
   it("normalizes a strict report without practice or model review text", () => {
     const parsed = parseJobResponse(job(), binding);
     expect(parsed.report?.review_status).toBe(REPORT_REVIEW_STATUS);
@@ -167,6 +204,112 @@ describe("CallStudio report contract", () => {
     ).toThrow("report_strength_0_evidence_0_quote_mismatch");
   });
 
+  it("preserves optional dimension evidence separately from legacy citations", () => {
+    const report = validReport();
+    report.dimensions[0] = {
+      ...report.dimensions[0]!,
+      status: "observed",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "agree on the next step",
+          start_ms: 1_000,
+          end_ms: 2_200,
+        },
+      ],
+    };
+    report.dimensions[1] = {
+      ...report.dimensions[1]!,
+      status: "unknown",
+      evidence: [],
+    };
+
+    const parsed = parseJobResponse(job(report), {
+      sourceSha256,
+      durationMs: transcript.duration_ms,
+      transcript: parseTranscript(transcript, sourceSha256),
+    });
+
+    expect(parsed.report?.dimensions[0]?.evidence).toEqual([
+      {
+        segment_id: "s1",
+        quote: "agree on the next step",
+        start_ms: 1_000,
+        end_ms: 2_200,
+      },
+    ]);
+    expect(parsed.report?.dimensions[0]?.citations).toEqual([citation]);
+    expect(parsed.report?.dimensions[1]?.evidence).toEqual([]);
+    expect(parsed.report?.dimensions[2]).not.toHaveProperty("evidence");
+  });
+
+  it("requires a provided evidence array for observed and conflicted dimensions", () => {
+    const legacy = validReport();
+    legacy.dimensions[0] = { ...legacy.dimensions[0]!, status: "observed" };
+    const legacyParsed = parseJobResponse(job(legacy), binding);
+    expect(legacyParsed.report?.dimensions[0]?.status).toBe("observed");
+    expect(legacyParsed.report?.dimensions[0]).not.toHaveProperty("evidence");
+
+    for (const status of ["observed", "conflicted"]) {
+      const report = validReport();
+      report.dimensions[0] = {
+        ...report.dimensions[0]!,
+        status,
+        evidence: [],
+      };
+      expect(() => parseJobResponse(job(report), binding)).toThrow(
+        "report_dimension_0_evidence_required",
+      );
+    }
+  });
+
+  it("rejects invalid dimension evidence IDs, quotes and non-native timings", () => {
+    const base = validReport();
+    const evidence = {
+      segment_id: "s1",
+      quote: "agree on the next step",
+      start_ms: 1_000,
+      end_ms: 2_200,
+    };
+    const bound = {
+      sourceSha256,
+      durationMs: transcript.duration_ms,
+      transcript: parseTranscript(transcript, sourceSha256),
+    };
+
+    const unknownSegment = structuredClone(base);
+    unknownSegment.dimensions[0]!.evidence = [
+      { ...evidence, segment_id: "missing-segment" },
+    ];
+    expect(() => parseJobResponse(job(unknownSegment), bound)).toThrow(
+      "report_dimension_0_evidence_0_segment_unknown",
+    );
+
+    const invalidId = structuredClone(base);
+    invalidId.dimensions[0]!.evidence = [
+      { ...evidence, segment_id: "../unsafe" },
+    ];
+    expect(() => parseJobResponse(job(invalidId), binding)).toThrow(
+      "report_dimension_0_evidence_0_segment_id_invalid",
+    );
+
+    const invalidQuote = structuredClone(base);
+    invalidQuote.dimensions[0]!.evidence = [
+      { ...evidence, quote: "not in the native segment" },
+    ];
+    expect(() => parseJobResponse(job(invalidQuote), bound)).toThrow(
+      "report_dimension_0_evidence_0_quote_mismatch",
+    );
+
+    const nonNativeTiming = structuredClone(base);
+    nonNativeTiming.dimensions[0]!.evidence = [
+      { ...evidence, start_ms: 1_100, end_ms: 2_100 },
+    ];
+    expect(() => parseJobResponse(job(nonNativeTiming), bound)).toThrow(
+      "report_dimension_0_evidence_0_segment_timing_mismatch",
+    );
+  });
+
   it("parses bounded saved recordings and rejects unsafe path IDs", () => {
     const parsed = parseSavedRecordings({
       recordings: [
@@ -257,6 +400,19 @@ function previewEnvelope() {
     },
   };
 }
+
+function recoveredPreviewEnvelope() {
+  return {
+    ...previewEnvelope(),
+    recovery: {
+      version: 1,
+      validation_state: "revalidated" as const,
+      provider_calls: 0 as const,
+      human_approved: false as const,
+      official_score: false as const,
+    },
+  };
+}
 const expectedSubmission = {
   submissionId: "submission-1",
   recordingId: "recording-1",
@@ -276,6 +432,74 @@ describe("server-withheld guest report preview", () => {
       transcript.segments[0].text,
     );
     expect(value.report.report_sections).toEqual([]);
+  });
+
+  it("accepts the exact server recovery metadata at the envelope boundary", () => {
+    const value = parseAcquisitionReport(
+      recoveredPreviewEnvelope(),
+      expectedSubmission,
+      transcript,
+    );
+    expect(value.recovery).toEqual({
+      version: 1,
+      validation_state: "revalidated",
+      provider_calls: 0,
+      human_approved: false,
+      official_score: false,
+    });
+  });
+
+  it.each([
+    [
+      "unknown field",
+      (recovery: Record<string, unknown>) => {
+        recovery.extra = "not allowed";
+      },
+    ],
+    [
+      "unsupported state",
+      (recovery: Record<string, unknown>) => {
+        recovery.validation_state = "approved";
+      },
+    ],
+    [
+      "provider calls",
+      (recovery: Record<string, unknown>) => {
+        recovery.provider_calls = 1;
+      },
+    ],
+    [
+      "human approval",
+      (recovery: Record<string, unknown>) => {
+        recovery.human_approved = true;
+      },
+    ],
+    [
+      "official score",
+      (recovery: Record<string, unknown>) => {
+        recovery.official_score = true;
+      },
+    ],
+  ] as const)("rejects recovery metadata with %s", (_, mutate) => {
+    const envelope = recoveredPreviewEnvelope();
+    mutate(envelope.recovery as unknown as Record<string, unknown>);
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_recovery");
+  });
+
+  it("keeps source and evidence binding active when recovery metadata is present", () => {
+    const envelope = recoveredPreviewEnvelope();
+    envelope.report.content.strengths[0].evidence[0].quote = "Invented words";
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("quote_mismatch");
+    envelope.report.content.strengths[0].evidence[0].quote =
+      transcript.segments[0].text;
+    envelope.source_sha256 = "ff".repeat(32);
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_envelope_binding");
   });
 
   it.each([

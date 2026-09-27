@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping
+from copy import copy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.media.api_contracts import (
     MediaAssetResponse,
+    ProfileAvatarResponse,
     UploadIntentRequest,
     UploadIntentResponse,
 )
@@ -89,11 +91,26 @@ class LocalAvatarMediaService(MediaService):
         *,
         idempotency_key: str,
         studio_authorization: StudioUploadAuthorization | None = None,
+        upload_origin: str | None = None,
     ) -> UploadIntentResponse:
         if request.purpose is not MediaPurpose.AVATAR:
             raise MediaForbidden("This local upload adapter accepts only profile photos.")
         if request.crop is not None and request.crop.rotation_degrees != 0:
             raise MediaBadRequest("This local photo editor does not support crop rotation.")
+        if upload_origin is not None:
+            if not isinstance(self.storage, FilesystemAvatarStorage):
+                raise MediaForbidden("This avatar adapter does not accept hosted upload origins.")
+            scoped_storage = self.storage.for_upload_origin(upload_origin)
+            scoped_service = copy(self)
+            scoped_service.storage = scoped_storage
+            return MediaService.create_upload_intent(
+                scoped_service,
+                database,
+                actor,
+                request,
+                idempotency_key=idempotency_key,
+                studio_authorization=studio_authorization,
+            )
         return super().create_upload_intent(
             database,
             actor,
@@ -101,6 +118,21 @@ class LocalAvatarMediaService(MediaService):
             idempotency_key=idempotency_key,
             studio_authorization=studio_authorization,
         )
+
+    def get_profile_avatar_for_origin(
+        self, database: Session, actor: ActorContext, *, origin: str
+    ) -> ProfileAvatarResponse:
+        """Issue same-surface filesystem read URLs without mutating shared runtime state."""
+
+        if not isinstance(self.storage, FilesystemAvatarStorage):
+            raise MediaForbidden("This avatar adapter does not accept hosted delivery origins.")
+        if origin not in self.storage.upload_origins or self.delivery_port is None:
+            raise MediaForbidden("The profile delivery origin is not configured.")
+        scoped_service = copy(self)
+        scoped_port = copy(self.delivery_port)
+        scoped_port.delivery_origin = origin
+        scoped_service.delivery_port = scoped_port
+        return MediaService.get_profile_avatar(scoped_service, database, actor)
 
 
 @dataclass(frozen=True)
@@ -144,6 +176,7 @@ class LocalAvatarRuntime:
         content_type: str,
         declared_length: str,
         checksum: str,
+        origin: str | None = None,
     ) -> UUID:
         self.require_identity(database, actor)
         if (
@@ -155,6 +188,10 @@ class LocalAvatarRuntime:
         now = datetime.now(UTC)
         claims = self.storage.signer.verify(token, now=now, token_type=self.storage.token_type)  # noqa: S106 - bounded token kind, not a secret
         digest = hashlib.sha256(body).hexdigest()
+        if isinstance(self.storage, FilesystemAvatarStorage) and (
+            origin not in self.storage.upload_origins or claims.get("origin") != origin
+        ):
+            raise MediaForbidden("The filesystem profile upload origin does not match its intent.")
         if (
             claims.get("key") != key
             or claims.get("bytes") != len(body)
@@ -445,6 +482,11 @@ def compose_filesystem_avatar_runtime(settings: Settings, base: MediaRuntime) ->
         ),
         fallback=base.service.storage,
         origin=str(settings.public_app_url).rstrip("/"),
+        upload_origins=tuple(
+            str(value).rstrip("/")
+            for value in (settings.public_app_url, settings.sales_xray_app_url)
+            if value is not None
+        ),
     )
     service = LocalAvatarMediaService(
         storage=storage,

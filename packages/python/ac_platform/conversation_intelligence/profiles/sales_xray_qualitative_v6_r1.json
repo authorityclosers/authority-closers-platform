@@ -1,0 +1,109 @@
+{
+  "schema_id": "ac.sales-xray.qualitative-pack/1",
+  "id": "sx-qualitative-v6-r1",
+  "scope": "single_call",
+  "numeric_evaluation": false,
+  "sources": [
+    {
+      "id": "brain-2",
+      "drive_id": "1-dQpveXRW5n6EXlb5cuOk6TEoWs6gwZTjipFsgMfuQc",
+      "captured_text_sha256": "4b68ee14f09cf5d32f9af056e408ffa2e3a6f59133eb8ff2e93ef2d657dbfaa6"
+    },
+    {
+      "id": "brain-2-1",
+      "drive_id": "1oWcdr_SqT-xxHbVrWpYw7S16wfEWHpkn6LFeL4CmjCA",
+      "captured_text_sha256": "870dd8a7a06d9eafc4e0e0d4088e82a172a9247f6b61c8fd5d6870c57c0c23f2"
+    },
+    {
+      "id": "context-sep22",
+      "drive_id": "1KdSYvWv-IJSkew81eVNxNniWqcJpxAm81lz0xfemRaI",
+      "captured_text_sha256": "fa2012ed41ca3b5eb8f2a8ad3dcf854e5f693173400bc9dc39bd4bbc1e951285"
+    },
+    {
+      "id": "main-training-rulebook",
+      "drive_id": "1_dz_4YK-c7ombMXfKU1kKlMx2tAUrcdkfnYRXa2T1fA",
+      "captured_text_sha256": "861de3b7b3e26e3286aba8864173a6af7bab135fe4a06a738aa1ed65473bce47"
+    }
+  ],
+  "rules": [
+    {
+      "id": "SXQ01",
+      "instruction": "Use the complete supplied conversation to check each finding. C4 observations are an index, not a complete account. Separate what was said, what remains unknown, and your interpretation. Check praise as carefully as criticism. Attach support for every material clause, including the buyer reply when describing a response. Accurate quoted words alone do not establish that the explanation is true.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.1", "2.2", "2.5", "2.7", "2.8"] }
+      ]
+    },
+    {
+      "id": "SXQ02",
+      "instruction": "Keep speaker, business subject and claim type separate. Preserve negation, approximation, units, currency, period, conditions and corrections. A seller example is not a buyer fact; annual revenue is not monthly revenue; receivables are not revenue or cash collected. A corrected amount replaces the earlier statement, not necessarily a real-world balance change. Do not assign roles from turn order or make uncertain speaker identity sound verified.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.2", "2.4", "2.7"] },
+        { "source_id": "brain-2-1", "sections": ["6 PREVIOUS-ATTEMPTS INTELLIGENCE"] }
+      ]
+    },
+    {
+      "id": "SXQ03",
+      "instruction": "Before saying an action was missing or ineffective, check earlier attempts, answers, refusals, constraints and later corrections. Distinguish not asked, asked but unanswered, answered partly, and no longer appropriate to ask. Credit the useful attempt and name only the remaining gap. Do not prescribe an already completed step. A later mistake cannot cause an earlier refusal; sequence alone does not prove causation.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.4", "2.5", "3.2", "4"] },
+        { "source_id": "brain-2-1", "sections": ["6 PREVIOUS-ATTEMPTS INTELLIGENCE", "13 WHEN TO STOP GOING DEEPER"] }
+      ]
+    },
+    {
+      "id": "SXQ04",
+      "instruction": "Coach the purpose and situation actually supported by the input. An early comparison, appointment-setting call, training session and purchase discussion have different expectations. A training or roleplay statement is not a real customer commitment. No fit, lack of implementation capacity, a legitimate no, or insufficient evidence can be an honest result. Do not manufacture a weakness, buying opportunity or need for further persuasion.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["3.2", "3.3", "4"] },
+        { "source_id": "context-sep22", "sections": ["28 ANALYZER ATTRIBUTION RULE", "29 COMPANY-CONFIGURABLE FIELDS", "30 ZOOM ANALYSIS SHOULD NOT BECOME A CHECKLIST"] },
+        { "source_id": "main-training-rulebook", "sections": ["23 DON'T CHASE"] }
+      ]
+    },
+    {
+      "id": "SXQ05",
+      "instruction": "For a supported priority, explain the specific behavior, why it matters in this situation, and the smallest useful alternative. Give natural suggested wording when it helps, without inventing product facts or putting new words in the source quotation. Explain when the alternative is appropriate and when to stop. A missed opportunity requires a relevant opening and a reasonable chance to act, not merely an unanswered checklist question.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["3.2", "12 COACHING OS"] },
+        { "source_id": "brain-2-1", "sections": ["13 WHEN TO STOP GOING DEEPER", "18 FIT DETERMINES WHETHER RESISTANCE SHOULD BE RESOLVED", "19 CORRECT YOUR OWN MISTAKE WITHOUT LOSING COMPOSURE"] }
+      ]
+    },
+    {
+      "id": "SXQ06",
+      "instruction": "Write generated prose in the selected report language using everyday words. Prefer 'who can approve the purchase' to 'decision architecture', and 'what work would change' to 'value realization'. Explain necessary sales terms. Short sentences must still complete the explanation. Do not repeat a label as its explanation, pad the report, impose a length target, or repeat the same advice in several sections without adding a useful distinction.",
+      "sources": [
+        { "source_id": "main-training-rulebook", "sections": ["26 WORD CHOICE RULE"] }
+      ]
+    },
+    {
+      "id": "SXQ07",
+      "instruction": "Check material seller promises as well as buyer statements. A quoted claim about revenue, savings, success rate, delivery or product capability proves that the claim was made, not that it is verified. When its basis is absent from the supplied material, identify the unsupported assurance and suggest qualification or verification before repeating it. Do not call it false or call the seller dishonest merely because proof is absent. Do not invent a replacement guarantee, feature, discount or implementation service.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.1", "3.3"] },
+        { "source_id": "brain-2-1", "sections": ["17 STRONG CONVICTION MUST NOT BECOME FALSE CERTAINTY"] }
+      ]
+    },
+    {
+      "id": "SXQ08",
+      "instruction": "Preserve permission and decision state: possibility, proposal, conditional permission, agreement and completion are different. A co-owner discussion, price preference, request for information or follow-up condition is not purchase authorization. Preserve the latest explicit correction and final boundary without erasing earlier context. Practice for future conversations does not authorize contacting this prospect. Accurate read-back and stopping is success when further action is declined.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.2", "3.3", "4"] },
+        { "source_id": "main-training-rulebook", "sections": ["17 DECISION TIMELINE RULE", "23 DON'T CHASE"] }
+      ]
+    },
+    {
+      "id": "SXQ09",
+      "instruction": "Select distinct consequential events, not a quota of clips. A numeric answer without its needed question or unit is not a self-contained replay. A caption must not describe an answer, correction or reaction outside its selected segment. Use a self-contained native segment where available; otherwise preserve the event with separate references in the relevant finding and omit the misleading rewatch item. Never join segments into one quotation, invent an identifier, alter source times or imply word-level alignment.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.4", "2.7", "2.8"] },
+        { "source_id": "context-sep22", "sections": ["22 AUDIO-ONLY EVIDENCE RULE"] }
+      ]
+    },
+    {
+      "id": "SXQ10",
+      "instruction": "All eight dimensions must state what this call supports and what it does not. A supported observation should explain the behavior's relevance and a useful keep/change action; a missing or inapplicable dimension should explain its limitation without inventing a drill. Keep one primary practice linked to a supported improvement. No improvement means no invented focus. Do not infer vocal delivery, psychology, personality, seller scores, mastery or cross-call development from transcript text.",
+      "sources": [
+        { "source_id": "brain-2", "sections": ["2.7", "2.8"] },
+        { "source_id": "context-sep22", "sections": ["28 ANALYZER ATTRIBUTION RULE", "30 ZOOM ANALYSIS SHOULD NOT BECOME A CHECKLIST"] }
+      ]
+    }
+  ]
+}

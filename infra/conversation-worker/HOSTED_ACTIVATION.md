@@ -68,6 +68,28 @@ approved stages. Initial external identity directories are:
 - `/etc/authority-closers/secrets/sales-xray/identities/groq`
 - `/etc/authority-closers/secrets/sales-xray/identities/gemini`
 
+OpenAI is an opt-in worker identity. When the release-owned service manifest
+contains an `openai` provider, the activation descriptor must select
+`compose.sales-xray-hosted-openai.yaml`, and the compose environment must add
+`AC_XRAY_OPENAI_IDENTITY_DIR` pointing to the separately provisioned
+`/etc/authority-closers/secrets/sales-xray/identities/openai` directory. The
+directory contains only that environment's Infisical service token, owned by
+UID10001 and mode0400. The OpenAI overlay mounts only this provider directory,
+read-only, at `/run/ac-sales-xray/identities/openai`; its service manifest must
+use the matching `/run/ac-sales-xray/identities/openai/token` file reference.
+Both hosted validators require this exact dedicated leaf and reject broader
+`identities` or `secrets` parent directories.
+The ordinary overlay does not request or mount an OpenAI identity, so existing
+activations remain on the original four-identity contract.
+
+An OpenAI mount grants no model, task, recording, or spending approval. The
+hash-pinned hosted approval must separately authorize the exact C5 provider,
+model, source/owner, credential reference, bounded requests/input/completion,
+pricing or verified allowance, no-overage, privacy, retention, professional
+gate and expiry. Use environment-specific Infisical project/environment/path
+references. The template's `/sales-xray-test/openai` path is test-only and is
+not staging or production approval.
+
 Each directory contains only its own token, UID10001, mode0400. The original
 ElevenLabs/Groq tokens expire after 24 hours; the Gemini testing token expires
 on 2026-09-20 at 22:53 UTC. Verify and renew each scoped identity before sustained
@@ -101,6 +123,13 @@ AC_XRAY_CHALLENGE_SECRET_FILE=/etc/authority-closers/secrets/sales-xray/staging/
 AC_XRAY_CHALLENGE_SITE_KEY=<public site key for the exact Sales Xray host>
 AC_XRAY_ACQUISITION_ENABLED=true
 AC_XRAY_ACQUISITION_POLICY_REVISION=<approved acquisition policy revision>
+```
+
+Only when the service manifest includes an approved OpenAI launcher, the
+separate OpenAI overlay also requires:
+
+```text
+AC_XRAY_OPENAI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/openai
 ```
 
 For production, use the corresponding `production/challenge-secret` path. The

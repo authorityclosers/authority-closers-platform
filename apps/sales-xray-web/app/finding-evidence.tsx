@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
-/** Keep full source quotations available without crowding the finding itself. */
+/** Evidence and playback actions stay visible beside the finding in either view. */
 export function FindingEvidence({
   count,
   children,
@@ -10,36 +10,21 @@ export function FindingEvidence({
   count: number;
   children: ReactNode;
 }) {
-  const details = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    let previous: boolean | null = null;
-    const beforePrint = () => {
-      if (!details.current || previous !== null) return;
-      previous = details.current.open;
-      details.current.open = true;
-    };
-    const afterPrint = () => {
-      if (details.current && previous !== null) details.current.open = previous;
-      previous = null;
-    };
-    window.addEventListener("beforeprint", beforePrint);
-    window.addEventListener("afterprint", afterPrint);
-    return () => {
-      window.removeEventListener("beforeprint", beforePrint);
-      window.removeEventListener("afterprint", afterPrint);
-      afterPrint();
-    };
-  }, []);
+  const headingId = useId();
   if (!count) return null;
   return (
-    <details ref={details} className="studio-finding-evidence">
-      <summary>
-        Listen &amp; read evidence{" "}
+    <div
+      className="studio-finding-evidence"
+      role="group"
+      aria-labelledby={headingId}
+    >
+      <p id={headingId} className="studio-finding-evidence-heading">
+        <strong>Evidence from this call</strong>{" "}
         <span>
           {count} {count === 1 ? "moment" : "moments"}
         </span>
-      </summary>
+      </p>
       {children}
-    </details>
+    </div>
   );
 }

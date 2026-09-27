@@ -103,30 +103,49 @@ export function ExecutionControlsPanel() {
     revision: number;
   } | null>(null);
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [executionValue, budgetValue] = await Promise.all([
-        request(endpoint, { signal }),
-        request(budgetEndpoint, { signal }),
-      ]);
-      const next = schema.parse(executionValue);
-      const nextBudget = budgetSchema.parse(budgetValue);
-      if (signal?.aborted) return;
-      setState(next);
-      setBudgetState(nextBudget);
-      if (nextBudget.budget)
-        setBudgetDraft(formatBudgetAmount(nextBudget.budget.cap_paise));
-      setError(null);
-      setBudgetError(null);
-      if (pending.current && next.control.revision > pending.current.revision)
-        pending.current = null;
-    } catch (failure) {
-      if (!signal?.aborted)
-        setError(
-          failure instanceof Error && !(failure instanceof z.ZodError)
-            ? failure.message
-            : "Usage details could not be verified. Refresh to try again.",
-        );
-    }
+    // Expired budget approval must not hide the independently authorized
+    // pause control. Each response clears only its own error and state.
+    await Promise.all([
+      (async () => {
+        try {
+          const next = schema.parse(await request(endpoint, { signal }));
+          if (signal?.aborted) return;
+          setState(next);
+          setError(null);
+          if (
+            pending.current &&
+            next.control.revision > pending.current.revision
+          )
+            pending.current = null;
+        } catch (failure) {
+          if (!signal?.aborted)
+            setError(
+              failure instanceof Error && !(failure instanceof z.ZodError)
+                ? failure.message
+                : "Analysis availability could not be verified. Refresh to try again.",
+            );
+        }
+      })(),
+      (async () => {
+        try {
+          const nextBudget = budgetSchema.parse(
+            await request(budgetEndpoint, { signal }),
+          );
+          if (signal?.aborted) return;
+          setBudgetState(nextBudget);
+          if (nextBudget.budget)
+            setBudgetDraft(formatBudgetAmount(nextBudget.budget.cap_paise));
+          setBudgetError(null);
+        } catch {
+          if (!signal?.aborted) {
+            setBudgetState(null);
+            setBudgetError(
+              "Budget details are unavailable. Refresh to check the approved limit.",
+            );
+          }
+        }
+      })(),
+    ]);
   }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -281,6 +300,11 @@ export function ExecutionControlsPanel() {
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {budgetError && (
+        <p role="alert" className={styles.alert}>
+          {budgetError}
+        </p>
+      )}
       {state && (
         <button
           type="button"
@@ -379,11 +403,6 @@ export function ExecutionControlsPanel() {
                 </button>
                 <span>Revision {budgetState.revision}</span>
               </div>
-              {budgetError && (
-                <p role="alert" className={styles.alert}>
-                  {budgetError}
-                </p>
-              )}
               {budgetMessage && <p role="status">{budgetMessage}</p>}
             </div>
           )}

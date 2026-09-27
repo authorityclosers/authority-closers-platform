@@ -8,6 +8,7 @@ budget-account transitions outside this read-only view.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal
@@ -29,15 +30,22 @@ class PricingSnapshot:
     evidence_sha256: str
     source_url: str
     rate_basis: str
-    evidence_release_sha: str = _EVIDENCE_RELEASE_SHA
+    evidence_release_sha: str | None = _EVIDENCE_RELEASE_SHA
     source_date: str = _SOURCE_DATE
     usd_per_hour: Decimal | None = None
     usd_per_minute: Decimal | None = None
     input_usd_per_million_tokens: Decimal | None = None
     output_usd_per_million_tokens: Decimal | None = None
+    cached_input_usd_per_million_tokens: Decimal | None = None
+    cache_write_usd_per_million_tokens: Decimal | None = None
+    long_context_threshold_tokens: int | None = None
+    long_input_usd_per_million_tokens: Decimal | None = None
+    long_cached_input_usd_per_million_tokens: Decimal | None = None
+    long_cache_write_usd_per_million_tokens: Decimal | None = None
+    long_output_usd_per_million_tokens: Decimal | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        snapshot = {
             "schema": _SNAPSHOT_SCHEMA,
             # This is the release that supplied the immutable pricing evidence;
             # it is not a claim about the release currently serving the API.
@@ -67,7 +75,54 @@ class PricingSnapshot:
                 if self.output_usd_per_million_tokens is None
                 else float(self.output_usd_per_million_tokens)
             ),
+            "cached_input_usd_per_million_tokens": (
+                None
+                if self.cached_input_usd_per_million_tokens is None
+                else float(self.cached_input_usd_per_million_tokens)
+            ),
+            "cache_write_usd_per_million_tokens": (
+                None
+                if self.cache_write_usd_per_million_tokens is None
+                else float(self.cache_write_usd_per_million_tokens)
+            ),
+            "long_context_threshold_tokens": self.long_context_threshold_tokens,
+            "long_input_usd_per_million_tokens": (
+                None
+                if self.long_input_usd_per_million_tokens is None
+                else float(self.long_input_usd_per_million_tokens)
+            ),
+            "long_cached_input_usd_per_million_tokens": (
+                None
+                if self.long_cached_input_usd_per_million_tokens is None
+                else float(self.long_cached_input_usd_per_million_tokens)
+            ),
+            "long_cache_write_usd_per_million_tokens": (
+                None
+                if self.long_cache_write_usd_per_million_tokens is None
+                else float(self.long_cache_write_usd_per_million_tokens)
+            ),
+            "long_output_usd_per_million_tokens": (
+                None
+                if self.long_output_usd_per_million_tokens is None
+                else float(self.long_output_usd_per_million_tokens)
+            ),
             "is_billing_rate": False,
+        }
+        # Preserve existing immutable snapshot shapes for routes without
+        # cache categories or tiered rates; OpenAI adds only its own fields.
+        optional_rates = {
+            "cached_input_usd_per_million_tokens",
+            "cache_write_usd_per_million_tokens",
+            "long_context_threshold_tokens",
+            "long_input_usd_per_million_tokens",
+            "long_cached_input_usd_per_million_tokens",
+            "long_cache_write_usd_per_million_tokens",
+            "long_output_usd_per_million_tokens",
+        }
+        return {
+            key: value
+            for key, value in snapshot.items()
+            if key not in optional_rates or value is not None
         }
 
 
@@ -114,6 +169,60 @@ PRICING_SNAPSHOTS: dict[tuple[str, str], PricingSnapshot] = {
         output_usd_per_million_tokens=Decimal("12"),
     ),
 }
+
+
+def _openai_snapshot(model: str, rates: tuple[str, ...]) -> PricingSnapshot:
+    (
+        input_rate,
+        cached_rate,
+        write_rate,
+        output_rate,
+        long_input_rate,
+        long_cached_rate,
+        long_write_rate,
+        long_output_rate,
+    ) = rates
+    fact_record = (
+        f"OpenAI API pricing facts|2026-09-24|{model}|"
+        + ",".join(rates)
+        + "|long-context-threshold=272000"
+    )
+    return PricingSnapshot(
+        provider_id="openai",
+        model_id=model,
+        pricing_ref=f"ref:pricing/openai-{model}-20260924",
+        # Fingerprint of the normalized, dated fact record. The linked OpenAI
+        # pricing page is the source; this is not a hash of its HTML bytes.
+        evidence_sha256=hashlib.sha256(fact_record.encode("utf-8")).hexdigest(),
+        source_url="https://developers.openai.com/api/docs/pricing",
+        rate_basis="per_million_tokens_with_cache_categories_and_long_context_tier",
+        evidence_release_sha=None,
+        source_date="2026-09-24",
+        input_usd_per_million_tokens=Decimal(input_rate),
+        output_usd_per_million_tokens=Decimal(output_rate),
+        cached_input_usd_per_million_tokens=Decimal(cached_rate),
+        cache_write_usd_per_million_tokens=Decimal(write_rate),
+        long_context_threshold_tokens=272_000,
+        long_input_usd_per_million_tokens=Decimal(long_input_rate),
+        long_cached_input_usd_per_million_tokens=Decimal(long_cached_rate),
+        long_cache_write_usd_per_million_tokens=Decimal(long_write_rate),
+        long_output_usd_per_million_tokens=Decimal(long_output_rate),
+    )
+
+
+PRICING_SNAPSHOTS.update(
+    {
+        ("openai", "gpt-6-luna"): _openai_snapshot(
+            "gpt-6-luna", ("0.10", "0.01", "0.125", "0.50", "0.20", "0.02", "0.25", "0.75")
+        ),
+        ("openai", "gpt-6-sol"): _openai_snapshot(
+            "gpt-6-sol", ("2", "0.20", "2.50", "10", "4", "0.40", "5", "15")
+        ),
+        ("openai", "gpt-6-astra"): _openai_snapshot(
+            "gpt-6-astra", ("10", "1", "12.50", "50", "20", "2", "25", "75")
+        ),
+    }
+)
 
 
 def _ceil_paise(value: Decimal) -> int:
@@ -194,7 +303,7 @@ def estimate_provider_usage(
     input_tokens = _counter(usage, "promptTokenCount", "prompt_tokens", "input_tokens")
     output_tokens = _counter(usage, "candidatesTokenCount", "completion_tokens", "output_tokens")
     thoughts = _counter(usage, "thoughtsTokenCount", "thoughts_tokens")
-    if output_tokens is not None and thoughts is not None:
+    if provider_id != "openai" and output_tokens is not None and thoughts is not None:
         output_tokens += thoughts
     if input_tokens is None or output_tokens is None:
         return {
@@ -203,6 +312,34 @@ def estimate_provider_usage(
             "basis": "provider_input_and_output_tokens_x_approved_token_rates",
             "pricing_snapshot": snapshot.as_dict(),
         }
+    if provider_id == "openai":
+        total_tokens = _counter(usage, "total_tokens")
+        cached_counter = _counter(usage, "cached_tokens")
+        write_counter = _counter(usage, "cache_write_tokens")
+        reasoning_counter = _counter(usage, "reasoning_tokens")
+        if (
+            total_tokens is None
+            or cached_counter is None
+            or write_counter is None
+            or reasoning_counter is None
+        ):
+            return {
+                "paise": None,
+                "state": "usage_unavailable",
+                "basis": "provider_input_cache_and_output_tokens_x_approved_token_rates",
+                "pricing_snapshot": snapshot.as_dict(),
+            }
+        if (
+            total_tokens != input_tokens + output_tokens
+            or cached_counter + write_counter > input_tokens
+            or reasoning_counter > output_tokens
+        ):
+            return {
+                "paise": None,
+                "state": "usage_invalid",
+                "basis": "provider_input_cache_and_output_tokens_x_approved_token_rates",
+                "pricing_snapshot": snapshot.as_dict(),
+            }
     input_rate = snapshot.input_usd_per_million_tokens
     output_rate = snapshot.output_usd_per_million_tokens
     if input_rate is None or output_rate is None:
@@ -212,14 +349,61 @@ def estimate_provider_usage(
             "basis": None,
             "pricing_snapshot": None,
         }
+    cached_tokens = _counter(usage, "cached_tokens") or 0
+    cache_write_tokens = _counter(usage, "cache_write_tokens") or 0
+    if cached_tokens + cache_write_tokens > input_tokens:
+        return {
+            "paise": None,
+            "state": "usage_invalid",
+            "basis": "provider_input_cache_and_output_tokens_x_approved_token_rates",
+            "pricing_snapshot": snapshot.as_dict(),
+        }
+    long_context = (
+        snapshot.long_context_threshold_tokens is not None
+        and input_tokens > snapshot.long_context_threshold_tokens
+    )
+    cached_rate = snapshot.cached_input_usd_per_million_tokens
+    write_rate = snapshot.cache_write_usd_per_million_tokens
+    if long_context:
+        input_rate = snapshot.long_input_usd_per_million_tokens or input_rate
+        cached_rate = snapshot.long_cached_input_usd_per_million_tokens
+        write_rate = snapshot.long_cache_write_usd_per_million_tokens
+        output_rate = snapshot.long_output_usd_per_million_tokens or output_rate
+    if (cached_tokens and cached_rate is None) or (cache_write_tokens and write_rate is None):
+        return {
+            "paise": None,
+            "state": "rate_unavailable",
+            "basis": None,
+            "pricing_snapshot": snapshot.as_dict(),
+        }
+    ordinary_input_tokens = input_tokens - cached_tokens - cache_write_tokens
+    input_cost = Decimal(ordinary_input_tokens) * input_rate
+    if cached_rate is not None:
+        input_cost += Decimal(cached_tokens) * cached_rate
+    if write_rate is not None:
+        input_cost += Decimal(cache_write_tokens) * write_rate
     paise = _ceil_paise(
-        Decimal(input_tokens) * input_rate * _FX_USD_TO_INR * _PAISE_PER_INR / _MILLION
+        input_cost * _FX_USD_TO_INR * _PAISE_PER_INR / _MILLION
         + Decimal(output_tokens) * output_rate * _FX_USD_TO_INR * _PAISE_PER_INR / _MILLION
     )
     return {
         "paise": paise,
         "state": "available",
-        "basis": "provider_input_and_output_tokens_x_approved_token_rates",
+        "basis": (
+            "provider_input_cache_write_and_output_tokens_x_approved_token_rates"
+            + ("_long_context" if long_context else "")
+            if provider_id == "openai"
+            else "provider_input_and_output_tokens_x_approved_token_rates"
+        ),
+        "usage_breakdown": {
+            "input_tokens": input_tokens,
+            "ordinary_input_tokens": ordinary_input_tokens,
+            "cached_tokens": cached_tokens,
+            "cache_write_tokens": cache_write_tokens,
+            "output_tokens": output_tokens,
+            # OpenAI reasoning tokens are already included in output_tokens.
+            "reasoning_tokens": _counter(usage, "reasoning_tokens"),
+        },
         "pricing_snapshot": snapshot.as_dict(),
     }
 

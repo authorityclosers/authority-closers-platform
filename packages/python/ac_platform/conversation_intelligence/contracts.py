@@ -45,6 +45,7 @@ class QuoteAcceptance(Contract):
 
 
 C5RepairFailureCode = Literal[
+    "conversation_report_evidence_invalid",
     "conversation_report_evidence_quote_mismatch",
     "conversation_report_evidence_segment_invalid",
     "conversation_report_findings_invalid",
@@ -59,6 +60,7 @@ C5RepairFailureCode = Literal[
 
 C5_REPAIR_FAILURE_CODES = frozenset(
     {
+        "conversation_report_evidence_invalid",
         "conversation_report_evidence_quote_mismatch",
         "conversation_report_evidence_segment_invalid",
         "conversation_report_findings_invalid",

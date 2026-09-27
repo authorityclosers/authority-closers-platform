@@ -15,6 +15,30 @@
 - Every code change must leave tests and implementation evidence.
 
 
+# DELIVERY CONSTITUTION (binding for every agent and person)
+
+1. One task at a time. A task is one small, reviewable change tied to one tracked
+   issue. Do not start a second task, widen scope, or refactor on the side; record
+   other findings as proposed tasks.
+2. Start every task from the latest `main`:
+   `git fetch origin && git switch -c task/<issue>-<short-name> origin/main`.
+   Never build on old, integration, release or other task branches. Do not
+   create extra git worktrees.
+3. `main` is the only long-lived branch. A task branch lives only until its pull
+   request merges or closes, then it is deleted.
+4. Done means: the change works on the dev environment, tests and evidence for the
+   changed areas pass, the pull request against `main` explains what changed and
+   how to check it on dev, and CI is green. Then stop and wait for the owner.
+5. The owner approves by merging. Agents never merge, deploy, promote, or change
+   GitHub, Cloudflare, server or billing settings.
+6. Releases move one way: merge to `main` -> CI builds images once -> staging
+   deploys automatically -> the owner promotes the same build to production from
+   Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
+   between environments.
+7. Use included subscriptions only. Stop on usage limits; never fall back to API
+   keys or paid credits. Only one agent runs at a time.
+8. Secrets never go in git, prompts, logs, task comments or pull requests.
+
 # CODEX SOURCE FETCH ORDER
 
 Use the CSV/JSON manifest. Fetch by exact Drive ID/URL, not filename guesses.
@@ -42,8 +66,8 @@ Use only for context and to verify intent. Controlled docs win.
 
 ## Cloud research orchestration
 
-For expensive, separable research or review, follow the `cloud-chat-orchestration`
-skill at `C:\Users\Suyash\.codex\skills\cloud-chat-orchestration\SKILL.md`.
+For expensive, separable research or review, follow the `ac-orchestra`
+skill at `C:\Users\Suyash\.codex\skills\ac-orchestra\SKILL.md`.
 Codex remains the integration and release owner: pin the source revision, keep
 file ownership separate, reproduce relevant claims locally, run the repository
 gates, and verify the real deployed journey. Use the authorized normal ChatGPT
@@ -53,3 +77,12 @@ delegate. Never bypass service limits, silently substitute an unapproved model,
 send secrets or raw customer data, or treat a cloud-chat handoff as production
 evidence. A handoff is accepted only after its claims and artifacts are checked
 against the repository and release controls.
+
+For substantive Sales Xray interface design, report presentation, architecture,
+and reusable SVG/component generation, continue the relevant existing AC
+Orchestra Pro chat with an exact source pin and bounded deliverable. Reuse and
+harvest its existing work before opening another research chat. Keep a durable
+chat-to-task record and use the authorized GitHub handoff route. Codex owns
+machine access, source review, integration, tests and release verification; cloud
+claims never replace those checks. Record unavailable Pro access or artifacts
+explicitly and keep the urgent verified repair moving.

@@ -153,6 +153,34 @@ async def test_code_exchange_keeps_provider_tokens_server_side_and_returns_verif
 
 
 @pytest.mark.asyncio
+async def test_code_exchange_carries_only_the_optional_signed_profile_name_claim() -> None:
+    transaction = _transaction()
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, json={"id_token": "signed-google-id-token"})
+        )
+    ) as client:
+        provider = GoogleOIDCProvider(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            http_client=client,
+            token_verifier=lambda _token, _audience: _claims(
+                transaction,
+                name="Signed Google display name",
+            ),
+        )
+        assertion = await provider.exchange_code(
+            "authorization-code",
+            transaction,
+            callback_state=transaction.state,
+            redirect_uri=REDIRECT_URI,
+        )
+
+    assert assertion.display_name == "Signed Google display name"
+
+
+@pytest.mark.asyncio
 async def test_callback_state_mismatch_is_rejected_before_network_access() -> None:
     called = False
 

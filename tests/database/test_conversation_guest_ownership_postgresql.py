@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import (
     AcquisitionSessions,
     MeasuredSource,
@@ -53,7 +54,6 @@ from ac_platform.conversation_intelligence.guest_ownership import (
 from ac_platform.conversation_intelligence.intake import ConversationIntake, IntakePolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
-    ConversationCheckpoint,
     ConversationCommand,
     ConversationMinuteAccount,
     ConversationPermission,
@@ -574,7 +574,7 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
     run(exercise())
 
 
-def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
+def test_unclaimed_guest_worker_holds_before_c1_without_releasing_source_reservation(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     async def exercise() -> None:
@@ -622,13 +622,14 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                     quote_id=UUID(view["id"]),
                     recipe_revision=view["recipe_revision"],
                 )
-                run_view = await app.request_run(actor, run_intent, key="guest-worker-run")
+                local_run_key = f"acquisition-local-run:{view['recording_id']}"
+                run_view = await app.request_run(actor, run_intent, key=local_run_key)
                 assert run_view["state"] == "queued"
 
             async with AsyncSession(engine) as database, database.begin():
                 replay = await ConversationApplication(
                     database, clock=lambda: state.now
-                ).request_run(actor, run_intent, key="guest-worker-run")
+                ).request_run(actor, run_intent, key=local_run_key)
                 assert replay == run_view
                 commands = (
                     await database.scalars(
@@ -673,25 +674,23 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                 scratch=scratch,
                 environment="test",
             )
+
+            def forbidden_native(*_: Any, **__: Any) -> Any:
+                pytest.fail("unclaimed guest work reached native AudioAtlas")
+
+            worker._inspect = forbidden_native  # type: ignore[method-assign]
             assert await worker.run_once() is True
 
-            async with AsyncSession(engine) as database:
+            async with AsyncSession(engine) as database, database.begin():
                 run_row = await database.scalar(
                     select(ConversationRun).where(
                         ConversationRun.recording_id == UUID(view["recording_id"])
                     )
                 )
-                assert run_row is not None and run_row.state == "completed"
-                checkpoints = (
-                    await database.scalars(
-                        select(ConversationCheckpoint)
-                        .where(ConversationCheckpoint.recording_id == UUID(view["recording_id"]))
-                        .order_by(ConversationCheckpoint.stage)
-                    )
-                ).all()
-                assert [checkpoint.stage for checkpoint in checkpoints] == ["C0", "C1"]
-                assert checkpoints[-1].payload is not None
-                assert checkpoints[-1].payload["media_duration_ms"] == 1000
+                assert run_row is not None and run_row.state == "queued"
+                job = await database.get(Job, run_row.job_id)
+                assert job is not None and job.status == "held"
+                assert job.hold_reason == "sales_xray_account_required"
                 assert (
                     await acquisition_seconds(
                         database, tenant_id=state.tenant_id, visitor_id=guest.visitor_id
@@ -709,6 +708,18 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                     for reservation in minute_account.reservations
                 )
                 assert usage_id
+                progress = await AcquisitionReports(
+                    GuestOwnership(
+                        AcquisitionSessions(
+                            database,
+                            tenant_id=state.tenant_id,
+                            policy_revision="guest-processing-v1",
+                            clock=lambda: state.now,
+                        )
+                    )
+                ).progress(measured.submission_id, token=guest.token)
+                assert progress["local_state"] == "queued"
+                assert progress["execution_hold"] == "account_profile_required"
         finally:
             await engine.dispose()
 

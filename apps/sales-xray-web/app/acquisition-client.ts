@@ -1,4 +1,9 @@
+import { parseCallLabel, type CallLabel } from "./call-label";
 import { ReportContractError } from "./report-contract";
+import {
+  parseLanguageCapabilities,
+  type ReportLanguage,
+} from "./report-language";
 
 export const ACQUISITION = "/v1/conversation/acquisition";
 export const ACQUISITION_PAUSED_MESSAGE =
@@ -12,6 +17,8 @@ export type Entry = {
   challenge_action: string | null;
   policy_revision: string | null;
   allowance_seconds: number | null;
+  report_languages?: ReportLanguage[];
+  report_language_default?: ReportLanguage;
 };
 export type Allowance = {
   allowance_seconds: number;
@@ -36,6 +43,8 @@ export type LibrarySubmission = {
   durationSeconds: number;
   state: string;
   hasReport: boolean;
+  /** Owner call name (C1); null when the server predates labels. */
+  label: CallLabel | null;
 };
 export type SubmissionLibraryPage = {
   submissions: LibrarySubmission[];
@@ -44,6 +53,7 @@ export type SubmissionLibraryPage = {
 export type Progress = {
   state: string;
   local_state: string | null;
+  failure_code: string | null;
   has_report: boolean;
   automatic_progression: boolean;
   stages: { stage: string; state: string }[];
@@ -54,31 +64,47 @@ export class AcquisitionError extends Error {
     readonly status: number,
     readonly reason?:
       | "provider_allowance_used"
+      | "trial_allowance_insufficient"
       | "plan_permission"
       | "plan_stale"
-      | "execution_paused",
+      | "execution_paused"
+      | "source_invalid"
+      | "source_incomplete"
+      | "source_verification"
+      | "source_storage",
+    readonly requestId?: string,
   ) {
-    super(
-      reason === "execution_paused"
-        ? ACQUISITION_PAUSED_MESSAGE
-        : status === 401
-          ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
-          : status === 403
-            ? reason === "provider_allowance_used"
-              ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-              : reason === "plan_stale"
-                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                : reason === "plan_permission"
-                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                  : "This action is not available with your current access. Ask the AC team to check your permission."
-            : status === 404
-              ? "This call is unavailable in your current session. It may have expired or been deleted."
-              : status === 429
-                ? "Another call is uploading. Please try again shortly."
-                : status === 409
-                  ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                  : "This request did not finish. Check your connection and try again.",
-    );
+    const message =
+      reason === "source_verification"
+        ? "We couldn’t verify this recording’s audio. Try again; if this continues, share the request reference with the AC team."
+        : reason === "execution_paused"
+          ? ACQUISITION_PAUSED_MESSAGE
+          : reason === "source_invalid"
+            ? "Choose one bounded audio file and accept the current upload terms."
+            : reason === "source_incomplete"
+              ? "The complete recording was not received. Check your connection and upload again."
+              : reason === "source_storage"
+                ? "The recording could not be verified in private storage. Check your connection and upload again."
+                : status === 401
+                  ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
+                  : status === 403
+                    ? reason === "trial_allowance_insufficient"
+                      ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
+                      : reason === "provider_allowance_used"
+                        ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                        : reason === "plan_stale"
+                          ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                          : reason === "plan_permission"
+                            ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                            : "This action is not available with your current access. Ask the AC team to check your permission."
+                    : status === 404
+                      ? "This call is unavailable in your current session. It may have expired or been deleted."
+                      : status === 429
+                        ? "Another call is uploading. Please try again shortly."
+                        : status === 409
+                          ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                          : "This request did not finish. Check your connection and try again.";
+    super(requestId ? `${message} Request reference: ${requestId}.` : message);
   }
 }
 export async function acquisition(
@@ -93,6 +119,7 @@ export async function acquisition(
     headers: { accept: "application/json", ...init.headers },
   });
   if (!response.ok) {
+    const requestId = response.headers.get("x-request-id") || undefined;
     if (response.status === 503) {
       const body: unknown = await response.json().catch(() => null);
       if (
@@ -101,27 +128,36 @@ export async function acquisition(
         "detail" in body &&
         body.detail === ACQUISITION_PAUSED_MESSAGE
       )
-        throw new AcquisitionError(503, "execution_paused");
+        throw new AcquisitionError(503, "execution_paused", requestId);
     }
-    if (
-      response.status === 403 &&
-      /^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path)
-    ) {
+    if (response.status === 403) {
       // Translate only an exact, known denial. Never display server/provider
       // bodies, which can contain private context or infrastructure details.
       const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body !== null &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body &&
+        typeof body.detail === "string"
+          ? body.detail
+          : undefined;
+      if (
+        detail ===
+        "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
+      ) {
+        throw new AcquisitionError(
+          response.status,
+          "trial_allowance_insufficient",
+          requestId,
+        );
+      }
+      if (!/^\/submissions\/[0-9a-f-]{36}\/plan(?:\/quote)?$/.test(path))
+        throw new AcquisitionError(response.status, undefined, requestId);
       const allowanceUsed =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "This recording's approved provider allowance is used.";
+        detail === "This recording's approved provider allowance is used.";
       const planStale =
-        body !== null &&
-        typeof body === "object" &&
-        !Array.isArray(body) &&
-        "detail" in body &&
-        body.detail === "Approve the current displayed processing plan.";
+        detail === "Approve the current displayed processing plan.";
       throw new AcquisitionError(
         response.status,
         allowanceUsed
@@ -129,9 +165,33 @@ export async function acquisition(
           : planStale
             ? "plan_stale"
             : "plan_permission",
+        requestId,
       );
     }
-    throw new AcquisitionError(response.status);
+    if (response.status === 422) {
+      const body: unknown = await response.json().catch(() => null);
+      const detail =
+        body &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body
+          ? body.detail
+          : undefined;
+      const sourceReason =
+        detail === "The audio length could not be verified. Try another file."
+          ? "source_verification"
+          : detail ===
+              "Choose one bounded audio file up to 32 MiB and accept the current upload terms."
+            ? "source_invalid"
+            : detail === "The complete recording was not received."
+              ? "source_incomplete"
+              : detail ===
+                  "The recording could not be verified in private storage."
+                ? "source_storage"
+                : undefined;
+      throw new AcquisitionError(response.status, sourceReason, requestId);
+    }
+    throw new AcquisitionError(response.status, undefined, requestId);
   }
   return response.json();
 }
@@ -175,6 +235,7 @@ export function parseEntry(value: unknown): Entry {
       challenge_action: null,
       policy_revision: entry.policy_revision,
       allowance_seconds: integer(entry.allowance_seconds, 6000),
+      ...parseLanguageCapabilities(entry),
     };
   }
   if (
@@ -193,6 +254,7 @@ export function parseEntry(value: unknown): Entry {
     challenge_action: entry.challenge_action,
     policy_revision: entry.policy_revision,
     allowance_seconds: integer(entry.allowance_seconds, 6000),
+    ...parseLanguageCapabilities(entry),
   };
 }
 export function parseAllowance(value: unknown): Allowance {
@@ -321,6 +383,8 @@ export function parseSubmissionLibraryPage(
             "duration_seconds",
             "state",
             "has_report",
+            "display_name",
+            "display_name_revision",
           ].includes(key),
       ) ||
       typeof submission.submission_id !== "string" ||
@@ -335,6 +399,12 @@ export function parseSubmissionLibraryPage(
       typeof submission.has_report !== "boolean"
     )
       throw new ReportContractError("acquisition_library_submission");
+    let label: CallLabel | null;
+    try {
+      label = parseCallLabel(submission);
+    } catch {
+      throw new ReportContractError("acquisition_library_submission");
+    }
     ids.add(submission.submission_id);
     submissions.push({
       id: submission.submission_id,
@@ -342,6 +412,7 @@ export function parseSubmissionLibraryPage(
       durationSeconds: submission.duration_seconds as number,
       state: submission.state,
       hasReport: submission.has_report,
+      label,
     });
   }
   return {
@@ -362,6 +433,10 @@ export function parseProgress(
     typeof item.state !== "string" ||
     typeof item.has_report !== "boolean" ||
     typeof item.automatic_progression !== "boolean" ||
+    (item.failure_code !== undefined &&
+      item.failure_code !== null &&
+      (typeof item.failure_code !== "string" ||
+        item.failure_code.length > 128)) ||
     ![null, "queued", "running", "completed", "failed", "cancelled"].includes(
       item.local_state as string | null,
     ) ||
@@ -382,6 +457,7 @@ export function parseProgress(
   return {
     state: item.state,
     local_state: item.local_state as string | null,
+    failure_code: (item.failure_code as string | null | undefined) ?? null,
     has_report: item.has_report,
     automatic_progression: item.automatic_progression,
     stages,
@@ -413,6 +489,26 @@ export function rememberSubmission(id: string | null) {
   try {
     if (id && UUID.test(id)) localStorage.setItem("ac.xray.submission.v1", id);
     else localStorage.removeItem("ac.xray.submission.v1");
+  } catch {
+    /* A blocked local store never prevents a private upload. */
+  }
+}
+// An upload whose server outcome is not confirmed yet. It is kept apart from
+// the saved-call selector above, so an interrupted upload is reconciled with
+// one read instead of being shown as a saved call.
+const PENDING_UPLOAD = "ac.xray.pending-upload.v1";
+export function pendingUploadId(): string | null {
+  try {
+    const id = localStorage.getItem(PENDING_UPLOAD);
+    return id && UUID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+export function rememberPendingUpload(id: string | null) {
+  try {
+    if (id && UUID.test(id)) localStorage.setItem(PENDING_UPLOAD, id);
+    else localStorage.removeItem(PENDING_UPLOAD);
   } catch {
     /* A blocked local store never prevents a private upload. */
   }

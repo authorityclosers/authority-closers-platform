@@ -28,10 +28,13 @@ NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457
 NATIVE_ROOT = Path(__file__).resolve().parents[4] / "native" / "audioatlas"
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
 # Hosted AudioAtlas runs at 16 kHz and supports a one-hour source window.  The
-# 360,000-frame bound below keeps the derived feature artifact bounded at that
-# profile (the offline 48 kHz profile remains intentionally smaller).
+# 360,000-frame-per-channel bound below keeps the derived feature artifact
+# bounded at that profile. Rows are stored for every physical channel, so the
+# total row cap is doubled for the supported stereo layout.
 MAX_SECONDS = 3600
-MAX_ROWS = 360_000
+MAX_ROWS_PER_CHANNEL = 360_000
+MAX_ROWS = MAX_ROWS_PER_CHANNEL * 2
+PROBE_PADDING_SECONDS = 1
 FLOAT_COLUMNS = (
     "rms",
     "rms_dbfs",
@@ -523,6 +526,16 @@ def _finite_number(value: Any, code: str) -> float:
     return result
 
 
+def _probe_duration_allowed(duration: float, max_seconds: int) -> bool:
+    """Allow bounded codec/container padding before exact decoded admission."""
+    return 0 < duration <= max_seconds + PROBE_PADDING_SECONDS
+
+
+def _decoded_samples_allowed(sample_count: int, rate: int, max_seconds: int) -> bool:
+    """Keep the final decoded-track duration strict after provisional probing."""
+    return 0 < sample_count <= rate * max_seconds
+
+
 def inspect_media(
     source: Path,
     outdir: Path,
@@ -607,7 +620,7 @@ def inspect_media(
                 stream.get("duration") or info.get("format", {}).get("duration"),
                 "signal_invalid_source_duration",
             )
-            if not 0 < duration <= max_seconds:
+            if not _probe_duration_allowed(duration, max_seconds):
                 raise SignalError("signal_invalid_source_duration")
             start_time = (
                 None
@@ -660,7 +673,7 @@ def inspect_media(
             if not size or size % (channels * 4):
                 raise SignalError("signal_incomplete_pcm_frame")
             sample_count = size // (channels * 4)
-            if sample_count > rate * max_seconds:
+            if not _decoded_samples_allowed(sample_count, rate, max_seconds):
                 raise SignalError("signal_decoded_duration_limit")
             receipt = raw_extract(pcm, raw, rate, channels, native_executable=native)
             features = workspace / "features.aaf"
@@ -824,7 +837,7 @@ def validate_media(
                 stream.get("duration") or info.get("format", {}).get("duration"),
                 "signal_invalid_source_duration",
             )
-            if not 0 < duration <= max_seconds:
+            if not _probe_duration_allowed(duration, max_seconds):
                 raise SignalError("signal_invalid_source_duration")
             start_time = (
                 None
@@ -877,7 +890,7 @@ def validate_media(
             if not size or size % (channels * 4):
                 raise SignalError("signal_incomplete_pcm_frame")
             sample_count = size // (channels * 4)
-            if sample_count > rate * max_seconds:
+            if not _decoded_samples_allowed(sample_count, rate, max_seconds):
                 raise SignalError("signal_decoded_duration_limit")
             digest = source_hash.hexdigest()
             result = {

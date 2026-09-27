@@ -1,0 +1,7 @@
+{
+  "schema": "ac.sales_xray.acquisition-browser-gate.v1",
+  "status": "failed",
+  "reason": "The required Sales Xray browser case failed",
+  "provider_acceptance": false,
+  "synthetic_only": true
+}

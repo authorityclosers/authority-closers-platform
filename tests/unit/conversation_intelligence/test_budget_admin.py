@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.budget_admin import (
     ConversationBudgetAdmin,
     admin_budget_approval_ref,
     is_admin_budget_approval_ref,
+    is_any_admin_budget_approval_ref,
 )
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import (
@@ -226,9 +227,10 @@ def test_admin_approval_ref_is_bound_to_the_release_digest():
     value = admin_budget_approval_ref("a" * 64, actor_id, "budget-key")
     assert is_admin_budget_approval_ref(value, "a" * 64)
     assert not is_admin_budget_approval_ref(value, "b" * 64)
+    assert is_any_admin_budget_approval_ref(value)
 
 
-def test_authority_accepts_a_lower_admin_limit_but_rejects_an_over_ceiling_snapshot():
+def test_authority_carries_an_admin_limit_across_release_refreshes():
     scope_id = uuid4()
     bundle = bundle_for(scope_id, cap=200_000)
     owner = uuid4()
@@ -259,19 +261,29 @@ def test_authority_accepts_a_lower_admin_limit_but_rejects_an_over_ceiling_snaps
         cap_approval=BudgetCapApproval(
             str(scope_id),
             admin_budget_approval_ref(bundle.digest, uuid4(), "budget-key"),
-            "admin-actor",
+            str(owner),
             100_000,
             release_budget.fingerprint,
             "admin limit",
         ),
     )
     assert _budget_matches_release(admin_budget, release_bundle)
-    over_ceiling = replace(
+    carried_admin_budget = replace(
         admin_budget,
         cap_paise=250_000,
         cap_approval=replace(
             admin_budget.cap_approval,
             approved_cap_paise=250_000,
+            explicit_above_ceiling=True,
+        ),
+    )
+    assert _budget_matches_release(carried_admin_budget, release_bundle)
+    over_ceiling = replace(
+        admin_budget,
+        cap_paise=1_000_001,
+        cap_approval=replace(
+            admin_budget.cap_approval,
+            approved_cap_paise=1_000_001,
             explicit_above_ceiling=True,
         ),
     )

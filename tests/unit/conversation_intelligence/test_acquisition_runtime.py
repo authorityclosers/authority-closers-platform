@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,8 +14,9 @@ from ac_platform.http.conversation_acquisition_runtime import _challenge_secret
 
 
 @pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("operations_tenant", [False, True])
 def test_missing_guest_config_preserves_core_api(
-    monkeypatch: pytest.MonkeyPatch, enabled: bool
+    monkeypatch: pytest.MonkeyPatch, enabled: bool, operations_tenant: bool
 ) -> None:
     import ac_platform.http.app as app_module
 
@@ -23,6 +25,7 @@ def test_missing_guest_config_preserves_core_api(
         environment="test",
         sales_xray_app_url="https://salesxray.example.test",
         sales_xray_acquisition_enabled=enabled,
+        operations_tenant_id=uuid4() if operations_tenant else None,
     )
     monkeypatch.setattr(app_module, "settings", settings)
     application = app_module.create_app()

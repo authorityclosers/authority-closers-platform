@@ -240,6 +240,7 @@ class ModelCatalogEntry:
     endpoint: str | None
     transport_status: ImplementationStatus
     task_support: tuple[tuple[TaskName, TaskSupportStatus], ...] = ()
+    readiness_override: str | None = None
 
     def __post_init__(self) -> None:
         _identifier(self.model_id, "model_id")
@@ -248,6 +249,8 @@ class ModelCatalogEntry:
             _validate_endpoint_syntax(self.endpoint)
         if self.transport_status not in {"implemented", "planned"}:
             _fail("invalid_transport_status")
+        if self.readiness_override is not None:
+            _text(self.readiness_override, "model_readiness")
         entries = _sequence(self.task_support, "task_support")
         seen: set[str] = set()
         for item in entries:
@@ -273,9 +276,12 @@ class ModelCatalogEntry:
             "endpoint": self.endpoint,
             "transport_status": self.transport_status,
             "readiness": (
-                "transport_available"
-                if self.transport_status == "implemented"
-                else "planned_no_transport"
+                self.readiness_override
+                or (
+                    "transport_available"
+                    if self.transport_status == "implemented"
+                    else "planned_no_transport"
+                )
             ),
             "task_support": [
                 {"task": task, "status": status} for task, status in self.task_support
@@ -387,12 +393,15 @@ def _model(
     model_id: str,
     endpoint: str | None,
     *task_support: tuple[TaskName, TaskSupportStatus],
+    readiness_override: str | None = None,
 ) -> ModelCatalogEntry:
-    return ModelCatalogEntry(model_id, endpoint, "implemented", tuple(task_support))
+    return ModelCatalogEntry(
+        model_id, endpoint, "implemented", tuple(task_support), readiness_override
+    )
 
 
 DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
-    revision="provider-catalog-20260914-v1",
+    revision="provider-catalog-20260924-openai-c5-v1",
     providers=(
         ProviderCatalogEntry(
             "local",
@@ -503,11 +512,31 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
             "openai",
             "OpenAI",
             "openai_https",
-            "planned",
-            (),
+            "implemented",
             (
-                "Provider option cataloged for a future approved adapter; model and terms "
-                "are not asserted."
+                _model(
+                    "gpt-6-luna",
+                    "https://api.openai.com/v1/responses",
+                    ("coaching", "implemented"),
+                    readiness_override="request_only_account_access_unverified",
+                ),
+                _model(
+                    "gpt-6-sol",
+                    "https://api.openai.com/v1/responses",
+                    ("coaching", "implemented"),
+                    readiness_override="request_only_account_access_unverified",
+                ),
+                _model(
+                    "gpt-6-astra",
+                    "https://api.openai.com/v1/responses",
+                    ("coaching", "implemented"),
+                    readiness_override="request_only_account_access_unverified",
+                ),
+            ),
+            (
+                "Stateless Responses JSON-schema adapter is implemented for detailed C5 coaching "
+                "only. Model publication and /v1/models visibility do not attest account access, "
+                "quality, provider approval or hosted activation. ASR and C4 facts are unavailable."
             ),
         ),
         ProviderCatalogEntry(

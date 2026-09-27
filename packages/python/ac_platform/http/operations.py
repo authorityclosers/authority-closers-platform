@@ -13,17 +13,42 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository, build_audit_tenant_lock_statement
+from ac_platform.authorization.platform import platform_projection
+from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.conversation_intelligence.acquisition_usage import (
+    ALLOWANCE_SECONDS,
+    shared_account_committed_seconds,
+)
+from ac_platform.conversation_intelligence.entitlements import MinuteGrant
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
+from ac_platform.conversation_intelligence.minute_account_admin import (
+    MINUTE_GRANT_ACTION,
+    MINUTE_GRANT_RESOURCE_TYPE,
+    EligibleLearnerBusy,
+    EligibleLearnerUnavailable,
+    InvalidMinuteAccountSnapshot,
+    MinuteAccountState,
+    append_minute_grant,
+    load_minute_account,
+    require_eligible_learner,
+)
+from ac_platform.conversation_intelligence.minute_account_targets import (
+    MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH,
+    MinuteAccountLookupInvalid,
+    resolve_public_learner_target,
+)
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
@@ -56,11 +81,15 @@ MAX_IDEMPOTENCY_KEY_LENGTH = 200
 MAX_RELEASE_SET_SIZE = 100
 MAX_PROVIDER_TIMESTAMP_LENGTH = 32
 MAX_PROVIDER_SIGNATURE_LENGTH = 1024
+MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
+MAX_MINUTE_GRANT_MINUTES = (MAX_SAFE_JSON_INTEGER - ALLOWANCE_SECONDS) // 60
 _PROVIDER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _PROVIDER_TIMESTAMP_PATTERN = re.compile(r"^[0-9]{1,20}$")
 
 JOB_RETRY_MARKER = "operations.job_retry_idempotency"
 RECOVERY_RECONCILE_MARKER = "operations.recovery_reconcile_idempotency"
+MINUTE_ACCOUNT_TARGET_LOOKUP_ACTION = "operations.conversation_minute_target_resolved"
+MINUTE_ACCOUNT_TARGET_LOOKUP_RESOURCE = "conversation_minute_target_resolution"
 
 
 class OperationsTenantRequired(DomainError):
@@ -97,6 +126,30 @@ class RecoveryReconciliationUnavailable(DomainError):
     code = "recovery_reconciliation_unavailable"
     title = "Recovery reconciliation cannot be performed"
     status = 409
+
+
+class MinuteAccountTargetUnavailable(DomainError):
+    code = "conversation_minute_account_unavailable"
+    title = "The learner account is unavailable"
+    status = 404
+
+
+class MinuteAccountTargetBusy(DomainError):
+    code = "conversation_minute_target_busy"
+    title = "The learner account is being updated"
+    status = 409
+
+
+class MinuteAccountUnavailable(DomainError):
+    code = "conversation_minute_account_conflict"
+    title = "The learner minute account is unavailable"
+    status = 409
+
+
+class PublicLearnerTenantUnconfigured(DomainError):
+    code = "public_learner_tenant_unconfigured"
+    title = "The public learner tenant is not configured"
+    status = 503
 
 
 class ProviderWebhookUnavailable(DomainError):
@@ -175,6 +228,74 @@ class ProviderWebhookResponse(BaseModel):
     external_event_id: str
     created: bool
     replayed: bool
+
+
+class MinuteGrantHistoryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grant_id: str
+    seconds: int
+    authorization_ref: str
+    granted_by: str
+    reason: str
+    created_at: datetime | None
+    audit_sequence: int | None
+
+
+class ConversationMinuteAccountResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    person_id: UUID
+    revision: int
+    stored_unlimited: bool
+    effective_unlimited: bool
+    granted_seconds: int
+    committed_seconds: int
+    available_seconds: int
+    available_minutes: int
+    shared_upload_allowance_seconds: int
+    shared_upload_committed_seconds: int
+    shared_upload_available_seconds: int
+    grants: list[MinuteGrantHistoryEntry]
+
+
+class ConversationMinuteGrantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    minutes: StrictInt = Field(gt=0, le=MAX_MINUTE_GRANT_MINUTES)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ConversationMinuteGrantResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    grant_id: UUID
+    minutes: int
+    replayed: bool
+    account: ConversationMinuteAccountResponse
+
+
+class MinuteAccountTargetResolutionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: StrictStr = Field(min_length=1, max_length=MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH)
+
+
+class MinuteAccountTargetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    person_id: UUID
+    display_name: str
+    username: str | None
+    masked_email: str
+
+
+class MinuteAccountTargetResolutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target: MinuteAccountTargetResponse | None
 
 
 def _normalize_idempotency_key(value: str | None) -> str:
@@ -362,6 +483,112 @@ async def _append_marker(
     )
 
 
+async def _find_minute_grant_marker(
+    session: AsyncSession,
+    *,
+    operations_tenant_id: UUID,
+    actor: ActorContext,
+    idempotency_key: str,
+) -> AuditEvent | None:
+    events = list(
+        (
+            await session.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == operations_tenant_id,
+                    AuditEvent.actor_person_id == actor.person_id,
+                    AuditEvent.action == MINUTE_GRANT_ACTION,
+                )
+                .order_by(AuditEvent.sequence_no.desc())
+            )
+        ).all()
+    )
+    for event in events:
+        payload = event.payload
+        if isinstance(payload, dict) and payload.get("idempotency_key") == idempotency_key:
+            return event
+    return None
+
+
+def _minute_grant_digest(*, tenant_id: UUID, person_id: UUID, minutes: int, reason: str) -> str:
+    return _request_digest(
+        {
+            "operation": "conversation_minute_grant",
+            "tenant_id": str(tenant_id),
+            "person_id": str(person_id),
+            "minutes": minutes,
+            "reason": reason,
+        }
+    )
+
+
+async def _minute_account_response(
+    session: AsyncSession,
+    *,
+    state: MinuteAccountState,
+    operations_tenant_id: UUID,
+    effective_unlimited: bool,
+) -> ConversationMinuteAccountResponse:
+    account = state.account
+    event_by_grant_id: dict[str, AuditEvent] = {}
+    grant_ids = [grant.grant_id for grant in account.grants]
+    if grant_ids:
+        events = await session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.tenant_id == operations_tenant_id,
+                AuditEvent.action == MINUTE_GRANT_ACTION,
+                AuditEvent.resource_type == "conversation_minute_grant",
+                AuditEvent.resource_id.in_(grant_ids),
+            )
+        )
+        event_by_grant_id = {
+            event.resource_id: event for event in events if event.resource_id is not None
+        }
+    grants = [
+        MinuteGrantHistoryEntry(
+            grant_id=grant.grant_id,
+            seconds=grant.seconds,
+            authorization_ref=grant.authorization_ref,
+            granted_by=grant.granted_by,
+            reason=grant.reason,
+            created_at=(
+                event_by_grant_id[grant.grant_id].occurred_at
+                if grant.grant_id in event_by_grant_id
+                else None
+            ),
+            audit_sequence=(
+                event_by_grant_id[grant.grant_id].sequence_no
+                if grant.grant_id in event_by_grant_id
+                else None
+            ),
+        )
+        for grant in account.grants
+    ]
+    committed_seconds = sum(item.committed_seconds for item in account.reservations)
+    shared_committed_seconds, additional_allowance_seconds = await shared_account_committed_seconds(
+        session,
+        tenant_id=UUID(account.tenant_id),
+        person_id=UUID(account.account_id),
+        operations_tenant_id=operations_tenant_id,
+    )
+    shared_allowance_seconds = ALLOWANCE_SECONDS + additional_allowance_seconds
+    return ConversationMinuteAccountResponse(
+        tenant_id=UUID(account.tenant_id),
+        person_id=UUID(account.account_id),
+        revision=state.revision,
+        stored_unlimited=account.unlimited,
+        effective_unlimited=effective_unlimited,
+        granted_seconds=sum(grant.seconds for grant in account.grants),
+        committed_seconds=committed_seconds,
+        available_seconds=account.available_seconds,
+        available_minutes=account.available_seconds // 60,
+        shared_upload_allowance_seconds=shared_allowance_seconds,
+        shared_upload_committed_seconds=shared_committed_seconds,
+        shared_upload_available_seconds=max(0, shared_allowance_seconds - shared_committed_seconds),
+        grants=grants,
+    )
+
+
 def _retry_digest(job_id: UUID, reason: str) -> str:
     return _request_digest({"operation": "job_retry", "job_id": str(job_id), "reason": reason})
 
@@ -417,6 +644,7 @@ def install_operations_http(
     settings: Settings,
     sessions: async_sessionmaker[AsyncSession],
     require_actor: RequireActor,
+    tester_policy: InternalTesterPolicy | None = None,
     webhook_adapters: Mapping[str, TrustedWebhookAdapter] | None = None,
 ) -> None:
     """Install narrow operations routes around existing durable abstractions.
@@ -436,6 +664,303 @@ def install_operations_http(
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = Depends(require_actor)
+
+    @router.post(
+        "/admin/conversation-minute-accounts/resolve-target",
+        response_model=MinuteAccountTargetResolutionResponse,
+    )
+    async def resolve_minute_account_target(
+        request: Request,
+        response: Response,
+        body: MinuteAccountTargetResolutionRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> MinuteAccountTargetResolutionResponse:
+        require_safe_origin(request, settings)
+        actor = auth.resolved.actor
+        operations_tenant_id = settings.operations_tenant_id
+        capabilities = await platform_projection(
+            auth.database,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+        )
+        if "platform_access_manage" not in capabilities:
+            raise CapabilityDenied("A current platform access-management assignment is required.")
+        assert operations_tenant_id is not None  # platform_projection rejects missing settings
+        if request.query_params:
+            raise InvalidOperationsRequest("Target resolution accepts no query parameters.")
+        public_tenant_id = settings.public_learner_tenant_id
+        if public_tenant_id is None:
+            raise PublicLearnerTenantUnconfigured(
+                "Target resolution requires the configured public learner tenant."
+            )
+        try:
+            target, lookup_kind = await resolve_public_learner_target(
+                auth.database,
+                tenant_id=public_tenant_id,
+                query=body.query,
+            )
+        except MinuteAccountLookupInvalid as error:
+            raise InvalidOperationsRequest(
+                "Enter one exact email address or public username."
+            ) from error
+
+        await AuditRepository(auth.database).append(
+            tenant_id=operations_tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action=MINUTE_ACCOUNT_TARGET_LOOKUP_ACTION,
+            resource_type=MINUTE_ACCOUNT_TARGET_LOOKUP_RESOURCE,
+            resource_id=target.person_id if target is not None else public_tenant_id,
+            payload={
+                "lookup_kind": lookup_kind,
+                "result_count": 1 if target is not None else 0,
+                "target_tenant_id": str(public_tenant_id),
+            },
+            reason="Exact public learner resolution for minute-account administration.",
+            request_id=_request_id(request),
+        )
+        _no_store(response)
+        return MinuteAccountTargetResolutionResponse(
+            target=(
+                None
+                if target is None
+                else MinuteAccountTargetResponse(
+                    tenant_id=target.tenant_id,
+                    person_id=target.person_id,
+                    display_name=target.display_name,
+                    username=target.username,
+                    masked_email=target.masked_email,
+                )
+            )
+        )
+
+    @router.get(
+        "/admin/conversation-minute-accounts/{tenant_id}/{person_id}",
+        response_model=ConversationMinuteAccountResponse,
+    )
+    async def read_conversation_minute_account(
+        tenant_id: Annotated[UUID, Path()],
+        person_id: Annotated[UUID, Path()],
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> ConversationMinuteAccountResponse:
+        if request.query_params:
+            raise InvalidOperationsRequest("The minute-account read accepts no query parameters.")
+        operations_tenant_id = settings.operations_tenant_id
+        capabilities = await platform_projection(
+            auth.database,
+            auth.resolved.actor,
+            operations_tenant_id=operations_tenant_id,
+        )
+        if "platform_access_manage" not in capabilities:
+            raise CapabilityDenied("A current platform access-management assignment is required.")
+        assert operations_tenant_id is not None  # platform_projection rejects missing settings
+        try:
+            await require_eligible_learner(
+                auth.database,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                operations_tenant_id=operations_tenant_id,
+            )
+            state = await load_minute_account(
+                auth.database,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                lock=True,
+            )
+            effective_unlimited = (
+                tester_policy is not None
+                and await tester_policy.for_learner_account(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                )
+                is not None
+            )
+            result = await _minute_account_response(
+                auth.database,
+                state=state,
+                operations_tenant_id=operations_tenant_id,
+                effective_unlimited=effective_unlimited,
+            )
+        except EligibleLearnerUnavailable as error:
+            raise MinuteAccountTargetUnavailable(
+                "The exact active learner account is unavailable."
+            ) from error
+        except InvalidMinuteAccountSnapshot as error:
+            raise MinuteAccountUnavailable(
+                "The learner minute ledger cannot be read safely."
+            ) from error
+        _no_store(response)
+        return result
+
+    @router.post(
+        "/admin/conversation-minute-accounts/{tenant_id}/{person_id}/grants",
+        response_model=ConversationMinuteGrantResponse,
+    )
+    async def grant_conversation_minutes(
+        tenant_id: Annotated[UUID, Path()],
+        person_id: Annotated[UUID, Path()],
+        request: Request,
+        response: Response,
+        body: ConversationMinuteGrantRequest,
+        idempotency_key: Annotated[
+            str | None,
+            Header(alias="Idempotency-Key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH),
+        ] = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> ConversationMinuteGrantResponse:
+        require_safe_origin(request, settings)
+        actor = auth.resolved.actor
+        operations_tenant_id = settings.operations_tenant_id
+        capabilities = await platform_projection(
+            auth.database,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+        )
+        if "platform_access_manage" not in capabilities:
+            raise CapabilityDenied("A current platform access-management assignment is required.")
+        assert operations_tenant_id is not None  # platform_projection rejects missing settings
+        key = _normalize_idempotency_key(idempotency_key)
+        reason = _normalize_reason(body.reason)
+        # Serialize actor/key lookup before touching a target account. The
+        # account lock alone is insufficient: concurrent requests that reuse
+        # one key for two different learners would otherwise both grant.
+        await _lock_idempotency_scope(auth.database, operations_tenant_id)
+        digest = _minute_grant_digest(
+            tenant_id=tenant_id,
+            person_id=person_id,
+            minutes=body.minutes,
+            reason=reason,
+        )
+        marker = await _find_minute_grant_marker(
+            auth.database,
+            operations_tenant_id=operations_tenant_id,
+            actor=actor,
+            idempotency_key=key,
+        )
+        replayed = marker is not None
+        grant_id: UUID
+        if marker is not None:
+            payload = _marker_payload(marker, digest=digest)
+            if (
+                payload.get("tenant_id") != str(tenant_id)
+                or payload.get("person_id") != str(person_id)
+                or payload.get("minutes") != body.minutes
+            ):
+                raise OperationsIdempotencyConflict(
+                    "The Idempotency-Key was already used for a different minute grant."
+                )
+            try:
+                grant_id = UUID(str(payload["grant_id"]))
+            except (ValueError, KeyError) as error:
+                raise OperationsIdempotencyConflict(
+                    "The stored minute-grant result is invalid."
+                ) from error
+            try:
+                await require_eligible_learner(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    operations_tenant_id=operations_tenant_id,
+                )
+                state = await load_minute_account(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    lock=True,
+                )
+            except EligibleLearnerUnavailable as error:
+                raise MinuteAccountTargetUnavailable(
+                    "The exact active learner account is unavailable."
+                ) from error
+            except InvalidMinuteAccountSnapshot as error:
+                raise MinuteAccountUnavailable(
+                    "The learner minute ledger cannot be read safely."
+                ) from error
+        else:
+            grant_id = uuid4()
+            audit_event_id = uuid4()
+            grant = MinuteGrant(
+                tenant_id=str(tenant_id),
+                account_id=str(person_id),
+                grant_id=str(grant_id),
+                seconds=body.minutes * 60,
+                authorization_ref=f"audit-event:{audit_event_id}",
+                granted_by=str(actor.person_id),
+                reason=reason,
+            )
+            try:
+                state = await append_minute_grant(
+                    auth.database,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    operations_tenant_id=operations_tenant_id,
+                    grant=grant,
+                )
+            except EligibleLearnerUnavailable as error:
+                raise MinuteAccountTargetUnavailable(
+                    "The exact active learner account is unavailable."
+                ) from error
+            except EligibleLearnerBusy as error:
+                raise MinuteAccountTargetBusy(
+                    "The learner account is being updated. Retry this request with the same "
+                    "Idempotency-Key."
+                ) from error
+            except InvalidMinuteAccountSnapshot as error:
+                raise MinuteAccountUnavailable(
+                    "The learner minute ledger cannot be changed safely."
+                ) from error
+            if sum(grant.seconds for grant in state.account.grants) > (
+                MAX_SAFE_JSON_INTEGER - ALLOWANCE_SECONDS
+            ):
+                raise InvalidOperationsRequest(
+                    "The resulting allowance exceeds the exact JSON integer range."
+                )
+            await AuditRepository(auth.database).append(
+                event_id=audit_event_id,
+                tenant_id=operations_tenant_id,
+                actor_person_id=actor.person_id,
+                session_id=actor.session_id,
+                action=MINUTE_GRANT_ACTION,
+                resource_type=MINUTE_GRANT_RESOURCE_TYPE,
+                resource_id=grant_id,
+                payload={
+                    "idempotency_key": key,
+                    "request_digest": digest,
+                    "grant_id": str(grant_id),
+                    "tenant_id": str(tenant_id),
+                    "person_id": str(person_id),
+                    "minutes": body.minutes,
+                    "seconds": body.minutes * 60,
+                },
+                reason=reason,
+                request_id=_request_id(request),
+            )
+
+        effective_unlimited = (
+            tester_policy is not None
+            and await tester_policy.for_learner_account(
+                auth.database,
+                tenant_id=tenant_id,
+                person_id=person_id,
+            )
+            is not None
+        )
+        account = await _minute_account_response(
+            auth.database,
+            state=state,
+            operations_tenant_id=operations_tenant_id,
+            effective_unlimited=effective_unlimited,
+        )
+        _no_store(response)
+        return ConversationMinuteGrantResponse(
+            grant_id=grant_id,
+            minutes=body.minutes,
+            replayed=replayed,
+            account=account,
+        )
 
     @router.post("/admin/jobs/{job_id}/retry", response_model=JobRetryResponse)
     async def retry_job(

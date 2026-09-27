@@ -97,6 +97,7 @@ class _IdentityApplication:
         *,
         pkce_verifier: str,
         consent_version: str,
+        allow_consent_supersession: bool = False,
         display_name: str | None = None,
         user_agent: str | None = None,
     ) -> SimpleNamespace:
@@ -106,6 +107,7 @@ class _IdentityApplication:
                 "assertion": assertion,
                 "pkce_verifier": pkce_verifier,
                 "consent_version": consent_version,
+                "allow_consent_supersession": allow_consent_supersession,
                 "display_name": display_name,
                 "user_agent": user_agent,
             }
@@ -113,8 +115,16 @@ class _IdentityApplication:
         return SimpleNamespace(
             person=SimpleNamespace(
                 id=UUID("11111111-1111-4111-8111-111111111111"),
+                consent_version=consent_version,
+                consented_at=datetime.now(UTC),
             ),
-            session=SimpleNamespace(token=VALID_SESSION_TOKEN),
+            session=SimpleNamespace(
+                token=VALID_SESSION_TOKEN,
+                metadata=SimpleNamespace(id=UUID("22222222-2222-4222-8222-222222222222")),
+            ),
+            consent_changed=True,
+            previous_consent_version=None,
+            previous_consented_at=None,
         )
 
 
@@ -238,7 +248,10 @@ class _CallbackIdentityApplication(_IdentityApplication):
         del transaction_id, assertion, pkce_verifier, user_agent
         return SimpleNamespace(
             token=VALID_SESSION_TOKEN,
-            metadata=SimpleNamespace(person_id=UUID("11111111-1111-4111-8111-111111111111")),
+            metadata=SimpleNamespace(
+                person_id=UUID("11111111-1111-4111-8111-111111111111"),
+                id=UUID("22222222-2222-4222-8222-222222222222"),
+            ),
         )
 
 
@@ -276,7 +289,8 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
         *,
         pkce_verifier: str,
         consent_version: str,
-        display_name: str | None,
+        allow_consent_supersession: bool = False,
+        display_name: str | None = None,
         user_agent: str | None = None,
     ) -> SimpleNamespace:
         del (
@@ -284,6 +298,7 @@ class _ProviderCollisionIdentityApplication(_IdentityApplication):
             assertion,
             pkce_verifier,
             consent_version,
+            allow_consent_supersession,
             display_name,
             user_agent,
         )
@@ -466,6 +481,45 @@ def test_password_auth_contract_uses_json_body_for_one_time_tokens() -> None:
     assert not any(
         parameter.get("name") == "token" for parameter in verification.get("parameters", [])
     )
+
+
+def test_email_code_config_and_routes_expose_a_small_surface_bound_contract() -> None:
+    settings = _settings().model_copy(
+        update={
+            "google_oauth_client_id": "test.apps.googleusercontent.com",
+            "google_oauth_client_secret": SecretStr("test-google-oauth-secret-long-enough"),
+        }
+    )
+    client = _client(settings=settings)
+    config = client.get("/v1/auth/email-code/config?surface=learner")
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+
+    assert config.status_code == 200
+    assert config.json() == {
+        "enabled": True,
+        "consent_version": "staging-test-document-v1",
+        "google_enabled": True,
+        "expires_in_seconds": 600,
+        "resend_after_seconds": 60,
+    }
+    assert config.headers["cache-control"] == "no-store"
+    assert {
+        "/v1/auth/email-code/config",
+        "/v1/auth/email-code/request",
+        "/v1/auth/email-code/verify",
+    } <= set(paths)
+    assert client.get("/v1/auth/email-code/config?surface=admin").status_code == 422
+
+
+def test_email_code_config_disables_new_signup_without_current_consent_and_tenant() -> None:
+    settings = _settings_without_registration_config()
+    response = _client(settings=settings).get("/v1/auth/email-code/config?surface=learner")
+
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+    assert response.json()["consent_version"] is None
+    assert response.json()["google_enabled"] is False
 
 
 def test_auth_start_binds_state_nonce_pkce_and_safe_return_in_signed_cookie() -> None:

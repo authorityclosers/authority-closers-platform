@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields, replace
 from typing import Any, ClassVar, Self
+from uuid import UUID
 
 from .checkpoints import SourceBinding, content_hash, require_sha256, require_text
 
@@ -24,13 +25,16 @@ def _integer(value: Any, field: str, minimum: int = 0) -> int:
 
 
 def effective_budget_cap_paise(release_cap_paise: int, persisted_cap_paise: int) -> int:
-    """Return the persisted Admin limit after checking the release upper bound."""
+    """Return the cap available to this release.
+
+    Historical Admin reservations may exceed a newer release ceiling. New
+    quotes remain bounded by the current release while the shared ledger keeps
+    its larger approved cap for reconciliation.
+    """
 
     _integer(release_cap_paise, "release cap paise")
     _integer(persisted_cap_paise, "persisted cap paise")
-    if persisted_cap_paise > release_cap_paise:
-        raise ValueError("persisted budget cap exceeds release approval")
-    return persisted_cap_paise
+    return min(release_cap_paise, persisted_cap_paise)
 
 
 def _strings(instance: Any, names: tuple[str, ...]) -> None:
@@ -214,11 +218,44 @@ class ExecutionPermission(Snapshot):
     quote_fingerprint: str
     approved_by: str
     expires_at_epoch: int
+    acquisition_c5_benchmark_approval_id: str | None = None
 
     def __post_init__(self) -> None:
         _strings(self, ("authorization_ref", "approved_by"))
         require_sha256(self.quote_fingerprint, "permission quote fingerprint")
         _integer(self.expires_at_epoch, "permission expiry epoch", 1)
+        if self.acquisition_c5_benchmark_approval_id is not None:
+            try:
+                value = UUID(self.acquisition_c5_benchmark_approval_id)
+            except (TypeError, ValueError):
+                raise ValueError("invalid acquisition benchmark permission") from None
+            if str(value) != self.acquisition_c5_benchmark_approval_id:
+                raise ValueError("invalid acquisition benchmark permission")
+
+    def as_dict(self) -> dict[str, Any]:
+        value = super().as_dict()
+        if self.acquisition_c5_benchmark_approval_id is None:
+            # Preserve the exact schema and fingerprint for pre-benchmark
+            # execution permissions.
+            value.pop("acquisition_c5_benchmark_approval_id", None)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Any) -> Self:
+        legacy_fields = {
+            "schema",
+            "authorization_ref",
+            "quote_fingerprint",
+            "approved_by",
+            "expires_at_epoch",
+        }
+        if (
+            isinstance(value, dict)
+            and set(value) == legacy_fields
+            and value.get("schema") == "ac.sales_xray.ExecutionPermission/1"
+        ):
+            value = {**value, "acquisition_c5_benchmark_approval_id": None}
+        return super().from_dict(value)
 
 
 @dataclass(frozen=True)
@@ -603,6 +640,8 @@ def reserve(
     quote: Quote,
     permission: ExecutionPermission,
     now_epoch: int,
+    *,
+    release_cap_paise: int | None = None,
 ) -> LedgerTransition:
     existing = _pair(minutes, budget, reservation_id)
     if existing is not None:
@@ -627,6 +666,11 @@ def reserve(
         raise ValueError("insufficient explicit minute grant")
     if quote.max_cost_paise > budget.available_paise:
         raise ValueError("shared project budget exhausted")
+    if release_cap_paise is not None:
+        effective_cap = effective_budget_cap_paise(release_cap_paise, budget.cap_paise)
+        committed_paise = sum(item.committed_paise for item in budget.reservations)
+        if quote.max_cost_paise > effective_cap - committed_paise:
+            raise ValueError("current release project budget exhausted")
     reservation = Reservation(reservation_id, quote, permission)
     return LedgerTransition(
         replace(minutes, reservations=(*minutes.reservations, reservation)),

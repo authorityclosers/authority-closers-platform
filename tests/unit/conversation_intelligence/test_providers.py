@@ -14,6 +14,10 @@ from ac_platform.conversation_intelligence.entitlements import (
     Reservation,
 )
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.openai_tasks import prepare_openai_body
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    MAX_ERROR_RESPONSE_BODY_BYTES,
+)
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
@@ -21,6 +25,7 @@ from ac_platform.conversation_intelligence.providers import (
     deepgram_transcript,
     scribe_transcript,
 )
+from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 
 
 def grant(
@@ -68,6 +73,7 @@ def client(handler, authorize=lambda _: None):
     return BoundedProviders(
         credentials={
             "gemini": "fake-never-real",
+            "openai": "fake-never-real",
             "elevenlabs": "fake-never-real",
             "deepgram": "fake-never-real",
         },
@@ -75,6 +81,14 @@ def client(handler, authorize=lambda _: None):
         clock=lambda: 200,
         transport=httpx.MockTransport(handler),
     )
+
+
+def _record_response(seen, raw_response):
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, content=raw_response)
+
+    return handler
 
 
 def test_generation_fixed_endpoint_bound_output_and_usage():
@@ -120,6 +134,106 @@ def test_groq_generation_uses_the_fixed_endpoint_and_declared_model():
     assert result.usage == {"total_tokens": 4}
 
 
+def test_openai_responses_is_fixed_stateless_no_tools_and_usage_bound():
+    request_body = prepare_openai_body(
+        {
+            "model": "gpt-6-luna",
+            "max_completion_tokens": 256,
+            "messages": [
+                {"role": "system", "content": OVERVIEW_MARKER + " synthetic"},
+                {"role": "user", "content": "Synthetic-only input"},
+            ],
+        },
+        task="coaching",
+        reasoning_effort="low",
+    )
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        assert request.headers["authorization"] == "Bearer fake-never-real"
+        assert json.loads(request.content)["store"] is False
+        return httpx.Response(
+            200,
+            headers={"x-request-id": "req_synthetic"},
+            json={
+                "usage": {
+                    "input_tokens": 100,
+                    "input_tokens_details": {"cached_tokens": 20, "cache_write_tokens": 10},
+                    "output_tokens": 30,
+                    "output_tokens_details": {"reasoning_tokens": 5},
+                    "total_tokens": 130,
+                },
+                "output": [],
+            },
+        )
+
+    provider = BoundedProviders(
+        credentials={"openai": "fake-never-real"},
+        authorize=lambda _: None,
+        clock=lambda: 200,
+        transport=httpx.MockTransport(handler),
+    )
+    result = provider.generate(
+        grant(canonical(request_body), provider="openai", model="gpt-6-luna"), request_body
+    )
+    assert len(seen) == 1
+    assert str(seen[0].url) == "https://api.openai.com/v1/responses"
+    assert result.usage == {
+        "input_tokens": 100,
+        "output_tokens": 30,
+        "total_tokens": 130,
+        "cached_tokens": 20,
+        "cache_write_tokens": 10,
+        "reasoning_tokens": 5,
+    }
+
+
+def test_openai_responses_preserves_raw_receipt_when_usage_is_unknown():
+    request_body = prepare_openai_body(
+        {
+            "model": "gpt-6-luna",
+            "max_completion_tokens": 256,
+            "messages": [
+                {"role": "system", "content": OVERVIEW_MARKER + " synthetic"},
+                {"role": "user", "content": "Synthetic-only input"},
+            ],
+        },
+        task="coaching",
+    )
+
+    invalid_usages = (
+        None,
+        {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+            "output_tokens": 30,
+            "output_tokens_details": {"reasoning_tokens": 31},
+            "total_tokens": 130,
+        },
+    )
+    for usage in invalid_usages:
+        seen = []
+        raw_response = json.dumps({"usage": usage, "output": []}, separators=(",", ":")).encode(
+            "utf-8"
+        )
+
+        provider = BoundedProviders(
+            credentials={"openai": "fake-never-real"},
+            authorize=lambda _: None,
+            clock=lambda: 200,
+            transport=httpx.MockTransport(_record_response(seen, raw_response)),
+        )
+        result = provider.generate(
+            grant(canonical(request_body), provider="openai", model="gpt-6-luna"),
+            request_body,
+        )
+        assert result.usage == {}
+        assert result.data["usage"] == usage
+        assert result.raw_json == raw_response
+        assert len(seen) == 1
+
+
 def test_result_and_failures_never_retain_provider_content_or_credentials():
     sensitive_value = "fake-never-real-super-secret"
 
@@ -141,6 +255,10 @@ def test_result_and_failures_never_retain_provider_content_or_credentials():
     assert str(caught.value) == "provider_http_403"
     assert sensitive_value not in repr(caught.value)
     assert caught.value.diagnostic == "key_invalid"
+    assert caught.value.failure_observation is not None
+    assert caught.value.failure_observation.http_status == 403
+    assert caught.value.failure_observation.diagnostic_category == "key_invalid"
+    assert sensitive_value not in repr(caught.value.failure_observation)
 
     def success(_):
         return httpx.Response(
@@ -183,6 +301,28 @@ def test_transport_exception_is_stable_and_not_retried():
     assert len(attempts) == 1
     assert str(caught.value) == "provider_transport_or_response_failed"
     assert "fake-never-real" not in repr(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("message", "diagnostic"),
+    [
+        ("schema has too many states for serving", "structured_schema_complexity"),
+        ("maximum nesting depth exceeded", "structured_schema_depth"),
+        ("null is not supported in schema", "structured_schema_null"),
+        ("invalid responseJsonSchema", "structured_schema_rejected"),
+    ],
+)
+def test_schema_errors_classify_without_disclosing_provider_text(message, diagnostic):
+    def handler(_):
+        return httpx.Response(400, json={"error": message + " secret-private-call"})
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(grant(canonical(body())), body())
+    assert str(caught.value) == "provider_http_400"
+    assert caught.value.diagnostic == diagnostic
+    assert caught.value.failure_observation is not None
+    assert caught.value.failure_observation.diagnostic_category == diagnostic
+    assert "secret-private-call" not in repr(caught.value)
 
 
 def test_changed_input_and_stale_grant_never_dispatch():
@@ -272,6 +412,119 @@ def test_streaming_response_has_a_whole_execution_deadline():
             transport=httpx.MockTransport(handler),
         ).generate(grant(canonical(body())), body())
     assert ticks
+
+
+def test_http_failure_observation_binds_attempt_and_complete_bounded_body():
+    source = grant(canonical(body()))
+    response_body = b'{"error":"synthetic schema rejection"}'
+
+    def handler(_):
+        return httpx.Response(
+            500,
+            headers={"x-request-id": "request-123", "retry-after": "45"},
+            content=response_body,
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert str(caught.value) == "provider_http_500"
+    assert observation.reservation_id == source.reservation_id
+    assert observation.attempt_id == source.attempt_id
+    assert observation.quote_fingerprint == source.quote.fingerprint
+    assert observation.provider == source.quote.provider_id
+    assert observation.model == source.quote.provider_model
+    assert observation.operation == source.quote.operation
+    assert observation.input_sha256 == source.quote.input_sha256
+    assert observation.http_status == 500
+    assert observation.response_body_complete is True
+    assert observation.response_body_observed_bytes == len(response_body)
+    assert observation.response_body_sha256 == hashlib.sha256(response_body).hexdigest()
+    assert observation.provider_request_id_sha256 == hashlib.sha256(b"request-123").hexdigest()
+    assert observation.retry_after_seconds == 45
+    assert "synthetic schema rejection" not in repr(observation)
+
+
+def test_http_failure_observation_keeps_status_when_body_stream_truncates():
+    source = grant(canonical(body()))
+    first_body_chunk = b'{"error":"schema failed fake-never-real"}' + b"x" * 4_054
+    second_body_chunk = b" and this suffix was not read"
+    ticks = iter((0.0, 0.0, 0.0, 181.0))
+
+    class SlowError(httpx.SyncByteStream):
+        def __iter__(self):
+            yield first_body_chunk
+            yield second_body_chunk
+
+    def handler(_):
+        return httpx.Response(
+            503,
+            headers={"request-id": "request-456", "retry-after": "99999"},
+            stream=SlowError(),
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        BoundedProviders(
+            credentials={"gemini": "fake-never-real"},
+            authorize=lambda _: None,
+            clock=lambda: 200,
+            monotonic=lambda: next(ticks, 181.0),
+            transport=httpx.MockTransport(handler),
+        ).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert str(caught.value) == "provider_http_503"
+    assert observation.http_status == 503
+    assert observation.response_body_complete is False
+    assert observation.response_body_observed_bytes == 4_096
+    assert observation.response_body_sha256 is None
+    assert observation.provider_request_id_sha256 == hashlib.sha256(b"request-456").hexdigest()
+    assert observation.retry_after_seconds is None
+    assert "fake-never-real" not in repr(observation)
+    assert "fake-never-real" not in repr(caught.value)
+
+
+def test_http_failure_observation_caps_oversized_body_and_drops_unsafe_metadata():
+    source = grant(canonical(body()))
+    private_body = b"fake-never-real" + b"x" * (MAX_ERROR_RESPONSE_BODY_BYTES + 1)
+
+    def handler(_):
+        return httpx.Response(
+            429,
+            headers={"x-request-id": "sk_live_synthetic_secret", "retry-after": "1.5"},
+            content=private_body,
+        )
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(source, body())
+
+    observation = caught.value.failure_observation
+    assert observation is not None
+    assert observation.http_status == 429
+    assert observation.response_body_complete is False
+    assert observation.response_body_observed_bytes == MAX_ERROR_RESPONSE_BODY_BYTES
+    assert observation.response_body_sha256 is None
+    assert (
+        observation.provider_request_id_sha256
+        == hashlib.sha256(b"sk_live_synthetic_secret").hexdigest()
+    )
+    assert b"sk_live_synthetic_secret" not in str(observation.as_dict()).encode()
+    assert "sk_live_synthetic_secret" not in repr(observation)
+    assert observation.retry_after_seconds is None
+    assert "fake-never-real" not in repr(observation)
+
+
+def test_transport_failure_has_no_http_observation():
+    def handler(_):
+        raise httpx.ReadTimeout("no response and no provider details may escape")
+
+    with pytest.raises(ProviderError) as caught:
+        client(handler).generate(grant(canonical(body())), body())
+
+    assert caught.value.failure_observation is None
 
 
 def test_response_bound():

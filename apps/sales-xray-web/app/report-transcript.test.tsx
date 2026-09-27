@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ReportFactors } from "./report-factors";
 import { formatTranscriptTime, ReportTranscript } from "./report-transcript";
+import { ReportReadingProvider } from "./report-reading-context";
 import type {
   ReportDimension,
   Transcript,
@@ -44,15 +45,19 @@ async function render(
   transcript: Transcript,
   onSelect = vi.fn<(segment: TranscriptSegment) => void>(),
   language: ReportDisplayLanguage = "en",
+  reading = false,
+  inline = reading,
 ) {
   await act(async () =>
     root.render(
-      <ReportTranscript
-        key={language}
-        transcript={transcript}
-        onSelect={onSelect}
-        language={language}
-      />,
+      <ReportReadingProvider reading={reading} inline={inline}>
+        <ReportTranscript
+          key={language}
+          transcript={transcript}
+          onSelect={onSelect}
+          language={language}
+        />
+      </ReportReadingProvider>,
     ),
   );
   return onSelect;
@@ -70,6 +75,39 @@ afterEach(async () => {
 });
 
 describe("ReportTranscript", () => {
+  it("opens the transcript in a section tab without losing phrase search or source selection", async () => {
+    const transcript = transcriptWithSegments(3);
+    const onSelect = await render(transcript, undefined, "en", false, true);
+    expect(container.querySelector("details")?.open).toBe(true);
+    expect(container.querySelector("summary")?.hidden).toBe(true);
+    const search = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Search transcript phrases"]',
+    )!;
+    expect(search.closest("[hidden]")).toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(search, "phrase 2");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(container.querySelectorAll("[data-segment-id]")).toHaveLength(1);
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[data-segment-id="segment-2"]')!
+        .click(),
+    );
+    expect(onSelect).toHaveBeenCalledWith(transcript.segments[1]);
+  });
+
+  it("shows the full transcript in reading mode", async () => {
+    await render(transcriptWithSegments(51), undefined, "en", true);
+
+    expect(container.querySelector("details")?.open).toBe(true);
+    expect(container.querySelectorAll("[data-segment-id]")).toHaveLength(51);
+    expect(container.querySelector(".loadMore")).toBeNull();
+  });
+
   it("expands, searches, filters by unverified speaker label, and returns the source segment", async () => {
     const transcript = transcriptWithSegments(3);
     const onSelect = await render(transcript);
@@ -86,7 +124,10 @@ describe("ReportTranscript", () => {
     expect(container.textContent).toContain(
       "Speaker labels come from the source and are unverified",
     );
-    expect(formatTranscriptTime(61_234)).toBe("01:01.234");
+    // Visible clocks never show milliseconds; long calls read as h:mm:ss.
+    expect(formatTranscriptTime(61_234)).toBe("01:01");
+    expect(formatTranscriptTime(3_597_994)).toBe("59:57");
+    expect(formatTranscriptTime(3_723_000)).toBe("1:02:03");
 
     const search = container.querySelector<HTMLInputElement>(
       'input[aria-label="Search transcript phrases"]',

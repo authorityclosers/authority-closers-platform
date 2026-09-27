@@ -137,6 +137,26 @@ def test_bundle_round_trips_canonical_json_and_current_window() -> None:
     assert loaded.current(1_500, "test") is loaded
 
 
+def test_provider_stage_request_count_scope_is_release_pinned_and_expires_with_bundle() -> None:
+    tester = InternalTesterApproval(
+        id=UUID("70000000-0000-4000-8000-000000000008"),
+        email="dipak@authorityclosers.com",
+        authorization_ref="ref:approval/named-provider-count-test",
+        scopes=("provider_stage_request_count",),
+        reason="Approved internal tester exemption",
+    )
+    bundle = _bundle(internal_tester_accounts=(tester,))
+
+    loaded = load_hosted_approval_bundle(bundle.to_json())
+
+    assert loaded.internal_tester_accounts == (tester,)
+    assert loaded.digest == bundle.digest
+    assert loaded.current(1_999, "test") is loaded
+    with pytest.raises(ActivationContractError, match="approval_bundle_inactive"):
+        loaded.current(2_000, "test")
+    assert "internal_tester_accounts" not in _bundle().as_dict()
+
+
 def test_legacy_128_mib_descriptor_remains_loadable() -> None:
     bundle = _bundle(allowances=(_allowance(),), stages=(_stage(),))
 

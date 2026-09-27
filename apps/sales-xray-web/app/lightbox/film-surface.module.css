@@ -1,0 +1,146 @@
+.film {
+  /* The Lens and its note use board colours on film in both themes. */
+  --lx-lens-outline: var(--lx-film-lens-outline);
+  --lx-lens-fill: var(--lx-film-lens-fill);
+  --lx-lens-note-ink: var(--lx-film);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--lx-radius-xl);
+  background-color: var(--lx-film);
+  background-image:
+    radial-gradient(
+      ellipse at 50% 38%,
+      color-mix(in srgb, var(--lx-glow) 20%, transparent),
+      transparent 60%
+    ),
+    linear-gradient(var(--lx-film-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lx-film-grid) 1px, transparent 1px);
+  background-size:
+    auto,
+    32px 32px,
+    32px 32px;
+  box-shadow: var(--lx-shadow-film);
+  color: var(--lx-film-text);
+}
+
+.film[data-film-variant="drop"] {
+  border: 1.5px dashed color-mix(in srgb, var(--lx-glow) 38%, transparent);
+}
+
+.film[data-film-variant="panel"] {
+  background-image:
+    radial-gradient(
+      ellipse at 18% 40%,
+      color-mix(in srgb, var(--lx-glow) 20%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(var(--lx-film-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lx-film-grid) 1px, transparent 1px);
+}
+
+.film[data-film-variant="player"],
+.film[data-film-variant="focus"] {
+  border-radius: var(--lx-radius-lg);
+}
+
+/* Dark theme: separate film from the page with a line and a lighter band. */
+:global(:root[data-theme="dark"]) .film {
+  border: 1px solid var(--lx-line);
+  background-color: var(--lx-film-2);
+  box-shadow: none;
+}
+
+.scanline {
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: 120px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--lx-glow) 16%, transparent),
+    transparent
+  );
+  animation: lxSweep 7s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes lxSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-120px);
+  }
+  8%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(calc(100cqw + 120px));
+  }
+}
+
+.film:has(> .scanline) {
+  container-type: inline-size;
+}
+
+.corners {
+  position: absolute;
+  z-index: -1;
+  inset: 18px;
+  pointer-events: none;
+}
+
+.corners > span {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: color-mix(in srgb, var(--lx-film-text-2) 50%, transparent);
+  border-style: solid;
+  border-width: 0;
+}
+
+.corners > span:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: var(--lx-radius-xs);
+}
+
+.corners > span:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-top-width: 2px;
+  border-right-width: 2px;
+  border-top-right-radius: var(--lx-radius-xs);
+}
+
+.corners > span:nth-child(3) {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+  border-bottom-left-radius: var(--lx-radius-xs);
+}
+
+.corners > span:nth-child(4) {
+  right: 0;
+  bottom: 0;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+  border-bottom-right-radius: var(--lx-radius-xs);
+}
+
+:global([data-motion-suspended="true"]) .scanline {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline {
+    animation: none;
+    opacity: 0;
+  }
+}

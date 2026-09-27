@@ -149,17 +149,29 @@ class GuestOwnership:
         return principal_id
 
     async def _owned_usage(
-        self, submission_id: UUID, *, token: str | None, actor: ActorContext | None, mutation: bool
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None,
+        actor: ActorContext | None,
+        mutation: bool,
+        shared_identity_locks: bool = False,
     ) -> tuple[ConversationAcquisitionUsage, datetime, bool]:
         if actor is not None:
-            await ConversationApplication(self.database, clock=self.clock).admit(actor)
+            await ConversationApplication(self.database, clock=self.clock).admit(
+                actor,
+                shared_identity_locks=shared_identity_locks,
+            )
         now = await self.sessions._admit(mutation=mutation)
         # An exact existing-call lookup uses the current account when signed
         # in. An unrelated guest cookie must not block that account's library.
         # The usage/claim match below still rejects unclaimed guest calls and
         # calls belonging to another account; this never creates a claim.
         visitor_id, person_id = await self.sessions._owner(
-            None if actor is not None else token, actor, now
+            None if actor is not None else token,
+            actor,
+            now,
+            shared_identity_locks=shared_identity_locks,
         )
         usage = await self.database.scalar(
             select(ConversationAcquisitionUsage).where(
@@ -424,15 +436,28 @@ class GuestOwnership:
         return grant.id
 
     async def require_submission_owner(
-        self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
+        self,
+        submission_id: UUID,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
     ) -> SubmissionScope:
         usage, now, claimed = await self._owned_usage(
-            submission_id, token=token, actor=actor, mutation=False
+            submission_id,
+            token=token,
+            actor=actor,
+            mutation=False,
+            shared_identity_locks=shared_identity_locks,
         )
         if usage.visitor_id is not None:
             await self.sessions.fence_visitor(usage.visitor_id, shared=True)
             usage, now, claimed = await self._owned_usage(
-                submission_id, token=token, actor=actor, mutation=False
+                submission_id,
+                token=token,
+                actor=actor,
+                mutation=False,
+                shared_identity_locks=shared_identity_locks,
             )
         link = await self.database.get(ConversationGuestSubmission, (self.tenant_id, submission_id))
         if link is None or link.usage_id != usage.id or link.source_sha256 != usage.source_sha256:

@@ -296,6 +296,124 @@ def test_process_excludes_provider_credentials(monkeypatch: pytest.MonkeyPatch) 
     assert result.strip() == b"absent"
 
 
+@pytest.mark.parametrize("operation", ["inspect", "validate"])
+def test_codec_padding_is_provisional_but_decoded_duration_stays_strict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    """A 1.072s probe tail is accepted only when decoded samples remain bounded."""
+    source = tmp_path / "synthetic.mp3"
+    source.write_bytes(b"synthetic encoded source")
+    monkeypatch.setattr(signals, "_tool", lambda name: name)
+    monkeypatch.setattr(signals, "_native_executable", lambda path: Path("trusted-native"))
+    if operation == "inspect":
+
+        def fake_extract(_pcm: Path, output: Path, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            del args, kwargs
+            output.write_bytes(b"raw")
+            return {}
+
+        def fake_pack(_raw: Path, output: Path, *args: Any) -> dict[str, Any]:
+            del args
+            output.write_bytes(b"features")
+            return {}
+
+        monkeypatch.setattr(
+            signals,
+            "raw_extract",
+            fake_extract,
+        )
+        monkeypatch.setattr(
+            signals,
+            "pack_features",
+            fake_pack,
+        )
+        monkeypatch.setattr(signals, "summarize", lambda *args: {})
+
+    def fake_run(argv: list[str], **kwargs: Any) -> bytes:
+        del kwargs
+        if argv[0] == "ffprobe":
+            return json.dumps(
+                {
+                    "streams": [
+                        {
+                            "codec_type": "audio",
+                            "sample_rate": "48000",
+                            "channels": 2,
+                            "duration": "1.072",
+                            "time_base": "1/48000",
+                        }
+                    ]
+                }
+            ).encode()
+        sample_count = 16_000
+        Path(argv[-1]).write_bytes(b"\0" * (sample_count * 2 * 4))
+        return b""
+
+    monkeypatch.setattr(signals, "_run_bounded", fake_run)
+    result = (
+        signals.inspect_media(source, tmp_path / "checkpoint", max_seconds=1)
+        if operation == "inspect"
+        else signals.validate_media(source, tmp_path / "validated", max_seconds=1)
+    )
+    assert result["media_duration_ms"] == 1000
+
+
+@pytest.mark.parametrize("operation", ["inspect", "validate"])
+def test_decoded_audio_over_one_hour_style_limit_is_rejected_after_padding_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    source = tmp_path / "synthetic.mp3"
+    source.write_bytes(b"synthetic encoded source")
+    monkeypatch.setattr(signals, "_tool", lambda name: name)
+    monkeypatch.setattr(signals, "_native_executable", lambda path: Path("trusted-native"))
+    if operation == "inspect":
+        monkeypatch.setattr(signals, "raw_extract", lambda *_args, **_kwargs: pytest.fail("native"))
+
+    def fake_run(argv: list[str], **kwargs: Any) -> bytes:
+        del kwargs
+        if argv[0] == "ffprobe":
+            return json.dumps(
+                {
+                    "streams": [
+                        {
+                            "codec_type": "audio",
+                            "sample_rate": "48000",
+                            "channels": 2,
+                            "duration": "1.072",
+                        }
+                    ]
+                }
+            ).encode()
+        Path(argv[-1]).write_bytes(b"\0" * ((16_000 + 160) * 2 * 4))
+        return b""
+
+    monkeypatch.setattr(signals, "_run_bounded", fake_run)
+    function = signals.inspect_media if operation == "inspect" else signals.validate_media
+    with pytest.raises(signals.SignalError, match="signal_decoded_duration_limit"):
+        function(source, tmp_path / "checkpoint", max_seconds=1)
+    assert list(tmp_path.iterdir()) == [source]
+
+
+def test_hour_stereo_layout_reaches_the_new_total_row_bound() -> None:
+    _, _, mono_rows = signals._layout(16000, 1, 16000 * 3600)
+    _, _, stereo_rows = signals._layout(16000, 2, 16000 * 3600)
+    assert mono_rows == signals.MAX_ROWS_PER_CHANNEL
+    assert stereo_rows == signals.MAX_ROWS
+    with pytest.raises(signals.SignalError, match="signal_unsupported_layout"):
+        signals._layout(16000, 2, 16000 * 3600 + 1)
+
+
+def test_exact_hour_probe_padding_and_decoded_plus_010_seconds_bound() -> None:
+    assert signals._probe_duration_allowed(3600.072, 3600)
+    assert not signals._probe_duration_allowed(3601.01, 3600)
+    assert signals._decoded_samples_allowed(16000 * 3600, 16000, 3600)
+    assert not signals._decoded_samples_allowed(16000 * 3600 + 160, 16000, 3600)
+
+
 @pytest.mark.parametrize("failure_stage", ["probe", "decode", "native", "pack", "summary"])
 def test_inspection_failure_cleans_every_temporary_derivative(
     tmp_path: Path,

@@ -1,0 +1,161 @@
+/*
+ * Sales Xray v0.2 "Lightbox" design tokens.
+ * Single source of truth for colour, type, space, radius, elevation and motion.
+ * Target location in the app: apps/sales-xray-web/app/lightbox/tokens.css, imported once from app/layout.tsx.
+ * Every CSS module should read these variables instead of hard-coded hex values.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- Neutrals ---------- */
+  --lx-ink: #0B1424;          /* primary text, strong UI */
+  --lx-ink-2: #1E2B40;        /* quote text on light surfaces */
+  --lx-ink-3: #334158;        /* secondary text */
+  --lx-muted: #56637A;        /* tertiary text; 5.6:1 on paper */
+  --lx-muted-2: #6B7486;      /* captions/meta; 4.6:1 on paper - never below 12px */
+  --lx-line: #E6E3DA;         /* hairlines on paper/surface */
+  --lx-line-soft: #ECE9E1;
+  --lx-line-strong: #CFCABE;
+  --lx-paper: #F6F5F1;        /* app ground */
+  --lx-paper-2: #FBFAF7;      /* nested/secondary surface */
+  --lx-surface: #FFFFFF;      /* cards */
+  --lx-sunken: #ECE9E1;       /* segmented controls, "still unknown" wells */
+
+  /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
+  --lx-film: #0A1220;
+  --lx-film-2: #16233A;
+  --lx-film-line: rgba(255, 255, 255, .06);
+  --lx-film-grid: rgba(255, 255, 255, .045);
+  --lx-film-text: #FFFFFF;
+  --lx-film-text-2: #C9D4E3;
+  --lx-film-text-3: #9FB0C8;
+  --lx-film-wave: #3A4C66;    /* unplayed waveform */
+
+  /* ---------- Brand ---------- */
+  --lx-teal: #087E79;         /* primary action, links, strength */
+  --lx-teal-hover: #06635F;
+  --lx-teal-2: #24B5A8;       /* wordmark gradient end */
+  --lx-teal-soft: #E6F5F2;
+  --lx-teal-tint: #F2FAF8;
+  --lx-teal-edge: #D5ECE8;
+  --lx-glow: #2DD4BF;         /* ONLY on film backgrounds (contrast), never text on light */
+
+  /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
+  --lx-strength: #087E79;      --lx-strength-soft: #E6F5F2;  --lx-strength-edge: #CDE8E3;  --lx-strength-on-film: #2DD4BF;
+  --lx-focus: #B45309;         --lx-focus-soft: #FEF3E2;     --lx-focus-edge: #F2C27A;     --lx-focus-on-film: #F59E0B;  --lx-focus-ink: #92400E;
+  --lx-missed: #5B3FD6;        --lx-missed-soft: #EFEBFF;    --lx-missed-edge: #DDD5FF;    --lx-missed-on-film: #8B74FF; --lx-missed-ink: #4A31B8;
+  --lx-objection: #BE2A55;     --lx-objection-soft: #FDECF1; --lx-objection-edge: #F3C9D5; --lx-objection-on-film: #F0527F;
+  --lx-closing: #2453D6;       --lx-closing-soft: #EAF0FF;   --lx-closing-ink: #1F4FB8;
+  --lx-hypothesis: #56637A;    --lx-hypothesis-edge: #AEB6C4; /* dashed border */
+
+  /* ---------- Status ---------- */
+  --lx-success: var(--lx-teal);
+  --lx-info: #2453D6;          --lx-info-soft: #EAF0FF;
+  --lx-warning: #B45309;       --lx-warning-soft: #FEF3E2;
+  --lx-danger: #B42318;        --lx-danger-soft: #FDECEA;    --lx-danger-edge: #F1C7C2;
+
+  /* ---------- Type ---------- */
+  --lx-font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --lx-font-ui: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "Noto Sans Devanagari Variable", "Noto Sans Devanagari", system-ui, sans-serif;
+  --lx-font-quote: "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable", "Noto Serif Devanagari", Georgia, serif;
+
+  --lx-text-display-xl: 700 76px/0.98 var(--lx-font-display);  /* marketing / foundations only */
+  --lx-text-display: 800 46px/1.04 var(--lx-font-display);      /* page H1 desktop */
+  --lx-text-h1: 800 42px/1.04 var(--lx-font-display);
+  --lx-text-h2: 800 30px/1.1 var(--lx-font-display);            /* report section titles */
+  --lx-text-verdict: 400 34px/1.28 var(--lx-font-quote);        /* the verdict sentence */
+  --lx-text-quote-lg: 400 22px/1.42 var(--lx-font-quote);       /* moment quotes */
+  --lx-text-quote: 400 15px/1.4 var(--lx-font-quote);           /* quote chips */
+  --lx-text-body: 500 15px/1.65 var(--lx-font-ui);
+  --lx-text-ui: 600 14px/1.45 var(--lx-font-ui);
+  --lx-text-meta: 600 12.5px/1.45 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 12px/1.2 var(--lx-font-ui);            /* letter-spacing: .14em, uppercase */
+  --lx-tracking-display: -0.035em;
+  --lx-tracking-eyebrow: 0.14em;
+  --lx-leading-devanagari: 1.65;                                 /* raise line-height for :lang(hi), :lang(mr) */
+
+  /* ---------- Space (4px grid) ---------- */
+  --lx-space-1: 4px;  --lx-space-2: 8px;  --lx-space-3: 12px; --lx-space-4: 16px;
+  --lx-space-5: 20px; --lx-space-6: 24px; --lx-space-8: 32px; --lx-space-10: 40px;
+  --lx-space-12: 48px; --lx-space-14: 56px; --lx-space-18: 72px;
+
+  /* ---------- Radius ---------- */
+  --lx-radius-xs: 6px;   /* tiny tags */
+  --lx-radius-sm: 10px;  /* buttons, inputs */
+  --lx-radius-md: 14px;  /* chips-in-cards, inner wells */
+  --lx-radius-lg: 20px;  /* cards */
+  --lx-radius-xl: 26px;  /* film panels */
+  --lx-radius-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --lx-shadow-1: 0 1px 2px rgba(11, 20, 36, .05);
+  --lx-shadow-2: 0 10px 26px -18px rgba(11, 20, 36, .45);
+  --lx-shadow-film: 0 30px 60px -32px rgba(10, 18, 32, .65);
+  --lx-shadow-cta: 0 14px 30px -14px rgba(8, 126, 121, .8);
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+
+  /* ---------- Motion ---------- */
+  --lx-ease-quick: cubic-bezier(.2, .8, .2, 1);
+  --lx-ease-move: cubic-bezier(.16, 1, .3, 1);
+  --lx-ease-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --lx-ease-scan: cubic-bezier(.65, 0, .35, 1);
+  --lx-dur-quick: 120ms;
+  --lx-dur-move: 240ms;
+  --lx-dur-reveal: 420ms;
+  --lx-dur-develop: 700ms;
+  --lx-stagger: 60ms;
+
+  /* ---------- Layout ---------- */
+  --lx-rail-w: 248px;
+  --lx-rail-w-collapsed: 72px;
+  --lx-topbar-h: 64px;
+  --lx-content-max: 880px;       /* report reading column */
+  --lx-chapter-rail-w: 196px;
+  --lx-bottom-nav-h: 76px;
+  --lx-mini-player-h: 62px;
+}
+
+/* Devanagari: never synthesise italics, always give it more leading. */
+:lang(hi), :lang(mr), :lang(hi-Deva), :lang(mr-Deva) {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+/* ---------- Dark theme (v0.2 ships tokens; UI toggle optional) ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --lx-ink: #E8EDF5;
+  --lx-ink-2: #D6DEEA;
+  --lx-ink-3: #B7C2D3;
+  --lx-muted: #93A0B5;
+  --lx-muted-2: #8390A6;
+  --lx-line: #223049;
+  --lx-line-soft: #1B2740;
+  --lx-line-strong: #2E3E5C;
+  --lx-paper: #070D18;
+  --lx-paper-2: #0C1424;
+  --lx-surface: #101A2C;
+  --lx-sunken: #0C1424;
+  --lx-teal: #2DD4BF;
+  --lx-teal-hover: #5EEAD4;
+  --lx-teal-soft: rgba(45, 212, 191, .12);
+  --lx-teal-tint: rgba(45, 212, 191, .08);
+  --lx-teal-edge: rgba(45, 212, 191, .28);
+  --lx-strength: #2DD4BF;   --lx-strength-soft: rgba(45, 212, 191, .12);
+  --lx-focus: #F59E0B;      --lx-focus-soft: rgba(245, 158, 11, .12);   --lx-focus-ink: #FBBF24;
+  --lx-missed: #A18FFF;     --lx-missed-soft: rgba(139, 116, 255, .14); --lx-missed-ink: #C4B8FF;
+  --lx-objection: #F0527F;  --lx-objection-soft: rgba(240, 82, 127, .14);
+  --lx-closing: #7EA2FF;    --lx-closing-soft: rgba(126, 162, 255, .14);
+  --lx-danger: #F97066;     --lx-danger-soft: rgba(249, 112, 102, .12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lx-dur-move: 120ms;
+    --lx-dur-reveal: 120ms;
+    --lx-dur-develop: 120ms;
+    --lx-stagger: 0ms;
+  }
+}

@@ -204,8 +204,10 @@ def test_docker_adapter_uses_fixed_isolated_command_and_promotes_verified_output
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
         "--pids-limit=32",
-        "--memory=768m",
-        "--memory-swap=768m",
+        "--memory=1g",
+        "--memory-swap=1g",
+        "--ulimit",
+        "fsize=536870912:536870912",
         "--cpus=1",
         "--log-driver=none",
         "target=/input/source.media,readonly,bind-propagation=rprivate",
@@ -217,6 +219,35 @@ def test_docker_adapter_uses_fixed_isolated_command_and_promotes_verified_output
     program = command[-1]
     assert '"--rate", "16000"' in program
     assert "provider" not in program.lower()
+
+
+def test_hour_stereo_workspace_bound_requires_the_new_768m_tmpfs(tmp_path: Path) -> None:
+    source_bytes = 32 * 1024 * 1024
+    mono = native_runtime.estimate_workspace_bytes(3600, 1, source_bytes)
+    stereo = native_runtime.estimate_workspace_bytes(3600, 2, source_bytes)
+    old_work = 512 * 1024 * 1024
+
+    assert mono <= old_work
+    assert stereo > old_work
+    assert stereo <= native_runtime.HOSTED_NATIVE_WORK_BYTES
+    assert native_runtime.HOSTED_NATIVE_MEMORY_BYTES == 1024 * 1024 * 1024
+    assert native_runtime.HOSTED_NATIVE_FSIZE_BYTES == 512 * 1024 * 1024
+
+    runtime = native_runtime.DockerNativeRuntime(
+        IMAGE, workspace_root=tmp_path, runner=lambda *_: None
+    )
+    source = tmp_path / "source.media"
+    source.write_bytes(b"synthetic source")
+    command = runtime._command(
+        source,
+        tmp_path / "staging",
+        "ac-native-resource-bound",
+        operation="inspect",
+    )
+    assert "--memory=1g" in command
+    assert "--memory-swap=1g" in command
+    assert "fsize=536870912:536870912" in command
+    assert "--tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700" in command
 
 
 def test_docker_adapter_stages_on_helper_quota_root_and_publishes_to_worker_root(

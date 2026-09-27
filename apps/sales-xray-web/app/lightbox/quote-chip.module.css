@@ -1,0 +1,129 @@
+.chip {
+  --chip-ink: var(--lx-ink-3);
+  --chip-bg: var(--lx-sunken);
+
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 44px;
+  align-items: flex-start;
+  gap: var(--lx-space-3);
+  padding: var(--lx-space-2) var(--lx-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--lx-radius-md);
+  background: var(--chip-bg);
+  color: var(--lx-ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.chip[data-kind="strength"] {
+  --chip-ink: var(--lx-strength-ink);
+  --chip-bg: var(--lx-strength-soft);
+}
+.chip[data-kind="focus"] {
+  --chip-ink: var(--lx-focus-ink);
+  --chip-bg: var(--lx-focus-soft);
+}
+.chip[data-kind="missed"] {
+  --chip-ink: var(--lx-missed-ink);
+  --chip-bg: var(--lx-missed-soft);
+}
+.chip[data-kind="objection"] {
+  --chip-ink: var(--lx-objection-ink);
+  --chip-bg: var(--lx-objection-soft);
+}
+.chip[data-kind="closing"] {
+  --chip-ink: var(--lx-closing-ink);
+  --chip-bg: var(--lx-closing-soft);
+}
+.chip[data-kind="hypothesis"] {
+  --chip-ink: var(--lx-hypothesis);
+  --chip-bg: var(--lx-sunken);
+  border-style: dashed;
+  border-color: var(--lx-hypothesis-edge);
+}
+
+.chip:hover {
+  border-color: var(--chip-ink);
+}
+
+.chip:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--lx-space-1);
+  padding-top: 1px;
+  color: var(--chip-ink);
+  font: var(--lx-text-meta);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock {
+  white-space: nowrap;
+}
+
+/* The full quote always wraps; it is never clamped or given an ellipsis. */
+.quote {
+  min-width: 0;
+  font: var(--lx-text-quote);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.equaliser {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.equaliser > span {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: lxEqualise 0.9s ease-in-out infinite;
+}
+
+.equaliser > span:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.equaliser > span:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+@keyframes lxEqualise {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip {
+    transition: none;
+  }
+  .equaliser > span {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+}

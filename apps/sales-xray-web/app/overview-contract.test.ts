@@ -23,6 +23,54 @@ it("reads the same complete synthetic overview validated by the Python parser", 
   expect(parsed.overview?.progress).toBeNull();
 });
 
+it("accepts the optional canonical top-level business impact projection", () => {
+  const objectValue = structuredClone(fixture.report);
+  Object.assign(objectValue.overview, {
+    business_impact: {
+      status: "insufficient_data",
+      missing_inputs: ["No validated outcome or value data."],
+    },
+  });
+  expect(parse(objectValue).overview?.business_impact).toEqual({
+    status: "insufficient_data",
+    missing_inputs: ["No validated outcome or value data."],
+  });
+
+  const nullableValue = structuredClone(fixture.report);
+  Object.assign(nullableValue.overview, { business_impact: null });
+  expect(parse(nullableValue).overview?.business_impact).toBeNull();
+});
+
+it.each([
+  [
+    "unknown field",
+    (impact: Record<string, unknown>) => {
+      impact.estimate = 5000;
+    },
+  ],
+  [
+    "unsupported status",
+    (impact: Record<string, unknown>) => {
+      impact.status = "validated";
+    },
+  ],
+  [
+    "empty missing inputs",
+    (impact: Record<string, unknown>) => {
+      impact.missing_inputs = [];
+    },
+  ],
+] as const)("rejects malformed top-level business impact: %s", (_, mutate) => {
+  const report = structuredClone(fixture.report);
+  const impact = {
+    status: "insufficient_data",
+    missing_inputs: ["No validated outcome or value data."],
+  } as Record<string, unknown>;
+  mutate(impact);
+  Object.assign(report.overview, { business_impact: impact });
+  expect(() => parse(report)).toThrow(ReportContractError);
+});
+
 it("keeps legacy report bytes compatible without fabricating detailed fields", () => {
   const { overview: omitted, ...legacy } = fixture.report;
   expect(omitted.version).toBe("dipak-14-point-v1");

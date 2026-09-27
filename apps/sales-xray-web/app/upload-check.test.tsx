@@ -23,7 +23,31 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   delete window.turnstile;
+  vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+it("shows a retry action when a rendered widget never returns a token", async () => {
+  vi.useFakeTimers();
+  window.turnstile = {
+    render: vi.fn(() => "stalled-widget"),
+    remove: vi.fn(),
+  };
+  await act(async () =>
+    root.render(
+      <UploadCheck
+        siteKey="synthetic-public-key"
+        action="sales_xray_upload"
+        onToken={vi.fn()}
+      />,
+    ),
+  );
+  expect(container.textContent).not.toContain("Retry check");
+  await act(async () => {
+    vi.advanceTimersByTime(20_000);
+  });
+  expect(container.textContent).toContain("The upload check could not load");
+  expect(container.textContent).toContain("Retry check");
 });
 
 it("retries a failed widget script without reloading or losing the selected call", async () => {

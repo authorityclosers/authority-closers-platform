@@ -48,6 +48,15 @@
       "environment_ref": "dev",
       "secret_path_ref": "/sales-xray-test/gemini",
       "token_file_ref": "/run/ac-sales-xray/identities/gemini/token"
+    },
+    {
+      "credential_ref": "REPLACE_WITH_APPROVED_OPENAI_CREDENTIAL_REF",
+      "provider_id": "openai",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/openai",
+      "token_file_ref": "/run/ac-sales-xray/identities/openai/token"
     }
   ]
 }

@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.storage import (
 from ac_platform.conversation_intelligence.worker import _FencedExecutor
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.http.conversation_playback import install_playback_route
+from ac_platform.http.sales_xray_profile import require_sales_xray_write_profile
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,7 @@ class ConversationByteTransport:
         self, request: Request, recording_id: UUID, quote_id: UUID
     ) -> dict[str, Any]:
         async with asynccontextmanager(self.require_actor)(request) as auth:
+            await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
             intake = self.runtime.intake(ConversationApplication(auth.database))
             recording = await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
             return {
@@ -124,14 +126,18 @@ class ConversationByteTransport:
                         raise HTTPException(422, "The complete recording was not received.")
                     await fenced.run(scratch.seek, 0)
                     async with asynccontextmanager(self.require_actor)(request) as auth:
-                        intake = self.runtime.intake(ConversationApplication(auth.database))
-                        await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
                         if (
                             str(auth.resolved.actor.person_id) != admission["person_id"]
                             or str(auth.resolved.actor.session_id) != admission["session_id"]
                             or str(auth.resolved.actor.tenant_id) != admission["tenant_id"]
                         ):
                             raise HTTPException(403, "The upload session changed.")
+                        await require_sales_xray_write_profile(
+                            auth.database,
+                            auth.resolved.actor,
+                        )
+                        intake = self.runtime.intake(ConversationApplication(auth.database))
+                        await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
                         # Thread completion is joined by store_source before the
                         # transaction, scratch and global storage fence can close.
                         return await intake.application.store_source(
@@ -174,6 +180,7 @@ def install_intake_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> Any:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         try:
             return await runtime.intake(ConversationApplication(auth.database)).prepare(
                 auth.resolved.actor,
@@ -192,6 +199,7 @@ def install_intake_routes(
         auth: AuthenticatedTransaction = dependency,
     ) -> Any:
         guard(request, response)
+        await require_sales_xray_write_profile(auth.database, auth.resolved.actor)
         try:
             return await runtime.intake(ConversationApplication(auth.database)).accept(
                 auth.resolved.actor,

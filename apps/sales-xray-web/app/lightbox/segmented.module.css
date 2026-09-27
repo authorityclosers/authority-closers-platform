@@ -1,0 +1,90 @@
+.segmented {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  margin-bottom: var(--lx-space-2);
+  padding: 0;
+  color: var(--lx-ink);
+  font: var(--lx-text-ui);
+}
+
+.track {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--lx-space-1);
+  padding: var(--lx-space-1);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-sunken);
+}
+
+.option {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.label {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--lx-space-2);
+  border-radius: var(--lx-radius-sm);
+  color: var(--lx-ink-3);
+  font: var(--lx-text-meta);
+  text-align: center;
+  transition:
+    background-color var(--lx-dur-move) var(--lx-ease-move),
+    color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+
+.input:checked + .label {
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  box-shadow: var(--lx-shadow-1);
+  font-weight: 800;
+}
+
+.input:focus-visible + .label {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.segmented:disabled .label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.hint {
+  margin: var(--lx-space-2) 0 0;
+  color: var(--lx-muted);
+  font: var(--lx-text-meta);
+}
+
+@media (pointer: coarse) {
+  .label {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .label {
+    transition: none;
+  }
+}

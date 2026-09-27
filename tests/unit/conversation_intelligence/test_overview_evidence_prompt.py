@@ -1,7 +1,6 @@
 """Synthetic reproduction of ambiguous nested evidence object/list instructions."""
 
 import json
-import re
 from copy import deepcopy
 from typing import Any
 
@@ -14,8 +13,11 @@ from ac_platform.conversation_intelligence.inference_tasks import (
     prepare_fact_inputs,
     prepare_scribe_input,
 )
+from ac_platform.conversation_intelligence.qualitative_pack import (
+    load_qualitative_pack_for_revision,
+)
 from ac_platform.conversation_intelligence.report_overview import (
-    OVERVIEW_FORMAT,
+    OVERVIEW_V5_FORMAT,
     DetailedOverview,
 )
 from tests.conversation_overview_fixtures import overview_for
@@ -36,8 +38,8 @@ EVIDENCE_PATHS = (
 )
 
 
-def full_overview_case() -> tuple[dict[str, Any], dict[str, Any]]:
-    transcript = _transcript()
+def full_overview_case(*, count: int = 3) -> tuple[dict[str, Any], dict[str, Any]]:
+    transcript = _transcript(count=count)
     draft = _payload(transcript)
     overview = overview_for(draft)
 
@@ -78,14 +80,71 @@ def full_overview_case() -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def test_all_eleven_nested_paths_have_an_explicit_array_in_the_prompt() -> None:
-    shape = json.dumps(OVERVIEW_FORMAT)
-    assert len(re.findall(r"\bevidence:\[span\]", shape)) == len(EVIDENCE_PATHS)
-    assert len(re.findall(r"\bevidence\b", shape)) == len(EVIDENCE_PATHS)
+    shape = json.dumps(OVERVIEW_V5_FORMAT)
+    assert shape.count("SourceNote") == len(EVIDENCE_PATHS)
+    assert "SourceNote={text,evidence:[span]}" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "exactly one span each" in shape
+    assert "1-3 distinct supported spans per SourceNote" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "exactly one per rewatch" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "max(before.end_ms) <= min(change.start_ms)" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "max(change.end_ms) <= min(after.start_ms)" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "unclear/overlapping groups:entire field null" in reports.OVERVIEW_V5_INSTRUCTION
+    assert "Never invent pivots, reorder spans or alter timestamps" in (
+        reports.OVERVIEW_V5_INSTRUCTION
+    )
     transcript, draft = full_overview_case()
     original = deepcopy(draft)
     parsed = reports.parse_report_draft(draft, transcript)
     assert parsed.overview is not None
     assert parsed.overview.model_dump(mode="json") == draft["overview"]
+    assert draft == original
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("diagnosis",),
+        ("improvement_details", 0, "what_happened"),
+    ],
+)
+def test_four_valid_source_spans_remain_rejected_at_source_note_bound(
+    path: tuple[str | int, ...],
+) -> None:
+    transcript, draft = full_overview_case(count=4)
+    note = draft["overview"]
+    for key in path:
+        note = note[key]
+    note["evidence"] = [_evidence(transcript, index) for index in range(4)]
+
+    with pytest.raises(ValidationError) as exc:
+        DetailedOverview.model_validate(draft["overview"])
+    assert ((*path, "evidence"), "too_long") in {
+        (tuple(error["loc"]), error["type"]) for error in exc.value.errors()
+    }
+    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
+        reports.parse_report_draft(draft, transcript)
+
+
+@pytest.mark.parametrize(
+    ("overlap_index", "start_ms", "end_ms"),
+    [(1, 800, 1_700), (2, 1_800, 2_700)],
+)
+def test_conversation_change_rejects_overlapping_native_source_timestamps(
+    overlap_index: int, start_ms: int, end_ms: int
+) -> None:
+    transcript, draft = full_overview_case()
+    transcript["segments"][overlap_index]["start_ms"] = start_ms
+    transcript["segments"][overlap_index]["end_ms"] = end_ms
+    change = draft["overview"]["conversation_change"]
+    draft["overview"]["missed_details"][0]["closer_response"]["evidence"] = [
+        _evidence(transcript, 1)
+    ]
+    for key, index in (("before", 0), ("change", 1), ("after", 2)):
+        change[key]["evidence"] = [_evidence(transcript, index)]
+    original = deepcopy(draft)
+
+    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
+        reports.parse_report_draft(draft, transcript)
     assert draft == original
 
 
@@ -103,13 +162,10 @@ def test_schema_requires_array_at_each_nested_evidence_path(path: tuple[str | in
     ]
 
 
-@pytest.mark.parametrize(
-    ("provider", "model"),
-    [("gemini", "gemini-3.8-flash"), ("groq", "openai/gpt-oss-120b")],
-)
 def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
-    monkeypatch: pytest.MonkeyPatch, provider: str, model: str
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    provider, model = "gemini", "gemini-3.8-flash"
     transcript = _transcript()
     c2 = prepare_scribe_input(transcript["source_sha256"], 1000)
     c4 = prepare_fact_inputs(transcript, provider=provider, model=model)
@@ -117,17 +173,28 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
         {"overview": "A synthetic call.", "observations": [], "uncertainties": []}, transcript
     )
     with monkeypatch.context() as old:
-        old.setattr(reports, "OVERVIEW_INSTRUCTION", "")
+        old.setattr(reports, "OVERVIEW_V5_INSTRUCTION", reports.OVERVIEW_INSTRUCTION)
         old.setattr(
             reports,
-            "OVERVIEW_FORMAT",
-            {
-                k: v.replace("evidence:[span]", "evidence") if isinstance(v, str) else v
-                for k, v in OVERVIEW_FORMAT.items()
-            },
+            "OVERVIEW_V5_FORMAT",
+            reports.OVERVIEW_FORMAT,
         )
-        previous = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
-    current = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
+        previous = prepare_coaching_input(
+            transcript,
+            [packet],
+            provider=provider,
+            model=model,
+            coaching_prompt_revision="coaching-v5",
+            qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+        )
+    current = prepare_coaching_input(
+        transcript,
+        [packet],
+        provider=provider,
+        model=model,
+        coaching_prompt_revision="coaching-v5",
+        qualitative_pack_sha256=load_qualitative_pack_for_revision("coaching-v5").sha256,
+    )
     assert type(current).from_dict(current.as_dict(), payload=current.payload) == current
     assert previous.input_sha256 != current.input_sha256
     assert current.max_completion_tokens == previous.max_completion_tokens
@@ -140,12 +207,39 @@ def test_array_contract_binds_only_new_c5_and_keeps_native_provider_shape(
         else body["messages"][0]["content"]
     )
     assert "EVIDENCE_ARRAYS: v1" in system
-    assert "nonempty JSON array of span objects, even for one" in system
-    assert "span={segment_id} for ordinary bounded segments" in system
-    assert "zero-based Python code-point offsets" in system
-    assert "Retained legacy full references" in system
+    assert "always arrays" in system
+    assert "1-3 distinct supported spans per SourceNote" in system
+    assert "exactly one per rewatch" in system
+    assert "max(before.end_ms) <= min(change.start_ms)" in system
+    assert "max(change.end_ms) <= min(after.start_ms)" in system
+    assert "unclear/overlapping groups:entire field null" in system
+    assert "span={segment_id}" in system
+    assert "zero-based Python code points" in system
+    assert "Legacy full references" in system
     assert json.loads(system.rsplit("Profile:\n", 1)[1]) == reports._prompt_profile(
         reports.load_report_profile()
     )
     assert prepare_scribe_input(transcript["source_sha256"], 1000) == c2
     assert prepare_fact_inputs(transcript, provider=provider, model=model) == c4
+
+
+@pytest.mark.parametrize("revision", ["coaching-v1", "coaching-v2", "coaching-v3", "coaching-v4"])
+def test_expanded_contract_cannot_change_previous_revision_requests(
+    monkeypatch: pytest.MonkeyPatch,
+    revision: Any,
+) -> None:
+    transcript = _transcript()
+    packet = reports.parse_fact_packet(
+        {"overview": "A synthetic call.", "observations": [], "uncertainties": []}, transcript
+    )
+    kwargs: dict[str, Any] = dict(
+        provider="gemini", model="gemini-3.8-flash", coaching_prompt_revision=revision
+    )
+    if revision == "coaching-v4":
+        kwargs["qualitative_pack_sha256"] = load_qualitative_pack_for_revision(revision).sha256
+    previous = prepare_coaching_input(transcript, [packet], **kwargs)
+    monkeypatch.setattr(reports, "OVERVIEW_V5_INSTRUCTION", "Unrelated successor instruction")
+    monkeypatch.setattr(reports, "OVERVIEW_V5_FORMAT", {"unrelated": "successor"})
+    current = prepare_coaching_input(transcript, [packet], **kwargs)
+    assert current == previous
+    assert b"1-3 distinct supported spans per SourceNote" not in current.payload

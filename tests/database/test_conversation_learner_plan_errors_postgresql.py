@@ -43,9 +43,9 @@ def test_plan_allowance_denial_is_private_403_and_rolls_back_acceptance(
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
         try:
             transport = httpx.ASGITransport(app=setup.app, raise_app_exceptions=False)
-            async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as guest:
-                guest.cookies.set("ac_xray_guest", setup.guest.token)
-                path, _ = await _upload_for_read_test(setup, guest)
+            async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as account:
+                account.cookies.set(setup.settings.session_cookie_name, setup.token)
+                path, _ = await _upload_for_read_test(setup, account)
             await _reconcile(setup.sessions, setup.state)
             local = OfflineConversationWorker(
                 setup.sessions,
@@ -54,8 +54,6 @@ def test_plan_allowance_denial_is_private_403_and_rolls_back_acceptance(
                 environment="test",
             )
             assert await local.run_once()
-            async with setup.sessions() as db, db.begin():
-                await setup.factory(db).claim(setup.guest.token, setup.state.actor)
             async with httpx.AsyncClient(transport=transport, base_url=origin) as account:
                 account.cookies.set(setup.settings.session_cookie_name, setup.token)
                 quoted = await account.post(

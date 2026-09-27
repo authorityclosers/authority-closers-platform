@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" role="img" aria-label="Connection lost">
+  <style>
+    .lx-dash { stroke-dasharray: 4 6; animation: lx-march 1.6s linear infinite; }
+    @keyframes lx-march { to { stroke-dashoffset: -20 } }
+    @media (prefers-reduced-motion: reduce) { .lx-dash { animation: none } }
+  </style>
+  <defs>
+    <radialGradient id="lx-aperture" cx="50%" cy="42%" r="62%">
+      <stop offset="0" stop-color="var(--lx-film-2, #16233A)"/>
+      <stop offset="1" stop-color="var(--lx-film, #0A1220)"/>
+    </radialGradient>
+  </defs>
+  <path class="lx-dash" d="M28 74 C 60 40, 140 40, 172 74" fill="none" stroke="var(--lx-muted, #5B6678)" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="28" cy="74" r="7" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="3"/>
+  <circle cx="172" cy="74" r="7" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="3"/>
+  <g transform="translate(70 62)">
+    <circle cx="30" cy="30" r="26" fill="var(--lx-paper, #FFFFFF)" stroke="var(--lx-ink, #0E1726)" stroke-width="4"/>
+    <circle cx="30" cy="30" r="17" fill="url(#lx-aperture)"/>
+    <path d="M22 30h16" stroke="var(--lx-muted, #8B96A8)" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+  <path d="M100 26 l0 14 M100 46 l0 .5" stroke="var(--lx-focus, #D97706)" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

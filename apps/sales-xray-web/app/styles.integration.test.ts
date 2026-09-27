@@ -33,10 +33,11 @@ describe("integrated Sales Xray boundary", () => {
   });
 
   it("uses the real learner route without query supplied scope", () => {
-    expect(route).toContain(
-      '<AcquisitionStudio homeHref="/home" variant="embedded" />',
-    );
-    expect(route).not.toMatch(/searchParams|tenantId|workspaceId|scopeId/);
+    // Saved-call selectors are allowed; tenancy must still come from the session.
+    // Mounted route behavior is covered by learner-web's sales-xray/page.test.tsx.
+    expect(route).toContain("<AcquisitionStudio");
+    expect(route).toContain('variant="embedded"');
+    expect(route).not.toMatch(/tenantId|workspaceId|scopeId/);
     expect(routeLayout).toContain('"../../../sales-xray-web/app/styles.css"');
   });
 });

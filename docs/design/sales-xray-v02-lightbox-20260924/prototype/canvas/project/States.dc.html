@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sales Xray v0.2 · States and moments of truth</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&amp;family=Plus+Jakarta+Sans:wght@400..800&amp;family=Noto+Sans+Devanagari:wght@400..700&amp;display=swap">
+<style>
+body{margin:0;background:#F6F5F1;color:#0B1424;font-family:"Plus Jakarta Sans","Noto Sans Devanagari",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#087E79}a:hover{color:#06635F}
+@keyframes lxBreathe{0%,100%{opacity:.55}50%{opacity:1}}
+@keyframes lxBar{from{transform:scaleX(.62)}to{transform:scaleX(.7)}}
+@keyframes lxStripe{to{background-position:28px 0}}
+@keyframes lxSmile{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
+@keyframes lxSpark{0%{opacity:0;transform:scale(.2) rotate(-30deg)}40%{opacity:1;transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+@keyframes lxLook{0%,40%,100%{transform:translateX(0)}55%,85%{transform:translateX(-6px)}}
+@keyframes lxMarch{to{stroke-dashoffset:-20}}
+@keyframes lxToastIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.lx-breathe{animation:lxBreathe 3.6s ease-in-out infinite}
+.lx-stripe{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 7px,rgba(255,255,255,0) 7px 14px);animation:lxStripe 1s linear infinite}
+.lx-smile{stroke-dasharray:40;animation:lxSmile .8s .2s cubic-bezier(.2,.8,.2,1) both}
+.lx-spark{transform-box:fill-box;transform-origin:center;animation:lxSpark 1.2s cubic-bezier(.2,.8,.2,1) both}
+.lx-look{animation:lxLook 5s ease-in-out infinite}
+.lx-march{stroke-dasharray:4 6;animation:lxMarch 1.6s linear infinite}
+.lx-toast{animation:lxToastIn .5s cubic-bezier(.16,1,.3,1) both}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1060px; box-sizing: border-box; padding: 56px; background: #F6F5F1; display: flex; flex-direction: column; gap: 28px">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <span style="font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: #087E79">STATES · MOMENTS OF TRUTH</span>
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; letter-spacing: -0.03em">When things go sideways, say exactly what happens next</h1>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+
+    <article style="display: flex; flex-direction: column; gap: 14px; padding: 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 24px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #6B7486">UPLOADING · REAL BYTES</span>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="position: relative; height: 58px; border-radius: 16px; background: #CFE9E5; overflow: hidden">
+          <div class="lx-stripe" style="position: absolute; left: 0; top: 0; bottom: 0; width: 68%; background-color: #087E79; border-radius: 16px"></div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; color: #FFFFFF; font-weight: 800; font-size: 15px"><span>Uploading privately</span><span style="font-variant-numeric: tabular-nums">12.4 of 18.2 MB</span></div>
+        </div>
+        <span style="font-size: 13px; line-height: 1.5; color: #56637A">The Analyse button becomes the upload bar. Its width is the real number of bytes sent, never a timer.</span>
+      </div>
+      <button type="button" style="align-self: flex-start; height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid #E6E3DA; background: #FFFFFF; font: 700 13px 'Plus Jakarta Sans'; color: #334158">Cancel upload</button>
+    </article>
+
+    <article style="display: flex; flex-direction: column; gap: 14px; padding: 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 24px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #6B7486">NEEDS YOUR OK</span>
+      <div style="display: flex; gap: 14px; align-items: flex-start">
+        <span style="width: 44px; height: 44px; flex: none; border-radius: 14px; background: #FEF3E2; color: #B45309; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h12v17l-6-4-6 4z"></path><path d="M9 9.5l2 2 4-4"></path></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 17px; font-weight: 800">Ready to start the analysis</h2><p style="margin: 0; font-size: 14px; line-height: 1.55; color: #56637A">Your call is uploaded and checked. It uses 26 of your 42 trial minutes.</p></div>
+      </div>
+      <a href="Processing.dc.html" style="display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 13px; background: #087E79; color: #FFFFFF; font-weight: 800; font-size: 15px; text-decoration: none">Start analysis</a>
+    </article>
+
+    <article style="display: flex; flex-direction: column; gap: 14px; padding: 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 24px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #6B7486">PAUSED · WE’RE ON IT</span>
+      <div style="display: flex; gap: 14px; align-items: flex-start">
+        <svg width="64" height="64" viewBox="0 0 120 120" aria-hidden="true" style="flex: none">
+          <defs><radialGradient id="aS1" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs>
+          <g transform="rotate(-7 60 60)">
+            <rect x="9" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect><rect x="102" y="50" width="9" height="20" rx="4.5" fill="#0E1726"></rect>
+            <circle cx="60" cy="60" r="44" fill="#FFFFFF" stroke="#0E1726" stroke-width="5"></circle><circle cx="60" cy="60" r="30" fill="url(#aS1)"></circle>
+            <rect class="lx-breathe" x="49" y="58" width="22" height="5" rx="2.5" fill="#D97706"></rect>
+          </g>
+          <circle cx="96" cy="22" r="14" fill="#FEF3C7" stroke="#D97706" stroke-width="3"></circle><rect x="90.5" y="16" width="4" height="12" rx="1.5" fill="#92400E"></rect><rect x="97.5" y="16" width="4" height="12" rx="1.5" fill="#92400E"></rect>
+        </svg>
+        <div style="display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 17px; font-weight: 800">The AI service was busy</h2><p style="margin: 0; font-size: 14px; line-height: 1.55; color: #56637A">Your recording and transcript are saved. We’ll retry automatically, with no need to re-upload and no double charge.</p></div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <button type="button" style="height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid #E6E3DA; background: #FFFFFF; font: 700 13px 'Plus Jakarta Sans'; color: #0B1424">Check now</button>
+        <button type="button" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border-radius: 10px; border: none; background: transparent; font: 700 12.5px 'Plus Jakarta Sans'; color: #56637A"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"></rect><path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8"></path></svg>Ref SX-7F2A-41C9</button>
+      </div>
+    </article>
+
+    <article style="display: flex; flex-direction: column; gap: 14px; padding: 22px; background: #FFFFFF; border: 1px solid #F1C7C2; border-radius: 24px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #B42318">CAN’T USE THIS FILE</span>
+      <div style="display: flex; gap: 14px; align-items: flex-start">
+        <span style="width: 44px; height: 44px; flex: none; border-radius: 14px; background: #FDECEA; color: #B42318; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5V12l3 2"></path></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 17px; font-weight: 800">This recording is 72 minutes long</h2><p style="margin: 0; font-size: 14px; line-height: 1.55; color: #56637A">Sales Xray takes calls up to 60 minutes. Trim it, or choose the part of the call you want coached.</p></div>
+      </div>
+      <a href="Home.dc.html" style="align-self: flex-start; display: flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 11px; background: #0B1424; color: #FFFFFF; font-weight: 800; font-size: 13.5px; text-decoration: none">Choose another file</a>
+    </article>
+
+    <article style="display: flex; flex-direction: column; gap: 14px; padding: 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 24px">
+      <span style="font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #6B7486">OFFLINE · AUTO-RESUMES</span>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #0B1424; color: #FFFFFF">
+        <svg width="54" height="38" viewBox="0 0 200 140" aria-hidden="true" style="flex: none"><path class="lx-march" d="M28 74 C 60 40, 140 40, 172 74" fill="none" stroke="#9FB0C8" stroke-width="6" stroke-linecap="round"></path><circle cx="28" cy="74" r="12" fill="#0B1424" stroke="#FFFFFF" stroke-width="6"></circle><circle cx="172" cy="74" r="12" fill="#0B1424" stroke="#FFFFFF" stroke-width="6"></circle></svg>
+        <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 800">You’re offline</span><span style="font-size: 12.5px; color: #C9D4E3">We’ll check again the moment you’re back. Nothing is lost.</span></div>
+      </div>
+      <span style="font-size: 13px; line-height: 1.5; color: #56637A">Status checks back off gently and restart when the tab is visible or the network returns. They never stop for good.</span>
+    </article>
+
+    <article style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 22px; background: #FFFFFF; border: 1px solid #E6E3DA; border-radius: 24px">
+      <span style="align-self: flex-start; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #6B7486">EMPTY · FIRST RUN</span>
+      <svg width="200" height="128" viewBox="0 0 280 180" aria-hidden="true">
+        <defs><radialGradient id="aS2" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#0A1220"></stop></radialGradient></defs>
+        <ellipse cx="140" cy="166" rx="112" ry="8" fill="#0E1726" opacity=".06"></ellipse>
+        <g transform="rotate(-8 78 114)"><rect x="22" y="92" width="112" height="44" rx="6" fill="#0A1220"></rect><path d="M34 114h6M44 108v12M52 104v20M60 110v8M68 106v16M76 111v6M84 108v12M92 112v4" stroke="#2DD4BF" stroke-opacity=".35" stroke-width="2.4" stroke-linecap="round"></path></g>
+        <g transform="rotate(6 204 120)"><rect x="148" y="98" width="112" height="44" rx="6" fill="#0A1220" opacity=".85"></rect><path d="M160 120h6M170 114v12M178 110v20M186 116v8M194 112v16M202 117v6M210 114v12M218 118v4" stroke="#2DD4BF" stroke-opacity=".25" stroke-width="2.4" stroke-linecap="round"></path></g>
+        <g transform="translate(96 16)"><rect x="3" y="36" width="8" height="18" rx="4" fill="#0E1726"></rect><rect x="77" y="36" width="8" height="18" rx="4" fill="#0E1726"></rect><circle cx="44" cy="45" r="36" fill="#FFFFFF" stroke="#0E1726" stroke-width="4.5"></circle><circle cx="44" cy="45" r="24" fill="url(#aS2)"></circle><g class="lx-look"><rect x="33" y="47" width="22" height="5" rx="2.5" fill="#2DD4BF"></rect></g></g>
+      </svg>
+      <h2 style="margin: 0; font-size: 17px; font-weight: 800">No calls yet</h2>
+      <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #56637A; max-width: 300px">Your first report takes one recording. Everything you analyse lands here.</p>
+      <a href="Home.dc.html" style="display: flex; align-items: center; height: 42px; padding: 0 18px; border-radius: 12px; background: #087E79; color: #FFFFFF; font-weight: 800; font-size: 14px; text-decoration: none">Analyse your first call</a>
+    </article>
+  </div>
+
+  <div class="lx-toast" role="status" style="align-self: center; display: flex; align-items: center; gap: 14px; padding: 12px 14px 12px 12px; border-radius: 18px; background: #0B1424; color: #FFFFFF; box-shadow: 0 24px 50px -20px rgba(11,20,36,.6)">
+    <svg width="44" height="44" viewBox="0 0 120 120" aria-hidden="true">
+      <defs><radialGradient id="aS3" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#16233A"></stop><stop offset="1" stop-color="#050A14"></stop></radialGradient></defs>
+      <circle cx="60" cy="60" r="44" fill="#FFFFFF"></circle><circle cx="60" cy="60" r="30" fill="url(#aS3)"></circle>
+      <path class="lx-smile" d="M46 57 Q60 71 74 57" fill="none" stroke="#2DD4BF" stroke-width="6" stroke-linecap="round"></path>
+      <path class="lx-spark" d="M104 10 l2.4 6.6 6.6 2.4 -6.6 2.4 -2.4 6.6 -2.4 -6.6 -6.6 -2.4 6.6 -2.4z" fill="#F59E0B"></path>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14.5px; font-weight: 800">Your report is ready</span><span style="font-size: 12.5px; color: #C9D4E3">Site visit follow-up · Mehta</span></div>
+    <a href="Report.dc.html" style="margin-left: 10px; display: flex; align-items: center; height: 38px; padding: 0 14px; border-radius: 11px; background: #2DD4BF; color: #0A1220; font-weight: 800; font-size: 13.5px; text-decoration: none">Open report</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

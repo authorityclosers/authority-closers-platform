@@ -76,10 +76,10 @@ def test_other_stages_and_models_cannot_use_extended_output(kind, route):
         kind.model_validate({**data, **route})
 
 
-def test_allocation_preserves_old_plan_and_only_expands_explicit_flash_approval():
+def test_allocation_preserves_every_route_bounded_approved_cap():
     assert stage_completion_limit("C5", 8000, provider="gemini", model="gemini-3.8-flash") == 8000
     assert stage_completion_limit("C5", 3200, provider="gemini", model="gemini-3.8-flash") == 3200
-    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 3200
+    assert stage_completion_limit("C5", 4000, provider="gemini", model="gemini-3.8-flash") == 4000
     with pytest.raises(ValueError):
         stage_completion_limit("C5", 8000)
     with pytest.raises(ValueError):
@@ -124,7 +124,10 @@ def test_complete_input_reconstructs_with_new_hash_but_unchanged_facts_and_profi
         validate_coaching_result(result(new, incomplete), new, transcript)
 
 
-def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction():
+@pytest.mark.parametrize(
+    "failure_code", ["conversation_report_json_invalid", "conversation_report_evidence_invalid"]
+)
+def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction(failure_code):
     transcript = _transcript()
     fact_input = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
     packet = FactPacket.model_validate(
@@ -136,7 +139,7 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction()
     )
     original = prepare_coaching_input(transcript, [packet])
     repair = C5RepairIntent(
-        failure_code="conversation_report_json_invalid",
+        failure_code=failure_code,
         original_run_id=uuid4(),
         original_response_sha256="a" * 64,
     )
@@ -145,11 +148,38 @@ def test_c5_repair_keeps_source_payload_and_changes_only_canonical_instruction()
     repaired_body = repaired.as_provider_body()
     assert original_body["messages"][1] == repaired_body["messages"][1]
     assert "SERVER_REPAIR" not in original_body["messages"][0]["content"]
-    assert "conversation_report_json_invalid" in repaired_body["messages"][0]["content"]
+    assert failure_code in repaired_body["messages"][0]["content"]
+    if failure_code == "conversation_report_evidence_invalid":
+        assert "never audio timestamps" in repaired_body["messages"][0]["content"]
+        assert "prefer {segment_id} alone" in repaired_body["messages"][0]["content"]
     assert repaired_body["messages"][0]["content"].endswith(
         original_body["messages"][0]["content"].split("Profile:\n", 1)[1]
     )
     assert repaired.input_sha256 != original.input_sha256
+
+
+def test_openai_stage_request_is_c5_only_and_disallows_paid_repair():
+    base = dict(
+        transcript_checkpoint_id=uuid4(),
+        fact_checkpoint_ids=(uuid4(),),
+        provider="openai",
+        model="gpt-6-luna",
+        max_completion_tokens=1800,
+    )
+    assert StageRequest(stage="C5", **base).provider == "openai"
+    with pytest.raises(ValidationError):
+        StageRequest(
+            stage="C4",
+            fact_checkpoint_ids=(),
+            **{key: value for key, value in base.items() if key != "fact_checkpoint_ids"},
+        )
+    repair = C5RepairIntent(
+        failure_code="conversation_report_overview_invalid",
+        original_run_id=uuid4(),
+        original_response_sha256="a" * 64,
+    )
+    with pytest.raises(ValidationError):
+        StageRequest(stage="C5", **base, repair=repair)
 
 
 @pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 96000)])

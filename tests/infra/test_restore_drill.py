@@ -760,6 +760,35 @@ def test_retained_c5_recovery_parity_contract_tracks_0043_table() -> None:
     )
 
 
+def test_analysis_language_parity_contract_tracks_0044_existing_tables() -> None:
+    assert restore_drill.parity_contract_for_head("20260923_0044") == "ac-postgres-parity-v24"
+    assert restore_drill.parity_tables_for_head("20260923_0044") == (
+        restore_drill.RETAINED_C5_RECOVERY_PARITY_TABLES
+    )
+
+
+def test_email_login_code_parity_contract_tracks_0045_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260923_0045") == "ac-postgres-parity-v25"
+    assert restore_drill.parity_tables_for_head("20260923_0045") == (
+        restore_drill.ANALYSIS_LANGUAGE_PARITY_TABLES + ("email_login_codes",)
+    )
+
+
+def test_sales_xray_profile_parity_contract_tracks_0046_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260923_0046") == "ac-postgres-parity-v26"
+    assert restore_drill.parity_tables_for_head("20260923_0046") == (
+        restore_drill.EMAIL_LOGIN_CODES_PARITY_TABLES + ("sales_xray_profiles",)
+    )
+
+
+def test_coaching_depth_parity_contract_tracks_0047_existing_inventory() -> None:
+    assert restore_drill.parity_contract_for_head("20260924_0047") == "ac-postgres-parity-v27"
+    assert restore_drill.parity_tables_for_head("20260924_0047") == (
+        restore_drill.SALES_XRAY_PROFILES_PARITY_TABLES
+    )
+    assert "conversation_analysis_settings" in restore_drill.parity_tables_for_head("20260924_0047")
+
+
 def test_processing_ownership_migration_command_targets_only_0037() -> None:
     target = restore_drill._target_for("0123456789ab")
     command = restore_drill._migration_command(

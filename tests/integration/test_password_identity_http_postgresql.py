@@ -9,7 +9,7 @@ import subprocess
 import sys
 from collections.abc import Coroutine, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -25,12 +25,25 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.auth_transactions import AuthTransaction
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.email_login import (
+    EMAIL_LOGIN_ATTEMPT_LIMIT,
+    EMAIL_LOGIN_CODE_TTL,
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_RESEND_AFTER,
+    EMAIL_LOGIN_SEND_WINDOW,
+    EmailLoginCodeService,
+    _code_hash,
+    _encrypt_code,
+    decrypt_email_login_code,
+)
 from ac_platform.identity.models import (
     EmailChallenge,
     EmailChallengeKind,
+    EmailLoginCode,
     IdentityCommandIdempotency,
     PasswordCredential,
     Person,
@@ -38,10 +51,16 @@ from ac_platform.identity.models import (
     ProviderIdentity,
 )
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.identity.password_auth import decrypt_challenge_token, hash_password
+from ac_platform.identity.password_auth import (
+    InvalidPasswordCredentials,
+    PasswordIdentityService,
+    decrypt_challenge_token,
+    hash_password,
+)
+from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
 from ac_platform.identity.services import ProviderAuthorizationType, VerifiedProviderAssertion
 from ac_platform.outbox.models import OutboxEvent
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus, Tenant
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +115,29 @@ def _run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
         with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
             return runner.run(coroutine)
     return asyncio.run(coroutine)
+
+
+def _email_code_settings(
+    schema_url: URL,
+    *,
+    public_tenant_id: UUID,
+    operations_tenant_id: UUID,
+    consent_version: str,
+) -> Settings:
+    return Settings(
+        environment="test",
+        database_url=schema_url.render_as_string(hide_password=False),
+        session_token_pepper="postgres-email-login-token-pepper-long-enough",  # noqa: S106
+        oauth_transaction_secret="postgres-email-login-oauth-secret-long-enough",  # noqa: S106
+        email_challenge_secret="postgres-email-login-challenge-secret-long-enough",  # noqa: S106
+        learner_consent_version=consent_version,
+        public_learner_tenant_id=public_tenant_id,
+        operations_tenant_id=operations_tenant_id,
+        public_app_url="https://app.authorityclosers.test",
+        admin_app_url="https://admin.authorityclosers.test",
+        api_url="https://api.authorityclosers.test",
+        sales_xray_app_url="https://salesxray.authorityclosers.test",
+    )
 
 
 def _postgres_url() -> URL:
@@ -268,6 +310,893 @@ def test_recovery_preserves_account_eligibility_without_authentication(
                     assert (person.email_verified_at is not None) is verified
         finally:
             await engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_code_concurrently_provisions_one_account_and_commits_failures(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        consent_version = "sales-xray-terms-v1"
+        email = f"email-login-{uuid4().hex}@example.test"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"email-login-public-{public_tenant_id.hex}",
+                        name="Email login public learner tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"email-login-ops-{operations_tenant_id.hex}",
+                        name="Email login operations tenant",
+                    ),
+                ]
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+
+        def client() -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+                base_url=origin,
+            )
+
+        clients = [client() for _ in range(5)]
+        try:
+            config = await clients[0].get("/v1/auth/email-code/config?surface=sales_xray")
+            assert config.status_code == 200
+            assert config.json() == {
+                "enabled": True,
+                "consent_version": consent_version,
+                "google_enabled": False,
+                "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+                "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+            }
+            request_body = {
+                "email": email,
+                "consent": True,
+                "consent_version": consent_version,
+                "age_attested": True,
+                "surface": "sales_xray",
+                "return_path": "/",
+            }
+            legacy_request_body = dict(request_body)
+            legacy_request_body.pop("age_attested")
+            no_full_ack = await clients[0].post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json=legacy_request_body,
+            )
+            assert no_full_ack.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                assert (
+                    database.scalar(
+                        select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                    )
+                    is None
+                )
+                assert (
+                    database.scalar(
+                        select(func.count()).select_from(Person).where(Person.email == email)
+                    )
+                    == 0
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(OutboxEvent)
+                        .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                    )
+                    == 0
+                )
+            requests = await asyncio.gather(
+                clients[0].post(
+                    "/v1/auth/email-code/request",
+                    headers={"Origin": origin},
+                    json=request_body,
+                ),
+                clients[1].post(
+                    "/v1/auth/email-code/request",
+                    headers={"Origin": origin},
+                    json=request_body,
+                ),
+            )
+            assert [response.status_code for response in requests] == [202, 202]
+            assert (
+                requests[0].json()
+                == requests[1].json()
+                == {
+                    "accepted": True,
+                    "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
+                    "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
+                }
+            )
+            with Session(postgres_harness.engine) as database:
+                challenges = list(
+                    database.scalars(
+                        select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                    )
+                )
+                assert len(challenges) == 1
+                challenge = challenges[0]
+                assert challenge.age_attested is True
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(OutboxEvent)
+                        .where(OutboxEvent.event_type == EMAIL_LOGIN_REQUEST_EVENT)
+                    )
+                    == 1
+                )
+                assert (
+                    database.scalar(
+                        select(func.count()).select_from(Person).where(Person.email == email)
+                    )
+                    == 0
+                )
+
+            wrong_code = "000000" if code != "000000" else "000001"
+            bad = await clients[2].post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "code": wrong_code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert bad.status_code == 400
+            with Session(postgres_harness.engine) as database:
+                failed_challenge = database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert failed_challenge is not None
+                assert failed_challenge.failed_attempts == 1
+                assert failed_challenge.consumed_at is None
+
+            verification = {
+                "email": email,
+                "code": code,
+                "surface": "sales_xray",
+                "return_path": "/",
+            }
+            results = await asyncio.gather(
+                clients[3].post(
+                    "/v1/auth/email-code/verify",
+                    headers={"Origin": origin},
+                    json=verification,
+                ),
+                clients[4].post(
+                    "/v1/auth/email-code/verify",
+                    headers={"Origin": origin},
+                    json=verification,
+                ),
+            )
+            assert sorted(response.status_code for response in results) == [200, 400]
+            successful = next(response for response in results if response.status_code == 200)
+            assert successful.json() == {
+                "authenticated": True,
+                "person_id": successful.json()["person_id"],
+                "email": email,
+                "display_name": None,
+                "account_created": True,
+                "profile_complete": False,
+                "return_path": "/",
+            }
+            cookie = successful.headers["set-cookie"].lower()
+            assert "httponly" in cookie
+            assert "samesite=lax" in cookie
+            assert "domain=" not in cookie
+            me_client = clients[3] if results[0] is successful else clients[4]
+            me = await me_client.get("/v1/me")
+            assert me.status_code == 200
+            person_id = UUID(me.json()["person_id"])
+            assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+            assert me.json()["membership_role"] == "learner"
+            replay = await clients[2].post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json=verification,
+            )
+            assert replay.status_code == 400
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.first_name is None
+                assert person.whatsapp_number is None
+                assert person.email_verified_at is not None
+                assert person.consent_version == consent_version
+                assert database.get(Membership, (public_tenant_id, person_id)) is not None
+                consent_audit = database.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.tenant_id == public_tenant_id,
+                        AuditEvent.actor_person_id == person_id,
+                        AuditEvent.action == "identity.learner_consent_accepted.v1",
+                        AuditEvent.resource_type == "person_consent",
+                        AuditEvent.resource_id == str(person_id),
+                    )
+                )
+                assert consent_audit is not None
+                assert consent_audit.occurred_at == person.consented_at
+                assert consent_audit.payload["consent_version"] == consent_version
+                assert consent_audit.payload["previous_consent_version"] is None
+                assert consent_audit.payload["explicit_acceptance"] is True
+                assert consent_audit.payload["age_attestation"] == ("18_plus_learner_declaration")
+                assert consent_audit.payload["accepted_via"] == "email_otp"
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 1
+                )
+                final_challenge = database.get(EmailLoginCode, challenge.id)
+                assert final_challenge is not None
+                assert final_challenge.failed_attempts == 1
+                assert final_challenge.consumed_at is not None
+        finally:
+            for current_client in clients:
+                await current_client.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_resend_does_not_reset_failure_budget(postgres_harness: _Harness) -> None:
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        email = f"email-budget-{uuid4().hex}@example.test"
+        secret = "postgres-email-budget-secret-long-enough-for-hmac-and-aes"  # noqa: S105
+        consent = "email-budget-consent-v1"
+        started = datetime(2026, 9, 23, 12, tzinfo=UTC)
+
+        async def begin(at: datetime):
+            async with sessions() as database, database.begin():
+                return await EmailLoginCodeService(
+                    database,
+                    challenge_secret=secret,
+                ).begin(
+                    email=email,
+                    consent_accepted=True,
+                    submitted_consent_version=consent,
+                    required_consent_version=consent,
+                    age_attested=True,
+                    now=at,
+                )
+
+        async def fail_current(at: datetime) -> None:
+            async with sessions() as database, database.begin():
+                challenge = await database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert challenge is not None
+                valid_code = decrypt_email_login_code(
+                    secret,
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+                wrong_code = "999999" if valid_code != "999999" else "999998"
+                result = await EmailLoginCodeService(
+                    database,
+                    challenge_secret=secret,
+                ).verify(
+                    email=email,
+                    code=wrong_code,
+                    required_consent_version=consent,
+                    now=at,
+                )
+                assert result.person is None
+
+        try:
+            first = await begin(started)
+            assert first is not None
+            await fail_current(started + timedelta(seconds=1))
+            await fail_current(started + timedelta(seconds=2))
+            resent = await begin(started + EMAIL_LOGIN_RESEND_AFTER)
+            assert resent is not None
+            assert resent.challenge_id == first.challenge_id
+            with Session(postgres_harness.engine) as database:
+                after_resend = database.get(EmailLoginCode, first.challenge_id)
+                assert after_resend is not None
+                assert after_resend.failed_attempts == 2
+                assert after_resend.sends_in_window == 2
+            await fail_current(started + timedelta(seconds=61))
+            await fail_current(started + timedelta(seconds=62))
+            await fail_current(started + timedelta(seconds=63))
+            blocked = await begin(started + timedelta(seconds=64))
+            assert blocked is None
+            with Session(postgres_harness.engine) as database:
+                exhausted = database.get(EmailLoginCode, first.challenge_id)
+                assert exhausted is not None
+                assert exhausted.failed_attempts == EMAIL_LOGIN_ATTEMPT_LIMIT
+                assert exhausted.consumed_at is not None
+            reset = await begin(started + EMAIL_LOGIN_SEND_WINDOW + timedelta(seconds=1))
+            assert reset is not None
+            assert reset.challenge_id == first.challenge_id
+            with Session(postgres_harness.engine) as database:
+                restarted = database.get(EmailLoginCode, first.challenge_id)
+                assert restarted is not None
+                assert restarted.failed_attempts == 0
+                assert restarted.sends_in_window == 1
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_requires_age_attestation_for_eligibility_but_not_verified_sign_in(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        secret = "postgres-email-age-secret-long-enough-for-hmac-and-aes"  # noqa: S105
+        consent_version = "email-age-consent-v2"
+        now = datetime.now(UTC)
+        new_email = f"email-age-new-{uuid4().hex}@example.test"
+        pending_person_id = uuid4()
+        pending_email = f"email-age-pending-{pending_person_id.hex}@example.test"
+        verified_person_id = uuid4()
+        verified_email = f"email-age-verified-{verified_person_id.hex}@example.test"
+        previous_consent_time = now - timedelta(days=30)
+        challenge_id = uuid4()
+        generation_id = uuid4()
+        code = "042731"
+        pending_password_hash = hash_password("synthetic pending password phrase")
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=pending_person_id,
+                        email=pending_email,
+                        consent_version="email-age-consent-v1",
+                        consented_at=previous_consent_time,
+                    ),
+                    PasswordCredential(
+                        person_id=pending_person_id,
+                        password_hash=pending_password_hash,
+                    ),
+                    Person(
+                        id=verified_person_id,
+                        email=verified_email,
+                        email_verified_at=now - timedelta(days=30),
+                        consent_version="email-age-consent-v1",
+                        consented_at=previous_consent_time,
+                    ),
+                    EmailLoginCode(
+                        id=challenge_id,
+                        generation_id=generation_id,
+                        normalized_email=pending_email,
+                        token_hash=_code_hash(secret, pending_email, code),
+                        encrypted_code=_encrypt_code(
+                            secret,
+                            code,
+                            challenge_id=challenge_id,
+                            generation_id=generation_id,
+                            email=pending_email,
+                        ),
+                        consent_version=consent_version,
+                        issued_at=now,
+                        expires_at=now + EMAIL_LOGIN_CODE_TTL,
+                        send_window_started_at=now,
+                        sends_in_window=1,
+                    ),
+                ]
+            )
+
+        async with sessions() as database, database.begin():
+            denied = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).begin(
+                email=new_email,
+                consent_accepted=True,
+                submitted_consent_version=consent_version,
+                required_consent_version=consent_version,
+            )
+            assert denied is None
+
+        with Session(postgres_harness.engine) as database:
+            assert (
+                database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == new_email)
+                )
+                is None
+            )
+            credential_before = database.scalar(
+                select(PasswordCredential).where(PasswordCredential.person_id == pending_person_id)
+            )
+            assert credential_before is not None
+            assert credential_before.password_hash == pending_password_hash
+            pending_credential_id = credential_before.id
+
+        async with sessions() as database, database.begin():
+            denied = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).verify(
+                email=pending_email,
+                code=code,
+                required_consent_version=consent_version,
+                now=now + timedelta(seconds=1),
+            )
+            assert denied.person is None
+
+        with Session(postgres_harness.engine) as database:
+            pending_person = database.get(Person, pending_person_id)
+            assert pending_person is not None
+            assert pending_person.email_verified_at is None
+            assert pending_person.consent_version == "email-age-consent-v1"
+            assert pending_person.consented_at == previous_consent_time
+            credential_after = database.get(PasswordCredential, pending_credential_id)
+            assert credential_after is not None
+            assert credential_after.person_id == pending_person_id
+            assert credential_after.password_hash == pending_password_hash
+            legacy_challenge = database.get(EmailLoginCode, challenge_id)
+            assert legacy_challenge is not None
+            assert legacy_challenge.age_attested is False
+            assert legacy_challenge.consumed_at is not None
+
+        async with sessions() as database, database.begin():
+            issued = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).begin(
+                email=verified_email,
+                consent_accepted=False,
+                submitted_consent_version=None,
+                required_consent_version=consent_version,
+                now=now,
+            )
+            assert issued is not None
+            challenge = await database.scalar(
+                select(EmailLoginCode).where(EmailLoginCode.normalized_email == verified_email)
+            )
+            assert challenge is not None
+            verified_code = decrypt_email_login_code(
+                secret,
+                challenge,
+                generation_id=challenge.generation_id,
+            )
+            signed_in = await EmailLoginCodeService(
+                database,
+                challenge_secret=secret,
+            ).verify(
+                email=verified_email,
+                code=verified_code,
+                required_consent_version=consent_version,
+                now=now + timedelta(seconds=1),
+            )
+            assert signed_in.person is not None
+            assert signed_in.person.id == verified_person_id
+            assert signed_in.learner_provisioning_required is False
+            assert signed_in.consent_audit_required is False
+            assert signed_in.previous_consent_version is None
+            assert signed_in.previous_consented_at is None
+
+        with Session(postgres_harness.engine) as database:
+            verified_person = database.get(Person, verified_person_id)
+            assert verified_person is not None
+            assert verified_person.email_verified_at == now - timedelta(days=30)
+            assert verified_person.consent_version == "email-age-consent-v1"
+            assert verified_person.consented_at == previous_consent_time
+        await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_reclaim_cancels_unverified_password_credentials_and_sessions(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        person_id = uuid4()
+        email = f"email-reclaim-{person_id.hex}@example.test"
+        consent_version = "email-reclaim-consent-v1"
+        previous_consent_version = "email-reclaim-consent-v0"
+        now = datetime.now(UTC)
+        previous_consent_time = now - timedelta(days=30)
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"email-reclaim-public-{public_tenant_id.hex}",
+                        name="Email reclaim public tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"email-reclaim-ops-{operations_tenant_id.hex}",
+                        name="Email reclaim operations tenant",
+                    ),
+                    Person(
+                        id=person_id,
+                        email=email,
+                        email_verified_at=None,
+                        consent_version=previous_consent_version,
+                        consented_at=previous_consent_time,
+                    ),
+                ]
+            )
+            database.flush()
+            database.add(
+                PasswordCredential(
+                    person_id=person_id,
+                    password_hash=hash_password("attacker-known-password-phrase"),
+                )
+            )
+            database.add_all(
+                [
+                    EmailChallenge(
+                        id=uuid4(),
+                        person_id=person_id,
+                        kind=EmailChallengeKind.VERIFICATION.value,
+                        token_hash=hashlib.sha256(b"old-verification-token").digest(),
+                        encrypted_token="opaque-verification-token",  # noqa: S106
+                        issued_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(minutes=9),
+                    ),
+                    EmailChallenge(
+                        id=uuid4(),
+                        person_id=person_id,
+                        kind=EmailChallengeKind.PASSWORD_RESET.value,
+                        token_hash=hashlib.sha256(b"old-reset-token").digest(),
+                        encrypted_token="opaque-reset-token",  # noqa: S106
+                        issued_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(minutes=9),
+                    ),
+                    IdentitySession(
+                        id=uuid4(),
+                        person_id=person_id,
+                        token_hash=hashlib.sha256(b"old-unverified-session").digest(),
+                        created_at=now - timedelta(minutes=1),
+                        expires_at=now + timedelta(days=1),
+                        audience="account",
+                    ),
+                ]
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        async with sessions() as database, database.begin():
+            await AuditRepository(database).append(
+                tenant_id=public_tenant_id,
+                actor_person_id=person_id,
+                action="identity.learner_consent_accepted.v1",
+                resource_type="person_consent",
+                resource_id=person_id,
+                payload={
+                    "consent_version": previous_consent_version,
+                    "previous_consent_version": None,
+                    "previous_consented_at": None,
+                    "explicit_acceptance": True,
+                    "age_attestation": "18_plus_learner_declaration",
+                    "terms_path": "/terms",
+                    "privacy_path": "/privacy",
+                    "accepted_via": "password_registration",
+                },
+                reason="Prior learner consent accepted during synthetic setup.",
+                now=previous_consent_time,
+            )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+
+        def client() -> httpx.AsyncClient:
+            return httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+                base_url=origin,
+            )
+
+        requester, verifier = client(), client()
+        try:
+            request = await requester.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "consent": True,
+                    "consent_version": consent_version,
+                    "age_attested": True,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                challenge = database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == email)
+                )
+                assert challenge is not None
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    challenge,
+                    generation_id=challenge.generation_id,
+                )
+            response = await verifier.post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": email,
+                    "code": code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert response.status_code == 200
+            assert response.json()["account_created"] is False
+            assert response.json()["person_id"] == str(person_id)
+            me = await verifier.get("/v1/me")
+            assert me.status_code == 200
+            assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+            assert me.json()["membership_role"] == "learner"
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.email_verified_at is not None
+                assert person.consent_version == consent_version
+                assert person.consented_at is not None
+                membership = database.get(Membership, (public_tenant_id, person_id))
+                assert membership is not None
+                assert membership.role == "learner" and membership.status == "active"
+                assert (
+                    database.scalar(
+                        select(PasswordCredential).where(PasswordCredential.person_id == person_id)
+                    )
+                    is None
+                )
+                old_challenges = list(
+                    database.scalars(
+                        select(EmailChallenge).where(EmailChallenge.person_id == person_id)
+                    )
+                )
+                assert len(old_challenges) == 2
+                assert all(item.consumed_at is not None for item in old_challenges)
+                old_session = database.scalar(
+                    select(IdentitySession).where(
+                        IdentitySession.person_id == person_id,
+                        IdentitySession.revocation_reason == "email_login_identity_reclaimed",
+                    )
+                )
+                assert old_session is not None
+                audit = database.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.tenant_id == operations_tenant_id,
+                        AuditEvent.action == "identity.email_login_unverified_credential_reclaimed",
+                        AuditEvent.resource_id == str(person_id),
+                    )
+                )
+                assert audit is not None
+                assert audit.payload == {
+                    "password_credential_removed": True,
+                    "email_challenges_consumed": 2,
+                    "sessions_revoked": 1,
+                }
+                consent_history = list(
+                    database.scalars(
+                        select(AuditEvent)
+                        .where(
+                            AuditEvent.tenant_id == public_tenant_id,
+                            AuditEvent.actor_person_id == person_id,
+                            AuditEvent.action == "identity.learner_consent_accepted.v1",
+                            AuditEvent.resource_type == "person_consent",
+                            AuditEvent.resource_id == str(person_id),
+                        )
+                        .order_by(AuditEvent.sequence_no)
+                    )
+                )
+                assert len(consent_history) == 2
+                assert consent_history[0].payload["consent_version"] == previous_consent_version
+                assert consent_history[1].occurred_at == person.consented_at
+                assert consent_history[1].payload["consent_version"] == consent_version
+                assert (
+                    consent_history[1].payload["previous_consent_version"]
+                    == previous_consent_version
+                )
+                assert (
+                    consent_history[1].payload["previous_consented_at"]
+                    == previous_consent_time.isoformat()
+                )
+                assert consent_history[1].payload["accepted_via"] == "email_otp"
+                assert consent_history[1].payload["age_attestation"] == (
+                    "18_plus_learner_declaration"
+                )
+            async with async_sessionmaker(async_engine)() as database, database.begin():
+                try:
+                    await PasswordIdentityService(
+                        database,
+                        token_secret=settings.email_challenge_secret.get_secret_value(),
+                    ).authenticate(
+                        email=email,
+                        password="attacker-known-password-phrase",  # noqa: S106
+                    )
+                except InvalidPasswordCredentials:
+                    pass
+                else:
+                    pytest.fail("the reclaimed unverified password authenticated")
+        finally:
+            await requester.aclose()
+            await verifier.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_email_login_never_authenticates_privileged_membership(postgres_harness: _Harness) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        operations_tenant_id = uuid4()
+        privileged_tenant_id = uuid4()
+        privileged_id = uuid4()
+        pending_id = uuid4()
+        privileged_email = f"otp-admin-{privileged_id.hex}@example.test"
+        pending_email = f"otp-pending-admin-{pending_id.hex}@example.test"
+        consent_version = "email-admin-consent-v1"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"otp-admin-public-{public_tenant_id.hex}",
+                        name="Email OTP public tenant",
+                    ),
+                    Tenant(
+                        id=operations_tenant_id,
+                        slug=f"otp-admin-ops-{operations_tenant_id.hex}",
+                        name="Email OTP operations tenant",
+                    ),
+                    Tenant(
+                        id=privileged_tenant_id,
+                        slug=f"otp-admin-privileged-{privileged_tenant_id.hex}",
+                        name="Email OTP privileged tenant",
+                    ),
+                    Person(
+                        id=privileged_id,
+                        email=privileged_email,
+                        email_verified_at=datetime.now(UTC),
+                    ),
+                    Person(
+                        id=pending_id,
+                        email=pending_email,
+                        email_verified_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            database.flush()
+            database.add(
+                Membership(
+                    tenant_id=privileged_tenant_id,
+                    person_id=privileged_id,
+                    role=MembershipRole.ADMIN.value,
+                    status=MembershipStatus.ACTIVE.value,
+                )
+            )
+        settings = _email_code_settings(
+            postgres_harness.schema_url,
+            public_tenant_id=public_tenant_id,
+            operations_tenant_id=operations_tenant_id,
+            consent_version=consent_version,
+        )
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=async_sessionmaker(async_engine, expire_on_commit=False),
+        )
+        origin = "https://salesxray.authorityclosers.test"
+        client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=application, client=("127.0.0.1", 12345)),
+            base_url=origin,
+        )
+        try:
+            privileged_request = await client.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={"email": privileged_email, "surface": "sales_xray"},
+            )
+            assert privileged_request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                assert (
+                    database.scalar(
+                        select(EmailLoginCode).where(
+                            EmailLoginCode.normalized_email == privileged_email
+                        )
+                    )
+                    is None
+                )
+            pending_request = await client.post(
+                "/v1/auth/email-code/request",
+                headers={"Origin": origin},
+                json={"email": pending_email, "surface": "sales_xray"},
+            )
+            assert pending_request.status_code == 202
+            with Session(postgres_harness.engine) as database:
+                pending_challenge = database.scalar(
+                    select(EmailLoginCode).where(EmailLoginCode.normalized_email == pending_email)
+                )
+                assert pending_challenge is not None
+                code = decrypt_email_login_code(
+                    settings.email_challenge_secret.get_secret_value(),
+                    pending_challenge,
+                    generation_id=pending_challenge.generation_id,
+                )
+            # Privilege is rechecked at consume time, not just when the email
+            # is queued, so a newly granted admin role cannot inherit OTP auth.
+            with Session(postgres_harness.engine) as database, database.begin():
+                database.add(
+                    Membership(
+                        tenant_id=privileged_tenant_id,
+                        person_id=pending_id,
+                        role=MembershipRole.OWNER.value,
+                        status=MembershipStatus.ACTIVE.value,
+                    )
+                )
+            denied = await client.post(
+                "/v1/auth/email-code/verify",
+                headers={"Origin": origin},
+                json={
+                    "email": pending_email,
+                    "code": code,
+                    "surface": "sales_xray",
+                    "return_path": "/",
+                },
+            )
+            assert denied.status_code == 400
+            assert "set-cookie" not in denied.headers
+            with Session(postgres_harness.engine) as database:
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id.in_((privileged_id, pending_id)))
+                    )
+                    == 0
+                )
+                consumed = database.get(EmailLoginCode, pending_challenge.id)
+                assert consumed is not None
+                assert consumed.consumed_at is not None
+        finally:
+            await client.aclose()
+            await async_engine.dispose()
 
     _run_async(scenario())
 
@@ -489,7 +1418,12 @@ def test_password_identity_recovery_and_onboarding_on_fresh_postgresql(
                 )
                 assert committed_response.status_code == 200
                 assert concurrent_replay.status_code == 200
-                assert concurrent_replay.json() == committed_response.json()
+                replayed_state = concurrent_replay.json()
+                committed_state = committed_response.json()
+                replayed_updated_at = datetime.fromisoformat(replayed_state.pop("updated_at"))
+                committed_updated_at = datetime.fromisoformat(committed_state.pop("updated_at"))
+                assert replayed_state == committed_state
+                assert replayed_updated_at == committed_updated_at
                 del committed_response  # The server committed, but the caller lost the response.
 
                 profile = await client.put(
@@ -1043,7 +1977,14 @@ def test_existing_google_registration_records_first_consent_and_enables_password
                     assert person.consent_version == consent_version
                     assert person.consented_at is not None
                     assert database.get(Membership, (public_tenant_id, person_id)) is not None
-                    assert database.get(PasswordCredential, person_id) is None
+                    assert (
+                        database.scalar(
+                            select(PasswordCredential).where(
+                                PasswordCredential.person_id == person_id
+                            )
+                        )
+                        is None
+                    )
 
                 recovery = await client.post(
                     "/v1/auth/password/recovery",
@@ -1270,6 +2211,7 @@ def test_concurrent_existing_google_registrations_share_one_canonical_person(
 
 def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
     postgres_harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def scenario() -> None:
         public_tenant_id = uuid4()
@@ -1287,6 +2229,30 @@ def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
         async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
         sessions = async_sessionmaker(async_engine, expire_on_commit=False)
         provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+
+        original_lookup = AsyncSqlAlchemyIdentityRepository.find_provider_identities
+        absent_lookups = 0
+        both_observed_absent = asyncio.Event()
+
+        async def synchronize_absent_lookup(self, issuer: str, subject: str):
+            nonlocal absent_lookups
+            matches = await original_lookup(self, issuer, subject)
+            if (
+                issuer == "https://accounts.google.com"
+                and subject == provider_subject
+                and not matches
+            ):
+                absent_lookups += 1
+                if absent_lookups == 2:
+                    both_observed_absent.set()
+                await asyncio.wait_for(both_observed_absent.wait(), timeout=5)
+            return matches
+
+        monkeypatch.setattr(
+            AsyncSqlAlchemyIdentityRepository,
+            "find_provider_identities",
+            synchronize_absent_lookup,
+        )
         settings = Settings(
             environment="test",
             database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
@@ -1348,6 +2314,11 @@ def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
                 timeout=10,
             )
             assert sorted(response.status_code for response in callbacks) == [303, 409]
+            assert absent_lookups == 2
+            assert sorted([(await client.get("/v1/me")).status_code for client in clients]) == [
+                200,
+                401,
+            ]
 
             with Session(postgres_harness.engine) as database:
                 people = list(

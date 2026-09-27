@@ -19,7 +19,8 @@ import re
 import stat
 import sys
 import uuid
-from pathlib import Path
+from collections.abc import Callable
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 CAPABILITY_RELATIVE = {
@@ -27,6 +28,7 @@ CAPABILITY_RELATIVE = {
     "production": Path("capabilities/sales-xray-hosted-production.json"),
 }
 OVERLAY_RELATIVE = Path("compose.sales-xray-hosted.yaml")
+OPENAI_OVERLAY_RELATIVE = Path("compose.sales-xray-hosted-openai.yaml")
 MAX_CAPABILITY_BYTES = 8192
 MAX_ACTIVATION_BYTES = 64 * 1024
 MAX_ENV_BYTES = 64 * 1024
@@ -34,6 +36,13 @@ MAX_REFERENCE_BYTES = 4 * 1024 * 1024
 MAX_CHALLENGE_SECRET_BYTES = 4 * 1024
 API_UID = 10001
 API_GID = 0
+# The dedicated worker is deliberately non-root.  Its manifest is non-secret,
+# but it still has to be readable by the worker after Docker bind-mounts it.
+# Keep this as an installer contract rather than relying on whatever umask or
+# group happened to create an activation bundle.
+WORKER_UID = 10001
+WORKER_GID = 10001
+WORKER_SERVICE_MODE = 0o440
 CHALLENGE_SECRET_MODE = 0o400
 CHALLENGE_SECRET_NAME = "challenge-secret"  # noqa: S105 - basename only
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -56,6 +65,11 @@ ABSOLUTE_ENV_KEYS = {
     "AC_XRAY_CHALLENGE_SECRET_FILE",
     "AC_XRAY_INFISICAL_BINARY",
 }
+OPTIONAL_IDENTITY_ENV_KEYS = {"AC_XRAY_OPENAI_IDENTITY_DIR"}
+OPENAI_HOST_IDENTITY_DIR = "/etc/authority-closers/secrets/sales-xray/identities/openai"
+OPENAI_IDENTITY_TOKEN_NAME = "token"  # noqa: S105 - basename only
+OPENAI_IDENTITY_TOKEN_MODE = 0o400
+OPENAI_TOKEN_FILE = "/run/ac-sales-xray/identities/openai/token"  # noqa: S105 - path only
 ENV_KEYS = ABSOLUTE_ENV_KEYS | {
     "AC_XRAY_SERVICE_SHA256",
     "AC_XRAY_APPROVAL_SHA256",
@@ -149,6 +163,67 @@ def _checked_absolute(value: object, field: str) -> Path:
     return path
 
 
+def _checked_openai_identity_dir(value: object) -> PurePosixPath:
+    if not isinstance(value, str) or value != OPENAI_HOST_IDENTITY_DIR:
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    path = PurePosixPath(value)
+    host_absolute = path.is_absolute() if os.name == "posix" else Path(value).is_absolute()
+    if not host_absolute or ".." in path.parts:
+        raise _fail("OpenAI identity directory must use its dedicated host path")
+    return path
+
+
+def _validate_openai_identity_metadata(
+    path: Path, *, lstat: Callable[[Path], os.stat_result] | None = None
+) -> None:
+    """Check the dedicated host identity directory without reading its token."""
+
+    inspect = lstat or (lambda candidate: candidate.lstat())
+    for ancestor in (*reversed(path.parents), path):
+        try:
+            info = inspect(ancestor)
+        except FileNotFoundError as exc:
+            raise _fail("OpenAI identity directory or token is missing") from exc
+        except OSError as exc:
+            raise _fail("OpenAI identity metadata is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise _fail("OpenAI identity paths must not contain symbolic links")
+        if not stat.S_ISDIR(info.st_mode):
+            raise _fail("OpenAI identity path ancestor is not a directory")
+        if os.name == "posix":
+            _trusted_metadata(info, file=False)
+        if ancestor == path and os.name == "posix":
+            mode = stat.S_IMODE(info.st_mode)
+            group_traverse = info.st_gid == WORKER_GID and bool(mode & 0o010)
+            other_traverse = bool(mode & 0o001)
+            if not (group_traverse or other_traverse):
+                raise _fail("OpenAI identity directory is not traversable by the worker")
+
+    try:
+        entries = sorted(entry.name for entry in path.iterdir())
+    except OSError as exc:
+        raise _fail("OpenAI identity directory contents are unavailable") from exc
+    if entries != [OPENAI_IDENTITY_TOKEN_NAME]:
+        raise _fail("OpenAI identity directory must contain only its token file")
+    token_path = path / OPENAI_IDENTITY_TOKEN_NAME
+    try:
+        token_info = inspect(token_path)
+    except OSError as exc:
+        raise _fail("OpenAI identity token metadata is unavailable") from exc
+    if (
+        stat.S_ISLNK(token_info.st_mode)
+        or not stat.S_ISREG(token_info.st_mode)
+        or token_info.st_nlink != 1
+        or token_info.st_size <= 0
+    ):
+        raise _fail("OpenAI identity token must be a nonempty regular file")
+    if os.name == "posix" and (
+        token_info.st_uid != WORKER_UID
+        or stat.S_IMODE(token_info.st_mode) != OPENAI_IDENTITY_TOKEN_MODE
+    ):
+        raise _fail("OpenAI identity token ownership or mode is invalid")
+
+
 def _validate_challenge_secret_reference(value: object) -> None:
     """Validate the host file bind-mounted into the API without reading it."""
 
@@ -182,6 +257,84 @@ def _validate_challenge_secret_reference(value: object) -> None:
             or stat.S_IMODE(info.st_mode) != CHALLENGE_SECRET_MODE
         ):
             raise _fail("upload challenge file ownership or mode is not API-readable")
+
+
+def _repair_worker_service_metadata(path: Path) -> None:
+    """Make the non-secret worker manifest readable by UID/GID 10001.
+
+    Activation files are managed outside Git and are commonly created with a
+    root-only umask.  The release controller owns this metadata transition;
+    it does not change the manifest bytes or its digest.  Refuse symlinks,
+    non-root ownership, and unexpected file types before changing metadata.
+    """
+
+    if os.name != "posix":
+        return
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise _fail("worker service manifest metadata is unavailable") from exc
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or stat.S_ISLNK(info.st_mode)
+    ):
+        raise _fail("worker service manifest must be a root-owned regular file")
+    try:
+        os.chown(path, 0, WORKER_GID, follow_symlinks=False)
+        os.chmod(path, WORKER_SERVICE_MODE, follow_symlinks=False)
+        verified = path.lstat()
+    except OSError as exc:
+        raise _fail("worker service manifest metadata could not be repaired") from exc
+    if (
+        verified.st_uid != 0
+        or verified.st_gid != WORKER_GID
+        or stat.S_IMODE(verified.st_mode) != WORKER_SERVICE_MODE
+    ):
+        raise _fail("worker service manifest is not readable by the hosted worker")
+
+
+def _repair_approval_metadata(path: Path, expected_sha256: str) -> None:
+    """Repair only a verified approval's group/mode; preserve its exact bytes.
+
+    Both API and dedicated worker bind-mount this non-secret, root-owned file
+    and run as UID/GID 10001. Operator-group readability alone is insufficient.
+    An open descriptor keeps the checked inode bound to the metadata operation.
+    """
+
+    if os.name != "posix":
+        return
+    raw = _regular_bytes(path, MAX_REFERENCE_BYTES, trusted=True)
+    if _sha256(raw) != expected_sha256:
+        raise _fail("approval digest differs before metadata repair")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            _trusted_metadata(info, file=True)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or stream.read(MAX_REFERENCE_BYTES + 1) != raw
+            ):
+                raise _fail("approval changed before metadata repair")
+            os.fchown(stream.fileno(), 0, WORKER_GID)
+            os.fchmod(stream.fileno(), WORKER_SERVICE_MODE)
+            verified = os.fstat(stream.fileno())
+            installed = path.lstat()
+            if (
+                verified.st_uid != 0
+                or verified.st_gid != WORKER_GID
+                or stat.S_IMODE(verified.st_mode) != WORKER_SERVICE_MODE
+                or (installed.st_dev, installed.st_ino) != (verified.st_dev, verified.st_ino)
+            ):
+                raise _fail("approval metadata repair did not preserve the checked file")
+            stream.seek(0)
+            if stream.read(MAX_REFERENCE_BYTES + 1) != raw:
+                raise _fail("approval bytes changed during metadata repair")
+    except OSError as exc:
+        raise _fail("approval metadata could not be repaired") from exc
 
 
 def _release_identity(release: Path) -> str:
@@ -290,14 +443,22 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         if "=" not in line:
             raise _fail("compose environment must use assignment lines")
         key, value = line.split("=", 1)
-        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS:
+        if ENV_KEY.fullmatch(key) is None or key not in ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
             raise _fail("compose environment contains an unapproved key")
         if key in result or not value or ENV_VALUE.fullmatch(value) is None:
             raise _fail("compose environment contains a duplicate or unsafe value")
         result[key] = value
-    if set(result) != ENV_KEYS:
+    if frozenset(result) not in {
+        frozenset(ENV_KEYS),
+        frozenset(ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS),
+    }:
         raise _fail("compose environment is incomplete")
-    for key in ABSOLUTE_ENV_KEYS:
+    for key in ABSOLUTE_ENV_KEYS | OPTIONAL_IDENTITY_ENV_KEYS:
+        if key not in result:
+            continue
+        if key == "AC_XRAY_OPENAI_IDENTITY_DIR":
+            _checked_openai_identity_dir(result[key])
+            continue
         path = _checked_absolute(result[key], key)
         if ".." in path.parts:
             raise _fail(f"{key} is traversal-prone")
@@ -358,7 +519,7 @@ def _load_activation(
     release_id: str,
     environment: str,
     managed_operations_tenant: str,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     expected_keys = {
         "schema_version",
         "environment",
@@ -382,28 +543,31 @@ def _load_activation(
         value["schema_version"] != "ac.sales_xray.hosted_activation/1"
         or value["environment"] != environment
         or value["release_id"] != release_id
-        or value["compose_overlay"] != OVERLAY_RELATIVE.as_posix()
+        or value["compose_overlay"]
+        not in {
+            OVERLAY_RELATIVE.as_posix(),
+            OPENAI_OVERLAY_RELATIVE.as_posix(),
+        }
         or value["compose_profile"] != "sales-xray-hosted"
         or value["previous_release_policy"] != "exact_target_release"
     ):
         raise _fail("activation descriptor identity or policy is invalid")
-    if not isinstance(value["native_image_ref"], str) or IMAGE_REF.fullmatch(
-        value["native_image_ref"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_ref"], str)
+        or IMAGE_REF.fullmatch(value["native_image_ref"]) is None
+    ):
         raise _fail("native_image_ref must be immutable")
-    if not isinstance(value["native_image_config_id"], str) or IMAGE_REF.fullmatch(
-        value["native_image_config_id"]
-    ) is None:
+    if (
+        not isinstance(value["native_image_config_id"], str)
+        or IMAGE_REF.fullmatch(value["native_image_config_id"]) is None
+    ):
         raise _fail("native_image_config_id must be immutable")
-    if not isinstance(value["helper_unit"], str) or UNIT_NAME.fullmatch(
-        value["helper_unit"]
-    ) is None:
+    if (
+        not isinstance(value["helper_unit"], str)
+        or UNIT_NAME.fullmatch(value["helper_unit"]) is None
+    ):
         raise _fail("helper_unit must be a fixed systemd service name")
 
-    overlay = release / OVERLAY_RELATIVE
-    expected_overlay = Path(value["compose_overlay"])
-    if expected_overlay != OVERLAY_RELATIVE or not overlay.is_file() or overlay.is_symlink():
-        raise _fail("the source-owned hosted compose overlay is unavailable")
     env_path = _checked_absolute(value["compose_env_file"], "compose_env_file")
     env_raw = _regular_bytes(env_path, MAX_ENV_BYTES, trusted=True)
     if _sha256(env_raw) != _checked_sha(value["compose_env_sha256"], "compose_env_sha256"):
@@ -427,6 +591,30 @@ def _load_activation(
     if env["AC_XRAY_SERVICE_SHA256"] != value["service_config_sha256"]:
         raise _fail("service config compose digest differs from the descriptor")
     service = _json_file(service_path, MAX_REFERENCE_BYTES, trusted=True)
+    providers = service.get("providers")
+    if not isinstance(providers, list) or any(not isinstance(item, dict) for item in providers):
+        raise _fail("service provider entries are invalid")
+    has_openai = any(item.get("provider_id") == "openai" for item in providers)
+    expected_overlay = OPENAI_OVERLAY_RELATIVE if has_openai else OVERLAY_RELATIVE
+    if Path(value["compose_overlay"]) != expected_overlay:
+        raise _fail("service provider set does not match its source-owned compose overlay")
+    openai_identity_dir = env.get("AC_XRAY_OPENAI_IDENTITY_DIR")
+    if has_openai:
+        if openai_identity_dir is None:
+            raise _fail("OpenAI provider requires its separately scoped identity directory")
+        openai_path = _checked_openai_identity_dir(openai_identity_dir)
+        if os.name == "posix":
+            _validate_openai_identity_metadata(Path(str(openai_path)))
+        if any(
+            item.get("provider_id") == "openai" and item.get("token_file_ref") != OPENAI_TOKEN_FILE
+            for item in providers
+        ):
+            raise _fail("OpenAI token file must use its dedicated mounted identity path")
+    elif openai_identity_dir is not None:
+        raise _fail("OpenAI identity directory is unexpected without an OpenAI provider")
+    overlay = release / expected_overlay
+    if not overlay.is_file() or overlay.is_symlink():
+        raise _fail("the source-owned hosted compose overlay is unavailable")
     if (
         service.get("schema_version") != "ac.sales_xray.worker_service/1"
         or service.get("sales_xray_enabled") is not True
@@ -460,17 +648,24 @@ def _load_activation(
         or approval.get("environment") != environment
     ):
         raise _fail("approval is not bound to the selected environment")
-    if _checked_uuid(
-        approval.get("provider_control_tenant_id"),
-        "approval.provider_control_tenant_id",
-    ) != operations_tenant:
+    if (
+        _checked_uuid(
+            approval.get("provider_control_tenant_id"),
+            "approval.provider_control_tenant_id",
+        )
+        != operations_tenant
+    ):
         raise _fail("approval control tenant differs from service operations tenant")
     _validate_service_mode(service, env, approval)
-    return overlay, env_path
+    return overlay, env_path, service_path
 
 
 def compose_inputs(
-    release: Path, environment: str, operations_tenant_id: str | None = None
+    release: Path,
+    environment: str,
+    operations_tenant_id: str | None = None,
+    *,
+    repair_worker_metadata: bool = False,
 ) -> tuple[Path, Path, str] | None:
     capability, release_id = _load_capability(release, environment)
     if capability is None:
@@ -495,13 +690,19 @@ def compose_inputs(
     if _sha256(activation_raw) != expected_sha:
         raise _fail("activation descriptor digest differs from the release policy")
     descriptor = _json_file(activation_path, MAX_ACTIVATION_BYTES, trusted=True)
-    overlay, env_path = _load_activation(
+    overlay, env_path, service_path = _load_activation(
         descriptor,
         release,
         release_id,
         environment,
         managed_operations_tenant,
     )
+    if repair_worker_metadata:
+        _repair_approval_metadata(
+            _checked_absolute(descriptor["approval_file"], "approval_file"),
+            descriptor["approval_sha256"],
+        )
+        _repair_worker_service_metadata(service_path)
     return overlay, env_path, descriptor["compose_profile"]
 
 
@@ -511,10 +712,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("release", type=Path)
     parser.add_argument("environment", choices=("staging", "production"))
     parser.add_argument("--operations-tenant-id")
+    parser.add_argument(
+        "--repair-worker-metadata",
+        action="store_true",
+        help="repair root-owned worker manifest and approval mode/group before Compose",
+    )
     args = parser.parse_args(argv)
     try:
         result = compose_inputs(
-            args.release, args.environment, args.operations_tenant_id
+            args.release,
+            args.environment,
+            args.operations_tenant_id,
+            repair_worker_metadata=args.repair_worker_metadata,
         )
         if result is not None:
             for value in result:

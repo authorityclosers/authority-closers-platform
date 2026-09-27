@@ -1,0 +1,110 @@
+{
+  "audit_date": "2026-09-22",
+  "note": "Metadata only. Controlled source text remains in Drive.",
+  "sources": [
+    {
+      "name": "Master Index",
+      "id": "1gC6BdFZ2LfjrpjM-qPKcX1qWMTUBSAXo3b-AlaOYqus",
+      "url": "https://docs.google.com/document/d/1gC6BdFZ2LfjrpjM-qPKcX1qWMTUBSAXo3b-AlaOYqus/edit",
+      "modified_time": "2026-08-29T15:47:03.047Z",
+      "retrieved": true,
+      "chars": 15318
+    },
+    {
+      "name": "BRD",
+      "id": "1HEp7QN4u3c_636uACznnkruYHhGYHAJWXH7Dlfjybpk",
+      "url": "https://docs.google.com/document/d/1HEp7QN4u3c_636uACznnkruYHhGYHAJWXH7Dlfjybpk/edit",
+      "modified_time": "2026-08-29T15:36:36.002Z",
+      "retrieved": true,
+      "chars": 50874
+    },
+    {
+      "name": "AC-IMP-00",
+      "id": "10tKbAIJWONFNTzK2-NHffy4h1wKgoQP7VdJH_K2eR-A",
+      "url": "https://docs.google.com/document/d/10tKbAIJWONFNTzK2-NHffy4h1wKgoQP7VdJH_K2eR-A/edit",
+      "modified_time": "2026-08-29T15:41:11.058Z",
+      "retrieved": true,
+      "chars": 10397
+    },
+    {
+      "name": "AC-IMP-01",
+      "id": "1JVnCjDdE79YseM-1PuhvW00xcoicwmhoHtUvEuKKrdU",
+      "url": "https://docs.google.com/document/d/1JVnCjDdE79YseM-1PuhvW00xcoicwmhoHtUvEuKKrdU/edit",
+      "modified_time": "2026-08-29T15:42:12.874Z",
+      "retrieved": true,
+      "chars": 9673
+    },
+    {
+      "name": "AC-IMP-03",
+      "id": "1ncsRMiMMiQ39tCn7dV3vpqwUnirY06BgSuVdm_BuIFo",
+      "url": "https://docs.google.com/document/d/1ncsRMiMMiQ39tCn7dV3vpqwUnirY06BgSuVdm_BuIFo/edit",
+      "modified_time": "2026-08-29T15:44:36.317Z",
+      "retrieved": true,
+      "chars": 10994
+    },
+    {
+      "name": "AC-IMP-04",
+      "id": "1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc",
+      "url": "https://docs.google.com/document/d/1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc/edit",
+      "modified_time": "2026-08-29T15:45:40.979Z",
+      "retrieved": true,
+      "chars": 11874
+    },
+    {
+      "name": "AC-IMP-05",
+      "id": "1Vvf1wCA_JjrJQwhkTsgyDM_9179G4M899pWWc3-UdXw",
+      "url": "https://docs.google.com/document/d/1Vvf1wCA_JjrJQwhkTsgyDM_9179G4M899pWWc3-UdXw/edit",
+      "modified_time": "2026-08-29T15:46:39.231Z",
+      "retrieved": true,
+      "chars": 9455
+    },
+    {
+      "name": "AC-UXA-01",
+      "id": "1ZRyNPkkfc8DsBAlpKE9ksb6Oi-nB9BX-",
+      "url": "https://drive.google.com/file/d/1ZRyNPkkfc8DsBAlpKE9ksb6Oi-nB9BX-/view",
+      "modified_time": "2026-08-29T11:05:17.283Z",
+      "retrieved": true,
+      "chars": 104868
+    },
+    {
+      "name": "AC-SVAL-01",
+      "id": "11yOvguvLLj4WRi7-gJonWM3nSzkGk0NC",
+      "url": "https://drive.google.com/file/d/11yOvguvLLj4WRi7-gJonWM3nSzkGk0NC/view",
+      "modified_time": "2026-08-29T10:53:38.563Z",
+      "retrieved": true,
+      "chars": 54255
+    },
+    {
+      "name": "AC-GOV-AUD-001",
+      "id": "17Gs86tkRo4jr8XcqgMPyO-UojXeTANnY",
+      "url": "https://docs.google.com/document/d/17Gs86tkRo4jr8XcqgMPyO-UojXeTANnY/edit",
+      "modified_time": "2026-08-29T11:01:02.145Z",
+      "retrieved": true,
+      "chars": 63895
+    },
+    {
+      "name": "UX States",
+      "id": "10HzU7kLk78WBHd_Y23jYaP0rIaScq7gW27e5D7D-08E",
+      "url": "https://docs.google.com/document/d/10HzU7kLk78WBHd_Y23jYaP0rIaScq7gW27e5D7D-08E/edit",
+      "modified_time": "2026-08-29T15:48:06.750Z",
+      "retrieved": true,
+      "chars": 73895
+    },
+    {
+      "name": "QA",
+      "id": "1DUx9JIHNC1KCR62Qso6KTFPoBxmfhU6GSuNqSl87hBg",
+      "url": "https://docs.google.com/document/d/1DUx9JIHNC1KCR62Qso6KTFPoBxmfhU6GSuNqSl87hBg/edit",
+      "modified_time": "2026-08-29T15:49:58.526Z",
+      "retrieved": true,
+      "chars": 42030
+    },
+    {
+      "name": "DevOps",
+      "id": "1r1P2XdYSY8XhcgLR6icYqhlN1vEbqKagj8Rb16JpcJs",
+      "url": "https://docs.google.com/document/d/1r1P2XdYSY8XhcgLR6icYqhlN1vEbqKagj8Rb16JpcJs/edit",
+      "modified_time": "2026-08-29T15:49:47.442Z",
+      "retrieved": true,
+      "chars": 11422
+    }
+  ]
+}

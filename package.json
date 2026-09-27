@@ -13,6 +13,7 @@
     "dev:staging": "pwsh -NoProfile -File scripts/Start-LocalStagingBridge.ps1",
     "dev:staging:down": "pwsh -NoProfile -File scripts/Stop-LocalStagingBridge.ps1",
     "dev:sales-xray:production": "pwsh -NoProfile -File scripts/Start-LocalSalesXrayProductionBridge.ps1",
+    "dev:sales-xray:review": "pwsh -NoProfile -File scripts/Start-LocalSalesXrayProductionBridge.ps1 -ReviewOnly",
     "dev:sales-xray:production:check": "pwsh -NoProfile -File scripts/Test-LocalSalesXrayProductionBridge.ps1",
     "dev:sales-xray:production:down": "pwsh -NoProfile -File scripts/Stop-LocalSalesXrayProductionBridge.ps1",
     "dev:dependencies": "docker compose --env-file .env.example -f infra/local/compose.yaml up -d --wait",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@types/node": "24.10.1",
     "concurrently": "9.2.1",
+    "playwright": "1.58.2",
     "prettier": "3.6.2",
     "typescript": "5.9.3"
   }

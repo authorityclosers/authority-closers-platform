@@ -45,6 +45,20 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=600,
     ),
     RateLimitRule(
+        name="email-login-code-request",
+        method="POST",
+        path=re.compile(r"^/v1/auth/email-code/request$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="email-login-code-verify",
+        method="POST",
+        path=re.compile(r"^/v1/auth/email-code/verify$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="password-register",
         method="POST",
         path=re.compile(r"^/v1/auth/password/register$"),

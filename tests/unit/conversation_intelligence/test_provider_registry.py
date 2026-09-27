@@ -128,8 +128,8 @@ def test_catalog_distinguishes_current_transport_from_planned_provider_options()
     assert {view[name]["status"] for name in ("gemini", "groq", "elevenlabs", "deepgram")} == {
         "implemented"
     }
+    assert view["openai"]["status"] == "implemented"
     planned = (
-        "openai",
         "deepseek",
         "anthropic",
         "openai_compatible_gateway",
@@ -143,6 +143,16 @@ def test_catalog_distinguishes_current_transport_from_planned_provider_options()
     assert view["ollama"]["readiness"] == "planned_no_transport"
     assert view["ollama"]["deployment"] == "local"
     assert view["openai_compatible_gateway"]["deployment"] == "gateway"
+    openai_models = {model["model_id"]: model for model in view["openai"]["models"]}
+    assert set(openai_models) == {"gpt-6-luna", "gpt-6-sol", "gpt-6-astra"}
+    assert all(
+        model["endpoint"] == "https://api.openai.com/v1/responses"
+        and model["readiness"] == "request_only_account_access_unverified"
+        and {item["task"]: item["status"] for item in model["task_support"]}
+        == {"coaching": "implemented"}
+        for model in openai_models.values()
+    )
+    assert openai_models["gpt-6-luna"]["task_support"]
     scribe = next(
         model for model in view["elevenlabs"]["models"] if model["model_id"] == "scribe_v2"
     )

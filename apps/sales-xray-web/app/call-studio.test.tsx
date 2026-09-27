@@ -1,7 +1,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallStudio, type CallStudioProps } from "./call-studio";
+import {
+  CallStudio,
+  parseProcessingPlan,
+  type CallStudioProps,
+} from "./call-studio";
+import * as sourcePlaybackContext from "./source-playback-context";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -68,6 +73,14 @@ const processingPlan = {
   automatic_progression: true,
   failure_code: null,
 };
+
+it("accepts the backend repair-cost field in a processing plan", () => {
+  const parsed = parseProcessingPlan(
+    { ...processingPlan, automatic_c5_repair_cost_paise: 149 },
+    "recording-1",
+  );
+  expect(parsed.automatic_c5_repair_cost_paise).toBe(149);
+});
 const citation = { doc: "Doc-1", sections: ["source section"] };
 const dimensions = Array.from({ length: 8 }, (_, index) => ({
   dimension_id: `dimension-${index + 1}`,
@@ -359,6 +372,40 @@ afterEach(async () => {
 });
 
 describe("CallStudio", () => {
+  it("shows a canonical profile hold and stops polling the held run", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    handleApi = (path, init) =>
+      path.endsWith("/runs/run-1/report")
+        ? response({
+            id: "run-1",
+            recording_id: "recording-1",
+            state: "queued",
+            execution_hold: "account_profile_required",
+          })
+        : originalHandler(path, init);
+    await render();
+    const file = await selectAudio("held.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain(
+      "Complete your account profile to continue",
+    );
+    expect(container.querySelector(".studio-progress .spin")).toBeNull();
+    const reads = requests.filter(({ url }) =>
+      url.endsWith("/runs/run-1/report"),
+    ).length;
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+    expect(
+      requests.filter(({ url }) => url.endsWith("/runs/run-1/report")),
+    ).toHaveLength(reads);
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).toBeNull();
+  });
+
   it("uses the embedded variant for the LMS mount without its standalone header", async () => {
     await render({ homeHref: "/home", variant: "embedded" });
 
@@ -468,7 +515,7 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain("Your call is being processed");
   });
 
-  it("polls for the report, renders evidence, and seeks the local audio", async () => {
+  it("polls for the report and bounds evidence playback to its cited interval", async () => {
     vi.useFakeTimers();
     await render();
     const file = await selectAudio("seekable.wav");
@@ -537,14 +584,183 @@ describe("CallStudio", () => {
     expect(container.textContent).not.toContain("Practise:");
     const audio = container.querySelector<HTMLAudioElement>("audio");
     expect(audio).not.toBeNull();
-    if (audio)
-      Object.defineProperty(audio, "currentTime", {
-        configurable: true,
-        writable: true,
-        value: 0,
-      });
+    if (!audio) throw new Error("Missing report audio player");
+    const pause = vi.spyOn(audio, "pause").mockImplementation(() => {});
+    Object.defineProperty(audio, "currentTime", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    });
+    const play = vi.spyOn(audio, "play").mockResolvedValue();
     await act(async () => getButton("00:01").click());
-    expect(audio?.currentTime).toBe(1.5);
+    expect(audio.currentTime).toBe(1.5);
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    audio.currentTime = 2.4;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(2.2);
+    expect(pause).toHaveBeenCalledOnce();
+
+    const moment = container.querySelector<HTMLButtonElement>(".studio-moment");
+    expect(moment).not.toBeNull();
+    await act(async () => moment?.click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    expect(moment?.getAttribute("aria-pressed")).toBe("true");
+    audio.currentTime = 3.1;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.1);
+    expect(moment?.getAttribute("aria-pressed")).toBe("false");
+    expect(pause).toHaveBeenCalledOnce();
+
+    const savedRewatchEvidence = report.improvements[0].evidence[0];
+    const playWithContext = getButton("Play with context");
+    pause.mockClear();
+    const previousPlayCalls = play.mock.calls.length;
+    await act(async () => playWithContext.click());
+    expect(audio.currentTime).toBe(1);
+    expect(play).toHaveBeenCalledTimes(previousPlayCalls + 1);
+    expect(savedRewatchEvidence).toEqual({
+      segment_id: "s2",
+      start_ms: 2500,
+      end_ms: 3200,
+      quote: "What would make this useful?",
+    });
+    const revalidate = vi
+      .spyOn(sourcePlaybackContext, "revalidateContextualSourcePlayback")
+      .mockReturnValue(null);
+    await act(async () => playWithContext.click());
+    revalidate.mockRestore();
+    expect(audio.currentTime).toBe(1);
+    expect(play).toHaveBeenCalledTimes(previousPlayCalls + 1);
+    audio.currentTime = 3.2;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.2);
+    expect(pause).toHaveBeenCalledOnce();
+
+    audio.currentTime = 3.4;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    expect(audio.currentTime).toBe(3.4);
+    expect(pause).toHaveBeenCalledOnce();
+  });
+
+  it("drives the shared report clip controls from this studio's own player", async () => {
+    vi.useFakeTimers();
+    await render();
+    const file = await selectAudio("seekable.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain("Name the objection earlier");
+
+    const audio = container.querySelector<HTMLAudioElement>("audio")!;
+    let paused = true;
+    let now = 0;
+    Object.defineProperty(audio, "paused", {
+      configurable: true,
+      get: () => paused,
+    });
+    Object.defineProperty(audio, "currentTime", {
+      configurable: true,
+      get: () => now,
+      set: (value: number) => {
+        now = value;
+      },
+    });
+    const play = vi.spyOn(audio, "play").mockImplementation(async () => {
+      paused = false;
+      audio.dispatchEvent(new Event("play"));
+    });
+    const pause = vi.spyOn(audio, "pause").mockImplementation(() => {
+      paused = true;
+      audio.dispatchEvent(new Event("pause"));
+    });
+    // The saved improvement evidence is 00:02.5–00:03.2 (segment s2).
+    const clip = () =>
+      container.querySelector<HTMLButtonElement>(
+        '.evidence-time-button[aria-label*="What would make this useful?"]',
+      )!;
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    expect(play).toHaveBeenCalledOnce();
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+    expect(clip().getAttribute("data-clip-playing")).toBe("true");
+
+    // Same control pauses the one element in place, then resumes it.
+    now = 2.8;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await act(async () => clip().click());
+    await flush();
+    expect(pause).toHaveBeenCalledOnce();
+    expect(now).toBe(2.8);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+    await act(async () => clip().click());
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(now).toBe(2.8);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+
+    // A manual seek in the player is the full-recording escape.
+    now = 10;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(container.querySelector('[data-clip-playing="true"]')).toBeNull();
+
+    // After a clip completes, a manual seek back into its range and native
+    // play must not let the finished clip claim the full-recording playback.
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    now = 3.2;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await flush();
+    expect(paused).toBe(true);
+    expect(now).toBe(3.2);
+    // The studio's own end-of-clip seek is not a manual escape.
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    now = 2.8;
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await act(async () => audio.play());
+    now = 2.9;
+    await act(async () => audio.dispatchEvent(new Event("timeupdate")));
+    await flush();
+    expect(paused).toBe(false);
+    expect(container.querySelector('[data-clip-playing="true"]')).toBeNull();
+    expect(clip().getAttribute("aria-label")).toMatch(/^Play source moment/);
+    // Pressing the clip again is a fresh bounded selection from its start.
+    await act(async () => clip().click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(2.5);
+    expect(clip().getAttribute("aria-label")).toMatch(/^Pause/);
+    await act(async () => clip().click());
+    await flush();
+    expect(paused).toBe(true);
+
+    // The shared overview component's context control reads the same player.
+    await act(async () => getButton("Play with context").click());
+    await act(async () => audio.dispatchEvent(new Event("seeking")));
+    await flush();
+    expect(now).toBe(1);
+    const contextPause = container.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Pause context playback,"]',
+    );
+    expect(contextPause).not.toBeNull();
+    await act(async () => contextPause!.click());
+    await flush();
+    // Pauses: inline pause, clip end, inline pause, context pause.
+    expect(pause).toHaveBeenCalledTimes(4);
+    expect(now).toBe(1);
   });
 
   it("keeps source exploration available without technical report measurement cards", async () => {
@@ -587,20 +803,19 @@ describe("CallStudio", () => {
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 
     const evidencePanels = [
-      ...container.querySelectorAll<HTMLDetailsElement>(
-        ".studio-finding-evidence",
-      ),
+      ...container.querySelectorAll<HTMLElement>(".studio-finding-evidence"),
     ];
     expect(evidencePanels.length).toBeGreaterThan(0);
-    expect(evidencePanels.every((panel) => !panel.open)).toBe(true);
-    evidencePanels[0].open = true;
+    expect(evidencePanels.every((panel) => panel.tagName !== "DETAILS")).toBe(
+      true,
+    );
+    const quotesBeforePrint = evidencePanels.map((panel) => panel.textContent);
     await act(async () => window.dispatchEvent(new Event("beforeprint")));
     await act(async () => window.dispatchEvent(new Event("beforeprint")));
-    expect(evidencePanels.every((panel) => panel.open)).toBe(true);
     await act(async () => window.dispatchEvent(new Event("afterprint")));
-    expect(evidencePanels.filter((panel) => panel.open)).toEqual([
-      evidencePanels[0],
-    ]);
+    expect(evidencePanels.map((panel) => panel.textContent)).toEqual(
+      quotesBeforePrint,
+    );
 
     const print = vi.fn();
     Object.defineProperty(window, "print", {
@@ -927,52 +1142,74 @@ describe("CallStudio", () => {
     );
   });
 
-  it("shows held plans honestly and requires a fresh quote to resume", async () => {
-    vi.useFakeTimers();
-    const originalHandler = handleApi;
-    let planReads = 0;
-    handleApi = (path, init) => {
-      if (
-        path.endsWith("/recordings/recording-1/plan") &&
-        init.method !== "POST"
-      ) {
-        planReads += 1;
-        if (planReads >= 1)
-          return response({
-            ...processingPlan,
-            accepted: true,
-            state: "held",
-            current_stage: "C4",
-            failure_code: "provider_timeout",
-          });
-      }
-      return originalHandler(path, init);
-    };
-    await render();
-    const file = await selectAudio("held-plan.wav");
-    await prepareAndAuthorize(file);
-    await act(async () => getButton("Upload and measure privately").click());
-    await flush();
-    await act(async () => vi.advanceTimersByTimeAsync(2500));
-    await flush();
-    await acceptProcessingPlan();
-    await act(async () => vi.advanceTimersByTimeAsync(2500));
-    await flush();
+  it.each(["provider_timeout", "account_profile_required"])(
+    "shows %s holds without polling or unauthorized retries",
+    async (failureCode) => {
+      vi.useFakeTimers();
+      const originalHandler = handleApi;
+      let planReads = 0;
+      handleApi = (path, init) => {
+        if (
+          path.endsWith("/recordings/recording-1/plan") &&
+          init.method !== "POST"
+        ) {
+          planReads += 1;
+          if (planReads >= 1)
+            return response({
+              ...processingPlan,
+              accepted: true,
+              state: "held",
+              current_stage: "C4",
+              failure_code: failureCode,
+            });
+        }
+        return originalHandler(path, init);
+      };
+      await render();
+      const file = await selectAudio("held-plan.wav");
+      await prepareAndAuthorize(file);
+      await act(async () => getButton("Upload and measure privately").click());
+      await flush();
+      await act(async () => vi.advanceTimersByTimeAsync(2500));
+      await flush();
+      await acceptProcessingPlan();
+      await act(async () => vi.advanceTimersByTimeAsync(2500));
+      await flush();
 
-    expect(container.textContent).toContain("report needs a fresh plan");
-    expect(container.textContent).toContain("Processing is paused");
-    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
-      null,
-    );
-    await act(async () => getButton("Request a fresh plan").click());
-    await flush();
-    expect(
-      requests.filter((request) =>
-        request.url.endsWith("/recordings/recording-1/plan/quote"),
-      ),
-    ).toHaveLength(2);
-    expect(container.textContent).toContain("Your approved report plan");
-  });
+      expect(container.textContent).toContain("Processing is paused");
+      expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+        null,
+      );
+      const heldReads = planReads;
+      await act(async () => vi.advanceTimersByTimeAsync(30_000));
+      expect(planReads).toBe(heldReads);
+      if (failureCode === "account_profile_required") {
+        expect(container.textContent).toContain(
+          "Complete your account profile to continue",
+        );
+        expect(container.textContent).toContain(
+          "Your approved plan and completed work are saved",
+        );
+        expect(container.textContent).not.toContain("Request a fresh plan");
+        expect(container.querySelector(".studio-progress .spin")).toBeNull();
+        expect(
+          requests.filter((request) =>
+            request.url.endsWith("/recordings/recording-1/plan/quote"),
+          ),
+        ).toHaveLength(1);
+        return;
+      }
+      expect(container.textContent).toContain("report needs a fresh plan");
+      await act(async () => getButton("Request a fresh plan").click());
+      await flush();
+      expect(
+        requests.filter((request) =>
+          request.url.endsWith("/recordings/recording-1/plan/quote"),
+        ),
+      ).toHaveLength(2);
+      expect(container.textContent).toContain("Your approved report plan");
+    },
+  );
 
   it("shows a funded upper limit and requires explicit cost consent", async () => {
     vi.useFakeTimers();
@@ -1262,6 +1499,7 @@ describe("CallStudio", () => {
   it.each(["audioatlas-48000-v1", "audioatlas-16000-v1"] as const)(
     "opens a saved %s recording, binds its report, and returns to the saved draft",
     async (recipeRevision) => {
+      const recovered = recipeRevision === "audioatlas-16000-v1";
       const originalHandler = handleApi;
       const savedRecording = {
         id: "recording-1",
@@ -1292,6 +1530,17 @@ describe("CallStudio", () => {
             state: "completed",
             message: "Saved report ready.",
             report,
+            ...(recovered
+              ? {
+                  recovery: {
+                    version: 2,
+                    validation_state: "corrected",
+                    provider_calls: 0,
+                    human_approved: false,
+                    official_score: false,
+                  },
+                }
+              : {}),
           });
         return originalHandler(path, init);
       };
@@ -1308,6 +1557,14 @@ describe("CallStudio", () => {
       expect(container.textContent).toContain(
         "Speaker labels remain unverified.",
       );
+      if (recovered) {
+        expect(container.textContent).toContain("Recovered draft · version 2");
+        expect(container.textContent).toContain(
+          "not a new analysis or a human-approved assessment",
+        );
+      } else {
+        expect(container.textContent).not.toContain("Recovered draft");
+      }
       expect(container.querySelector("audio")?.getAttribute("src")).toBe(
         "/v1/conversation/recordings/recording-1/source",
       );

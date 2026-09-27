@@ -148,7 +148,9 @@ def test_total_envelope_stays_below_ten_rupees_and_rejects_one_byte_over():
 def test_large_complete_source_is_rejected_without_silent_turn_truncation():
     transcript = _transcript(count=200)
     for segment in transcript["segments"]:
-        segment["text"] = "Original source words. " * 30
+        # Exceed the new structured 256k envelope; long calls below it are
+        # admitted losslessly by test_long_coaching_budget.
+        segment["text"] = "Original source words. " * 60
     before = deepcopy(transcript)
     packet = reports.parse_fact_packet({"observations": [], "uncertainties": []}, transcript)
     with pytest.raises(reports.ReportError, match="report_prompt_budget_exceeded"):

@@ -30,6 +30,9 @@ from typing import Any, Protocol, cast
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.entitlements import Reservation
+from ac_platform.conversation_intelligence.provider_failure_observation import (
+    ProviderFailureObservation,
+)
 from ac_platform.conversation_intelligence.providers import (
     MAX_AUDIO_BYTES,
     MAX_JSON_BYTES,
@@ -97,6 +100,7 @@ _STABLE_ERROR_CODES = frozenset(
         "provider_response_too_large",
         "provider_source_binding_mismatch",
         "provider_transport_or_response_failed",
+        "provider_usage_invalid",
     }
 )
 
@@ -107,6 +111,7 @@ _CREDENTIAL_ENV = {
     "deepgram": "DEEPGRAM_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
 }
 _PROVIDER_ENV_NAMES = frozenset(_CREDENTIAL_ENV.values())
 _RUNTIME_ENV_NAMES = frozenset(
@@ -130,13 +135,19 @@ _RUNTIME_ENV_NAMES = frozenset(
 class InferenceBrokerError(ValueError):
     """Stable local error code; no source, response, path or credential text."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        failure_observation: ProviderFailureObservation | None = None,
+    ) -> None:
         lowered = code.lower() if isinstance(code, str) else ""
         if not _is_stable_error_code(code) or any(
             marker in lowered for marker in ("secret", "password", "bearer", "api_key")
         ):
             code = "broker_failed"
         self.code = code
+        self.failure_observation = failure_observation
         super().__init__(code)
 
 
@@ -768,9 +779,20 @@ def _decode_frame(frame: bytes, *, maximum_payload: int) -> tuple[dict[str, Any]
     header_end = _FRAME_LENGTH.size + header_length
     if len(frame) < header_end:
         raise InferenceBrokerError("broker_frame_invalid")
+
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate frame key")
+            result[key] = value
+        return result
+
     try:
-        header = json.loads(frame[_FRAME_LENGTH.size : header_end])
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, TypeError):
+        header = json.loads(
+            frame[_FRAME_LENGTH.size : header_end], object_pairs_hook=reject_duplicate_keys
+        )
+    except (UnicodeDecodeError, ValueError, RecursionError, TypeError):
         raise InferenceBrokerError("broker_frame_invalid") from None
     if not isinstance(header, dict):
         raise InferenceBrokerError("broker_frame_invalid")
@@ -878,7 +900,12 @@ def _decode_response(
         raise InferenceBrokerError("broker_response_invalid")
     status = header.get("status")
     if status == "error":
-        if set(header) != {"schema", "kind", "status", "error_code", "payload_len"}:
+        base_error_fields = {"schema", "kind", "status", "error_code", "payload_len"}
+        observed_error_fields = base_error_fields | {"failure_observation"}
+        if frozenset(header) not in {
+            frozenset(base_error_fields),
+            frozenset(observed_error_fields),
+        }:
             raise InferenceBrokerError("broker_response_invalid")
         if header.get("payload_len") != 0:
             raise InferenceBrokerError("broker_response_invalid")
@@ -890,7 +917,27 @@ def _decode_response(
         lowered = code.lower()
         if any(marker in lowered for marker in ("secret", "password", "bearer", "api_key")):
             raise InferenceBrokerError("broker_child_failed")
-        raise InferenceBrokerError(code)
+        observation: ProviderFailureObservation | None = None
+        if "failure_observation" in header:
+            try:
+                observation = ProviderFailureObservation.from_dict(header["failure_observation"])
+            except (TypeError, ValueError):
+                raise InferenceBrokerError("broker_response_invalid") from None
+            quote = reservation.quote
+            expected_input = hashlib.sha256(payload).hexdigest()
+            if (
+                code != f"provider_http_{observation.http_status}"
+                or observation.reservation_id != reservation.reservation_id
+                or observation.attempt_id != reservation.attempt_id
+                or observation.quote_fingerprint != quote.fingerprint
+                or observation.provider != quote.provider_id
+                or observation.model != quote.provider_model
+                or observation.operation != quote.operation
+                or observation.input_sha256 != expected_input
+                or observation.input_sha256 != quote.input_sha256
+            ):
+                raise InferenceBrokerError("broker_response_invalid")
+        raise InferenceBrokerError(code, failure_observation=observation)
     if status != "ok" or set(header) != expected_success:
         raise InferenceBrokerError("broker_response_invalid")
     quote = reservation.quote
@@ -1039,20 +1086,41 @@ class ProcessInferenceBroker:
         )
 
 
-def _child_response_error(code: str) -> bytes:
+def _child_response_error(
+    code: str,
+    failure_observation: ProviderFailureObservation | None = None,
+) -> bytes:
     safe_code = code if _is_stable_error_code(code) else "broker_child_failed"
     if any(marker in safe_code.lower() for marker in ("secret", "password", "bearer", "api_key")):
         safe_code = "broker_child_failed"
-    return _encode_frame(
-        {
-            "schema": BROKER_SCHEMA,
-            "kind": "response",
-            "status": "error",
-            "error_code": safe_code,
-            "payload_len": 0,
-        },
-        b"",
-    )
+    header: dict[str, Any] = {
+        "schema": BROKER_SCHEMA,
+        "kind": "response",
+        "status": "error",
+        "error_code": safe_code,
+        "payload_len": 0,
+    }
+    if (
+        isinstance(failure_observation, ProviderFailureObservation)
+        and safe_code == f"provider_http_{failure_observation.http_status}"
+    ):
+        header["failure_observation"] = failure_observation.as_dict()
+    return _encode_frame(header, b"")
+
+
+def _provider_error_code_or_dispatch_failed(error: ProviderError) -> str:
+    """Carry only a stable provider code across the child process boundary."""
+
+    # ProviderError deliberately has no public code attribute.  Its first
+    # argument is a code for the in-tree provider implementation, but an
+    # adapter may still raise it with remote/free-form text.  Never serialize
+    # that text: accept exactly one string that is already in the broker's
+    # stable allowlist and collapse everything else to the old generic code.
+    args = tuple(error.args)
+    candidate: object = next(iter(args), None) if len(args) == 1 else None
+    if isinstance(candidate, str) and _is_stable_error_code(candidate):
+        return candidate
+    return "provider_dispatch_failed"
 
 
 def _child_execute(frame: bytes) -> bytes:
@@ -1154,7 +1222,11 @@ def _child_execute(frame: bytes) -> bytes:
         )
     except InferenceBrokerError as error:
         return _child_response_error(error.code)
-    except (ProviderError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except ProviderError as error:
+        return _child_response_error(
+            _provider_error_code_or_dispatch_failed(error), error.failure_observation
+        )
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
         return _child_response_error("provider_dispatch_failed")
     except Exception:
         return _child_response_error("broker_child_failed")

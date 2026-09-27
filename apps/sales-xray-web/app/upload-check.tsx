@@ -33,6 +33,7 @@ export function UploadCheck({
     let disposed = false;
     let id: string | undefined;
     let script: HTMLScriptElement | undefined;
+    let tokenReceived = false;
     const render = () => {
       if (disposed || !container.current || !window.turnstile) return;
       id = window.turnstile.render(container.current, {
@@ -43,14 +44,19 @@ export function UploadCheck({
         "response-field": false,
         callback: (token: string) => {
           if (disposed) return;
+          tokenReceived = token.length > 0;
           setError(false);
           callback.current(token);
         },
         "expired-callback": () => {
-          if (!disposed) callback.current("");
+          if (!disposed) {
+            tokenReceived = false;
+            callback.current("");
+          }
         },
         "error-callback": () => {
           if (disposed) return;
+          tokenReceived = false;
           callback.current("");
           setError(true);
         },
@@ -73,7 +79,10 @@ export function UploadCheck({
       document.head.appendChild(script);
     }
     const timeout = setTimeout(() => {
-      if (!id) failed();
+      // A rendered iframe is not proof that Turnstile returned a token. If a
+      // managed challenge stalls, give the user a visible retry instead of
+      // leaving the Analyse button disabled indefinitely.
+      if (!tokenReceived) failed();
     }, 20000);
     return () => {
       disposed = true;

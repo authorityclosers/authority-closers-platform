@@ -10,9 +10,11 @@ import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.identity.email_login import _encrypt_code
 from ac_platform.identity.models import (
     EmailChallenge,
     EmailChallengeKind,
+    EmailLoginCode,
     Person,
     PersonStatus,
 )
@@ -34,6 +36,8 @@ from ac_platform.providers import (
 )
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryRecorder
 from ac_platform.worker import (
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_REQUEST_JOB,
     ENROLLMENT_WELCOME_EVENT,
     ENROLLMENT_WELCOME_JOB,
     OUTBOX_JOB_ROUTES,
@@ -56,6 +60,7 @@ from ac_platform.worker import (
     DurableWorker,
     PreparedDispatch,
     UnknownJobKindError,
+    build_default_dispatcher,
 )
 
 
@@ -186,6 +191,7 @@ async def test_dispatcher_rejects_job_kinds_outside_the_exact_allowlist() -> Non
 def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> None:
     assert set(OUTBOX_JOB_ROUTES) == {
         ENROLLMENT_WELCOME_EVENT,
+        EMAIL_LOGIN_REQUEST_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
         PASSWORD_EMAIL_RESET_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
@@ -196,7 +202,9 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PASSWORD_EMAIL_RESET_EVENT_V3,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
+    assert OUTBOX_JOB_ROUTES[EMAIL_LOGIN_REQUEST_EVENT].job_kind == EMAIL_LOGIN_REQUEST_JOB
     assert ENROLLMENT_WELCOME_JOB != "email.send"
+    assert EMAIL_LOGIN_REQUEST_JOB in build_default_dispatcher(_settings()).allowed_kinds
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].allowed_payload_values["source"] == {
         "free_self",
         "manual_grant",
@@ -263,6 +271,48 @@ async def test_password_email_link_uses_fragment_and_never_exposes_token_in_requ
     assert "?token=" not in str(message.variables["action_link"])
     challenge_query = session.scalar.await_args_list[0].args[0]
     assert "email_challenges.expires_at > now()" in str(challenge_query)
+
+
+async def test_email_login_worker_resolves_only_the_current_encrypted_code_generation() -> None:
+    settings = _settings()
+    challenge_id = uuid4()
+    generation_id = uuid4()
+    email = "learner@example.test"
+    code = "042731"
+    challenge = EmailLoginCode(
+        id=challenge_id,
+        generation_id=generation_id,
+        normalized_email=email,
+        token_hash=b"x" * 32,
+        encrypted_code=_encrypt_code(
+            settings.email_challenge_secret.get_secret_value(),
+            code,
+            challenge_id=challenge_id,
+            generation_id=generation_id,
+            email=email,
+        ),
+        issued_at=datetime(2026, 8, 30, 12, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 30, 12, tzinfo=UTC) + timedelta(minutes=10),
+        send_window_started_at=datetime(2026, 8, 30, 12, tzinfo=UTC),
+        sends_in_window=1,
+    )
+    job = _job(EMAIL_LOGIN_REQUEST_JOB)
+    job.payload = {"challenge_id": str(challenge_id), "generation_id": str(generation_id)}
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.return_value = challenge
+    worker = DurableWorker(_factory(session), settings=settings)
+
+    message = await worker._resolve_message(
+        session,
+        job,
+        provider_key="identity-email-login:current-generation",
+    )
+
+    assert message.to == email
+    assert message.template == "identity-email-login-code"
+    assert message.variables["code"] == code
+    query_text = str(session.scalar.await_args.args[0])
+    assert "email_login_codes.generation_id" in query_text
 
 
 async def test_password_email_context_stays_before_fragment_and_is_worker_validated() -> None:
@@ -780,6 +830,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
     assert worker.allowed_job_kinds == frozenset(
         {
             ENROLLMENT_WELCOME_JOB,
+            EMAIL_LOGIN_REQUEST_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2,

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -16,26 +19,58 @@ from ac_platform.http.auth import RequestOriginDenied
 from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.problem import register_problem_handlers
-from ac_platform.identity.services import ProviderAuthorizationType
+from ac_platform.identity.application import ResolvedActorContext
+from ac_platform.identity.services import (
+    ProviderAuthorizationType,
+    ProviderConsentVersionConflictError,
+)
+from ac_platform.kernel.authz import ActorContext
 from tests.unit.application.test_settings import _deployment_values
 from tests.unit.http.test_auth_routes import (
     DEPLOYMENT_OAUTH_COOKIE,
     DEPLOYMENT_SESSION_COOKIE,
+    SECOND_VALID_SESSION_TOKEN,
     VALID_SESSION_TOKEN,
     _CallbackIdentityApplication,
     _client,
     _IdentityApplication,
     _LearnerProvisioningApplication,
     _RecordingProvider,
+    _RejectedProvider,
     _request_with_host_and_origin,
     _settings,
     _staging_settings,
     _SuccessfulProvider,
+    _UnavailableProvider,
 )
 
 SALES_STAGING_ORIGIN = "https://salesxray-staging.authorityclosers.com"
 SALES_PRODUCTION_ORIGIN = "https://salesxray.authorityclosers.com"
 SALES_STAGING_HOST = "salesxray-staging.authorityclosers.com"
+
+
+class _CompletionIdentityApplication(_CallbackIdentityApplication):
+    async def resolve_actor(self, token: str) -> ResolvedActorContext:
+        session_id = (
+            UUID("22222222-2222-4222-8222-222222222222")
+            if token == VALID_SESSION_TOKEN
+            else UUID("33333333-3333-4333-8333-333333333333")
+        )
+        return ResolvedActorContext(
+            actor=ActorContext(
+                person_id=UUID("11111111-1111-4111-8111-111111111111"),
+                session_id=session_id,
+                tenant_id=None,
+            ),
+            membership_role=None,
+            person_revision=1,
+            session_revision=1,
+        )
+
+
+class _ConsentConflictIdentityApplication(_IdentityApplication):
+    async def register_verified_provider(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise ProviderConsentVersionConflictError("consent projection changed")
 
 
 @pytest.fixture(autouse=True)
@@ -73,8 +108,9 @@ def _workspace_client(settings: Settings) -> TestClient:
 def _sales_start(
     client: TestClient,
     *,
-    return_path: str = "/sales-xray",
+    return_path: str | None = None,
 ) -> tuple[Any, str]:
+    return_path = return_path or f"/auth/complete?flow={uuid4()}"
     response = client.get(
         "/v1/auth/google/start",
         params={
@@ -90,6 +126,10 @@ def _sales_start(
         response.cookies[DEPLOYMENT_OAUTH_COOKIE]
     )
     return response, transaction
+
+
+def _completion_flow_id(transaction: AuthTransaction) -> UUID:
+    return UUID(parse_qs(urlsplit(transaction.return_path).query)["flow"][0])
 
 
 @pytest.mark.parametrize(
@@ -168,7 +208,7 @@ def test_sales_xray_google_start_issues_an_existing_account_transaction_for_its_
         params={
             "action": "authenticate",
             "surface": "sales_xray",
-            "return_path": "/sales-xray",
+            "return_path": f"/auth/complete?flow={uuid4()}",
         },
         headers={"host": SALES_STAGING_HOST},
         follow_redirects=False,
@@ -241,6 +281,11 @@ def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
         selected.append((token, tenant_id))
 
     monkeypatch.setattr(_IdentityApplication, "select_tenant", select_tenant)
+
+    async def append_audit(_repository, **_kwargs):
+        return None
+
+    monkeypatch.setattr(auth_module.AuditRepository, "append", append_audit)
     client = _client(settings=settings, provider=provider)
     started = client.get(
         "/v1/auth/google/start",
@@ -248,8 +293,9 @@ def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
             "action": action,
             "surface": "sales_xray",
             "consent": "true",
+            "age_attested": "true",
             "consent_version": settings.learner_consent_version,
-            "return_path": "/?report=owned-report&continue=claim",
+            "return_path": f"/auth/complete?flow={uuid4()}",
         },
         headers={"host": SALES_STAGING_HOST},
         follow_redirects=False,
@@ -261,6 +307,7 @@ def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
     )
     assert transaction.authorization_type is ProviderAuthorizationType.REGISTER
     assert transaction.consent_version == settings.learner_consent_version
+    assert transaction.age_attested is True
     callback = client.get(
         "/v1/auth/google/callback",
         params={"state": transaction.state, "code": "google-authorization-code"},
@@ -268,12 +315,13 @@ def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
         follow_redirects=False,
     )
     assert callback.status_code == 303
-    assert (
-        callback.headers["location"]
-        == SALES_STAGING_ORIGIN + "/?report=owned-report&continue=claim"
+    assert callback.headers["location"] == (
+        SALES_STAGING_ORIGIN
+        + f"/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=success"
     )
     assert selected == [(VALID_SESSION_TOKEN, settings.public_learner_tenant_id)]
     assert len(_IdentityApplication.registered_provider_calls) == 1
+    assert _IdentityApplication.registered_provider_calls[0]["allow_consent_supersession"] is True
     assert callback.cookies[DEPLOYMENT_SESSION_COOKIE] == VALID_SESSION_TOKEN
     assert provider.redirect_uris == [SALES_STAGING_ORIGIN + "/v1/auth/google/callback"]
 
@@ -291,6 +339,53 @@ def test_sales_google_registration_requires_current_consent(consent) -> None:
         headers={"host": SALES_STAGING_HOST},
         follow_redirects=False,
     )
+    assert response.status_code == 400
+    assert response.json()["code"] == "learner_consent_required"
+    assert not response.headers.get_list("set-cookie")
+
+
+def test_sales_xray_partial_checkbox_cannot_upgrade_or_create_full_learner_consent() -> None:
+    settings = _sales_staging_settings()
+    client = _client(settings=settings, provider=_RecordingProvider())
+
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "sales_xray",
+            "consent": "true",
+            "consent_version": settings.learner_consent_version,
+            "return_path": f"/auth/complete?flow={uuid4()}",
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    transaction = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).decode(
+        response.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    )
+    assert transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE
+    assert transaction.consent_version is None
+    assert transaction.age_attested is False
+
+
+def test_sales_xray_registration_rejects_old_partial_consent_form() -> None:
+    settings = _sales_staging_settings()
+    client = _client(settings=settings, provider=_RecordingProvider())
+
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "register",
+            "surface": "sales_xray",
+            "consent": "true",
+            "consent_version": settings.learner_consent_version,
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+
     assert response.status_code == 400
     assert response.json()["code"] == "learner_consent_required"
     assert not response.headers.get_list("set-cookie")
@@ -314,15 +409,14 @@ def test_sales_google_registration_rejects_missing_or_superseded_version(version
     assert not response.headers.get_list("set-cookie")
 
 
-@pytest.mark.parametrize("consent_version", [None, "superseded-version"])
-def test_sales_google_callback_rechecks_registration_consent_before_exchange(consent_version):
+def test_sales_google_callback_rejects_unsigned_full_ack_before_exchange():
     settings = _sales_staging_settings()
     provider = _SuccessfulProvider()
     transaction = AuthTransaction.issue(
         ProviderAuthorizationType.REGISTER,
         surface="sales_xray",
-        return_path="/?report=owned-report",
-        consent_version=consent_version,
+        return_path=f"/auth/complete?flow={uuid4()}",
+        consent_version="staging-test-document-v1",
     )
     encoded = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).encode(
         transaction
@@ -334,7 +428,42 @@ def test_sales_google_callback_rechecks_registration_consent_before_exchange(con
         headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
         follow_redirects=False,
     )
-    assert callback.status_code == 503
+    assert callback.status_code == 303
+    assert callback.headers["location"] == (
+        SALES_STAGING_ORIGIN
+        + f"/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=failed"
+    )
+    assert provider.redirect_uris == []
+    assert DEPLOYMENT_SESSION_COOKIE not in callback.cookies
+
+
+def test_sales_google_callback_rechecks_full_acknowledgement_version_before_exchange():
+    settings = _sales_staging_settings()
+    provider = _SuccessfulProvider()
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="sales_xray",
+        return_path=f"/auth/complete?flow={uuid4()}",
+        consent_version="superseded-version",
+        age_attested=True,
+    )
+    encoded = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).encode(
+        transaction
+    )
+    client = _client(settings=settings, provider=provider)
+
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "must-not-exchange"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"] == (
+        SALES_STAGING_ORIGIN
+        + f"/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=review_terms"
+    )
     assert provider.redirect_uris == []
     assert DEPLOYMENT_SESSION_COOKIE not in callback.cookies
 
@@ -371,8 +500,15 @@ def test_sales_xray_google_callback_rejects_cross_surface_host_or_state(
         follow_redirects=False,
     )
 
-    assert response.status_code == 400
-    assert "location" not in response.headers
+    if callback_host == SALES_STAGING_HOST:
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            SALES_STAGING_ORIGIN
+            + f"/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=failed"
+        )
+    else:
+        assert response.status_code == 400
+        assert "location" not in response.headers
     assert provider.redirect_uris == []
 
 
@@ -397,7 +533,10 @@ def test_sales_xray_google_callback_redirects_to_its_host_and_sets_host_only_ses
     )
 
     assert response.status_code == 303
-    assert response.headers["location"] == f"{SALES_STAGING_ORIGIN}/sales-xray"
+    assert response.headers["location"] == (
+        f"{SALES_STAGING_ORIGIN}/auth/complete?flow={_completion_flow_id(transaction)}"
+        "&auth_result=success"
+    )
     assert provider.redirect_uris == [f"{SALES_STAGING_ORIGIN}/v1/auth/google/callback"]
     session_cookie = next(
         value.lower()
@@ -410,6 +549,289 @@ def test_sales_xray_google_callback_redirects_to_its_host_and_sets_host_only_ses
         for attribute in ("secure", "httponly", "samesite=lax", "path=/")
     )
     assert "domain=" not in session_cookie
+    completion_cookie = next(
+        value.lower()
+        for value in response.headers.get_list("set-cookie")
+        if value.lower().startswith(f"{auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME.lower()}=")
+    )
+    assert all(
+        attribute in completion_cookie
+        for attribute in ("secure", "httponly", "samesite=lax", "path=/", "max-age=180")
+    )
+    assert "domain=" not in completion_cookie
+
+
+def test_sales_xray_completion_requires_the_matching_callback_flow_and_current_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CompletionIdentityApplication)
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    started, transaction = _sales_start(client)
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    receipt_cookie = callback.cookies[auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME]
+    matching_cookie_header = (
+        f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}; "
+        f"{auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME}={receipt_cookie}"
+    )
+
+    matched = client.post(
+        "/v1/auth/google/completion",
+        json={"flow_id": str(_completion_flow_id(transaction))},
+        headers={
+            "host": SALES_STAGING_HOST,
+            "origin": SALES_STAGING_ORIGIN,
+            "cookie": matching_cookie_header,
+        },
+    )
+    other_flow = client.post(
+        "/v1/auth/google/completion",
+        json={"flow_id": str(uuid4())},
+        headers={
+            "host": SALES_STAGING_HOST,
+            "origin": SALES_STAGING_ORIGIN,
+            "cookie": matching_cookie_header,
+        },
+    )
+    other_session = client.post(
+        "/v1/auth/google/completion",
+        json={"flow_id": str(_completion_flow_id(transaction))},
+        headers={
+            "host": SALES_STAGING_HOST,
+            "origin": SALES_STAGING_ORIGIN,
+            "cookie": (
+                f"{DEPLOYMENT_SESSION_COOKIE}={SECOND_VALID_SESSION_TOKEN}; "
+                f"{auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME}={receipt_cookie}"
+            ),
+        },
+    )
+
+    assert matched.status_code == 200
+    assert matched.json() == {"matched": True}
+    assert matched.headers["cache-control"] == "private, no-store"
+    assert other_flow.json() == {"matched": False}
+    assert other_session.json() == {"matched": False}
+
+
+def test_sales_xray_completion_rejects_missing_or_duplicated_receipt_cookie(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CompletionIdentityApplication)
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    flow_id = uuid4()
+    headers = {
+        "host": SALES_STAGING_HOST,
+        "origin": SALES_STAGING_ORIGIN,
+        "cookie": f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}",
+    }
+
+    missing = client.post(
+        "/v1/auth/google/completion",
+        json={"flow_id": str(flow_id)},
+        headers=headers,
+    )
+    duplicated = client.post(
+        "/v1/auth/google/completion",
+        json={"flow_id": str(flow_id)},
+        headers={
+            **headers,
+            "cookie": (
+                f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}; "
+                f"{auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME}=not-a-receipt; "
+                f"{auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME}=not-a-receipt"
+            ),
+        },
+    )
+
+    assert missing.status_code == 200
+    assert missing.json() == {"matched": False}
+    assert duplicated.status_code == 200
+    assert duplicated.json() == {"matched": False}
+
+
+def test_sales_xray_callback_keeps_account_specific_consent_conflicts_generic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _sales_staging_settings()
+    monkeypatch.setattr(
+        auth_module, "AsyncIdentityApplication", _ConsentConflictIdentityApplication
+    )
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="sales_xray",
+        return_path=f"/auth/complete?flow={uuid4()}",
+        consent_version=settings.learner_consent_version,
+        age_attested=True,
+    )
+    encoded = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).encode(
+        transaction
+    )
+    client = _client(settings=settings, provider=_SuccessfulProvider())
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"] == (
+        SALES_STAGING_ORIGIN
+        + f"/auth/complete?flow={_completion_flow_id(transaction)}&auth_result=failed"
+    )
+    assert DEPLOYMENT_SESSION_COOKIE not in callback.cookies
+    assert auth_module.SALES_XRAY_COMPLETION_COOKIE_NAME not in callback.cookies
+
+
+@pytest.mark.parametrize(
+    ("audit_required", "provisioning_required"),
+    [(True, True), (False, False)],
+)
+def test_email_login_audits_only_full_consent_that_establishes_eligibility(
+    monkeypatch: pytest.MonkeyPatch,
+    audit_required: bool,
+    provisioning_required: bool,
+) -> None:
+    settings = _sales_staging_settings()
+    consented_at = datetime.now(UTC)
+    person = SimpleNamespace(
+        id=UUID("11111111-1111-4111-8111-111111111111"),
+        email="learner@example.test",
+        first_name="Learner",
+        display_name=None,
+        consent_version=settings.learner_consent_version,
+        consented_at=consented_at,
+        email_verified_at=consented_at,
+    )
+    verified = SimpleNamespace(
+        person=person,
+        account_created=provisioning_required,
+        learner_provisioning_required=provisioning_required,
+        consent_audit_required=audit_required,
+        previous_consent_version="older-version" if audit_required else None,
+        previous_consented_at=consented_at if audit_required else None,
+    )
+    appended: list[dict[str, Any]] = []
+
+    class _EmailAuditIdentityApplication(_IdentityApplication):
+        async def issue_authenticated_session(self, person_id: UUID, **_kwargs: Any) -> Any:
+            assert person_id == person.id
+            return SimpleNamespace(
+                token=VALID_SESSION_TOKEN,
+                metadata=SimpleNamespace(id=UUID("22222222-2222-4222-8222-222222222222")),
+            )
+
+    class _EmailService:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
+        async def verify(self, **kwargs: Any) -> Any:
+            assert kwargs["required_consent_version"] == settings.learner_consent_version
+            return verified
+
+    async def profile(_database: Any, *, person_id: UUID) -> Any:
+        assert person_id == person.id
+        return SimpleNamespace(profile_complete=False)
+
+    async def append_audit(_repository: Any, **kwargs: Any) -> None:
+        appended.append(kwargs)
+
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _EmailAuditIdentityApplication)
+    monkeypatch.setattr(auth_module, "EmailLoginCodeService", _EmailService)
+    monkeypatch.setattr(auth_module, "get_sales_xray_profile", profile)
+    monkeypatch.setattr(auth_module.AuditRepository, "append", append_audit)
+    response = _client(settings=settings, provider=_SuccessfulProvider()).post(
+        "/v1/auth/email-code/verify",
+        headers={"host": SALES_STAGING_HOST, "origin": SALES_STAGING_ORIGIN},
+        json={"email": "learner@example.test", "code": "123456", "surface": "sales_xray"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["profile_complete"] is False
+    if audit_required:
+        assert len(appended) == 1
+        assert appended[0]["payload"] == {
+            "consent_version": settings.learner_consent_version,
+            "previous_consent_version": "older-version",
+            "previous_consented_at": consented_at.isoformat(),
+            "explicit_acceptance": True,
+            "age_attestation": "18_plus_learner_declaration",
+            "accepted_via": "email_otp",
+            "terms_path": "/terms",
+            "privacy_path": "/privacy",
+        }
+        assert appended[0]["now"] == consented_at
+    else:
+        assert appended == []
+
+
+@pytest.mark.parametrize(
+    ("provider_factory", "expected_result"),
+    [
+        (_RejectedProvider, "failed"),
+        (_UnavailableProvider, "unavailable"),
+    ],
+)
+def test_sales_xray_google_callback_returns_only_bounded_provider_result(
+    provider_factory,
+    expected_result: str,
+) -> None:
+    settings = _sales_staging_settings()
+    client = _client(settings=settings, provider=provider_factory())
+    started, transaction = _sales_start(client)
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        f"{SALES_STAGING_ORIGIN}/auth/complete?flow={_completion_flow_id(transaction)}"
+        f"&auth_result={expected_result}"
+    )
+    assert DEPLOYMENT_SESSION_COOKIE not in response.cookies
+    assert any(
+        header.lower().startswith(f'{DEPLOYMENT_OAUTH_COOKIE.lower()}=""')
+        for header in response.headers.get_list("set-cookie")
+    )
+
+
+def test_sales_xray_duplicate_callback_state_fails_without_clearing_other_tab_cookies() -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    started, transaction = _sales_start(client)
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params=[
+            ("state", transaction.state),
+            ("state", "s" * 43),
+            ("code", "google-authorization-code"),
+        ],
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        SALES_STAGING_ORIGIN + "/auth/complete?auth_result=failed"
+    )
+    assert all(
+        not header.lower().startswith(
+            (DEPLOYMENT_OAUTH_COOKIE.lower(), "__host-ac_oauth_transaction.")
+        )
+        for header in response.headers.get_list("set-cookie")
+    )
 
 
 @pytest.mark.parametrize(

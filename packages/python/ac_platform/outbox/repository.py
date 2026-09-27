@@ -100,6 +100,22 @@ def _bounded_error(error: str | BaseException, *, maximum: int = 2000) -> str:
     return sanitize_error(error, max_length=maximum)
 
 
+def _has_provider_effect_evidence(row: Job) -> bool:
+    """Return whether a job carries any durable provider-effect marker."""
+
+    return any(
+        value is not None
+        for value in (
+            row.provider_idempotency_key,
+            row.dispatch_started_at,
+            row.provider_receipt,
+            row.provider_receipt_digest,
+            row.receipt_recorded_at,
+            row.delivery_ambiguous_at,
+        )
+    )
+
+
 def _require_same_transaction_audit(
     session: AsyncSession,
     audit: AuditRepository,
@@ -2127,6 +2143,13 @@ class JobRepository:
         )
         if row.status != JobStatus.DEAD_LETTER.value:
             raise RetryNotAllowedError("only dead-letter jobs may be manually retried")
+        if _has_provider_effect_evidence(row):
+            # A generic admin retry cannot erase dispatch/receipt evidence and
+            # turn an unknown provider outcome into a new send. Typed provider
+            # reconciliation must establish the outcome before any redispatch.
+            raise ReconciliationRequiredError(
+                "provider effect evidence requires typed reconciliation before retry"
+            )
         previous_status = row.status
         prior_effect_evidence = {
             "dispatch_started_at": (

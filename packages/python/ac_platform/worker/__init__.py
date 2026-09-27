@@ -31,7 +31,18 @@ from ac_platform.conversation_intelligence.review_invitations import (
     REVIEW_INVITATION_PATH,
     decrypt_invitation_token,
 )
-from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
+from ac_platform.identity.email_login import (
+    EMAIL_LOGIN_REQUEST_EVENT,
+    EMAIL_LOGIN_REQUEST_JOB,
+    decrypt_email_login_code,
+)
+from ac_platform.identity.models import (
+    EmailChallenge,
+    EmailChallengeKind,
+    EmailLoginCode,
+    Person,
+    PersonStatus,
+)
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
     PASSWORD_EMAIL_RESET_EVENT_V2,
@@ -102,6 +113,11 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
             uuid_payload_keys=frozenset({"challenge_id"}),
+        ),
+        EMAIL_LOGIN_REQUEST_EVENT: OutboxJobRoute(
+            job_kind=EMAIL_LOGIN_REQUEST_JOB,
+            required_payload_keys=frozenset({"challenge_id", "generation_id"}),
+            uuid_payload_keys=frozenset({"challenge_id", "generation_id"}),
         ),
         REVIEW_INVITATION_EVENT: OutboxJobRoute(
             job_kind=REVIEW_INVITATION_JOB,
@@ -196,6 +212,7 @@ async def resolve_password_message(
         (candidate for candidate in OUTBOX_JOB_ROUTES.values() if candidate.job_kind == job.kind),
         None,
     )
+
     if route is None:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     payload = route.normalize_payload(job.payload)
@@ -256,6 +273,52 @@ async def resolve_password_message(
         variables={
             "first_name": person.first_name or person.display_name or "there",
             "action_link": action_link,
+            "expires_at": challenge.expires_at.isoformat(),
+        },
+        communication_class="verification_security",
+    )
+
+
+async def resolve_email_login_code_message(
+    session: AsyncSession,
+    settings: Any,
+    job: Job,
+    *,
+    provider_key: str,
+) -> EmailMessage:
+    """Resolve only the current numeric code generation for an email."""
+
+    if job.kind != EMAIL_LOGIN_REQUEST_JOB:
+        raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
+    route = OUTBOX_JOB_ROUTES[EMAIL_LOGIN_REQUEST_EVENT]
+    payload = route.normalize_payload(job.payload)
+    challenge = await session.scalar(
+        select(EmailLoginCode)
+        .where(
+            EmailLoginCode.id == UUID(payload["challenge_id"]),
+            EmailLoginCode.generation_id == UUID(payload["generation_id"]),
+            EmailLoginCode.expires_at > func.now(),
+        )
+        .with_for_update(read=True)
+    )
+    if challenge is None or challenge.consumed_at is not None:
+        raise PermanentProviderError("email login code is unavailable")
+    try:
+        code = decrypt_email_login_code(
+            settings.email_challenge_secret.get_secret_value(),
+            challenge,
+            generation_id=UUID(payload["generation_id"]),
+        )
+    except (InvalidTag, ValueError, TypeError) as error:
+        raise PermanentProviderError("email login code payload is unavailable") from error
+    return EmailMessage(
+        to=challenge.normalized_email,
+        template="identity-email-login-code",
+        template_version=1,
+        idempotency_key=provider_key,
+        variables={
+            "first_name": "there",
+            "code": code,
             "expires_at": challenge.expires_at.isoformat(),
         },
         communication_class="verification_security",
@@ -445,6 +508,7 @@ def build_default_dispatcher(
             ENROLLMENT_WELCOME_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
+            EMAIL_LOGIN_REQUEST_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB: handler,
             PASSWORD_EMAIL_RESET_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2: handler,
@@ -609,6 +673,7 @@ class DurableWorker:
                 ENROLLMENT_WELCOME_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
+                EMAIL_LOGIN_REQUEST_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB,
                 PASSWORD_EMAIL_RESET_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB_V2,
@@ -695,6 +760,13 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
+        if job.kind == EMAIL_LOGIN_REQUEST_JOB:
+            return await resolve_email_login_code_message(
+                session,
+                self._settings,
+                job,
+                provider_key=provider_key,
+            )
         if job.kind in {
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,

@@ -8,6 +8,7 @@ the worker's durable idempotency key to Resend as a second deduplication fence.
 from __future__ import annotations
 
 import html
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -166,6 +167,42 @@ def render_email(message: EmailMessage) -> RenderedEmail:
         raise PermanentProviderError("email template version is not implemented")
     first_name = _required_text(message.variables, "first_name", maximum=120)
     safe_name = html.escape(first_name)
+
+    if message.template == "identity-email-login-code":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("email sign-in code has the wrong communication class")
+        code = _required_text(message.variables, "code", maximum=6)
+        if re.fullmatch(r"[0-9]{6}", code) is None:
+            raise PermanentProviderError("email sign-in code must contain six digits")
+        expires = _expiry_label(message.variables)
+        safe_expires = html.escape(expires)
+        return RenderedEmail(
+            subject="Your Authority Closers sign-in code",
+            text=(
+                f"Hi {first_name},\n\nYour Authority Closers sign-in code is {code}. "
+                f"It expires {expires}. If you did not request this code, ignore this email."
+            ),
+            html=(
+                '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                "<title>Authority Closers sign-in code</title></head>"
+                '<body style="margin:0;padding:36px;background:#f3f6fb;color:#0f1b33;'
+                'font-family:Arial,sans-serif;"><main style="max-width:560px;margin:auto;'
+                'padding:32px;background:#fff;border:1px solid #dfe5ee;border-radius:16px;">'
+                '<p style="color:#4f46e5;font-size:12px;font-weight:700;letter-spacing:.12em;'
+                'text-transform:uppercase;">Authority Closers</p>'
+                '<h1 style="font-size:28px;">Your sign-in code</h1>'
+                f"<p>Hi {safe_name}, enter this code in the sign-in window you opened:</p>"
+                f'<p style="padding:20px;border-radius:10px;background:#f6f7ff;color:#18244a;'
+                f'font-size:32px;font-weight:800;letter-spacing:.2em;text-align:center;">{code}</p>'
+                f"<p>This code expires {safe_expires} and can be used once.</p>"
+                "<p>If you did not request this code, ignore this email. No account access "
+                "is granted by the email alone.</p>"
+                '<p style="color:#7a8495;font-size:12px;">'
+                "Transactional account-security message.</p>"
+                "</main></body></html>"
+            ),
+        )
 
     if message.template == "identity-email-verification":
         if message.communication_class != "verification_security":

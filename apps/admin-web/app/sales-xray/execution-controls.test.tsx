@@ -83,6 +83,36 @@ it("does not show an unconfirmed save as success or enable another mutation", as
   expect(host.textContent).not.toContain("New analysis is paused");
 });
 
+it.each(["expired", "malformed"])(
+  "keeps pause available when the budget response is %s",
+  async (failure) => {
+    let paused = false;
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      if (url === "/v1/admin/conversation/budget")
+        return failure === "expired" ? json({}, 503) : json({ invalid: true });
+      if (init.method === "POST") {
+        paused = true;
+        return json({ ...control, revision: 1, paused });
+      }
+      return json({
+        ...state,
+        control: { ...control, revision: paused ? 1 : 0, paused },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await render();
+    expect(button("Pause new analysis")?.disabled).toBe(false);
+    expect(button("Save budget limit")).toBeUndefined();
+    expect(host.textContent).toContain("Budget details are unavailable");
+    await act(async () => button("Pause new analysis").click());
+    expect(button("Resume new analysis")?.disabled).toBe(false);
+    expect(host.textContent).toContain("New analysis is paused");
+    expect(
+      fetcher.mock.calls.filter(([, init]) => init.method === "POST"),
+    ).toHaveLength(1);
+  },
+);
+
 it("warns using the returned ledger and keeps uncertain money separate from settled cost", async () => {
   vi.stubGlobal(
     "fetch",
