@@ -156,15 +156,17 @@ class StaticGroup(installer.SubprocessGroup):
         return self.responses.get(key)
 
 
-def _install_args(tmp_path: Path, descriptor: Path, digest: str) -> dict[str, Any]:
+def _install_args(
+    tmp_path: Path, descriptor: Path, digest: str, environment: str = "staging"
+) -> dict[str, Any]:
     unit_root = tmp_path / "systemd"
     unit_root.mkdir(exist_ok=True)
     app_root = tmp_path / "application"
     app_root.mkdir(exist_ok=True)
-    receipt_parent = app_root / "deployments" / "staging"
+    receipt_parent = app_root / "deployments" / environment
     receipt_parent.mkdir(parents=True, exist_ok=True)
     return {
-        "environment": "staging",
+        "environment": environment,
         "native_units": descriptor,
         "native_units_sha256": digest,
         "renderer": RENDERER,
@@ -587,11 +589,14 @@ def test_receipt_is_rechecked_after_shared_lock(
     assert list(arguments["unit_root"].iterdir()) == []
 
 
-def test_install_starts_mount_before_helper_and_preserves_prior_bytes(tmp_path: Path) -> None:
-    descriptor, digest = _render_descriptor(tmp_path / "native-units.json")
-    arguments = _install_args(tmp_path, descriptor, digest)
+@pytest.mark.parametrize("environment", ["development", "staging", "production"])
+def test_install_starts_mount_before_helper_and_preserves_prior_bytes(
+    tmp_path: Path, environment: str
+) -> None:
+    descriptor, digest = _render_descriptor(tmp_path / "native-units.json", environment)
+    arguments = _install_args(tmp_path, descriptor, digest, environment)
     fake = FakeSystemd(arguments["unit_root"])
-    names = (installer._mount_unit("staging"), installer._service_unit("staging"))
+    names = (installer._mount_unit(environment), installer._service_unit(environment))
     units = json.loads(descriptor.read_text())["units"]
     old = {name: units[name].encode() for name in names}
     for name, raw in old.items():
@@ -613,6 +618,17 @@ def test_install_starts_mount_before_helper_and_preserves_prior_bytes(tmp_path: 
     assert receipt["readback"]["active"][names[0]] is True
     assert receipt["readback"]["active"][names[1]] is True
     assert receipt["readback"]["socket"]["mode"] == 0o660
+    assert receipt["environment"] == environment
+
+
+@pytest.mark.parametrize("environment", ["test", "local"])
+def test_install_rejects_unsupported_environment(tmp_path: Path, environment: str) -> None:
+    descriptor, digest = _render_descriptor(tmp_path / "native-units.json")
+    arguments = _install_args(tmp_path, descriptor, digest, environment)
+    fake = FakeSystemd(arguments["unit_root"])
+    with pytest.raises(installer.InstallerError, match="^environment_invalid$"):
+        installer.install(**arguments, systemd=fake)
+    assert fake.events == []
 
 
 def test_created_native_group_is_recorded_truthfully(tmp_path: Path) -> None:
