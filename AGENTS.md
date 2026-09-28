@@ -29,8 +29,8 @@
 4. Done means: the change works on the dev environment, tests and evidence for the
    changed areas pass, the pull request against `main` explains what changed and
    how to check it on dev, and CI is green. Then stop and wait for the owner.
-5. The owner approves by merging. Agents never merge, deploy, promote, or change
-   GitHub, Cloudflare, server or billing settings.
+5. The owner approves by merging. Billing settings, payment settings, and
+   purchases require explicit human permission.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
    deploys automatically -> the owner promotes the same build to production from
    Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
