@@ -14,6 +14,9 @@ Commands (``ac-release <command>``):
     pause ENV | resume ENV          stop or restart automatic deploys
     rollback ENV --component web    restore the previous Sales Xray web image
     history [-n N]                  recent deploy records
+    prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]
+                                    report (default) or remove installer
+                                    artifacts and core images nothing needs
 
 Production deploys are refused unless ``/etc/ac-release/production.enabled``
 exists and the same commit already passed staging.
@@ -28,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -41,7 +45,7 @@ import zipfile
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 try:
     import fcntl
@@ -61,6 +65,21 @@ MAX_ARTIFACT_BYTES = 450_000_000
 # Stored bundles are several hundred MB each. Keep whatever runs in staging or
 # production plus this many recent successful deploys (rollback and promotion).
 KEEP_RECENT_BUILDS = 10
+# The installer's own copies (application/artifacts/<sha>) are the local source
+# for reinstalling an older core release: GitHub keeps each bundle for one day.
+# prune-artifacts manages only these and the four core images they load.
+CORE_IMAGE_REPOSITORIES = frozenset(
+    f"ghcr.io/authorityclosers/authority-closers-{name}"
+    for name in ("api", "learner-web", "admin-web", "coach-web")
+)
+CORE_IMAGE_KEYS = ("AC_API_IMAGE", "AC_LEARNER_IMAGE", "AC_ADMIN_IMAGE", "AC_COACH_IMAGE")
+DEPLOYMENT_RECORD_RE = re.compile(r"[0-9]{8}T[0-9]{6}Z-([0-9a-f]{40})-[A-Za-z0-9-]+\.env")
+UNFINISHED_RECORD_RE = re.compile(
+    r"\.(?:prepared|deployment|forward-recovery)-([0-9a-f]{40})\.[A-Za-z0-9]+"
+)
+ARTIFACT_REFERENCE_RE = re.compile(rb"artifacts/([0-9a-f]{40})(?![0-9a-f])")
+PRUNE_LEFTOVER_RE = re.compile(r"\.prune-[0-9a-f]{40}\.[0-9a-f]+")
+REFERENCE_SCAN_MAX_BYTES = 1_000_000
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE_REF_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -406,6 +425,48 @@ def verify_checksums(directory: Path, covered: frozenset[str]) -> None:
         seen.add(match.group(2))
     if seen != set(covered):
         raise ReleaseError("SHA256SUMS does not cover the complete bundle")
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """Parse a KEY=VALUE file written by the installer, refusing anything else."""
+
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+            raise ReleaseError(f"{path.name} is not a KEY=VALUE file")
+        values[key] = value
+    return values
+
+
+def _tree_size(path: Path) -> int:
+    if path.is_symlink() or not path.is_dir():
+        return path.lstat().st_size
+    total = 0
+    for directory, _, names in os.walk(path):
+        for name in names:
+            total += (Path(directory) / name).lstat().st_size
+    return total
+
+
+def _add_reason(keep: dict[str, list[str]], sha: str, reason: str) -> None:
+    reasons = keep.setdefault(sha, [])
+    if reason not in reasons:
+        reasons.append(reason)
+
+
+def _refuse_unreadable(error: OSError) -> NoReturn:
+    # A file we cannot read may name an artifact, so never guess past it.
+    raise ReleaseError(f"cannot read {error.filename}: {error.strerror}")
+
+
+def _size(count: int) -> str:
+    for unit, scale in (("GB", 10**9), ("MB", 10**6), ("kB", 10**3)):
+        if count >= scale:
+            return f"{count / scale:.1f} {unit}"
+    return f"{count} B"
 
 
 @dataclass
@@ -1050,6 +1111,318 @@ class Engine:
                 removed.append(entry_path.name)
         return removed
 
+    # -- installer artifact retention ------------------------------------------
+
+    def retained_releases(self) -> dict[str, list[str]]:
+        """Releases whose installer artifact must stay, each with its reasons.
+
+        Keeps what each environment runs, every release its deployment records
+        name from the last COMMITTED record onward (the rollback target and any
+        unfinished or forward-recovery attempt to reapply), and every release a
+        file under deployments/ or operator-inputs/ names by artifact path.
+        """
+
+        keep: dict[str, list[str]] = {}
+        for environment in ENVIRONMENTS:
+            current = self._current_release(environment)
+            if current:
+                _add_reason(keep, current, f"running in {environment}")
+            for sha, reason in self._deployment_record_releases(environment):
+                _add_reason(keep, sha, reason)
+        for sha, reason in self._artifact_references():
+            _add_reason(keep, sha, reason)
+        return keep
+
+    def _current_release(self, environment: str) -> str | None:
+        link = self.paths.application / f"current-{environment}"
+        if not link.is_symlink():
+            if link.exists():
+                raise ReleaseError(f"current-{environment} is not a symbolic link")
+            return None
+        target = Path(os.path.realpath(link))
+        releases = Path(os.path.realpath(self.paths.application / "releases"))
+        if target.parent != releases or not SHA_RE.fullmatch(target.name):
+            raise ReleaseError(f"current-{environment} does not resolve to an installed release")
+        return target.name
+
+    def _deployment_record_releases(self, environment: str) -> list[tuple[str, str]]:
+        root = self.paths.application / "deployments" / environment
+        if not root.is_dir():
+            return []
+        found: list[tuple[str, str]] = []
+        records: list[dict[str, str]] = []
+        for path in sorted(root.iterdir()):
+            unfinished = UNFINISHED_RECORD_RE.fullmatch(path.name)
+            if unfinished:
+                # The installer is writing this record, or was killed while it did.
+                found.append((unfinished.group(1), f"unfinished {environment} record"))
+                continue
+            named = DEPLOYMENT_RECORD_RE.fullmatch(path.name)
+            if named is None:
+                continue
+            if path.is_symlink() or not path.is_file():
+                raise ReleaseError(f"deployment record {path.name} is not a regular file")
+            values = read_env_file(path)
+            previous = values.get("AC_PREVIOUS_RELEASE", "")
+            if (
+                values.get("AC_RELEASE_ID") != named.group(1)
+                or not values.get("AC_STATUS")
+                or (previous and not SHA_RE.fullmatch(previous))
+            ):
+                raise ReleaseError(f"deployment record {path.name} does not match its name")
+            records.append(values)
+        # Record names start with a UTC timestamp, so sorted order is time order.
+        committed = [i for i, values in enumerate(records) if values["AC_STATUS"] == "COMMITTED"]
+        for values in records[committed[-1] if committed else 0 :]:
+            status = values["AC_STATUS"]
+            if status == "COMMITTED":
+                reason = f"last committed to {environment}"
+            elif status == "FORWARD_RECOVERY_REQUIRED":
+                reason = f"{environment} forward recovery (reapply this release)"
+            else:
+                reason = f"unfinished {environment} attempt"
+            found.append((values["AC_RELEASE_ID"], reason))
+            if values.get("AC_PREVIOUS_RELEASE"):
+                found.append((values["AC_PREVIOUS_RELEASE"], f"{environment} rollback target"))
+        return found
+
+    def _artifact_references(self) -> list[tuple[str, str]]:
+        found: list[tuple[str, str]] = []
+        for top in ("deployments", "operator-inputs"):
+            base = self.paths.application / top
+            if not base.is_dir():
+                continue
+            for directory, _, names in os.walk(base, onerror=_refuse_unreadable):
+                for name in sorted(names):
+                    path = Path(directory) / name
+                    try:
+                        if (
+                            path.is_symlink()
+                            or not path.is_file()
+                            or path.stat().st_size > REFERENCE_SCAN_MAX_BYTES
+                        ):
+                            continue
+                        data = path.read_bytes()
+                    except OSError as error:
+                        _refuse_unreadable(error)
+                    relative = path.relative_to(self.paths.application).as_posix()
+                    for match in sorted(set(ARTIFACT_REFERENCE_RE.findall(data))):
+                        found.append((match.decode(), f"named in {relative}"))
+        return found
+
+    def artifact_retention(
+        self, keep_recent: int = KEEP_RECENT_BUILDS, *, images: bool = True
+    ) -> dict[str, Any]:
+        """Report each installer artifact (and core image) with why it stays.
+
+        An entry without reasons is not needed. Only full-SHA directories are
+        managed; Sales Xray native helpers and web bundles that share the
+        directory, and the installer's own .stage-* directories, are listed
+        as unmanaged and never removed.
+        """
+
+        root = self.paths.application / "artifacts"
+        keep = self.retained_releases()
+        core: list[Path] = []
+        leftovers: list[Path] = []
+        unmanaged: list[Path] = []
+        if root.is_dir():
+            for path in sorted(root.iterdir()):
+                if path.is_symlink() or not path.is_dir():
+                    unmanaged.append(path)
+                elif SHA_RE.fullmatch(path.name):
+                    core.append(path)
+                elif PRUNE_LEFTOVER_RE.fullmatch(path.name):
+                    leftovers.append(path)
+                else:
+                    unmanaged.append(path)
+        core.sort(key=lambda path: (path.stat().st_mtime, path.name), reverse=True)
+        for path in core[:keep_recent]:
+            _add_reason(keep, path.name, f"one of the {keep_recent} newest")
+        report: dict[str, Any] = {
+            "artifacts_root": str(root),
+            "keep_recent": keep_recent,
+            "artifacts": [
+                {
+                    "sha": path.name,
+                    "bytes": _tree_size(path),
+                    "written": dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC).strftime(
+                        "%Y-%m-%d"
+                    ),
+                    "keep": keep.get(path.name, []),
+                }
+                for path in core
+            ],
+            "leftovers": [path.name for path in leftovers],
+            "unmanaged": [{"name": path.name, "bytes": _tree_size(path)} for path in unmanaged],
+        }
+        if images:
+            report.update(self.image_retention(keep))
+        return report
+
+    def image_retention(self, keep: Mapping[str, list[str]]) -> dict[str, Any]:
+        """Core application images, each with why it stays.
+
+        An image is managed only when every tag is a core repository tagged
+        with a full commit. It stays when any container uses it or when it
+        belongs to a kept release. Sales Xray native images run from systemd
+        units rather than containers, so they are never managed here.
+        """
+
+        kept_images: dict[str, str] = {}
+        for sha in keep:
+            for manifest in (
+                self.paths.application / "releases" / sha / "release-images.env",
+                self.paths.application / "artifacts" / sha / "release-images.env",
+            ):
+                if not manifest.is_file():
+                    continue
+                values = read_env_file(manifest)
+                for key in CORE_IMAGE_KEYS:
+                    image = values.get(key, "")
+                    if image and not IMAGE_REF_RE.fullmatch(image):
+                        raise ReleaseError(f"{manifest} has a malformed {key}")
+                    if image:
+                        kept_images[image] = sha
+        listing = self.run(
+            [
+                "docker",
+                "image",
+                "ls",
+                "--all",
+                "--no-trunc",
+                "--format",
+                "{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}",
+            ]
+        ).stdout
+        tags: dict[str, list[str]] = {}
+        sizes: dict[str, str] = {}
+        for line in listing.splitlines():
+            if not line.strip():
+                continue
+            fields = line.split("\t")
+            if len(fields) != 4 or not IMAGE_REF_RE.fullmatch(fields[0]):
+                raise ReleaseError("docker image ls returned an unexpected line")
+            image, repository, tag, size = fields
+            sizes[image] = size
+            references = tags.setdefault(image, [])
+            if repository != "<none>" and tag != "<none>":
+                references.append(f"{repository}:{tag}")
+        containers = self.run(
+            ["docker", "container", "ls", "--all", "--quiet", "--no-trunc"]
+        ).stdout.split()
+        used: set[str] = set()
+        if containers:
+            used.update(
+                self.run(
+                    ["docker", "container", "inspect", "--format", "{{.Image}}", *containers]
+                ).stdout.split()
+            )
+        managed: list[dict[str, Any]] = []
+        unmanaged = 0
+        for image, references in tags.items():
+            parsed = [reference.rsplit(":", 1) for reference in references]
+            if not parsed or any(
+                repository not in CORE_IMAGE_REPOSITORIES or not SHA_RE.fullmatch(tag)
+                for repository, tag in parsed
+            ):
+                unmanaged += 1
+                continue
+            reasons = ["used by a container"] if image in used else []
+            releases = {tag for _, tag in parsed if tag in keep}
+            if image in kept_images:
+                releases.add(kept_images[image])
+            reasons += [f"belongs to kept release {sha[:12]}" for sha in sorted(releases)]
+            managed.append({"id": image, "tags": references, "size": sizes[image], "keep": reasons})
+        managed.sort(key=lambda entry: entry["tags"])
+        return {"images": managed, "unmanaged_images": unmanaged}
+
+    @contextlib.contextmanager
+    def deployment_lock(self) -> Iterator[None]:
+        """Hold the installer's own lock so no core install runs meanwhile."""
+
+        path = self.paths.application / ".deployment.lock"
+        with path.open("a") as handle:
+            if fcntl is not None:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise ReleaseError(
+                        "an application deployment is running; try again when it finishes"
+                    ) from None
+            yield
+
+    def prune_artifacts(
+        self, keep_recent: int = KEEP_RECENT_BUILDS, *, apply: bool = False, images: bool = True
+    ) -> dict[str, Any]:
+        """Report, or with apply remove, what artifact_retention finds unneeded."""
+
+        if keep_recent < 0:
+            raise ReleaseError("--keep-recent cannot be negative")
+        if not apply:
+            return {**self.artifact_retention(keep_recent, images=images), "applied": False}
+        if hasattr(os, "geteuid") and os.geteuid() != 0:
+            raise ReleaseError("prune-artifacts --apply must run as root")
+        with self.locked(wait=False) as acquired:
+            if not acquired:
+                raise ReleaseError("a release engine run is active; try again when it finishes")
+            with self.deployment_lock():
+                # Decide again under both locks so a just-finished install counts.
+                report = {**self.artifact_retention(keep_recent, images=images), "applied": True}
+                report["removed"], report["errors"] = self._remove_unretained(report)
+        self.record(
+            {
+                "at": _now(),
+                "action": "prune-artifacts",
+                "removed": len(report["removed"]),
+                "freed_bytes": sum(
+                    entry["bytes"]
+                    for entry in report["artifacts"]
+                    if f"artifacts/{entry['sha']}" in report["removed"]
+                ),
+                "errors": report["errors"],
+            }
+        )
+        return report
+
+    def _remove_unretained(self, report: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+        root = self.paths.application / "artifacts"
+        removed: list[str] = []
+        errors: list[str] = []
+        doomed = [(root / name, f"artifacts/{name}") for name in report["leftovers"]]
+        for artifact in report["artifacts"]:
+            if artifact["keep"]:
+                continue
+            source = root / artifact["sha"]
+            # Rename first: an install must never find a half-removed bundle.
+            target = root / f".prune-{artifact['sha']}.{secrets.token_hex(4)}"
+            try:
+                source.rename(target)
+            except OSError as error:
+                errors.append(f"artifacts/{artifact['sha']}: {error.strerror}")
+                continue
+            doomed.append((target, f"artifacts/{artifact['sha']}"))
+        for path, label in doomed:
+            try:
+                shutil.rmtree(path, onexc=_make_writable_and_retry)
+            except OSError as error:
+                errors.append(f"{label}: {error.strerror}")
+                continue
+            removed.append(label)
+        for image in report.get("images", []):
+            if image["keep"]:
+                continue
+            # Untag one reference at a time without --force: Docker itself
+            # refuses if a container started using the image meanwhile.
+            for reference in image["tags"]:
+                completed = self.run(["docker", "image", "rm", reference], check=False)
+                if completed.returncode != 0:
+                    errors.append(f"{reference}: {completed.stderr.strip()[:200]}")
+                    break
+            else:
+                removed.append(image["id"])
+        return removed, errors
+
     def tick(self) -> list[dict[str, Any]]:
         """Timer entry point: bring staging up to the latest good main build."""
 
@@ -1200,6 +1573,69 @@ def _print(data: Any, as_json: bool) -> None:
         print(json.dumps(entry, sort_keys=True))
 
 
+def _why(reasons: Sequence[str]) -> str:
+    shown = "; ".join(reasons[:2])
+    return shown + (f" (+{len(reasons) - 2} more)" if len(reasons) > 2 else "")
+
+
+def _print_retention(report: Mapping[str, Any]) -> None:
+    artifacts = report["artifacts"]
+    kept = [entry for entry in artifacts if entry["keep"]]
+    unneeded = [entry for entry in artifacts if not entry["keep"]]
+    total = sum(entry["bytes"] for entry in artifacts)
+    print(f"Installer artifacts in {report['artifacts_root']}: {len(artifacts)}, {_size(total)}")
+    for entry in artifacts:
+        decision = "keep" if entry["keep"] else "remove"
+        print(
+            f"  {decision:<6} {entry['sha'][:12]}  {entry['written']}  "
+            f"{_size(entry['bytes']):>8}  {_why(entry['keep'])}".rstrip()
+        )
+    print(
+        f"Keep {len(kept)} ({_size(sum(entry['bytes'] for entry in kept))}); "
+        f"remove {len(unneeded)} ({_size(sum(entry['bytes'] for entry in unneeded))})."
+    )
+    if report["leftovers"]:
+        print(f"Also remove {len(report['leftovers'])} left over from an interrupted removal.")
+    groups: dict[str, list[int]] = {}
+    for entry in report["unmanaged"]:
+        groups.setdefault(re.sub(r"[0-9a-f]{40}.*$", "*", entry["name"]), []).append(entry["bytes"])
+    if groups:
+        listed = ", ".join(
+            f"{pattern} x{len(sizes)} ({_size(sum(sizes))})"
+            for pattern, sizes in sorted(groups.items())
+        )
+        print(f"Never removed by this command: {listed}")
+    if "images" in report:
+        images = report["images"]
+        print(f"\nCore application images in Docker: {len(images)}")
+        for image in images:
+            decision = "keep" if image["keep"] else "remove"
+            names = ", ".join(
+                f"{repository.rsplit('/', 1)[-1]}:{tag[:12]}"
+                for repository, tag in (reference.rsplit(":", 1) for reference in image["tags"])
+            )
+            print(
+                f"  {decision:<6} {image['id'][7:19]}  {image['size']:>8}  {names}  "
+                f"{_why(image['keep'])}".rstrip()
+            )
+        removable = sum(1 for image in images if not image["keep"])
+        print(
+            f"Keep {len(images) - removable}; remove {removable}. Layers are shared, so compare "
+            "`docker system df` before and after to see the space freed."
+        )
+        print(
+            f"Never removed by this command: {report['unmanaged_images']} other images "
+            "(Sales Xray web and native, foundation, untagged)."
+        )
+    print()
+    if not report["applied"]:
+        print("Dry run: nothing was removed. Run again with --apply to remove what says remove.")
+        return
+    print(f"Removed {len(report['removed'])}.")
+    for error in report["errors"]:
+        print(f"  FAILED {error}")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="ac-release", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1220,6 +1656,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     rollback.add_argument("--component", choices=("web",), required=True)
     history = sub.add_parser("history")
     history.add_argument("-n", type=int, default=20)
+    prune = sub.add_parser("prune-artifacts")
+    mode = prune.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="report only (the default)")
+    mode.add_argument("--apply", action="store_true", help="remove what the report marks remove")
+    prune.add_argument("--keep-recent", type=int, default=KEEP_RECENT_BUILDS, metavar="N")
+    prune.add_argument("--no-images", action="store_true", help="leave Docker images out")
+    prune.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     paths = Paths()
@@ -1246,6 +1689,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             )
             _print(result, True)
+        elif args.command == "prune-artifacts":
+            report = engine.prune_artifacts(
+                args.keep_recent, apply=args.apply, images=not args.no_images
+            )
+            if args.json:
+                _print(report, True)
+            else:
+                _print_retention(report)
+            if report.get("errors"):
+                return 1
         else:
             engine.github = _load_github(paths, required=args.command == "tick")
             results = (
