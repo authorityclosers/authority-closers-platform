@@ -356,3 +356,54 @@ def test_new_object_during_deletion_prevents_empty_receipt(
     monkeypatch.setattr(adapter, "delete", racing_delete)
     with pytest.raises(storage.StorageError, match="deletion_incomplete"):
         adapter.delete_recording(key.tenant_id, key.recording_id, expected_keys=(key,))
+
+
+def test_shared_source_is_tenant_scoped_and_outside_recording_inventory(tmp_path: Path) -> None:
+    adapter = storage.PrivateLocalRecordingStorage(tmp_path / "private")
+    legacy = _key()
+    content = b"fictional shared audio"
+    shared = storage.SourceAudioKey(legacy.tenant_id, _hash(content))
+    other = storage.SourceAudioKey(uuid4(), shared.sha256)
+    assert shared.directories == (legacy.tenant_id.hex, "sources", shared.sha256)
+    assert shared.filename == "source"
+    for key in (legacy, shared, other):
+        adapter.put(key, [content], expected_sha256=shared.sha256)
+    assert adapter.list_recording(legacy.tenant_id, legacy.recording_id) == (legacy,)
+    adapter.delete_recording(legacy.tenant_id, legacy.recording_id, expected_keys=(legacy,))
+    assert b"".join(adapter.iter_bytes(shared, expected_sha256=shared.sha256)) == content
+    assert adapter.delete(shared) is True
+    assert adapter.delete(shared) is False
+    assert b"".join(adapter.iter_bytes(other, expected_sha256=shared.sha256)) == content
+
+
+def test_shared_source_put_verifies_both_incoming_and_existing_bytes(tmp_path: Path) -> None:
+    adapter = storage.PrivateLocalRecordingStorage(tmp_path / "private")
+    content = b"fictional shared audio"
+    key = storage.SourceAudioKey(uuid4(), _hash(content))
+    first = adapter.put(key, [content], expected_sha256=key.sha256)
+    assert adapter.put(key, [content], expected_sha256=key.sha256) == first
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        adapter.put(key, [b"wrong incoming audio"], expected_sha256=key.sha256)
+    path = adapter.root.joinpath(*key.directories, key.filename)
+    path.write_bytes(b"corrupted stored audio")
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        next(adapter.iter_bytes(key, expected_sha256=key.sha256))
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        adapter.put(key, [content], expected_sha256=key.sha256)
+    assert path.read_bytes() == b"corrupted stored audio"
+    assert not list(adapter.root.rglob("*.tmp"))
+
+
+def test_shared_source_key_digest_cannot_be_overridden(tmp_path: Path) -> None:
+    adapter = storage.PrivateLocalRecordingStorage(tmp_path / "private")
+    key = storage.SourceAudioKey(uuid4(), _hash(b"original"))
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        adapter.put(key, [b"different"], expected_sha256=_hash(b"different"))
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        next(adapter.iter_bytes(key, expected_sha256=_hash(b"different")))
+
+
+@pytest.mark.parametrize("digest", ["../escape", "a" * 63, "A" * 64, "g" * 64])
+def test_shared_source_key_rejects_invalid_digest(digest: str) -> None:
+    with pytest.raises(storage.StorageError, match="sha256_required"):
+        storage.SourceAudioKey(uuid4(), digest)

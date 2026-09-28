@@ -72,8 +72,32 @@ class ObjectKey:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceAudioKey:
+    """Tenant/hash namespace that cannot alias a recording UUID directory."""
+
+    tenant_id: UUID
+    sha256: str
+
+    def __post_init__(self) -> None:
+        if type(self.tenant_id) is not UUID:
+            raise StorageError("storage_server_key_required")
+        _validate_digest(self.sha256)
+
+    @property
+    def directories(self) -> tuple[str, str, str]:
+        return self.tenant_id.hex, "sources", self.sha256
+
+    @property
+    def filename(self) -> str:
+        return "source"
+
+
+StorageKey = ObjectKey | SourceAudioKey
+
+
+@dataclass(frozen=True, slots=True)
 class StoredObject:
-    key: ObjectKey
+    key: StorageKey
     sha256: str
     size_bytes: int
     transport: str = "private-local/1"
@@ -92,16 +116,16 @@ class RecordingDeletionReceipt:
 class RecordingObjectStorage(Protocol):
     def put(
         self,
-        key: ObjectKey,
+        key: StorageKey,
         chunks: Iterable[bytes],
         *,
         expected_sha256: str,
         expected_bytes: int | None = None,
     ) -> StoredObject: ...
 
-    def iter_bytes(self, key: ObjectKey, *, expected_sha256: str) -> Iterator[bytes]: ...
+    def iter_bytes(self, key: StorageKey, *, expected_sha256: str) -> Iterator[bytes]: ...
 
-    def delete(self, key: ObjectKey) -> bool: ...
+    def delete(self, key: StorageKey) -> bool: ...
 
     def list_recording(self, tenant_id: UUID, recording_id: UUID) -> tuple[ObjectKey, ...]: ...
 
@@ -424,20 +448,22 @@ class PrivateLocalRecordingStorage:
                     parent.rmdir(root.name)
                 raise
 
-    def _path(self, key: ObjectKey) -> Path:
-        if not isinstance(key, ObjectKey):
+    def _path(self, key: StorageKey) -> Path:
+        if not isinstance(key, ObjectKey | SourceAudioKey):
             raise StorageError("storage_server_key_required")
         return self.root.joinpath(*key.directories)
 
     def put(
         self,
-        key: ObjectKey,
+        key: StorageKey,
         chunks: Iterable[bytes],
         *,
         expected_sha256: str,
         expected_bytes: int | None = None,
     ) -> StoredObject:
         _validate_digest(expected_sha256)
+        if isinstance(key, SourceAudioKey) and key.sha256 != expected_sha256:
+            raise StorageError("storage_digest_mismatch")
         if expected_bytes is not None and (
             type(expected_bytes) is not int or not 0 < expected_bytes <= self.max_bytes
         ):
@@ -467,14 +493,23 @@ class PrivateLocalRecordingStorage:
                 try:
                     directory.publish(temporary, key.filename)
                 except FileExistsError:
-                    raise StorageError("storage_object_exists") from None
+                    if not isinstance(key, SourceAudioKey):
+                        raise StorageError("storage_object_exists") from None
+                    existing_size = sum(
+                        len(block)
+                        for block in self.iter_bytes(key, expected_sha256=expected_sha256)
+                    )
+                    if existing_size != size:
+                        raise StorageError("storage_size_mismatch") from None
                 return StoredObject(key, digest.hexdigest(), size)
             finally:
                 directory.unlink(temporary)
 
-    def iter_bytes(self, key: ObjectKey, *, expected_sha256: str) -> Iterator[bytes]:
+    def iter_bytes(self, key: StorageKey, *, expected_sha256: str) -> Iterator[bytes]:
         """Verify size/hash before first yield; consumers must close abandoned iterators."""
         _validate_digest(expected_sha256)
+        if isinstance(key, SourceAudioKey) and key.sha256 != expected_sha256:
+            raise StorageError("storage_digest_mismatch")
         try:
             with _directory(self._path(key)) as directory:
                 descriptor = directory.open(key.filename, os.O_RDONLY)
@@ -508,7 +543,7 @@ class PrivateLocalRecordingStorage:
         except FileNotFoundError:
             raise StorageError("storage_object_missing") from None
 
-    def delete(self, key: ObjectKey) -> bool:
+    def delete(self, key: StorageKey) -> bool:
         try:
             with _directory(self._path(key)) as directory:
                 _validate_entry(directory.stat(key.filename))
