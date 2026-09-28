@@ -52,6 +52,11 @@ if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
 
 PRIVACY_REVISION = "local-private-audio-v1"
+# Recorded with each consent when the recording is kept for model training.
+KEEP_FOR_TRAINING_PRIVACY_REVISION = "local-private-audio-keep-for-training-v1"
+STANDARD_RETENTION_DAYS = 7
+MAX_RETENTION_DAYS = 3650
+KEEP_FOR_TRAINING_RETENTION_PREFIX = "ref:retention/sales-xray-keep-for-training"
 CONSENT_PREFIX = "intake-consent-v1:"
 
 
@@ -71,12 +76,38 @@ class IntakePolicy:
             or type(self.tenant_ids) is not frozenset
             or any(type(value) is not UUID for value in self.tenant_ids)
             or type(self.retention_days) is not int
-            or not 1 <= self.retention_days <= 7
+            or not 1 <= self.retention_days <= MAX_RETENTION_DAYS
             or self.acoustic_recipe not in AUDIOATLAS_RECIPES
         ):
             raise ValueError("An exact internal workspace and bounded retention are required.")
         require_text(self.authorization_ref, "intake authorization")
         require_text(self.retention_ref, "retention reference")
+        if self.keeps_for_training and not self.retention_ref.startswith(
+            KEEP_FOR_TRAINING_RETENTION_PREFIX
+        ):
+            raise ValueError(
+                "Keeping recordings beyond the standard week needs a keep-for-training "
+                "retention policy."
+            )
+
+    @property
+    def keeps_for_training(self) -> bool:
+        return self.retention_days > STANDARD_RETENTION_DAYS
+
+    @property
+    def privacy_revision(self) -> str:
+        return KEEP_FOR_TRAINING_PRIVACY_REVISION if self.keeps_for_training else PRIVACY_REVISION
+
+    def retention_sentence(self) -> str:
+        if self.keeps_for_training:
+            return (
+                "Your recording is kept in AC's private storage to improve AC's coaching "
+                "AI until you delete it. "
+            )
+        return (
+            f"Your recording stays in AC's private storage for up to "
+            f"{self.retention_days} days, or until you delete it. "
+        )
 
 
 class ConversationIntake:
@@ -152,9 +183,8 @@ class ConversationIntake:
             "privacy_revision": quote.privacy_revision,
             "cost_label": "₹0 · local audio measurements",
             "privacy_summary": (
-                f"Your recording stays in AC's private storage for up to "
-                f"{self.policy.retention_days} days, or until you delete it. "
-                "This step does not send audio to an AI provider. "
+                self.policy.retention_sentence()
+                + "This step does not send audio to an AI provider. "
                 "A sales report needs a separate approved transcription and coaching run."
             ),
             "providers": ["AC local AudioAtlas"],
@@ -238,7 +268,7 @@ class ConversationIntake:
             self.policy.acoustic_recipe,
             "inspect_audioatlas",
             intent.source_sha256,
-            PRIVACY_REVISION,
+            self.policy.privacy_revision,
             CONSENT_PREFIX + str(identifier),
             "local-no-provider",
             self.policy.retention_ref,

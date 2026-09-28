@@ -10,7 +10,7 @@ from ac_platform.conversation_intelligence.application import ConversationApplic
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
-from ac_platform.conversation_intelligence.intake import PRIVACY_REVISION, IntakePolicy
+from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.conversation_intelligence.signals import MAX_SECONDS
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
     view: dict[str, Any] = {
         "schema": "ac.sales-xray.private-upload-consent/1",
-        "privacy_revision": PRIVACY_REVISION,
+        "privacy_revision": policy.privacy_revision,
         "recipe_revision": policy.acoustic_recipe,
         "maximum_file_bytes": MAX_AUDIO_BYTES,
         "maximum_call_seconds": MAX_SECONDS,
@@ -35,8 +35,14 @@ def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
             "then uses its AI service providers to transcribe the recording and prepare "
             "your coaching report. The call uses its length from your displayed free "
             "allowance once; you will not be charged a payment. "
-            f"Your recording and report stay private for up to {policy.retention_days} days. "
-            "You can request deletion at admin@authorityclosers.com. "
+            + (
+                "Your recording and report are kept privately to improve AC's coaching AI "
+                "until you delete them. "
+                if policy.keeps_for_training
+                else "Your recording and report stay private for up to "
+                f"{policy.retention_days} days. "
+            )
+            + "You can request deletion at admin@authorityclosers.com. "
             "Review the privacy details before starting your analysis."
         ),
     }

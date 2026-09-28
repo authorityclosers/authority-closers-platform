@@ -278,6 +278,10 @@ describe("acquisition source-bound presentation", () => {
       parseAllowance({ ...allowance, available_seconds: 5999 }),
     ).toThrow();
     expect(() => parsePolicy({ ...policy, max_cost_paise: 1 })).toThrow();
+    expect(parsePolicy({ ...policy, retention_days: 3650 }).retention_days).toBe(
+      3650,
+    );
+    expect(() => parsePolicy({ ...policy, retention_days: 3651 })).toThrow();
     expect(() =>
       parseProgress(
         { ...progress, source_sha256: "a".repeat(64) },

@@ -409,3 +409,28 @@ def test_model_copy_is_revalidated_by_loader() -> None:
 
     with pytest.raises(ActivationContractError, match="approval_bundle_window_invalid"):
         load_hosted_approval_bundle(forged.to_json())
+
+
+def test_retention_beyond_a_week_needs_a_keep_for_training_policy() -> None:
+    payload = json.loads(_bundle().to_json())
+    payload["retention_days"] = 30
+    with pytest.raises(
+        ActivationContractError, match="retention_beyond_standard_requires_keep_for_training"
+    ):
+        load_hosted_approval_bundle(payload)
+    payload["intake_retention_ref"] = "ref:retention/sales-xray-keep-for-training-v1"
+    assert load_hosted_approval_bundle(payload).retention_days == 30
+    payload["retention_days"] = 3650
+    assert load_hosted_approval_bundle(payload).retention_days == 3650
+    payload["retention_days"] = 3651
+    with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
+        load_hosted_approval_bundle(payload)
+
+
+def test_owner_limits_allow_large_recording_counts_within_the_ceiling() -> None:
+    payload = json.loads(_bundle(allowances=(_allowance(),)).to_json())
+    payload["allowances"][0]["max_recordings"] = 400
+    assert load_hosted_approval_bundle(payload).allowances[0].max_recordings == 400
+    payload["allowances"][0]["max_recordings"] = 10_001
+    with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
+        load_hosted_approval_bundle(payload)
