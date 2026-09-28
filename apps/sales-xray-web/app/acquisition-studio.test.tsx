@@ -74,6 +74,7 @@ let deferSourcePut: boolean;
 let sourcePutLosesResponse: boolean;
 let sourceUploadIntent: boolean;
 let generatedId: string;
+let earlierReportSubmissionId: string | null;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -247,6 +248,7 @@ beforeEach(() => {
   sourcePutLosesResponse = false;
   sourceUploadIntent = false;
   generatedId = submissionId;
+  earlierReportSubmissionId = null;
   localStorage.clear();
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
@@ -320,6 +322,7 @@ beforeEach(() => {
             submission_id: generatedId,
             recording_id: recordingId,
             source_sha256: "0".repeat(64),
+            earlier_report_submission_id: earlierReportSubmissionId,
             duration_ms: 5000,
             allowance: {
               ...allowance,
@@ -679,6 +682,53 @@ it("keeps one source upload alive across client navigation and shows the confirm
   ).toHaveLength(1);
 });
 
+it.each(["analyse", "view", "escape"] as const)(
+  "handles the earlier-report %s choice",
+  async (choice) => {
+    earlierReportSubmissionId = secondSubmissionId;
+    sourceUploadIntent = true;
+    await mountWithUploadSession();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    const dialog = container.querySelector<HTMLDialogElement>("dialog[open]");
+    expect(dialog).not.toBeNull();
+    const link = dialog?.querySelector<HTMLAnchorElement>("a[href]");
+    expect(link?.textContent).toBe("View earlier report");
+    expect(link?.getAttribute("href")).toBe(`/?call=${secondSubmissionId}`);
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    const title = dialog?.querySelector("h2");
+    expect(title?.textContent).toBe("You've analysed this recording before.");
+    expect(dialog?.getAttribute("aria-labelledby")).toBe(title?.id);
+    expect(document.activeElement).toBe(link);
+    expect(calls.some(({ path }) => path.endsWith("/plan/quote"))).toBe(false);
+
+    if (choice === "view") {
+      await act(async () => link?.click());
+    } else if (choice === "escape") {
+      await act(async () =>
+        dialog?.dispatchEvent(new Event("cancel", { cancelable: true })),
+      );
+    } else {
+      const analyse = button("Analyse again");
+      analyse.focus();
+      await act(async () =>
+        dialog?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+        ),
+      );
+      expect(document.activeElement).toBe(link);
+      await click("Analyse again");
+    }
+    await flush();
+    expect(container.querySelector("dialog[open]")).toBeNull();
+    expect(calls.some(({ path }) => path.endsWith("/plan/quote"))).toBe(
+      choice !== "view",
+    );
+  },
+);
+
 it("waits for native file checks after navigating away mid-upload, then starts once across remounts", async () => {
   await analyseThenOpenAnotherCall();
   progressOverride = { ...progress, local_state: "running" };
@@ -865,6 +915,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   expect(button("Analyse my call").disabled).toBe(true);
   await click("Complete upload check");
   await click("Analyse my call");
+  expect(container.querySelector("dialog[open]")).toBeNull();
   expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
   expect(
     calls.filter((call) => call.path.endsWith("/plan/quote")),
@@ -941,7 +992,7 @@ it.each([
   [
     403,
     { detail: "This recording's approved provider allowance is used." },
-    "approved analysis allowance has been used",
+    "This analysis allowance has been used",
   ],
   [
     403,

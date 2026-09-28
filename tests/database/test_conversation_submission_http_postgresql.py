@@ -30,6 +30,9 @@ import ac_platform.conversation_intelligence.inference_worker as inference_worke
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
+from ac_platform.conversation_intelligence.acquisition_library import (
+    earlier_report_submission_id,
+)
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
@@ -55,6 +58,7 @@ from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
     ConversationProcessingContinuation,
 )
+from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import (
@@ -83,6 +87,9 @@ from ac_platform.conversation_intelligence.provider_registry import parse_regist
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.qualitative_pack import load_qualitative_pack
 from ac_platform.conversation_intelligence.reports import load_report_profile
+from ac_platform.conversation_intelligence.retained_c5_recovery import (
+    RetainedC5RecoveryService,
+)
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
@@ -375,6 +382,123 @@ async def _upload_for_read_test(setup: Any, client: httpx.AsyncClient) -> tuple[
     )
     assert uploaded.status_code == 202, uploaded.text
     return path, submission
+
+
+def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
+    postgres_harness: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        available_recordings: set[UUID] = set()
+
+        async def retained_report(
+            _service: RetainedC5RecoveryService, recording: ConversationRecording
+        ) -> object | None:
+            return object() if recording.id in available_recordings else None
+
+        monkeypatch.setattr(RetainedC5RecoveryService, "latest_for_recording", retained_report)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                _sign_in(setup, client)
+                first_path, first_id = await _upload_for_read_test(setup, client)
+                data = _wav_one_second_48k()
+                first = await client.put(
+                    first_path + "/source", content=data, headers=await _headers(client, data)
+                )
+                assert first.status_code == 202, first.text
+                assert first.json()["earlier_report_submission_id"] is None
+                available_recordings.add(UUID(first.json()["recording_id"]))
+
+                setup.clock[0] += timedelta(seconds=1)
+                own_repeat_id = uuid4()
+                own_repeat_path = f"{PREFIX}/submissions/{own_repeat_id}"
+                own_repeat = await client.put(
+                    own_repeat_path + "/source",
+                    content=data,
+                    headers=await _headers(client, data),
+                )
+                assert own_repeat.status_code == 202, own_repeat.text
+                assert own_repeat.json()["earlier_report_submission_id"] == str(first_id)
+                available_recordings.add(UUID(own_repeat.json()["recording_id"]))
+                setup.clock[0] += timedelta(seconds=1)
+                latest_id = uuid4()
+                latest = await client.put(
+                    f"{PREFIX}/submissions/{latest_id}/source",
+                    content=data,
+                    headers=await _headers(client, data),
+                )
+                assert latest.status_code == 202, latest.text
+                assert latest.json()["earlier_report_submission_id"] == str(own_repeat_id)
+
+                available_guest_reports: set[UUID] = set()
+
+                async def guest_progress(
+                    _reports: AcquisitionReports, submission_id: UUID, **_: Any
+                ) -> dict[str, bool]:
+                    return {"has_report": submission_id in available_guest_reports}
+
+                monkeypatch.setattr(AcquisitionReports, "progress", guest_progress)
+                async with setup.sessions() as database, database.begin():
+                    sessions = setup.factory(database)
+                    ownership = GuestOwnership(sessions)
+                    source_sha256 = hashlib.sha256(data).hexdigest()
+
+                    async def guest_submission(token: str, key: str) -> UUID:
+                        setup.clock[0] += timedelta(seconds=1)
+                        submission = uuid4()
+                        await sessions.reserve(
+                            MeasuredSource(
+                                submission,
+                                source_sha256,
+                                5_000,
+                                hashlib.sha256(key.encode()).hexdigest(),
+                            ),
+                            token=token,
+                        )
+                        return submission
+
+                    guest_first = await guest_submission(
+                        setup.guest.token, "earlier-report-guest-first"
+                    )
+                    assert (
+                        await earlier_report_submission_id(
+                            ownership,
+                            submission_id=guest_first,
+                            source_sha256=source_sha256,
+                            token=setup.guest.token,
+                        )
+                        is None
+                    )
+                    available_guest_reports.add(guest_first)
+                    guest_repeat = await guest_submission(
+                        setup.guest.token, "earlier-report-guest-repeat"
+                    )
+                    assert await earlier_report_submission_id(
+                        ownership,
+                        submission_id=guest_repeat,
+                        source_sha256=source_sha256,
+                        token=setup.guest.token,
+                    ) == str(guest_first)
+                    stranger = await guest_submission(
+                        setup.stranger.token, "earlier-report-stranger"
+                    )
+                    assert (
+                        await earlier_report_submission_id(
+                            ownership,
+                            submission_id=stranger,
+                            source_sha256=source_sha256,
+                            token=setup.stranger.token,
+                        )
+                        is None
+                    )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 class _HeldPlaybackIterator:
