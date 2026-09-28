@@ -75,20 +75,27 @@ or production rollback command described here. Do not use the planned commands
 below until their implementation tasks have landed and the engine is updated.
 
 Production Admin submits intent to the engine through the request inbox. The
-production API can create inbox files but cannot list, read, or delete them.
-The root engine consumes each request under its lock, moves it to a root-only
-`processed/` directory, and writes `status.json` plus a per-request result into
-the outbox using atomic writes. Staging and production APIs mount the outbox
-read-only. A systemd path unit triggers the consumer, with the two-minute
-engine tick as backup.
+production API can create request files but cannot list the inbox. Once the
+engine moves a request into the root-only `processed/` directory, the API can
+no longer reach it. The root engine consumes each request under its lock and
+writes `status.json` plus a per-request result into the outbox using atomic
+writes. Staging and production APIs mount the outbox read-only. A systemd path
+unit triggers the consumer, with the two-minute engine tick as backup.
 
-Requests are regular files no larger than 4 KB, use a strict schema, and reject
-unknown keys. The engine refuses symlinks, files not owned by uid `10001`,
-requests older than 15 minutes, concurrent requests, and stale expected
-production commit/version values. Processing is at most once. The API requires
-the owner-only `platform_release_manage` capability, a safe origin, and an
-`audit_events` entry before returning `202` and a request id. Status is read
-from the outbox. Staging Admin cannot submit production actions.
+Requests use a strict schema and reject unknown keys. The engine moves each
+inbox request into the root-only `processed/` directory before handling it, so
+a request runs at most once. It reads the moved file once: the opened file must
+be regular, not a symlink, no larger than 4 KB, and owned by uid `10001`. The
+engine validates only the bytes read from that open file; it never re-reads the
+inbox path. It also refuses requests older than 15 minutes, concurrent
+requests, and stale expected production commit/version values.
+
+Before writing a request, the production API requires the owner-only
+`platform_release_manage` capability, a safe origin, and typed confirmation of
+the resulting version; it appends an `audit_events` entry and includes its
+`audit_event_id` in the request. It then writes the request and returns `202`
+with its id. Status is read from the outbox. Staging Admin cannot submit
+production actions.
 
 The engine enforces these production guards on every request:
 
@@ -101,10 +108,12 @@ The engine enforces these production guards on every request:
   migration head as production. Database rollback is forbidden.
 - Foundation support for new migrations must be installed first, and the
   Sales Xray approval must have at least one day remaining.
-- The owner types the displayed resulting version to confirm. The engine
-  derives the next version from tags and release records.
+- The engine accepts requests only from the production inbox, which no other
+  API mounts, and each request must carry its `audit_event_id`.
+- The engine derives the next version from tags and release records.
 
-The agreed baseline is current production `v0.2.0`; with no existing
+The API requires the owner to type the displayed resulting version to
+confirm. The agreed baseline is current production `v0.2.0`; with no existing
 `vX.Y.Z` tags, the first minor promote is `v0.3.0` (D1). Production actions
 come only from production Admin; staging Admin is read-only, and CLI is the
 fallback (D3). The authorization is a new owner-only `platform_release_manage`

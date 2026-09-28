@@ -23,20 +23,25 @@ never supplies a command, path, option, token, or other executable input.
 - The production API alone receives the host inbox
   `/var/lib/ac-release/admin/production/inbox` at `/run/ac-release/inbox`,
   mounted read/write. It is owned by `root:acrelreq` with mode `1730`; the API
-  user (uid `10001`, through `group_add`) can create a request but cannot list,
-  read, or delete inbox entries.
+  user (uid `10001`, through `group_add`) can create request files but cannot
+  list the inbox. Once the engine moves a request into the root-only
+  `processed/` directory, the API can no longer reach it.
 - The host outbox is `/var/lib/ac-release/admin/outbox`. The engine writes
   `status.json` and `requests/<id>.json` atomically as root. Staging and
   production APIs mount the outbox read-only.
 - `ac-release-inbox.path` triggers `ac-release inbox`; a two-minute engine tick
   is the backup trigger. The inbox consumer uses the engine lock.
 
-A request is a regular file, at most 4 KB, with a strict schema; unknown keys
-are refused. The planned fields are `v`, `id`, `action` (`promote` or
-`rollback`), `bump`, `sha`, `web_sha`, `expected_production_sha`,
-`expected_version`, `requested_by`, `audit_event_id`, and `requested_at`.
-The engine moves a request into a root-only `processed/` directory before
-handling it, so it runs at most once.
+Requests use a strict schema; unknown keys are refused. The planned fields
+are `v`, `id`, `action` (`promote` or `rollback`), `bump`, `sha`, `web_sha`,
+`expected_production_sha`, `expected_version`, `requested_by`,
+`audit_event_id`, and `requested_at`.
+
+The engine moves each inbox request into the root-only `processed/` directory
+before handling it, so a request runs at most once. It reads the moved file
+once: the opened file must be regular, not a symlink, no larger than 4 KB, and
+owned by uid `10001`. The engine validates only the bytes read from that open
+file and never re-reads the inbox path.
 
 The planned API routes are:
 
@@ -44,18 +49,18 @@ The planned API routes are:
 - `POST /v1/platform/releases/requests` to submit a request.
 - `GET /v1/platform/releases/requests/{id}` for its outcome.
 
-Submission requires the new owner-only `platform_release_manage` capability
-and `require_safe_origin`, appends an `audit_events` entry, writes the request,
+Before writing a request, the production API checks the new owner-only
+`platform_release_manage` capability, `require_safe_origin`, and the typed
+resulting version, then appends an `audit_events` entry. It writes the request
 and returns `202` with its request id. The APIs read results from the outbox;
 the web app does not access engine state directly.
 
 ### Engine guards
 
-The engine rechecks every guard; a disabled button in Admin is not authority.
-It refuses a request that is not a regular file, is a symlink, is not owned by
-uid `10001`, is older than 15 minutes, or arrives while another request is
-running. It also compares the expected production commit and version before
-acting, preventing stale requests and double submissions.
+The engine rechecks the release and request-file guards it can enforce; Admin
+UI state is never authority. It refuses requests older than 15 minutes or when
+another request is running. It also compares the expected production commit
+and version before acting, preventing stale requests and double submissions.
 
 Production actions require all of the following:
 
@@ -68,8 +73,10 @@ allows only one action at a time.
 migration head matches the current one.
 5. Foundation support for any new migration is installed first, and the Sales
 Xray approval has at least one day remaining.
-6. The request came through production Admin with `platform_release_manage`, a
-safe origin, an audit event, and typed confirmation of the resulting version.
+6. The production API checks `platform_release_manage`, `require_safe_origin`
+and the typed resulting version, and appends the `audit_events` entry, before
+it writes the request. The engine accepts requests only from the production
+inbox, which no other API mounts, and each one must carry its `audit_event_id`.
 Staging Admin is read-only for production actions.
 
 ### Recorded decisions from AUT-21
@@ -83,7 +90,7 @@ Staging Admin is read-only for production actions.
   capability. Do not reuse `platform_access_manage`; per ADR 0031, one
   capability does not imply another.
 
-The owner selects minor, major, or patch and types the displayed resulting
+The production API requires the owner to type the displayed resulting
 version to confirm. The engine derives the next version from the highest
 `vX.Y.Z` among tags and release records. Rollback remains limited to the
 previous release; database rollback is out of scope.
