@@ -162,17 +162,18 @@ def test_c2_payload_still_uses_fenced_audio_loader() -> None:
     worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
     calls: list[Any] = []
 
-    def synthetic_audio(recording: Any) -> bytes:
-        calls.append(recording)
+    def synthetic_audio(recording: Any, source_key: Any) -> bytes:
+        calls.append((recording, source_key))
         return b"synthetic-audio"
 
     cast(Any, worker)._audio = synthetic_audio
     recording = object()
     scope = _scope("C2", SimpleNamespace(payload=b"c2-reference"))
     cast(Any, scope).recording = recording
+    cast(Any, scope).source_key = ObjectKey(uuid4(), uuid4(), uuid4(), ObjectKind.SOURCE_AUDIO)
 
     assert worker._payload(scope) == b"synthetic-audio"
-    assert calls == [recording]
+    assert calls == [(recording, scope.source_key)]
 
 
 def test_c4_validation_binds_result_to_plan_transcript() -> None:

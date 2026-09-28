@@ -42,9 +42,8 @@ from ac_platform.conversation_intelligence.reports import (
     parse_report_draft,
 )
 from ac_platform.conversation_intelligence.retained_c5_recovery import RetainedC5RecoveryService
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
-    ObjectKey,
-    ObjectKind,
     RecordingObjectStorage,
     StorageError,
 )
@@ -574,10 +573,8 @@ class ConversationReports:
             if previous is None:
                 raise ConversationConflict("The imported report receipt is unavailable.")
             return await self._response(actor, run, previous)
-        source_key = ObjectKey(
-            recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO
-        )
         try:
+            source_key = await resolve_source_key(self.database, recording)
             size = await join_thread(
                 lambda: sum(
                     len(block)

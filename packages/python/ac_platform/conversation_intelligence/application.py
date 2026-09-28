@@ -50,6 +50,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
     ProcessingActor,
 )
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
     ObjectKind,
@@ -416,6 +417,7 @@ class ConversationApplication:
         object_key = ObjectKey(
             recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO
         )
+        source_key = await resolve_source_key(self.database, recording)
 
         def write() -> None:
             try:
@@ -433,7 +435,7 @@ class ConversationApplication:
                 existing_size = sum(
                     len(block)
                     for block in storage.iter_bytes(
-                        object_key,
+                        source_key,
                         expected_sha256=recording.source_sha256,
                     )
                 )

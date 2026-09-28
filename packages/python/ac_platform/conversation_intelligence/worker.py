@@ -64,6 +64,7 @@ from ac_platform.conversation_intelligence.native_runtime import (
     NativeRuntime,
 )
 from ac_platform.conversation_intelligence.signals import inspect_media
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     MAX_OBJECT_BYTES,
@@ -71,6 +72,7 @@ from ac_platform.conversation_intelligence.storage import (
     ObjectKind,
     PrivateLocalRecordingStorage,
     StorageError,
+    StorageKey,
 )
 from ac_platform.conversation_intelligence.worker_account_gate import (
     AccountProfileRequired,
@@ -602,7 +604,7 @@ class OfflineConversationWorker:
             raise StorageError("conversation_c1_cache_metadata_invalid")
         return size
 
-    def _verify_object(self, key: ObjectKey, sha: str, expected_bytes: int) -> None:
+    def _verify_object(self, key: StorageKey, sha: str, expected_bytes: int) -> None:
         if type(expected_bytes) is not int or expected_bytes <= 0:
             raise StorageError("storage_invalid_expected_size")
         size = sum(len(block) for block in self.storage.iter_bytes(key, expected_sha256=sha))
@@ -611,12 +613,13 @@ class OfflineConversationWorker:
 
     def _verify_cached_c1(
         self,
-        source: ObjectKey,
+        source: StorageKey,
         source_sha: str,
         source_bytes: int,
         feature_blob_id: UUID | None,
         payload: dict[str, Any] | None,
         payload_sha: str,
+        recording_id: UUID,
     ) -> dict[str, Any]:
         if type(feature_blob_id) is not UUID or not isinstance(payload, dict):
             raise StorageError("conversation_c1_cache_missing_feature_blob")
@@ -642,7 +645,7 @@ class OfflineConversationWorker:
         self._verify_object(
             ObjectKey(
                 source.tenant_id,
-                source.recording_id,
+                recording_id,
                 feature_blob_id,
                 ObjectKind.SIGNAL_FEATURES,
             ),
@@ -653,7 +656,7 @@ class OfflineConversationWorker:
 
     def _inspect(
         self,
-        source: ObjectKey,
+        source: StorageKey,
         sha: str,
         expected_bytes: int,
         root: Path,
@@ -675,7 +678,7 @@ class OfflineConversationWorker:
 
     def _inspect_hosted(
         self,
-        source: ObjectKey,
+        source: StorageKey,
         sha: str,
         expected_bytes: int,
         root: Path,
@@ -728,9 +731,8 @@ class OfflineConversationWorker:
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
                 recording, _, quoted, _ = await self._scope(db, job)
-                source = ObjectKey(
-                    recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO
-                )
+                source = await resolve_source_key(db, recording)
+                recording_id = recording.id
                 source_sha = recording.source_sha256
                 source_bytes = recording.source_bytes
                 binding = SourceBinding(
@@ -790,6 +792,7 @@ class OfflineConversationWorker:
                     cached_row[1],
                     cached_row[0],
                     cached_row[2],
+                    recording_id,
                 )
 
             # Dispatch is committed only after a cache hit has proved its source and

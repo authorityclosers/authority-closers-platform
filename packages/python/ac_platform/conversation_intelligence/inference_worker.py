@@ -63,12 +63,14 @@ from ac_platform.conversation_intelligence.models import (
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
     ObjectKey,
     ObjectKind,
     PrivateLocalRecordingStorage,
     StorageError,
+    StorageKey,
 )
 from ac_platform.conversation_intelligence.worker import Work, _drain, _FencedExecutor
 from ac_platform.conversation_intelligence.worker_account_gate import (
@@ -263,6 +265,7 @@ class Scope:
     run: ConversationRun
     quoted: ConversationQuote
     plan: ServicePlan
+    source_key: StorageKey | None = None
 
 
 def save_accounts(
@@ -470,7 +473,9 @@ class ConversationInferenceWorker:
         """
 
         if scope.task.stage == "C2":
-            return self._audio(scope.recording)
+            if scope.source_key is None:
+                raise StorageError("storage_object_missing")
+            return self._audio(scope.recording, scope.source_key)
         if scope.task.stage in {"C4", "C5"}:
             payload = scope.plan.prepared.payload
             if type(payload) is not bytes or not payload:
@@ -507,12 +512,12 @@ class ConversationInferenceWorker:
             )
         raise ConversationConflict("The provider task stage is invalid.")
 
-    def _audio(self, recording: ConversationRecording) -> bytes:
+    def _audio(self, recording: ConversationRecording, source_key: StorageKey) -> bytes:
         if recording.source_bytes > MAX_AUDIO_BYTES:
             raise StorageError("provider_audio_too_large")
         audio = b"".join(
             self.storage.iter_bytes(
-                ObjectKey(recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO),
+                source_key,
                 expected_sha256=recording.source_sha256,
             )
         )
@@ -577,6 +582,8 @@ class ConversationInferenceWorker:
                 if job.dispatch_started_at is not None:
                     raise ConversationConflict("A previous provider dispatch needs reconciliation.")
                 scope = await self._scope(db, job)
+                if scope.task.stage == "C2":
+                    scope.source_key = await resolve_source_key(db, scope.recording)
                 payload = await fenced.run(self._payload, scope)
                 service = ConversationInference(ConversationApplication(db, clock=self.clock))
                 minutes, budget = await service.accounts(scope.recording, scope.quoted)
