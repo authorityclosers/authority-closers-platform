@@ -200,6 +200,11 @@ export function record(value: unknown): Record<string, unknown> {
     throw new ReportContractError("acquisition_response");
   return value as Record<string, unknown>;
 }
+// Standard policies keep recordings up to 7 days; an approved keep-for-training
+// policy may keep them (until the owner deletes them) for up to ten years.
+export const STANDARD_RETENTION_DAYS = 7;
+const MAX_RETENTION_DAYS = 3650;
+
 function integer(value: unknown, maximum: number): number {
   if (
     !Number.isSafeInteger(value) ||
@@ -300,7 +305,7 @@ export function parsePolicy(value: unknown): UploadPolicy {
       MAX_ACQUISITION_FILE_BYTES,
     ),
     maximum_call_seconds = integer(item.maximum_call_seconds, 3600),
-    retention_days = integer(item.retention_days, 7);
+    retention_days = integer(item.retention_days, MAX_RETENTION_DAYS);
   const privacy_details =
     typeof item.privacy_details === "string"
       ? item.privacy_details

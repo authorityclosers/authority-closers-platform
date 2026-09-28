@@ -44,6 +44,13 @@ ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"
     "ac.sales-xray.acquisition-provider-policy/1"
 )
 MAX_ACQUISITION_POLICY_STAGES = 3
+# Owner limits (28 Sep 2026): recordings may be kept beyond the standard week only
+# under a keep-for-training retention policy, which records the consent basis.
+STANDARD_RETENTION_DAYS = 7
+MAX_RETENTION_DAYS = 3650
+KEEP_FOR_TRAINING_RETENTION_PREFIX = "ref:retention/sales-xray-keep-for-training"
+MAX_ACQUISITION_RECORDINGS = 10_000
+MAX_ACQUISITION_STORED_SOURCE_BYTES = 34_359_738_368
 
 _DIGEST = r"^[0-9a-f]{64}$"
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,255}$")
@@ -110,12 +117,12 @@ class AllowanceApproval(_StrictFrozenModel):
     authorization_ref: str = Field(min_length=6, max_length=256)
     granted_by: UUID
     reason: Literal["Approved internal testing allowance"]
-    max_recordings: StrictInt = Field(ge=1, le=64)
+    max_recordings: StrictInt = Field(ge=1, le=MAX_ACQUISITION_RECORDINGS)
     # Keep the descriptor schema compatible with existing 128 MiB approval
     # manifests; guest intake and provider execution remain capped at 32 MiB
     # by the admission and provider paths.
     max_source_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_stored_source_bytes: StrictInt = Field(ge=1, le=8_589_934_592)
+    max_stored_source_bytes: StrictInt = Field(ge=1, le=MAX_ACQUISITION_STORED_SOURCE_BYTES)
 
     _authorization_ref = field_validator("authorization_ref")(_validate_reference)
 
@@ -460,9 +467,9 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
     processing_person_id: UUID
     authorization_ref: str = Field(min_length=6, max_length=256)
     expires_at_epoch: StrictInt = Field(gt=0)
-    max_recordings: StrictInt = Field(ge=1, le=64)
+    max_recordings: StrictInt = Field(ge=1, le=MAX_ACQUISITION_RECORDINGS)
     max_source_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_stored_source_bytes: StrictInt = Field(ge=1, le=8_589_934_592)
+    max_stored_source_bytes: StrictInt = Field(ge=1, le=MAX_ACQUISITION_STORED_SOURCE_BYTES)
     stages: tuple[AcquisitionStagePolicy, ...] = Field(
         min_length=MAX_ACQUISITION_POLICY_STAGES, max_length=MAX_ACQUISITION_POLICY_STAGES
     )
@@ -598,7 +605,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
     paid_approval_ref: str | None = Field(default=None, min_length=6, max_length=256)
     intake_authorization_ref: str = Field(min_length=6, max_length=256)
     intake_retention_ref: str = Field(min_length=6, max_length=256)
-    retention_days: StrictInt = Field(ge=1, le=7)
+    retention_days: StrictInt = Field(ge=1, le=MAX_RETENTION_DAYS)
     max_stored_source_bytes: StrictInt = Field(ge=1, le=34_359_738_368)
     allowances: tuple[AllowanceApproval, ...] = Field(max_length=MAX_ALLOWANCES)
     stages: tuple[StageApproval, ...] = Field(max_length=MAX_STAGES)
@@ -623,6 +630,10 @@ class HostedApprovalBundle(_StrictFrozenModel):
     def validate_bundle_consistency(self) -> Self:
         if self.expires_at_epoch <= self.issued_at_epoch:
             raise ValueError("approval_bundle_window_invalid")
+        if self.retention_days > STANDARD_RETENTION_DAYS and not (
+            self.intake_retention_ref.startswith(KEEP_FOR_TRAINING_RETENTION_PREFIX)
+        ):
+            raise ValueError("retention_beyond_standard_requires_keep_for_training")
         if self.stage_call_supplements and self.environment == "production":
             raise ValueError("stage_supplements_not_approved_for_production")
 

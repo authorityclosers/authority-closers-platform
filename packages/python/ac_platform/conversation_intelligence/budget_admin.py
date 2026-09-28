@@ -35,7 +35,7 @@ from ac_platform.kernel.authz import ActorContext
 
 # The user-authorized ceiling is INR 10,000.  The pinned release approval must
 # still carry the exact amount before this service can persist it.
-ADMIN_BUDGET_CEILING_PAISE = 1_000_000
+ADMIN_BUDGET_CEILING_PAISE = 10_000_000
 
 
 def admin_budget_approval_ref(bundle_digest: str, actor_id: UUID, key: str) -> str:

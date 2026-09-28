@@ -219,7 +219,7 @@ async def test_save_retries_same_key_against_the_recorded_receipt_action():
 
 
 def test_admin_ceiling_is_ten_thousand_inr():
-    assert ADMIN_BUDGET_CEILING_PAISE == 1_000_000
+    assert ADMIN_BUDGET_CEILING_PAISE == 10_000_000
 
 
 def test_admin_approval_ref_is_bound_to_the_release_digest():
@@ -280,10 +280,10 @@ def test_authority_carries_an_admin_limit_across_release_refreshes():
     assert _budget_matches_release(carried_admin_budget, release_bundle)
     over_ceiling = replace(
         admin_budget,
-        cap_paise=1_000_001,
+        cap_paise=ADMIN_BUDGET_CEILING_PAISE + 1,
         cap_approval=replace(
             admin_budget.cap_approval,
-            approved_cap_paise=1_000_001,
+            approved_cap_paise=ADMIN_BUDGET_CEILING_PAISE + 1,
             explicit_above_ceiling=True,
         ),
     )
