@@ -17,33 +17,43 @@
 
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
-1. One task at a time, for the whole company: every agent, person and device.
-   A task is one small, reviewable change tied to one tracked issue. No new task
-   starts while any task branch or pull request is open, or while the latest
-   `main` build is not green. Do not widen scope or refactor on the side; record
-   other findings as proposed tasks.
+1. One task at a time per lane, for every agent, person and device. There are
+   three lanes: `sales-xray`, `platform` and `admin`. Lanes run in parallel; each
+   holds one task. A task is one small, reviewable change tied to one tracked
+   issue. No new task starts in a lane while that lane holds a task branch or pull
+   request, or while the latest `main` build is not green. Pull requests may not
+   change the same files, and only one at a time may change shared files
+   (migrations, lockfiles, workflows, AGENTS.md, the gate). Do not widen scope or
+   refactor on the side; record other findings as proposed tasks.
 2. Start every task with the gate, never with raw git:
-   `python scripts/ac_task.py start <issue>-<short-name>`. It refuses while
-   anything else is open and otherwise branches from the latest `main` and claims
-   the task on GitHub. Check with `python scripts/ac_task.py status` first; run
-   `python scripts/ac_task.py check` before resuming work. If the gate says BUSY,
-   stop and report. Never build on old, integration, release or other task
-   branches. Do not create extra git worktrees.
+   `python scripts/ac_task.py start <lane> <issue>-<short-name>`. It refuses while
+   the lane is busy and otherwise branches from the latest `main` and claims the
+   task on GitHub. Without a lane, a task is exclusive: it runs only when nothing
+   else is open, and nothing else starts while it is. Check with
+   `python scripts/ac_task.py status` first; run `python scripts/ac_task.py check`
+   before resuming work. If the gate says BUSY, stop and report. Never build on
+   old, integration, release or other task branches. One checkout per lane; do not
+   create extra git worktrees.
 3. `main` is the only long-lived branch. A task branch lives only until its pull
-   request merges or closes (GitHub then deletes it, which frees the gate); run
-   `python scripts/ac_task.py done` afterwards. The `single-track` check fails any
-   pull request while another one is open.
+   request merges or closes (GitHub then deletes it, which frees the lane); run
+   `python scripts/ac_task.py done` afterwards. The `single-track` check fails a
+   pull request while its lane is taken, its files overlap another open pull
+   request, or both change shared files.
 4. Done means: the change works on the dev environment, tests and evidence for the
    changed areas pass, the pull request against `main` explains what changed and
-   how to check it on dev, and CI is green. Then stop and wait for the owner.
-5. The owner approves by merging. Billing settings, payment settings, and
-   purchases require explicit human permission.
+   how to check it on dev, and CI is green. Then stop: the CTO reviews and the CEO
+   approves.
+5. The CEO approves merges on the owner's behalf; the watchdog merges exactly the
+   approved commit. Billing settings, payment settings, purchases, secrets,
+   production data and data deletion still require the owner's explicit
+   permission.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
    deploys automatically -> the owner promotes the same build to production from
    Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
    between environments.
 7. Use included subscriptions only. Stop on usage limits; never fall back to API
-   keys or paid credits. Only one agent runs at a time.
+   keys or paid credits. Agents run in parallel only as far as the server's
+   headroom allows (the launcher's slots).
 8. Secrets never go in git, prompts, logs, task comments or pull requests.
 
 # CODEX SOURCE FETCH ORDER

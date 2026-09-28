@@ -169,4 +169,103 @@ def test_cli_exit_codes(capsys) -> None:
     repo.branches.append("task/75-other")
     assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
     assert MODULE.main(["start", "76-x"], gate(repo)) == MODULE.EXIT_BUSY
-    assert "one task at a time" in capsys.readouterr().err
+    assert "one task per lane" in capsys.readouterr().err
+
+
+# -- lanes ---------------------------------------------------------------------
+
+
+def test_lanes_run_in_parallel_but_hold_one_task_each() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/platform/23-release-notes")
+    repo.prs = [{"number": 91, "headRefName": "task/platform/23-release-notes", "title": "R2"}]
+    branch = gate(repo).start("46-plan-accept", "sales-xray")
+    assert branch == "task/sales-xray/46-plan-accept"
+    assert branch in repo.branches
+    with pytest.raises(MODULE.BusyError, match="platform lane"):
+        gate(repo).start("24-promote", "platform")
+
+
+def test_an_exclusive_task_blocks_every_lane_and_is_blocked_by_any() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/83-development-hosted")
+    with pytest.raises(MODULE.BusyError):
+        gate(repo).start("46-plan-accept", "sales-xray")
+    repo.branches = ["main", "task/admin/29-releases-page"]
+    with pytest.raises(MODULE.BusyError):
+        gate(repo).start("90-parallel-lanes")
+
+
+def test_unknown_lanes_are_refused() -> None:
+    with pytest.raises(MODULE.TaskError, match="unknown lane"):
+        gate(FakeRepo()).start("46-x", "mobile")
+
+
+def test_check_only_counts_the_own_lane_and_exclusive_work() -> None:
+    repo = FakeRepo()
+    repo.branches += ["task/sales-xray/46-fix", "task/platform/23-notes"]
+    repo.current = "task/sales-xray/46-fix"
+    assert gate(repo).check().free
+    repo.branches.append("task/sales-xray/47-other")
+    assert not gate(repo).check().free
+
+
+def test_status_json_reports_each_lane(capsys) -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/platform/23-notes")
+    assert MODULE.main(["status", "--json"], gate(repo)) == 0
+    status = json.loads(capsys.readouterr().out)
+    assert status["lanes"]["platform"] == {"holder": "task/platform/23-notes", "free": False}
+    assert status["lanes"]["sales-xray"]["free"] is True
+    assert status["exclusive_free"] is False
+
+
+def test_cli_start_accepts_a_lane(capsys) -> None:
+    repo = FakeRepo()
+    assert MODULE.main(["start", "admin", "29-releases-page"], gate(repo)) == 0
+    assert "task/admin/29-releases-page" in capsys.readouterr().out
+
+
+def pr(number: int, head: str, *paths: str) -> dict[str, object]:
+    return {
+        "number": number,
+        "headRefName": head,
+        "title": f"PR {number}",
+        "files": [{"path": path} for path in paths],
+    }
+
+
+def test_pr_check_allows_separate_lanes_with_separate_files() -> None:
+    repo = FakeRepo()
+    repo.prs = [
+        pr(1, "task/sales-xray/46-a", "apps/sales-xray-web/app/a.tsx"),
+        pr(2, "task/platform/23-b", "infra/release/ac_release.py"),
+    ]
+    assert gate(repo).pr_check(1) == []
+
+
+@pytest.mark.parametrize(
+    ("other", "expected"),
+    [
+        (pr(2, "task/sales-xray/47-b", "docs/b.md"), "already holds the sales-xray lane"),
+        (pr(2, "task/platform/23-b", "docs/shared.md"), "same files: docs/shared.md"),
+        (pr(2, "task/platform/23-b", "uv.lock"), "shared files"),
+        (pr(2, "task/83-exclusive", "docs/b.md"), "exclusive task"),
+        (pr(2, "dependabot/npm/x", "docs/b.md"), "exclusive task"),
+    ],
+)
+def test_pr_check_refuses_conflicting_work(other, expected) -> None:
+    repo = FakeRepo()
+    mine = pr(1, "task/sales-xray/46-a", "docs/shared.md", "db/migrations/versions/x.py")
+    repo.prs = [mine, other]
+    problems = gate(repo).pr_check(1)
+    assert problems and expected in problems[0]
+
+
+def test_pr_check_cli_exit_codes(capsys) -> None:
+    repo = FakeRepo()
+    repo.prs = [pr(1, "task/admin/29-a", "apps/admin-web/a.tsx")]
+    assert MODULE.main(["pr-check", "1"], gate(repo)) == 0
+    repo.prs.append(pr(2, "task/admin/30-b", "apps/admin-web/b.tsx"))
+    assert MODULE.main(["pr-check", "1"], gate(repo)) == 1
+    assert "::error::" in capsys.readouterr().out

@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""Single-track work gate: one task at a time across every agent and device.
+"""Work gate: one task at a time per lane, up to three lanes in parallel.
 
-GitHub is the shared lock. A task is active while its `task/<issue>-<name>`
-branch exists on GitHub; merging its pull request deletes the branch and frees
-the lock. Nobody starts new work while another branch or pull request is open,
-or while the latest `main` build is not green.
+GitHub is the shared lock. A task is active while its branch exists on GitHub;
+merging its pull request deletes the branch and frees the lock.
 
-    python scripts/ac_task.py status            show what is open and whether work may start
-    python scripts/ac_task.py start 76-my-fix   claim the lock and branch from the latest main
-    python scripts/ac_task.py check             exit 0 only if the current branch may be worked on
-    python scripts/ac_task.py done              after the merge: back to main, delete the branch
+- A lane task lives on `task/<lane>/<issue>-<name>`. Each lane (sales-xray,
+  platform, admin) holds one task at a time; different lanes run in parallel.
+- A plain `task/<issue>-<name>` branch is exclusive: it runs alone, as before.
+- Nobody starts new work while the latest `main` build is not green.
+- Pull requests may not change the same file, and only one open pull request at
+  a time may touch shared files (migrations, lockfiles, workflows, AGENTS.md).
+
+    python scripts/ac_task.py status [--json]          what is open, which lanes are free
+    python scripts/ac_task.py start sales-xray 81-fix  claim a lane and branch from main
+    python scripts/ac_task.py start 76-my-fix          claim everything (exclusive task)
+    python scripts/ac_task.py check                    may this branch be worked on?
+    python scripts/ac_task.py done                     after the merge: back to main
+    python scripts/ac_task.py pr-check 90              CI: may this pull request stay open?
 
 Needs `git` and an authenticated `gh` (GitHub CLI).
 """
@@ -27,6 +34,23 @@ from dataclasses import dataclass, field
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
 TASK_NAME_RE = re.compile(r"[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*")
+LANES = ("sales-xray", "platform", "admin")
+EXCLUSIVE = "exclusive"
+SHARED_PREFIXES = ("db/migrations/", ".github/")
+SHARED_FILES = frozenset(
+    {
+        "AGENTS.md",
+        "CLAUDE.md",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "pyproject.toml",
+        "uv.lock",
+        "packages/python/ac_platform/db/models.py",
+        "tests/database/test_model_registry.py",
+        "scripts/ac_task.py",
+    }
+)
 EXIT_BUSY = 3
 
 Runner = Callable[[Sequence[str]], str]
@@ -48,6 +72,19 @@ def run(argv: Sequence[str]) -> str:
     return completed.stdout
 
 
+def lane_of(branch: str) -> str:
+    """The lane a branch holds; plain task branches and anything else are exclusive."""
+
+    parts = branch.split("/")
+    if len(parts) == 3 and parts[0] == "task" and parts[1] in LANES:
+        return parts[1]
+    return EXCLUSIVE
+
+
+def is_shared(path: str) -> bool:
+    return path in SHARED_FILES or path.startswith(SHARED_PREFIXES)
+
+
 @dataclass
 class Verdict:
     """Whether new work may start, and why not."""
@@ -56,6 +93,7 @@ class Verdict:
     active_branches: list[str] = field(default_factory=list)
     open_prs: list[str] = field(default_factory=list)
     main_state: str = "unknown"
+    lanes: dict[str, str | None] = field(default_factory=dict)
 
     @property
     def free(self) -> bool:
@@ -82,18 +120,9 @@ class Gate:
                 names.append(ref.removeprefix("refs/heads/"))
         return sorted(names)
 
-    def open_pull_requests(self) -> list[dict[str, object]]:
+    def open_pull_requests(self, fields: str = "number,headRefName,title") -> list[dict]:
         data = self.gh(
-            "pr",
-            "list",
-            "-R",
-            REPOSITORY,
-            "--state",
-            "open",
-            "--json",
-            "number,headRefName,title",
-            "--limit",
-            "100",
+            "pr", "list", "-R", REPOSITORY, "--state", "open", "--json", fields, "--limit", "100"
         )
         return list(json.loads(data or "[]"))
 
@@ -127,35 +156,48 @@ class Gate:
 
     # -- decisions ---------------------------------------------------------------
 
-    def assess(self, own_branch: str | None = None) -> Verdict:
+    def assess(self, own_branch: str | None = None, lane: str = EXCLUSIVE) -> Verdict:
+        """May work in `lane` go ahead? An exclusive task needs everything else closed."""
+
         verdict = Verdict()
-        verdict.active_branches = [
-            name for name in self.remote_branches() if name != "main" and name != own_branch
+        branches = [name for name in self.remote_branches() if name not in ("main", own_branch)]
+        verdict.active_branches = branches
+        verdict.lanes = {name: None for name in LANES}
+        for name in branches:
+            if lane_of(name) in verdict.lanes:
+                verdict.lanes[lane_of(name)] = name
+        blocking = [
+            name for name in branches if lane == EXCLUSIVE or lane_of(name) in (EXCLUSIVE, lane)
         ]
-        for pr in self.open_pull_requests():
-            if pr.get("headRefName") != own_branch:
-                verdict.open_prs.append(f"#{pr.get('number')} {pr.get('title')}")
+        prs = [pr for pr in self.open_pull_requests() if pr.get("headRefName") != own_branch]
+        verdict.open_prs = [f"#{pr.get('number')} {pr.get('title')}" for pr in prs]
+        blocking_prs = [
+            f"#{pr.get('number')} {pr.get('title')}"
+            for pr in prs
+            if lane == EXCLUSIVE or lane_of(str(pr.get("headRefName"))) in (EXCLUSIVE, lane)
+        ]
         verdict.main_state = self.main_state()
-        if verdict.active_branches:
-            verdict.reasons.append(
-                "another task is in progress: " + ", ".join(verdict.active_branches)
-            )
-        if verdict.open_prs:
-            verdict.reasons.append("open pull request(s): " + "; ".join(verdict.open_prs))
+        if blocking:
+            where = "" if lane == EXCLUSIVE else f" in the {lane} lane"
+            verdict.reasons.append(f"another task is in progress{where}: " + ", ".join(blocking))
+        if blocking_prs:
+            verdict.reasons.append("open pull request(s): " + "; ".join(blocking_prs))
         if verdict.main_state != "green":
             verdict.reasons.append(f"main is not green yet ({verdict.main_state})")
         return verdict
 
-    def start(self, name: str) -> str:
+    def start(self, name: str, lane: str = EXCLUSIVE) -> str:
+        if lane != EXCLUSIVE and lane not in LANES:
+            raise TaskError(f"unknown lane {lane!r}; lanes are {', '.join(LANES)}")
         if not TASK_NAME_RE.fullmatch(name):
             raise TaskError(
                 "task name must look like <issue>-<short-name>, e.g. 76-single-track-gate"
             )
-        branch = f"task/{name}"
+        branch = f"task/{name}" if lane == EXCLUSIVE else f"task/{lane}/{name}"
         if not self.is_clean():
             raise TaskError("this folder has uncommitted changes; finish or stash them first")
         self.git("fetch", "--quiet", "--prune", "origin")
-        verdict = self.assess()
+        verdict = self.assess(lane=lane)
         if not verdict.free:
             raise BusyError(verdict)
         self.git("switch", "--quiet", "--create", branch, "origin/main")
@@ -172,7 +214,7 @@ class Gate:
             return verdict
         if branch not in self.remote_branches():
             return Verdict(reasons=[f"{branch} is not claimed on GitHub; run start first"])
-        verdict = self.assess(own_branch=branch)
+        verdict = self.assess(own_branch=branch, lane=lane_of(branch))
         # main moving on is fine while you work; only other tasks block you.
         verdict.reasons = [reason for reason in verdict.reasons if not reason.startswith("main is")]
         return verdict
@@ -193,6 +235,37 @@ class Gate:
         self.git("branch", "--quiet", "-D", branch)
         return branch
 
+    def pr_check(self, number: int) -> list[str]:
+        """Problems that forbid pull request `number` from being open right now."""
+
+        prs = self.open_pull_requests("number,headRefName,title,files")
+        mine = next((pr for pr in prs if pr.get("number") == number), None)
+        if mine is None:
+            return [f"#{number} is not an open pull request"]
+        lane = lane_of(str(mine.get("headRefName")))
+        files = {str(item.get("path")) for item in mine.get("files") or []}
+        problems = []
+        for other in prs:
+            if other is mine:
+                continue
+            label = f"#{other.get('number')} {other.get('title')}"
+            other_lane = lane_of(str(other.get("headRefName")))
+            other_files = {str(item.get("path")) for item in other.get("files") or []}
+            if EXCLUSIVE in (lane, other_lane):
+                problems.append(f"{label} is open and one of the two is an exclusive task")
+                continue
+            if other_lane == lane:
+                problems.append(f"{label} already holds the {lane} lane")
+            overlap = sorted(files & other_files)
+            if overlap:
+                problems.append(f"{label} changes the same files: {', '.join(overlap[:5])}")
+            shared = sorted(path for path in files if is_shared(path))
+            if shared and any(is_shared(path) for path in other_files):
+                problems.append(
+                    f"{label} also changes shared files; one at a time ({', '.join(shared[:3])})"
+                )
+        return problems
+
 
 class BusyError(TaskError):
     def __init__(self, verdict: Verdict) -> None:
@@ -204,6 +277,11 @@ def _describe(verdict: Verdict) -> str:
     lines = [f"main: {verdict.main_state}"]
     lines.append("active task branches: " + (", ".join(verdict.active_branches) or "none"))
     lines.append("open pull requests: " + ("; ".join(verdict.open_prs) or "none"))
+    if verdict.lanes:
+        lines.append(
+            "lanes: "
+            + ", ".join(f"{name}={holder or 'free'}" for name, holder in verdict.lanes.items())
+        )
     if verdict.free:
         lines.append("FREE: new work may start")
     else:
@@ -211,26 +289,57 @@ def _describe(verdict: Verdict) -> str:
     return "\n".join(lines)
 
 
+def _status_json(gate: Gate) -> dict[str, object]:
+    """Per-lane view for automation: which lanes may start a task right now."""
+
+    overall = gate.assess()
+    free = {}
+    for lane in LANES:
+        verdict = gate.assess(lane=lane)
+        free[lane] = verdict.free
+    return {
+        "main": overall.main_state,
+        "active_branches": overall.active_branches,
+        "open_prs": overall.open_prs,
+        "lanes": {lane: {"holder": overall.lanes.get(lane), "free": free[lane]} for lane in LANES},
+        "exclusive_free": overall.free,
+    }
+
+
 def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="ac_task", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("status")
+    status = sub.add_parser("status")
+    status.add_argument("--json", action="store_true", help="per-lane status for automation")
     start = sub.add_parser("start")
-    start.add_argument("name", help="<issue>-<short-name>, e.g. 76-single-track-gate")
+    start.add_argument(
+        "names",
+        nargs="+",
+        metavar="[LANE] NAME",
+        help=f"optional lane ({', '.join(LANES)}) then <issue>-<short-name>",
+    )
     sub.add_parser("check")
     sub.add_parser("done")
+    pr_check = sub.add_parser("pr-check")
+    pr_check.add_argument("number", type=int)
     args = parser.parse_args(argv)
     gate = gate or Gate()
     try:
         if args.command == "status":
             gate.git("fetch", "--quiet", "--prune", "origin")
+            if args.json:
+                print(json.dumps(_status_json(gate)))
+                return 0
             verdict = gate.assess()
             print(_describe(verdict))
             return 0 if verdict.free else EXIT_BUSY
         if args.command == "start":
-            print(f"started {gate.start(args.name)} from the latest main; the lock is claimed")
+            if len(args.names) > 2:
+                raise TaskError("start takes [LANE] NAME")
+            lane, name = (EXCLUSIVE, args.names[0]) if len(args.names) == 1 else args.names
+            print(f"started {gate.start(name, lane)} from the latest main; the lock is claimed")
             return 0
         if args.command == "check":
             verdict = gate.check()
@@ -239,11 +348,18 @@ def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
                 return 0
             print(_describe(verdict), file=sys.stderr)
             return EXIT_BUSY
+        if args.command == "pr-check":
+            problems = gate.pr_check(args.number)
+            for problem in problems:
+                print(f"::error::{problem}. One task per lane, no shared files (AGENTS.md).")
+            if not problems:
+                print("This pull request may stay open: its lane is its own and no files overlap.")
+            return 1 if problems else 0
         print(f"finished {gate.done()}; back on the latest main")
         return 0
     except BusyError as error:
         print(_describe(error.verdict), file=sys.stderr)
-        print("Stop: finish the open task first (one task at a time, AGENTS.md).", file=sys.stderr)
+        print("Stop: finish the open task first (one task per lane, AGENTS.md).", file=sys.stderr)
         return EXIT_BUSY
     except TaskError as error:
         print(f"ac_task: {error}", file=sys.stderr)
