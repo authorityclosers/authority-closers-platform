@@ -179,9 +179,19 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
                         assert result.state == "completed" and job.status == "succeeded"
                 if reader == "inference":
                     assert broker.payloads == ([] if history == "released" else [prepared.data])
-            assert reads == (
+            expected_reads = (
                 [] if history == "released" else [shared if history == "live" else legacy]
             )
+            if reader in {"native", "hosted"} and history != "released":
+                expected_reads.append(
+                    ObjectKey(
+                        state.tenant_id,
+                        prepared.recording_id,
+                        prepared.run_id,
+                        ObjectKind.SIGNAL_FEATURES,
+                    )
+                )
+            assert reads == expected_reads
         finally:
             await engine.dispose()
 
