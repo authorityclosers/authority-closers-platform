@@ -32,6 +32,7 @@ same source-owned installers the laptop script used to run over SSH.
 | `ac-release pause staging` / `resume staging` | Stop or restart automatic deploys; `resume` also clears failure marks |
 | `ac-release rollback staging --component web` | Restore the previous Sales Xray web image |
 | `ac-release history -n 20` | Recent deploy records (`/var/lib/ac-release/history.jsonl`) |
+| `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]` | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space)) |
 
 Logs for each deploy are in `/var/log/ac-release/`.
 
@@ -55,3 +56,79 @@ Logs for each deploy are in `/var/log/ac-release/`.
   exists **and** the same commit already passed staging. That file is created
   only after the off-host backup restore check passes.
 - Admin → Releases (T5) will call these same commands.
+
+## Disk space
+
+Two stores keep core release bundles on the server:
+
+| Store | Holds | Cleaned by |
+|---|---|---|
+| `/srv/authority-closers/release-store/<sha>/` | The engine's downloads | The engine, after each successful deploy: what runs plus the last 10 successful deploys |
+| `/srv/authority-closers/application/artifacts/<sha>/` | The installer's immutable copy of every core bundle it installed (about 390 MB each), plus the four images it loaded into Docker | `ac-release prune-artifacts`, run by the owner |
+
+GitHub keeps each bundle for one day, so these copies are the only local way
+to reinstall an older release. Once a copy is removed, reinstalling that
+release needs its bundle from the release store, or a new package from the
+*Application release package recovery* workflow.
+
+### What `prune-artifacts` keeps
+
+A core artifact stays if any of these is true. The report prints the reasons.
+
+1. `current-staging` or `current-production` points at it.
+2. An environment's records in `application/deployments/<env>/` name it at or
+   after the last `COMMITTED` record. That covers the `AC_PREVIOUS_RELEASE`
+   rollback target, any later unfinished attempt, and any
+   `FORWARD_RECOVERY_REQUIRED` release, whose recovery is to reapply that exact
+   release.
+3. A file under `application/deployments/` or `application/operator-inputs/`
+   names `artifacts/<sha>`. Files over 1 MB are not scanned.
+4. It is one of the newest N (`--keep-recent`, default 10), by the time it was
+   written.
+
+A core image (`authority-closers-api`, `-learner-web`, `-admin-web`,
+`-coach-web`) stays if any container uses it, or if it belongs to a kept
+release (by its tag or that release's `release-images.env`).
+
+It never touches:
+
+- `sales-xray-native-<sha>` directories, because the native systemd units run
+  their helper from there;
+- `sales-xray-web-<sha>` bundles and the installer's `.stage-*` directories;
+- Sales Xray web and native images, foundation and third-party images, and
+  untagged images.
+
+The report lists their size. The native units start their image only for a
+job, so Docker counts it as unused. **Do not run `docker image prune -a`**: it
+would delete the live native image.
+
+The command stops without removing anything when a current link or deployment
+record is not what the installer writes, or when a file it must scan cannot be
+read.
+
+### Running it
+
+```bash
+sudo ac-release prune-artifacts
+sudo ac-release prune-artifacts --apply
+```
+
+The first command is the dry run: every entry marked keep or remove, with its
+reasons and size. The second removes what the dry run marked remove. Before the
+engine is installed, run the same commands from a clean checkout of the
+reviewed commit as `sudo python3 infra/release/ac_release.py prune-artifacts`.
+
+`--apply` runs only as root. It refuses while an engine run or an installer
+holds its lock (`application/.deployment.lock`), and it decides again after
+taking both locks. Each artifact is renamed to `.prune-<sha>.<random>` before it
+is deleted, so an install never sees a half-deleted bundle. The next run
+finishes any interrupted removal. Images are untagged with `docker image rm`,
+never with `--force`. The outcome is appended to `history.jsonl`.
+
+Dry run on 2026-09-28:
+
+- **Core artifacts:** 109 (31.4 GB). Keep 14 (5.4 GB), remove 95 (26.0 GB).
+- **Core images:** all 20 belong to the five kept releases that have images
+  loaded, so none would be removed.
+- **Unmanaged:** 60 Sales Xray entries (8.0 GB) and 19 Docker images were left
+  alone.
