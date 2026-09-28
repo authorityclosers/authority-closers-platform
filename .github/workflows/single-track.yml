@@ -1,0 +1,58 @@
+name: Single track
+
+# One task at a time (AGENTS.md, delivery constitution). A pull request fails
+# this check while any other pull request is open, so parallel work can never
+# merge unnoticed. When a pull request closes, the remaining ones are re-checked.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, closed]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: single-track-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  single-track:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Only one open pull request at a time
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          others="$(gh pr list -R "$REPOSITORY" --state open --json number,title \
+            --jq "[.[] | select(.number != ${PULL_REQUEST}) | \"#\(.number) \(.title)\"] | join(\"; \")")"
+          if [ -n "$others" ]; then
+            printf '::error::Another task is open: %s. Finish or close it first; one task at a time (AGENTS.md).\n' "$others"
+            exit 1
+          fi
+          printf 'Only this task is open.\n'
+
+  recheck-remaining:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-run the single-track check of every remaining pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for number in $(gh pr list -R "$REPOSITORY" --state open --json number --jq '.[].number'); do
+            head_sha="$(gh pr view "$number" -R "$REPOSITORY" --json headRefOid --jq .headRefOid)"
+            run_id="$(gh run list -R "$REPOSITORY" --workflow single-track.yml --commit "$head_sha" \
+              --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            if [ -n "$run_id" ]; then
+              gh run rerun "$run_id" -R "$REPOSITORY" || printf 'Could not re-run the check for #%s.\n' "$number"
+            fi
+          done

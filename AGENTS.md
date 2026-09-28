@@ -17,15 +17,22 @@
 
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
-1. One task at a time. A task is one small, reviewable change tied to one tracked
-   issue. Do not start a second task, widen scope, or refactor on the side; record
+1. One task at a time, for the whole company: every agent, person and device.
+   A task is one small, reviewable change tied to one tracked issue. No new task
+   starts while any task branch or pull request is open, or while the latest
+   `main` build is not green. Do not widen scope or refactor on the side; record
    other findings as proposed tasks.
-2. Start every task from the latest `main`:
-   `git fetch origin && git switch -c task/<issue>-<short-name> origin/main`.
-   Never build on old, integration, release or other task branches. Do not
-   create extra git worktrees.
+2. Start every task with the gate, never with raw git:
+   `python scripts/ac_task.py start <issue>-<short-name>`. It refuses while
+   anything else is open and otherwise branches from the latest `main` and claims
+   the task on GitHub. Check with `python scripts/ac_task.py status` first; run
+   `python scripts/ac_task.py check` before resuming work. If the gate says BUSY,
+   stop and report. Never build on old, integration, release or other task
+   branches. Do not create extra git worktrees.
 3. `main` is the only long-lived branch. A task branch lives only until its pull
-   request merges or closes, then it is deleted.
+   request merges or closes (GitHub then deletes it, which frees the gate); run
+   `python scripts/ac_task.py done` afterwards. The `single-track` check fails any
+   pull request while another one is open.
 4. Done means: the change works on the dev environment, tests and evidence for the
    changed areas pass, the pull request against `main` explains what changed and
    how to check it on dev, and CI is green. Then stop and wait for the owner.
