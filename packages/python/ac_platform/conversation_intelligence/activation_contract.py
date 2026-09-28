@@ -593,7 +593,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
 
 class HostedApprovalBundle(_StrictFrozenModel):
     schema_id: Literal["ac.sales-xray.hosted-approval/1"] = Field(alias="schema")
-    environment: Literal["staging", "production", "test"]
+    environment: Literal["development", "staging", "production", "test"]
     provider_control_tenant_id: UUID
     deployment_ref: str = Field(min_length=6, max_length=256)
     issued_at_epoch: StrictInt = Field(gt=0)
@@ -796,7 +796,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("acquisition_c5_benchmark_stage_approval_missing")
             stage = candidates[0]
             if (
-                self.environment not in {"staging", "test"}
+                self.environment not in {"development", "staging", "test"}
                 or policy is None
                 or benchmark.tenant_id != policy.tenant_id
                 or benchmark.processing_person_id != policy.processing_person_id

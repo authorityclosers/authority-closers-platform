@@ -125,8 +125,9 @@ def _bundle(
     )
 
 
-def test_bundle_round_trips_canonical_json_and_current_window() -> None:
-    bundle = _bundle(allowances=(_allowance(),))
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "test"])
+def test_bundle_round_trips_canonical_json_and_current_window(environment: str) -> None:
+    bundle = _bundle(allowances=(_allowance(),), environment=environment)
 
     loaded = load_hosted_approval_bundle(bundle.to_json())
 
@@ -134,7 +135,10 @@ def test_bundle_round_trips_canonical_json_and_current_window() -> None:
     assert loaded.as_dict()["schema"] == HOSTED_APPROVAL_SCHEMA
     assert loaded.to_json() == bundle.to_json()
     assert loaded.digest == bundle.digest
-    assert loaded.current(1_500, "test") is loaded
+    assert loaded.current(1_500, environment) is loaded
+    for other in {"development", "staging", "production", "test"} - {environment}:
+        with pytest.raises(ActivationContractError, match="approval_environment_mismatch"):
+            loaded.current(1_500, other)
 
 
 def test_provider_stage_request_count_scope_is_release_pinned_and_expires_with_bundle() -> None:

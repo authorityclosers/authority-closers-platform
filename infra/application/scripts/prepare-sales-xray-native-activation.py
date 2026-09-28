@@ -39,7 +39,7 @@ ENV_VALUE = re.compile(r"[A-Za-z0-9_./:@+%=-]+\Z")
 MAX_ACTIVATION_BYTES = 64 * 1024
 MAX_REFERENCE_BYTES = 4 * 1024 * 1024
 MAX_MANIFEST_BYTES = 128 * 1024
-ENVIRONMENT_NAMES = frozenset({"staging", "production"})
+ENVIRONMENT_NAMES = frozenset({"development", "staging", "production"})
 OVERLAY = "compose.sales-xray-hosted.yaml"
 OPENAI_OVERLAY = "compose.sales-xray-hosted-openai.yaml"
 PROFILE = "sales-xray-hosted"

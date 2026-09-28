@@ -135,7 +135,7 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
 
     if not settings.sales_xray_enabled:
         return None
-    if settings.environment not in {"staging", "production", "test"}:
+    if settings.environment not in {"development", "staging", "production", "test"}:
         raise ValueError("hosted_conversation_environment_required")
     if not all(
         (

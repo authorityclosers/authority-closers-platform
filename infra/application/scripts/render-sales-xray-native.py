@@ -17,7 +17,7 @@ import stat
 import sys
 from pathlib import Path, PurePosixPath
 
-_ENVIRONMENTS = frozenset({"staging", "production"})
+_ENVIRONMENTS = frozenset({"development", "staging", "production"})
 _SHA40 = re.compile(r"[0-9a-f]{40}")
 _IMAGE = re.compile(r"sha256:[0-9a-f]{64}")
 _PATH = re.compile(r"/[A-Za-z0-9_./-]+")

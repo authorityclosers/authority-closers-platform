@@ -44,9 +44,9 @@ NATIVE_IMAGE_CONFIG_ID = "sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2
 # image artifact. Docker 29/containerd may report the transport manifest while
 # classic Docker may report the config ID; either is safe only as this pair.
 NATIVE_IMAGE_BINDING = frozenset({NATIVE_IMAGE_REF, NATIVE_IMAGE_CONFIG_ID})
-RENDERER_SHA256 = "33787dcc6d08219f6e595d86ccc0a80574f822678d13f629471171cdd5ce2544"
+RENDERER_SHA256 = "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76"
 SCHEMA = "ac.sales-xray.native-supervisor/1"
-ENVIRONMENTS = frozenset({"staging", "production"})
+ENVIRONMENTS = frozenset({"development", "staging", "production"})
 NATIVE_GROUP_NAME = "ac-sales-xray-native"
 NATIVE_GROUP_GID = 10001
 NATIVE_READINESS_TIMEOUT_SECONDS = 10.0

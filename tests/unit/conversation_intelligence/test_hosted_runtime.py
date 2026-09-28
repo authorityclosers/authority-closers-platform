@@ -69,24 +69,46 @@ def settings_for(tmp_path: Path, data: dict[str, Any]) -> Settings:
     )
 
 
-def test_disabled_runtime_does_not_create_storage(tmp_path: Path) -> None:
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "test"])
+def test_disabled_runtime_does_not_create_storage(tmp_path: Path, environment: str) -> None:
     settings = Settings(environment="test", sales_xray_storage_root=str(tmp_path / "unused"))
+    settings = settings.model_copy(update={"environment": environment})
     assert compose_hosted_intake(settings) is None
     assert not (tmp_path / "unused").exists()
 
 
-def test_complete_pinned_runtime_loads_and_rechecks_artifact(tmp_path: Path) -> None:
-    settings = settings_for(tmp_path, approval_data())
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "test"])
+def test_complete_pinned_runtime_loads_and_rechecks_artifact(
+    tmp_path: Path, environment: str
+) -> None:
+    settings = settings_for(tmp_path, approval_data(environment)).model_copy(
+        update={"environment": environment}
+    )
     runtime = compose_hosted_intake(settings)
     assert runtime.authority is not None
     assert runtime.policy.acoustic_recipe == "audioatlas-16000-v1"
     assert runtime.storage.root == tmp_path / "objects"
     assert runtime.scratch.root == tmp_path / "scratch"
     assert runtime.storage.root != runtime.scratch.root
-    assert runtime.authority.current(datetime.now(UTC)).digest
+    assert runtime.authority.current(datetime.now(UTC)).environment == environment
     Path(settings.sales_xray_approval_path).write_text("changed")
     with pytest.raises(ValueError, match="approved processing configuration"):
         runtime.authority.current(datetime.now(UTC))
+
+
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "test"])
+def test_synthetic_stage_approvals_remain_test_only(tmp_path: Path, environment: str) -> None:
+    from tests.unit.conversation_intelligence.test_activation_contract import _stage
+
+    data = approval_data(environment)
+    data["stages"] = [_stage(expires_at_epoch=data["expires_at_epoch"]).model_dump(mode="json")]
+    settings = settings_for(tmp_path, data).model_copy(update={"environment": environment})
+    if environment == "test":
+        assert compose_hosted_intake(settings) is not None
+    else:
+        with pytest.raises(ValueError, match="^hosted_approval_unavailable$"):
+            compose_hosted_intake(settings)
+        assert not (tmp_path / "objects").exists()
 
 
 def test_internal_tester_bundle_mounts_the_configured_public_tenant(tmp_path: Path) -> None:

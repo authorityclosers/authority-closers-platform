@@ -10,6 +10,7 @@ import pytest
 
 from ac_platform.conversation_intelligence.activation_contract import (
     ACQUISITION_POLICY_SCHEMA,
+    AcquisitionC5BenchmarkApproval,
     AcquisitionProviderPolicy,
     AcquisitionProviderProfile,
     AcquisitionStagePolicy,
@@ -180,6 +181,54 @@ def _paid_policy() -> AcquisitionProviderPolicy:
         for stage in ("C2", "C4", "C5")
     )
     return _policy(stages=stages)
+
+
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "test"])
+def test_c5_benchmark_environment_boundary(environment: str) -> None:
+    policy = _paid_policy()
+    stage = policy.derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C5",
+        configuration_sha256="b" * 64,
+    ).model_copy(update={"provider_id": "openai", "model_id": "gpt-6-luna", "max_requests": 1})
+    benchmark = AcquisitionC5BenchmarkApproval(
+        id=uuid4(),
+        authorization_ref="ref:test/benchmark",
+        tenant_id=TENANT_ID,
+        owner_person_id=SUPPLEMENT_OWNER_ID,
+        submission_id=uuid4(),
+        recording_id=uuid4(),
+        processing_person_id=PROCESSING_PERSON_ID,
+        processing_lease_id=uuid4(),
+        usage_id=uuid4(),
+        source_sha256=SOURCE_SHA,
+        source_revision=1,
+        generation=1,
+        stage_approval_id=stage.id,
+        configuration_sha256=stage.configuration_sha256,
+        analysis_settings_revision=1,
+        analysis_settings_sha256="e" * 64,
+        coaching_prompt_revision="coaching-v5",
+        report_language="en",
+        output_profile="detailed",
+        profile_sha256=stage.profile_sha256,
+        issued_at_epoch=1_000,
+        expires_at_epoch=1_800,
+        max_cost_paise=stage.max_cost_paise,
+        max_completion_tokens=stage.max_completion_tokens,
+    )
+    payload = _bundle(
+        policy, budget_cap_paise=2_200, paid_approval_ref="ref:test/paid-approval"
+    ).model_dump(by_alias=True)
+    payload.update(environment=environment, stages=(stage,), acquisition_c5_benchmarks=(benchmark,))
+    if environment == "production":
+        with pytest.raises(ValueError, match="acquisition_c5_benchmark_stage_scope_invalid"):
+            HostedApprovalBundle.model_validate(payload)
+    else:
+        bundle = HostedApprovalBundle.model_validate(payload)
+        assert bundle.current(1_500, environment).acquisition_c5_benchmarks == (benchmark,)
 
 
 def _stage_supplement(

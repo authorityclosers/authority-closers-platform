@@ -36,7 +36,7 @@ VALUES = {
 }
 
 
-@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize("environment", ["development", "staging", "production"])
 def test_units_bind_frozen_sources_and_isolate_environment(environment: str) -> None:
     result = MODULE.render(**{**VALUES, "environment": environment})
     units = result["units"]
@@ -59,8 +59,8 @@ def test_units_bind_frozen_sources_and_isolate_environment(environment: str) -> 
     assert "ExecStart=/usr/bin/env -i " in service
     assert "EnvironmentFile=" not in service
     assert "size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec" in units[mount_name]
-    other = "production" if environment == "staging" else "staging"
-    assert f"sales-xray/{other}" not in service
+    for other in {"development", "staging", "production"} - {environment}:
+        assert f"sales-xray/{other}" not in service
     assert result["installed"] is False and result["provider_calls"] == 0
 
 
@@ -68,6 +68,8 @@ def test_units_bind_frozen_sources_and_isolate_environment(environment: str) -> 
     ("field", "value"),
     [
         ("environment", "staging\nExecStart=/bin/false"),
+        ("environment", "test"),
+        ("environment", "local"),
         ("helper_source_sha", "main"),
         ("native_image_ref", "image:latest"),
         ("native_image_ref", "sha256:" + "c" * 63),
