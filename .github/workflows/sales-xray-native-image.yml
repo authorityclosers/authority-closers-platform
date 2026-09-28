@@ -7,13 +7,32 @@ on:
         description: "Exact 40-character lowercase commit to build"
         required: true
         type: string
+  # Rebuild automatically only when a native input changes. These paths match
+  # INPUT_FILES in infra/application/scripts/native_artifact_compatibility.py;
+  # otherwise the release engine reuses the previous verified native artifact.
+  push:
+    branches:
+      - main
+    paths:
+      - .dockerignore
+      - .github/workflows/sales-xray-native-image.yml
+      - infra/conversation-worker/Dockerfile
+      - infra/release/validate-artifact-pool.py
+      - native/audioatlas/**
+      - packages/python/ac_platform/__init__.py
+      - packages/python/ac_platform/conversation_intelligence/__init__.py
+      - packages/python/ac_platform/conversation_intelligence/__main__.py
+      - packages/python/ac_platform/conversation_intelligence/native_runtime.py
+      - packages/python/ac_platform/conversation_intelligence/signals.py
+      - scripts/native_runtime_helper.py
+      - scripts/test_hosted_native_linux.py
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: sales-xray-native-image-${{ inputs.frozen_sha }}
+  group: sales-xray-native-image-${{ inputs.frozen_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -24,8 +43,8 @@ jobs:
       group: application-release-packaging
       cancel-in-progress: false
     env:
-      FROZEN_SHA: ${{ inputs.frozen_sha }}
-      NATIVE_TAG: ghcr.io/authorityclosers/ac-sales-xray-native:${{ inputs.frozen_sha }}
+      FROZEN_SHA: ${{ inputs.frozen_sha || github.sha }}
+      NATIVE_TAG: ghcr.io/authorityclosers/ac-sales-xray-native:${{ inputs.frozen_sha || github.sha }}
       MAX_IMAGE_BYTES: "440000000"
       MAX_ARTIFACT_BYTES: "450000000"
       MAX_HELPER_BYTES: "20000000"
@@ -43,7 +62,7 @@ jobs:
       - name: Checkout the exact source commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ inputs.frozen_sha }}
+          ref: ${{ inputs.frozen_sha || github.sha }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -535,7 +554,7 @@ jobs:
       - name: Upload the offline native image artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: ac-sales-xray-native-${{ inputs.frozen_sha }}
-          path: ${{ runner.temp }}/ac-sales-xray-native-${{ inputs.frozen_sha }}
+          name: ac-sales-xray-native-${{ inputs.frozen_sha || github.sha }}
+          path: ${{ runner.temp }}/ac-sales-xray-native-${{ inputs.frozen_sha || github.sha }}
           if-no-files-found: error
           retention-days: 1

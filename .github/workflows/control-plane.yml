@@ -25,6 +25,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # The tag historical/backup-controller-35c658bd keeps this commit in every
+      # full clone now that main is squash-merged. Do not delete that tag.
       - name: Require the exact historical backup controller
         run: git cat-file -e '35c658bd028b4fc3a7c048ab72dae700cd7682d6:infra/application/scripts/restore-drill.py'
 
