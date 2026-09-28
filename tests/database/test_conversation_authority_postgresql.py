@@ -615,7 +615,7 @@ async def _duplicate_ready_recording(setup: AuthorityFixture, key: str) -> UUID:
 def _grant_provider_stage_request_count_scope(setup: AuthorityFixture) -> None:
     approval = InternalTesterApproval(
         id=uuid4(),
-        email="dipak@authorityclosers.com",
+        email="admin@authorityclosers.com",
         authorization_ref="ref:approval:provider-stage-count-test",
         scopes=("provider_stage_request_count",),
         reason="Approved internal tester exemption",
@@ -935,10 +935,10 @@ def test_deepgram_native_tail_is_bounded_through_c3_c5_and_report_read(
     run(exercise())
 
 
-def test_authority_stage_max_requests_spans_same_source_on_second_recording(
+def test_authority_stage_max_requests_is_per_recording_for_same_source(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
-    """One hosted C2 allowance cannot be multiplied by re-uploading the same WAV."""
+    """Each upload gets its own C2 reservation and provider dispatch."""
 
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
@@ -1003,34 +1003,80 @@ def test_authority_stage_max_requests_spans_same_source_on_second_recording(
                 assert local_run is not None and local_run.state == "completed"
                 assert local_c1 is not None and local_c1.payload is not None
 
-            with pytest.raises(ConversationDenied, match="allowance"):
-                await _issue(
-                    setup,
-                    key="hosted-cap-second-quote",
-                    recording_id=second_recording_id,
-                )
-            assert setup.broker.calls == 1
+            second_quote = await _issue(
+                setup, key="hosted-cap-second-quote", recording_id=second_recording_id
+            )
+            second_run = await _start(
+                setup, second_quote, key="hosted-cap-second-run", recording_id=second_recording_id
+            )
+            assert second_run["id"] != first_run["id"]
+            assert await setup.worker.run_once()
+            assert await completed_checkpoint(setup.sessions, second_run)
+            assert setup.broker.calls == 2
         finally:
             await setup.engine.dispose()
 
     run(exercise())
 
 
-def test_named_provider_request_scope_keeps_budget_and_uncertain_stage_holds(
-    postgres_harness: Any, tmp_path: Path
+@pytest.mark.parametrize("max_requests", [1, 2])
+def test_one_recording_keeps_stage_limit_and_tester_exemption(
+    postgres_harness: Any, tmp_path: Path, max_requests: int
 ) -> None:
-    """The named source owner can exceed count caps, not budget or dispatch holds."""
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            setup.bundle_box["bundle"] = setup.bundle.model_copy(
+                update={
+                    "stages": tuple(
+                        stage.model_copy(update={"max_requests": max_requests})
+                        if stage.stage == "C4"
+                        else stage
+                        for stage in setup.bundle.stages
+                    )
+                }
+            )
+            quote = await _issue(setup, key="retry-c2-quote")
+            started = await _start(setup, quote, key="retry-c2-run")
+            assert await setup.worker.run_once()
+            c2 = await completed_checkpoint(setup.sessions, started)
+            for attempt in range(max_requests):
+                request = StageRequest(
+                    stage="C4",
+                    transcript_checkpoint_id=c2,
+                    max_completion_tokens=1400 - attempt * 100,
+                )
+                quote = await _issue(setup, key=f"retry-{attempt}-quote", request=request)
+                await _start(setup, quote, key=f"retry-{attempt}-run", request=request)
+                assert await setup.worker.run_once()
+            request = request.model_copy(update={"max_completion_tokens": 800})
+            with pytest.raises(
+                ConversationDenied,
+                match="^This recording's approved provider allowance is used\\.$",
+            ):
+                await _issue(setup, key="retry-exhausted", request=request)
+            _grant_provider_stage_request_count_scope(setup)
+            quote = await _issue(setup, key="retry-tester-quote", request=request)
+            await _start(setup, quote, key="retry-tester-run", request=request)
+            assert await setup.worker.run_once()
+            assert setup.broker.calls == max_requests + 2
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("named_tester_scope", [False, True])
+def test_provider_request_scope_keeps_budget_and_uncertain_stage_holds(
+    postgres_harness: Any, tmp_path: Path, named_tester_scope: bool
+) -> None:
+    """Ordinary owners and named testers retain budget and dispatch holds."""
 
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path, funded=True)
         try:
-            async with setup.sessions() as database, database.begin():
-                await database.execute(
-                    update(Person)
-                    .where(Person.id == setup.actor.person_id)
-                    .values(email="dipak@authorityclosers.com")
-                )
-            _grant_provider_stage_request_count_scope(setup)
+            if named_tester_scope:
+                _grant_provider_stage_request_count_scope(setup)
 
             first_quote = await _issue(setup, key="named-provider-count-first-quote")
             assert first_quote["max_cost_paise"] == 50_000
@@ -1172,7 +1218,7 @@ def test_carried_budget_cap_does_not_expand_current_release_admission(
                     update={
                         "configuration_sha256": config.digest,
                         "max_cost_paise": 60_000,
-                        "max_requests": 2,
+                        "max_requests": 1,
                     }
                 )
                 if stage.stage == "C2"
