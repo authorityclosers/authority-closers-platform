@@ -850,7 +850,10 @@ if ($run.status -ne "completed" -or $run.conclusion -ne "success") {
 $runHeadSha = [string]$run.head_sha
 $standardReleaseRun = (
     $runHeadSha -eq $ReleaseSha -and
-    [string]$run.event -eq "workflow_dispatch" -and
+    (
+        [string]$run.event -eq "workflow_dispatch" -or
+        ([string]$run.event -eq "push" -and [string]$run.head_branch -eq "main")
+    ) -and
     [string]$run.path -eq ".github/workflows/application.yml"
 )
 $recoveryReleaseRun = (

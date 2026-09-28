@@ -232,6 +232,27 @@ def test_original_ci_must_be_successful_and_bound(tmp_path: Path, field: str, va
         bundle.verify()
 
 
+def test_automatic_build_from_main_is_an_accepted_original(tmp_path: Path) -> None:
+    bundle = Bundle(tmp_path)
+    bundle.run["event"] = "push"
+    bundle.run["head_branch"] = "main"
+    bundle.refresh()
+    assert bundle.verify()["native_source_commit"] == bundle.source
+
+
+@pytest.mark.parametrize("branch", [None, "task/other", "codex/old-release"])
+def test_automatic_build_from_another_branch_is_refused(tmp_path: Path, branch) -> None:
+    bundle = Bundle(tmp_path)
+    bundle.run["event"] = "push"
+    if branch is None:
+        bundle.run.pop("head_branch", None)
+    else:
+        bundle.run["head_branch"] = branch
+    bundle.refresh()
+    with pytest.raises(MODULE.NativeCompatibilityError, match="native_ci_run_invalid"):
+        bundle.verify()
+
+
 def test_helper_bytes_must_equal_the_original_git_source_even_with_matching_checksums(
     tmp_path: Path,
 ) -> None:
