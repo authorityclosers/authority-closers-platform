@@ -1,0 +1,13 @@
+# T3a: source-object schema and backup parity
+
+Source: AUT-8 / GitHub #81, CTO scope comment `202440db-dab1-458d-9858-75460aa66dc6`, base `a5064f46`. ADR 0033 records D4/D5; runtime callers are unchanged. The local Orchestra skill and Pro chat/artifacts were unavailable; this implements the supplied CTO decisions without claiming cloud review.
+
+Migration `20260928_0051` follows `20260925_0050`. All three backup helpers map it to `ac-postgres-parity-v31`, **103 tables**, adding `conversation_source_objects` and `conversation_source_references`. Historical mappings remain unchanged. Install matching foundation helpers before deployed migration; row counts do not prove column equality or a live restore.
+
+`uv run pytest -q tests/database/test_conversation_source_objects_postgresql.py tests/database/test_conversation_postgresql.py::test_populated_migration_head_matches_real_model_registry tests/database/test_model_registry.py`: **9 passed**, using disposable schemas and fictional data. Covers live uniqueness, tenant separation, tenant-bound references, one reference per recording, permanent release history, tombstone replacement, empty-schema downgrade/upgrade, and model/migration parity. Populated downgrade deliberately refuses history loss.
+
+CTO pre-review follow-up: `uv run pytest -q tests/database/test_conversation_postgresql.py --tb=short`: **10 passed** (7.73s), including `compare_metadata(...) == []` at head 0051; no FK naming change needed. Used the inherited disposable test connection. An initial invocation incorrectly selected the dev migrator connection and failed all 10 cases at fixture setup because it cannot create schemas; no privileges were changed.
+
+`tests/database/test_conversation_retention_postgresql.py`: **1 passed**, proving existing offline retention erasure. `tests/infra/test_ac_release.py`: **63 passed**. Root-only `test_capability_backup_parity.py`: **1,855 skipped locally**; two read-only catalogue/migration checks passed when called directly. The first structural run caught new-head ordering in the test catalogue; corrected before these passing results. Full root coverage remains a CI requirement.
+
+`uv run ruff format --check packages/python tests`, `uv run ruff check packages/python tests`, and `uv run mypy packages/python` passed (320 typed source files). Dev migrated using the configured Alembic migrator: head 0051, both new tables empty. No production/staging changes, provider requests, UI edits, or real recordings. Authenticated upload/analyse/delete on dev is not claimed; owner check: open https://salesxray-dev.authorityclosers.com, upload a fictional clip, analyse and delete as today.

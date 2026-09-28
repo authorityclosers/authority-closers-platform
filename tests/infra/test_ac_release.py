@@ -496,8 +496,8 @@ def bundle_with_head(tmp_path: Path, head: str) -> Path:
 
 def test_known_migration_head_is_accepted(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
-    foundation_backup_tool(engine, "20260924_0048", "20260925_0050")
-    engine.require_backup_support(bundle_with_head(tmp_path, "20260925_0050"))
+    foundation_backup_tool(engine, "20260924_0048", "20260928_0051")
+    engine.require_backup_support(bundle_with_head(tmp_path, "20260928_0051"))
 
 
 @pytest.mark.parametrize("installed", [("20260924_0048",), ()])
@@ -505,13 +505,13 @@ def test_unknown_migration_head_is_refused_before_install(tmp_path: Path, instal
     engine = make_engine(tmp_path)
     if installed:
         foundation_backup_tool(engine, *installed)
-    with pytest.raises(MODULE.ReleaseError, match="do not recognise migration 20260925_0050"):
-        engine.require_backup_support(bundle_with_head(tmp_path, "20260925_0050"))
+    with pytest.raises(MODULE.ReleaseError, match="do not recognise migration 20260928_0051"):
+        engine.require_backup_support(bundle_with_head(tmp_path, "20260928_0051"))
 
 
 def test_bundle_without_migration_head_is_refused(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
-    foundation_backup_tool(engine, "20260925_0050")
+    foundation_backup_tool(engine, "20260928_0051")
     with pytest.raises(MODULE.ReleaseError, match="no valid AC_MIGRATION_HEAD"):
         engine.require_backup_support(bundle_with_head(tmp_path, "latest"))
 

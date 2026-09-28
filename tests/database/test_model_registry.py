@@ -93,6 +93,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "practice_focus_events",
         "conversation_permissions",
         "conversation_recordings",
+        "conversation_source_objects",
+        "conversation_source_references",
         "conversation_runs",
         "conversation_checkpoints",
         "conversation_minute_accounts",
