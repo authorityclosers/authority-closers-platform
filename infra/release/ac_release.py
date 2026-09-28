@@ -556,7 +556,8 @@ class Engine:
         """Download once into the immutable local store and return its path."""
 
         target = self.paths.store / build.sha / component
-        provenance = target / "provenance.json"
+        # Provenance sits beside the bundle: verifiers require exact file sets.
+        provenance = self.paths.store / build.sha / f"{component}.provenance.json"
         if provenance.exists():
             verify_checksums(target, expected - {"SHA256SUMS"})
             return target
@@ -573,7 +574,8 @@ class Engine:
             unpacked = work_path / component
             unpacked.mkdir()
             extract_exact(zip_path, unpacked, expected)
-            (unpacked / "provenance.json").write_text(
+            record = work_path / "provenance.json"
+            record.write_text(
                 json.dumps(
                     {
                         "sha": build.sha,
@@ -590,8 +592,9 @@ class Engine:
             )
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(unpacked, target)
-        for item in [target, *target.iterdir()]:
-            item.chmod(0o500 if item.is_dir() else 0o400)
+            for item in [*target.iterdir(), target]:
+                item.chmod(0o500 if item.is_dir() else 0o400)
+            os.replace(record, provenance)
         return target
 
     def source_archive(self, sha: str, stage: Path, prefix: str) -> tuple[Path, str]:
@@ -789,65 +792,79 @@ class Engine:
         bundle = self.store_bundle(build, "web", WEB_FILES)
         previous_sha, previous_image = self.current_web(environment)
         inputs = self.paths.application / "operator-inputs" / f"sales-xray-web-{build.sha}"
-        with self.stage(build.sha) as stage:
-            archive, archive_sha = self.source_archive(build.sha, stage, "infra/sales-xray-web")
-            if inputs.exists():
-                shutil.rmtree(inputs)
-            inputs.mkdir(parents=True, mode=0o750)
-            self.extract_source(archive, inputs / "source", "infra/sales-xray-web")
-            source = inputs / "source" / "infra" / "sales-xray-web"
-            proof = json.loads(
+        if previous_sha == build.sha and not dry_run:
+            # The live container's compose files are in `inputs`; never rebuild them.
+            return {"unchanged": True, "previous": previous_sha, "log": str(log)}
+        # Anything short of a started container leaves no operator inputs behind.
+        prepared = False
+        try:
+            with self.stage(build.sha) as stage:
+                # A dry run never touches the live operator inputs.
+                workdir = stage / "inputs" if dry_run else inputs
+                archive, archive_sha = self.source_archive(build.sha, stage, "infra/sales-xray-web")
+                if workdir.exists():
+                    shutil.rmtree(workdir)
+                workdir.mkdir(parents=True, mode=0o750)
+                self.extract_source(archive, workdir / "source", "infra/sales-xray-web")
+                source = workdir / "source" / "infra" / "sales-xray-web"
+                proof = json.loads(
+                    self.run(
+                        [
+                            "python3",
+                            str(source / "verify-artifact.py"),
+                            "--artifact-dir",
+                            str(bundle),
+                            "--source-sha40",
+                            build.sha,
+                            "--metadata-sha256",
+                            _sha256_file(bundle / "web-image.json"),
+                        ],
+                        log=log,
+                    ).stdout
+                )
+                runtime_ref = str(proof.get("runtime_ref", ""))
+                if proof.get("verified_source") != build.sha or not IMAGE_REF_RE.fullmatch(
+                    runtime_ref
+                ):
+                    raise ReleaseError("web artifact verification did not bind this commit")
+                if dry_run:
+                    return {
+                        "dry_run": True,
+                        "previous": previous_sha,
+                        "runtime_ref": runtime_ref,
+                        "log": str(log),
+                    }
                 self.run(
+                    ["docker", "load", "--quiet", "--input", str(bundle / "web-image.tar.gz")],
+                    log=log,
+                )
+                marker = self.run(
                     [
-                        "python3",
-                        str(source / "verify-artifact.py"),
-                        "--artifact-dir",
-                        str(bundle),
-                        "--source-sha40",
-                        build.sha,
-                        "--metadata-sha256",
-                        _sha256_file(bundle / "web-image.json"),
+                        "docker",
+                        "run",
+                        "--rm",
+                        "--network",
+                        "none",
+                        "--entrypoint",
+                        "cat",
+                        runtime_ref,
+                        "/app/.ac-release-id",
                     ],
                     log=log,
-                ).stdout
-            )
-            runtime_ref = str(proof.get("runtime_ref", ""))
-            if proof.get("verified_source") != build.sha or not IMAGE_REF_RE.fullmatch(runtime_ref):
-                raise ReleaseError("web artifact verification did not bind this commit")
-            if dry_run:
+                ).stdout.strip()
+                if marker != build.sha:
+                    raise ReleaseError("web image release marker does not match the commit")
+                self.image_release(runtime_ref)
+                verified = workdir / "verified-runtime.env"
+                verified.write_text(f"AC_WEB_IMAGE={runtime_ref}\n", encoding="utf-8")
+                rollback = workdir / "rollback-runtime.env"
+                if previous_image:
+                    rollback.write_text(f"AC_WEB_IMAGE={previous_image}\n", encoding="utf-8")
+                (workdir / "archive.sha256").write_text(archive_sha + "\n", encoding="utf-8")
+            prepared = True
+        finally:
+            if not prepared and not dry_run:
                 shutil.rmtree(inputs, ignore_errors=True)
-                return {
-                    "dry_run": True,
-                    "previous": previous_sha,
-                    "runtime_ref": runtime_ref,
-                    "log": str(log),
-                }
-            self.run(
-                ["docker", "load", "--quiet", "--input", str(bundle / "web-image.tar.gz")], log=log
-            )
-            marker = self.run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "none",
-                    "--entrypoint",
-                    "cat",
-                    runtime_ref,
-                    "/app/.ac-release-id",
-                ],
-                log=log,
-            ).stdout.strip()
-            if marker != build.sha:
-                raise ReleaseError("web image release marker does not match the commit")
-            self.image_release(runtime_ref)
-            verified = inputs / "verified-runtime.env"
-            verified.write_text(f"AC_WEB_IMAGE={runtime_ref}\n", encoding="utf-8")
-            rollback = inputs / "rollback-runtime.env"
-            if previous_image:
-                rollback.write_text(f"AC_WEB_IMAGE={previous_image}\n", encoding="utf-8")
-            (inputs / "archive.sha256").write_text(archive_sha + "\n", encoding="utf-8")
         try:
             self.compose_web(environment, source, verified, log)
             self.check_web(environment, build.sha, runtime_ref, log)
@@ -1085,7 +1102,7 @@ class Engine:
             return results
 
     def stored_build(self, sha: str, component: str) -> Build | None:
-        provenance = self.paths.store / sha / component / "provenance.json"
+        provenance = self.paths.store / sha / f"{component}.provenance.json"
         if not provenance.exists():
             return None
         data = json.loads(provenance.read_text(encoding="utf-8"))
