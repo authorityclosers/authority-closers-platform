@@ -20,6 +20,7 @@ import {
 import { UploadIndicator } from "./shell/upload-indicator";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
+import * as processingReviewPort from "./processing-review-port";
 import { spokenClipRange } from "./lightbox/time";
 import {
   allowance,
@@ -1822,6 +1823,131 @@ it("finishes the one-click start when ordinary progress changes during quoting",
   expect(container.textContent).not.toContain("Continue analysis");
 });
 
+async function beginDelayedPlanQuote() {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishQuote!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementation(async (path, init = {}) => {
+    if (String(path).endsWith("/plan/quote")) {
+      calls.push({ path: String(path), init });
+      return new Promise<Response>((resolve) => {
+        finishQuote = resolve;
+      });
+    }
+    return original(path, init);
+  });
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  expect(quotes()).toHaveLength(1);
+  expect(accepts()).toHaveLength(0);
+  return async () => {
+    await act(async () => finishQuote(response(plan)));
+    await flush();
+  };
+}
+
+it.each([{ local_state: "running" }, { automatic_progression: true }])(
+  "accepts a slow quote once after the progress poll changes %j",
+  async (change) => {
+    const finishQuote = await beginDelayedPlanQuote();
+    progressOverride = { ...progress, ...change };
+    // The 3 s observation poll changes a real auto-start effect dependency.
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(67_000));
+    await flush();
+    await finishQuote();
+    expect(accepts()).toHaveLength(1);
+    expect(quotes()).toHaveLength(1);
+    expect(JSON.parse(accepts()[0].init.body as string)).toMatchObject({
+      plan_id: plan.id,
+      plan_fingerprint: plan.plan_fingerprint,
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flush();
+    expect(accepts()).toHaveLength(1);
+    expect(quotes()).toHaveLength(1);
+  },
+);
+
+it.each(["paused", "read-only"])(
+  "keeps a slow quote for explicit continuation when %s at resolution",
+  async (gate) => {
+    let readOnly = false;
+    const originalReview = processingReviewPort.useProcessingReview;
+    vi.spyOn(processingReviewPort, "useProcessingReview").mockImplementation(
+      (id) => ({ ...originalReview(id), readOnly }),
+    );
+    const finishQuote = await beginDelayedPlanQuote();
+    analysisPaused = gate === "paused";
+    readOnly = gate === "read-only";
+    // Availability polls every 15 s; the review port updates on render.
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flush();
+    await finishQuote();
+    expect(accepts()).toHaveLength(0);
+    expect(button("Continue analysis").disabled).toBe(true);
+    await click("Continue analysis");
+    expect(accepts()).toHaveLength(0);
+
+    analysisPaused = false;
+    readOnly = false;
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flush();
+    expect(button("Continue analysis").disabled).toBe(false);
+    expect(accepts()).toHaveLength(0);
+    await click("Continue analysis");
+    expect(quotes()).toHaveLength(1);
+    expect(accepts()).toHaveLength(1);
+    expect(JSON.parse(accepts()[0].init.body as string)).toMatchObject({
+      plan_id: plan.id,
+      plan_fingerprint: plan.plan_fingerprint,
+    });
+  },
+);
+
+it.each(["unmount", "another call", "check status"])(
+  "does not accept a delayed quote after %s ends the consent binding",
+  async (change) => {
+    const finishQuote = await beginDelayedPlanQuote();
+    if (change === "unmount") await act(async () => root.render(null));
+    else if (change === "another call")
+      await navigateToCall(secondSubmissionId);
+    else await click("Check status");
+    await finishQuote();
+    expect(quotes()[0].init.signal?.aborted).toBe(true);
+    expect(accepts()).toHaveLength(0);
+    expect(quotes()).toHaveLength(1);
+  },
+);
+
+it.each(["paused", "read-only"])(
+  "accepts a slow quote once if the %s gate clears before it returns",
+  async (gate) => {
+    let readOnly = false;
+    const originalReview = processingReviewPort.useProcessingReview;
+    vi.spyOn(processingReviewPort, "useProcessingReview").mockImplementation(
+      (id) => ({ ...originalReview(id), readOnly }),
+    );
+    const finishQuote = await beginDelayedPlanQuote();
+    analysisPaused = gate === "paused";
+    readOnly = gate === "read-only";
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flush();
+    expect(accepts()).toHaveLength(0);
+    analysisPaused = false;
+    readOnly = false;
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    await flush();
+    expect(accepts()).toHaveLength(0);
+    await finishQuote();
+    expect(accepts()).toHaveLength(1);
+    expect(quotes()).toHaveLength(1);
+  },
+);
+
 it("reconciles a lost acceptance response without a second acceptance or upload", async () => {
   planFailure = { status: 503, body: {} };
   savedPlanBody = {
@@ -2192,6 +2318,51 @@ it("reconciles a committed acceptance after its response is interrupted without 
   expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
     1,
   );
+});
+
+it("keeps the completed report language when an older acceptance response arrives", async () => {
+  entryBody = {
+    ...entry,
+    report_languages: ["en"],
+    report_language_default: "en",
+  };
+  quoteBody = {
+    ...plan,
+    report_language: "en",
+    coaching_prompt_revision: "coaching-v4",
+  };
+  savedPlanBody = {
+    ...(quoteBody as object),
+    accepted: true,
+    state: "completed",
+    report_ready: true,
+    report_run_id: envelope.run_id,
+  };
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishAccept!: (value: Response) => void;
+  vi.mocked(fetch).mockImplementation(async (path, init = {}) => {
+    if (String(path).endsWith("/plan") && init.method === "POST") {
+      calls.push({ path: String(path), init });
+      accepted = true;
+      return new Promise<Response>((resolve) => {
+        finishAccept = resolve;
+      });
+    }
+    return original(path, init);
+  });
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  await act(async () => vi.advanceTimersByTimeAsync(3_000));
+  await flush();
+  expect(container.textContent).toContain("Report language: English");
+  await act(async () => finishAccept(response({ ...plan, accepted: true })));
+  await flush();
+  expect(container.textContent).toContain("Report language: English");
+  expect(accepts()).toHaveLength(1);
+  expect(quotes()).toHaveLength(1);
 });
 
 it("requires review if the returned frozen plan differs from the requested language", async () => {

@@ -1,7 +1,14 @@
 "use client";
 import { AnalysisAvailability } from "./analysis-availability";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -335,6 +342,7 @@ export function AcquisitionStudio({
   const chosenId = useRef("");
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
+  const automaticPlanController = useRef<AbortController | null>(null);
   const lastRequestedCallId = useRef<string | null>(null);
   // The call a rename confirmation may update; never a later-bound call.
   const bindingRef = useRef<string | null>(null);
@@ -957,12 +965,15 @@ export function AcquisitionStudio({
   );
 
   // Recover the saved language from the immutable plan, never from today's
-  // Admin default. This owner-read route cannot create a replacement quote.
+  // Admin default. Confirm observed processing/report progress even while the
+  // original consent-bound request is pending. This read cannot create a quote.
   useEffect(() => {
     if (
       !submission ||
       !entry?.report_languages ||
-      consentedSubmissionId === submission.id
+      (consentedSubmissionId === submission.id &&
+        !progress?.automatic_progression &&
+        !result?.runId)
     )
       return;
     const abort = new AbortController();
@@ -996,6 +1007,7 @@ export function AcquisitionStudio({
     submission,
     entry?.report_languages,
     consentedSubmissionId,
+    progress?.automatic_progression,
     result?.runId,
   ]);
 
@@ -1084,6 +1096,15 @@ export function AcquisitionStudio({
   const processingTerminal = ["held", "cancelled", "completed"].includes(
     processingState ?? "",
   );
+  // Quote completion must consult the current write gates, not those from
+  // before a slow request. A blocked quote keeps the explicit continue action.
+  const acceptQuotedPlan = useEffectEvent(acceptPlanRequest);
+  const refreshQuotedPlan = useEffectEvent(refreshStalePlan);
+  useEffect(() => {
+    // End the pending flow when its consent binding ends or its report arrives.
+    // Ordinary progress/availability updates must not orphan a dispatched quote.
+    return () => automaticPlanController.current?.abort();
+  }, [submission?.id, consentedSubmissionId, result?.runId]);
   useEffect(() => {
     if (
       !submission ||
@@ -1101,6 +1122,7 @@ export function AcquisitionStudio({
       return;
     const abort = new AbortController();
     const bound = submission;
+    automaticPlanController.current = abort;
     requestedPlan.current = bound.id;
     void (async () => {
       try {
@@ -1115,7 +1137,7 @@ export function AcquisitionStudio({
           setPlanRequiresAction(true);
           return;
         }
-        await acceptPlanRequest(bound, approved, abort.signal);
+        await acceptQuotedPlan(bound, approved, abort.signal);
       } catch (error) {
         if (abort.signal.aborted) return;
         if (
@@ -1123,7 +1145,7 @@ export function AcquisitionStudio({
           error.reason === "plan_stale"
         ) {
           try {
-            if (await refreshStalePlan(bound, abort.signal)) return;
+            if (await refreshQuotedPlan(bound, abort.signal)) return;
           } catch (refreshError) {
             if (!abort.signal.aborted) {
               setPlanRequiresAction(true);
@@ -1138,22 +1160,10 @@ export function AcquisitionStudio({
         }
       }
     })();
-    return () => {
-      abort.abort();
-      // A dependency change can interrupt an already-dispatched quote or
-      // acceptance. Do not silently start it again or hide the review action.
-      // Observation will reconcile any work the server has already accepted.
-      if (active.current)
-        setConsentedSubmissionId((current) =>
-          current === bound.id ? null : current,
-        );
-    };
   }, [
     analysisPaused,
     analysisWriteBlocked,
-    acceptPlanRequest,
     getPlan,
-    refreshStalePlan,
     consentedSubmissionId,
     planRequiresAction,
     submission,
