@@ -1,0 +1,14 @@
+[Unit]
+Description=AC release engine: keep staging on the latest verified main build
+Documentation=file:///opt/ac-release/current/ac_release.py
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-release tick
+# Deploys share the VPS with production; stay behind interactive work.
+Nice=10
+CPUWeight=50
+IOWeight=50
+TimeoutStartSec=90min
