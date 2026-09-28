@@ -16,15 +16,7 @@ def report(source=None):
     return scorecard.build_report(source or json.loads(FIXTURE.read_text()), monday, start, end)
 
 
-def test_week_window_and_invalid_monday():
-    monday, start, end = scorecard.week_window("2026-09-21")
-    assert monday.isoformat() == "2026-09-21"
-    assert scorecard.in_window(end - 1, start, end) and not scorecard.in_window(end, start, end)
-    with pytest.raises(ValueError, match="Monday"):
-        scorecard.week_window("2026-09-22")
-
-
-def test_metrics_alerts_failures_and_markdown():
+def test_metrics_alerts_failures_and_sunday_boundary():
     result = report()
     agent = dict(result["rows"])["Fictional Agent"]
     assert (agent["done"], agent["bounces"], agent["failed_pct"]) == (2, 1, 50)
@@ -39,7 +31,9 @@ def test_metrics_alerts_failures_and_markdown():
     assert rendered.count("n/a (AUT-57)") == len(scorecard.GITHUB_COLUMNS) * len(result["rows"])
 
 
-def test_monday_completion_is_excluded():
+def test_monday_completion_is_excluded_and_non_monday_rejected():
+    with pytest.raises(ValueError, match="Monday"):
+        scorecard.week_window("2026-09-22")
     source = json.loads(FIXTURE.read_text())
     source["activity"]["task-b"][-1]["createdAt"] = "2026-09-28T00:00:00Z"
     assert dict(report(source)["rows"])["Company"]["done"] == 1
@@ -51,19 +45,16 @@ def test_missing_usage_is_not_zero():
     assert dict(report(source)["rows"])["Company"]["tokens"] is None
 
 
-def test_fetch_is_get_only(monkeypatch):
+def test_fetch_is_get_only_and_missing_env_is_named(monkeypatch, capsys):
     monkeypatch.setenv("PAPERCLIP_API_URL", "https://paperclip.invalid")
     monkeypatch.setenv("PAPERCLIP_API_KEY", "fictional")
     with pytest.raises(ValueError, match="GET"):
         scorecard.fetch_json("/api/anything", method="POST")
-
-
-def test_missing_env_names_only(monkeypatch, capsys):
     for key in ("PAPERCLIP_API_URL", "PAPERCLIP_API_KEY", "PAPERCLIP_COMPANY_ID"):
         monkeypatch.delenv(key, raising=False)
     assert scorecard.main(["--week", "2026-09-21"]) == 2
     error = capsys.readouterr().err
-    assert all(key in error for key in (
-        "PAPERCLIP_API_URL", "PAPERCLIP_API_KEY", "PAPERCLIP_COMPANY_ID"
-    ))
+    assert all(
+        key in error for key in ("PAPERCLIP_API_URL", "PAPERCLIP_API_KEY", "PAPERCLIP_COMPANY_ID")
+    )
     assert "fictional" not in error
