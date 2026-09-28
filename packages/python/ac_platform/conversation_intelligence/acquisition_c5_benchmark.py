@@ -141,7 +141,7 @@ async def validate_benchmark_scope(
     if not benchmark.issued_at_epoch <= int(now.timestamp()) < benchmark.expires_at_epoch:
         raise ConversationDenied("This acquisition benchmark authorization has expired.")
     if (
-        bundle.environment not in {"staging", "test"}
+        bundle.environment not in {"development", "staging", "test"}
         or bundle.expires_at_epoch <= int(now.timestamp())
         or benchmark.tenant_id != actor.tenant_id
         or benchmark.processing_person_id != actor.person_id

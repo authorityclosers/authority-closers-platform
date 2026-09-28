@@ -36,7 +36,7 @@ PAUSED_MESSAGE = (
     "New analysis is temporarily paused. Your saved calls and reports are still available. "
     "Contact the AC team at admin@authorityclosers.com."
 )
-ENVIRONMENTS = frozenset({"local", "test", "staging", "production"})
+ENVIRONMENTS = frozenset({"local", "test", "development", "staging", "production"})
 _STARTED_SCOPE: ContextVar[tuple[str, UUID] | None] = ContextVar("xray_started_scope", default=None)
 
 

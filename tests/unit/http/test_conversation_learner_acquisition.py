@@ -29,6 +29,7 @@ from ac_platform.http.conversation_acquisition_runtime import (
     install_acquisition_runtime,
 )
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
@@ -37,6 +38,52 @@ PUBLIC_TENANT = UUID("206ccee8-a246-433b-b6d3-78eb21592a5c")
 OTHER_TENANT = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 PERSON_ID = UUID("311f4bd2-7b8b-4f45-99f0-a2aed83bc95a")
 SESSION_ID = UUID("11111111-1111-4111-8111-111111111111")
+
+
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "local", "test"])
+@pytest.mark.parametrize("socket_kind", ["missing", "regular_file"])
+def test_acquisition_requires_hosted_native_socket(tmp_path, monkeypatch, environment, socket_kind):
+    socket_path = tmp_path.parent / f"native-{uuid4().hex[:8]}.sock"
+    if socket_kind == "regular_file":
+        socket_path.touch(mode=0o600)
+    settings = _settings().model_copy(
+        update={
+            "environment": environment,
+            "sales_xray_native_socket_path": str(socket_path),
+            "sales_xray_native_image_ref": "sha256:" + "c" * 64,
+            "sales_xray_challenge_secret_file": str(tmp_path / "fictional-challenge"),
+        }
+    )
+    monkeypatch.setattr(
+        acquisition_runtime_module, "_challenge_secret", lambda _: SecretStr("fictional-challenge")
+    )
+    intake = _runtime(tmp_path).intake
+    if environment in {"local", "test"}:
+        assert acquisition_runtime_module.compose_acquisition(settings, intake) is not None
+    else:
+        with pytest.raises(ValueError, match="^acquisition_native_helper_unavailable$"):
+            acquisition_runtime_module.compose_acquisition(settings, intake)
+
+
+@pytest.mark.parametrize("environment", ["development", "staging", "production", "local", "test"])
+def test_submission_install_requires_hosted_native_socket(tmp_path, environment):
+    runtime = _runtime(tmp_path)
+    application = FastAPI()
+    kwargs = dict(
+        application=application,
+        settings=_settings().model_copy(update={"environment": environment}),
+        sessions=None,
+        require_actor=None,
+        factory=None,
+        runtime=runtime.intake,
+        preflight=runtime.preflight,
+    )
+    if environment in {"local", "test"}:
+        install_submission_http(**kwargs)
+        assert "/v1/conversation/acquisition/submissions" in application.openapi()["paths"]
+    else:
+        with pytest.raises(ValueError, match="Hosted source preflight requires the bounded native"):
+            install_submission_http(**kwargs)
 
 
 class _Database:
