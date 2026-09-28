@@ -1,0 +1,87 @@
+{
+  "observed_at": "2026-09-27T06:09:03.439050+00:00",
+  "source_head": "e488f952b1aafc10761f304630965d8233a2e39b",
+  "warning": "Files may include uncommitted changes; file hashes identify inspected bytes. No code or runtime test is claimed.",
+  "files": [
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\package.json",
+      "bytes": 2253,
+      "sha256": "db46b8b6768a7d8263d87e5e5293dde00a6ab4661ae59a86dfa9fe4e4f64cdb6",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\apps\\sales-xray-web\\package.json",
+      "bytes": 1108,
+      "sha256": "75cf1ed3c97f9fe7c5af2b8c3710efb3f459fa254e848201422e80f8f8ea2106",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\apps\\learner-web\\package.json",
+      "bytes": 781,
+      "sha256": "0a03e6d1ad0651a801cdc0e3030fa352293ed72d5955968d839b78dc258448c8",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\scripts\\verify-sales-xray-viewport.mjs",
+      "bytes": 46417,
+      "sha256": "9ac8c6087c2f63ae94a661850acf9b861881e91b79f3e871418bd4c4cbf4756a",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\scripts\\sales-xray-review-controls.test.mjs",
+      "bytes": 14888,
+      "sha256": "1f4ac60cde75a85c33eb88b8f4012b772810f4942f265f0ac0e97edbe884817b",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\docs\\design\\sales-xray-v02-refresh-20260926\\OWNER-VISUAL-DIRECTION-20260927.md",
+      "bytes": 2351,
+      "sha256": "934fb6d49bf0ae9acffe519e0db1a622eca6faa786bce416b2e45fd2632708e7",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\docs\\design\\sales-xray-v02-refresh-20260926\\DELIVERY-STATUS-20260926.md",
+      "bytes": 2582,
+      "sha256": "ede9a08988f562460d403a744454aa764ee6535d14d8dd1fb5e2ade23cc8370f",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\docs\\design\\sales-xray-v02-refresh-20260926\\state-manifest.json",
+      "bytes": 345289,
+      "sha256": "0de2b56846c77cfc3f50ff8bd76482a594d68a7a67fab31224a916b4d75b52b1",
+      "status": "read-only working-tree input"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\docs\\design\\sales-xray-v02-refresh-20260926\\images\\06-report\\06-report-01-overview-desktop.png",
+      "bytes": 1294746,
+      "sha256": "498711eeafa2f2d21854919ddfa4efc4efe036dd51a51778ceb1e0ec9638c55a",
+      "status": "read-only working-tree input",
+      "raster_pixels": [
+        1586,
+        992
+      ],
+      "intended_logical_pixels": [
+        1440,
+        900
+      ],
+      "individual_drive_revision": "not freshly reconciled",
+      "visual_direction": "owner-selected original library; factual and interaction corrections remain applicable"
+    },
+    {
+      "path": "C:\\Users\\Suyash\\.codex\\worktrees\\sales-xray-v02-core-release-20260925\\authority-closers-platform\\docs\\design\\sales-xray-v02-refresh-20260926\\images\\06-report\\06-report-01-overview-mobile.png",
+      "bytes": 1282748,
+      "sha256": "1f40f0b7e313410c83396ec629d1fb46bd1d3982e443c62210ee47842591b69a",
+      "status": "read-only working-tree input",
+      "raster_pixels": [
+        853,
+        1844
+      ],
+      "intended_logical_pixels": [
+        390,
+        844
+      ],
+      "individual_drive_revision": "not freshly reconciled",
+      "visual_direction": "owner-selected original library; factual and interaction corrections remain applicable"
+    }
+  ]
+}

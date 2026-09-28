@@ -269,3 +269,9 @@ def test_pr_check_cli_exit_codes(capsys) -> None:
     repo.prs.append(pr(2, "task/admin/30-b", "apps/admin-web/b.tsx"))
     assert MODULE.main(["pr-check", "1"], gate(repo)) == 1
     assert "::error::" in capsys.readouterr().out
+
+
+def test_the_ui_lane_runs_beside_the_sales_xray_lane() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/sales-xray/59-overview-tolerance")
+    assert gate(repo).start("101-report-overview-look", "ui") == "task/ui/101-report-overview-look"

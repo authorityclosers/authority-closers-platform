@@ -1,0 +1,54 @@
+{
+  "files": [
+    {
+      "path": "ASTRA-OPUS-MODES.md",
+      "bytes": 14313,
+      "sha256": "a2060366cfa6a573486d9bf7779eb1845e9d75a91e6238c0394566fecb65e604"
+    },
+    {
+      "path": "INPUTS.json",
+      "bytes": 4420,
+      "sha256": "b8976c9ce09d065d45558b0a0141f0ed78c7dad85cab4acca715653b11dafa4c"
+    },
+    {
+      "path": "MODE-REVIEW.md",
+      "bytes": 4056,
+      "sha256": "33637c05ad781e74c061cb89709b5b0b07f1dae33fc1ddff257b3f2294fceda2"
+    },
+    {
+      "path": "MODE-SOURCES.json",
+      "bytes": 3586,
+      "sha256": "ef1351f756d17d6e4998264c51c7131a017cd034b2cb751259b370606c59a495"
+    },
+    {
+      "path": "OPUS-STUDY-HANDOFF.md",
+      "bytes": 14093,
+      "sha256": "1a87fc380858d37bc62f6fc8069ace7596acab59ebe3b8b51c680b373b86abc1"
+    },
+    {
+      "path": "PILOT.md",
+      "bytes": 3975,
+      "sha256": "67fbfec15aa7f936a4980386becba11e850c7a485b2d7779ea00d03f602f1e97"
+    },
+    {
+      "path": "README.md",
+      "bytes": 22740,
+      "sha256": "ce4442f9befb5727d91f05583636f86ac91171763dc71aa8a25d8c472d6516ce"
+    },
+    {
+      "path": "RESEARCH-REVIEW.md",
+      "bytes": 4660,
+      "sha256": "3f54c583bcd107ad65717f2dbc2bfb8356e385443de18564b3c193c7a3b23bf4"
+    },
+    {
+      "path": "SCREEN-PACKET-TEMPLATE.md",
+      "bytes": 4260,
+      "sha256": "7e536f0efab24627e45ba016d2284955354552f429b87704c77969b8e978dd50"
+    },
+    {
+      "path": "SOURCES.json",
+      "bytes": 19036,
+      "sha256": "d4d38c7150e7fc97afe514bf2202676474627c9619e899439292a56a8e38e74e"
+    }
+  ]
+}
