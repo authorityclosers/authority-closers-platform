@@ -14,23 +14,44 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.expression import ColumnElement
 
 from ac_platform.conversation_intelligence.models import recording_fk
 from ac_platform.db.base import Base
+
+
+class _SourceDigestHexExpression(ColumnElement[bool]):
+    inherit_cache = True
+
+
+@compiles(_SourceDigestHexExpression, "postgresql")
+def _compile_postgresql_digest_hex(
+    _element: _SourceDigestHexExpression, _compiler: object, **_kw: object
+) -> str:
+    return "source_sha256 ~ '^[0-9a-f]{64}$'"
+
+
+@compiles(_SourceDigestHexExpression)
+def _compile_default_digest_hex(
+    _element: _SourceDigestHexExpression, _compiler: object, **_kw: object
+) -> str:
+    return "length(source_sha256) = 64 AND source_sha256 = lower(source_sha256)"
 
 
 class ConversationSourceObject(Base):
     __tablename__ = "conversation_source_objects"
     __table_args__ = (
         UniqueConstraint("id", "tenant_id"),
-        CheckConstraint("source_sha256 ~ '^[0-9a-f]{64}$'", name="sha256"),
+        CheckConstraint(_SourceDigestHexExpression(), name="sha256"),
         Index(
             "uq_source_object_live",
             "tenant_id",
             "source_sha256",
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
         ),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

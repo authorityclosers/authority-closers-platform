@@ -5,11 +5,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
-from alembic.config import Config
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
-from alembic.script import ScriptDirectory
-from sqlalchemy import delete, inspect, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Session
@@ -88,16 +84,3 @@ def test_source_history_constraints(postgres_harness: Any) -> None:
         db.flush()
         assert add_object(state.tenant_id).id != first.id
         assert db.get(Object, first.id).deleted_at == now
-
-
-def test_empty_schema_downgrade_upgrade(postgres_harness: Any) -> None:
-    script = ScriptDirectory.from_config(Config("alembic.ini"))
-    migration = script.get_revision("20260928_0051").module
-    with (
-        postgres_harness.begin() as connection,
-        Operations.context(MigrationContext.configure(connection)),
-    ):
-        migration.downgrade()
-        assert not inspect(connection).has_table("conversation_source_objects")
-        migration.upgrade()
-        assert inspect(connection).has_table("conversation_source_references")

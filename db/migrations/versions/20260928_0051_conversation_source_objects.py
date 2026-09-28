@@ -62,14 +62,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("""
-        DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM conversation_source_objects) OR
-               EXISTS (SELECT 1 FROM conversation_source_references) THEN
-                RAISE EXCEPTION 'source history must not be lost on downgrade';
-            END IF;
-        END $$;
-        DROP TABLE conversation_source_references;
-        DROP TABLE conversation_source_objects;
-        DROP FUNCTION conversation_source_history_guard();
-    """)
+    raise RuntimeError(
+        "Conversation source history is forward-only; use a reviewed forward migration."
+    )

@@ -17,7 +17,7 @@ Global hash dedupe breaks tenant isolation. Placing shared files inside a record
 ## Consequences
 T3a changes no runtime behaviour. T3c must deliver fenced upload/deletion recovery and D5 evidence together before using these tables.
 ## Reversal cost
-Empty schema can downgrade to 0050. Once populated, downgrade refuses to destroy history; rollback needs a separately reviewed forward migration.
+Migration 0051 is forward-only, including empty schema. Reversal needs a separately reviewed forward migration that preserves history.
 ## Evidence
 AUT-4 plan revision `0c5f3782-31c2-4d6e-af8f-6a424605af14`, CTO T3a scope comment `202440db-dab1-458d-9858-75460aa66dc6`, base `a5064f46`; PostgreSQL and parity results are recorded in the T3a evidence file.
 ## Owner
