@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
 import {
   acquisition,
+  callHref,
   clearRequestedSubmission,
   AcquisitionError,
   parseAllowance,
@@ -59,9 +60,12 @@ describe("acquisition permission recovery", () => {
       ).rejects.toMatchObject({
         status: 403,
         message: expect.stringContaining(
-          "approved analysis allowance has been used",
+          "This analysis allowance has been used",
         ),
       });
+      expect(
+        new AcquisitionError(403, "provider_allowance_used").message,
+      ).not.toContain("review its approval");
       expect(fetch).toHaveBeenCalledOnce();
       expect(fetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -202,6 +206,23 @@ describe("acquisition permission recovery", () => {
       });
     },
   );
+});
+
+it("validates the earlier-report signal and builds a same-page call link", () => {
+  const upload = {
+    submission_id: submissionId,
+    recording_id: recordingId,
+    source_sha256: "0".repeat(64),
+  };
+  expect(
+    parseSubmission({ ...upload, earlier_report_submission_id: submissionId })
+      .earlierReportSubmissionId,
+  ).toBe(submissionId);
+  expect(parseSubmission(upload).earlierReportSubmissionId).toBeNull();
+  expect(() =>
+    parseSubmission({ ...upload, earlier_report_submission_id: "not-a-uuid" }),
+  ).toThrow();
+  expect(callHref(submissionId, "/?new=1")).toBe(`/?call=${submissionId}`);
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {

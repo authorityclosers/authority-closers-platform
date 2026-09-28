@@ -51,6 +51,7 @@ import {
   ACQUISITION,
   AcquisitionError,
   acquisition,
+  callHref,
   clearRequestedSubmission,
   parseAllowance,
   parseEntry,
@@ -272,6 +273,9 @@ export function AcquisitionStudio({
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
   const [submission, setSubmission] = useState<Submission | null>(null);
+  const [earlierReportSubmissionId, setEarlierReportSubmissionId] = useState<
+    string | null
+  >(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   // Upload consent is deliberately ephemeral. It is only eligible to approve
@@ -283,6 +287,11 @@ export function AcquisitionStudio({
   const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const earlierReportDialog = useRef<HTMLDialogElement>(null);
+  const earlierReportLink = useRef<HTMLAnchorElement>(null);
+  const earlierReportChoice = useRef<
+    ((choice: "view" | "analyse" | "dismiss") => void) | null
+  >(null);
   const [busy, setBusy] = useState("");
   const [playbackExpanded, setPlaybackExpanded] = useState(false);
   const [error, setError] = useState<string | AcquisitionError>("");
@@ -332,6 +341,15 @@ export function AcquisitionStudio({
   useEffect(() => {
     bindingRef.current = submission?.id ?? null;
   }, [submission?.id]);
+  useEffect(() => {
+    const element = earlierReportDialog.current;
+    if (!earlierReportSubmissionId || !element) return;
+    if (!element.open) element.showModal();
+    earlierReportLink.current?.focus();
+    return () => {
+      if (element.open) element.close();
+    };
+  }, [earlierReportSubmissionId]);
   const stalePlanRefresh = useRef<string | null>(null);
   const previewUrl = useRef("");
   const reconciliationAttempted = useRef("");
@@ -470,6 +488,7 @@ export function AcquisitionStudio({
     active.current = true;
     return () => {
       active.current = false;
+      earlierReportChoice.current?.("dismiss");
       controller.current?.abort();
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     };
@@ -1249,6 +1268,10 @@ export function AcquisitionStudio({
     }
   }
 
+  function chooseEarlierReport(choice: "view" | "analyse" | "dismiss") {
+    earlierReportChoice.current?.(choice);
+  }
+
   async function upload() {
     if (analysisWriteBlocked || !file || !policy || !consentCurrent) return;
     if (access?.requestAnalysisAccess && !access.requestAnalysisAccess())
@@ -1358,6 +1381,30 @@ export function AcquisitionStudio({
       signal: AbortSignal,
       onPhase: (phase: "checking" | "starting") => void,
     ): Promise<AnalysisStartSettled> => {
+      const earlierReportId = outcome.bound.earlierReportSubmissionId;
+      if (earlierReportId) {
+        const choice = await new Promise<"view" | "analyse" | "dismiss">(
+          (resolve) => {
+            const settle = (choice: "view" | "analyse" | "dismiss") => {
+              signal.removeEventListener("abort", dismiss);
+              earlierReportChoice.current = null;
+              if (active.current) setEarlierReportSubmissionId(null);
+              resolve(choice);
+            };
+            const dismiss = () => settle("dismiss");
+            // The store survives navigation; a dialog requires its original view.
+            if (!active.current || signal.aborted) return dismiss();
+            earlierReportChoice.current = settle;
+            signal.addEventListener("abort", dismiss, { once: true });
+            setEarlierReportSubmissionId(earlierReportId);
+          },
+        );
+        if (signal.aborted || choice !== "analyse")
+          return {
+            state: "needs_action",
+            message: "Your recording is saved. Analysis has not started.",
+          };
+      }
       const started = await startAnalysis(
         {
           bound: outcome.bound,
@@ -2127,6 +2174,58 @@ export function AcquisitionStudio({
             : undefined
         }
       >
+        {earlierReportSubmissionId && (
+          <dialog
+            ref={earlierReportDialog}
+            className="panel"
+            aria-modal="true"
+            aria-labelledby="earlier-report-dialog-title"
+            onKeyDown={(event) => {
+              if (event.key !== "Tab") return;
+              const focusable = [
+                ...event.currentTarget.querySelectorAll<HTMLElement>(
+                  "a[href], button:not([disabled])",
+                ),
+              ];
+              if (!focusable.length) return;
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (
+                (event.shiftKey && document.activeElement === first) ||
+                (!event.shiftKey && document.activeElement === last)
+              ) {
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus();
+              }
+            }}
+            onCancel={(event) => {
+              event.preventDefault();
+              chooseEarlierReport("dismiss");
+            }}
+          >
+            <h2 id="earlier-report-dialog-title">
+              You&apos;ve analysed this recording before.
+            </h2>
+            <p>Open the earlier report or continue with a new analysis.</p>
+            <div>
+              <Link
+                ref={earlierReportLink}
+                className="secondary-button"
+                href={callHref(earlierReportSubmissionId, homeHref)}
+                onClick={() => chooseEarlierReport("view")}
+              >
+                View earlier report
+              </Link>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => chooseEarlierReport("analyse")}
+              >
+                Analyse again
+              </button>
+            </div>
+          </dialog>
+        )}
         {(review.frame || review.localFrame) && (
           <nav
             className={styles.reviewNotice}

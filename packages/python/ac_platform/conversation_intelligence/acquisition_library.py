@@ -25,6 +25,83 @@ from ac_platform.kernel.authz import ActorContext
 PAGE_SIZE = 20
 
 
+def _submission_owner_filter(
+    usage: Any,
+    claim: Any,
+    *,
+    person_id: UUID | None,
+    visitor_id: UUID | None,
+) -> Any:
+    """Use the same direct/claimed account and visitor scope as the library."""
+    return (
+        or_(usage.person_id == person_id, claim.person_id == person_id)
+        if person_id is not None
+        else usage.visitor_id == visitor_id
+    )
+
+
+async def earlier_report_submission_id(
+    ownership: GuestOwnership,
+    *,
+    submission_id: UUID,
+    source_sha256: str,
+    token: str | None = None,
+    actor: ActorContext | None = None,
+    shared_identity_locks: bool = False,
+) -> str | None:
+    """Find the latest earlier retained report owned by this account or guest session."""
+    now = await ownership.sessions._admit()
+    visitor_id, person_id = await ownership.sessions._owner(
+        None if actor is not None else token,
+        actor,
+        now,
+        shared_identity_locks=shared_identity_locks,
+    )
+    current = await ownership.database.scalar(
+        select(ConversationAcquisitionUsage).where(
+            ConversationAcquisitionUsage.tenant_id == ownership.tenant_id,
+            ConversationAcquisitionUsage.submission_id == submission_id,
+            ConversationAcquisitionUsage.source_sha256 == source_sha256,
+        )
+    )
+    if current is None:
+        return None
+    usage = ConversationAcquisitionUsage
+    claim = ConversationVisitorClaim
+    query = (
+        select(usage)
+        .outerjoin(
+            claim, and_(claim.visitor_id == usage.visitor_id, claim.tenant_id == usage.tenant_id)
+        )
+        .where(
+            usage.tenant_id == ownership.tenant_id,
+            usage.source_sha256 == source_sha256,
+            _submission_owner_filter(usage, claim, person_id=person_id, visitor_id=visitor_id),
+            tuple_(usage.created_at, usage.submission_id)
+            < (current.created_at, current.submission_id),
+        )
+    )
+    rows = (
+        await ownership.database.scalars(
+            query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE)
+        )
+    ).all()
+    reports = AcquisitionReports(ownership)
+    for row in rows:
+        try:
+            progress = await reports.progress(
+                row.submission_id,
+                token=None if actor is not None else token,
+                actor=actor,
+                shared_identity_locks=shared_identity_locks,
+            )
+        except ConversationNotFound:
+            continue
+        if progress["has_report"]:
+            return str(row.submission_id)
+    return None
+
+
 async def account_library(
     ownership: GuestOwnership,
     actor: ActorContext,
@@ -83,7 +160,7 @@ async def account_library(
         )
         .where(
             usage.tenant_id == actor.tenant_id,
-            or_(usage.person_id == actor.person_id, claim.person_id == actor.person_id),
+            _submission_owner_filter(usage, claim, person_id=actor.person_id, visitor_id=None),
         )
     )
     if before is not None:

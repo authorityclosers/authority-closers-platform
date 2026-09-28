@@ -19,7 +19,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, ValidationError
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
@@ -31,7 +31,10 @@ from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
     record_owner_benchmark_receipt,
     validate_benchmark_scope,
 )
-from ac_platform.conversation_intelligence.acquisition_library import account_library
+from ac_platform.conversation_intelligence.acquisition_library import (
+    account_library,
+    earlier_report_submission_id,
+)
 from ac_platform.conversation_intelligence.acquisition_processing import (
     AcquisitionProcessing,
     upload_policy,
@@ -608,7 +611,7 @@ def install_submission_http(
                                 storage=runtime.storage,
                             )
                         accepted = await service.enqueue(actor, quote)
-                        return {
+                        upload_result = {
                             "submission_id": str(submission_id),
                             "source_sha256": measured.source.source_sha256,
                             "duration_ms": measured.source.duration_ms,
@@ -617,6 +620,26 @@ def install_submission_http(
                             ),
                             **accepted,
                         }
+                        lookup_token, lookup_actor = owner.token, owner.actor
+            earlier_report_id: str | None = None
+            try:
+                # Commit the upload before taking the library's read fences. A
+                # guest claim acquires those fences before the upload lock.
+                async with sessions() as database, database.begin():
+                    earlier_report_id = await earlier_report_submission_id(
+                        ownership(database),
+                        submission_id=submission_id,
+                        source_sha256=measured.source.source_sha256,
+                        token=lookup_token,
+                        actor=lookup_actor,
+                        shared_identity_locks=True,
+                    )
+            except (ConversationError, SQLAlchemyError):
+                # Upload completion remains successful if the optional history
+                # hint cannot be read; the owner can still open the saved call.
+                earlier_report_id = None
+            upload_result["earlier_report_submission_id"] = earlier_report_id
+            return upload_result
         except StorageError:
             raise fail(422, "The recording could not be verified in private storage.") from None
         except ConversationError as error:

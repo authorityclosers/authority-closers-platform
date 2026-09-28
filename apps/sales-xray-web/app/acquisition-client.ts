@@ -36,7 +36,12 @@ export type UploadPolicy = {
   retention_days: number;
 };
 export const MAX_ACQUISITION_FILE_BYTES = 32 * 1024 ** 2;
-export type Submission = { id: string; recordingId: string; sha: string };
+export type Submission = {
+  id: string;
+  recordingId: string;
+  sha: string;
+  earlierReportSubmissionId?: string | null;
+};
 export type LibrarySubmission = {
   id: string;
   createdAt: string;
@@ -91,7 +96,7 @@ export class AcquisitionError extends Error {
                     ? reason === "trial_allowance_insufficient"
                       ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
                       : reason === "provider_allowance_used"
-                        ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
+                        ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
                         : reason === "plan_stale"
                           ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
                           : reason === "plan_permission"
@@ -332,21 +337,34 @@ export function parsePolicy(value: unknown): UploadPolicy {
   };
 }
 export function parseSubmission(value: unknown): Submission {
-  const item = record(value);
+  const item = record(value),
+    earlier = item.earlier_report_submission_id;
   if (
     typeof item.submission_id !== "string" ||
     !UUID.test(item.submission_id) ||
     typeof item.recording_id !== "string" ||
     !UUID.test(item.recording_id) ||
     typeof item.source_sha256 !== "string" ||
-    !SHA.test(item.source_sha256)
+    !SHA.test(item.source_sha256) ||
+    (earlier !== undefined &&
+      earlier !== null &&
+      (typeof earlier !== "string" || !UUID.test(earlier)))
   )
     throw new ReportContractError("acquisition_submission");
   return {
     id: item.submission_id,
     recordingId: item.recording_id,
     sha: item.source_sha256,
+    earlierReportSubmissionId: typeof earlier === "string" ? earlier : null,
   };
+}
+
+export function callHref(id: string, homeHref = "/"): string {
+  if (!UUID.test(id)) throw new ReportContractError("submission_id");
+  const url = new URL(homeHref, "https://sales-xray.invalid");
+  url.searchParams.delete("new");
+  url.searchParams.set("call", id);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function iso8601(value: unknown): value is string {
