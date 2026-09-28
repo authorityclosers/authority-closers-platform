@@ -83,7 +83,7 @@ async def earlier_report_submission_id(
     )
     rows = (
         await ownership.database.scalars(
-            query.order_by(usage.created_at.desc(), usage.submission_id.desc())
+            query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE)
         )
     ).all()
     reports = AcquisitionReports(ownership)

@@ -13,7 +13,10 @@ import {
   AcquisitionStudio,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
-import { UploadSessionProvider } from "./hooks/upload-session";
+import {
+  UploadSessionProvider,
+  UploadSessionStore,
+} from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
@@ -210,7 +213,15 @@ async function analyseThenOpenAnotherCall() {
 }
 async function saveDeferredSource() {
   resolveDeferredSourcePut?.(
-    response({ ...progress, duration_ms: 5000, allowance }, 202),
+    response(
+      {
+        ...progress,
+        duration_ms: 5000,
+        allowance,
+        earlier_report_submission_id: earlierReportSubmissionId,
+      },
+      202,
+    ),
   );
   await settleAll();
 }
@@ -724,10 +735,87 @@ it.each(["analyse", "view", "escape"] as const)(
     await flush();
     expect(container.querySelector("dialog[open]")).toBeNull();
     expect(calls.some(({ path }) => path.endsWith("/plan/quote"))).toBe(
-      choice !== "view",
+      choice === "analyse",
+    );
+    if (choice === "escape") {
+      expect(accepts()).toHaveLength(0);
+      await click("Start analysis");
+      expect(accepts()).toHaveLength(1);
+    }
+  },
+);
+
+it.each(["during upload", "with dialog open"])(
+  "settles an earlier-report choice on navigation %s and permits another upload",
+  async (when) => {
+    earlierReportSubmissionId = secondSubmissionId;
+    deferSourcePut = when === "during upload";
+    await mountWithUploadSession();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Analyse my call");
+    if (!deferSourcePut)
+      expect(container.querySelector("dialog[open]")).not.toBeNull();
+
+    // Keep the shell's store mounted while the route's studio unmounts.
+    await act(async () =>
+      root.render(
+        <UploadSessionProvider>
+          <UploadIndicator />
+          <p>Another page</p>
+        </UploadSessionProvider>,
+      ),
+    );
+    if (deferSourcePut) await saveDeferredSource();
+    await settleAll();
+    expect(
+      container.querySelector('[data-analysis-start="needs_action"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain(
+      "Your recording is saved. Analysis has not started.",
+    );
+    expect(quotes()).toHaveLength(0);
+    expect(accepts()).toHaveLength(0);
+    const leave = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leave);
+    expect(leave.defaultPrevented).toBe(false);
+
+    generatedId = secondSubmissionId;
+    earlierReportSubmissionId = null;
+    deferSourcePut = false;
+    localStorage.clear();
+    await mountWithUploadSession();
+    await select();
+    await consent();
+    await click("Analyse my call");
+    expect(
+      calls.filter(
+        ({ path, init }) => path.endsWith("/source") && init.method === "PUT",
+      ),
+    ).toHaveLength(2);
+    expect(container.textContent).not.toContain(
+      "Another recording is still uploading",
     );
   },
 );
+
+it("dismisses a pending earlier-report choice when the store aborts on sign-out", async () => {
+  const runs = vi.spyOn(UploadSessionStore.prototype, "run");
+  earlierReportSubmissionId = secondSubmissionId;
+  await mountWithUploadSession();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Analyse my call");
+  expect(container.querySelector("dialog[open]")).not.toBeNull();
+  const store = runs.mock.contexts[0] as UploadSessionStore;
+  await act(async () => store.completeSignOut());
+  await settleAll();
+  expect(container.querySelector("dialog[open]")).toBeNull();
+  expect(quotes()).toHaveLength(0);
+  expect(accepts()).toHaveLength(0);
+});
 
 it("waits for native file checks after navigating away mid-upload, then starts once across remounts", async () => {
   await analyseThenOpenAnotherCall();

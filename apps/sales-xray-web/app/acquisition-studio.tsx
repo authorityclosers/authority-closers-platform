@@ -290,7 +290,7 @@ export function AcquisitionStudio({
   const earlierReportDialog = useRef<HTMLDialogElement>(null);
   const earlierReportLink = useRef<HTMLAnchorElement>(null);
   const earlierReportChoice = useRef<
-    ((choice: "view" | "analyse") => void) | null
+    ((choice: "view" | "analyse" | "dismiss") => void) | null
   >(null);
   const [busy, setBusy] = useState("");
   const [playbackExpanded, setPlaybackExpanded] = useState(false);
@@ -488,6 +488,7 @@ export function AcquisitionStudio({
     active.current = true;
     return () => {
       active.current = false;
+      earlierReportChoice.current?.("dismiss");
       controller.current?.abort();
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     };
@@ -1267,13 +1268,8 @@ export function AcquisitionStudio({
     }
   }
 
-  function chooseEarlierReport(choice: "view" | "analyse") {
-    const resolve = earlierReportChoice.current;
-    earlierReportChoice.current = null;
-    setEarlierReportSubmissionId(null);
-    if (choice === "analyse" && !uploadStore && submission)
-      setConsentedSubmissionId(submission.id);
-    resolve?.(choice);
+  function chooseEarlierReport(choice: "view" | "analyse" | "dismiss") {
+    earlierReportChoice.current?.(choice);
   }
 
   async function upload() {
@@ -1387,12 +1383,23 @@ export function AcquisitionStudio({
     ): Promise<AnalysisStartSettled> => {
       const earlierReportId = outcome.bound.earlierReportSubmissionId;
       if (earlierReportId) {
-        setEarlierReportSubmissionId(earlierReportId);
-        const choice = await new Promise<"view" | "analyse">((resolve) => {
-          earlierReportChoice.current = resolve;
-        });
-        earlierReportChoice.current = null;
-        if (signal.aborted || choice === "view")
+        const choice = await new Promise<"view" | "analyse" | "dismiss">(
+          (resolve) => {
+            const settle = (choice: "view" | "analyse" | "dismiss") => {
+              signal.removeEventListener("abort", dismiss);
+              earlierReportChoice.current = null;
+              if (active.current) setEarlierReportSubmissionId(null);
+              resolve(choice);
+            };
+            const dismiss = () => settle("dismiss");
+            // The store survives navigation; a dialog requires its original view.
+            if (!active.current || signal.aborted) return dismiss();
+            earlierReportChoice.current = settle;
+            signal.addEventListener("abort", dismiss, { once: true });
+            setEarlierReportSubmissionId(earlierReportId);
+          },
+        );
+        if (signal.aborted || choice !== "analyse")
           return {
             state: "needs_action",
             message: "Your recording is saved. Analysis has not started.",
@@ -2193,7 +2200,7 @@ export function AcquisitionStudio({
             }}
             onCancel={(event) => {
               event.preventDefault();
-              chooseEarlierReport("analyse");
+              chooseEarlierReport("dismiss");
             }}
           >
             <h2 id="earlier-report-dialog-title">

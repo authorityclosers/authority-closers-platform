@@ -19,7 +19,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, ValidationError
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
@@ -634,7 +634,7 @@ def install_submission_http(
                         actor=lookup_actor,
                         shared_identity_locks=True,
                     )
-            except (ConversationError, DBAPIError):
+            except (ConversationError, SQLAlchemyError):
                 # Upload completion remains successful if the optional history
                 # hint cannot be read; the owner can still open the saved call.
                 earlier_report_id = None

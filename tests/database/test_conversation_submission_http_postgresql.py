@@ -24,13 +24,16 @@ from fastapi import FastAPI
 from pydantic import SecretStr
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import ac_platform.conversation_intelligence.inference_worker as inference_worker_module
+import ac_platform.http.conversation_submissions as submission_http
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_library import (
+    PAGE_SIZE,
     earlier_report_submission_id,
 )
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -413,6 +416,45 @@ def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
                 assert first.json()["earlier_report_submission_id"] is None
                 available_recordings.add(UUID(first.json()["recording_id"]))
 
+                outsider = await seed(setup.engine, tenant_id=setup.state.tenant_id)
+                outsider_token = secrets.token_urlsafe(32)
+                async with setup.sessions() as database, database.begin():
+                    session = await database.get(IdentitySession, outsider.session_id)
+                    assert session is not None
+                    session.token_hash = hmac.new(
+                        setup.settings.session_token_pepper.get_secret_value().encode(),
+                        outsider_token.encode(),
+                        hashlib.sha256,
+                    ).digest()
+                client.cookies.clear()
+                client.cookies.set(setup.settings.session_cookie_name, outsider_token)
+                other = await client.put(
+                    f"{PREFIX}/submissions/{uuid4()}/source",
+                    content=data,
+                    headers=await _headers(client, data),
+                )
+                assert other.status_code == first.status_code
+                assert other.json()["earlier_report_submission_id"] is None
+
+                def shape(value: Any) -> Any:
+                    if isinstance(value, dict):
+                        return {key: shape(item) for key, item in value.items()}
+                    if isinstance(value, list):
+                        return [shape(item) for item in value]
+                    return type(value)
+
+                assert shape(other.json()) == shape(first.json())
+                assert {
+                    key: value
+                    for key, value in other.json().items()
+                    if key not in {"submission_id", "recording_id"}
+                } == {
+                    key: value
+                    for key, value in first.json().items()
+                    if key not in {"submission_id", "recording_id"}
+                }
+                _sign_in(setup, client)
+
                 setup.clock[0] += timedelta(seconds=1)
                 own_repeat_id = uuid4()
                 own_repeat_path = f"{PREFIX}/submissions/{own_repeat_id}"
@@ -495,6 +537,60 @@ def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
                         )
                         is None
                     )
+
+                    # An unavailable recent history must do bounded report reads.
+                    recent = [
+                        await guest_submission(setup.guest.token, f"bounded-{n}")
+                        for n in range(PAGE_SIZE + 2)
+                    ]
+                    checked: list[UUID] = []
+
+                    async def missing_progress(
+                        _reports: AcquisitionReports, submission_id: UUID, **_: Any
+                    ) -> dict[str, bool]:
+                        checked.append(submission_id)
+                        return {"has_report": False}
+
+                    monkeypatch.setattr(AcquisitionReports, "progress", missing_progress)
+                    assert (
+                        await earlier_report_submission_id(
+                            ownership,
+                            submission_id=recent[-1],
+                            source_sha256=source_sha256,
+                            token=setup.guest.token,
+                        )
+                        is None
+                    )
+                    assert checked == list(reversed(recent[:-1]))[:PAGE_SIZE]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_reupload_lookup_timeout_preserves_saved_upload(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unavailable_history(*_: Any, **__: Any) -> None:
+        raise SQLAlchemyTimeoutError("synthetic pool timeout")
+
+    monkeypatch.setattr(submission_http, "earlier_report_submission_id", unavailable_history)
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                _sign_in(setup, client)
+                data = _wav_one_second_48k()
+                path = f"{PREFIX}/submissions/{uuid4()}"
+                uploaded = await client.put(
+                    path + "/source", content=data, headers=await _headers(client, data)
+                )
+                assert uploaded.status_code == 202, uploaded.text
+                assert uploaded.json()["earlier_report_submission_id"] is None
+                assert (await client.get(path)).status_code == 200
         finally:
             await setup.engine.dispose()
 
