@@ -124,6 +124,7 @@ class Paths:
     lock: Path = Path("/run/ac-release.lock")
     foundation: Path = Path("/srv/authority-closers/current")
     sales_xray: Path = Path("/etc/authority-closers/sales-xray")
+    engine: Path = Path("/opt/ac-release")
 
     @property
     def mirror(self) -> Path:
@@ -1794,6 +1795,72 @@ class Engine:
                 removed.append(image["id"])
         return removed, errors
 
+    def installed_engine(self) -> str | None:
+        """Commit of the installed engine (``current`` links to ``releases/<sha>``)."""
+
+        with contextlib.suppress(OSError):
+            name = Path(os.path.realpath(self.paths.engine / "current")).name
+            if SHA_RE.fullmatch(name):
+                return name
+        return None
+
+    def release_tree(self, sha: str) -> str:
+        """Git tree of infra/release at a commit; empty when the mirror lacks it."""
+
+        result = self.run(
+            ["git", f"--git-dir={self.paths.mirror}", "rev-parse", f"{sha}:infra/release"],
+            check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    def update_engine(self, head: str) -> dict[str, Any] | None:
+        """Reinstall this engine from main when a validated main commit changed it.
+
+        Only owner-merged commits whose full validation passed are installed:
+        the same trust the engine already gives the installers it runs. A
+        failed install is not retried for the same commit; deploys continue
+        on the engine already installed.
+        """
+
+        installed = self.installed_engine()
+        failed = self.paths.state / "engine-update.failed"
+        if installed is None or installed == head:
+            return None
+        if failed.exists() and failed.read_text(encoding="utf-8").strip() == head:
+            return None
+        if self.release_tree(installed) == self.release_tree(head):
+            return None
+        if self.github is None or not validated(self.github, head):
+            return None
+        entry: dict[str, Any] = {
+            "at": _now(),
+            "action": "engine-update",
+            "from": installed,
+            "to": head,
+        }
+        log = self.new_log("engine", "update", head)
+        with self.stage(head) as stage:
+            checkout = stage / "source"
+            self.run(
+                ["git", "clone", "--quiet", "--no-checkout", str(self.paths.mirror), str(checkout)],
+                log=log,
+            )
+            self.run(["git", "-C", str(checkout), "checkout", "--quiet", head], log=log)
+            completed = self.run(
+                ["bash", str(checkout / "infra/release/install-release-engine.sh")],
+                log=log,
+                check=False,
+                timeout=300,
+            )
+        if completed.returncode == 0:
+            entry["result"] = "success"
+        else:
+            entry["result"] = "failed"
+            entry["error"] = f"engine install exited with {completed.returncode}; see {log}"
+            failed.write_text(head + "\n", encoding="utf-8")
+        self.record(entry)
+        return entry
+
     def tick(self) -> list[dict[str, Any]]:
         """Timer entry point: bring staging up to the latest good main build."""
 
@@ -1805,6 +1872,10 @@ class Engine:
                 return []
             head = self.main_head()
             results: list[dict[str, Any]] = []
+            update = self.update_engine(head)
+            if update is not None:
+                # The next tick runs the new engine; this one stops here.
+                return [update]
             if (
                 self.current_core(environment) != head
                 and self.failed_sha(environment, "core") != head
@@ -1913,6 +1984,7 @@ class Engine:
                 ),
             }
         report["production_enabled"] = self.paths.production_enabled.exists()
+        report["engine"] = self.installed_engine()
         report["recent"] = self.history(5)
         return report
 
@@ -1949,6 +2021,8 @@ def _print(data: Any, as_json: bool) -> None:
                     f"({env['sales_xray_approval_days_left']} days)"
                 )
         print(f"production deploys enabled: {data['production_enabled']}")
+        if data.get("engine"):
+            print(f"engine: {data['engine'][:12]} (updates itself from main)")
         return
     for entry in data if isinstance(data, list) else [data]:
         print(json.dumps(entry, sort_keys=True))

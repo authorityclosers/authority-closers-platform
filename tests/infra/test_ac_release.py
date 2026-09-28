@@ -1065,6 +1065,74 @@ def test_a_restarting_sales_xray_worker_fails_the_check(tmp_path: Path) -> None:
     assert "STEADY worker" in log.read_text()
 
 
+class EngineRunner(FakeRunner):
+    """Answers tree lookups per commit and records the engine reinstall."""
+
+    def __init__(self, trees: dict[str, str], install_code: int = 0) -> None:
+        super().__init__()
+        self.trees = trees
+        self.install_code = install_code
+        self.installs: list[list[str]] = []
+
+    def __call__(self, argv, **kwargs) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        if "rev-parse" in argv and argv[-1].endswith(":infra/release"):
+            tree = self.trees.get(argv[-1].split(":")[0], "")
+            return subprocess.CompletedProcess(argv, 0 if tree else 128, tree + "\n", "")
+        if argv[:2] == ["git", "clone"] or (argv[0] == "git" and "checkout" in argv):
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        if argv[0] == "bash" and argv[1].endswith("install-release-engine.sh"):
+            self.installs.append(argv)
+            return subprocess.CompletedProcess(argv, self.install_code, "", "")
+        return super().__call__(argv, **kwargs)
+
+
+def engine_setup(tmp_path: Path, trees: dict[str, str], *, validated_head: bool = True, **kw):
+    github = FakeGitHub()
+    if validated_head:
+        ready_core(github, HEAD)
+    runner = EngineRunner(trees, **kw)
+    engine = make_engine(tmp_path, github, runner)
+    engine.paths = MODULE.Paths(**{**engine.paths.__dict__, "engine": tmp_path / "engine"})
+    release = engine.paths.engine / "releases" / OLD
+    release.mkdir(parents=True)
+    (engine.paths.engine / "current").symlink_to(release)
+    engine.deploy_core = lambda *a, **k: pytest.fail("an engine update ends the tick")
+    return engine, runner
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_engine_updates_itself_when_validated_main_changes_it(tmp_path: Path) -> None:
+    engine, runner = engine_setup(tmp_path, {OLD: "1" * 40, HEAD: "2" * 40})
+    assert engine.installed_engine() == OLD
+    results = engine.tick()
+    assert [(r["action"], r["from"], r["to"], r["result"]) for r in results] == [
+        ("engine-update", OLD, HEAD, "success")
+    ]
+    assert len(runner.installs) == 1
+    assert engine.history()[-1]["action"] == "engine-update"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_unchanged_engine_or_unvalidated_main_is_left_alone(tmp_path: Path) -> None:
+    same, runner = engine_setup(tmp_path / "same", {OLD: "1" * 40, HEAD: "1" * 40})
+    assert same.update_engine(HEAD) is None
+    waiting, waiting_runner = engine_setup(
+        tmp_path / "waiting", {OLD: "1" * 40, HEAD: "2" * 40}, validated_head=False
+    )
+    assert waiting.update_engine(HEAD) is None
+    assert runner.installs == waiting_runner.installs == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_a_failed_engine_update_is_not_retried_for_the_same_commit(tmp_path: Path) -> None:
+    engine, runner = engine_setup(tmp_path, {OLD: "1" * 40, HEAD: "2" * 40}, install_code=1)
+    first = engine.update_engine(HEAD)
+    assert first is not None and first["result"] == "failed"
+    assert engine.update_engine(HEAD) is None
+    assert len(runner.installs) == 1
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
 def test_status_shows_when_the_sales_xray_approval_lapses(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
