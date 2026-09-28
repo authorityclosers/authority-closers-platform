@@ -1,8 +1,10 @@
 name: Single track
 
-# One task at a time (AGENTS.md, delivery constitution). A pull request fails
-# this check while any other pull request is open, so parallel work can never
-# merge unnoticed. When a pull request closes, the remaining ones are re-checked.
+# One task per lane (AGENTS.md, delivery constitution). A pull request fails this
+# check while another pull request holds its lane, changes the same files, or also
+# changes shared files; an exclusive (lane-less) task fails while anything else is
+# open. The rules come from main's scripts/ac_task.py, never from the pull request
+# itself. When a pull request closes, the remaining ones are re-checked.
 
 on:
   pull_request:
@@ -10,6 +12,7 @@ on:
 
 permissions:
   actions: write
+  contents: read
   pull-requests: read
 
 concurrency:
@@ -22,13 +25,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Only one open pull request at a time
+      - name: One task per lane, no overlapping or shared files
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+          gh api -H "Accept: application/vnd.github.raw" \
+            "repos/${REPOSITORY}/contents/scripts/ac_task.py?ref=${BASE_SHA}" > "$RUNNER_TEMP/ac_task.py"
+          if grep -q '"pr-check"' "$RUNNER_TEMP/ac_task.py"; then
+            python3 "$RUNNER_TEMP/ac_task.py" pr-check "$PULL_REQUEST"
+            exit 0
+          fi
+          # Until lanes reach main: the original one-pull-request rule.
           others="$(gh pr list -R "$REPOSITORY" --state open --json number,title \
             --jq "[.[] | select(.number != ${PULL_REQUEST}) | \"#\(.number) \(.title)\"] | join(\"; \")")"
           if [ -n "$others" ]; then
