@@ -536,9 +536,19 @@ function parseReport(
       "dimensions",
       "report_sections",
       "overview",
+      "provider_extras",
     ],
     "report",
   );
+  if ("provider_extras" in report) {
+    const extras = object(
+      report.provider_extras,
+      "report_provider_extras_invalid",
+    );
+    const prototype = Object.getPrototypeOf(extras);
+    if (prototype !== Object.prototype && prototype !== null)
+      throw new ReportContractError("report_provider_extras_invalid");
+  }
   if (!SHA256.test(binding.sourceSha256))
     throw new ReportContractError("source_binding_invalid");
   if (!Number.isInteger(binding.durationMs) || binding.durationMs <= 0)

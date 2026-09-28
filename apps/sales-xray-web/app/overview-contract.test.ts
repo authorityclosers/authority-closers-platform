@@ -23,6 +23,32 @@ it("reads the same complete synthetic overview validated by the Python parser", 
   expect(parsed.overview?.progress).toBeNull();
 });
 
+it("accepts saved overview diagnostics without exposing them in the report", () => {
+  const report = {
+    ...fixture.report,
+    provider_extras: {
+      compatibility: {
+        overview_drops: { strength_details: { reference_out_of_range: 1 } },
+      },
+    },
+  };
+  expect(parse(report)).toEqual(parse(fixture.report));
+  expect(parse(report)).not.toHaveProperty("provider_extras");
+  expect(() => parse({ ...report, extra: "untrusted" })).toThrow(
+    "report_unknown_field",
+  );
+});
+
+it.each(
+  [null, [], "untrusted", 0, false, undefined, new Date(0)].map((value) => ({
+    value,
+  })),
+)("rejects non-plain-object provider extras: $value", ({ value }) => {
+  expect(() => parse({ ...fixture.report, provider_extras: value })).toThrow(
+    "report_provider_extras_invalid",
+  );
+});
+
 it("accepts the optional canonical top-level business impact projection", () => {
   const objectValue = structuredClone(fixture.report);
   Object.assign(objectValue.overview, {
