@@ -12,46 +12,60 @@ import urllib.request
 from collections import Counter, defaultdict
 
 FAILED = {"failed", "cancelled", "timed_out"}
-CORE_COLUMNS = (
-    "Agent|Tasks done|Cycle median|Cycle p90|Bounces|Tokens / done task|Runs / done task|Failed-run %"
-).split("|")
-GITHUB_COLUMNS = "First-try CI|Owner changes|Post-merge bugs|Scope|Evidence|Gate".split("|")
+ISSUE_PAGE_SIZE = 1000
+CORE_COLUMNS = ["Agent", "Tasks done", "Cycle median", "Cycle p90",
+                "Bounces", "Tokens / done task", "Runs / done task", "Failed-run %"]  # fmt: skip
+GITHUB_COLUMNS = ["First-try CI", "Owner changes", "Post-merge bugs", "Scope", "Evidence", "Gate"]
 
 
 def fetch_json(path, method="GET"):
-    """Only network entry point; this report permits GET requests only."""
     if method != "GET":
         raise ValueError("agent scorecard permits GET requests only")
-    request = urllib.request.Request(
-        os.environ["PAPERCLIP_API_URL"].rstrip("/") + path,
+    base_url = os.environ["PAPERCLIP_API_URL"].rstrip("/")
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("PAPERCLIP_API_URL must use HTTP(S)")
+    request = urllib.request.Request(  # noqa: S310 - scheme restricted above
+        base_url + path,
         headers={"Authorization": "Bearer " + os.environ["PAPERCLIP_API_KEY"]},
         method="GET",
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - HTTP(S) only
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise RuntimeError("Paperclip read failed") from exc
 
 
-def fetch_report_data(company_id):
-    issues = fetch_json(f"/api/companies/{company_id}/issues")
+def fetch_report_data(company_id, start):
+    issues, offset = [], 0
+    while True:
+        page = fetch_json(
+            f"/api/companies/{company_id}/issues?limit={ISSUE_PAGE_SIZE}&offset={offset}"
+        )
+        issues.extend(page)
+        if len(page) < ISSUE_PAGE_SIZE:
+            break
+        offset += ISSUE_PAGE_SIZE
     agents = fetch_json(f"/api/companies/{company_id}/agents")
     runs = fetch_json(f"/api/companies/{company_id}/heartbeat-runs")
     activity = {
-        i["id"]: fetch_json(f"/api/issues/{i['id']}/activity") for i in issues if i.get("id")
+        issue["id"]: fetch_json(f"/api/issues/{issue['id']}/activity")
+        for issue in issues
+        if issue.get("id")
+        and (updated := timestamp(issue.get("updatedAt"))) is not None
+        and updated >= start
     }
     return {"issues": issues, "agents": agents, "runs": runs, "activity": activity}
 
 
 def week_window(value=None, today=None):
-    today = today or dt.datetime.now(dt.timezone.utc).date()
+    today = today or dt.datetime.now(dt.UTC).date()
     monday = (
         dt.date.fromisoformat(value) if value else today - dt.timedelta(days=today.weekday() + 7)
     )
     if monday.weekday():
         raise ValueError("--week must be a Monday (UTC)")
-    start = dt.datetime.combine(monday, dt.time(), dt.timezone.utc)
+    start = dt.datetime.combine(monday, dt.time(), dt.UTC)
     return monday, start.timestamp(), (start + dt.timedelta(days=7)).timestamp()
 
 
@@ -59,7 +73,7 @@ def timestamp(value):
     try:
         parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+            parsed = parsed.replace(tzinfo=dt.UTC)
         return parsed.timestamp()
     except (AttributeError, TypeError, ValueError):
         return None
@@ -67,8 +81,8 @@ def timestamp(value):
 
 def run_tokens(run):
     try:
-        raw = run["usageJson"]
-        usage = json.loads(raw) if isinstance(raw, str) else raw
+        usage = run["usageJson"]
+        usage = json.loads(usage) if isinstance(usage, str) else usage
         values = [usage[key] for key in ("inputTokens", "outputTokens")]
         return (
             sum(values)
@@ -94,18 +108,32 @@ def build_report(data, monday, start, end):
     bounces = Counter()
     cycles = defaultdict(list)
     for issue_id, events in data["activity"].items():
-        owner = issues.get(issue_id, {}).get("assigneeAgentId")
-        starts, completions = [], []
-        for event in events:
+        issue = issues.get(issue_id, {})
+        owner = issue.get("assigneeAgentId")
+        starts = [t for t in [timestamp(issue.get("startedAt"))] if t is not None]
+        completions, last_status = [], None
+        for event in sorted(events, key=lambda e: timestamp(e.get("createdAt")) or 0):
             when = timestamp(event.get("createdAt"))
-            status = ((event.get("details") or {}).get("changes") or {}).get("status") or {}
-            before, after = status.get("from"), status.get("to")
+            details = event.get("details") or {}
+            status = (details.get("changes") or {}).get("status") or {}
+            before = status.get("from") or (details.get("_previous") or {}).get("status")
+            after = status.get("to") or details.get("status")
+            started = (details.get("changes") or {}).get("startedAt") or {}
+            starts.extend(filter(None, map(timestamp, (started.get("from"), started.get("to")))))
+            checkout = event.get("type") == "issue.checked_out"
+            # Paperclip records checkout/start metadata, not an in_progress status transition.
+            if when is not None and (checkout or before == "in_progress"):
+                starts.append(when)
+            bounced = before == "in_review" and after == "in_progress"
+            bounced |= last_status == "in_review" and (checkout or before == "in_progress")
             if when is not None and start <= when < end:
-                bounces[owner] += before == "in_review" and after == "in_progress"
+                bounces[owner] += bounced
                 if after == "done":
                     completions.append(when)
-            if after == "in_progress" and when is not None:
-                starts.append(when)
+            if after is not None:
+                last_status = after
+            elif checkout or last_status == "in_review" and before == "in_progress":
+                last_status = "in_progress"
         if completions:
             done_by[owner].add(issue_id)
             end_at = max(completions)
@@ -131,28 +159,25 @@ def build_report(data, monday, start, end):
         selected = relevant if group == company_key else done_by.get(group, set())
         duration_sets = cycles.values() if group == company_key else [cycles.get(group, [])]
         values = [v for durations in duration_sets for v in durations]
-        cycle_missing = len(values) < len(selected)
-        median = statistics.median(values) if values and not cycle_missing else None
-        p90 = sorted(values)[int(0.9 * len(values) - 0.1)] if values and not cycle_missing else None
+        median = statistics.median(values) if values else None
+        p90 = sorted(values)[int(0.9 * len(values) - 0.1)] if values else None
         selected_runs = [r for r in week_runs if group == company_key or r.get("agentId") == group]
         failed = sum(r.get("status") in FAILED for r in selected_runs)
         failed_pct = 100 * failed / len(selected_runs) if selected_runs else None
         task_runs = [r for issue_id in selected for r in by_issue.get(issue_id, [])]
         complete_runs = bool(selected) and all(by_issue.get(issue_id) for issue_id in selected)
         token_values = [run_tokens(run) for run in task_runs]
-        tokens = (
-            sum(token_values) / len(selected)
-            if complete_runs and all(v is not None for v in token_values)
-            else None
-        )
+        reported_tokens = [value for value in token_values if value is not None]
+        tokens = sum(reported_tokens) / len(selected) if selected and reported_tokens else None
         runs_per_task = len(task_runs) / len(selected) if complete_runs else None
         return {
             "done": len(selected),
             "median": median,
             "p90": p90,
-            "cycle_missing": cycle_missing,
+            "cycle_missing": len(selected) - len(values),
             "bounces": sum(bounces.values()) if group == company_key else bounces[group],
             "tokens": tokens,
+            "unreported_runs": len(token_values) - len(reported_tokens),
             "runs_per_task": runs_per_task,
             "failed_pct": failed_pct,
         }
@@ -176,6 +201,8 @@ def build_report(data, monday, start, end):
             )
     alerts = []
     for label, row in rows:
+        if row["cycle_missing"]:
+            alerts.append(f"{label}: cycle time missing for {row['cycle_missing']} task(s)")
         if row["failed_pct"] is not None and row["failed_pct"] > 10:
             alerts.append(f"{label}: failed runs {row['failed_pct']:.1f}% (>10%)")
         if row["p90"] is not None and row["p90"] > 3:
@@ -193,13 +220,21 @@ def render_report(report):
     ]
     for label, row in report["rows"]:
         no_cycles = "n/a (no done tasks)" if not row["done"] else "n/a (missing activity)"
+        tokens = row["tokens"]
+        token_cell = (
+            f"{tokens:.2f}"
+            if tokens is not None
+            else f"n/a ({'no usage' if row['done'] else 'no done tasks'})"
+        )
+        if tokens is not None and row["unreported_runs"]:
+            token_cell += f" ({row['unreported_runs']} runs unreported)"
         cells = [
             label,
             str(row["done"]),
             f"{row['median']:.2f}d" if row["median"] is not None else no_cycles,
             f"{row['p90']:.2f}d" if row["p90"] is not None else no_cycles,
             str(row["bounces"]),
-            f"{row['tokens']:.2f}" if row["tokens"] is not None else "n/a (missing usage)",
+            token_cell,
             f"{row['runs_per_task']:.2f}"
             if row["runs_per_task"] is not None
             else "n/a (missing runs)",
@@ -223,7 +258,7 @@ def main(argv=None):
         return 2
     try:
         monday, start, end = week_window(args.week)
-        data = fetch_report_data(os.environ["PAPERCLIP_COMPANY_ID"])
+        data = fetch_report_data(os.environ["PAPERCLIP_COMPANY_ID"], start)
         print(render_report(build_report(data, monday, start, end)), end="")
     except (ValueError, RuntimeError) as exc:
         print(str(exc) if isinstance(exc, ValueError) else "Paperclip read failed", file=sys.stderr)
