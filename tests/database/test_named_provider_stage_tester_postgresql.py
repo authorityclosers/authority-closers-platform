@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -24,15 +24,14 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.activation_contract import InternalTesterApproval
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
-    ConversationDenied,
 )
+from ac_platform.conversation_intelligence.entitlements import BudgetAccount
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
-    ConversationInferenceTask,
     ConversationRecording,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
@@ -119,8 +118,9 @@ async def _request_transcription(
         )
 
 
-def test_provider_request_scope_follows_submission_owner_not_shared_processor(
-    postgres_harness: Any, tmp_path: Path
+@pytest.mark.parametrize("named_tester_scope", [False, True])
+def test_reuploads_get_separate_requests_and_scope_follows_submission_owner(
+    postgres_harness: Any, tmp_path: Path, named_tester_scope: bool
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(
@@ -140,7 +140,7 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
                 await database.execute(
                     update(Person)
                     .where(Person.id == tester.person_id)
-                    .values(email="dipak@authorityclosers.com")
+                    .values(email="provider-tester@example.test")
                 )
                 await database.execute(
                     update(IdentitySession)
@@ -167,13 +167,13 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
             base_bundle = setup.bundle_box["bundle"]
             tester_scope = InternalTesterApproval(
                 id=uuid4(),
-                email="dipak@authorityclosers.com",
-                authorization_ref="ref:approval:dipak-provider-count-test",
+                email="provider-tester@example.test",
+                authorization_ref="ref:approval:synthetic-provider-count-test",
                 scopes=("provider_stage_request_count",),
                 reason="Approved internal tester exemption",
             )
             granted_bundle = base_bundle.model_copy(
-                update={"internal_tester_accounts": (tester_scope,)}
+                update={"internal_tester_accounts": (tester_scope,) if named_tester_scope else ()}
             )
             setup.bundle_box["bundle"] = granted_bundle
             setup.authority.tester_policy = InternalTesterPolicy(
@@ -213,24 +213,26 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
             assert ordinary_actor.person_id == primary_actor.person_id
             assert ordinary_actor.tenant_id == primary_actor.tenant_id
             assert ordinary_actor.processing_lease_id != primary_actor.processing_lease_id
-            with pytest.raises(ConversationDenied, match="provider allowance is used"):
-                await _request_transcription(
-                    setup,
-                    ordinary_actor,
-                    ordinary_recording,
-                    key="ordinary-owner-shared-source-denied",
-                )
+            ordinary_run = await _request_transcription(
+                setup, ordinary_actor, ordinary_recording, key="ordinary-owner-shared-source"
+            )
+            # Only identities differ from a first-ever upload; no cross-owner
+            # report/cache signal or different processing outcome is exposed.
+            assert {k: v for k, v in ordinary_run.items() if k not in {"id", "recording_id"}} == {
+                k: v for k, v in first.items() if k not in {"id", "recording_id"}
+            }
             async with setup.sessions() as database:
-                assert (
-                    await database.scalar(
-                        select(func.count()).where(
-                            ConversationInferenceTask.recording_id == ordinary_recording,
-                            ConversationInferenceTask.stage == "C2",
-                        )
-                    )
-                    == 0
+                recording = await database.get(ConversationRecording, ordinary_recording)
+                assert recording is not None
+                assert not await setup.authority._provider_stage_request_count_tester(
+                    ConversationApplication(database),
+                    ordinary_actor,
+                    recording,
+                    setup.clock[0],
+                    granted_bundle,
                 )
-            assert broker.calls == 1
+            assert await worker.run_once()
+            assert broker.calls == 2
 
             second_tester_submission, second_tester_recording = await _upload_as(
                 setup, data, tester_token
@@ -249,7 +251,25 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
             )
             assert first["id"] != second["id"]
             assert await worker.run_once()
-            assert broker.calls == 2
+            assert broker.calls == 3
+            async with setup.sessions() as database:
+                budget = await database.get(
+                    ConversationBudgetAccount, granted_bundle.budget_scope_id
+                )
+                assert budget is not None
+                reservations = [
+                    entry
+                    for entry in BudgetAccount.from_dict(budget.snapshot).reservations
+                    if entry.permission.authorization_ref.startswith("hosted-stage-v1:")
+                ]
+                assert len(reservations) == 3
+                assert {item.quote.source.recording_id for item in reservations} == {
+                    str(primary_recording),
+                    str(ordinary_recording),
+                    str(second_tester_recording),
+                }
+                assert len({item.quote.quote_id for item in reservations}) == 3
+                assert len({item.permission.authorization_ref for item in reservations}) == 1
 
             # Authenticated owner requests lock Person before budget. Processing
             # quote validation locks budget first; tester resolution must use
@@ -289,37 +309,37 @@ def test_provider_request_scope_follows_submission_owner_not_shared_processor(
                     recording = await database.get(ConversationRecording, second_tester_recording)
                     assert recording is not None
                     app = ConversationApplication(database, clock=lambda: setup.clock[0])
-                    assert await setup.authority._provider_stage_request_count_tester(
-                        app,
-                        second_tester_actor,
-                        recording,
-                        setup.clock[0],
-                        granted_bundle,
-                    )
+                    assert (
+                        await setup.authority._provider_stage_request_count_tester(
+                            app,
+                            second_tester_actor,
+                            recording,
+                            setup.clock[0],
+                            granted_bundle,
+                        )
+                    ) is named_tester_scope
 
             await asyncio.wait_for(
                 asyncio.gather(owner_person_then_budget(), processing_budget_then_owner_read()),
                 timeout=8,
             )
 
-            revoked_submission, revoked_recording = await _upload_as(setup, data, tester_token)
-            await _reconcile(setup.sessions, setup.state)
-            assert await local_worker.run_once()
-            revoked_actor = await _processing_actor(setup, revoked_submission, tester.actor)
             async with setup.sessions() as database, database.begin():
                 await database.execute(
                     update(Person)
                     .where(Person.id == tester.person_id)
                     .values(email_verified_at=None)
                 )
-            with pytest.raises(ConversationDenied, match="provider allowance is used"):
-                await _request_transcription(
-                    setup,
-                    revoked_actor,
-                    revoked_recording,
-                    key="unverified-owner-scope-revoked",
+                recording = await database.get(ConversationRecording, second_tester_recording)
+                assert recording is not None
+                assert not await setup.authority._provider_stage_request_count_tester(
+                    ConversationApplication(database),
+                    second_tester_actor,
+                    recording,
+                    setup.clock[0],
+                    granted_bundle,
                 )
-            assert broker.calls == 2
+            assert broker.calls == 3
 
             async with setup.sessions() as database:
                 usages = list(

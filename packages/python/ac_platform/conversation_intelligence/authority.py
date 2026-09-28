@@ -1414,7 +1414,7 @@ class ConversationAuthority:
             raise ConversationDenied("The exact quote is outside its current release approval.")
         # All admitted operations hold the current owner/session/recording locks.
         # The budget lock makes the finite provider-call allowance atomic with
-        # reservation, even across multiple uploads of the same source.
+        # reservation within the current recording.
         _, budget = await ConversationInference(app).accounts(recording, row)
         entries = BudgetAccount.from_dict(budget.snapshot).reservations
         if request_benchmark_id is not None:
@@ -1442,7 +1442,13 @@ class ConversationAuthority:
                 require_owner_acceptance=require_owner_acceptance,
             )
         prefix = f"hosted-stage-v1:{approval.id}:"
-        used = [entry for entry in entries if entry.permission.authorization_ref.startswith(prefix)]
+        used = [
+            entry
+            for entry in entries
+            if entry.permission.authorization_ref.startswith(prefix)
+            and entry.quote.source.tenant_id == str(recording.tenant_id)
+            and entry.quote.source.recording_id == str(recording.id)
+        ]
         provider_count_tester = await self._provider_stage_request_count_tester(
             app, actor, recording, now, bundle
         )
