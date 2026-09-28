@@ -14,9 +14,9 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
@@ -40,6 +40,7 @@ from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_VERSION,
     DetailedOverview,
     normalize_overview,
+    normalize_overview_evidence,
 )
 
 REPORT_PROFILE_PATH = Path(__file__).with_name("profiles") / "dipak_report_v1.json"
@@ -1569,7 +1570,108 @@ def _normalise_findings(
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/5"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/6"
+
+
+def _sanitize_provider_overview(
+    payload: Mapping[str, Any], transcript: Mapping[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    # Validate all citations before dropping anything, including malformed/duplicate items.
+    overview = normalize_overview_evidence(
+        payload.get("overview"),
+        normalize_evidence=lambda item: _normalise_c5_evidence(item, transcript),
+    )
+    drops: dict[str, dict[str, int]] = {}
+    if not isinstance(overview, dict):
+        return dict(payload), drops
+
+    def drop(field: str, reason: str) -> None:
+        counts = drops.setdefault(field, {})
+        counts[reason] = counts.get(reason, 0) + 1
+
+    detail_fields = {
+        "strength_details": "strengths",
+        "improvement_details": "improvements",
+        "missed_details": "missed_opportunities",
+    }
+    for collection in detail_fields.values():
+        if not isinstance(payload[collection], list):
+            raise ReportError("report_findings_invalid")
+    list_fields = {
+        *detail_fields,
+        "golden_moments",
+        "rewatch",
+        "prospect_interpretations",
+        "ethics_notes",
+    }
+    for field in (
+        *detail_fields,
+        "golden_moments",
+        "rewatch",
+        "prospect_interpretations",
+        "ethics_notes",
+        "diagnosis",
+        "outcome",
+        "conversation_change",
+        "next_call_focus",
+        "practice",
+    ):
+        if field not in overview or overview[field] is None:
+            continue
+        many = field in list_fields
+        if many and not isinstance(overview[field], list):
+            continue  # Collection shape and required fields stay strict.
+        annotation = DetailedOverview.model_fields[field].annotation
+        adapter: TypeAdapter[Any] = TypeAdapter(get_args(annotation)[0] if many else annotation)
+        kept, seen = [], set()
+        for raw in overview[field] if many else [overview[field]]:
+            try:
+                item = adapter.validate_python(raw).model_dump(mode="json")
+            except ValidationError as exc:
+                if any("evidence" in error["loc"] for error in exc.errors()):
+                    raise ReportError("report_evidence_invalid") from None
+                drop(field, "item_schema_invalid")
+                continue
+            ref: Any = None
+            if field in detail_fields:
+                ref = item["finding_index"]
+                if ref >= len(payload[detail_fields[field]]):
+                    drop(field, "reference_out_of_range")
+                    continue
+            elif field == "golden_moments":
+                ref = (item["strength_index"], item["evidence_index"])
+                strengths = payload["strengths"]
+                evidence = (
+                    strengths[ref[0]].get("evidence")
+                    if ref[0] < len(strengths) and isinstance(strengths[ref[0]], Mapping)
+                    else None
+                )
+                if not isinstance(evidence, list) or ref[1] >= len(evidence):
+                    drop(field, "reference_out_of_range")
+                    continue
+            elif field == "rewatch":
+                span = item["evidence"][0]
+                ref = (span["segment_id"], span["start_ms"], span["end_ms"])
+            elif field == "conversation_change":
+                if any(
+                    max(span["end_ms"] for span in item[left]["evidence"])
+                    > min(span["start_ms"] for span in item[right]["evidence"])
+                    for left, right in (("before", "change"), ("change", "after"))
+                ):
+                    drop(field, "chronology_invalid")
+                    continue
+            if ref is not None and ref in seen:
+                drop(field, "reference_duplicate")
+                continue
+            seen.add(ref)
+            kept.append(item)
+        overview[field] = kept if many else next(iter(kept), None)
+    if bool(overview.get("next_call_focus")) != bool(overview.get("practice")):
+        for field in ("next_call_focus", "practice"):
+            if overview.get(field) is not None:
+                drop(field, "focus_practice_unpaired")
+                overview[field] = None
+    return {**payload, "overview": overview}, drops
 
 
 def _adapt_unbound_provider_findings(
@@ -1601,10 +1703,10 @@ def _adapt_unbound_provider_findings(
         indexed: dict[int, Mapping[str, Any]] = {}
         for detail in details:
             if not isinstance(detail, Mapping):
-                raise ReportError("report_overview_invalid")
+                continue
             index = detail.get("finding_index")
             if type(index) is not int or not 0 <= index < count or index in indexed:
-                raise ReportError("report_overview_invalid")
+                continue
             indexed[index] = detail
         return indexed
 
@@ -2269,7 +2371,10 @@ def parse_report_draft(
         consumed_provider_keys.update(overview_keys)
     # Scalar adapters need the same canonical envelope regardless of where
     # the provider put overview fields. Normalize it before joining evidence.
+    payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript)
     payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
+    if overview_drops:
+        compatibility_extras["overview_drops"] = overview_drops
     normalized = dict(payload)
     for field in (
         "strengths",
@@ -2282,18 +2387,7 @@ def parse_report_draft(
             payload[field], transcript=validated_transcript, field_name=field
         )
     overview_payload = payload.get("overview")
-    overview_compatibility: dict[str, Any] = {}
     if overview_payload is not None:
-        if isinstance(overview_payload, Mapping):
-            # Older Gemini coaching responses used a plain diagnosis string.
-            # A scalar has no source binding, so do not invent evidence for it;
-            # omit it from the canonical overview while retaining the bounded
-            # provider value for later review and adapter improvements.
-            overview_payload = dict(overview_payload)
-            scalar_diagnosis = overview_payload.get("diagnosis")
-            if isinstance(scalar_diagnosis, str):
-                overview_compatibility["diagnosis"] = scalar_diagnosis[:320]
-                overview_payload["diagnosis"] = None
         try:
             normalized["overview"] = normalize_overview(
                 overview_payload,
@@ -2303,6 +2397,18 @@ def parse_report_draft(
         except ValueError as exc:
             if isinstance(exc, ReportError):
                 raise
+            if isinstance(exc, ValidationError):
+                raise ReportError("report_overview_schema_invalid") from None
+            if str(exc) in {
+                "overview_finding_reference_invalid",
+                "overview_golden_reference_duplicate",
+                "overview_golden_reference_invalid",
+                "overview_focus_requires_improvement",
+                "overview_focus_practice_mismatch",
+                "overview_rewatch_duplicate",
+                "overview_change_order_invalid",
+            }:
+                raise ReportError("report_overview_reference_invalid") from None
             raise ReportError("report_overview_invalid") from None
     if "dimensions" in payload and "dimension_assessments" in payload:
         raise ReportError("report_dimensions_ambiguous")
@@ -2321,11 +2427,6 @@ def parse_report_draft(
         payload.get("report_sections"), profile=resolved_profile
     )
     provider_extras = _provider_extras(payload, consumed_keys=consumed_provider_keys)
-    if overview_compatibility:
-        compatibility_extras = {
-            **compatibility_extras,
-            "overview_scalars": overview_compatibility,
-        }
     if compatibility_extras:
         provider_extras = {**provider_extras, "compatibility": compatibility_extras}
     # The provider object starts as a convenient working copy above. Strip

@@ -157,12 +157,11 @@ class DetailedOverview(_Strict):
     final_assessment: FinalAssessment
 
 
-def normalize_overview(
+def normalize_overview_evidence(
     payload: Any,
     *,
-    findings: Mapping[str, Any],
     normalize_evidence: Callable[[Any], dict[str, Any]],
-) -> DetailedOverview:
+) -> Any:
     """Resolve every quote through native source validation and check references.
 
     Some retained provider responses used one evidence object for a singular
@@ -194,7 +193,18 @@ def normalize_overview(
             return [walk(item) for item in value]
         return value
 
-    parsed = DetailedOverview.model_validate(walk(payload))
+    return walk(payload)
+
+
+def normalize_overview(
+    payload: Any,
+    *,
+    findings: Mapping[str, Any],
+    normalize_evidence: Callable[[Any], dict[str, Any]],
+) -> DetailedOverview:
+    parsed = DetailedOverview.model_validate(
+        normalize_overview_evidence(payload, normalize_evidence=normalize_evidence)
+    )
     for field, collection in (
         (parsed.strength_details, "strengths"),
         (parsed.improvement_details, "improvements"),
@@ -205,10 +215,6 @@ def normalize_overview(
             index >= len(findings[collection]) for index in indices
         ):
             raise ValueError("overview_finding_reference_invalid")
-        if collection in {"strengths", "improvements"} and set(indices) != set(
-            range(len(findings[collection]))
-        ):
-            raise ValueError("overview_finding_detail_missing")
     golden_refs = [(item.strength_index, item.evidence_index) for item in parsed.golden_moments]
     if len(golden_refs) != len(set(golden_refs)):
         raise ValueError("overview_golden_reference_duplicate")
@@ -221,8 +227,6 @@ def normalize_overview(
         raise ValueError("overview_focus_requires_improvement")
     if bool(parsed.next_call_focus) != bool(parsed.practice):
         raise ValueError("overview_focus_practice_mismatch")
-    if findings["improvements"] and not parsed.next_call_focus:
-        raise ValueError("overview_focus_required")
     clips = [
         (item.evidence[0].segment_id, item.evidence[0].start_ms, item.evidence[0].end_ms)
         for item in parsed.rewatch

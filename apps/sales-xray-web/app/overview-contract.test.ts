@@ -103,9 +103,9 @@ it.each([
     },
   ],
   [
-    "missing strength context",
+    "out-of-range strength context",
     (o: Record<string, unknown>) => {
-      o.strength_details = [];
+      o.strength_details = [{ finding_index: 2, why_it_matters: "Reason" }];
     },
   ],
   [
@@ -163,4 +163,20 @@ it("rejects duplicate clips, financial expansion, and inferred concerns labeled 
   const concern = structuredClone(fixture.report);
   concern.overview.prospect_interpretations[0].interpretation_kind = "fact";
   expect(() => parse(concern)).toThrow(ReportContractError);
+});
+
+it("accepts partial details and absent paired focus while retaining reference guards", () => {
+  const report = structuredClone(fixture.report);
+  Object.assign(report.overview, {
+    strength_details: [],
+    improvement_details: [],
+    next_call_focus: null,
+    practice: null,
+  });
+  expect(parse(report).overview?.strength_details).toEqual([]);
+  report.overview.strength_details = [
+    fixture.report.overview.strength_details[0],
+    fixture.report.overview.strength_details[0],
+  ];
+  expect(() => parse(report)).toThrow(ReportContractError);
 });
