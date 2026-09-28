@@ -65,7 +65,64 @@ Logs for each deploy are in `/var/log/ac-release/`.
 - Production deploys are refused unless `/etc/ac-release/production.enabled`
   exists **and** the same commit already passed staging. That file is created
   only after the off-host backup restore check passes.
-- Admin → Releases (T5) will call these same commands.
+- Admin → Releases production controls are proposed in [ADR 0034](../adr/0034-admin-release-control-through-engine-inbox.md); the inbox consumer and Admin release routes are not implemented yet.
+
+## Admin production controls (ADR 0034)
+
+**Status: proposed; implementation pending.** The installed engine does not
+currently provide the Admin request routes, inbox consumer, `promote` command,
+or production rollback command described here. Do not use the planned commands
+below until their implementation tasks have landed and the engine is updated.
+
+Production Admin submits intent to the engine through the request inbox. The
+production API can create request files but cannot list the inbox. Once the
+engine moves a request into the root-only `processed/` directory, the API can
+no longer reach it. The root engine consumes each request under its lock and
+writes `status.json` plus a per-request result into the outbox using atomic
+writes. Staging and production APIs mount the outbox read-only. A systemd path
+unit triggers the consumer, with the two-minute engine tick as backup.
+
+Requests use a strict schema and reject unknown keys. The engine moves each
+inbox request into the root-only `processed/` directory before handling it, so
+a request runs at most once. It reads the moved file once: the opened file must
+be regular, not a symlink, no larger than 4 KB, and owned by uid `10001`. The
+engine validates only the bytes read from that open file; it never re-reads the
+inbox path. It also refuses requests older than 15 minutes, concurrent
+requests, and stale expected production commit/version values.
+
+Before writing a request, the production API requires the owner-only
+`platform_release_manage` capability, a safe origin, and typed confirmation of
+the resulting version; it appends an `audit_events` entry and includes its
+`audit_event_id` in the request. It then writes the request and returns `202`
+with its id. Status is read from the outbox. Staging Admin cannot submit
+production actions.
+
+The engine enforces these production guards on every request:
+
+- Production is enabled only when `/etc/ac-release/production.enabled` exists;
+  the off-host backup restore check must have passed.
+- The core commit and paired web build must be on `main` and pass staging.
+- Compare-and-swap must match the current production commit and version, and
+  the engine lock permits one action at a time.
+- Rollback can target only the immediately previous release with the same
+  migration head as production. Database rollback is forbidden.
+- Foundation support for new migrations must be installed first, and the
+  Sales Xray approval must have at least one day remaining.
+- The engine accepts requests only from the production inbox, which no other
+  API mounts, and each request must carry its `audit_event_id`.
+- The engine derives the next version from tags and release records.
+
+The API requires the owner to type the displayed resulting version to
+confirm. The agreed baseline is current production `v0.2.0`; with no existing
+`vX.Y.Z` tags, the first minor promote is `v0.3.0` (D1). Production actions
+come only from production Admin; staging Admin is read-only, and CLI is the
+fallback (D3). The authorization is a new owner-only `platform_release_manage`
+capability, not `platform_access_manage` (D4; see [ADR 0031](../adr/0031-explicit-platform-and-studio-capabilities.md)).
+
+After the engine CLI work is implemented, the planned fallback commands are
+`sudo ac-release promote --bump minor` and
+`sudo ac-release rollback production`. Until then, use only the currently
+implemented commands in this runbook.
 
 ## Sales Xray activation
 
