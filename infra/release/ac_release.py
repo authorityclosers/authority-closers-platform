@@ -641,7 +641,14 @@ class Engine:
     ) -> dict[str, Any]:
         log = self.new_log(environment, "core", build.sha)
         bundle = self.store_bundle(build, "core", CORE_FILES)
-        self.require_backup_support(bundle)
+        blockers: list[str] = []
+        try:
+            self.require_backup_support(bundle)
+        except ReleaseError as error:
+            if not dry_run:
+                raise
+            # A rehearsal reports every blocker instead of stopping at the first.
+            blockers.append(str(error))
         previous = self.current_core(environment)
         with self.stage(build.sha) as stage:
             archive, archive_sha = self.source_archive(build.sha, stage, "infra/application")
@@ -670,6 +677,8 @@ class Engine:
                 "AC_IMAGE_BUNDLE_DIR": str(bundle_dir),
             }
             if dry_run:
+                if blockers:
+                    raise ReleaseError("dry run found blockers: " + "; ".join(blockers))
                 return {
                     "dry_run": True,
                     "previous": previous,
