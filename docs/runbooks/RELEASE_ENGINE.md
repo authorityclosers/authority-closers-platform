@@ -24,6 +24,14 @@ same source-owned installers the laptop script used to run over SSH.
 3. First supervised deploy: `sudo ac-release deploy staging --dry-run`, then
    `sudo ac-release deploy staging`, then `sudo ac-release resume staging`.
 
+After this one-time install, the engine **updates itself**. When a tick finds
+that `main` changed `infra/release/`, it waits for that commit's full
+validation to pass, then reinstalls itself from that exact commit (a clean
+checkout from its mirror, then `install-release-engine.sh`) and ends the
+tick. The next tick runs the new engine. A failed self-install is recorded in
+`history` and not retried for the same commit; deploys continue on the engine
+already installed. `ac-release status` shows the installed engine commit.
+
 ## Commands
 
 | Command | Does |
