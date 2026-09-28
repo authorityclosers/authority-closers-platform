@@ -1,0 +1,24 @@
+{
+  "issues": [
+    {"id": "task-a", "identifier": "DEMO-1", "assigneeAgentId": "agent-a"},
+    {"id": "task-b", "identifier": "DEMO-2", "assigneeAgentId": "agent-a"}
+  ],
+  "agents": [{"id": "agent-a", "name": "Fictional Agent"}],
+  "activity": {
+    "task-a": [
+      {"createdAt": "2026-09-21T00:00:00Z", "details": {"changes": {"status": {"from": "todo", "to": "in_progress"}}}},
+      {"createdAt": "2026-09-24T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "in_review"}}}},
+      {"createdAt": "2026-09-25T00:00:00Z", "details": {"changes": {"status": {"from": "in_review", "to": "in_progress"}}}},
+      {"createdAt": "2026-09-26T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "done"}}}}
+    ],
+    "task-b": [
+      {"createdAt": "2026-09-22T00:00:00Z", "details": {"changes": {"status": {"from": "todo", "to": "in_progress"}}}},
+      {"createdAt": "2026-09-27T23:59:59Z", "details": {"changes": {"status": {"from": "in_progress", "to": "done"}}}}
+    ]
+  },
+  "runs": [
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-23T00:00:00Z", "contextSnapshot": {"issueId": "task-a"}, "usageJson": {"inputTokens": 100, "outputTokens": 50}},
+    {"agentId": "agent-a", "status": "failed", "startedAt": "2026-09-26T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": {"inputTokens": 200, "outputTokens": 50}},
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-28T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": {"inputTokens": 9, "outputTokens": 9}}
+  ]
+}
