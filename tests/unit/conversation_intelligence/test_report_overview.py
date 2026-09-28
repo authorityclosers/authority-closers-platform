@@ -78,21 +78,38 @@ def test_provider_scalar_findings_keep_source_bound_report_usable() -> None:
     assert extras["strengths"] == ["Polite and respectful opening."]
 
 
-def test_legacy_scalar_diagnosis_is_omitted_without_blocking_report() -> None:
-    """A legacy provider diagnosis cannot be promoted without source evidence."""
+@pytest.mark.parametrize(
+    "field",
+    [
+        "diagnosis",
+        "outcome",
+        "conversation_change",
+        "next_call_focus",
+        "practice",
+        "golden_moments",
+        "rewatch",
+        "prospect_interpretations",
+        "ethics_notes",
+        "missed_details",
+    ],
+)
+def test_malformed_overview_items_are_omitted_without_blocking_report(field: str) -> None:
+    """Never invent evidence or retain provider text in drop diagnostics."""
 
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
-    payload["overview"]["diagnosis"] = "A useful but unbound provider diagnosis."
+    many = isinstance(payload["overview"][field], list)
+    payload["overview"][field] = ["broken"] if many else "broken"
 
     result = parse_report_draft(payload, transcript)
 
     assert result.overview is not None
-    assert result.overview.diagnosis is None
-    assert result.provider_extras["compatibility"]["overview_scalars"]["diagnosis"] == (
-        "A useful but unbound provider diagnosis."
-    )
+    assert getattr(result.overview, field) == ([] if many else None)
+    assert result.provider_extras["compatibility"]["overview_drops"][field] == {
+        "item_schema_invalid": 1
+    }
+    assert (result.overview.next_call_focus is None) == (result.overview.practice is None)
 
 
 @pytest.mark.parametrize("flattened", [False, True])
@@ -165,25 +182,45 @@ def test_scalar_improvement_evidence_follows_explicit_index(flattened: bool) -> 
         ]
 
 
-@pytest.mark.parametrize("bad_index", [False, -1, 2, "0"])
-def test_scalar_adaptation_rejects_invalid_detail_identity(bad_index: Any) -> None:
+@pytest.mark.parametrize("bad_index", [False, -1, 2, "0", 0.0, None])
+@pytest.mark.parametrize("scalar", [False, True])
+def test_adaptation_drops_invalid_detail_identity(bad_index: Any, scalar: bool) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
-    payload["improvements"] = ["A scalar improvement."]
+    if scalar:
+        payload["improvements"] = ["A scalar improvement."]
     payload["overview"]["improvement_details"][0]["finding_index"] = bad_index
-    with pytest.raises(ReportError, match="report_overview_invalid"):
-        parse_report_draft(payload, transcript)
+    if bad_index is None:
+        payload["overview"]["improvement_details"] = ["not an object"]
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None and report.overview.improvement_details == []
+    assert len(report.improvements) == (0 if scalar else 1)
+    assert (
+        sum(
+            report.provider_extras["compatibility"]["overview_drops"][
+                "improvement_details"
+            ].values()
+        )
+        == 1
+    )
 
 
-def test_scalar_adaptation_rejects_duplicate_detail_identity() -> None:
+def test_scalar_adaptation_keeps_first_valid_detail_identity() -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
     payload["improvements"] = ["First scalar improvement.", "Second scalar improvement."]
-    payload["overview"]["improvement_details"] *= 2
-    with pytest.raises(ReportError, match="report_overview_invalid"):
-        parse_report_draft(payload, transcript)
+    payload["overview"]["improvement_details"] = [
+        {"finding_index": 0},
+        *payload["overview"]["improvement_details"] * 2,
+    ]
+    report = parse_report_draft(payload, transcript)
+    assert len(report.improvements) == 1
+    assert report.provider_extras["compatibility"]["overview_drops"]["improvement_details"] == {
+        "item_schema_invalid": 1,
+        "reference_duplicate": 1,
+    }
 
 
 @pytest.mark.parametrize("single_evidence", [False, True])
@@ -218,7 +255,7 @@ def test_flattened_overview_cannot_hide_missing_required_fields() -> None:
     overview = overview_for(payload)
     overview.pop("final_assessment")
     payload.update(overview)
-    with pytest.raises(ReportError, match="report_overview_invalid"):
+    with pytest.raises(ReportError, match="report_overview_schema_invalid"):
         parse_report_draft(payload, transcript)
 
 
@@ -239,44 +276,39 @@ def test_scalar_singular_evidence_still_rejects_fabricated_quote(flattened: bool
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "code"),
     [
-        ("progress", {"trend": "improving"}),
-        ("version", "future-auto-approved"),
-        ("strength_details", []),
-        ("next_call_focus", None),
-        ("practice", None),
-        ("diagnosis", {"text": "Unsupported", "evidence": []}),
-        ("golden_moments", [{"strength_index": 2, "evidence_index": 0, "why_effective": "x"}]),
-        ("improvement_details", []),
+        ("progress", {"trend": "improving"}, "report_overview_schema_invalid"),
+        ("version", "future-auto-approved", "report_overview_schema_invalid"),
+        ("diagnosis", {"text": "Unsupported", "evidence": []}, "report_evidence_invalid"),
     ],
 )
-def test_missing_or_invented_template_data_fails(field: str, value: Any) -> None:
+def test_missing_or_invented_template_data_fails(field: str, value: Any, code: str) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
     payload["overview"][field] = value
-    with pytest.raises(ReportError, match="report_overview_invalid"):
+    with pytest.raises(ReportError, match=f"^{code}$"):
         parse_report_draft(payload, transcript)
 
 
 @pytest.mark.parametrize("field", ["quote", "start_ms", "segment_id"])
-def test_new_nested_evidence_cannot_change_the_source(field: str) -> None:
+@pytest.mark.parametrize("invalid_index", [False, True])
+def test_new_nested_evidence_cannot_change_the_source(field: str, invalid_index: bool) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(deepcopy(payload))
+    if invalid_index:
+        payload["overview"]["improvement_details"][0]["finding_index"] = 9
     span = payload["overview"]["improvement_details"][0]["what_happened"]["evidence"][0]
     span[field] = 1 if field == "start_ms" else "invented"
     with pytest.raises(ReportError, match="report_evidence_"):
         parse_report_draft(payload, transcript)
 
 
-def test_financial_estimates_traits_and_boolean_focus_indices_are_rejected() -> None:
+def test_traits_and_scores_are_rejected() -> None:
     transcript = _transcript()
     for mutate in (
-        lambda o: o["improvement_details"][0]["business_impact"].update(estimate=5000),
-        lambda o: o["improvement_details"][0]["business_impact"].update(missing_inputs=[""]),
-        lambda o: o["next_call_focus"].update(improvement_index=False),
         lambda o: o.update(closer_level="elite"),
         lambda o: o.update(overall_score=95),
     ):
@@ -324,7 +356,7 @@ def test_root_business_impact_rejects_non_contract_values(root_impact: dict[str,
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
     payload["overview"]["business_impact"] = root_impact
-    with pytest.raises(ReportError, match="report_overview_invalid"):
+    with pytest.raises(ReportError, match="report_overview_schema_invalid"):
         parse_report_draft(payload, transcript)
 
 
@@ -342,11 +374,14 @@ def test_interpretation_and_change_require_source_and_chronological_context() ->
     }
     assert parse_report_draft(payload, transcript).overview.conversation_change  # type: ignore[union-attr]
     overview["conversation_change"]["after"] = overview["conversation_change"]["before"]
-    with pytest.raises(ReportError, match="report_overview_invalid"):
-        parse_report_draft(payload, transcript)
+    result = parse_report_draft(payload, transcript)
+    assert result.overview is not None and result.overview.conversation_change is None
+    assert result.provider_extras["compatibility"]["overview_drops"]["conversation_change"] == {
+        "chronology_invalid": 1
+    }
 
 
-def test_duplicate_references_and_duplicate_rewatch_clips_are_rejected() -> None:
+def test_duplicate_references_and_duplicate_rewatch_clips_are_dropped() -> None:
     transcript = _transcript()
     for field, duplicate in (
         ("strength_details", {"finding_index": 0, "why_it_matters": "Reason"}),
@@ -356,8 +391,11 @@ def test_duplicate_references_and_duplicate_rewatch_clips_are_rejected() -> None
         payload = _payload(transcript)
         payload["overview"] = overview_for(payload)
         payload["overview"][field] = [duplicate, duplicate]
-        with pytest.raises(ReportError, match="report_overview_invalid"):
-            parse_report_draft(payload, transcript)
+        report = parse_report_draft(payload, transcript)
+        assert report.overview is not None and len(getattr(report.overview, field)) == 1
+        assert report.provider_extras["compatibility"]["overview_drops"][field] == {
+            "reference_duplicate": 1
+        }
 
 
 def test_new_template_changes_only_coaching_input_and_preserves_token_ceiling() -> None:
@@ -505,3 +543,93 @@ def test_source_prices_and_action_counts_are_preserved_without_inventing_revenue
     result = parse_report_draft(payload, transcript)
     assert result.summary == payload["summary"]
     assert result.strengths[0].evidence[0].quote == payload["strengths"][0]["evidence"][0]["quote"]
+
+
+@pytest.mark.parametrize("indices", [[1, 2, 3], [False, 1, 2], ["0", 1, 2], [0.0, 1, 2]])
+def test_partial_strength_indices_are_never_guessed_or_reindexed(indices):
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["strengths"] = [
+        {
+            **payload["strengths"][0],
+            "title": f"Strength {i}",
+            "evidence": [_evidence(transcript, i)],
+        }
+        for i in range(3)
+    ]
+    payload["overview"] = overview_for(payload)
+    for detail, index in zip(payload["overview"]["strength_details"], indices, strict=True):
+        detail["finding_index"] = index
+    original = deepcopy(payload)
+    result = parse_report_draft(payload, transcript)
+    assert [d.finding_index for d in result.overview.strength_details] == [1, 2]
+    assert len(result.strengths) == 3 and payload == original
+    assert (
+        sum(result.provider_extras["compatibility"]["overview_drops"]["strength_details"].values())
+        == 1
+    )
+
+
+@pytest.mark.parametrize("kind", ["schema", "reference"])
+def test_specific_overview_failures_remain_repairable_and_visible(kind):
+    from pydantic import TypeAdapter
+
+    from ac_platform.conversation_intelligence.acquisition_reports import (
+        _safe_progress_failure_code,
+    )
+    from ac_platform.conversation_intelligence.contracts import (
+        C5_REPAIR_FAILURE_CODES,
+        C5RepairFailureCode,
+    )
+    from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
+    from ac_platform.conversation_intelligence.inference_worker import provider_failure_code
+
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    if kind == "schema":
+        payload["overview"].pop("version")
+    code = f"report_overview_{kind}_invalid"
+    if kind == "schema":
+        with pytest.raises(ReportError, match=f"^{code}$"):
+            parse_report_draft(payload, transcript)
+    exposed = provider_failure_code(InferenceTaskError(code))
+    assert exposed == f"conversation_{code}" and exposed in C5_REPAIR_FAILURE_CODES
+    assert TypeAdapter(C5RepairFailureCode).validate_python(exposed) == exposed
+    assert _safe_progress_failure_code(exposed) == exposed
+
+
+def test_overview_overflow_keeps_first_valid_items_in_provider_order() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    notes = [{"text": f"Observation {i}", "evidence": [_evidence(transcript)]} for i in range(5)]
+    payload["overview"]["ethics_notes"] = ["malformed", *notes]
+    original = deepcopy(payload)
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None
+    assert [note.model_dump() for note in report.overview.ethics_notes] == notes[:3]
+    assert report.provider_extras["compatibility"]["overview_drops"]["ethics_notes"] == {
+        "item_schema_invalid": 1,
+        "limit_exceeded": 2,
+    }
+    assert payload == original
+    saved = report.model_dump(mode="json")
+    assert (
+        parse_report_draft(saved, transcript, canonical_read=True).model_dump(mode="json") == saved
+    )
+
+
+def test_focus_and_practice_without_improvements_are_dropped() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = []
+    payload["overview"]["improvement_details"] = []
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None
+    assert report.overview.next_call_focus is None and report.overview.practice is None
+    assert report.provider_extras["compatibility"]["overview_drops"] == {
+        "next_call_focus": {"reference_out_of_range": 1},
+        "practice": {"reference_out_of_range": 1},
+    }

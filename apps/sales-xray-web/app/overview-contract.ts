@@ -250,19 +250,17 @@ export function parseDetailedOverview(
   function references(
     details: { finding_index: number }[],
     collection: Finding[],
-    complete: boolean,
   ) {
     const indices = details.map((d) => d.finding_index);
     if (
       new Set(indices).size !== indices.length ||
-      indices.some((i) => i >= collection.length) ||
-      (complete && indices.length !== collection.length)
+      indices.some((i) => i >= collection.length)
     )
       fail();
   }
-  references(parsed.strength_details, findings.strengths, true);
-  references(parsed.improvement_details, findings.improvements, true);
-  references(parsed.missed_details, findings.missed_opportunities, false);
+  references(parsed.strength_details, findings.strengths);
+  references(parsed.improvement_details, findings.improvements);
+  references(parsed.missed_details, findings.missed_opportunities);
   const goldenRefs = parsed.golden_moments.map(
     (g) => `${g.strength_index}:${g.evidence_index}`,
   );
@@ -275,7 +273,7 @@ export function parseDetailedOverview(
     fail();
   if (
     Boolean(parsed.next_call_focus) !== Boolean(parsed.practice) ||
-    Boolean(findings.improvements.length) !== Boolean(parsed.next_call_focus)
+    (!findings.improvements.length && Boolean(parsed.next_call_focus))
   )
     fail();
   const clips = parsed.rewatch.map(
