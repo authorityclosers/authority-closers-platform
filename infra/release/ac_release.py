@@ -83,6 +83,7 @@ class Paths:
     application: Path = Path("/srv/authority-closers/application")
     stage_root: Path = Path("/var/tmp")  # noqa: S108 - root-only mkdtemp stages (0700)
     lock: Path = Path("/run/ac-release.lock")
+    foundation: Path = Path("/srv/authority-closers/current")
 
     @property
     def mirror(self) -> Path:
@@ -640,6 +641,7 @@ class Engine:
     ) -> dict[str, Any]:
         log = self.new_log(environment, "core", build.sha)
         bundle = self.store_bundle(build, "core", CORE_FILES)
+        self.require_backup_support(bundle)
         previous = self.current_core(environment)
         with self.stage(build.sha) as stage:
             archive, archive_sha = self.source_archive(build.sha, stage, "infra/application")
@@ -686,6 +688,32 @@ class Engine:
                 )
         self.check_core(environment, build.sha, log)
         return {"previous": previous, "log": str(log)}
+
+    def require_backup_support(self, bundle: Path) -> None:
+        """Refuse a schema the installed foundation backup tools cannot attest.
+
+        ac-postgres-backup checks every environment's migration head before it
+        backs up any of them, so one unknown head stops production backups too.
+        """
+
+        head = ""
+        for line in (bundle / "release-images.env").read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition("=")
+            if key == "AC_MIGRATION_HEAD":
+                head = value.strip()
+        if not re.fullmatch(r"[0-9]{8}_[0-9]{4}", head):
+            raise ReleaseError("release bundle has no valid AC_MIGRATION_HEAD")
+        backup_tool = self.paths.foundation / "scripts" / "ac-postgres-backup.py"
+        try:
+            known = f'"{head}"' in backup_tool.read_text(encoding="utf-8")
+        except OSError:
+            known = False
+        if not known:
+            raise ReleaseError(
+                f"the installed foundation backup tools do not recognise migration {head}; "
+                "install the foundation release from main first, or backups for every "
+                "environment would stop"
+            )
 
     def check_core(self, environment: str, sha: str, log: Path) -> None:
         release_dir = self.paths.application / "releases" / sha

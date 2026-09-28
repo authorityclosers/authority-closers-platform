@@ -120,6 +120,7 @@ def make_engine(tmp_path: Path, github: FakeGitHub | None = None, runner: FakeRu
         application=tmp_path / "application",
         stage_root=tmp_path,
         lock=tmp_path / "lock",
+        foundation=tmp_path / "foundation",
     )
     for directory in (paths.state, paths.config, paths.application):
         directory.mkdir(parents=True)
@@ -475,3 +476,39 @@ def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:
     kept = sorted(p.name for p in engine.paths.store.iterdir())
     assert kept == sorted([shas[1], *shas[5:]])
     assert sorted(removed) == sorted([shas[0], shas[2], shas[3], shas[4]])
+
+
+def foundation_backup_tool(engine, *heads: str) -> None:
+    scripts = engine.paths.foundation / "scripts"
+    scripts.mkdir(parents=True)
+    lines = [f'HEAD_{i} = "{head}"' for i, head in enumerate(heads)]
+    (scripts / "ac-postgres-backup.py").write_text("".join(f"{line}\n" for line in lines))
+
+
+def bundle_with_head(tmp_path: Path, head: str) -> Path:
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "release-images.env").write_text(f"AC_RELEASE_ID=x\nAC_MIGRATION_HEAD={head}\n")
+    return bundle
+
+
+def test_known_migration_head_is_accepted(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    foundation_backup_tool(engine, "20260924_0048", "20260925_0050")
+    engine.require_backup_support(bundle_with_head(tmp_path, "20260925_0050"))
+
+
+@pytest.mark.parametrize("installed", [("20260924_0048",), ()])
+def test_unknown_migration_head_is_refused_before_install(tmp_path: Path, installed) -> None:
+    engine = make_engine(tmp_path)
+    if installed:
+        foundation_backup_tool(engine, *installed)
+    with pytest.raises(MODULE.ReleaseError, match="do not recognise migration 20260925_0050"):
+        engine.require_backup_support(bundle_with_head(tmp_path, "20260925_0050"))
+
+
+def test_bundle_without_migration_head_is_refused(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    foundation_backup_tool(engine, "20260925_0050")
+    with pytest.raises(MODULE.ReleaseError, match="no valid AC_MIGRATION_HEAD"):
+        engine.require_backup_support(bundle_with_head(tmp_path, "latest"))

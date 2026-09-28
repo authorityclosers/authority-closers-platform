@@ -41,8 +41,15 @@ Logs for each deploy are in `/var/log/ac-release/`.
   checked against GitHub, and bundle checksums against `SHA256SUMS`. The GitHub
   token is sent only to `api.github.com`, never to the storage redirect.
 - A failed **core** deploy pauses staging and is not retried automatically.
-  Database migrations are forward-only, so there is no automatic core
-  rollback. A person decides.
+  The installer takes a database dump before migrating. If the install fails,
+  it restores that dump, the release link and the edge route by itself. The
+  engine then waits for a person to decide.
+- **Foundation first for new migrations.** `ac-postgres-backup` checks the
+  migration head of every environment before it backs up any of them. A core
+  release whose `AC_MIGRATION_HEAD` the installed foundation backup tool does
+  not know would stop backups for staging **and production**. The engine
+  refuses such a deploy until the foundation release from `main` is installed
+  (`infra/vps-foundation/scripts/install-foundation-release.sh`).
 - A failed **web** deploy automatically restores the previous web image.
 - Production deploys are refused unless `/etc/ac-release/production.enabled`
   exists **and** the same commit already passed staging. That file is created
