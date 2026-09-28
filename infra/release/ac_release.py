@@ -17,9 +17,15 @@ Commands (``ac-release <command>``):
     prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]
                                     report (default) or remove installer
                                     artifacts and core images nothing needs
+    store-native SHA [--from ZIP]   keep a Sales Xray native build for good
+                                    (GitHub deletes it after one day)
 
 Production deploys are refused unless ``/etc/ac-release/production.enabled``
 exists and the same commit already passed staging.
+
+A core release that runs hosted Sales Xray needs an activation descriptor.
+The engine carries the running release's activation forward with the
+repository tool; it never creates or widens an approval.
 """
 
 from __future__ import annotations
@@ -59,6 +65,7 @@ ENVIRONMENTS = ("staging", "production")
 COMPONENTS = ("core", "web")
 CORE_WORKFLOW = "application.yml"
 WEB_WORKFLOW = "sales-xray-web-image.yml"
+NATIVE_WORKFLOW = "sales-xray-native-image.yml"
 CORE_FILES = frozenset({"SHA256SUMS", "application-images.tar.gz", "release-images.env"})
 WEB_FILES = frozenset({"SHA256SUMS", "web-image.env", "web-image.json", "web-image.tar.gz"})
 MAX_ARTIFACT_BYTES = 450_000_000
@@ -73,6 +80,19 @@ CORE_IMAGE_REPOSITORIES = frozenset(
     for name in ("api", "learner-web", "admin-web", "coach-web")
 )
 CORE_IMAGE_KEYS = ("AC_API_IMAGE", "AC_LEARNER_IMAGE", "AC_ADMIN_IMAGE", "AC_COACH_IMAGE")
+# A native build plus the GitHub records its reuse proofs pin. GitHub keeps the
+# zip for one day, so the store keeps these for good (never pruned).
+NATIVE_STORE_FILES = frozenset(
+    {"native-artifact.zip", "artifact-metadata.json", "workflow-run.json"}
+)
+# The hosted worker cannot start once its approval lapses, so an approval with
+# less than this left is never carried into a new release.
+APPROVAL_MIN_REMAINING_SECONDS = 24 * 3600
+# A crash-looping container can read "running" between restarts; it must stay
+# up this long without a restart to count as started.
+STEADY_SECONDS = 30
+# The hosted worker reads its service and approval files through this group.
+HOSTED_WORKER_GID = 10001
 DEPLOYMENT_RECORD_RE = re.compile(r"[0-9]{8}T[0-9]{6}Z-([0-9a-f]{40})-[A-Za-z0-9-]+\.env")
 UNFINISHED_RECORD_RE = re.compile(
     r"\.(?:prepared|deployment|forward-recovery)-([0-9a-f]{40})\.[A-Za-z0-9]+"
@@ -103,10 +123,15 @@ class Paths:
     stage_root: Path = Path("/var/tmp")  # noqa: S108 - root-only mkdtemp stages (0700)
     lock: Path = Path("/run/ac-release.lock")
     foundation: Path = Path("/srv/authority-closers/current")
+    sales_xray: Path = Path("/etc/authority-closers/sales-xray")
 
     @property
     def mirror(self) -> Path:
         return self.state / "mirror.git"
+
+    @property
+    def native_store(self) -> Path:
+        return self.store / "native"
 
     @property
     def token(self) -> Path:
@@ -310,6 +335,52 @@ def web_build_for(github: Any, sha: str) -> Build | None:
     return Build(sha, int(run["id"]), int(artifact["id"]), name, str(artifact["digest"]))
 
 
+def find_native_run(github: Any, sha: str) -> dict[str, Any] | None:
+    """The successful native-image run for this commit, as reuse proofs accept it."""
+
+    data = github.get_json(
+        f"/repos/{REPOSITORY}/actions/workflows/{NATIVE_WORKFLOW}/runs",
+        {"head_sha": sha, "per_page": "20"},
+    )
+    runs = [
+        run
+        for run in data.get("workflow_runs", [])
+        if run.get("head_sha") == sha
+        and run.get("path") == f".github/workflows/{NATIVE_WORKFLOW}"
+        and run.get("repository", {}).get("full_name") == REPOSITORY
+        and run.get("status") == "completed"
+        and run.get("conclusion") == "success"
+        and (
+            run.get("event") == "workflow_dispatch"
+            or (run.get("event") == "push" and run.get("head_branch") == "main")
+        )
+    ]
+    if not runs:
+        return None
+    return max(runs, key=lambda run: (run.get("run_number", 0), run.get("run_attempt", 0)))
+
+
+def native_artifact_record(github: Any, run: Mapping[str, Any], sha: str) -> dict[str, Any] | None:
+    """The run's native artifact record, expired or not: its digest outlives the zip."""
+
+    name = f"ac-sales-xray-native-{sha}"
+    data = github.get_json(
+        f"/repos/{REPOSITORY}/actions/runs/{int(run['id'])}/artifacts", {"name": name}
+    )
+    matches = [
+        artifact
+        for artifact in data.get("artifacts", [])
+        if artifact.get("name") == name
+        and artifact.get("workflow_run", {}).get("id") == run["id"]
+        and artifact.get("workflow_run", {}).get("head_sha") == sha
+        and DIGEST_RE.fullmatch(str(artifact.get("digest") or ""))
+        and 0 < int(artifact.get("size_in_bytes") or 0) <= MAX_ARTIFACT_BYTES
+    ]
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
 def recent_web_shas(github: Any) -> list[str]:
     data = github.get_json(
         f"/repos/{REPOSITORY}/actions/workflows/{WEB_WORKFLOW}/runs",
@@ -462,6 +533,10 @@ def _refuse_unreadable(error: OSError) -> NoReturn:
     raise ReleaseError(f"cannot read {error.filename}: {error.strerror}")
 
 
+def _date(epoch: int) -> str:
+    return dt.datetime.fromtimestamp(epoch, dt.UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
 def _size(count: int) -> str:
     for unit, scale in (("GB", 10**9), ("MB", 10**6), ("kB", 10**3)):
         if count >= scale:
@@ -475,6 +550,8 @@ class Engine:
     github: Any = None
     run: Runner = run_command
     sleep: Callable[[float], None] = time.sleep
+    clock: Callable[[], float] = time.time
+    operator_group: str = "acops"
 
     # -- state ---------------------------------------------------------------
 
@@ -737,6 +814,16 @@ class Engine:
                 "AC_RELEASE_ARCHIVE_SHA256": archive_sha,
                 "AC_IMAGE_BUNDLE_DIR": str(bundle_dir),
             }
+            activation: dict[str, Any] = {}
+            try:
+                self.keep_native_build(build.sha)
+                activation = self.prepare_activation(
+                    environment, build.sha, source, stage, dry_run=dry_run, log=log
+                )
+            except ReleaseError as error:
+                if not dry_run:
+                    raise
+                blockers.append(str(error))
             if dry_run:
                 if blockers:
                     raise ReleaseError("dry run found blockers: " + "; ".join(blockers))
@@ -745,6 +832,7 @@ class Engine:
                     "previous": previous,
                     "installer": str(installer),
                     "log": str(log),
+                    **activation,
                 }
             completed = self.run(
                 ["bash", str(installer)], env=env, log=log, check=False, timeout=3600
@@ -757,7 +845,7 @@ class Engine:
                     + f"; see {log}"
                 )
         self.check_core(environment, build.sha, log)
-        return {"previous": previous, "log": str(log)}
+        return {"previous": previous, "log": str(log), **activation}
 
     def require_backup_support(self, bundle: Path) -> None:
         """Refuse a schema the installed foundation backup tools cannot attest.
@@ -785,6 +873,283 @@ class Engine:
                 "environment would stop"
             )
 
+    # -- Sales Xray activation ---------------------------------------------------
+
+    def activation_path(self, environment: str, sha: str) -> Path:
+        return self.paths.sales_xray / environment / f"activation-{sha}.json"
+
+    @staticmethod
+    def approval_expiry(descriptor: Mapping[str, Any]) -> int:
+        """When the activation's approval, or its acquisition policy, lapses."""
+
+        approval = json.loads(Path(str(descriptor["approval_file"])).read_text(encoding="utf-8"))
+        ends = [int(approval["expires_at_epoch"])]
+        policy = approval.get("acquisition_policy")
+        if isinstance(policy, dict):
+            ends.append(int(policy["expires_at_epoch"]))
+        return min(ends)
+
+    def approval_expires(self, environment: str) -> int | None:
+        current = self.current_core(environment)
+        if current is None:
+            return None
+        path = self.activation_path(environment, current)
+        with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+            return self.approval_expiry(json.loads(path.read_text(encoding="utf-8")))
+        return None
+
+    def store_native(self, sha: str, *, local_zip: Path | None = None) -> Path:
+        """Keep one native build and its GitHub records for good.
+
+        Every later release's reuse proof needs the original zip, and GitHub
+        deletes it a day after the build. A saved copy is adopted only when it
+        matches the digest and size GitHub recorded for that build.
+        """
+
+        if not SHA_RE.fullmatch(sha):
+            raise ReleaseError("a native build is named by its full commit id")
+        target = self.paths.native_store / sha
+        if all((target / name).is_file() for name in NATIVE_STORE_FILES):
+            return target
+        if self.github is None:
+            raise ReleaseError(
+                f"native build {sha[:12]} is not stored and GitHub is not configured"
+            )
+        run = find_native_run(self.github, sha)
+        record = native_artifact_record(self.github, run, sha) if run is not None else None
+        if run is None or record is None:
+            raise ReleaseError(f"GitHub has no successful native image build for {sha[:12]}")
+        self.paths.native_store.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=self.paths.native_store, prefix=".download-") as work:
+            unpacked = Path(work) / sha
+            unpacked.mkdir()
+            zip_path = unpacked / "native-artifact.zip"
+            if local_zip is not None:
+                if (
+                    local_zip.stat().st_size != int(record["size_in_bytes"])
+                    or f"sha256:{_sha256_file(local_zip)}" != record["digest"]
+                ):
+                    raise ReleaseError("the saved zip is not the native build GitHub recorded")
+                shutil.copyfile(local_zip, zip_path)
+            elif record.get("expired", True):
+                raise ReleaseError(
+                    f"native build {sha[:12]} has expired on GitHub; adopt a saved copy with "
+                    f"`ac-release store-native {sha} --from ZIP`"
+                )
+            else:
+                self.github.download_artifact(int(record["id"]), zip_path, str(record["digest"]))
+            metadata = self.github.get_json(
+                f"/repos/{REPOSITORY}/actions/artifacts/{int(record['id'])}"
+            )
+            workflow_run = self.github.get_json(
+                f"/repos/{REPOSITORY}/actions/runs/{int(run['id'])}"
+            )
+            if metadata.get("digest") != record["digest"] or workflow_run.get("id") != run["id"]:
+                raise ReleaseError("GitHub returned inconsistent records for the native build")
+            for name, value in (
+                ("artifact-metadata.json", metadata),
+                ("workflow-run.json", workflow_run),
+            ):
+                (unpacked / name).write_text(
+                    json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+                )
+            for item in unpacked.iterdir():
+                item.chmod(0o400)
+            if target.exists():
+                shutil.rmtree(target, onexc=_make_writable_and_retry)
+            os.replace(unpacked, target)
+            target.chmod(0o500)
+        return target
+
+    def keep_native_build(self, sha: str) -> None:
+        """Store this commit's own native build, if CI made one, before GitHub drops it."""
+
+        if self.github is not None and find_native_run(self.github, sha) is not None:
+            self.store_native(sha)
+
+    def native_for_image(self, image_ref: str) -> tuple[str, Path]:
+        """The loaded native artifact (source commit, manifest) behind an image."""
+
+        matches: list[tuple[str, Path]] = []
+        root = self.paths.application / "artifacts"
+        for manifest in sorted(root.glob("sales-xray-native-*/native-image.json")):
+            sha = manifest.parent.name.removeprefix("sales-xray-native-")
+            with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+                if (
+                    SHA_RE.fullmatch(sha)
+                    and data["source_commit"] == sha
+                    and data["image"]["expected_runtime_ref"] == image_ref
+                ):
+                    matches.append((sha, manifest))
+        if len(matches) != 1:
+            raise ReleaseError(f"no single loaded native artifact provides {image_ref[:19]}")
+        return matches[0]
+
+    def prepare_activation(
+        self, environment: str, sha: str, source: Path, stage: Path, *, dry_run: bool, log: Path
+    ) -> dict[str, Any]:
+        """Carry the running release's Sales Xray activation forward to ``sha``.
+
+        Uses the repository's prepare tool with the approval unchanged and the
+        running native image, proven reusable from the stored native build and
+        this engine's mirror. Nothing happens when hosted Sales Xray is not
+        active or the target already has an activation.
+        """
+
+        if self.activation_path(environment, sha).is_file():
+            return {"sales_xray_activation": "present"}
+        current = self.current_core(environment)
+        if current is None or not self.activation_path(environment, current).is_file():
+            return {}
+        previous = self.activation_path(environment, current)
+        descriptor = json.loads(previous.read_text(encoding="utf-8"))
+        expires = self.approval_expiry(descriptor)
+        if expires - self.clock() < APPROVAL_MIN_REMAINING_SECONDS:
+            raise ReleaseError(
+                f"the {environment} Sales Xray approval expires {_date(expires)}; "
+                "renew it before deploying"
+            )
+        native_sha, manifest = self.native_for_image(str(descriptor["native_image_ref"]))
+        stamp = dt.datetime.fromtimestamp(self.clock(), dt.UTC).strftime("%Y%m%dT%H%M%SZ")
+        home = (
+            stage / "sales-xray-activation"
+            if dry_run
+            else self.paths.application / "operator-inputs" / environment / f"release-{sha}-{stamp}"
+        )
+        inputs, output = home / "inputs", home / "activation-bundle"
+        inputs.mkdir(parents=True)
+        argv = [
+            "python3",
+            str(source / "infra/application/scripts/prepare-sales-xray-native-activation.py"),
+            "--source-activation",
+            str(previous),
+            "--target-release-id",
+            sha,
+            "--native-artifact-manifest",
+            str(manifest),
+            "--native-artifact-sha256",
+            _sha256_file(manifest),
+            "--output-dir",
+            str(output),
+        ]
+        if native_sha != sha:
+            proof = self.native_reuse_proof(native_sha, sha, inputs)
+            argv += [
+                "--native-reuse-proof",
+                str(proof),
+                "--native-reuse-proof-sha256",
+                _sha256_file(proof),
+                "--source-repository",
+                str(self.paths.mirror),
+            ]
+        completed = self.run(argv, log=log, check=False, timeout=900)
+        if completed.returncode != 0:
+            lines = completed.stderr.strip().splitlines()
+            detail = lines[-1][:300] if lines else f"exit {completed.returncode}"
+            if "native_inputs_changed" in detail:
+                raise ReleaseError(
+                    f"{sha[:12]} changes the Sales Xray native image; install its native "
+                    f"build before deploying it ({detail})"
+                )
+            raise ReleaseError(f"Sales Xray activation could not be prepared: {detail}")
+        result = json.loads(completed.stdout)
+        if (
+            result.get("release_id") != sha
+            or result.get("provider_calls") != 0
+            or result.get("approval_replaced") is not False
+        ):
+            raise ReleaseError("the Sales Xray prepare tool returned an unexpected result")
+        summary = {
+            "sales_xray_activation": f"carried forward from {current[:12]}",
+            "sales_xray_native": native_sha,
+            "sales_xray_approval_expires": _date(expires),
+        }
+        if not dry_run:
+            self._seal_activation(home, output)
+            self._publish_activation(environment, sha, output)
+        return summary
+
+    def native_reuse_proof(self, native_sha: str, sha: str, directory: Path) -> Path:
+        stored = self.store_native(native_sha)
+        proof = directory / "native-reuse-input.json"
+        pinned = {
+            name.removesuffix(".json").replace("-", "_"): {
+                "path": str(stored / name),
+                "sha256": _sha256_file(stored / name),
+            }
+            for name in ("artifact-metadata.json", "workflow-run.json")
+        }
+        proof.write_text(
+            json.dumps(
+                {
+                    "archive_path": str(stored / "native-artifact.zip"),
+                    **pinned,
+                    "native_source_commit": native_sha,
+                    "repository": REPOSITORY,
+                    "schema": "ac.sales-xray.native-reuse-input/1",
+                    "target_release_id": sha,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return proof
+
+    def _seal_activation(self, home: Path, output: Path) -> None:
+        """Give prepared files the reviewed layout: root-owned and read-only."""
+
+        for item in output.iterdir():
+            item.chmod(0o440)
+        if os.name != "posix" or os.geteuid() != 0:
+            return
+        import grp
+
+        try:
+            operators = grp.getgrnam(self.operator_group).gr_gid
+        except KeyError:
+            raise ReleaseError(f"operator group {self.operator_group} is absent") from None
+        for directory in (home, home / "inputs", output):
+            os.chown(directory, 0, operators)
+        for item in output.iterdir():
+            group = HOSTED_WORKER_GID if item.name.startswith("service-") else operators
+            os.chown(item, 0, group)
+        home.chmod(0o2750)
+        (home / "inputs").chmod(0o2750)
+        output.chmod(0o2755)
+
+    def _publish_activation(self, environment: str, sha: str, output: Path) -> None:
+        """Install the descriptor, then its digest, where the installer reads them."""
+
+        descriptor = output / f"activation-{sha}.json"
+        digest = output / f"activation-{sha}.json.sha256"
+        if digest.read_text(encoding="ascii").strip() != _sha256_file(descriptor):
+            raise ReleaseError("the prepared activation digest does not match its descriptor")
+        config = self.paths.sales_xray / environment
+        for item in (descriptor, digest):
+            temporary = config / f".{item.name}.{secrets.token_hex(4)}"
+            shutil.copyfile(item, temporary)
+            temporary.chmod(0o444)
+            os.replace(temporary, config / item.name)
+
+    def require_steady(self, container: str, log: Path) -> None:
+        """Fail when a container restarts or stops within STEADY_SECONDS."""
+
+        fmt = "{{.State.Status}}|{{.RestartCount}}|{{.State.StartedAt}}"
+        argv = ["docker", "inspect", "--format", fmt, container]
+        before = self.run(argv, check=False).stdout.strip()
+        self.sleep(STEADY_SECONDS)
+        after = self.run(argv, check=False).stdout.strip()
+        if not after.startswith("running|") or after != before:
+            raise ReleaseError(
+                f"{container} did not stay up after the deploy ({before} -> {after}); "
+                f"see `docker logs {container}`"
+            )
+        with log.open("a", encoding="utf-8") as handle:
+            handle.write(f"STEADY {container}\n")
+
     def check_core(self, environment: str, sha: str, log: Path) -> None:
         release_dir = self.paths.application / "releases" / sha
         if self.current_core(environment) != sha:
@@ -808,6 +1173,12 @@ class Engine:
             self.wait_for_container(
                 f"{project}-{service}-1", image, healthy, sha if release_env else None, log
             )
+        if self.activation_path(environment, sha).is_file():
+            # The hosted worker has no health check; a bad activation shows up
+            # only as a restart loop, so it must stay up on the release image.
+            worker = f"{project}-sales-xray-worker-1"
+            self.wait_for_container(worker, images.get("AC_API_IMAGE"), False, None, log)
+            self.require_steady(worker, log)
         suffix = "-staging" if environment == "staging" else ""
         self.expect_http(
             f"learner{suffix}.authorityclosers.com", "/", 200, f"learner-{environment}"
@@ -1528,6 +1899,7 @@ class Engine:
         report: dict[str, Any] = {"at": _now(), "environments": {}}
         for environment in ENVIRONMENTS:
             web_sha, web_image = self.current_web(environment)
+            expires = self.approval_expires(environment)
             report["environments"][environment] = {
                 "core": self.current_core(environment),
                 "web": web_sha,
@@ -1535,6 +1907,10 @@ class Engine:
                 "auto_deploy": environment == "staging" and not self.is_paused(environment),
                 "paused": self.is_paused(environment),
                 "failed": {c: self.failed_sha(environment, c) for c in COMPONENTS},
+                "sales_xray_approval_expires": _date(expires) if expires else None,
+                "sales_xray_approval_days_left": (
+                    int((expires - self.clock()) // 86400) if expires else None
+                ),
             }
         report["production_enabled"] = self.paths.production_enabled.exists()
         report["recent"] = self.history(5)
@@ -1567,6 +1943,11 @@ def _print(data: Any, as_json: bool) -> None:
             for component, sha in env["failed"].items():
                 if sha:
                     print(f"{'':<11} {component} deploy of {sha[:12]} FAILED (resume to retry)")
+            if env.get("sales_xray_approval_expires"):
+                print(
+                    f"{'':<11} Sales Xray approval until {env['sales_xray_approval_expires']} "
+                    f"({env['sales_xray_approval_days_left']} days)"
+                )
         print(f"production deploys enabled: {data['production_enabled']}")
         return
     for entry in data if isinstance(data, list) else [data]:
@@ -1663,6 +2044,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     prune.add_argument("--keep-recent", type=int, default=KEEP_RECENT_BUILDS, metavar="N")
     prune.add_argument("--no-images", action="store_true", help="leave Docker images out")
     prune.add_argument("--json", action="store_true")
+    native = sub.add_parser("store-native")
+    native.add_argument("sha")
+    native.add_argument("--from", dest="local_zip", type=Path, metavar="ZIP")
     args = parser.parse_args(argv)
 
     paths = Paths()
@@ -1699,6 +2083,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _print_retention(report)
             if report.get("errors"):
                 return 1
+        elif args.command == "store-native":
+            engine.github = _load_github(paths, required=True)
+            with engine.locked(wait=True):
+                print(engine.store_native(args.sha, local_zip=args.local_zip))
         else:
             engine.github = _load_github(paths, required=args.command == "tick")
             results = (
