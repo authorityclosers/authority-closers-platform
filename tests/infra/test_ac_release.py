@@ -452,3 +452,26 @@ def test_status_reports_pause_and_failures(tmp_path: Path) -> None:
     assert staging["paused"] is True and staging["auto_deploy"] is False
     assert staging["failed"] == {"core": None, "web": HEAD}
     assert json.loads(json.dumps(report))
+
+
+def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    shas = [f"{i:040x}" for i in range(15)]
+    for sha in shas:
+        bundle = engine.paths.store / sha / "core"
+        bundle.mkdir(parents=True)
+        (bundle / "application-images.tar.gz").write_bytes(b"x")
+        (bundle / "application-images.tar.gz").chmod(0o400)
+        bundle.chmod(0o500)
+    for sha in shas[3:]:
+        engine.record(
+            {"environment": "staging", "component": "core", "sha": sha, "result": "success"}
+        )
+    engine.record(
+        {"environment": "staging", "component": "core", "sha": shas[0], "result": "failed"}
+    )
+    engine.current_core = lambda environment: shas[1] if environment == "production" else None
+    removed = engine.prune_store()
+    kept = sorted(p.name for p in engine.paths.store.iterdir())
+    assert kept == sorted([shas[1], *shas[5:]])
+    assert sorted(removed) == sorted([shas[0], shas[2], shas[3], shas[4]])

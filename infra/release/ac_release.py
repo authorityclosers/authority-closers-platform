@@ -58,6 +58,9 @@ WEB_WORKFLOW = "sales-xray-web-image.yml"
 CORE_FILES = frozenset({"SHA256SUMS", "application-images.tar.gz", "release-images.env"})
 WEB_FILES = frozenset({"SHA256SUMS", "web-image.env", "web-image.json", "web-image.tar.gz"})
 MAX_ARTIFACT_BYTES = 450_000_000
+# Stored bundles are several hundred MB each. Keep whatever runs in staging or
+# production plus this many recent successful deploys (rollback and promotion).
+KEEP_RECENT_BUILDS = 10
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE_REF_RE = re.compile(r"sha256:[0-9a-f]{64}")
@@ -356,6 +359,18 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _make_writable_and_retry(
+    function: Callable[..., Any], path: str, _error: BaseException
+) -> None:
+    """Stored bundles are read-only; allow pruning them."""
+
+    parent = Path(path).parent
+    parent.chmod(0o700)
+    with contextlib.suppress(OSError):
+        Path(path).chmod(0o700)
+    function(path)
 
 
 def extract_exact(zip_path: Path, destination: Path, expected: frozenset[str]) -> None:
@@ -952,7 +967,34 @@ class Engine:
         entry["duration_s"] = round(time.monotonic() - started, 1)
         if not dry_run:
             self.record(entry)
+            if entry["result"] == "success":
+                with contextlib.suppress(OSError):
+                    entry["pruned"] = self.prune_store()
         return entry
+
+    def prune_store(self) -> list[str]:
+        """Keep what runs anywhere plus the most recent successful deploys."""
+
+        keep: set[str | None] = set()
+        for environment in ENVIRONMENTS:
+            keep.add(self.current_core(environment))
+            keep.add(self.current_web(environment)[0])
+        recent: list[str] = []
+        for entry in reversed(self.history(10_000)):
+            sha = entry.get("sha")
+            if entry.get("result") == "success" and sha and sha not in recent:
+                recent.append(sha)
+                if len(recent) >= KEEP_RECENT_BUILDS:
+                    break
+        keep.update(recent)
+        removed: list[str] = []
+        if not self.paths.store.exists():
+            return removed
+        for entry_path in sorted(self.paths.store.iterdir()):
+            if SHA_RE.fullmatch(entry_path.name) and entry_path.name not in keep:
+                shutil.rmtree(entry_path, onexc=_make_writable_and_retry)
+                removed.append(entry_path.name)
+        return removed
 
     def tick(self) -> list[dict[str, Any]]:
         """Timer entry point: bring staging up to the latest good main build."""
