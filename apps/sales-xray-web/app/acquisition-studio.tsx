@@ -2771,8 +2771,8 @@ export function AcquisitionStudio({
                         <p>
                           {policy.retention_days > STANDARD_RETENTION_DAYS ? (
                             <>
-                              Your recording is kept privately to improve AC&apos;s
-                              coaching AI until you delete it.
+                              Your recording is kept privately to improve
+                              AC&apos;s coaching AI until you delete it.
                             </>
                           ) : (
                             <>
