@@ -243,7 +243,10 @@ def verify_reuse(
             run["repository"]["full_name"] == REPOSITORY
             and run["head_sha"] == source
             and run["path"] == WORKFLOW
-            and run["event"] == "workflow_dispatch"
+            and (
+                run["event"] == "workflow_dispatch"
+                or (run["event"] == "push" and run.get("head_branch") == "main")
+            )
             and run["status"] == "completed"
             and run["conclusion"] == "success",
             "native_ci_run_invalid",
