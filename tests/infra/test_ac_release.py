@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -512,3 +513,311 @@ def test_bundle_without_migration_head_is_refused(tmp_path: Path) -> None:
     foundation_backup_tool(engine, "20260925_0050")
     with pytest.raises(MODULE.ReleaseError, match="no valid AC_MIGRATION_HEAD"):
         engine.require_backup_support(bundle_with_head(tmp_path, "latest"))
+
+
+# -- installer artifact retention -----------------------------------------------
+
+REGISTRY = "ghcr.io/authorityclosers"
+NOW = 1_800_000_000
+
+
+def release_sha(label: str) -> str:
+    return hashlib.sha256(label.encode()).hexdigest()[:40]
+
+
+def image_id(label: str) -> str:
+    return "sha256:" + hashlib.sha256(label.encode()).hexdigest()
+
+
+def core_artifact(engine, sha: str, *, age_hours: int) -> Path:
+    path = engine.paths.application / "artifacts" / sha
+    path.mkdir(parents=True)
+    (path / "application-images.tar.gz").write_bytes(b"x" * 1000)
+    (path / "release-images.env").write_text(f"AC_RELEASE_ID={sha}\n")
+    stamp = NOW - age_hours * 3600
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def deployment_record(
+    engine, environment: str, stamp: str, sha: str, status: str, previous: str = "", kind: str = ""
+) -> None:
+    root = engine.paths.application / "deployments" / environment
+    root.mkdir(parents=True, exist_ok=True)
+    name = f"{stamp}-{sha}{'-' + kind if kind else ''}-AbC123.env"
+    (root / name).write_text(
+        f"AC_STATUS={status}\nAC_ENVIRONMENT={environment}\n"
+        f"AC_RELEASE_ID={sha}\nAC_PREVIOUS_RELEASE={previous}\n"
+    )
+
+
+def link_current(engine, environment: str, sha: str) -> None:
+    release = engine.paths.application / "releases" / sha
+    release.mkdir(parents=True, exist_ok=True)
+    try:
+        (engine.paths.application / f"current-{environment}").symlink_to(release, True)
+    except OSError as exc:
+        pytest.skip(f"fixture symlinks are unavailable: {exc}")
+
+
+class DockerImages:
+    """Answers the docker listing and removal commands retention issues."""
+
+    def __init__(self, images: dict[str, list[str]], used: list[str]) -> None:
+        self.images = images
+        self.used = used
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv, **kwargs) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        self.calls.append(argv)
+        if argv[:3] == ["docker", "image", "ls"]:
+            rows = []
+            for image, references in self.images.items():
+                for reference in references or ["<none>:<none>"]:
+                    repository, tag = reference.rsplit(":", 1)
+                    rows.append(f"{image}\t{repository}\t{tag}\t1.5GB\n")
+            out = "".join(rows)
+        elif argv[:3] == ["docker", "container", "ls"]:
+            out = "".join(f"{index:064x}\n" for index in range(len(self.used)))
+        elif argv[:3] == ["docker", "container", "inspect"]:
+            out = "".join(f"{image}\n" for image in self.used)
+        elif argv[:3] == ["docker", "image", "rm"]:
+            out = ""
+        else:
+            raise AssertionError(f"unexpected command {argv}")
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+    def removed(self) -> list[str]:
+        return [call[3] for call in self.calls if call[:3] == ["docker", "image", "rm"]]
+
+
+RUNNING_STAGING = release_sha("running-staging")
+STAGING_ROLLBACK = release_sha("staging-rollback")
+UNFINISHED = release_sha("unfinished")
+FORWARD = release_sha("forward-recovery")
+RUNNING_PRODUCTION = release_sha("running-production")
+PRODUCTION_ROLLBACK = release_sha("production-rollback")
+REFERENCED = release_sha("operator-input")
+NEWEST = release_sha("newest")
+OLD_COMMITTED = release_sha("old-committed")
+OLD = release_sha("old")
+
+
+def retention_fixture(tmp_path: Path, runner=None):
+    """Ten installed releases; only OLD and OLD_COMMITTED are unneeded at N=1."""
+
+    engine = make_engine(tmp_path, runner=runner)
+    app = engine.paths.application
+    ages = {
+        NEWEST: 1,
+        UNFINISHED: 2,
+        FORWARD: 3,
+        RUNNING_STAGING: 4,
+        STAGING_ROLLBACK: 30,
+        REFERENCED: 40,
+        RUNNING_PRODUCTION: 50,
+        PRODUCTION_ROLLBACK: 60,
+        OLD_COMMITTED: 70,
+        OLD: 80,
+    }
+    for sha, age in ages.items():
+        core_artifact(engine, sha, age_hours=age)
+    link_current(engine, "staging", RUNNING_STAGING)
+    link_current(engine, "production", RUNNING_PRODUCTION)
+    staging = [
+        ("20260920T010000Z", OLD_COMMITTED, "COMMITTED", "", ""),
+        ("20260921T010000Z", STAGING_ROLLBACK, "COMMITTED", OLD_COMMITTED, ""),
+        ("20260926T010000Z", RUNNING_STAGING, "PREPARED_BEFORE_WRITE_EXPOSURE", "", "prepared"),
+        ("20260926T010100Z", RUNNING_STAGING, "COMMITTED", STAGING_ROLLBACK, ""),
+        ("20260927T010000Z", FORWARD, "FORWARD_RECOVERY_REQUIRED", "", "forward-recovery"),
+    ]
+    for stamp, sha, status, previous, kind in staging:
+        deployment_record(engine, "staging", stamp, sha, status, previous, kind)
+    (app / "deployments" / "staging" / f".prepared-{UNFINISHED}.Xy12Ab").write_text("")
+    deployment_record(engine, "production", "20260920T020000Z", PRODUCTION_ROLLBACK, "COMMITTED")
+    deployment_record(
+        engine,
+        "production",
+        "20260923T020000Z",
+        RUNNING_PRODUCTION,
+        "COMMITTED",
+        PRODUCTION_ROLLBACK,
+    )
+    intent = app / "operator-inputs" / "production" / "prepare-only" / "install.intent.json"
+    intent.parent.mkdir(parents=True)
+    bundle = f"/srv/authority-closers/application/artifacts/{REFERENCED}"
+    intent.write_text(json.dumps({"bundle": bundle}))
+    for name in (f"sales-xray-native-{OLD}", f"sales-xray-web-{OLD}", f".stage-{OLD}.QwErTy"):
+        (app / "artifacts" / name).mkdir()
+        (app / "artifacts" / name / "payload").write_bytes(b"y" * 500)
+    return engine
+
+
+def test_retention_keeps_running_rollback_recovery_referenced_and_newest(tmp_path: Path) -> None:
+    engine = retention_fixture(tmp_path)
+    report = engine.prune_artifacts(1, images=False)
+    decisions = {entry["sha"]: entry["keep"] for entry in report["artifacts"]}
+    unneeded = sorted(sha for sha, reasons in decisions.items() if not reasons)
+    assert unneeded == sorted([OLD_COMMITTED, OLD])
+    assert decisions[RUNNING_STAGING][:2] == ["running in staging", "last committed to staging"]
+    assert "staging rollback target" in decisions[STAGING_ROLLBACK]
+    assert decisions[FORWARD] == ["staging forward recovery (reapply this release)"]
+    assert decisions[UNFINISHED] == ["unfinished staging record"]
+    assert decisions[PRODUCTION_ROLLBACK] == ["production rollback target"]
+    assert decisions[REFERENCED] == [
+        "named in operator-inputs/production/prepare-only/install.intent.json"
+    ]
+    assert decisions[NEWEST] == ["one of the 1 newest"]
+    assert report["artifacts"][0]["sha"] == NEWEST
+    assert sorted(entry["name"] for entry in report["unmanaged"]) == sorted(
+        [f".stage-{OLD}.QwErTy", f"sales-xray-native-{OLD}", f"sales-xray-web-{OLD}"]
+    )
+    assert report["applied"] is False
+    assert (engine.paths.application / "artifacts" / OLD).is_dir()
+    assert not engine.paths.history.exists()
+
+
+def test_keep_recent_widens_the_kept_set(tmp_path: Path) -> None:
+    engine = retention_fixture(tmp_path)
+    report = engine.prune_artifacts(10, images=False)
+    assert all(entry["keep"] for entry in report["artifacts"])
+
+
+def test_apply_removes_only_unretained_artifacts_and_core_images(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rollback_api = image_id("api-rollback")
+    docker = DockerImages(
+        {
+            image_id("api-running"): [f"{REGISTRY}/authority-closers-api:{RUNNING_STAGING}"],
+            rollback_api: [f"{REGISTRY}/authority-closers-api:{STAGING_ROLLBACK}"],
+            image_id("api-newest"): [f"{REGISTRY}/authority-closers-api:{NEWEST}"],
+            image_id("api-old"): [f"{REGISTRY}/authority-closers-api:{OLD}"],
+            image_id("learner-old"): [
+                f"{REGISTRY}/authority-closers-learner-web:{OLD}",
+                f"{REGISTRY}/authority-closers-learner-web:{OLD_COMMITTED}",
+            ],
+            # Never managed: native runs from systemd units, not containers.
+            image_id("native"): [f"{REGISTRY}/ac-sales-xray-native:{OLD}"],
+            image_id("web"): [f"{REGISTRY}/ac-sales-xray-web:{OLD}"],
+            image_id("mixed"): [
+                f"{REGISTRY}/authority-closers-api:{OLD_COMMITTED}",
+                f"{REGISTRY}/ac-sales-xray-web:{OLD_COMMITTED}",
+            ],
+            image_id("caddy"): ["caddy:2-alpine"],
+            image_id("dangling"): [],
+            image_id("api-latest"): [f"{REGISTRY}/authority-closers-api:latest"],
+        },
+        used=[image_id("api-running"), image_id("caddy")],
+    )
+    engine = retention_fixture(tmp_path, runner=docker)
+    app = engine.paths.application
+    # The rollback image is kept by its release manifest, not only by its tag.
+    (app / "releases" / STAGING_ROLLBACK).mkdir(parents=True)
+    (app / "releases" / STAGING_ROLLBACK / "release-images.env").write_text(
+        f"AC_API_IMAGE={rollback_api}\n"
+    )
+    leftover = app / "artifacts" / f".prune-{OLD}.0badf00d"
+    leftover.mkdir()
+    (leftover / "application-images.tar.gz").write_bytes(b"z")
+    unneeded_bytes = sum(
+        path.stat().st_size
+        for sha in (OLD, OLD_COMMITTED)
+        for path in (app / "artifacts" / sha).iterdir()
+    )
+    monkeypatch.setattr(MODULE.os, "geteuid", lambda: 0, raising=False)
+
+    report = engine.prune_artifacts(1, apply=True)
+
+    assert report["errors"] == []
+    remaining = {path.name for path in (app / "artifacts").iterdir()}
+    assert OLD not in remaining and OLD_COMMITTED not in remaining
+    assert not any(name.startswith(".prune-") for name in remaining)
+    assert {RUNNING_STAGING, STAGING_ROLLBACK, REFERENCED, NEWEST} <= remaining
+    assert {f"sales-xray-native-{OLD}", f".stage-{OLD}.QwErTy"} <= remaining
+    assert sorted(docker.removed()) == sorted(
+        [
+            f"{REGISTRY}/authority-closers-api:{OLD}",
+            f"{REGISTRY}/authority-closers-learner-web:{OLD}",
+            f"{REGISTRY}/authority-closers-learner-web:{OLD_COMMITTED}",
+        ]
+    )
+    assert not any("--force" in call or "-f" in call for call in docker.calls)
+    kept = {image["id"]: image["keep"] for image in report["images"]}
+    assert kept[image_id("api-running")][0] == "used by a container"
+    assert kept[rollback_api] == [f"belongs to kept release {STAGING_ROLLBACK[:12]}"]
+    assert kept[image_id("api-newest")] == [f"belongs to kept release {NEWEST[:12]}"]
+    assert report["unmanaged_images"] == 6
+    entry = engine.history()[-1]
+    assert entry["action"] == "prune-artifacts"
+    assert entry["removed"] == len(report["removed"]) == 5
+    assert entry["freed_bytes"] == unneeded_bytes
+
+
+@pytest.mark.skipif(MODULE.fcntl is None, reason="POSIX file locks are unavailable")
+def test_apply_refuses_while_an_install_holds_the_deployment_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = retention_fixture(tmp_path)
+    monkeypatch.setattr(MODULE.os, "geteuid", lambda: 0, raising=False)
+    with (engine.paths.application / ".deployment.lock").open("a") as held:
+        MODULE.fcntl.flock(held, MODULE.fcntl.LOCK_EX)
+        with pytest.raises(MODULE.ReleaseError, match="deployment is running"):
+            engine.prune_artifacts(1, apply=True, images=False)
+    assert (engine.paths.application / "artifacts" / OLD).is_dir()
+
+
+def test_apply_requires_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    engine = retention_fixture(tmp_path)
+    monkeypatch.setattr(MODULE.os, "geteuid", lambda: 1000, raising=False)
+    with pytest.raises(MODULE.ReleaseError, match="must run as root"):
+        engine.prune_artifacts(1, apply=True, images=False)
+    assert (engine.paths.application / "artifacts" / OLD).is_dir()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        f"AC_STATUS=COMMITTED\nAC_RELEASE_ID={OLD}\n",
+        f"AC_STATUS=COMMITTED\nAC_RELEASE_ID={NEWEST}\nAC_PREVIOUS_RELEASE=not-a-sha\n",
+        f"AC_RELEASE_ID={NEWEST}\n",
+        "not an assignment\n",
+    ],
+)
+def test_unreadable_deployment_evidence_stops_retention(tmp_path: Path, content: str) -> None:
+    engine = retention_fixture(tmp_path)
+    records = engine.paths.application / "deployments" / "staging"
+    (records / f"20260928T000000Z-{NEWEST}-ZzZzZz.env").write_text(content)
+    with pytest.raises(MODULE.ReleaseError):
+        engine.prune_artifacts(0, images=False)
+
+
+def test_current_link_outside_releases_is_refused(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path)
+    artifact_dir = core_artifact(engine, OLD, age_hours=1)
+    try:
+        (engine.paths.application / "current-staging").symlink_to(artifact_dir, True)
+    except OSError as exc:
+        pytest.skip(f"fixture symlinks are unavailable: {exc}")
+    with pytest.raises(MODULE.ReleaseError, match="does not resolve to an installed release"):
+        engine.prune_artifacts(0, images=False)
+
+
+def test_prune_artifacts_command_is_a_dry_run_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    engine = retention_fixture(tmp_path)
+    monkeypatch.setattr(MODULE, "Paths", lambda: engine.paths)
+    assert MODULE.main(["prune-artifacts", "--no-images", "--keep-recent", "1"]) == 0
+    output = capsys.readouterr().out
+    assert f"remove {OLD[:12]}" in output
+    assert f"keep   {RUNNING_STAGING[:12]}" in output
+    assert "Keep 8 (" in output and "remove 2 (" in output
+    assert "sales-xray-native-* x1" in output
+    assert "Dry run: nothing was removed" in output
+    assert (engine.paths.application / "artifacts" / OLD).is_dir()
+    assert MODULE.main(["prune-artifacts", "--dry-run", "--no-images", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["applied"] is False
+    with pytest.raises(SystemExit):
+        MODULE.main(["prune-artifacts", "--dry-run", "--apply"])
