@@ -14,6 +14,24 @@ grep -Eq '^CLOUDFLARE_APT_KEY_SHA256=[0-9a-f]{64}$' "$policy"
 resolved_packages_sha="$(awk -F= '$1 == "AC_OS_RESOLVED_PACKAGES_SHA256" {print $2}' "$policy")"
 [[ "$resolved_packages_sha" == "$(sha256sum "$resolved_packages" | awk '{print $1}')" ]]
 
+baseline_fixtures="$repo_root/tests/infra/fixtures/os-baseline"
+base_resolved_fixture="$baseline_fixtures/ubuntu-noble-amd64-2026-08-30-v1.tsv"
+ffmpeg_delta_fixture="$baseline_fixtures/ubuntu-noble-amd64-2026-09-28-v1-ffmpeg.tsv"
+expected_resolved="$(mktemp)"
+trap 'rm -f -- "$expected_resolved"' EXIT
+base_resolved_sha="$(sha256sum "$base_resolved_fixture" | awk '{print $1}')"
+[[ "$base_resolved_sha" == '1f43279b601f915f6fefe54a673c920dc11473db267068eb25168b09a15ae96c' ]]
+[[ "$(wc -l < "$ffmpeg_delta_fixture" | tr -d ' ')" == 163 ]]
+ffmpeg_policy_version="$(awk -F '\t' '$1 == "ffmpeg" {print $2}' "$packages")"
+ffmpeg_delta_version="$(awk -F '\t' '$1 == "ffmpeg" {print $2}' "$ffmpeg_delta_fixture")"
+[[ -n "$ffmpeg_policy_version" && "$ffmpeg_policy_version" == "$ffmpeg_delta_version" ]]
+grep -Fxq 'AC_OS_BASELINE_ID=ubuntu-noble-amd64-2026-09-28-v1' "$policy"
+cat "$base_resolved_fixture" "$ffmpeg_delta_fixture" | LC_ALL=C sort > "$expected_resolved"
+if ! cmp -s "$expected_resolved" "$resolved_packages"; then
+  diff -u "$expected_resolved" "$resolved_packages" >&2
+  exit 1
+fi
+
 awk -F '\t' '
   /^#/ || NF == 0 { next }
   NF != 2 { exit 1 }
