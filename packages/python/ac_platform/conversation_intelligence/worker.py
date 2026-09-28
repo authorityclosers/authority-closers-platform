@@ -296,13 +296,13 @@ class OfflineConversationWorker:
         *,
         storage: PrivateLocalRecordingStorage,
         scratch: PrivateLocalRecordingStorage,
-        environment: Literal["local", "test", "staging", "production"],
+        environment: Literal["local", "test", "development", "staging", "production"],
         native_runtime: NativeRuntime | None,
         c1_rate: int,
         lease_for: timedelta,
         heartbeat_every: timedelta,
     ) -> None:
-        if environment not in {"local", "test", "staging", "production"}:
+        if environment not in {"local", "test", "development", "staging", "production"}:
             raise ValueError("Conversation worker environment is unsupported.")
         if storage.root == scratch.root:
             raise ValueError(
@@ -310,7 +310,7 @@ class OfflineConversationWorker:
             )
         if environment in {"local", "test"} and native_runtime is not None:
             raise ValueError("Offline conversation worker cannot use a hosted native adapter.")
-        if environment in {"staging", "production"} and not callable(
+        if environment in {"development", "staging", "production"} and not callable(
             getattr(native_runtime, "inspect", None)
         ):
             raise ValueError("Hosted conversation worker requires a native adapter.")
@@ -1083,7 +1083,7 @@ class HostedConversationWorker(OfflineConversationWorker):
         *,
         storage: PrivateLocalRecordingStorage,
         scratch: PrivateLocalRecordingStorage,
-        environment: Literal["staging", "production"],
+        environment: Literal["development", "staging", "production"],
         native_runtime: NativeRuntime,
         lease_for: timedelta = _WORK_LEASE,
         heartbeat_every: timedelta = _WORK_HEARTBEAT,

@@ -185,7 +185,7 @@ def install_submission_http(
     if settings.public_learner_tenant_id not in runtime.policy.tenant_ids:
         raise ValueError("The private upload policy must include the public Academy.")
     if (
-        settings.environment in {"staging", "production"}
+        settings.environment in {"development", "staging", "production"}
         and type(preflight.runtime) is not SocketNativeRuntime
     ):
         raise ValueError("Hosted source preflight requires the bounded native socket helper.")

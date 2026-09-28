@@ -73,7 +73,7 @@ class ProviderLauncherConfig(StrictConfig):
 
 class WorkerServiceConfig(StrictConfig):
     schema_version: Literal["ac.sales_xray.worker_service/1"]
-    environment: Literal["staging", "production"]
+    environment: Literal["development", "staging", "production"]
     release_id: Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
     operations_tenant_id: UUID
     sales_xray_enabled: Literal[True] = True

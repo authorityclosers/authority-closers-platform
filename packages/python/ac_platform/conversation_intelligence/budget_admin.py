@@ -84,7 +84,7 @@ class ConversationBudgetAdmin:
         environment: str,
         operations_tenant_id: UUID,
     ) -> None:
-        if environment not in {"local", "test", "staging", "production"}:
+        if environment not in {"local", "test", "development", "staging", "production"}:
             raise ValueError("budget_admin_environment_invalid")
         if not isinstance(operations_tenant_id, UUID):
             raise ValueError("budget_admin_scope_required")

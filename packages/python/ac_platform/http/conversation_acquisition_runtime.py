@@ -99,7 +99,7 @@ def compose_acquisition(
         workspace_root=intake.scratch.root,
         expected_image_ref=settings.sales_xray_native_image_ref,
     )
-    if settings.environment in {"staging", "production"}:
+    if settings.environment in {"development", "staging", "production"}:
         try:
             info = socket_path.lstat()
             if not stat.S_ISSOCK(info.st_mode) or info.st_mode & 0o007:
