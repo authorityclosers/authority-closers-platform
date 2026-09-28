@@ -299,7 +299,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-59 changes overview admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "0df49cae86ba3762d34d733996aa0e6cb200a2a3c8a2de1df9e301fd4d7d1832"
+        "8d441ad920bd2a68dd6ce1e6e0112db686d823b9a146b6aa9fb42921672b637a"
     )
 
 

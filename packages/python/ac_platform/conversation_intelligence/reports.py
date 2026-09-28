@@ -933,7 +933,7 @@ def _has_forbidden_numeric_key(key: str) -> bool:
 
 
 def _provider_extras(
-    payload: Mapping[str, Any], *, consumed_keys: Iterable[str] = ()
+    payload: Mapping[str, Any], *, consumed_keys: Iterable[str] = (), canonical_read: bool = False
 ) -> dict[str, Any]:
     """Keep bounded provider additions without expanding the canonical schema.
 
@@ -946,6 +946,11 @@ def _provider_extras(
 
     known_fields = _CANONICAL_REPORT_ROOT_FIELDS.union(consumed_keys)
     extras = {key: value for key, value in payload.items() if key not in known_fields}
+    if canonical_read and "provider_extras" in extras:
+        retained = extras.pop("provider_extras")
+        if not isinstance(retained, dict):
+            raise ReportError("report_provider_extras_invalid")
+        extras = {**retained, **extras}
     if not extras:
         return {}
 
@@ -1621,9 +1626,14 @@ def _sanitize_provider_overview(
         many = field in list_fields
         if many and not isinstance(overview[field], list):
             continue  # Collection shape and required fields stay strict.
-        annotation = DetailedOverview.model_fields[field].annotation
+        field_info = DetailedOverview.model_fields[field]
+        annotation = field_info.annotation
+        limit = next(
+            (rule.max_length for rule in field_info.metadata if hasattr(rule, "max_length")), None
+        )
         adapter: TypeAdapter[Any] = TypeAdapter(get_args(annotation)[0] if many else annotation)
-        kept, seen = [], set()
+        kept: list[dict[str, Any]] = []
+        seen: set[Any] = set()
         for raw in overview[field] if many else [overview[field]]:
             try:
                 item = adapter.validate_python(raw).model_dump(mode="json")
@@ -1664,12 +1674,18 @@ def _sanitize_provider_overview(
                 drop(field, "reference_duplicate")
                 continue
             seen.add(ref)
+            if many and limit is not None and len(kept) >= limit:
+                drop(field, "limit_exceeded")
+                continue
             kept.append(item)
         overview[field] = kept if many else next(iter(kept), None)
-    if bool(overview.get("next_call_focus")) != bool(overview.get("practice")):
+    if not payload["improvements"] or bool(overview.get("next_call_focus")) != bool(
+        overview.get("practice")
+    ):
+        reason = "focus_practice_unpaired" if payload["improvements"] else "reference_out_of_range"
         for field in ("next_call_focus", "practice"):
             if overview.get(field) is not None:
-                drop(field, "focus_practice_unpaired")
+                drop(field, reason)
                 overview[field] = None
     return {**payload, "overview": overview}, drops
 
@@ -2426,7 +2442,9 @@ def parse_report_draft(
     normalized["report_sections"] = _normalise_sections(
         payload.get("report_sections"), profile=resolved_profile
     )
-    provider_extras = _provider_extras(payload, consumed_keys=consumed_provider_keys)
+    provider_extras = _provider_extras(
+        payload, consumed_keys=consumed_provider_keys, canonical_read=canonical_read
+    )
     if compatibility_extras:
         provider_extras = {**provider_extras, "compatibility": compatibility_extras}
     # The provider object starts as a convenient working copy above. Strip

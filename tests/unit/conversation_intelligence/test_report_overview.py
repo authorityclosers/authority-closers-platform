@@ -276,19 +276,19 @@ def test_scalar_singular_evidence_still_rejects_fabricated_quote(flattened: bool
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "code"),
     [
-        ("progress", {"trend": "improving"}),
-        ("version", "future-auto-approved"),
-        ("diagnosis", {"text": "Unsupported", "evidence": []}),
+        ("progress", {"trend": "improving"}, "report_overview_schema_invalid"),
+        ("version", "future-auto-approved", "report_overview_schema_invalid"),
+        ("diagnosis", {"text": "Unsupported", "evidence": []}, "report_evidence_invalid"),
     ],
 )
-def test_missing_or_invented_template_data_fails(field: str, value: Any) -> None:
+def test_missing_or_invented_template_data_fails(field: str, value: Any, code: str) -> None:
     transcript = _transcript()
     payload = _payload(transcript)
     payload["overview"] = overview_for(payload)
     payload["overview"][field] = value
-    with pytest.raises(ReportError, match="report_(overview_schema|evidence)_invalid"):
+    with pytest.raises(ReportError, match=f"^{code}$"):
         parse_report_draft(payload, transcript)
 
 
@@ -589,12 +589,47 @@ def test_specific_overview_failures_remain_repairable_and_visible(kind):
     payload["overview"] = overview_for(payload)
     if kind == "schema":
         payload["overview"].pop("version")
-    else:
-        payload["improvements"] = []
     code = f"report_overview_{kind}_invalid"
-    with pytest.raises(ReportError, match=f"^{code}$"):
-        parse_report_draft(payload, transcript)
+    if kind == "schema":
+        with pytest.raises(ReportError, match=f"^{code}$"):
+            parse_report_draft(payload, transcript)
     exposed = provider_failure_code(InferenceTaskError(code))
     assert exposed == f"conversation_{code}" and exposed in C5_REPAIR_FAILURE_CODES
     assert TypeAdapter(C5RepairFailureCode).validate_python(exposed) == exposed
     assert _safe_progress_failure_code(exposed) == exposed
+
+
+def test_overview_overflow_keeps_first_valid_items_in_provider_order() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    notes = [{"text": f"Observation {i}", "evidence": [_evidence(transcript)]} for i in range(5)]
+    payload["overview"]["ethics_notes"] = ["malformed", *notes]
+    original = deepcopy(payload)
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None
+    assert [note.model_dump() for note in report.overview.ethics_notes] == notes[:3]
+    assert report.provider_extras["compatibility"]["overview_drops"]["ethics_notes"] == {
+        "item_schema_invalid": 1,
+        "limit_exceeded": 2,
+    }
+    assert payload == original
+    saved = report.model_dump(mode="json")
+    assert (
+        parse_report_draft(saved, transcript, canonical_read=True).model_dump(mode="json") == saved
+    )
+
+
+def test_focus_and_practice_without_improvements_are_dropped() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["improvements"] = []
+    payload["overview"]["improvement_details"] = []
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None
+    assert report.overview.next_call_focus is None and report.overview.practice is None
+    assert report.provider_extras["compatibility"]["overview_drops"] == {
+        "next_call_focus": {"reference_out_of_range": 1},
+        "practice": {"reference_out_of_range": 1},
+    }
