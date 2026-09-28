@@ -122,6 +122,7 @@ def make_engine(tmp_path: Path, github: FakeGitHub | None = None, runner: FakeRu
         stage_root=tmp_path,
         lock=tmp_path / "lock",
         foundation=tmp_path / "foundation",
+        sales_xray=tmp_path / "sales-xray",
     )
     for directory in (paths.state, paths.config, paths.application):
         directory.mkdir(parents=True)
@@ -821,3 +822,256 @@ def test_prune_artifacts_command_is_a_dry_run_by_default(
     assert json.loads(capsys.readouterr().out)["applied"] is False
     with pytest.raises(SystemExit):
         MODULE.main(["prune-artifacts", "--dry-run", "--apply"])
+
+
+# -- Sales Xray activation ------------------------------------------------------
+
+NATIVE = "e" * 40
+NOW = 1_800_000_000
+DAY = 86_400
+IMAGE = "sha256:" + "f" * 64
+NATIVE_ZIP = b"native build bytes"
+NATIVE_DIGEST = "sha256:" + hashlib.sha256(NATIVE_ZIP).hexdigest()
+
+
+class NativeGitHub(FakeGitHub):
+    """Adds the native-image run, its artifact and the records a proof pins."""
+
+    def __init__(self, *, expired: bool = False) -> None:
+        super().__init__()
+        self.runs[(MODULE.NATIVE_WORKFLOW, NATIVE)] = [run(NATIVE, MODULE.NATIVE_WORKFLOW, id=300)]
+        self.record = artifact(
+            NATIVE,
+            f"ac-sales-xray-native-{NATIVE}",
+            run_id=300,
+            id=30,
+            expired=expired,
+            digest=NATIVE_DIGEST,
+            size_in_bytes=len(NATIVE_ZIP),
+        )
+        self.artifacts[300] = [self.record]
+        self.downloads = 0
+
+    def get_json(self, path: str, params: dict[str, str] | None = None) -> Any:
+        if path.endswith("/actions/artifacts/30"):
+            return self.record
+        if path.endswith("/actions/runs/300"):
+            return run(NATIVE, MODULE.NATIVE_WORKFLOW, id=300)
+        return super().get_json(path, params)
+
+    def download_artifact(self, artifact_id: int, destination: Path, expected_digest: str) -> None:
+        assert (artifact_id, expected_digest) == (30, NATIVE_DIGEST)
+        self.downloads += 1
+        destination.write_bytes(NATIVE_ZIP)
+
+
+class PrepareRunner(FakeRunner):
+    """Stands in for the repository's prepare tool and for docker inspect."""
+
+    def __init__(self, *, fail: str = "") -> None:
+        super().__init__()
+        self.fail = fail
+        self.prepared: list[list[str]] = []
+        self.inspections: list[str] = []
+
+    def __call__(self, argv, **kwargs) -> subprocess.CompletedProcess[str]:
+        argv = list(argv)
+        if argv[0] == "python3" and argv[1].endswith("prepare-sales-xray-native-activation.py"):
+            self.prepared.append(argv)
+            if self.fail:
+                return subprocess.CompletedProcess(argv, 2, "", f"FAIL  refused: {self.fail}\n")
+            target = argv[argv.index("--target-release-id") + 1]
+            output = Path(argv[argv.index("--output-dir") + 1])
+            output.mkdir()
+            descriptor = output / f"activation-{target}.json"
+            descriptor.write_text(json.dumps({"release_id": target}) + "\n")
+            (output / f"activation-{target}.json.sha256").write_text(
+                hashlib.sha256(descriptor.read_bytes()).hexdigest() + "\n"
+            )
+            (output / f"service-{target}.json").write_text("{}\n")
+            result = {"release_id": target, "provider_calls": 0, "approval_replaced": False}
+            return subprocess.CompletedProcess(argv, 0, json.dumps(result), "")
+        if argv[:2] == ["docker", "inspect"] and self.inspections:
+            return subprocess.CompletedProcess(argv, 0, self.inspections.pop(0) + "\n", "")
+        return super().__call__(argv, **kwargs)
+
+
+def hosted_setup(tmp_path: Path, *, expires_in: int = 90 * DAY, github=None, runner=None):
+    """Staging runs OLD with a hosted activation on the NATIVE build's image."""
+
+    engine = make_engine(tmp_path, github or NativeGitHub(), runner or PrepareRunner())
+    engine.clock = lambda: NOW
+    # Root test hosts seal ownership too; use a group that exists there.
+    import grp
+
+    engine.operator_group = grp.getgrgid(os.getgid()).gr_name
+    set_current_core(engine, OLD)
+    approval = tmp_path / "approval.json"
+    approval.write_text(
+        json.dumps(
+            {
+                "expires_at_epoch": NOW + expires_in + DAY,
+                "acquisition_policy": {"expires_at_epoch": NOW + expires_in},
+            }
+        )
+    )
+    (engine.paths.sales_xray / "staging").mkdir(parents=True)
+    engine.activation_path("staging", OLD).write_text(
+        json.dumps({"approval_file": str(approval), "native_image_ref": IMAGE})
+    )
+    native = engine.paths.application / "artifacts" / f"sales-xray-native-{NATIVE}"
+    native.mkdir(parents=True)
+    (native / "native-image.json").write_text(
+        json.dumps({"source_commit": NATIVE, "image": {"expected_runtime_ref": IMAGE}})
+    )
+    (engine.paths.application / "operator-inputs" / "staging").mkdir(parents=True)
+    return engine
+
+
+def prepare(engine, tmp_path: Path, *, dry_run: bool = False) -> dict[str, Any]:
+    stage = tmp_path / "stage"
+    stage.mkdir(exist_ok=True)
+    return engine.prepare_activation(
+        "staging", HEAD, tmp_path / "source", stage, dry_run=dry_run, log=tmp_path / "log"
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_activation_is_carried_forward_with_a_native_reuse_proof(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path)
+    summary = prepare(engine, tmp_path)
+
+    assert summary == {
+        "sales_xray_activation": f"carried forward from {OLD[:12]}",
+        "sales_xray_native": NATIVE,
+        "sales_xray_approval_expires": MODULE._date(NOW + 90 * DAY),
+    }
+    argv = engine.run.prepared[0]
+    assert argv[argv.index("--source-activation") + 1] == str(
+        engine.activation_path("staging", OLD)
+    )
+    assert "--approval-file" not in argv  # the approval is carried forward unchanged
+    assert argv[argv.index("--source-repository") + 1] == str(engine.paths.mirror)
+    proof_path = Path(argv[argv.index("--native-reuse-proof") + 1])
+    proof = json.loads(proof_path.read_text())
+    stored = engine.paths.native_store / NATIVE
+    assert proof["schema"] == "ac.sales-xray.native-reuse-input/1"
+    assert (proof["native_source_commit"], proof["target_release_id"]) == (NATIVE, HEAD)
+    assert proof["archive_path"] == str(stored / "native-artifact.zip")
+    assert proof["workflow_run"]["sha256"] == MODULE._sha256_file(stored / "workflow-run.json")
+    assert proof["artifact_metadata"]["path"] == str(stored / "artifact-metadata.json")
+    assert argv[argv.index("--native-reuse-proof-sha256") + 1] == MODULE._sha256_file(proof_path)
+    operator_inputs = engine.paths.application / "operator-inputs" / "staging"
+    assert proof_path.parent.parent.parent == operator_inputs
+
+    published = engine.activation_path("staging", HEAD)
+    digest = published.with_name(published.name + ".sha256").read_text().strip()
+    assert digest == MODULE._sha256_file(published)
+    assert oct(published.stat().st_mode & 0o777) == "0o444"
+    # A retry finds the published activation and prepares nothing new.
+    assert prepare(engine, tmp_path) == {"sales_xray_activation": "present"}
+    assert len(engine.run.prepared) == 1
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_dry_run_prepares_in_the_stage_and_publishes_nothing(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path)
+    summary = prepare(engine, tmp_path, dry_run=True)
+    assert summary["sales_xray_native"] == NATIVE
+    argv = engine.run.prepared[0]
+    assert Path(argv[argv.index("--output-dir") + 1]).is_relative_to(tmp_path / "stage")
+    assert not engine.activation_path("staging", HEAD).exists()
+    assert not list((engine.paths.application / "operator-inputs" / "staging").iterdir())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_without_hosted_sales_xray_nothing_is_prepared(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path)
+    engine.activation_path("staging", OLD).unlink()
+    assert prepare(engine, tmp_path) == {}
+    assert engine.run.prepared == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_an_approval_about_to_lapse_is_refused(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path, expires_in=3600)
+    with pytest.raises(MODULE.ReleaseError, match="renew it before deploying"):
+        prepare(engine, tmp_path)
+    assert engine.run.prepared == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_changed_native_inputs_ask_for_the_new_native_build(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path, runner=PrepareRunner(fail="native_inputs_changed"))
+    with pytest.raises(MODULE.ReleaseError, match="changes the Sales Xray native image"):
+        prepare(engine, tmp_path)
+    assert not engine.activation_path("staging", HEAD).exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_the_running_native_image_must_be_loaded(tmp_path: Path) -> None:
+    engine = hosted_setup(tmp_path)
+    native = engine.paths.application / "artifacts" / f"sales-xray-native-{NATIVE}"
+    (native / "native-image.json").write_text(json.dumps({"source_commit": NATIVE}))
+    with pytest.raises(MODULE.ReleaseError, match="no single loaded native artifact"):
+        prepare(engine, tmp_path)
+
+
+def test_native_build_is_downloaded_once_and_kept(tmp_path: Path) -> None:
+    github = NativeGitHub()
+    engine = make_engine(tmp_path, github)
+    stored = engine.store_native(NATIVE)
+    assert (stored / "native-artifact.zip").read_bytes() == NATIVE_ZIP
+    assert json.loads((stored / "artifact-metadata.json").read_text())["digest"] == NATIVE_DIGEST
+    assert json.loads((stored / "workflow-run.json").read_text())["id"] == 300
+    assert engine.store_native(NATIVE) == stored
+    assert github.downloads == 1
+    # Kept outside the per-commit bundles, so the store prune never removes it.
+    assert engine.prune_store() == []
+    assert stored.is_dir()
+
+
+def test_a_saved_zip_is_adopted_only_when_it_matches_github(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, NativeGitHub(expired=True))
+    wrong = tmp_path / "wrong.zip"
+    wrong.write_bytes(b"something else")
+    with pytest.raises(MODULE.ReleaseError, match="not the native build GitHub recorded"):
+        engine.store_native(NATIVE, local_zip=wrong)
+    with pytest.raises(MODULE.ReleaseError, match="store-native"):
+        engine.store_native(NATIVE)
+    saved = tmp_path / "saved.zip"
+    saved.write_bytes(NATIVE_ZIP)
+    stored = engine.store_native(NATIVE, local_zip=saved)
+    assert (stored / "native-artifact.zip").read_bytes() == NATIVE_ZIP
+
+
+def test_commits_without_a_native_build_store_nothing(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, NativeGitHub())
+    engine.keep_native_build(HEAD)
+    assert not engine.paths.native_store.exists()
+    engine.keep_native_build(NATIVE)
+    assert (engine.paths.native_store / NATIVE / "native-artifact.zip").is_file()
+
+
+def test_a_restarting_sales_xray_worker_fails_the_check(tmp_path: Path) -> None:
+    runner = PrepareRunner()
+    engine = make_engine(tmp_path, runner=runner)
+    log = tmp_path / "log"
+    runner.inspections = ["running|0|t1", "running|1|t2"]
+    with pytest.raises(MODULE.ReleaseError, match="did not stay up"):
+        engine.require_steady("worker", log)
+    runner.inspections = ["running|0|t1", "running|0|t1"]
+    engine.require_steady("worker", log)
+    assert "STEADY worker" in log.read_text()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_status_shows_when_the_sales_xray_approval_lapses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    engine = hosted_setup(tmp_path, expires_in=40 * DAY)
+    staging = engine.status()["environments"]["staging"]
+    assert staging["sales_xray_approval_expires"] == MODULE._date(NOW + 40 * DAY)
+    assert staging["sales_xray_approval_days_left"] == 40
+    MODULE._print(engine.status(), False)
+    assert "Sales Xray approval until" in capsys.readouterr().out

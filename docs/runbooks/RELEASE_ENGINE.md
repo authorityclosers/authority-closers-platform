@@ -10,7 +10,8 @@ same source-owned installers the laptop script used to run over SSH.
 |---|---|---|
 | Core app (API, worker, learner, admin, coach) | `ac-application-<sha>` from `application.yml` | `infra/application/scripts/install-application-release.sh` |
 | Sales Xray web | `ac-sales-xray-web-<sha>` from `sales-xray-web-image.yml` (built only when web inputs change) | `verify-artifact.py`, `docker load`, compose `up --wait` |
-| Sales Xray native | pinned by `install-sales-xray-native.py` | not handled; changes rarely and is installed separately |
+| Sales Xray activation | the running release's `/etc/authority-closers/sales-xray/<env>/activation-<sha>.json` | carried forward with `prepare-sales-xray-native-activation.py` (see [Sales Xray activation](#sales-xray-activation)) |
+| Sales Xray native | `ac-sales-xray-native-<sha>` from `sales-xray-native-image.yml` (built only when native inputs change) | stored for good in `release-store/native/<sha>/`; a new native image is still installed separately with `install-sales-xray-native.py` |
 
 ## One-time setup (owner)
 
@@ -33,6 +34,7 @@ same source-owned installers the laptop script used to run over SSH.
 | `ac-release rollback staging --component web` | Restore the previous Sales Xray web image |
 | `ac-release history -n 20` | Recent deploy records (`/var/lib/ac-release/history.jsonl`) |
 | `ac-release prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]` | Report, or with `--apply` remove, installer artifacts and core images nothing needs (see [Disk space](#disk-space)) |
+| `ac-release store-native SHA [--from ZIP]` | Keep a Sales Xray native build for good. Downloads it while GitHub still has it; `--from` adopts a saved copy only if it matches the digest and size GitHub recorded |
 
 Logs for each deploy are in `/var/log/ac-release/`.
 
@@ -56,6 +58,36 @@ Logs for each deploy are in `/var/log/ac-release/`.
   exists **and** the same commit already passed staging. That file is created
   only after the off-host backup restore check passes.
 - Admin → Releases (T5) will call these same commands.
+
+## Sales Xray activation
+
+A core release that runs hosted Sales Xray needs its own activation
+descriptor. The installer refuses a release without one. For each core deploy
+(real or dry run), the engine does the following:
+
+1. Does nothing if the target already has an activation, or if the running
+   release has none (hosted Sales Xray is not active there).
+2. Refuses if the running approval, or its acquisition policy, lapses within a
+   day. `ac-release status` shows each environment's approval end date.
+3. Finds the loaded native artifact behind the running native image and builds
+   the native reuse proof from `release-store/native/<sha>/` and its git mirror.
+4. Runs the repository tool `prepare-sales-xray-native-activation.py` with the
+   approval **carried forward unchanged** into
+   `application/operator-inputs/<env>/release-<sha>-<time>/`. It then installs
+   the descriptor and its digest (mode 0444). A dry run prepares inside its
+   temporary stage and publishes nothing.
+
+After the installer, the core check also waits for `sales-xray-worker` to run on
+the release's API image and to stay up for 30 seconds without restarting.
+
+The engine never creates, renews or widens an approval. A new approval (new
+limits, testers or providers) is still prepared by a person against a new
+release. The engine also pauses staging, with a message, in two cases:
+
+- the release changes the native image inputs (install the new native build
+  first);
+- the running native build is not stored and GitHub has already dropped it
+  (adopt the saved copy with `store-native --from`).
 
 ## Disk space
 
