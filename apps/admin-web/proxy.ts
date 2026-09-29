@@ -18,6 +18,7 @@ import { resolveReviewerServerContext } from "./app/lib/reviewer-server-auth";
 const INTERNAL_HEALTH_PATH = "/healthz";
 const INTERNAL_HEALTH_HOSTS = new Set(["127.0.0.1:3001", "localhost:3001"]);
 const ADMIN_PUBLIC_HOSTS = new Set([
+  "admin-dev.authorityclosers.com",
   "admin-staging.authorityclosers.com",
   "admin.authorityclosers.com",
 ]);
