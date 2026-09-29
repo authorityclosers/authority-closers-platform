@@ -289,6 +289,42 @@ def _describe(verdict: Verdict) -> str:
     return "\n".join(lines)
 
 
+def _status_verdict_line(label: str, verdict: Verdict) -> str:
+    state = "FREE" if verdict.free else "BUSY"
+    blockers = "; ".join(verdict.reasons)
+    detail = f" ({blockers})" if blockers else ""
+    return f"{label}: {state}{detail}"
+
+
+def _describe_status(gate: Gate, verdict: Verdict) -> str:
+    """Describe start verdicts and, on task branches, the current task verdict."""
+
+    lines = [f"main: {verdict.main_state}"]
+    lines.append("active task branches: " + (", ".join(verdict.active_branches) or "none"))
+    lines.append("open pull requests: " + ("; ".join(verdict.open_prs) or "none"))
+    if verdict.lanes:
+        lines.append(
+            "lanes: "
+            + ", ".join(f"{name}={holder or 'free'}" for name, holder in verdict.lanes.items())
+        )
+
+    branch = gate.current_branch()
+    if branch.startswith("task/"):
+        task_verdict = gate.check()
+        if task_verdict.free:
+            task_state = "free to continue"
+        else:
+            blockers = "; ".join(task_verdict.reasons)
+            task_state = f"blocked: {blockers}"
+        lines.append(f"your task {branch}: {task_state}")
+
+    lines.append("Start verdicts (BUSY applies to starting new work):")
+    for lane in LANES:
+        lines.append(_status_verdict_line(lane, gate.assess(lane=lane)))
+    lines.append(_status_verdict_line("exclusive (no lane)", verdict))
+    return "\n".join(lines)
+
+
 def _status_json(gate: Gate) -> dict[str, object]:
     """Per-lane view for automation: which lanes may start a task right now."""
 
@@ -333,7 +369,7 @@ def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
                 print(json.dumps(_status_json(gate)))
                 return 0
             verdict = gate.assess()
-            print(_describe(verdict))
+            print(_describe_status(gate, verdict))
             return 0 if verdict.free else EXIT_BUSY
         if args.command == "start":
             if len(args.names) > 2:
