@@ -215,8 +215,9 @@ function StandaloneStudioView({
   };
   const skeletonVariant = (
     path: string,
-  ): "dashboard" | "list" | "account" | "studio" => {
+  ): "dashboard" | "list" | "account" | "studio" | "call" => {
     if (path === "/dashboard") return "dashboard";
+    if (callIdFromPath(path) !== null) return "call";
     if (path === "/calls" || path === "/analysis" || path === "/analysis/calls")
       return "list";
     if (path === "/account") return "account";
@@ -559,7 +560,11 @@ function StandaloneStudioView({
     return (
       <WorkspaceAccessProvider value={accessValue}>
         <AppFrame embedded={embedded}>
-          <AcquisitionShell authenticated={false} active={activeFor(pathname)}>
+          <AcquisitionShell
+            authenticated={false}
+            loading
+            active={activeFor(pathname)}
+          >
             <PageSkeleton variant={skeletonVariant(pathname)} />
           </AcquisitionShell>
         </AppFrame>

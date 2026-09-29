@@ -271,6 +271,11 @@ export function SourceWaveformProvider({
   );
 }
 
+/** The measured envelope and playhead, for views that draw the whole call. */
+export function useSourceWaveform() {
+  return useContext(SourceContext);
+}
+
 export function waveformBins(
   envelope: WaveformEnvelope,
   startMs = 0,

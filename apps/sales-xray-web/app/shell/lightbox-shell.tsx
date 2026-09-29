@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AudioLines,
   ChevronDown,
   ChevronsUpDown,
   CircleUserRound,
@@ -21,15 +20,20 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent,
   type ReactNode,
 } from "react";
 
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
+import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
+import { RecentCallItem } from "./recent-call-item";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
+import { SettingsDialogHost } from "../settings-dialog";
+import { openSettings, opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
@@ -43,6 +47,7 @@ import {
   getShellState,
   recentCallsForContext,
   updateShellState,
+  type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import styles from "./lightbox-shell.module.css";
@@ -50,6 +55,8 @@ import styles from "./lightbox-shell.module.css";
 export type LightboxShellProps = {
   children: ReactNode;
   authenticated: boolean;
+  /** The session is still being confirmed: show placeholders, never guest labels. */
+  loading?: boolean;
   homeHref?: string;
   active?: "dashboard" | "analyse" | "calls" | "account";
   compactBusy?: boolean;
@@ -83,10 +90,7 @@ function pageHeading(
           description:
             "A read-only preview of how your call moves from upload to report.",
         }
-      : {
-          title: "Analysing your call",
-          description: "Find this call and its progress in Calls.",
-        };
+      : { title: "Analysing your call" };
   if (stage === "welcome") return { title: "New analysis" };
   return null;
 }
@@ -101,6 +105,8 @@ function resolvePageTitle(
   if (active === "account") return "Account";
   return null;
 }
+
+const subscribeNothing = () => () => {};
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -122,15 +128,27 @@ function LightboxShellFrame({
   previewHero = false,
   allowance = null,
   displayName = null,
+  loading = false,
 }: LightboxShellProps) {
   const access = useWorkspaceAccess();
   const cached = getShellState();
   const accountKey = access?.context
     ? JSON.stringify([access.context.personId, access.context.sessionId])
     : null;
-  const [collapsed, setCollapsed] = useState(cached.collapsed);
+  const [savedCollapsed, setCollapsed] = useState(cached.collapsed);
+  // The server cannot read the saved sidebar state: match it while
+  // hydrating, then apply the saved state (no hydration mismatch).
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
+  const collapsed = hydrated && savedCollapsed;
   const [, setCounts] = useState<CallSummary | null>(cached.counts);
   const [workspaces, setWorkspaces] = useState(cached.workspaces);
+  const [workspacesSettled, setWorkspacesSettled] = useState(
+    cached.workspaces.length > 0,
+  );
   const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
     cached.selectedTenantAccountKey,
   );
@@ -242,6 +260,7 @@ function LightboxShellFrame({
         const mapped = submissions.map((call) => ({
           id: call.id,
           name: call.label?.displayName ?? "Untitled call",
+          revision: call.label?.revision ?? 0,
           date: new Intl.DateTimeFormat(undefined, {
             dateStyle: "medium",
           }).format(new Date(call.createdAt)),
@@ -300,6 +319,7 @@ function LightboxShellFrame({
         promise
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
+            if (!controller.signal.aborted) setWorkspacesSettled(true);
             if (
               !controller.signal.aborted &&
               data &&
@@ -320,7 +340,9 @@ function LightboxShellFrame({
               });
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!controller.signal.aborted) setWorkspacesSettled(true);
+          });
       }
     } catch {}
     return () => controller.abort();
@@ -385,6 +407,12 @@ function LightboxShellFrame({
     if (!authenticated && access?.requestAccountSignIn) {
       event.preventDefault();
       access.requestAccountSignIn();
+      return;
+    }
+    // Settings float over the current screen instead of leaving it.
+    if (authenticated && active !== "account" && opensInPlace(event)) {
+      event.preventDefault();
+      openSettings();
     }
   }
 
@@ -400,6 +428,11 @@ function LightboxShellFrame({
       : null) ||
     displayName ||
     "Workspace";
+  // Signed in but names not fetched yet: placeholders, never a guest-looking
+  // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
+  const chromePending =
+    loading ||
+    (authenticated && !workspacesSettled && !profileName && !displayName);
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -407,11 +440,44 @@ function LightboxShellFrame({
       : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
 
+  // Apply a rename or deletion to the sidebar list and its shared cache.
+  function updateRecentCall(id: string, next: ShellRecentCall | null) {
+    const apply = (calls: ShellRecentCall[]) =>
+      next === null
+        ? calls.filter((call) => call.id !== id)
+        : calls.map((call) => (call.id === id ? next : call));
+    setRecentCalls(apply);
+    updateShellState({ recentCalls: apply(getShellState().recentCalls) });
+  }
+
+  // A rename anywhere (report header, Calls, sidebar) updates Recents at once.
+  useEffect(() => {
+    const onLabel = (event: Event) => {
+      const { submissionId, label } = (event as CustomEvent<CallLabelChange>)
+        .detail;
+      const rename = (calls: ShellRecentCall[]) =>
+        calls.map((call) =>
+          call.id === submissionId
+            ? {
+                ...call,
+                name: label.displayName ?? "Untitled call",
+                revision: label.revision,
+              }
+            : call,
+        );
+      setRecentCalls(rename);
+      updateShellState({ recentCalls: rename(getShellState().recentCalls) });
+    };
+    window.addEventListener(CALL_LABEL_EVENT, onLabel);
+    return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
+  }, []);
+
   return (
     <div
       className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
       data-lightbox-shell
       data-authenticated={authenticated}
+      data-loading={chromePending || undefined}
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
       data-mobile-fit={mobileFit}
@@ -623,20 +689,12 @@ function LightboxShellFrame({
             {recentsOpen && (
               <div className={styles.recentsList}>
                 {visibleRecentCalls.map((call) => (
-                  <Link
+                  <RecentCallItem
                     key={call.id}
+                    call={call}
                     href={callHref(call.id)}
-                    className={styles.recentItem}
-                    title={call.name}
-                  >
-                    <AudioLines
-                      size={14}
-                      className={styles.recentIcon}
-                      aria-hidden="true"
-                    />
-                    <span className={styles.recentName}>{call.name}</span>
-                    <span className={styles.recentDate}>{call.date}</span>
-                  </Link>
+                    onChange={(next) => updateRecentCall(call.id, next)}
+                  />
                 ))}
               </div>
             )}
@@ -685,6 +743,12 @@ function LightboxShellFrame({
             )}
           </div>
           <div className={styles.topBarRight}>
+            {authenticated && active !== "analyse" ? (
+              <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
+                <Plus size={15} aria-hidden="true" />
+                New analysis
+              </Link>
+            ) : null}
             <AllowanceRing allowance={allowance} />
             <ThemeToggle />
             <ProfileMenu
@@ -734,6 +798,7 @@ function LightboxShellFrame({
         </Link>
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
+      <SettingsDialogHost />
     </div>
   );
 }
@@ -751,7 +816,10 @@ const PersistentShellContext = createContext<
  * chrome (active item, heading, allowance) instead of drawing a second one.
  */
 export function PersistentShell({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<ShellPage>({ authenticated: false });
+  const [page, setPage] = useState<ShellPage>({
+    authenticated: false,
+    loading: true,
+  });
   return (
     <PersistentShellContext.Provider value={setPage}>
       <LightboxShellFrame {...page}>{children}</LightboxShellFrame>

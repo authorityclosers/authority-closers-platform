@@ -107,9 +107,9 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
       (link) => link.getAttribute("href"),
     ),
   ).toEqual([
+    "mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help",
     "https://app.authorityclosers.com/privacy",
     "https://app.authorityclosers.com/terms",
-    "mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help",
   ]);
   await act(async () =>
     document.dispatchEvent(
