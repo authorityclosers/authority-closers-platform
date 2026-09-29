@@ -44,7 +44,23 @@ function runInstalledTraceProbe(suppress: boolean) {
           largest.stop(1000n + BigInt(Number.MAX_SAFE_INTEGER) * 1000n);
           await trace.flushAllTraces({ end: true });
           const file = path.join(directory, 'trace');
-          const contents = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+          const startedAt = Date.now();
+          let lastBytes = -1;
+          let unchangedSince = startedAt;
+          let contents = '';
+          while (Date.now() - startedAt < 5000) {
+            contents = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+            const markerCount = contents.split(marker).length - 1;
+            if (markerCount === 221) break;
+            const bytes = Buffer.byteLength(contents);
+            if (bytes !== lastBytes) {
+              lastBytes = bytes;
+              unchangedSince = Date.now();
+            } else if (Date.now() - unchangedSince >= 500) {
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
           const inherited = spawnSync(process.execPath, ['-e', 'process.stdout.write(process.env.NEXT_TRACE_SPAN_THRESHOLD_MS || "absent")'], { encoding: 'utf8' });
           process.stdout.write(JSON.stringify({
             markerCount: contents.split(marker).length - 1,
