@@ -69,6 +69,9 @@ def _install_routes_with_stub_native(
             self.workspace_root = workspace_root
             self.expected_image_ref = expected_image_ref
 
+        def inspect(self, source: Path, outdir: Path, *, job_id: UUID, rate: Any) -> dict[str, Any]:
+            return setup.native.inspect(source, outdir, job_id=job_id, rate=rate)
+
     monkeypatch.setattr(sample_module, "compose_hosted_intake", lambda _settings: setup.runtime)
     monkeypatch.setattr(sample_module, "SocketNativeRuntime", StubNativeRuntime)
     settings = setup.settings.model_copy(
