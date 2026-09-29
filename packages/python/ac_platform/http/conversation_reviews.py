@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.models import ConversationRecording
 from ac_platform.conversation_intelligence.review_contracts import (
     ReviewAssignmentCreateRequest,
     ReviewFeedbackRequest,
@@ -29,9 +30,8 @@ from ac_platform.conversation_intelligence.review_contracts import (
     ReviewInvitationCreateRequest,
 )
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
-    ObjectKey,
-    ObjectKind,
     PrivateLocalRecordingStorage,
     StorageError,
 )
@@ -309,7 +309,7 @@ def install_conversation_review_http(
         try:
             source_bytes = recording["source_bytes"]
             source_sha256 = recording["source_sha256"]
-            tenant_id = UUID(str(recording["tenant_id"]))
+            UUID(str(recording["tenant_id"]))
             recording_id = UUID(str(recording["id"]))
             content_type = str(recording["content_type"])
             if (
@@ -330,11 +330,13 @@ def install_conversation_review_http(
                 "Use a single valid audio byte range.",
                 headers={"Content-Range": f"bytes */{recording.get('source_bytes', 0)}"},
             ) from None
-        iterator = storage.iter_bytes(
-            ObjectKey(tenant_id, recording_id, recording_id, ObjectKind.SOURCE_AUDIO),
-            expected_sha256=source_sha256,
-        )
+        iterator = None
         try:
+            row = await auth.database.get(ConversationRecording, recording_id)
+            if row is None:
+                raise StorageError("storage_object_missing")
+            key = await resolve_source_key(auth.database, row)
+            iterator = storage.iter_bytes(key, expected_sha256=source_sha256)
             first = await join_thread(lambda: next(iterator, None))
             if first is None:
                 raise StorageError("empty private source")

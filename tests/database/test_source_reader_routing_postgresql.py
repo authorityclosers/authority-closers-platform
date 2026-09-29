@@ -3,7 +3,9 @@
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
+from fastapi import APIRouter, FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ac_platform.conversation_intelligence.application import (
@@ -30,6 +32,7 @@ from ac_platform.conversation_intelligence.storage import (
     StorageError,
 )
 from ac_platform.conversation_intelligence.worker import HostedConversationWorker
+from ac_platform.http.conversation_playback import install_playback_route
 from ac_platform.outbox.models import Job
 from tests.database.test_conversation_inference_postgresql import FakeBroker, _provider_quote
 from tests.database.test_conversation_postgresql import application, run
@@ -47,7 +50,7 @@ def postgres_harness():
     yield from _postgres_harness.__wrapped__()
 
 
-@pytest.mark.parametrize("reader", ["upload", "native", "hosted", "inference", "report"])
+@pytest.mark.parametrize("reader", ["upload", "native", "hosted", "inference", "report", "http"])
 @pytest.mark.parametrize("history", ["none", "live", "released"])
 def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch, reader, history):
     async def exercise():
@@ -119,6 +122,34 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
                         await _import_valid(fixture, sessions)
                 else:
                     assert (await _import_valid(fixture, sessions))["state"] == "completed"
+            elif reader == "http":
+
+                async def require_actor():
+                    async with sessions() as db, db.begin():
+                        yield SimpleNamespace(
+                            database=db, resolved=SimpleNamespace(actor=state.actor)
+                        )
+
+                app, router = FastAPI(), APIRouter()
+                install_playback_route(router, require_actor, storage)
+                app.include_router(router)
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="https://fictional.test"
+                ) as client:
+                    for headers in ({}, {"Range": "bytes=2-5"}):
+                        response = await client.get(
+                            f"/recordings/{prepared.recording_id}/source", headers=headers
+                        )
+                        if history == "released":
+                            assert response.status_code == 409
+                            assert response.json() == {
+                                "detail": "The retained recording is unavailable."
+                            }
+                        else:
+                            assert response.status_code == (206 if headers else 200)
+                            assert response.content == (
+                                prepared.data[2:6] if headers else prepared.data
+                            )
             else:
                 run_id = prepared.run_id
                 if reader == "inference":
@@ -182,6 +213,8 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
             expected_reads = (
                 [] if history == "released" else [shared if history == "live" else legacy]
             )
+            if reader == "http":
+                expected_reads *= 2
             if reader in {"native", "hosted"} and history != "released":
                 expected_reads.append(
                     ObjectKey(

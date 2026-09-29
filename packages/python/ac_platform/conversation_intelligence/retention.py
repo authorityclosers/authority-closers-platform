@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.application import DELETE_JOB, utc
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
     ConversationRecording,
@@ -45,6 +46,7 @@ class ConversationRetentionScheduler:
                 .where(
                     ConversationRecording.state.not_in(("deleting", "deleted")),
                     ConversationPermission.retention_until <= now,
+                    ~recording_is_canary(),
                 )
                 .order_by(ConversationPermission.retention_until, ConversationRecording.id)
                 .limit(1)

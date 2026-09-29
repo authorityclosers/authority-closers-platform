@@ -25,6 +25,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.acquisition_activity import account_activity
 from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
     benchmark_for_submission,
     build_benchmark_request,
@@ -33,6 +34,7 @@ from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
 )
 from ac_platform.conversation_intelligence.acquisition_library import (
     account_library,
+    account_library_summary,
     earlier_report_submission_id,
 )
 from ac_platform.conversation_intelligence.acquisition_processing import (
@@ -64,10 +66,9 @@ from ac_platform.conversation_intelligence.processing_plan import (
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
-    ObjectKey,
-    ObjectKind,
     StorageError,
 )
 from ac_platform.conversation_intelligence.submission_labels import (
@@ -473,6 +474,46 @@ def install_submission_http(
                     ownership(auth.database),
                     auth.resolved.actor,
                     before=before,
+                    shared_identity_locks=True,
+                )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
+
+    @router.get("/submissions/summary")
+    async def saved_calls_summary(request: Request, response: Response) -> dict[str, int]:
+        host = guard(request, response, library=True)
+        try:
+            context = (
+                learner_read_account(request)
+                if host == "learner"
+                else asynccontextmanager(read_require_actor)(request)
+            )
+            async with context as auth:
+                return await account_library_summary(
+                    ownership(auth.database),
+                    auth.resolved.actor,
+                    shared_identity_locks=True,
+                )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
+
+    @router.get("/activity")
+    async def saved_calls_activity(request: Request, response: Response) -> dict[str, Any]:
+        host = guard(request, response)
+        try:
+            context = (
+                learner_read_account(request)
+                if host == "learner"
+                else asynccontextmanager(read_require_actor)(request)
+            )
+            async with context as auth:
+                return await account_activity(
+                    ownership(auth.database),
+                    auth.resolved.actor,
                     shared_identity_locks=True,
                 )
         except ConversationError as error:
@@ -1002,7 +1043,7 @@ def install_submission_http(
         owner: _Owner = streaming_dependency,
     ) -> StreamingResponse:
         guard(request, response)
-        scope, recording = await AcquisitionReports(owner.ownership).recording(
+        _scope, recording = await AcquisitionReports(owner.ownership).recording(
             submission_id, **owner.arguments
         )
         ranges = request.headers.getlist("range")
@@ -1016,11 +1057,10 @@ def install_submission_http(
                 "Use a single valid audio byte range.",
                 headers={**_PRIVATE, "Content-Range": f"bytes */{recording.source_bytes}"},
             ) from None
-        iterator = runtime.storage.iter_bytes(
-            ObjectKey(scope.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO),
-            expected_sha256=recording.source_sha256,
-        )
+        iterator = None
         try:
+            key = await resolve_source_key(owner.ownership.database, recording)
+            iterator = runtime.storage.iter_bytes(key, expected_sha256=recording.source_sha256)
             first = await join_thread(lambda: next(iterator, None))
             if first is None:
                 raise StorageError("empty_private_source")

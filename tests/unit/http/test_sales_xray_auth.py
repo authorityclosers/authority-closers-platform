@@ -889,6 +889,61 @@ def test_workspace_keeps_existing_learner_sign_in_when_sales_host_is_unconfigure
     )
 
 
+STUDIO_ORIGIN = "https://salesxray-dev.authorityclosers.com"
+
+
+def test_staging_sales_xray_host_accepts_the_owner_ui_studio_origin() -> None:
+    client = _client(settings=_sales_staging_settings())
+
+    response = client.post(
+        "/v1/auth/logout",
+        headers={"host": SALES_STAGING_HOST, "origin": STUDIO_ORIGIN},
+    )
+
+    assert response.status_code == 204
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "staging.authorityclosers.com",
+        "admin-staging.authorityclosers.com",
+        "api-staging.authorityclosers.com",
+    ],
+)
+def test_studio_origin_is_refused_off_the_sales_xray_host(host: str) -> None:
+    with pytest.raises(RequestOriginDenied):
+        auth_module.require_safe_origin(
+            _request_with_host_and_origin(host=host, origin=STUDIO_ORIGIN),
+            _sales_staging_settings(),
+        )
+
+
+def test_production_trusts_no_studio_origin_and_cors_is_unchanged() -> None:
+    values = _deployment_values("production")
+    values["sales_xray_app_url"] = SALES_PRODUCTION_ORIGIN
+    production = Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
+    staging = _sales_staging_settings()
+
+    assert production.sales_xray_studio_origin is None
+    assert staging.sales_xray_studio_origin == STUDIO_ORIGIN
+    assert STUDIO_ORIGIN not in staging.allowed_origins
+    with pytest.raises(RequestOriginDenied):
+        auth_module.require_safe_origin(
+            _request_with_host_and_origin(
+                host="salesxray.authorityclosers.com", origin=STUDIO_ORIGIN
+            ),
+            production,
+        )
+
+
+def test_studio_origin_needs_a_configured_sales_xray_host() -> None:
+    values = _deployment_values("staging")
+    staging_without_sales = Settings(environment="staging", _env_file=None, **values)  # type: ignore[arg-type]
+
+    assert staging_without_sales.sales_xray_studio_origin is None
+
+
 def test_same_surface_origin_helper_accepts_sales_xray_and_rejects_learner_bridge() -> None:
     settings = _sales_staging_settings()
     auth_module.require_safe_origin(
