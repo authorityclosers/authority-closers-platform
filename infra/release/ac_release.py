@@ -11,6 +11,7 @@ Commands (``ac-release <command>``):
     status [--json]                 what runs where, pause state, last results
     tick                            timer entry point: auto-deploy staging
     deploy ENV [SHA] [--component core|web|all] [--dry-run]
+    promote --bump patch|minor|major --version vX.Y.Z
     pause ENV | resume ENV          stop or restart automatic deploys
     rollback ENV --component web    restore the previous Sales Xray web image
     history [-n N]                  recent deploy records
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import getpass
 import hashlib
 import json
 import os
@@ -142,6 +144,10 @@ def _validate_release_record(entry: Mapping[str, Any]) -> dict[str, Any]:
     rolled_back_from = record["rolled_back_from"]
     if rolled_back_from is not None and _version_parts(rolled_back_from) is None:
         raise ReleaseError("production release rolled_back_from is invalid")
+    if record["action"] == "promote" and rolled_back_from is not None:
+        raise ReleaseError("a promoted release cannot set rolled_back_from")
+    if record["action"] == "rollback" and rolled_back_from is None:
+        raise ReleaseError("a rollback release must set rolled_back_from")
     return record
 
 
@@ -646,6 +652,10 @@ class Engine:
         """Append one production release event without changing prior history."""
 
         record = _validate_release_record(entry)
+        if record["action"] == "rollback":
+            current, _ = self.production_releases()
+            if current is None or record["rolled_back_from"] != current["version"]:
+                raise ReleaseError("rollback must refer to the current production version")
         self.paths.state.mkdir(parents=True, exist_ok=True)
         with self.paths.releases.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, sort_keys=True) + "\n")
@@ -660,10 +670,10 @@ class Engine:
         previous = records[-2] if len(records) > 1 else None
         return current, previous
 
-    def passed_staging(self, sha: str) -> bool:
+    def passed_staging(self, sha: str, component: str = "core") -> bool:
         return any(
             entry.get("environment") == "staging"
-            and entry.get("component") == "core"
+            and entry.get("component") == component
             and entry.get("sha") == sha
             and entry.get("result") == "success"
             for entry in self.history(10_000)
@@ -799,6 +809,76 @@ class Engine:
             ).returncode
             == 0
         )
+
+    def promote(
+        self,
+        bump: str,
+        version: str,
+        *,
+        requested_by: str,
+        trigger: str,
+        expected_sha: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Promote the tested staging pair, recording a release only on success."""
+
+        with self.locked(wait=True):
+            if not self.paths.production_enabled.exists():
+                raise ReleaseError("production deploys are not enabled on this server yet")
+            core_sha = self.current_core("staging")
+            web_sha, _ = self.current_web("staging")
+            if core_sha is None or web_sha is None:
+                raise ReleaseError("staging does not have a complete core and web pair")
+            head = self.main_head()
+            if not self.is_ancestor(core_sha, head) or not self.is_ancestor(web_sha, head):
+                raise ReleaseError("both staging commits must be on main")
+            if not self.passed_staging(core_sha, "core") or not self.passed_staging(web_sha, "web"):
+                raise ReleaseError("both staging components must have a successful staging deploy")
+            if any(
+                self.paths.failed_flag("staging", component).exists()
+                for component in COMPONENTS
+            ):
+                raise ReleaseError("staging has a failed deploy that must be cleared first")
+            core_build = self.stored_build(core_sha, "core")
+            web_build = self.stored_build(web_sha, "web")
+            if core_build is None or web_build is None:
+                raise ReleaseError("the stored builds for the staging pair are incomplete")
+            production_core = self.current_core("production")
+            production_web, _ = self.current_web("production")
+            if production_core and not self.is_ancestor(production_core, core_sha):
+                raise ReleaseError("production core is not an ancestor of the staging core")
+            if production_core == core_sha and production_web == web_sha:
+                raise ReleaseError("production already runs this staging pair")
+            if version != self.next_version(bump):
+                raise ReleaseError(
+                    "requested version does not match the next version for this bump"
+                )
+            if expected_sha is not None and expected_sha != production_core:
+                raise ReleaseError("production core changed since this promotion was requested")
+
+            attempts: list[dict[str, Any]] = []
+            if production_core != core_sha:
+                attempts.append(
+                    self.attempt("production", "core", core_build, dry_run=False, trigger=trigger)
+                )
+                if attempts[-1]["result"] != "success":
+                    return attempts
+            attempts.append(
+                self.attempt("production", "web", web_build, dry_run=False, trigger=trigger)
+            )
+            if attempts[-1]["result"] != "success":
+                return attempts
+            self.append_release(
+                {
+                    "version": version,
+                    "core_sha": core_sha,
+                    "web_sha": web_sha,
+                    "requested_by": requested_by,
+                    "at": _now(),
+                    "action": "promote",
+                    "rolled_back_from": None,
+                }
+            )
+            return attempts
 
     # -- artifacts -------------------------------------------------------------
 
@@ -2224,6 +2304,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     deploy.add_argument("sha", nargs="?")
     deploy.add_argument("--component", choices=("core", "web", "all"), default="all")
     deploy.add_argument("--dry-run", action="store_true")
+    promote = sub.add_parser("promote")
+    promote.add_argument("--bump", choices=("patch", "minor", "major"), required=True)
+    promote.add_argument("--version", required=True, metavar="vX.Y.Z")
     for name in ("pause", "resume"):
         sub.add_parser(name).add_argument("environment", choices=ENVIRONMENTS)
     rollback = sub.add_parser("rollback")
@@ -2267,6 +2350,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             )
             _print(result, True)
+        elif args.command == "promote":
+            user = os.environ.get("SUDO_USER") or getpass.getuser()
+            results = engine.promote(
+                args.bump, args.version, requested_by=f"cli:{user}", trigger="cli"
+            )
+            _print(results, True)
+            if any(entry.get("result") == "failed" for entry in results):
+                return 1
         elif args.command == "prune-artifacts":
             report = engine.prune_artifacts(
                 args.keep_recent, apply=args.apply, images=not args.no_images
