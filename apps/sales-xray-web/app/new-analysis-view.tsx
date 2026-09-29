@@ -81,9 +81,7 @@ export function NewAnalysisView({
               const sizeBytes =
                 typeof sub.byte_size === "number" ? sub.byte_size : 0;
               const sizeStr =
-                sizeBytes > 0
-                  ? `${(sizeBytes / 1048576).toFixed(1)} MB`
-                  : "—";
+                sizeBytes > 0 ? `${(sizeBytes / 1048576).toFixed(1)} MB` : "—";
               return {
                 id: typeof sub.id === "string" ? sub.id : `sub-${index}`,
                 callName: label,
@@ -273,14 +271,22 @@ export function NewAnalysisView({
                           <Phone size={15} />
                         </div>
                         <div>
-                          <div className={styles.primaryText}>{item.callName}</div>
-                          <div className={styles.secondaryText}>{item.fileName}</div>
+                          <div className={styles.primaryText}>
+                            {item.callName}
+                          </div>
+                          <div className={styles.secondaryText}>
+                            {item.fileName}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <div className={styles.primaryText}>{item.prospectName}</div>
-                      <div className={styles.secondaryText}>{item.companyName}</div>
+                      <div className={styles.primaryText}>
+                        {item.prospectName}
+                      </div>
+                      <div className={styles.secondaryText}>
+                        {item.companyName}
+                      </div>
                     </td>
                     <td>
                       <div className={styles.primaryText}>{item.date}</div>

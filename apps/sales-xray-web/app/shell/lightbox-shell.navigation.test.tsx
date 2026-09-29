@@ -63,7 +63,7 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(mobileNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
   expect(
     desktopNav?.querySelector(
-      'a[aria-label="Calls"][href="/calls"][data-next-client-link="true"]',
+      'a[aria-label="Calls"][href="/analysis/calls"][data-next-client-link="true"]',
     ),
   ).not.toBeNull();
   const mobileCalls = Array.from(
@@ -71,7 +71,7 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
       'a[data-next-client-link="true"]',
     ) ?? [],
   ).find((link) => link.textContent?.trim() === "Calls");
-  expect(mobileCalls?.getAttribute("href")).toBe("/calls");
+  expect(mobileCalls?.getAttribute("href")).toBe("/analysis/calls");
   expect(
     desktopNav?.querySelector(
       'a[aria-label="Account"][href="/account"][data-next-client-link="true"]',

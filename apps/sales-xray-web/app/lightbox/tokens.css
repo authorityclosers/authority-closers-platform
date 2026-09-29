@@ -174,7 +174,12 @@
   --lx-chapter-rail-w: 196px;
   --lx-bottom-nav-h: 76px;
   --lx-mini-player-h: 62px;
-  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #14b8a6 0%,
+    #06b6d4 50%,
+    #6366f1 100%
+  );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 
@@ -238,7 +243,12 @@
   --lx-warning-soft: rgba(245, 158, 11, 0.12);
   --lx-danger: #f97066;
   --lx-danger-soft: rgba(249, 112, 102, 0.12);
-  --lx-gradient-brand: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 50%, #818cf8 100%);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #2dd4bf 0%,
+    #22d3ee 50%,
+    #818cf8 100%
+  );
   --lx-gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 100%);
 }
 
@@ -295,7 +305,12 @@
   --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
   background-color: var(--lx-paper);
   color: var(--lx-ink);
-  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #14b8a6 0%,
+    #06b6d4 50%,
+    #6366f1 100%
+  );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 

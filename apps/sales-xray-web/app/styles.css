@@ -133,7 +133,12 @@
   --lx-chapter-rail-w: 196px;
   --lx-bottom-nav-h: 76px;
   --lx-mini-player-h: 62px;
-  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #14b8a6 0%,
+    #06b6d4 50%,
+    #6366f1 100%
+  );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 
