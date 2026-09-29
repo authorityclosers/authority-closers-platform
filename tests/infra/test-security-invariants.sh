@@ -145,6 +145,11 @@ done
 grep -Fq 'resolve_installed_policy "$installed_root" "$scope_record"' \
   "$foundation/scripts/r2-usage-guard.sh"
 grep -Fq 'foundation_policy_path(host_root)' "$foundation/scripts/ac-postgres-backup.py"
+if grep -Eq '(^|[[:space:]])(export[[:space:]]+)?R2_POLICY_FILE=' \
+  "$foundation/scripts/ac-r2-usage-guard"; then
+  printf 'R2 wrapper overrides the installed scoped policy resolver.\n' >&2
+  exit 1
+fi
 
 if grep -Eq 'dist-upgrade|apt-get install -y docker-ce|apt-get install -y cloudflared' \
   "$foundation/scripts/bootstrap-host.sh"; then

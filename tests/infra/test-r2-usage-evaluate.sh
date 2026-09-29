@@ -38,6 +38,12 @@ scope_id="foundation-$(printf 'a%.0s' {1..40})"
 printf '%s\n' "$scope_id" > "$scope_record"
 [[ "$(resolve_installed_policy "$foundation_root" "$scope_record")" == \
   "$foundation_root/releases/$scope_id/config/r2/free-tier-policy.conf" ]]
+: > "$scope_record"
+if output="$(resolve_installed_policy "$foundation_root" "$scope_record" 2>&1)"; then
+  printf 'R2 policy resolver accepted an empty backup scope record.\n' >&2
+  exit 1
+fi
+[[ "$output" == *'scope record is empty'* ]]
 printf 'invalid\n' > "$scope_record"
 if resolve_installed_policy "$foundation_root" "$scope_record" >/dev/null 2>&1; then
   printf 'R2 policy resolver accepted an invalid backup scope record.\n' >&2

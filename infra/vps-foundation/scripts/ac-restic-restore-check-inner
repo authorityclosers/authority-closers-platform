@@ -199,7 +199,10 @@ compare_restored_managed_files() {
     [[ -f "$record" && ! -L "$record" && -r "$record" ]] || {
       printf 'FAIL  Restored backup scope record is unsafe.\n' >&2; return 1;
     }
-    IFS= read -r scope_release_id < "$record" || return 1
+    IFS= read -r scope_release_id < "$record" || {
+      printf 'FAIL  Restored backup scope record is empty.\n' >&2
+      return 1
+    }
     [[ "$scope_release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
       printf 'FAIL  Restored backup scope release ID is invalid.\n' >&2; return 1;
     }

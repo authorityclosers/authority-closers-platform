@@ -28,7 +28,10 @@ resolve_installed_policy() {
       printf 'Backup foundation scope record is unsafe.\n' >&2
       return 1
     }
-    IFS= read -r scope_release_id < "$record_path" || return 1
+    IFS= read -r scope_release_id < "$record_path" || {
+      printf 'Backup foundation scope record is empty.\n' >&2
+      return 1
+    }
     [[ "$scope_release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
       printf 'Backup foundation scope record has an invalid release ID.\n' >&2
       return 1

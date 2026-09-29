@@ -254,6 +254,10 @@ def test_restored_managed_files_use_scoped_release_only_for_listed_targets(tmp_p
     (restored_targets / "ac-backup").write_text("current backup\n")
     result = compare()
     assert result.returncode == 0, result.stderr
+    record.write_text("")
+    result = compare()
+    assert result.returncode != 0
+    assert "scope record is empty" in result.stderr
     record.write_text(scope_id + "\n")
     (restored_targets / "ac-backup").write_text("tampered scoped backup\n")
     result = compare()
