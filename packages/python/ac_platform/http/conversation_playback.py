@@ -17,9 +17,9 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
+from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
-    ObjectKey,
-    ObjectKind,
     PrivateLocalRecordingStorage,
     StorageError,
 )
@@ -109,13 +109,13 @@ def install_playback_route(
                 headers={"Content-Range": f"bytes */{recording['source_bytes']}"},
             ) from None
         assert auth.resolved.actor.tenant_id is not None
-        iterator = storage.iter_bytes(
-            ObjectKey(
-                auth.resolved.actor.tenant_id, recording_id, recording_id, ObjectKind.SOURCE_AUDIO
-            ),
-            expected_sha256=recording["source_sha256"],
-        )
+        iterator = None
         try:
+            row = await auth.database.get(ConversationRecording, recording_id)
+            if row is None:
+                raise StorageError("storage_object_missing")
+            key = await resolve_source_key(auth.database, row)
+            iterator = storage.iter_bytes(key, expected_sha256=recording["source_sha256"])
             # The storage adapter validates the complete source before yielding.
             first = await join_thread(lambda: next(iterator, None))
             if first is None:
