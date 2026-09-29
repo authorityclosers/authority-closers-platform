@@ -1228,3 +1228,46 @@
     animation: none;
   }
 }
+
+/* Session still loading: soft placeholders instead of guest labels. */
+.shell[data-loading="true"] .workspaceName,
+.shell[data-loading="true"] .workspaceSub,
+.shell[data-loading="true"] .titleText {
+  width: fit-content;
+  min-width: 96px;
+  border-radius: 6px;
+  background: var(--lx-sunken);
+  color: transparent;
+  animation: shell-placeholder 1.6s ease-in-out infinite;
+}
+.shell[data-loading="true"] .workspaceSub {
+  min-width: 70px;
+  margin-top: 5px;
+}
+.shell[data-loading="true"] .workspaceTile {
+  background: var(--lx-sunken);
+  color: transparent;
+}
+.shell[data-loading="true"] .titleText {
+  min-width: 140px;
+}
+.shell[data-loading="true"] .topBarRight > :last-child,
+.shell[data-loading="true"] .barActions > :last-child {
+  visibility: hidden;
+}
+@keyframes shell-placeholder {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell[data-loading="true"] .workspaceName,
+  .shell[data-loading="true"] .workspaceSub,
+  .shell[data-loading="true"] .titleText {
+    animation: none;
+  }
+}

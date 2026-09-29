@@ -12,6 +12,7 @@ import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
+import { NoticeCenter } from "./notice-center";
 export const metadata: Metadata = {
   title: "Dipak’s Sales Xray · Authority Closers",
   description:
@@ -49,6 +50,7 @@ export default function Layout({
               )}
             </AppSession>
             <UploadIndicator />
+            <NoticeCenter />
           </UploadSessionProvider>
         </ThemeProvider>
       </body>

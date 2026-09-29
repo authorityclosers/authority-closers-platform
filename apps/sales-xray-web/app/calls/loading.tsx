@@ -8,7 +8,7 @@ export default function CallsLoading() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   return (
-    <AcquisitionShell authenticated={authenticated} active="calls">
+    <AcquisitionShell authenticated={authenticated} loading={!access} active="calls">
       <PageSkeleton variant="list" />
     </AcquisitionShell>
   );

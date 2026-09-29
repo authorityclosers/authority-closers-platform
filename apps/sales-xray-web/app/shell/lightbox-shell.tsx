@@ -21,6 +21,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -30,6 +31,8 @@ import { callHref, type Allowance } from "../acquisition-client";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
+import { SettingsDialogHost } from "../settings-dialog";
+import { openSettings, opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
@@ -50,6 +53,8 @@ import styles from "./lightbox-shell.module.css";
 export type LightboxShellProps = {
   children: ReactNode;
   authenticated: boolean;
+  /** The session is still being confirmed: show placeholders, never guest labels. */
+  loading?: boolean;
   homeHref?: string;
   active?: "dashboard" | "analyse" | "calls" | "account";
   compactBusy?: boolean;
@@ -83,10 +88,7 @@ function pageHeading(
           description:
             "A read-only preview of how your call moves from upload to report.",
         }
-      : {
-          title: "Analysing your call",
-          description: "Find this call and its progress in Calls.",
-        };
+      : { title: "Analysing your call" };
   if (stage === "welcome") return { title: "New analysis" };
   return null;
 }
@@ -101,6 +103,8 @@ function resolvePageTitle(
   if (active === "account") return "Account";
   return null;
 }
+
+const subscribeNothing = () => () => {};
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -122,15 +126,27 @@ function LightboxShellFrame({
   previewHero = false,
   allowance = null,
   displayName = null,
+  loading = false,
 }: LightboxShellProps) {
   const access = useWorkspaceAccess();
   const cached = getShellState();
   const accountKey = access?.context
     ? JSON.stringify([access.context.personId, access.context.sessionId])
     : null;
-  const [collapsed, setCollapsed] = useState(cached.collapsed);
+  const [savedCollapsed, setCollapsed] = useState(cached.collapsed);
+  // The server cannot read the saved sidebar state: match it while
+  // hydrating, then apply the saved state (no hydration mismatch).
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
+  const collapsed = hydrated && savedCollapsed;
   const [, setCounts] = useState<CallSummary | null>(cached.counts);
   const [workspaces, setWorkspaces] = useState(cached.workspaces);
+  const [workspacesSettled, setWorkspacesSettled] = useState(
+    cached.workspaces.length > 0,
+  );
   const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
     cached.selectedTenantAccountKey,
   );
@@ -300,6 +316,7 @@ function LightboxShellFrame({
         promise
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
+            if (!controller.signal.aborted) setWorkspacesSettled(true);
             if (
               !controller.signal.aborted &&
               data &&
@@ -320,7 +337,9 @@ function LightboxShellFrame({
               });
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            if (!controller.signal.aborted) setWorkspacesSettled(true);
+          });
       }
     } catch {}
     return () => controller.abort();
@@ -385,6 +404,12 @@ function LightboxShellFrame({
     if (!authenticated && access?.requestAccountSignIn) {
       event.preventDefault();
       access.requestAccountSignIn();
+      return;
+    }
+    // Settings float over the current screen instead of leaving it.
+    if (authenticated && active !== "account" && opensInPlace(event)) {
+      event.preventDefault();
+      openSettings();
     }
   }
 
@@ -400,6 +425,11 @@ function LightboxShellFrame({
       : null) ||
     displayName ||
     "Workspace";
+  // Signed in but names not fetched yet: placeholders, never a guest-looking
+  // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
+  const chromePending =
+    loading ||
+    (authenticated && !workspacesSettled && !profileName && !displayName);
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -412,6 +442,7 @@ function LightboxShellFrame({
       className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
       data-lightbox-shell
       data-authenticated={authenticated}
+      data-loading={chromePending || undefined}
       data-sidebar-collapsed={collapsed}
       data-compact-busy={compactBusy}
       data-mobile-fit={mobileFit}
@@ -734,6 +765,7 @@ function LightboxShellFrame({
         </Link>
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
+      <SettingsDialogHost />
     </div>
   );
 }
@@ -751,7 +783,10 @@ const PersistentShellContext = createContext<
  * chrome (active item, heading, allowance) instead of drawing a second one.
  */
 export function PersistentShell({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<ShellPage>({ authenticated: false });
+  const [page, setPage] = useState<ShellPage>({
+    authenticated: false,
+    loading: true,
+  });
   return (
     <PersistentShellContext.Provider value={setPage}>
       <LightboxShellFrame {...page}>{children}</LightboxShellFrame>

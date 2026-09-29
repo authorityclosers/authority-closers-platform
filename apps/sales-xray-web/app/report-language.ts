@@ -7,6 +7,13 @@ export const reportLanguageLabels: Record<ReportLanguage, string> = {
   "hi-Deva+en": "Hindi + English",
   "mr-Deva+en": "Marathi + English",
 };
+/** Picker labels: English is always written, so each option names only the
+ * optional second language of the report. */
+export const secondLanguageLabels: Record<ReportLanguage, string> = {
+  en: "No second language",
+  "hi-Deva+en": "हिन्दी · Hindi",
+  "mr-Deva+en": "मराठी · Marathi",
+};
 export function parseReportLanguage(value: unknown): ReportLanguage {
   if (
     typeof value !== "string" ||
