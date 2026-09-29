@@ -16,8 +16,11 @@ const SHELL_ROUTES = new Set([
   "/analysis/calls",
 ]);
 
-function isShellRoute(pathname: string) {
-  return SHELL_ROUTES.has(pathname) || callIdFromPath(pathname) !== null;
+function isShellRoute(pathname: string | null) {
+  if (!pathname) return false;
+  // Static exports use trailing slashes for the same application pages.
+  const route = pathname.replace(/\/$/, "") || "/";
+  return SHELL_ROUTES.has(route) || callIdFromPath(route) !== null;
 }
 
 /**
