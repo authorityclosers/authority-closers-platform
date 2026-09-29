@@ -1,0 +1,897 @@
+{
+  "repos/example/project/pulls/101": [
+    {
+      "number": 101,
+      "body": "No dev verification noted",
+      "additions": 300,
+      "deletions": 101,
+      "head": {
+        "ref": "task/admin/57-github-metrics",
+        "sha": "head-101"
+      }
+    }
+  ],
+  "repos/example/project/pulls/101/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-21T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      },
+      {
+        "submitted_at": "2026-09-22T02:00:00Z",
+        "state": "APPROVED",
+        "user": {
+          "login": "fictional-owner"
+        }
+      },
+      {
+        "submitted_at": "2026-09-22T03:00:00Z",
+        "state": "CHANGES_REQUESTED",
+        "user": {
+          "login": "fictional-owner"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/101/commits?per_page=100": [
+    [
+      {
+        "sha": "first-101",
+        "commit": {
+          "committer": {
+            "date": "2026-09-21T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-101",
+        "commit": {
+          "committer": {
+            "date": "2026-09-21T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/101/files?per_page=100": [
+    []
+  ],
+  "repos/example/project/issues/101/timeline?per_page=100": [
+    [
+      {
+        "event": "committed",
+        "sha": "rework-101-0",
+        "committer": {
+          "date": "2026-09-22T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      },
+      {
+        "event": "committed",
+        "sha": "rework-101-1",
+        "committer": {
+          "date": "2026-09-23T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      },
+      {
+        "event": "committed",
+        "sha": "merge-101",
+        "committer": {
+          "date": "2026-09-24T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "one"
+          },
+          {
+            "sha": "two"
+          }
+        ]
+      }
+    ]
+  ],
+  "repos/example/project/commits/first-101/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "cancelled"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-101/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": [
+        {
+          "name": "single-track",
+          "conclusion": "failure",
+          "completed_at": "2026-09-22T05:00:00Z"
+        },
+        {
+          "name": "single-track",
+          "conclusion": "success",
+          "completed_at": "2026-09-22T06:00:00Z"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/pulls/102": [
+    {
+      "number": 102,
+      "body": "## Dev check\nRan fictional tests.",
+      "additions": 10,
+      "deletions": 10,
+      "head": {
+        "ref": "task/sales-xray/81-http-source-readers",
+        "sha": "head-102"
+      }
+    }
+  ],
+  "repos/example/project/pulls/102/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-22T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/102/commits?per_page=100": [
+    [
+      {
+        "sha": "first-102",
+        "commit": {
+          "committer": {
+            "date": "2026-09-22T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-102",
+        "commit": {
+          "committer": {
+            "date": "2026-09-22T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/102/files?per_page=100": [
+    [
+      {
+        "filename": "tests/test_sales.py"
+      }
+    ]
+  ],
+  "repos/example/project/issues/102/timeline?per_page=100": [
+    [
+      {
+        "event": "committed",
+        "sha": "rework-102-0",
+        "committer": {
+          "date": "2026-09-23T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      }
+    ]
+  ],
+  "repos/example/project/commits/first-102/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "neutral"
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 2,
+          "status": "completed",
+          "conclusion": "neutral"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-102/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/pulls/103": [
+    {
+      "number": 103,
+      "body": "## Check on dev\nVerified fictional flow.",
+      "additions": 200,
+      "deletions": 200,
+      "head": {
+        "ref": "task/platform/24-r3-promote",
+        "sha": "head-103"
+      }
+    }
+  ],
+  "repos/example/project/pulls/103/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-22T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      },
+      {
+        "submitted_at": "2026-09-22T03:00:00Z",
+        "state": "APPROVED",
+        "user": {
+          "login": "fictional-owner"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/103/commits?per_page=100": [
+    [
+      {
+        "sha": "first-103",
+        "commit": {
+          "committer": {
+            "date": "2026-09-22T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-103",
+        "commit": {
+          "committer": {
+            "date": "2026-09-22T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/103/files?per_page=100": [
+    [
+      {
+        "filename": "tests/test_platform.py"
+      }
+    ]
+  ],
+  "repos/example/project/issues/103/timeline?per_page=100": [
+    []
+  ],
+  "repos/example/project/commits/first-103/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "failure"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-103/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/pulls/104": [
+    {
+      "number": 104,
+      "body": "## Tests and dev check\nVerified fictional flow.",
+      "additions": 20,
+      "deletions": 30,
+      "head": {
+        "ref": "task/ui/66-shell",
+        "sha": "head-104"
+      }
+    }
+  ],
+  "repos/example/project/pulls/104/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-23T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      },
+      {
+        "submitted_at": "2026-09-23T03:00:00Z",
+        "state": "APPROVED",
+        "user": {
+          "login": "fictional-owner"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/104/commits?per_page=100": [
+    [
+      {
+        "sha": "first-104",
+        "commit": {
+          "committer": {
+            "date": "2026-09-23T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-104",
+        "commit": {
+          "committer": {
+            "date": "2026-09-23T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/104/files?per_page=100": [
+    [
+      {
+        "filename": "src/shell.test.ts"
+      }
+    ]
+  ],
+  "repos/example/project/issues/104/timeline?per_page=100": [
+    [
+      {
+        "event": "committed",
+        "sha": "rework-104-0",
+        "committer": {
+          "date": "2026-09-24T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      },
+      {
+        "event": "committed",
+        "sha": "rework-104-1",
+        "committer": {
+          "date": "2026-09-25T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      },
+      {
+        "event": "committed",
+        "sha": "rework-104-2",
+        "committer": {
+          "date": "2026-09-26T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      }
+    ]
+  ],
+  "repos/example/project/commits/first-104/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-104/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/pulls/105": [
+    {
+      "number": 105,
+      "body": "## How to check on dev\nVerified fictional flow.",
+      "additions": 5,
+      "deletions": 5,
+      "head": {
+        "ref": "feature/untracked-task",
+        "sha": "head-105"
+      }
+    }
+  ],
+  "repos/example/project/pulls/105/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-24T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/105/commits?per_page=100": [
+    [
+      {
+        "sha": "first-105",
+        "commit": {
+          "committer": {
+            "date": "2026-09-24T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-105",
+        "commit": {
+          "committer": {
+            "date": "2026-09-24T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/105/files?per_page=100": [
+    [
+      {
+        "filename": "test_feature.py"
+      }
+    ]
+  ],
+  "repos/example/project/issues/105/timeline?per_page=100": [
+    [
+      {
+        "event": "committed",
+        "sha": "rework-105-0",
+        "committer": {
+          "date": "2026-09-25T04:00:00Z"
+        },
+        "parents": [
+          {
+            "sha": "parent"
+          }
+        ]
+      }
+    ]
+  ],
+  "repos/example/project/commits/first-105/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "timed_out"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-105/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/pulls/106": [
+    {
+      "number": 106,
+      "body": "## Dev check\nChecks are pending.",
+      "additions": 10,
+      "deletions": 10,
+      "head": {
+        "ref": "feature/pending-checks",
+        "sha": "head-106"
+      }
+    }
+  ],
+  "repos/example/project/pulls/106/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-25T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/106/commits?per_page=100": [
+    [
+      {
+        "sha": "first-106",
+        "commit": {
+          "committer": {
+            "date": "2026-09-25T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-106",
+        "commit": {
+          "committer": {
+            "date": "2026-09-25T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/106/files?per_page=100": [
+    [
+      {
+        "filename": "tests/test_pending.py"
+      }
+    ]
+  ],
+  "repos/example/project/issues/106/timeline?per_page=100": [
+    []
+  ],
+  "repos/example/project/commits/first-106/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "queued",
+          "conclusion": null
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-106/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/pulls?state=all&per_page=100&sort=created&direction=asc": [
+    [
+      {
+        "number": 99,
+        "created_at": "2026-09-10T01:00:00Z",
+        "updated_at": "2026-09-15T01:00:00Z",
+        "merged_at": "2026-09-15T01:00:00Z",
+        "head": {
+          "ref": "task/admin/old-99",
+          "sha": "head-99"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 100,
+        "created_at": "2026-09-16T01:00:00Z",
+        "updated_at": "2026-09-18T01:00:00Z",
+        "merged_at": "2026-09-18T01:00:00Z",
+        "head": {
+          "ref": "task/platform/old-100",
+          "sha": "head-100"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 101,
+        "created_at": "2026-09-21T01:00:00Z",
+        "updated_at": "2026-09-23T01:00:00Z",
+        "merged_at": "2026-09-23T01:00:00Z",
+        "head": {
+          "ref": "task/admin/57-github-metrics",
+          "sha": "head-101"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 102,
+        "created_at": "2026-09-22T01:00:00Z",
+        "updated_at": "2026-09-22T01:00:00Z",
+        "merged_at": null,
+        "head": {
+          "ref": "task/sales-xray/81-http-source-readers",
+          "sha": "head-102"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 103,
+        "created_at": "2026-09-22T01:00:00Z",
+        "updated_at": "2026-09-25T01:00:00Z",
+        "merged_at": "2026-09-25T01:00:00Z",
+        "head": {
+          "ref": "task/platform/24-r3-promote",
+          "sha": "head-103"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 104,
+        "created_at": "2026-09-23T01:00:00Z",
+        "updated_at": "2026-09-23T01:00:00Z",
+        "merged_at": null,
+        "head": {
+          "ref": "task/ui/66-shell",
+          "sha": "head-104"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 105,
+        "created_at": "2026-09-24T01:00:00Z",
+        "updated_at": "2026-09-24T01:00:00Z",
+        "merged_at": null,
+        "head": {
+          "ref": "feature/untracked-task",
+          "sha": "head-105"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 106,
+        "created_at": "2026-09-25T01:00:00Z",
+        "updated_at": "2026-09-25T01:00:00Z",
+        "merged_at": null,
+        "head": {
+          "ref": "feature/pending-checks",
+          "sha": "head-106"
+        },
+        "base": {
+          "ref": "main"
+        }
+      },
+      {
+        "number": 107,
+        "created_at": "2026-09-26T01:00:00Z",
+        "updated_at": "2026-09-26T01:00:00Z",
+        "merged_at": null,
+        "head": {
+          "ref": "feature/cancelled-suite",
+          "sha": "head-107"
+        },
+        "base": {
+          "ref": "main"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/issues?state=all&labels=bug&per_page=100": [
+    [
+      {
+        "number": 501,
+        "title": "Fictional linked bug",
+        "created_at": "2026-09-17T00:00:00Z",
+        "body": "Regression after /pull/99"
+      },
+      {
+        "number": 502,
+        "title": "Fictional fix reference",
+        "created_at": "2026-09-17T00:00:00Z",
+        "body": "Fixed by #101"
+      },
+      {
+        "number": 503,
+        "title": "Fictional hash-linked bug",
+        "created_at": "2026-09-21T00:00:00Z",
+        "body": "Regression after #100"
+      }
+    ]
+  ],
+  "repos/example/project/pulls/107": [
+    {
+      "number": 107,
+      "body": "## Dev check\nFictional cancellation fixture.",
+      "additions": 5,
+      "deletions": 5,
+      "head": {
+        "ref": "feature/cancelled-suite",
+        "sha": "head-107"
+      }
+    }
+  ],
+  "repos/example/project/pulls/107/reviews?per_page=100": [
+    [
+      {
+        "submitted_at": "2026-09-26T01:05:00Z",
+        "state": "COMMENTED",
+        "user": {
+          "login": "copilot-reviewer"
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/107/commits?per_page=100": [
+    [
+      {
+        "sha": "first-107",
+        "commit": {
+          "committer": {
+            "date": "2026-09-26T00:50:00Z"
+          }
+        }
+      },
+      {
+        "sha": "head-107",
+        "commit": {
+          "committer": {
+            "date": "2026-09-26T01:10:00Z"
+          }
+        }
+      }
+    ]
+  ],
+  "repos/example/project/pulls/107/files?per_page=100": [
+    [
+      {
+        "filename": "tests/test_cancellation.py"
+      }
+    ]
+  ],
+  "repos/example/project/issues/107/timeline?per_page=100": [
+    []
+  ],
+  "repos/example/project/commits/first-107/check-suites?per_page=100": [
+    {
+      "check_suites": [
+        {
+          "app": {
+            "slug": "claude"
+          },
+          "latest_check_runs_count": 0,
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "app": {
+            "slug": "github-actions"
+          },
+          "latest_check_runs_count": 1,
+          "status": "completed",
+          "conclusion": "cancelled"
+        }
+      ]
+    }
+  ],
+  "repos/example/project/commits/head-107/check-runs?filter=all&per_page=100": [
+    {
+      "check_runs": []
+    }
+  ],
+  "repos/example/project/commits?sha=main&since=2026-08-29T00:00:00Z&until=2026-09-28T00:00:00Z&per_page=100": [
+    [
+      {
+        "sha": "abc123456789",
+        "commit": {
+          "message": "Revert fictional change\n\nThis reverts a fictional commit.",
+          "committer": {
+            "date": "2026-09-16T00:00:00Z"
+          }
+        }
+      },
+      {
+        "sha": "old123456789",
+        "commit": {
+          "message": "Revert old fictional change",
+          "committer": {
+            "date": "2026-08-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  ]
+}
