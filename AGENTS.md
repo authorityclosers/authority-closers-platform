@@ -51,11 +51,14 @@
    `main` is the only new commit and the pull request's own diff is unchanged,
    the approval carries over; any other change needs a new review. Billing
    settings, payment settings, purchases, secrets, production data and data
-   deletion still require the owner's explicit permission.
+   deletion still require the owner's explicit permission. UI Guard may approve
+   eligible UI-only merges under ADR 0041's SHA-bound scope, checks and hold
+   rules; all other merges retain CTO review and CEO approval.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
-   deploys automatically -> the owner promotes the same build to production from
-   Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
-   between environments.
+   deploys automatically -> the same build is promoted to production. Train
+   promotions run under the owner's standing approval (ADR 0041); everything
+   else is promoted by the owner from Admin -> Releases. No laptop deploys,
+   no manual server edits, no rebuilds between environments.
 7. Use included subscriptions only. Stop on usage limits; never fall back to API
    keys or paid credits. Agents run in parallel only as far as the server's
    headroom allows (the launcher's slots).
