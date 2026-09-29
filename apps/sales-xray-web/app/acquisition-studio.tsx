@@ -12,17 +12,20 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AudioLines,
+  AlertCircle,
   ArrowRight,
+  AudioLines,
   Check,
   ChevronDown,
   Clock3,
+  Copy,
   FileAudio,
   FileText,
   FolderOpen,
   HardDrive,
   LoaderCircle,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { formatClipRange, formatClock, isPlayableRange } from "./lightbox/time";
 import {
@@ -77,7 +80,8 @@ import {
   type Submission,
   type UploadPolicy,
 } from "./acquisition-client";
-import { ProcessingVisual } from "./processing-visual";
+import { XrayWave } from "./xray-wave";
+import { PageSkeleton } from "./shell/page-skeleton";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
@@ -85,6 +89,7 @@ import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
   parseReportLanguage,
   reportLanguageLabels,
+  secondLanguageLabels,
   type ReportLanguage,
 } from "./report-language";
 import {
@@ -1998,12 +2003,20 @@ export function AcquisitionStudio({
       const entryView = (
         <div
           className={`xray-app simple-app ${styles.app}`}
-          data-theme="light"
+          data-theme={resolvedTheme}
           data-variant={variant}
           data-stage={opening ? "opening" : "recovery"}
           aria-busy={opening}
         >
           <div className="studio-main">
+            {opening ? (
+              <>
+                <p className="visually-hidden" role="status" aria-live="polite">
+                  Opening your saved call
+                </p>
+                <PageSkeleton variant="call" />
+              </>
+            ) : (
             <section
               className={`panel ${styles.processingPanel}`}
               role={opening ? "status" : "alert"}
@@ -2061,7 +2074,14 @@ export function AcquisitionStudio({
                       Start a new call
                     </button>
                     {needsSignIn && (
-                      <Link className="text-button" href="/login">
+                      <Link
+                        className="primary-button"
+                        href={`/login?next=${encodeURIComponent(
+                          activeRequestedCallId
+                            ? `/analysis/calls/${activeRequestedCallId}`
+                            : "/analysis/calls",
+                        )}`}
+                      >
                         Sign in to recover it
                       </Link>
                     )}
@@ -2110,6 +2130,7 @@ export function AcquisitionStudio({
                 )}
               </div>
             </section>
+            )}
           </div>
         </div>
       );
@@ -2118,6 +2139,7 @@ export function AcquisitionStudio({
         <AcquisitionShell
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
+          loading={opening && access?.authenticated !== true}
           homeHref={homeHref}
           mobileFit
           allowance={allowance}
@@ -2168,9 +2190,9 @@ export function AcquisitionStudio({
     const content = (
       <div
         className={`xray-app simple-app ${styles.app}`}
-        // Only the upload stage follows the app theme so far; processing and
-        // report keep their light surfaces until their own theme pass.
-        data-theme={studioStage === "upload" ? resolvedTheme : "light"}
+        // Upload, uploading and processing follow the app theme; the report
+        // keeps its light surface until its own theme pass.
+        data-theme={studioStage === "report" ? "light" : resolvedTheme}
         data-variant={variant}
         data-stage={studioStage}
         data-selected={displayFileSelected ? "true" : "false"}
@@ -2344,17 +2366,39 @@ export function AcquisitionStudio({
           {savedCallRecovery}
           {visibleError && !savedCallNeedsSession && (
             <div className={`notice error ${styles.error}`} role="alert">
+              <div className={styles.errorHead}>
+                <AlertCircle
+                  size={18}
+                  aria-hidden="true"
+                  className={styles.errorIcon}
+                />
+                <p className={styles.errorTitle}>
+                  {errorTitle(visibleError, Boolean(statusIssue && !error))}
+                </p>
+                {error ? (
+                  <button
+                    type="button"
+                    className={styles.errorClose}
+                    aria-label="Dismiss"
+                    onClick={() => setError("")}
+                  >
+                    <X size={15} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
               {statusIssue && !error && (
                 <p>
                   Status could not be refreshed. This does not mean analysis
                   failed.
                 </p>
               )}
-              <p>
-                {visibleError instanceof AcquisitionError
-                  ? visibleError.message
-                  : visibleError}
-              </p>
+              <ErrorMessage
+                message={
+                  visibleError instanceof AcquisitionError
+                    ? visibleError.message
+                    : String(visibleError)
+                }
+              />
               <div className={styles.errorActions}>
                 <button
                   className="secondary-button"
@@ -2411,7 +2455,7 @@ export function AcquisitionStudio({
             </div>
           )}
           <div
-            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
+            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
             <div className={styles.primaryColumn}>
               {studioStage === "upload" && !embedded ? (
@@ -2539,7 +2583,7 @@ export function AcquisitionStudio({
                     role="status"
                     aria-live="polite"
                   >
-                    <ProcessingVisual phase="upload" paused={false} />
+                    <XrayWave mode="scanning" legend={false} />
                     <div className={styles.progressCopy}>
                       <p className={styles.progressKicker}>
                         UPLOAD IN PROGRESS
@@ -2828,10 +2872,26 @@ export function AcquisitionStudio({
                           <label htmlFor="report-language">
                             Report language
                           </label>
+                          <div className={styles.languagePair}>
+                          <span className={styles.languageFixed}>
+                            <Check size={13} aria-hidden="true" />
+                            English
+                          </span>
+                          <span
+                            className={styles.languagePlus}
+                            aria-hidden="true"
+                          >
+                            +
+                          </span>
                           <select
                             id="report-language"
+                            aria-describedby="report-language-help"
                             value={displayReportLanguage ?? ""}
-                            disabled={!!busy || reviewSelectionActive}
+                            disabled={
+                              !!busy ||
+                              reviewSelectionActive ||
+                              entry.report_languages.length < 2
+                            }
                             onChange={(event) => {
                               const selected = parseReportLanguage(
                                 event.target.value,
@@ -2859,14 +2919,15 @@ export function AcquisitionStudio({
                               )}
                             {entry.report_languages.map((language) => (
                               <option key={language} value={language}>
-                                {reportLanguageLabels[language]}
+                                {secondLanguageLabels[language]}
                               </option>
                             ))}
                           </select>
-                          <p>
-                            Hindi and Marathi use Devanagari with natural
-                            English sales terms. Original transcript quotes stay
-                            unchanged.
+                          </div>
+                          <p id="report-language-help">
+                            {entry.report_languages.length > 1
+                              ? "A second language is written in Devanagari with familiar English sales terms. Quotes stay as spoken; the call’s own language is detected automatically."
+                              : "The call’s spoken language is detected automatically. Second report languages appear here once enabled."}
                           </p>
                         </div>
                       )}
@@ -3215,7 +3276,8 @@ export function AcquisitionStudio({
                 !report &&
                 !deletionOnlyId && <CallsLibrary preview />}
             </div>
-            {(embedded || stagedFiles.length >= 2) &&
+            {/* The standalone sheet's inspector replaces the guide rail. */}
+            {embedded &&
               !report &&
               !deletionOnlyId &&
               !submission && (
@@ -3434,4 +3496,44 @@ export function AcquisitionStudio({
       </AcquisitionShell>
     );
   }
+}
+
+function errorTitle(error: unknown, statusOnly: boolean) {
+  if (statusOnly) return "Status not refreshed";
+  if (error instanceof AcquisitionError) {
+    if (error.status === 401) return "You’re signed out";
+    if (error.status === 403) return "Access needs a check";
+    if (error.status === 404) return "Call not found";
+    if (error.status === 429) return "One moment";
+  }
+  return "That didn’t go through";
+}
+
+/** The message, with any request reference as a small copyable chip. */
+function ErrorMessage({ message }: { message: string }) {
+  const [copied, setCopied] = useState(false);
+  const match = /\s*Request reference: ([^\s]+?)\.?$/.exec(message);
+  const text = match ? message.slice(0, match.index) : message;
+  const reference = match?.[1];
+  return (
+    <>
+      <p className={styles.errorText}>{text}</p>
+      {reference ? (
+        <button
+          type="button"
+          className={styles.errorRef}
+          title={`Request reference: ${reference}`}
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(reference)
+              .then(() => setCopied(true))
+              .catch(() => {});
+          }}
+        >
+          <Copy size={12} aria-hidden="true" />
+          {copied ? "Reference copied" : `Ref ${reference.slice(0, 8)}`}
+        </button>
+      ) : null}
+    </>
+  );
 }

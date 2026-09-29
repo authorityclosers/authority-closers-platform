@@ -1,11 +1,19 @@
 "use client";
 
 import {
+  ArrowUpRight,
   ChevronDown,
+  FileText,
   FolderOpen,
   LogOut,
   Mail,
+  Monitor,
+  Moon,
   MoreHorizontal,
+  Palette,
+  Settings,
+  ShieldCheck,
+  Sun,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,7 +25,9 @@ import {
 } from "./account-navigation";
 import { invalidateShellProfile, useShellProfile } from "./shell/profile-store";
 import { useUploadSession } from "./hooks/upload-session";
-import { ThemeControl } from "./lightbox/theme-provider";
+import { parseThemePreference } from "./lightbox/theme";
+import { useTheme } from "./lightbox/theme-provider";
+import { openSettings, opensInPlace } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
 
@@ -46,6 +56,43 @@ function getFirstName(name: string | null, email: string | null): string {
     if (prefix) return prefix;
   }
   return "Account";
+}
+
+const THEME_CHOICES = [
+  { value: "system", label: "System", Icon: Monitor },
+  { value: "light", label: "Light", Icon: Sun },
+  { value: "dark", label: "Dark", Icon: Moon },
+] as const;
+
+/** One compact row: the label, then three icon choices (native radios). */
+function ThemeRow() {
+  const theme = useTheme();
+  if (!theme) return null;
+  return (
+    <fieldset className={styles.themeRow}>
+      <legend className={styles.themeLegend}>
+        <Palette size={16} aria-hidden="true" />
+        Theme
+      </legend>
+      <div className={styles.themeTrack}>
+        {THEME_CHOICES.map(({ value, label, Icon }) => (
+          <label key={value} className={styles.themeOption} title={label}>
+            <input
+              type="radio"
+              name="sales-xray-menu-theme"
+              value={value}
+              aria-label={label}
+              checked={theme.preference === value}
+              onChange={(event) =>
+                theme.setPreference(parseThemePreference(event.target.value))
+              }
+            />
+            <Icon size={15} aria-hidden="true" />
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
 }
 
 export function ProfileMenu({
@@ -243,10 +290,21 @@ export function ProfileMenu({
               <Link
                 href={accountHref}
                 className={styles.item}
-                onClick={() => setOpen(false)}
+                onClick={(event) => {
+                  setOpen(false);
+                  // Settings float over the current screen, except on /account.
+                  if (
+                    accountHref === "/account" &&
+                    window.location.pathname !== "/account" &&
+                    opensInPlace(event)
+                  ) {
+                    event.preventDefault();
+                    openSettings();
+                  }
+                }}
               >
-                <User size={16} aria-hidden="true" />
-                <span>Account</span>
+                <Settings size={16} aria-hidden="true" />
+                <span>Settings</span>
               </Link>
             ) : access?.requestAccountSignIn ? (
               <button
@@ -278,28 +336,11 @@ export function ProfileMenu({
               <FolderOpen size={16} aria-hidden="true" />
               <span>Calls</span>
             </Link>
+            <ThemeRow />
           </div>
-          <ThemeControl />
           <div className={styles.separator} role="separator" />
+          <p className={styles.groupLabel}>Help</p>
           <div className={styles.actions}>
-            <a
-              href="https://app.authorityclosers.com/privacy"
-              target="_blank"
-              rel="noreferrer"
-              className={styles.item}
-              onClick={() => setOpen(false)}
-            >
-              <span>Privacy</span>
-            </a>
-            <a
-              href="https://app.authorityclosers.com/terms"
-              target="_blank"
-              rel="noreferrer"
-              className={styles.item}
-              onClick={() => setOpen(false)}
-            >
-              <span>Terms</span>
-            </a>
             <a
               href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help"
               className={styles.item}
@@ -308,6 +349,36 @@ export function ProfileMenu({
               <Mail size={16} aria-hidden="true" />
               <span>Email the AC team</span>
             </a>
+            <a
+              href="https://app.authorityclosers.com/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <ShieldCheck size={16} aria-hidden="true" />
+              <span>Privacy</span>
+              <ArrowUpRight
+                size={14}
+                aria-hidden="true"
+                className={styles.external}
+              />
+            </a>
+            <a
+              href="https://app.authorityclosers.com/terms"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <FileText size={16} aria-hidden="true" />
+              <span>Terms</span>
+              <ArrowUpRight
+                size={14}
+                aria-hidden="true"
+                className={styles.external}
+              />
+            </a>
           </div>
           {authenticated ? (
             <>
@@ -315,7 +386,7 @@ export function ProfileMenu({
               <div className={styles.actions}>
                 <button
                   type="button"
-                  className={styles.item}
+                  className={`${styles.item} ${styles.signOut}`}
                   disabled={signingOut}
                   onClick={() => void signOut()}
                 >

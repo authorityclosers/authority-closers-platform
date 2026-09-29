@@ -1647,9 +1647,10 @@ it("keeps the next staged file ready after starting another call", async () => {
   );
   await flush();
   expect(container.textContent).toContain("2 files added");
+  // The standalone sheet's inspector replaces the guide rail, even for queues.
   expect(
     container.querySelector('[aria-label="Added files and next steps"]'),
-  ).not.toBeNull();
+  ).toBeNull();
   expect(container.textContent).toContain(
     "Discovery.wav selected for analysis",
   );

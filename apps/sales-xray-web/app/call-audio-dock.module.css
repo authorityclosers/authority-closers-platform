@@ -307,3 +307,64 @@
     display: none;
   }
 }
+
+/* ---------- A floating glass island ----------
+   Pinned to the bottom of the content area (sticky, not fixed), so it always
+   sits beside the sidebar at any width, collapsed or open. */
+.dock.dock:not([data-embedded="true"]) {
+  position: sticky;
+  top: auto;
+  right: auto;
+  bottom: 16px;
+  left: auto;
+  width: min(100% - 32px, 1040px);
+  min-height: 60px;
+  margin: 18px auto 0;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid color-mix(in srgb, var(--lx-line-strong) 55%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--lx-surface) 70%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(20px);
+  backdrop-filter: saturate(1.8) blur(20px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--lx-surface) 80%, transparent),
+    0 18px 40px -22px color-mix(in srgb, var(--lx-film) 55%, transparent),
+    0 2px 8px -4px color-mix(in srgb, var(--lx-film) 20%, transparent);
+  animation: island-in var(--lx-dur-develop) var(--lx-ease-move) both;
+}
+@media (min-width: 900px) {
+  :global([data-sidebar-collapsed]) .dock.dock:not([data-embedded="true"]) {
+    left: auto;
+  }
+}
+@media (max-width: 899.98px) {
+  :global([data-sidebar-collapsed]) .dock.dock:not([data-embedded="true"]) {
+    bottom: calc(var(--lx-bottom-nav-h, 76px) + 10px);
+    padding-bottom: 8px;
+  }
+}
+.dock.dock .play {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  background: var(--lx-gradient-primary);
+  box-shadow: var(--lx-shadow-cta);
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.dock.dock .play:hover {
+  transform: scale(1.06);
+}
+.dock.dock .play:active {
+  transform: scale(0.96);
+}
+@keyframes island-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock.dock:not([data-embedded="true"]) {
+    animation: none;
+  }
+}

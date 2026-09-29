@@ -1,0 +1,124 @@
+.wrap {
+  display: grid;
+  min-height: 60dvh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  padding: 28px 24px 22px;
+  border: 1px solid var(--lx-line);
+  border-radius: 20px;
+  background: var(--lx-surface);
+  box-shadow: 0 18px 48px rgb(15 27 51 / 12%);
+  text-align: center;
+  animation: rise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.art {
+  width: 56px;
+  height: 56px;
+}
+
+.ring {
+  fill: var(--lx-teal-soft);
+}
+
+.wave {
+  fill: none;
+  stroke: var(--lx-teal);
+  stroke-linecap: round;
+  stroke-width: 3;
+  stroke-dasharray: 40;
+  animation: draw 1.6s ease-in-out infinite alternate;
+}
+
+.card h1 {
+  margin: 4px 0 0;
+  color: var(--lx-ink);
+  font-family: var(--lx-font-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.card p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--lx-ink);
+  color: var(--lx-surface);
+}
+
+.secondary {
+  border-color: var(--lx-line-strong);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.card .ref {
+  margin-top: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .wave {
+    animation: none;
+  }
+}
