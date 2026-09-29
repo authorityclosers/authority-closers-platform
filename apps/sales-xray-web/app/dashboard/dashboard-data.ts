@@ -15,7 +15,6 @@ import {
   type Allowance,
   type LibrarySubmission,
 } from "../acquisition-client";
-import { callTone } from "../calls-library";
 import { ReportContractError } from "../report-contract";
 
 /** Mirrors the Calls list status families (`callTone` in calls-library). */
@@ -65,11 +64,7 @@ function exactKeys(
 export function parseCallSummary(value: unknown): CallSummary {
   const item = record(value);
   const code = "dashboard_summary";
-  exactKeys(
-    item,
-    ["total", "processing", "completed", "needs_attention"],
-    code,
-  );
+  exactKeys(item, ["total", "processing", "completed", "needs_attention"], code);
   const summary = {
     total: count(item.total, code),
     processing: count(item.processing, code),
@@ -145,57 +140,8 @@ async function servedRead<T>(
   }
 }
 
-/** The Calls list pages (20 calls each) the fallback count reads at most. */
-const LIBRARY_COUNT_PAGE_LIMIT = 50;
-
-/**
- * Until `/submissions/summary` is deployed, count the whole Calls list with the
- * same status families as its filters (`callTone`). A list longer than the page
- * limit reads as null (not available) rather than an undercount.
- */
-async function countLibrary(signal?: AbortSignal): Promise<CallSummary | null> {
-  const code = "dashboard_summary";
-  const summary: CallSummary = {
-    total: 0,
-    processing: 0,
-    completed: 0,
-    needsAttention: 0,
-  };
-  const seen = new Set<string>();
-  let before: string | null = null;
-  for (let page = 0; page < LIBRARY_COUNT_PAGE_LIMIT; page += 1) {
-    const result = parseSubmissionLibraryPage(
-      await acquisition(
-        before === null
-          ? "/submissions"
-          : `/submissions?before=${encodeURIComponent(before)}`,
-        { signal },
-      ),
-    );
-    for (const submission of result.submissions) {
-      if (seen.has(submission.id)) throw new ReportContractError(code);
-      seen.add(submission.id);
-      summary.total += 1;
-      const tone = callTone(submission);
-      if (tone === "ready") summary.completed += 1;
-      else if (tone === "active") summary.processing += 1;
-      else if (tone === "attention") summary.needsAttention += 1;
-    }
-    if (result.nextCursor === null) return summary;
-    if (result.nextCursor === before) throw new ReportContractError(code);
-    before = result.nextCursor;
-  }
-  return null;
-}
-
-export async function readCallSummary(
-  signal?: AbortSignal,
-): Promise<CallSummary | null> {
-  return (
-    (await servedRead("/submissions/summary", parseCallSummary, signal)) ??
-    countLibrary(signal)
-  );
-}
+export const readCallSummary = (signal?: AbortSignal) =>
+  servedRead("/submissions/summary", parseCallSummary, signal);
 
 export const readCallActivity = (signal?: AbortSignal) =>
   servedRead("/activity", parseCallActivity, signal);

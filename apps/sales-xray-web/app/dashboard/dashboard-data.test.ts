@@ -60,78 +60,9 @@ describe("dashboard summary", () => {
     expect(() => parseCallSummary(value)).toThrow();
   });
 
-  it("counts the whole Calls list while the summary route is not deployed", async () => {
-    const row = (index: number, state: string, has_report = false) => ({
-      submission_id: `00000000-0000-4000-8000-00000000000${index}`,
-      created_at: "2026-09-29T08:00:00Z",
-      duration_seconds: 600,
-      state,
-      has_report,
-    });
-    const cursor = "00000000-0000-4000-8000-000000000002";
-    const bodies = [
-      [422, { detail: "not a call id" }],
-      [
-        200,
-        {
-          submissions: [row(1, "completed", true), row(2, "processing")],
-          next_cursor: cursor,
-        },
-      ],
-      [
-        200,
-        {
-          submissions: [row(3, "failed"), row(4, "awaiting_upload")],
-          next_cursor: null,
-        },
-      ],
-    ] as const;
-    const fetch = vi.fn();
-    for (const [status, body] of bodies)
-      fetch.mockResolvedValueOnce(
-        new Response(JSON.stringify(body), { status }),
-      );
-    vi.stubGlobal("fetch", fetch);
-    await expect(readCallSummary()).resolves.toEqual({
-      total: 4,
-      processing: 1,
-      completed: 1,
-      needsAttention: 1,
-    });
-    expect(fetch.mock.calls.map((call) => call[0])).toEqual([
-      "/v1/conversation/acquisition/submissions/summary",
-      "/v1/conversation/acquisition/submissions",
-      `/v1/conversation/acquisition/submissions?before=${cursor}`,
-    ]);
-  });
-
-  it("reads null rather than an undercount for a very long Calls list", async () => {
-    let page = 0;
-    const fetch = vi.fn().mockImplementation(async () => {
-      if (page === 0) {
-        page += 1;
-        return new Response("{}", { status: 404 });
-      }
-      const id = (n: number) =>
-        `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-      const body = {
-        submissions: [
-          {
-            submission_id: id(page),
-            created_at: "2026-09-29T08:00:00Z",
-            duration_seconds: 600,
-            state: "active",
-            has_report: false,
-          },
-        ],
-        next_cursor: id(page),
-      };
-      page += 1;
-      return new Response(JSON.stringify(body), { status: 200 });
-    });
-    vi.stubGlobal("fetch", fetch);
+  it("reads null while the summary route is not deployed", async () => {
+    respond(422, { detail: "not a call id" });
     await expect(readCallSummary()).resolves.toBeNull();
-    expect(fetch).toHaveBeenCalledTimes(51);
   });
 
   it("reads the live summary from the acquisition namespace", async () => {
