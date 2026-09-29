@@ -6,7 +6,7 @@ from importlib import resources
 
 FIXTURE_PACKAGE = "ac_platform.conversation_intelligence"
 FIXTURE_PATH = "canary_fixture/sales_call_v1.wav"
-FIXTURE_SHA256 = "454a0353808b53e6535d949781006b49b036f43b8d225db1ec88d46c7996939f"
+FIXTURE_SHA256 = "78cb1194e987db6b8d06d0aa2a4d2e66d21bbdf0c3de6960e4e26da36ed207af"
 MAX_FIXTURE_BYTES = 2_000_000
 
 
