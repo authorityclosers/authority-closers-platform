@@ -88,7 +88,9 @@ def validate_gh_command(command):
     if command[:2] != ["gh", "api"]:
         raise ValueError("GitHub reads must use gh api")
     for i, arg in enumerate(command):
-        if arg in ("-f", "-F", "--input") or arg.startswith(("-f", "-F", "--input=")):
+        if arg in ("-f", "-F", "--field", "--raw-field", "--input") or arg.startswith(
+            ("-f", "-F", "--field=", "--raw-field=", "--input=")
+        ):
             raise ValueError("agent scorecard permits read-only gh api calls")
         if arg in ("-X", "--method") and (i + 1 == len(command) or command[i + 1].upper() != "GET"):
             raise ValueError("agent scorecard permits GET requests only")
@@ -175,9 +177,10 @@ def github_data(repo, start, end, owner=None):
         reviewed_at = timestamp(first_review.get("submitted_at"))
         owner_reviews = [r for r in reviews if owner and (r.get("user") or {}).get("login", "").lower() == owner.lower()
                          and in_window(r.get("submitted_at"), start, end)]
-        pushes = sum(e.get("event") == "committed" and reviewed_at is not None
-                     and (t := timestamp(e.get("created_at"))) is not None and reviewed_at < t
-                     and start <= t < end for e in timeline)
+        pushes = sum(e.get("event") == "committed" and len(e.get("parents") or []) <= 1
+                     and reviewed_at is not None
+                     and (t := timestamp((e.get("committer") or {}).get("date"))) is not None
+                     and reviewed_at < t and start <= t < end for e in timeline)
         force = next((e for e in timeline if e.get("event") == "head_ref_force_pushed"), {})
         first_sha = (force.get("before_commit") or {}).get("sha")
         if not first_sha:
@@ -186,31 +189,37 @@ def github_data(repo, start, end, owner=None):
             prior = [(t, sha) for t, sha in dated if t is not None and t <= (timestamp(created) or start)]
             first_sha = max(prior)[1] if prior else (details.get("head") or {}).get("sha")
         suites = gh_list(f"repos/{repo}/commits/{first_sha}/check-suites?per_page=100", "check_suites") if first_sha else []
-        suite = min(suites, key=lambda s: timestamp(s.get("created_at")) or 0) if suites else {}
+        actions_suites = [s for s in suites if (s.get("app") or {}).get("slug") == "github-actions"
+                          and (s.get("latest_check_runs_count") or 0) > 0]
+        first_try_ci = (next((s.get("conclusion") for s in actions_suites
+                              if s.get("conclusion") not in ("success", "neutral", "skipped")), "success")
+                        if actions_suites and all(s.get("status") == "completed" for s in actions_suites) else None)
         head = (details.get("head") or {}).get("sha")
-        checks = gh_list(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs") if head else []
+        checks = gh_list(f"repos/{repo}/commits/{head}/check-runs?filter=all&per_page=100", "check_runs") if head else []
         gate = [c for c in checks if c.get("name") == "single-track"
                 and c.get("conclusion") in ("failure", "timed_out", "startup_failure")
                 and in_window(c.get("completed_at"), start, end)]
         test_file = any(re.search(r"(^|/)(tests?|__tests__)(/|$)|(^|/)(test_[^/]+|[^/]+\.(test|spec)\.)",
                                   f.get("filename", "")) for f in files)
         result.append({**event,
-                       "first_try_ci": suite.get("conclusion") if suite.get("completed_at") else None,
-                       "first_try_at": suite.get("completed_at"), "rework_pushes": pushes,
+                       "first_try_ci": first_try_ci, "rework_pushes": pushes,
                        "owner_changes": len(owner_reviews) if owner else None,
                        "owner_change_requests": [r for r in owner_reviews if r.get("state") == "CHANGES_REQUESTED"],
                        "changed_lines": (details.get("additions") or 0) + (details.get("deletions") or 0),
-                       "evidence_missing": "how to check on dev" not in (details.get("body") or "").lower() or not test_file,
+                       "evidence_missing": not any("check" in line.lower() and "dev" in line.lower()
+                                                    for line in (details.get("body") or "").splitlines()) or not test_file,
                        "gate_failures": gate})
     cutoff = end - 30 * 86400
     bugs = []
     for issue in gh_list(f"repos/{repo}/issues?state=all&labels=bug&per_page=100"):
         if issue.get("pull_request"):
             continue
-        events = gh_list(f"repos/{repo}/issues/{issue['number']}/timeline?per_page=100")
-        linked = [e.get("source", {}).get("issue", {}) for e in events if e.get("event") == "cross-referenced"]
-        merged = [p for p in pulls if timestamp(p.get("merged_at")) and cutoff <= timestamp(p["merged_at"]) < end
-                  and any(x.get("number") == p.get("number") and x.get("pull_request") for x in linked)]
+        refs = {int(n) for pair in re.findall(r"#(\d+)|/pull/(\d+)", issue.get("body") or "", re.I)
+                for n in pair if n}
+        created_at = timestamp(issue.get("created_at"))
+        merged = [p for p in pulls if p.get("number") in refs and timestamp(p.get("merged_at")) is not None
+                  and cutoff <= timestamp(p["merged_at"]) < end and created_at is not None
+                  and timestamp(p["merged_at"]) < created_at < end]
         if merged:
             pr = max(merged, key=lambda p: timestamp(p["merged_at"]))
             bugs.append({"issue": issue["number"], "title": issue.get("title", ""),
@@ -246,7 +255,7 @@ def github_metrics(data, start, end):
             if source.get("owner_login"):
                 m["owner"] += p.get("owner_changes") or 0
             if created:
-                ci = p.get("first_try_ci") if in_window(p.get("first_try_at"), start, end) else None
+                ci = p.get("first_try_ci")
                 if ci:
                     m["total"] += 1
                     m["pass"] += ci == "success"
@@ -361,12 +370,13 @@ def build_report(data, monday, start, end):
     groups = set(names) | set(done_by) | set(bounces)
     groups.update(run["agentId"] for run in week_runs if run.get("agentId"))
     gh_metrics = github_metrics(data, start, end)
-    groups.update(lane_agent(p.get("branch", "")) for p in (data.get("github") or {}).get("pull_requests", []))
-    groups.discard(None)
+    lane_names = {lane_agent(p.get("branch", "")) for p in (data.get("github") or {}).get("pull_requests", [])} - {None}
+    groups.update(next((key for key, value in names.items() if value == name), f"__lane__:{name}")
+                  for name in lane_names)
     company_key = "__company__"
 
     def label(group):
-        return group if group in LANE_AGENTS.values() else names.get(group, "Unassigned")
+        return group[9:] if group.startswith("__lane__:") else names.get(group, "Unassigned")
 
     def metrics(group):
         selected = relevant if group == company_key else done_by.get(group, set())
@@ -417,7 +427,7 @@ def build_report(data, monday, start, end):
     for p in github.get("pull_requests", []):
         agent, pr = lane_agent(p.get("branch", "")) or "Company", f"PR #{p.get('number', 'n/a')}"
         ci = p.get("first_try_ci")
-        if in_window(p.get("first_try_at"), start, end) and ci and ci not in ("success", "neutral", "skipped"):
+        if in_window(p.get("created_at"), start, end) and ci and ci not in ("success", "neutral", "skipped"):
             failures.append((agent, pr, f"first-try CI {ci}"))
         failures.extend((agent, pr, "owner changes requested") for _ in p.get("owner_change_requests", []))
     failures.extend((b.get("lane") or "Company", f"Issue #{b.get('issue', 'n/a')}",
@@ -503,7 +513,7 @@ def main(argv=None):
                                      os.environ.get("AC_SCORECARD_OWNER_GITHUB_LOGIN"))
         print(render_report(build_report(data, monday, start, end)), end="")
     except (ValueError, RuntimeError) as exc:
-        print(str(exc) if isinstance(exc, ValueError) else "Paperclip read failed", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
         return 2
     return 0
 

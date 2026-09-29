@@ -122,16 +122,28 @@ def test_get_only_and_missing_env_names_only(monkeypatch, capsys):
     ] == ["--method", "GET"]
 
 
-def github_report(owner=True):
+def github_report(monkeypatch, owner=True):
     source = json.loads(FIXTURE.read_text())
-    source["github"] = json.loads(GITHUB_FIXTURE.read_text())
-    source["github"]["owner_login"] = "fictional-owner" if owner else None
-    return scorecard.build_report(source, *scorecard.week_window("2026-09-21"))
+    responses = json.loads(GITHUB_FIXTURE.read_text())
+
+    def fake_gh_api(path, paginate=False):
+        assert path in responses, f"unexpected GitHub request: {path}"
+        return responses[path] if paginate else responses[path][0]
+
+    monkeypatch.setattr(scorecard, "gh_api", fake_gh_api)
+    monday, start, end = scorecard.week_window("2026-09-21")
+    source["github"] = scorecard.github_data(
+        "example/project", start, end, "fictional-owner" if owner else None
+    )
+    return scorecard.build_report(source, monday, start, end)
 
 
-def test_github_metrics_use_task_branch_attribution_and_company_totals():
-    result = github_report()
+def test_github_metrics_use_raw_api_data_and_task_branch_attribution(monkeypatch):
+    result = github_report(monkeypatch)
+    labels = [label for label, _ in result["rows"]]
+    assert len(labels) == len(set(labels))
     rows = dict(result["rows"])
+    assert rows["Software Engineer"]["done"] == 0
     admin, lead, platform, company = (
         rows[x]["github"]
         for x in ("Software Engineer", "Lead Engineer", "Platform Engineer", "Company")
@@ -154,21 +166,30 @@ def test_github_metrics_use_task_branch_attribution_and_company_totals():
     assert (admin["rework"], lead["rework"], platform["rework"], company["rework"]) == (2, 1, 0, 7)
     assert (admin["owner"], platform["owner"], company["owner"]) == (2, 1, 4)
     assert (admin["scope"], platform["scope"], admin["evidence"], admin["gate"]) == (1, 0, 1, 1)
-    assert (admin["bugs"], company["bugs"]) == (1, 2)
+    assert (admin["bugs"], platform["bugs"], company["bugs"]) == (1, 1, 3)
     assert "UI Engineer" not in rows
     assert scorecard.github_cells(company)[:3] == ["2.50d", "3.00d", "40.0% (2/5)"]
     assert "PR cycle median" in scorecard.render_report(result)
     assert any("first-try CI" in alert and "<70%" in alert for alert in result["alerts"])
-    assert "n/a (owner unset)" in scorecard.render_report(github_report(owner=False))
+    assert "n/a (owner unset)" in scorecard.render_report(github_report(monkeypatch, owner=False))
+    assert any(
+        path.endswith("check-runs?filter=all&per_page=100")
+        for path in json.loads(GITHUB_FIXTURE.read_text())
+    )
 
 
-def test_github_failures_list_first_ci_owner_request_and_recent_bugs():
-    failures = github_report()["failures"]
+def test_github_failures_list_first_ci_owner_request_and_post_merge_bugs(monkeypatch):
+    failures = github_report(monkeypatch)["failures"]
     assert ("Software Engineer", "PR #101", "first-try CI failure") in failures
     assert ("Platform Engineer", "PR #103", "first-try CI failure") in failures
     assert ("Company", "PR #105", "first-try CI timed_out") in failures
     assert ("Software Engineer", "PR #101", "owner changes requested") in failures
     assert ("Software Engineer", "Issue #501", "post-merge bug: Fictional linked bug") in failures
+    assert (
+        "Platform Engineer",
+        "Issue #503",
+        "post-merge bug: Fictional hash-linked bug",
+    ) in failures
     assert ("Company", "Commit abc1234", "post-merge bug: Revert fictional change") in failures
     assert not any("#502" in item[1] or "old1234" in item[1] for item in failures)
 
@@ -180,6 +201,10 @@ def test_github_get_guard_rejects_write_methods_and_bodies():
         ("--method=DELETE",),
         ("-f", "state=closed"),
         ("-F", "body=@file"),
+        ("--field", "state=closed"),
+        ("--field=state",),
+        ("--raw-field", "body=@file"),
+        ("--raw-field=body",),
         ("--input", "body.json"),
     ):
         with pytest.raises(ValueError):
