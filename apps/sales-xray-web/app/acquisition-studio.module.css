@@ -4081,3 +4081,53 @@ a.overviewCard:hover {
 .app.app[data-stage="report"] .reportAbout a {
   color: var(--lx-teal);
 }
+
+/* Report header, final: title and ⋯ on one row; the call map spans below. */
+.app.app[data-stage="report"] .reportHeader {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "heading actions"
+    "visual visual";
+  row-gap: 14px;
+}
+.app.app[data-stage="report"] .reportHeading {
+  grid-area: heading;
+}
+.app.app[data-stage="report"] .reportActions {
+  grid-area: actions;
+  align-self: start;
+}
+.app.app[data-stage="report"] .reportVisual {
+  grid-area: visual;
+  max-width: none;
+  margin-top: 0;
+  justify-self: stretch;
+}
+.app.app[data-stage="report"] .reportTitleRow {
+  flex-wrap: wrap;
+}
+
+/* Report rhythm: title, then 18px to the call map, then 28px to the report.
+   The map spans the same column as the report text below it. */
+.app.app[data-stage="report"] .reportHeader {
+  row-gap: 18px;
+  margin-bottom: 28px;
+  padding-top: clamp(10px, 2vh, 20px);
+}
+.app.app[data-stage="report"] .reportMetadata {
+  margin-top: 4px;
+}
+.app.app[data-stage="report"] .reportActions {
+  margin-top: 2px;
+}
+
+/* Dark app: the report stays a light document (tokens.css), shown as a sheet
+   with its own paper ground rather than letting the dark app show through. */
+:global(:root[data-theme="dark"])
+  .app.app[data-stage="report"]
+  .report:global(.studio-report) {
+  padding: clamp(16px, 2.4vw, 28px) clamp(16px, 2.4vw, 32px) 8px;
+  border-radius: 20px;
+  background: var(--lx-paper);
+  box-shadow: 0 24px 60px -32px rgb(0 0 0 / 0.6);
+}

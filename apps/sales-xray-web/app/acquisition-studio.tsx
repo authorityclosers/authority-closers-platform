@@ -1768,6 +1768,20 @@ export function AcquisitionStudio({
     seekTo(evidence);
   }
 
+  /** Plays the whole recording on from a chosen time (the call map). */
+  function playFrom(ms: number) {
+    if (!audio.current || !result) return;
+    setMoment(null);
+    audio.current.currentTime = Math.max(0, ms) / 1000;
+    void audio.current
+      .play()
+      .catch(() =>
+        setPlaybackMessage(
+          "Press play in the audio controls to hear this moment.",
+        ),
+      );
+  }
+
   /** A plain transcript seek: always starts the chosen segment. */
   function seekTo(evidence: ReportEvidence) {
     if (!audio.current || !result) return;
@@ -2019,119 +2033,119 @@ export function AcquisitionStudio({
                 <PageSkeleton variant="call" />
               </>
             ) : (
-            <section
-              className={`panel ${styles.processingPanel}`}
-              role={opening ? "status" : "alert"}
-              aria-live="polite"
-              aria-labelledby="existing-call-entry-heading"
-            >
-              {opening ? (
-                <LoaderCircle size={24} aria-hidden="true" />
-              ) : (
-                <FileText size={24} aria-hidden="true" />
-              )}
-              <div className={styles.progressCopy}>
-                <p className={styles.progressKicker}>SAVED CALL</p>
-                <h1 id="existing-call-entry-heading">
-                  {opening
-                    ? "Opening your saved call"
-                    : deletionOnlyId
-                      ? "Saved call unavailable"
-                      : "Could not open your saved call"}
-                </h1>
-                <p>
-                  {opening
-                    ? "Checking your access and loading the saved call…"
-                    : failedMessage}
-                </p>
-                {!opening && (
-                  <div className={styles.errorActions}>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() => {
-                        setError("");
-                        setStatusIssue("");
-                        if (activeRequestedCallId)
-                          setExistingCallEntry({
-                            submissionId: activeRequestedCallId,
-                            state: "opening",
-                          });
-                        if (submission) {
-                          setConsentedSubmissionId(null);
-                          setPollAttempt((n) => n + 1);
-                        } else setAttempt((n) => n + 1);
-                      }}
-                    >
-                      Check again
-                    </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={startAnotherCall}
-                    >
-                      <ArrowRight size={16} aria-hidden="true" />
-                      Start a new call
-                    </button>
-                    {needsSignIn && (
-                      <Link
-                        className="primary-button"
-                        href={`/login?next=${encodeURIComponent(
-                          activeRequestedCallId
-                            ? `/analysis/calls/${activeRequestedCallId}`
-                            : "/analysis/calls",
-                        )}`}
-                      >
-                        Sign in to recover it
-                      </Link>
-                    )}
-                  </div>
+              <section
+                className={`panel ${styles.processingPanel}`}
+                role={opening ? "status" : "alert"}
+                aria-live="polite"
+                aria-labelledby="existing-call-entry-heading"
+              >
+                {opening ? (
+                  <LoaderCircle size={24} aria-hidden="true" />
+                ) : (
+                  <FileText size={24} aria-hidden="true" />
                 )}
-                {!opening && deletionOnlyId && (
-                  <div className={styles.errorActions}>
-                    {!deleteConfirm ? (
+                <div className={styles.progressCopy}>
+                  <p className={styles.progressKicker}>SAVED CALL</p>
+                  <h1 id="existing-call-entry-heading">
+                    {opening
+                      ? "Opening your saved call"
+                      : deletionOnlyId
+                        ? "Saved call unavailable"
+                        : "Could not open your saved call"}
+                  </h1>
+                  <p>
+                    {opening
+                      ? "Checking your access and loading the saved call…"
+                      : failedMessage}
+                  </p>
+                  {!opening && (
+                    <div className={styles.errorActions}>
                       <button
-                        className="text-button"
+                        className="secondary-button"
                         type="button"
-                        disabled={!!busy || analysisWriteBlocked}
-                        onClick={() => setDeleteConfirm(true)}
+                        disabled={!!busy}
+                        onClick={() => {
+                          setError("");
+                          setStatusIssue("");
+                          if (activeRequestedCallId)
+                            setExistingCallEntry({
+                              submissionId: activeRequestedCallId,
+                              state: "opening",
+                            });
+                          if (submission) {
+                            setConsentedSubmissionId(null);
+                            setPollAttempt((n) => n + 1);
+                          } else setAttempt((n) => n + 1);
+                        }}
                       >
-                        Request deletion
+                        Check again
                       </button>
-                    ) : (
-                      <>
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          disabled={!!busy || analysisWriteBlocked}
-                          onClick={() => void erase()}
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={!!busy}
+                        onClick={startAnotherCall}
+                      >
+                        <ArrowRight size={16} aria-hidden="true" />
+                        Start a new call
+                      </button>
+                      {needsSignIn && (
+                        <Link
+                          className="primary-button"
+                          href={`/login?next=${encodeURIComponent(
+                            activeRequestedCallId
+                              ? `/analysis/calls/${activeRequestedCallId}`
+                              : "/analysis/calls",
+                          )}`}
                         >
-                          Request recording deletion
-                        </button>
+                          Sign in to recover it
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                  {!opening && deletionOnlyId && (
+                    <div className={styles.errorActions}>
+                      {!deleteConfirm ? (
                         <button
                           className="text-button"
                           type="button"
                           disabled={!!busy || analysisWriteBlocked}
-                          onClick={() => setDeleteConfirm(false)}
+                          onClick={() => setDeleteConfirm(true)}
                         >
-                          Keep call
+                          Request deletion
                         </button>
-                      </>
-                    )}
-                    <button
-                      className="text-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={forgetSavedCall}
-                    >
-                      Forget this saved call on this device
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
+                      ) : (
+                        <>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            disabled={!!busy || analysisWriteBlocked}
+                            onClick={() => void erase()}
+                          >
+                            Request recording deletion
+                          </button>
+                          <button
+                            className="text-button"
+                            type="button"
+                            disabled={!!busy || analysisWriteBlocked}
+                            onClick={() => setDeleteConfirm(false)}
+                          >
+                            Keep call
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={!!busy}
+                        onClick={forgetSavedCall}
+                      >
+                        Forget this saved call on this device
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
             )}
           </div>
         </div>
@@ -2875,56 +2889,60 @@ export function AcquisitionStudio({
                             Report language
                           </label>
                           <div className={styles.languagePair}>
-                          <span className={styles.languageFixed}>
-                            <Check size={13} aria-hidden="true" />
-                            English
-                          </span>
-                          <span
-                            className={styles.languagePlus}
-                            aria-hidden="true"
-                          >
-                            +
-                          </span>
-                          <select
-                            id="report-language"
-                            aria-describedby="report-language-help"
-                            value={displayReportLanguage ?? ""}
-                            disabled={
-                              !!busy ||
-                              reviewSelectionActive ||
-                              entry.report_languages.length < 2
-                            }
-                            onChange={(event) => {
-                              const selected = parseReportLanguage(
-                                event.target.value,
-                              );
-                              chosenReportLanguage.current = selected;
-                              setReportLanguage(selected);
-                            }}
-                          >
-                            {localObservation && (
-                              <option value="">
-                                No language selection observed
-                              </option>
-                            )}
-                            {displayReportLanguage &&
-                              !entry.report_languages.includes(
-                                displayReportLanguage,
-                              ) && (
-                                <option
-                                  value={displayReportLanguage}
-                                  key={displayReportLanguage}
-                                >
-                                  {reportLanguageLabels[displayReportLanguage]}{" "}
-                                  (observed)
+                            <span className={styles.languageFixed}>
+                              <Check size={13} aria-hidden="true" />
+                              English
+                            </span>
+                            <span
+                              className={styles.languagePlus}
+                              aria-hidden="true"
+                            >
+                              +
+                            </span>
+                            <select
+                              id="report-language"
+                              aria-describedby="report-language-help"
+                              value={displayReportLanguage ?? ""}
+                              disabled={
+                                !!busy ||
+                                reviewSelectionActive ||
+                                entry.report_languages.length < 2
+                              }
+                              onChange={(event) => {
+                                const selected = parseReportLanguage(
+                                  event.target.value,
+                                );
+                                chosenReportLanguage.current = selected;
+                                setReportLanguage(selected);
+                              }}
+                            >
+                              {localObservation && (
+                                <option value="">
+                                  No language selection observed
                                 </option>
                               )}
-                            {entry.report_languages.map((language) => (
-                              <option key={language} value={language}>
-                                {secondLanguageLabels[language]}
-                              </option>
-                            ))}
-                          </select>
+                              {displayReportLanguage &&
+                                !entry.report_languages.includes(
+                                  displayReportLanguage,
+                                ) && (
+                                  <option
+                                    value={displayReportLanguage}
+                                    key={displayReportLanguage}
+                                  >
+                                    {
+                                      reportLanguageLabels[
+                                        displayReportLanguage
+                                      ]
+                                    }{" "}
+                                    (observed)
+                                  </option>
+                                )}
+                              {entry.report_languages.map((language) => (
+                                <option key={language} value={language}>
+                                  {secondLanguageLabels[language]}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <p id="report-language-help">
                             {entry.report_languages.length > 1
@@ -3279,16 +3297,13 @@ export function AcquisitionStudio({
                 !deletionOnlyId && <CallsLibrary preview />}
             </div>
             {/* The standalone sheet's inspector replaces the guide rail. */}
-            {embedded &&
-              !report &&
-              !deletionOnlyId &&
-              !submission && (
-                <AcquisitionGuideRail
-                  stage={displayFileSelected ? "selected" : "empty"}
-                  stagedFiles={stagedFiles}
-                  maximumFileBytes={policy?.maximum_file_bytes}
-                />
-              )}
+            {embedded && !report && !deletionOnlyId && !submission && (
+              <AcquisitionGuideRail
+                stage={displayFileSelected ? "selected" : "empty"}
+                stagedFiles={stagedFiles}
+                maximumFileBytes={policy?.maximum_file_bytes}
+              />
+            )}
           </div>
           {result && report && (
             <SourceWaveformProvider
@@ -3336,10 +3351,12 @@ export function AcquisitionStudio({
                   onAnalyseAnother={startAnotherCall}
                   visual={
                     <CallMap
+                      callId={submission?.id ?? null}
                       transcript={result.transcript}
                       report={report}
                       durationMs={result.transcript.duration_ms}
                       onSelectEvidence={seek}
+                      onSeek={playFrom}
                     />
                   }
                   onDownload={() => void downloadReport()}

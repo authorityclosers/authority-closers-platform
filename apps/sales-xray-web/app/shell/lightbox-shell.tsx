@@ -742,6 +742,8 @@ function LightboxShellFrame({
               </div>
             )}
           </div>
+          {/* Pages can host their own toolbar here (the report's sections). */}
+          <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
             {authenticated && active !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>

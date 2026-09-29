@@ -1309,3 +1309,18 @@
     font-size: 0;
   }
 }
+
+/* A page toolbar (the report's sections) sits centred in the top bar,
+   like a document app's ribbon: always visible, never scrolling away. */
+.topBarCenter {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 20px;
+  container: shell-toolbar / inline-size;
+}
+.topBarCenter:empty {
+  padding: 0;
+}

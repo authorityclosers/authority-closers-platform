@@ -44,8 +44,13 @@ export type ReportHeaderProps = {
   onRequestDeletion: () => void;
   /** Server-confirmed owner call name (C1); null/absent on older servers. */
   label?: CallLabel | null;
-  /** An optional picture of the call (the call map) beside the title. */
+  /** An optional picture of the call (the call map) below the title. */
   visual?: ReactNode;
+  /**
+   * A compact version of the visual. Once the full one scrolls under the
+   * pinned title row, this one grows into the space beside the title.
+   */
+  compactVisual?: ReactNode;
   /** Rename wiring; offered only for a claimed call with a server label. */
   rename?: {
     save: (
@@ -63,8 +68,9 @@ function closeMenu(event: MouseEvent<HTMLElement>) {
 }
 
 /**
- * The compact report header: title and measured facts, one primary action,
- * secondary actions in an overflow, and provenance in a collapsed disclosure.
+ * The report header: a pinned row with the title, measured facts and one
+ * overflow menu (actions and provenance), then the call map below it. When
+ * the map scrolls under the row, a compact map takes its place in the row.
  */
 export function ReportHeader({
   durationMs,
@@ -81,8 +87,13 @@ export function ReportHeader({
   label = null,
   rename,
   visual,
+  compactVisual,
 }: ReportHeaderProps) {
   const menu = useRef<HTMLDetailsElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const visualBox = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  const hasCompact = Boolean(visual && compactVisual);
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const title = callTitle(label, "Sales call report");
@@ -106,9 +117,59 @@ export function ReportHeader({
     };
   }, []);
 
+  // Compact once the full call map has slid (mostly) under the pinned row.
+  useEffect(() => {
+    const target = visualBox.current;
+    const header = bar.current;
+    if (!hasCompact || !target || !header) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    let root: HTMLElement | null = null;
+    for (let node = target.parentElement; node; node = node.parentElement) {
+      const { overflowY } = window.getComputedStyle(node);
+      if (overflowY === "auto" || overflowY === "scroll") {
+        root = node;
+        break;
+      }
+    }
+    let observer: IntersectionObserver | null = null;
+    const watch = () => {
+      observer?.disconnect();
+      const inset = Math.round(header.getBoundingClientRect().height);
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (!entry) return;
+          const top = entry.rootBounds?.top ?? 0;
+          setCompact(
+            entry.intersectionRatio < 0.4 &&
+              entry.boundingClientRect.top < top + inset,
+          );
+        },
+        {
+          root,
+          rootMargin: `-${inset}px 0px 0px 0px`,
+          threshold: [0, 0.2, 0.4, 0.6, 1],
+        },
+      );
+      observer.observe(target);
+    };
+    watch();
+    const resize =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(watch);
+    resize?.observe(header);
+    return () => {
+      observer?.disconnect();
+      resize?.disconnect();
+    };
+  }, [hasCompact]);
+
   return (
     <>
-      <div className={styles.reportHeader}>
+      <div
+        ref={bar}
+        className={styles.reportHeader}
+        data-report-sticky
+        data-compact={compact ? "true" : undefined}
+      >
         <div className={styles.reportHeading}>
           {renaming && canRename && label ? (
             <CallLabelEditor
@@ -145,7 +206,15 @@ export function ReportHeader({
             <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
-        {visual ? <div className={styles.reportVisual}>{visual}</div> : null}
+        {hasCompact ? (
+          <div
+            className={styles.reportCompact}
+            aria-hidden={!compact}
+            inert={!compact}
+          >
+            {compactVisual}
+          </div>
+        ) : null}
         <div
           className={styles.reportActions}
           role="group"
@@ -272,6 +341,11 @@ export function ReportHeader({
           </details>
         </div>
       </div>
+      {visual ? (
+        <div ref={visualBox} className={styles.reportVisual}>
+          {visual}
+        </div>
+      ) : null}
     </>
   );
 }
