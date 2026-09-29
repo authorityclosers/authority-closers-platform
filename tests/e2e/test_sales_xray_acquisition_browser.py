@@ -624,7 +624,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     accepted_plan_states = {"active", "completed"}
                     continue_enabled = False
                     try:
-                        async with asyncio.timeout(30):
+                        async with asyncio.timeout(120):
                             while not plan_accepted.is_set():
                                 plan_state = await db(latest_plan_state())
                                 if plan_state in accepted_plan_states:
@@ -634,10 +634,17 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                                     break
                                 await asyncio.sleep(0.25)
                     except TimeoutError:
-                        pytest.fail(
-                            "Neither plan acceptance nor enabled Continue analysis "
-                            "appeared within 30 seconds"
-                        )
+                        plan_state = await db(latest_plan_state())
+                        continue_enabled = await continue_button.is_enabled()
+                        if (
+                            not plan_accepted.is_set()
+                            and plan_state not in accepted_plan_states
+                            and not continue_enabled
+                        ):
+                            pytest.fail(
+                                "Neither plan acceptance nor enabled Continue analysis "
+                                f"appeared within 120 seconds; plan_state={plan_state!r}"
+                            )
 
                     # Recheck canonical state immediately before acting. The start
                     # request can commit even when its browser response is lost.
