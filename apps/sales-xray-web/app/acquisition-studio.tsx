@@ -26,12 +26,12 @@ import {
 } from "lucide-react";
 import { formatClipRange, formatClock, isPlayableRange } from "./lightbox/time";
 import {
+  CallStudio,
   parseProcessingPlan,
   type ProcessingPlan,
   type CallStudioVariant,
 } from "./call-studio";
 import { AcquisitionShell } from "./acquisition-shell";
-import { NewAnalysisView } from "./new-analysis-view";
 import { CallsLibrary } from "./calls-library";
 import {
   AcquisitionGuideRail,
@@ -1905,12 +1905,7 @@ export function AcquisitionStudio({
     requestedCallEntryState: "opening" | "restored" | "failed" | null;
   }) {
     if (entry && !entry.enabled && requestedCallEntryState === null) {
-      const fallback = (
-        <NewAnalysisView
-          disabled={true}
-          onFileSelect={(selected) => void addFiles([selected])}
-        />
-      );
+      const fallback = <CallStudio variant="embedded" homeHref={homeHref} />;
       return embedded ? (
         fallback
       ) : (
@@ -1918,7 +1913,6 @@ export function AcquisitionStudio({
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
           homeHref={homeHref}
-          heroStage="welcome"
           allowance={allowance}
         >
           {fallback}

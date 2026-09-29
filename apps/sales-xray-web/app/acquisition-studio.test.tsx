@@ -375,6 +375,13 @@ beforeEach(() => {
       if (path === "/v1/auth/email-code/config?surface=sales_xray")
         return response({}, 503);
       if (path.endsWith("/entry")) return response(entryBody);
+      if (path === "/v1/conversation/workspace")
+        return response({
+          authenticated: false,
+          intake_enabled: false,
+          sign_in_url: "/login",
+          message: "Sign in to open your account-only studio.",
+        });
       if (path.endsWith("/availability"))
         return response({ paused: analysisPaused });
       if (path.endsWith("/submissions")) return response(libraryBody);
@@ -574,13 +581,18 @@ it("keeps the new account home clear of empty recent-call panels", async () => {
   ).toHaveLength(1);
 });
 
-it("does not request acquisition history while the entry is disabled", async () => {
+it("keeps account-only sign-in without acquisition history while entry is disabled", async () => {
   entryBody = { ...entry, enabled: false };
   await mount();
   expect(container.querySelector(".calls-library-preview")).toBeNull();
   expect(
     calls.filter(({ path }) => path.endsWith("/submissions")),
   ).toHaveLength(0);
+  expect(
+    container.querySelector('.studio-availability a[href="/login"]')
+      ?.textContent,
+  ).toContain("Sign in with AC");
+  expect(container.querySelector('input[type="file"]')).not.toBeNull();
 });
 
 it("shows real account recent calls on home and opens the selected saved report", async () => {

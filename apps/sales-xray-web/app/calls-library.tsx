@@ -796,7 +796,7 @@ function CallsLibraryContent({
         {/* One page heading; privacy is one quiet line, not a second title. */}
         <header className="calls-library-intro">
           <div>
-            <h1 id="calls-library-title" style={{ display: "none" }}>
+            <h1 id="calls-library-title" className="visually-hidden">
               Calls
             </h1>
             <p className="calls-library-summary">
