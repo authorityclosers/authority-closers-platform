@@ -65,12 +65,20 @@ function addressFromSearch(
   search: string,
   boundCallId: string,
   panels: ReportPanel[],
+  pathname: string,
 ): Address | null {
   const query = new URLSearchParams(search);
   const calls = query.getAll("call");
+  const pathCallId = callIdFromPath(pathname);
+  const requestedCallId = calls.length === 0 ? pathCallId : calls[0];
   const sections = query.getAll("section");
   const views = query.getAll("view");
-  if (!UUID.test(boundCallId) || calls.length !== 1 || calls[0] !== boundCallId)
+  if (
+    !UUID.test(boundCallId) ||
+    calls.length > 1 ||
+    requestedCallId !== boundCallId ||
+    (pathCallId !== null && pathCallId !== boundCallId)
+  )
     return null;
   // No explicit view: the caller applies its preferred default.
   const view: View | null =
@@ -84,8 +92,8 @@ function addressFromSearch(
   return section ? { view, section } : null;
 }
 
-function browserSearch() {
-  return window.location.search;
+function browserLocation() {
+  return window.location.pathname + window.location.search;
 }
 
 function scrollBehavior(): ScrollBehavior {
@@ -228,7 +236,7 @@ function restoreOrigin(point: ReturnPoint, done: () => void) {
   );
 }
 
-function serverSearch() {
+function serverLocation() {
   return "";
 }
 
@@ -372,7 +380,12 @@ export function ReportModes({
     returnRef.current = point;
     setReturnPointState(point);
   };
-  const search = useSyncExternalStore(subscribe, browserSearch, serverSearch);
+  const location = useSyncExternalStore(
+    subscribe,
+    browserLocation,
+    serverLocation,
+  );
+  const { pathname, search } = new URL(location, "https://sales-xray.invalid");
 
   useEffect(() => {
     const workspace = workspaceRef.current;
@@ -426,7 +439,7 @@ export function ReportModes({
   }, []);
 
   const linked = boundCallId
-    ? addressFromSearch(search, boundCallId, panels)
+    ? addressFromSearch(search, boundCallId, panels, pathname)
     : null;
   const address = linked ?? local;
   const selected = panels.some((panel) => panel.id === address.section)
@@ -520,6 +533,8 @@ export function ReportModes({
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
       const current = new URL(window.location.href);
+      const pathCallId = callIdFromPath(current.pathname);
+      if (pathCallId !== null && pathCallId !== boundCallId) return;
       const calls = current.searchParams.getAll("call");
       if (calls.length > 1 || (calls.length === 1 && calls[0] !== boundCallId))
         return;
