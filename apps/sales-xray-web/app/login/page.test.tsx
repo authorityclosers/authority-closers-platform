@@ -69,7 +69,7 @@ it("opens the versioned code-first flow without initiating sign-in before consen
   vi.stubGlobal("fetch", fetcher);
   await mount();
 
-  expect(host.textContent).toContain("Your next better");
+  expect(host.textContent).toContain("Sign in or create your account");
   expect(
     host.querySelector('a[aria-label="Sales Xray home"]')?.getAttribute("href"),
   ).toBe("/");

@@ -1,15 +1,23 @@
 "use client";
 
 import {
-  ArrowRight,
   Clock3,
   Download,
   Ellipsis,
+  Link2,
+  Pencil,
+  Plus,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
 import { callTitle, type CallLabel } from "./call-label";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
@@ -36,6 +44,8 @@ export type ReportHeaderProps = {
   onRequestDeletion: () => void;
   /** Server-confirmed owner call name (C1); null/absent on older servers. */
   label?: CallLabel | null;
+  /** An optional picture of the call (the call map) beside the title. */
+  visual?: ReactNode;
   /** Rename wiring; offered only for a claimed call with a server label. */
   rename?: {
     save: (
@@ -70,9 +80,11 @@ export function ReportHeader({
   onRequestDeletion,
   label = null,
   rename,
+  visual,
 }: ReportHeaderProps) {
   const menu = useRef<HTMLDetailsElement>(null);
   const [renaming, setRenaming] = useState(false);
+  const [copied, setCopied] = useState(false);
   const title = callTitle(label, "Sales call report");
   const canRename = claimed && label !== null && rename !== undefined;
 
@@ -108,7 +120,12 @@ export function ReportHeader({
             />
           ) : (
             <div className={styles.reportTitleRow}>
-              <h1>{title}</h1>
+              <h1
+                onDoubleClick={canRename ? () => setRenaming(true) : undefined}
+                title={canRename ? "Double-click to rename" : undefined}
+              >
+                {title}
+              </h1>
               {canRename ? (
                 <RenameCallButton
                   callTitle={title}
@@ -128,6 +145,7 @@ export function ReportHeader({
             <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
+        {visual ? <div className={styles.reportVisual}>{visual}</div> : null}
         <div
           className={styles.reportActions}
           role="group"
@@ -138,16 +156,7 @@ export function ReportHeader({
               Sign in to save
             </Link>
           )}
-          <button
-            className={`${styles.reportAction} ${styles.reportActionPrimary}`}
-            type="button"
-            disabled={busy}
-            onClick={onAnalyseAnother}
-          >
-            <ArrowRight size={16} aria-hidden="true" />
-            Analyse another call
-          </button>
-          {/* Secondary actions stay reachable without crowding the report. */}
+          {/* Every action lives in one calm menu; "New analysis" is in the app header. */}
           <details
             ref={menu}
             className={styles.reportMore}
@@ -167,6 +176,19 @@ export function ReportHeader({
               <Ellipsis size={18} aria-hidden="true" />
             </summary>
             <div className={styles.reportMenu}>
+              {canRename ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={(event) => {
+                    closeMenu(event);
+                    setRenaming(true);
+                  }}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  Rename call
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={busy || !canDownload}
@@ -177,46 +199,79 @@ export function ReportHeader({
               >
                 <Download size={16} aria-hidden="true" />
                 Download report
+                <small>.docx</small>
               </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  const url = new URL(window.location.href);
+                  url.search = "";
+                  void navigator.clipboard
+                    ?.writeText(url.toString())
+                    .then(() => {
+                      setCopied(true);
+                      window.setTimeout(() => setCopied(false), 1200);
+                    })
+                    .catch(() => {});
+                  closeMenu(event);
+                }}
+              >
+                <Link2 size={16} aria-hidden="true" />
+                {copied ? "Link copied" : "Copy link"}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={(event) => {
+                  closeMenu(event);
+                  onAnalyseAnother();
+                }}
+              >
+                <Plus size={16} aria-hidden="true" />
+                Analyse another call
+              </button>
+              <details className={styles.reportAbout}>
+                <summary>
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  About this report
+                </summary>
+                <p>
+                  {claimed ? "Private to your account. " : ""}Draft coaching;
+                  not adjudicated by Dipak. Speaker labels are unverified.
+                  Original quotes are preserved in the language spoken.
+                </p>
+                <p>
+                  Source: {sourceLabel}. Measured duration:{" "}
+                  {formatClock(durationMs)}.
+                </p>
+                <p>
+                  Need the call removed?{" "}
+                  <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
+                    Contact the AC team.
+                  </a>
+                </p>
+              </details>
               {canRequestDeletion && (
-                <button
-                  type="button"
-                  className={styles.reportMenuSupport}
-                  disabled={busy || deletionDisabled}
-                  onClick={(event) => {
-                    closeMenu(event);
-                    onRequestDeletion();
-                  }}
-                >
-                  <Trash2 size={16} aria-hidden="true" />
-                  Request deletion
-                </button>
+                <>
+                  <span className={styles.reportMenuSeparator} aria-hidden="true" />
+                  <button
+                    type="button"
+                    className={styles.reportMenuSupport}
+                    disabled={busy || deletionDisabled}
+                    onClick={(event) => {
+                      closeMenu(event);
+                      onRequestDeletion();
+                    }}
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                    Request deletion
+                  </button>
+                </>
               )}
             </div>
           </details>
         </div>
       </div>
-      <details className={styles.reportDisclosure}>
-        <summary>
-          <ShieldCheck size={14} aria-hidden="true" />
-          {claimed
-            ? "Private to your account · Source details"
-            : "Source details"}
-        </summary>
-        <p>
-          Draft coaching; not adjudicated by Dipak. Speaker labels are
-          unverified. Original quotes are preserved in the language spoken.
-        </p>
-        <p>
-          Source: {sourceLabel}. Measured duration: {formatClock(durationMs)}.
-        </p>
-        <p>
-          Need the call removed?{" "}
-          <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
-            Contact the AC team.
-          </a>
-        </p>
-      </details>
     </>
   );
 }

@@ -8,19 +8,24 @@ import {
   Eye,
   EyeOff,
   FileAudio,
+  FileText,
   LoaderCircle,
   Mail,
   ShieldCheck,
+  Sparkles,
+  UsersRound,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type FormEvent,
 } from "react";
+import { BrandMark } from "./shell/brand-lockup";
+import { ThemeToggle } from "./shell/theme-toggle";
 import {
   emailCodeRequest,
   isAuthCompleteMessage,
@@ -46,10 +51,117 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
-const AUTH_WAVE_HEIGHTS = [
-  17, 25, 19, 37, 52, 34, 59, 73, 46, 28, 64, 82, 56, 36, 67, 88, 62, 40, 74,
-  54, 82, 59, 35, 64, 45, 71, 39, 25, 49, 28, 17,
+// Decorative "x-ray" of a conversation: a scan passes over a two-speaker
+// waveform and the kinds of moment Sales Xray looks for light up. It shows no
+// data; heights are a fixed pattern so server and client render the same.
+const XRAY_BAR_COUNT = 64;
+const XRAY_SWEEP_SECONDS = 7;
+const XRAY_BARS = Array.from({ length: XRAY_BAR_COUNT }, (_, index) => {
+  const envelope = Math.abs(Math.sin(index * 0.21) * Math.cos(index * 0.047));
+  const grain = ((index * 37) % 11) / 11;
+  return Math.round(16 + 74 * (0.3 + 0.7 * envelope) * (0.62 + 0.38 * grain));
+});
+const XRAY_SPEAKER_TURNS = [0, 12, 23, 37, 47] as const;
+const XRAY_MOMENTS = [
+  { kind: "strength", label: "Strong moment", from: 16, to: 19, row: 0 },
+  { kind: "objection", label: "Objection", from: 28, to: 31, row: 1 },
+  { kind: "missed", label: "Missed opportunity", from: 40, to: 43, row: 0 },
+  { kind: "next", label: "Next step", from: 55, to: 58, row: 1 },
 ] as const;
+const XRAY_FEATURES = [
+  { Icon: UsersRound, label: "Speakers separated" },
+  { Icon: Sparkles, label: "Moments and objections" },
+  { Icon: FileText, label: "A clear summary" },
+] as const;
+
+function xrayDelay(position: number) {
+  return `${((position + 0.5) / XRAY_BAR_COUNT) * XRAY_SWEEP_SECONDS}s`;
+}
+
+function xraySpeaker(index: number) {
+  return XRAY_SPEAKER_TURNS.filter((turn) => turn <= index).length % 2 === 1
+    ? "rep"
+    : "buyer";
+}
+
+function xrayMoment(index: number) {
+  return XRAY_MOMENTS.find((moment) => index >= moment.from && index <= moment.to);
+}
+
+function XrayScene() {
+  return (
+    <div className={styles.xray} aria-hidden="true">
+      {XRAY_MOMENTS.map((moment) => (
+        <span
+          key={moment.kind}
+          className={styles.tag}
+          data-kind={moment.kind}
+          data-row={moment.row}
+          style={
+            {
+              "--x": `${(((moment.from + moment.to) / 2 + 0.5) / XRAY_BAR_COUNT) * 100}%`,
+              "--d": xrayDelay(moment.from),
+            } as CSSProperties
+          }
+        >
+          <i />
+          {moment.label}
+        </span>
+      ))}
+      <div className={styles.track}>
+        {XRAY_BARS.map((height, index) => {
+          const moment = xrayMoment(index);
+          return (
+            <span
+              key={index}
+              className={styles.bar}
+              data-speaker={xraySpeaker(index)}
+              data-kind={moment?.kind}
+              style={
+                {
+                  "--h": `${height}%`,
+                  "--d": xrayDelay(index),
+                } as CSSProperties
+              }
+            />
+          );
+        })}
+        <span className={styles.beamRail}>
+          <span className={styles.beam} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function GoogleMark() {
+  // Google's own four-colour "G", as its sign-in branding requires.
+  return (
+    <svg
+      className={styles.googleMark}
+      viewBox="0 0 48 48"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="#FFC107"
+        d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"
+      />
+      <path
+        fill="#FF3D00"
+        d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+      />
+      <path
+        fill="#4CAF50"
+        d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"
+      />
+      <path
+        fill="#1976D2"
+        d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"
+      />
+    </svg>
+  );
+}
 const subscribeHostname = () => () => {};
 const serverHostname = () => "";
 const LEARNER_ORIGINS_BY_SOURCE_HOST = {
@@ -584,17 +696,30 @@ export function AccountAuth({
     !!activeConfig.consent_version &&
     !configError &&
     !(preview && previewState === "auth.error");
-  const brandContent = (
-    <>
-      <Image src="/brand/ac-v0.1/symbol.svg" alt="" width={48} height={48} />
-      <Image
-        src="/brand/ac-v0.1/sales-xray-wordmark.svg"
-        alt=""
-        width={147}
-        height={52}
-      />
-    </>
-  );
+  const brandContent = <BrandMark />;
+  const heading =
+    displayedStep === "code"
+      ? "Check your email."
+      : displayedStep === "confirmed"
+        ? "Let’s get you ready."
+        : displayedStep === "password"
+          ? "Welcome back."
+          : "Sign in or create your account";
+  const lead =
+    displayedStep === "code" ? (
+      <>
+        If this address can receive a sign-in code, check the inbox for{" "}
+        <strong>{maskedEmail(displayedEmail)}</strong>.
+      </>
+    ) : displayedStep === "confirmed" ? (
+      "Opening your account securely…"
+    ) : displayedStep === "password" ? (
+      "Sign in with your existing Authority Closers password."
+    ) : unavailable && !googleAvailable ? (
+      "Sign in with your existing Authority Closers account."
+    ) : (
+      "One quick step for new and returning members."
+    );
   return (
     <section
       className={`xray-app ${styles.auth}`}
@@ -602,7 +727,7 @@ export function AccountAuth({
       aria-busy={pending}
       data-review-preview={preview ? "true" : undefined}
     >
-      <div className={styles.story}>
+      <div className={styles.stage}>
         {selectedFile ? (
           onCancel ? (
             <button
@@ -624,78 +749,46 @@ export function AccountAuth({
           </Link>
         )}
         <div className={styles.storyCopy}>
-          <p className={styles.eyebrow}>TURN CALLS INTO CLARITY</p>
           <h2>
-            Hear the opportunity
+            Hear the <span className={styles.accent}>opportunity</span>
             <br />
             in every call.
           </h2>
           <p>Bring your conversation. Leave with a clearer next step.</p>
         </div>
-        <div className={styles.wave} aria-hidden="true">
-          <svg
-            className={styles.waveRibbon}
-            viewBox="0 0 640 220"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <linearGradient
-                id="account-auth-ribbon"
-                x1="0"
-                x2="1"
-                y1="0"
-                y2="0"
-              >
-                <stop offset="0" stopColor="#66cced" stopOpacity=".38" />
-                <stop offset=".22" stopColor="#c1ffff" stopOpacity=".9" />
-                <stop offset=".55" stopColor="#7af2ed" stopOpacity=".62" />
-                <stop offset="1" stopColor="#35afe4" stopOpacity=".82" />
-              </linearGradient>
-            </defs>
-            {Array.from({ length: 16 }, (_, index) => {
-              const offset = (index - 7.5) * 3.2;
-              return (
-                <path
-                  key={index}
-                  d={`M -20 ${131 + offset} C 64 ${132 + offset}, 98 ${43 + offset}, 166 ${85 + offset} C 238 ${132 + offset}, 262 ${211 + offset}, 346 ${152 + offset} C 415 ${102 + offset}, 450 ${176 + offset}, 514 ${84 + offset} C 557 ${24 + offset}, 598 ${61 + offset}, 664 ${104 + offset}`}
-                  fill="none"
-                  stroke="url(#account-auth-ribbon)"
-                  strokeWidth="1.1"
-                />
-              );
-            })}
-          </svg>
-          <div className={styles.waveBars}>
-            {AUTH_WAVE_HEIGHTS.map((height, index) => (
-              <span
-                key={index}
-                style={{
-                  height: `${height}%`,
-                  animationDelay: `${-index * 64}ms`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        <XrayScene />
+        <ul className={styles.features}>
+          {XRAY_FEATURES.map(({ Icon, label }) => (
+            <li key={label}>
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </li>
+          ))}
+        </ul>
         <p className={styles.shared}>
-          <ShieldCheck size={17} />
+          <ShieldCheck size={15} aria-hidden="true" />
           One AC account. Your learning, calls and reports.
         </p>
       </div>
       <div className={styles.formColumn}>
-        {selectedFile && onCancel ? (
-          <button
-            type="button"
-            className={styles.returnLink}
-            onClick={() => onCancel(selectedFile)}
-          >
-            <ArrowLeft size={17} aria-hidden="true" /> Back to your call
-          </button>
-        ) : !selectedFile ? (
-          <Link className={styles.returnLink} href="/">
-            <ArrowLeft size={17} aria-hidden="true" /> Return to app
-          </Link>
-        ) : null}
+        <div className={styles.formBar}>
+          {selectedFile && onCancel ? (
+            <button
+              type="button"
+              className={styles.returnLink}
+              onClick={() => onCancel(selectedFile)}
+            >
+              <ArrowLeft size={16} aria-hidden="true" /> Back to your call
+            </button>
+          ) : !selectedFile ? (
+            <Link className={styles.returnLink} href="/">
+              <ArrowLeft size={16} aria-hidden="true" /> Return to app
+            </Link>
+          ) : (
+            <span />
+          )}
+          <ThemeToggle />
+        </div>
         <div className={styles.card}>
           <p className={styles.eyebrow}>
             {displayedStep === "code"
@@ -706,40 +799,13 @@ export function AccountAuth({
                   ? "Existing AC account"
                   : "Welcome to Sales Xray"}
           </p>
-          <h1 id="account-auth-heading">
-            {displayedStep === "code" ? (
-              "Check your email."
-            ) : displayedStep === "confirmed" ? (
-              "Let’s get you ready."
-            ) : displayedStep === "password" ? (
-              "Welcome back."
-            ) : (
-              <>
-                Your next better
-                <br />
-                conversation starts here.
-              </>
-            )}
-          </h1>
-          <p className={styles.lead}>
-            {displayedStep === "code" ? (
-              <>
-                If this address can receive a sign-in code, check the inbox for{" "}
-                <strong>{maskedEmail(displayedEmail)}</strong>.
-              </>
-            ) : displayedStep === "confirmed" ? (
-              "Opening your account securely…"
-            ) : displayedStep === "password" ? (
-              "Sign in with your existing Authority Closers password."
-            ) : unavailable && !googleAvailable ? (
-              "Sign in with your existing Authority Closers account."
-            ) : (
-              "Sign in or create your account. It only takes a moment."
-            )}
-          </p>
+          <h1 id="account-auth-heading">{heading}</h1>
+          <p className={styles.lead}>{lead}</p>
           {displayedStep === "confirmed" ? (
             <div className={styles.confirmed}>
-              <Check />
+              <span className={styles.confirmedMark}>
+                <Check aria-hidden="true" />
+              </span>
               Account confirmed
             </div>
           ) : (
@@ -780,6 +846,44 @@ export function AccountAuth({
               unavailable &&
               !googleAvailable ? null : displayedStep === "email" ? (
                 <>
+                  <label
+                    className={styles.consent}
+                    data-checked={consent ? "true" : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      form="account-email-form"
+                      checked={consent}
+                      onChange={(event) => setConsent(event.target.checked)}
+                      disabled={preview || pending}
+                      required
+                    />
+                    <span className={styles.check} aria-hidden="true">
+                      <svg viewBox="0 0 16 16">
+                        <path d="M3.5 8.4 6.6 11.3 12.5 5" />
+                      </svg>
+                    </span>
+                    <span>
+                      I confirm that I am 18 or older and accept the current
+                      Authority Closers{" "}
+                      <a
+                        href="https://app.authorityclosers.com/terms"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Terms
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        href="https://app.authorityclosers.com/privacy"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Privacy notice
+                      </a>{" "}
+                      for my learner account.
+                    </span>
+                  </label>
                   {googleAvailable && (
                     <button
                       type="button"
@@ -790,9 +894,7 @@ export function AccountAuth({
                         !consent ? "account-google-consent-hint" : undefined
                       }
                     >
-                      <span aria-hidden="true" className={styles.googleMark}>
-                        G
-                      </span>
+                      <GoogleMark />
                       Continue with Google
                     </button>
                   )}
@@ -801,8 +903,7 @@ export function AccountAuth({
                       id="account-google-consent-hint"
                       className={styles.consentHint}
                     >
-                      Confirm your age and accept the Terms and Privacy notice
-                      below to continue with Google.
+                      Tick the box above to continue with Google or email.
                     </p>
                   )}
                   {googleAvailable && available && (
@@ -810,10 +911,19 @@ export function AccountAuth({
                       <span>or use email</span>
                     </div>
                   )}
-                  <form onSubmit={sendCode} className={styles.form}>
+                  <form
+                    id="account-email-form"
+                    onSubmit={sendCode}
+                    className={styles.form}
+                  >
                     {available && (
                       <>
-                        <label htmlFor="account-email">Email address</label>
+                        <label
+                          htmlFor="account-email"
+                          className={styles.visuallyHidden}
+                        >
+                          Email address
+                        </label>
                         <div className={styles.inputWrap}>
                           <Mail size={18} aria-hidden="true" />
                           <input
@@ -829,55 +939,26 @@ export function AccountAuth({
                             disabled={preview || pending}
                           />
                         </div>
+                        <button
+                          type="submit"
+                          className={styles.primary}
+                          disabled={
+                            preview || !available || !consent || pending
+                          }
+                        >
+                          {pending ? (
+                            <>
+                              <LoaderCircle className={styles.spin} size={18} />
+                              Sending…
+                            </>
+                          ) : (
+                            <>
+                              Send sign-in code
+                              <ArrowRight size={18} className={styles.arrow} />
+                            </>
+                          )}
+                        </button>
                       </>
-                    )}
-                    <label className={styles.consent}>
-                      <input
-                        type="checkbox"
-                        checked={consent}
-                        onChange={(event) => setConsent(event.target.checked)}
-                        disabled={preview || pending}
-                        required
-                      />
-                      <span>
-                        I confirm that I am 18 or older and accept the current
-                        Authority Closers{" "}
-                        <a
-                          href="https://app.authorityclosers.com/terms"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Terms
-                        </a>{" "}
-                        and{" "}
-                        <a
-                          href="https://app.authorityclosers.com/privacy"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Privacy notice
-                        </a>{" "}
-                        for my learner account.
-                      </span>
-                    </label>
-                    {available && (
-                      <button
-                        type="submit"
-                        className={styles.primary}
-                        disabled={preview || !available || !consent || pending}
-                      >
-                        {pending ? (
-                          <>
-                            <LoaderCircle className={styles.spin} size={18} />
-                            Sending…
-                          </>
-                        ) : (
-                          <>
-                            Send sign-in code
-                            <ArrowRight size={18} />
-                          </>
-                        )}
-                      </button>
                     )}
                   </form>
                   {popupActive && pending && (
@@ -935,8 +1016,7 @@ export function AccountAuth({
                       />
                       <button
                         type="button"
-                        className={styles.textButton}
-                        style={{ width: 44, flexShrink: 0, cursor: "pointer" }}
+                        className={styles.reveal}
                         aria-label={
                           showPassword ? "Hide password" : "Show password"
                         }
@@ -945,9 +1025,9 @@ export function AccountAuth({
                         disabled={pending}
                       >
                         {showPassword ? (
-                          <EyeOff size={19} aria-hidden="true" />
+                          <EyeOff size={18} aria-hidden="true" />
                         ) : (
-                          <Eye size={19} aria-hidden="true" />
+                          <Eye size={18} aria-hidden="true" />
                         )}
                       </button>
                     </div>
@@ -957,7 +1037,11 @@ export function AccountAuth({
                       disabled={pending || preview}
                     >
                       {pending ? "Signing in…" : "Sign in"}
-                      <ArrowRight size={18} aria-hidden="true" />
+                      <ArrowRight
+                        size={18}
+                        aria-hidden="true"
+                        className={styles.arrow}
+                      />
                     </button>
                   </form>
                   {!selectedFile && (
@@ -1037,7 +1121,7 @@ export function AccountAuth({
                     ) : (
                       <>
                         Verify and continue
-                        <ArrowRight size={18} />
+                        <ArrowRight size={18} className={styles.arrow} />
                       </>
                     )}
                   </button>
@@ -1091,24 +1175,26 @@ export function AccountAuth({
               />
             </div>
           )}
-          <p className={styles.footnote}>
-            {selectedFile
-              ? "Your recording stays here while you sign in."
-              : "The same account works across Authority Closers."}
-          </p>
-          {displayedStep === "email" && !unavailable && (
-            <button
-              type="button"
-              className={styles.password}
-              disabled={pending || preview || !interactive}
-              onClick={() => {
-                setStep("password");
-                setError("");
-              }}
-            >
-              Use my existing password
-            </button>
-          )}
+          <div className={styles.cardFoot}>
+            {displayedStep === "email" && !unavailable && (
+              <button
+                type="button"
+                className={styles.password}
+                disabled={pending || preview || !interactive}
+                onClick={() => {
+                  setStep("password");
+                  setError("");
+                }}
+              >
+                Use my existing password
+              </button>
+            )}
+            <p className={styles.footnote}>
+              {selectedFile
+                ? "Your recording stays here while you sign in."
+                : "The same account works across Authority Closers."}
+            </p>
+          </div>
         </div>
       </div>
     </section>

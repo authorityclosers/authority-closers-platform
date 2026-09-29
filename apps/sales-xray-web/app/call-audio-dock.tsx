@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, type CSSProperties, type RefObject } from "react";
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
+import { Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 import { formatClock } from "./lightbox/time";
 import { SourceWaveform } from "./source-waveform";
 import styles from "./call-audio-dock.module.css";
@@ -32,6 +38,29 @@ export function CallAudioDock({
   onError?: () => void;
 }) {
   const [playing, setPlaying] = useState(false);
+  // The player rises into view the first time anything plays.
+  const [revealed, setRevealed] = useState(false);
+  const dockRef = useRef<HTMLElement>(null);
+
+  // Paused and the reader scrolls on: tuck the player away. While audio plays
+  // it stays; playing anything brings it back.
+  useEffect(() => {
+    if (embedded || !revealed || playing) return;
+    let scroller = dockRef.current?.parentElement ?? null;
+    while (scroller) {
+      const overflow = getComputedStyle(scroller).overflowY;
+      if (overflow === "auto" || overflow === "scroll") break;
+      scroller = scroller.parentElement;
+    }
+    const target: HTMLElement | Window = scroller ?? window;
+    const startTop = scroller ? scroller.scrollTop : window.scrollY;
+    const onScroll = () => {
+      const top = scroller ? scroller.scrollTop : window.scrollY;
+      if (Math.abs(top - startTop) > 120) setRevealed(false);
+    };
+    target.addEventListener("scroll", onScroll, { passive: true });
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [embedded, revealed, playing]);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(durationMs / 1000);
   const [rate, setRate] = useState(1);
@@ -59,16 +88,21 @@ export function CallAudioDock({
   }
   return (
     <section
+      ref={dockRef}
       className={styles.dock}
       data-embedded={embedded}
       data-playing={playing}
+      data-revealed={embedded || revealed}
       aria-label="Call audio player"
     >
       <audio
         ref={audioRef}
         src={src || undefined}
         preload="metadata"
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          setRevealed(true);
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onLoadedMetadata={() => {
@@ -167,6 +201,20 @@ export function CallAudioDock({
           <Volume2 size={20} aria-hidden="true" />
         )}
       </button>
+      {!embedded && (
+        <button
+          type="button"
+          className={`${styles.tool} ${styles.hide}`}
+          aria-label="Hide player"
+          title="Hide player"
+          onClick={() => {
+            audioRef.current?.pause();
+            setRevealed(false);
+          }}
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+      )}
     </section>
   );
 }

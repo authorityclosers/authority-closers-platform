@@ -31,7 +31,21 @@ export async function renameCall(
     ),
   );
   if (!confirmed) throw new CallLabelContractError("call_label_missing");
+  announceCallLabel(submissionId, confirmed);
   return confirmed;
+}
+
+/** Fired after the server confirms a rename, so every view shows the name. */
+export const CALL_LABEL_EVENT = "sales-xray:call-label";
+export type CallLabelChange = Readonly<{ submissionId: string; label: CallLabel }>;
+
+function announceCallLabel(submissionId: string, label: CallLabel) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<CallLabelChange>(CALL_LABEL_EVENT, {
+      detail: { submissionId, label },
+    }),
+  );
 }
 
 /** Re-read the current label from the owner-scoped progress read (GET only). */

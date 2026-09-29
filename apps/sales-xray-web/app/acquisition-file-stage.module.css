@@ -665,3 +665,239 @@
 .stage[data-has-files="false"] .browse:hover:not(:disabled) {
   background: var(--lx-teal-hover);
 }
+
+/* ---------- With files: the recording leads, "add another" follows ----------
+   The doubled class lifts these above the compact-height tuning earlier on. */
+.stage.stage[data-has-files="true"] {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+.stage.stage[data-has-files="true"] .selection {
+  order: -1;
+  gap: 10px;
+}
+.stage.stage[data-has-files="true"] .selectionHeader {
+  min-height: 24px;
+}
+.stage.stage[data-has-files="true"] .selectionHeader strong {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.stage.stage[data-has-files="true"] .selectionHeader small {
+  display: none;
+}
+.stage.stage[data-has-files="true"] .clear {
+  padding: 5px 10px;
+  border-radius: var(--lx-radius-pill);
+  color: var(--lx-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.stage.stage[data-has-files="true"] .clear:hover:not(:disabled) {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+.stage.stage[data-has-files="true"] .fileList {
+  gap: 10px;
+}
+.stage.stage[data-has-files="true"] .fileCard {
+  min-height: 88px;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: 18px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  animation: card-in var(--lx-dur-reveal) var(--lx-ease-move) both;
+  transition:
+    border-color var(--lx-dur-move) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-move) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-move);
+}
+.stage.stage[data-has-files="true"]
+  .fileCard:not([data-selected="true"]):hover {
+  transform: translateY(-1px);
+}
+.stage.stage[data-has-files="true"] .fileCard[data-selected="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-surface);
+  box-shadow:
+    0 0 0 4px var(--lx-teal-tint),
+    var(--lx-shadow-2);
+}
+/* The recording as a document: a vivid tile with a live equaliser. */
+.stage.stage[data-has-files="true"] .fileIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--lx-gradient-brand);
+  box-shadow: 0 10px 20px -12px var(--lx-teal);
+  color: var(--lx-film-text);
+}
+.stage.stage[data-has-files="true"] .fileIcon svg {
+  width: 26px;
+  height: 26px;
+}
+.stage.stage[data-has-files="true"]
+  .fileCard[data-selected="true"]
+  .fileIcon
+  path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: equalise 1.1s ease-in-out infinite alternate;
+}
+.stage.stage[data-has-files="true"] .fileIcon path:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.stage.stage[data-has-files="true"] .fileIcon path:nth-child(3) {
+  animation-delay: -0.6s;
+}
+.stage.stage[data-has-files="true"] .fileIcon path:nth-child(4) {
+  animation-delay: -0.15s;
+}
+.stage.stage[data-has-files="true"] .fileIcon path:nth-child(5) {
+  animation-delay: -0.45s;
+}
+.stage.stage[data-has-files="true"] .fileIcon path:nth-child(6) {
+  animation-delay: -0.75s;
+}
+.stage.stage[data-has-files="true"] .fileCopy {
+  gap: 4px;
+}
+.stage.stage[data-has-files="true"] .fileCopy strong {
+  color: var(--lx-ink);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.stage.stage[data-has-files="true"] .fileCopy small {
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+.stage.stage[data-has-files="true"] .selectedBadge,
+.stage.stage[data-has-files="true"] .select {
+  min-height: 28px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+.stage.stage[data-has-files="true"] .selectedBadge svg {
+  animation: tick-in var(--lx-dur-reveal) var(--lx-ease-pop) both;
+}
+.stage.stage[data-has-files="true"] .remove {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+/* "Add another": a slim, quiet drop row. */
+.stage.stage[data-has-files="true"] .dropArea {
+  min-height: 62px;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border: 1.5px dashed var(--lx-line-strong);
+  border-radius: 16px;
+  background: transparent;
+  transition:
+    border-color var(--lx-dur-move) var(--lx-ease-quick),
+    background-color var(--lx-dur-move) var(--lx-ease-quick);
+}
+.stage.stage[data-has-files="true"] .dropArea:hover,
+.stage.stage[data-has-files="true"] .dropArea[data-drag-active="true"] {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-tint);
+}
+.stage.stage[data-has-files="true"] .cloud {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.stage.stage[data-has-files="true"] .dropArea:hover .cloud {
+  transform: rotate(90deg);
+}
+.stage.stage[data-has-files="true"] .cloud::after {
+  display: none;
+}
+.stage.stage[data-has-files="true"] .dropCopy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.stage.stage[data-has-files="true"] .dropCopy strong {
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+.stage.stage[data-has-files="true"] .browse {
+  min-height: 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.stage.stage[data-has-files="true"] .facts {
+  width: auto;
+  flex-wrap: nowrap;
+  gap: 14px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  font-size: 12px;
+}
+.stage.stage[data-has-files="true"] .facts svg {
+  width: 14px;
+  height: 14px;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}
+@keyframes equalise {
+  from {
+    transform: scaleY(0.55);
+  }
+  to {
+    transform: scaleY(1.05);
+  }
+}
+@keyframes tick-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-20deg);
+  }
+}
+@media (max-width: 1180px) {
+  .stage.stage[data-has-files="true"] .facts span:first-child {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .stage.stage[data-has-files="true"] .dropArea {
+    flex-wrap: wrap;
+  }
+  .stage.stage[data-has-files="true"] .facts {
+    width: 100%;
+    margin: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage.stage[data-has-files="true"] .fileCard,
+  .stage.stage[data-has-files="true"] .fileIcon path,
+  .stage.stage[data-has-files="true"] .selectedBadge svg {
+    animation: none;
+  }
+}
+
+.stage.stage[data-has-files="true"] .dropCopy strong {
+  white-space: nowrap;
+}

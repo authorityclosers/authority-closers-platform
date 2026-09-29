@@ -275,9 +275,11 @@ export function parseEntry(value: unknown): Entry {
 }
 export function parseAllowance(value: unknown): Allowance {
   const item = record(value);
-  const allowance_seconds = integer(item.allowance_seconds, 6000),
+  // A person's balance includes audited admin grants, so it can exceed the
+  // advertised trial (the entry's 6,000 s cap still applies there).
+  const allowance_seconds = integer(item.allowance_seconds, 2147483647),
     committed_seconds = integer(item.committed_seconds, 2147483647),
-    available_seconds = integer(item.available_seconds, 6000);
+    available_seconds = integer(item.available_seconds, 2147483647);
   const unlimited = item.unlimited === true;
   if (
     item.unlimited !== undefined &&

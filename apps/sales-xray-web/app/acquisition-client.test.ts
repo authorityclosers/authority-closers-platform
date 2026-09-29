@@ -285,6 +285,14 @@ describe("acquisition source-bound presentation", () => {
   });
   it("rejects forged quota, paid upload policy and mismatched progress", () => {
     expect(parseAllowance(allowance).available_seconds).toBe(6000);
+    // Audited minute grants can lift a balance above the advertised trial.
+    expect(
+      parseAllowance({
+        allowance_seconds: 39600,
+        committed_seconds: 3120,
+        available_seconds: 36480,
+      }).available_seconds,
+    ).toBe(36480);
     expect(parsePolicy(policy).maximum_file_bytes).toBe(32 * 1024 ** 2);
     expect(
       parsePolicy({

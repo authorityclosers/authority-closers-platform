@@ -1,124 +1,226 @@
+/* Skeletons: shaped like the real screens, drawn only from tokens. A fixed
+   background sheen means one band of light crosses every block together. */
 .skeleton {
-  --sk-bg: var(--lx-sunken);
-  --sk-border: 1px solid var(--lx-line-soft);
-  --sk-radius: var(--lx-radius-md, 8px);
-  --sk-dur: var(--lx-dur-reveal, 300ms);
-  display: contents;
+  width: 100%;
+  min-width: 0;
+  animation: skeleton-in 240ms ease-out 150ms both;
 }
 
 .block {
-  background: var(--sk-bg);
-  border: var(--sk-border);
-  border-radius: var(--sk-radius);
-  animation: shimmer 1.6s ease-in-out infinite;
+  display: block;
+  flex: none;
+  max-width: 100%;
+  border-radius: 6px;
+  background-color: var(--lx-sunken);
+  background-image: linear-gradient(
+    100deg,
+    transparent 40%,
+    color-mix(in srgb, var(--lx-surface) 65%, transparent) 50%,
+    transparent 60%
+  );
+  background-attachment: fixed;
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: sheen 1.8s ease-in-out infinite;
 }
 
-@keyframes shimmer {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
+.stack {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .block {
-    animation: none;
-  }
-}
-
-/* ── Dashboard variant ── */
-.dashboard {
+.card {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 24px;
-  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 16px;
+  background: var(--lx-surface);
 }
 
+.pushRight {
+  margin-left: auto;
+}
+
+.row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+/* ---------- Dashboard ---------- */
+.dashboard {
+  display: grid;
+  gap: 18px;
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 2.4vw, 36px);
+}
 .kpiRow {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
-
-.kpiCard {
-  height: 96px;
-  composes: block;
-}
-
 .analyticsRow {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 14px;
 }
-
-.chartBlock {
-  height: 220px;
-  composes: block;
-}
-
-.tableRows {
-  display: flex;
+.tall {
+  height: clamp(160px, 26vh, 260px);
   flex-direction: column;
+  align-items: stretch;
+}
+.rows {
+  display: grid;
   gap: 8px;
 }
 
-.tableRow {
-  height: 48px;
-  composes: block;
-}
-
-/* ── List variant ── */
+/* ---------- Calls list ---------- */
 .list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 10px;
-  padding: 24px;
-  width: 100%;
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 2.4vw, 36px);
 }
-
-.listRow {
-  height: 64px;
-  composes: block;
-}
-
-/* ── Account variant ── */
-.account {
+.listHead {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  width: 100%;
-}
-
-.accountHeader {
-  height: 56px;
-  composes: block;
-}
-
-.accountCard {
-  height: 140px;
-  composes: block;
-}
-
-/* ── Studio variant ── */
-.studio {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  width: 100%;
-  min-height: 320px;
+  margin-bottom: 6px;
 }
 
-.uploadPanel {
-  width: min(100%, 520px);
-  height: 240px;
-  composes: block;
+/* ---------- Account ---------- */
+.account {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  padding: clamp(12px, 2vh, 24px) clamp(16px, 2.4vw, 36px);
+}
+.accountNav {
+  display: grid;
+  gap: 8px;
+}
+.account .card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding: 22px;
+}
+.settingRow {
+  display: flex;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+/* ---------- New analysis ---------- */
+.studio {
+  display: grid;
+  gap: 22px;
+  padding: clamp(16px, 3vh, 30px) clamp(16px, 2.4vw, 36px);
+}
+.drop {
+  display: grid;
+  min-height: clamp(220px, 38vh, 340px);
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  border: 1.5px dashed var(--lx-line);
+  border-radius: 18px;
+}
+
+/* ---------- A call (processing / report) ---------- */
+.call {
+  display: grid;
+  min-height: calc(100dvh - var(--lx-topbar-h, 64px) - 150px);
+  grid-template-rows: minmax(8px, 1fr) auto auto auto minmax(16px, 1fr) auto;
+  justify-items: center;
+  padding: clamp(8px, 2vh, 20px) clamp(16px, 2.4vw, 36px) 20px;
+}
+.center {
+  grid-row: 2;
+  display: grid;
+  width: min(100%, 720px);
+  justify-items: center;
+  gap: 12px;
+}
+.wave {
+  grid-row: 3;
+  display: flex;
+  width: min(100%, 1040px);
+  height: clamp(96px, 17vh, 168px);
+  align-items: center;
+  gap: clamp(2px, 0.28vw, 4px);
+  margin: clamp(22px, 4vh, 44px) 0 clamp(18px, 3vh, 32px);
+}
+.waveBar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 99px;
+  background-color: var(--lx-sunken);
+  background-image: linear-gradient(
+    100deg,
+    transparent 40%,
+    color-mix(in srgb, var(--lx-surface) 65%, transparent) 50%,
+    transparent 60%
+  );
+  background-attachment: fixed;
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: sheen 1.8s ease-in-out infinite;
+}
+.stages {
+  grid-row: 4;
+  display: grid;
+  width: min(100%, 720px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.foot {
+  grid-row: 6;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lx-line);
+}
+
+@keyframes skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheen {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+@media (max-width: 900px) {
+  .kpiRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analyticsRow,
+  .account {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .accountNav {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .block,
+  .waveBar {
+    animation: none;
+  }
 }
