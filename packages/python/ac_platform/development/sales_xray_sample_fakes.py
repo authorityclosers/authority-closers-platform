@@ -629,20 +629,20 @@ class FictionalReportingBroker:
                 facts = json.loads(user.split("\n", 1)[1])
                 context = facts["source_context"]
                 rows = _rows_by_id(context)
-                report = _fictional_report(rows)
-                text = json.dumps(report, ensure_ascii=False)
-                data = (
-                    {
-                        "candidates": [
-                            {
-                                "finishReason": "STOP",
-                                "content": {"role": "model", "parts": [{"text": text}]},
-                            }
-                        ]
-                    }
-                    if provider == "gemini"
-                    else {"choices": [{"message": {"content": text}}]}
-                )
+                data = _fictional_report(rows)
+            text = json.dumps(data, ensure_ascii=False)
+            data = (
+                {
+                    "candidates": [
+                        {
+                            "finishReason": "STOP",
+                            "content": {"role": "model", "parts": [{"text": text}]},
+                        }
+                    ]
+                }
+                if provider == "gemini"
+                else {"choices": [{"message": {"content": text}}]}
+            )
         raw = canonical(data)
         return ProviderResult(
             provider=provider,

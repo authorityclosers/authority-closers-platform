@@ -12,6 +12,7 @@ import pytest
 
 import ac_platform.development.sales_xray_samples as samples
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.gemini_tasks import decode_gemini_object
 from ac_platform.conversation_intelligence.providers import ProviderResult, scribe_transcript
 from ac_platform.conversation_intelligence.reports import (
     coaching_source_context,
@@ -128,6 +129,39 @@ def test_fictional_audio_covers_the_full_transcript_in_mono_16khz() -> None:
         duration = source.getnframes() / source.getframerate()
     assert duration == _AUDIO_DURATION_SECONDS
     assert duration >= max(word["end"] for word in words)
+
+
+def test_fake_c4_result_uses_gemini_envelope_and_zero_usage() -> None:
+    request = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": json.dumps(
+                            {
+                                "schema": "ac.sales-xray.native-scribe-input/1",
+                                "segments": [{"id": "s1", "text": "The price feels high."}],
+                            }
+                        )
+                    }
+                ],
+            }
+        ]
+    }
+    payload = canonical(request)
+    reservation = SimpleNamespace(
+        quote=SimpleNamespace(
+            provider_id="gemini",
+            provider_model="gemini-3.8-flash",
+            input_sha256=hashlib.sha256(payload).hexdigest(),
+        )
+    )
+    result = asyncio.run(FictionalReportingBroker().execute(reservation, payload))
+    facts = decode_gemini_object(result.data)
+
+    assert facts["observations"][0]["segment_id"] == "s1"
+    assert all(value == 0 for value in result.usage.values())
 
 
 def test_fake_report_is_complete_and_passes_source_quote_validation() -> None:
