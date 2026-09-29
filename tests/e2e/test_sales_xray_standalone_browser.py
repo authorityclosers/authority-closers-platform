@@ -41,6 +41,7 @@ from ac_platform.http.conversation_acquisition_runtime import install_acquisitio
 from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.password_auth import hash_password
@@ -191,7 +192,8 @@ def _make_backend(
         coach_app_url="http://coach.test",
         api_url="http://api.test",
         sales_xray_app_url=origin,
-        operations_tenant_id=account.own_tenant_id,
+        public_learner_tenant_id=account.own_tenant_id,
+        operations_tenant_id=uuid4(),
         session_token_pepper=uuid4().hex + uuid4().hex,
         oauth_transaction_secret=uuid4().hex + uuid4().hex,
         email_challenge_secret=uuid4().hex + uuid4().hex,
@@ -206,6 +208,9 @@ def _make_backend(
             application = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(application)
             require_actor = install_identity_http(application, settings=settings, sessions=sessions)
+            install_sales_xray_profile_http(
+                application, settings=settings, require_actor=require_actor
+            )
             install_conversation_http(
                 application,
                 settings=settings,

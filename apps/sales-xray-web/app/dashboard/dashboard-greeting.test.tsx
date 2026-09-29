@@ -4,7 +4,10 @@ import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { updateShellState } from "../shell/shell-store";
+import {
+  invalidateShellProfile,
+  readShellProfile,
+} from "../shell/profile-store";
 import { firstNameOf } from "../profile-first-name";
 import { DashboardGreeting, greetingLines } from "./dashboard-greeting";
 
@@ -46,11 +49,27 @@ describe("dashboard greeting", () => {
     if (root) await act(async () => root?.unmount());
     host.remove();
     vi.useRealTimers();
-    updateShellState({ profileName: null });
+    invalidateShellProfile();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("greets the signed-in person by first name and rotates", async () => {
-    updateShellState({ profileName: "Suyash Rahegaonkar" });
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          name: "Suyash Rahegaonkar",
+          email: "person@example.test",
+          phone_number_e164: null,
+          phone_verified: false,
+          profile_complete: false,
+          revision: 0,
+        }),
+      ),
+    );
+    await readShellProfile("document");
     const mountedRoot = createRoot(host);
     root = mountedRoot;
     await act(async () => mountedRoot.render(<DashboardGreeting />));

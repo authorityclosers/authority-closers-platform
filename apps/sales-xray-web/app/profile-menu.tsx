@@ -15,7 +15,7 @@ import {
   requestSalesXrayLogout,
   UploadNeedsSignOutConfirmationError,
 } from "./account-navigation";
-import { readAccountProfile } from "./account-profile-client";
+import { invalidateShellProfile, useShellProfile } from "./shell/profile-store";
 import { useUploadSession } from "./hooks/upload-session";
 import { ThemeControl } from "./lightbox/theme-provider";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -24,7 +24,7 @@ import styles from "./profile-menu.module.css";
 const SIGN_OUT_UPLOAD_WARNING =
   "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
 
-export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
+export { PROFILE_UPDATED_EVENT } from "./shell/profile-store";
 
 function initials(name: string | null): string {
   if (!name) return "AC";
@@ -66,43 +66,14 @@ export function ProfileMenu({
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
-  const [profileName, setProfileName] = useState<string | null>(null);
-  const [profileEmail, setProfileEmail] = useState<string | null>(null);
+  const profile = useShellProfile(authenticated);
+  const profileName = profile?.name?.trim() || null;
+  const profileEmail = profile?.email?.trim() || null;
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
   const access = useWorkspaceAccess();
   const upload = useUploadSession();
-
-  useEffect(() => {
-    if (!authenticated) return;
-    let controller: AbortController | null = null;
-    const refresh = () => {
-      controller?.abort();
-      const current = new AbortController();
-      controller = current;
-      void readAccountProfile(current.signal)
-        .then((profile) => {
-          if (!current.signal.aborted) {
-            setProfileName(profile.name?.trim() || null);
-            setProfileEmail(profile.email?.trim() || null);
-          }
-        })
-        .catch(() => {
-          // The menu remains usable when a profile read is unavailable.
-        });
-    };
-    const refreshAfterUpdate = () => {
-      setProfileName(null);
-      refresh();
-    };
-    refresh();
-    window.addEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
-    return () => {
-      window.removeEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
-      controller?.abort();
-    };
-  }, [authenticated]);
 
   const accountName = authenticated ? profileName : null;
   const accountLabel = authenticated
@@ -170,6 +141,7 @@ export function ProfileMenu({
     setError("");
     try {
       await requestSalesXrayLogout(upload, unresolved);
+      invalidateShellProfile();
       // Discard the mounted report, audio and client route cache after logout.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign out must discard private document state.
       window.location.assign("/");

@@ -25,7 +25,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { readAccountProfile } from "../account-profile-client";
+import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
@@ -152,7 +152,11 @@ function LightboxShellFrame({
         ])
       : null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [profileName, setProfileName] = useState(cached.profileName);
+  const profile = useShellProfile(
+    authenticated,
+    process.env.NODE_ENV !== "test",
+  );
+  const profileName = profile?.name?.trim() || null;
   const [recentCalls, setRecentCalls] = useState(() =>
     recentCallsForContext(cached, recentContextKey),
   );
@@ -321,23 +325,6 @@ function LightboxShellFrame({
     } catch {}
     return () => controller.abort();
   }, [authenticated, accountKey]);
-
-  useEffect(() => {
-    if (!authenticated || process.env.NODE_ENV === "test") {
-      return;
-    }
-    const controller = new AbortController();
-    readAccountProfile(controller.signal)
-      .then((profile) => {
-        if (!controller.signal.aborted && profile.name?.trim()) {
-          const name = profile.name.trim();
-          setProfileName(name);
-          updateShellState({ profileName: name });
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [authenticated]);
 
   useEffect(() => {
     if (!switcherOpen) return;

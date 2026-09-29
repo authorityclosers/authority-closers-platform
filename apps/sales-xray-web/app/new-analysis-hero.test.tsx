@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
-import { updateShellState } from "./shell/shell-store";
+import {
+  invalidateShellProfile,
+  readShellProfile,
+} from "./shell/profile-store";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -22,11 +25,27 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  updateShellState({ profileName: null });
+  invalidateShellProfile();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 it("welcomes the person by first name", async () => {
-  updateShellState({ profileName: "Suyash Rahegaonkar" });
+  vi.stubEnv("NODE_ENV", "development");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      Response.json({
+        name: "Suyash Rahegaonkar",
+        email: "person@example.test",
+        phone_number_e164: null,
+        phone_verified: false,
+        profile_complete: false,
+        revision: 0,
+      }),
+    ),
+  );
+  await readShellProfile("document");
   await act(async () => root.render(<NewAnalysisHero />));
   expect(host.querySelector("h2")?.textContent).toBe(
     "Let's analyse your next call, Suyash🎧",

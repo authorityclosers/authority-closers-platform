@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { invalidateShellProfile } from "./shell/profile-store";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
 import { WorkspaceAccessProvider } from "./workspace-access";
@@ -19,6 +20,7 @@ const profile = (name: string | null) => ({
   revision: 1,
 });
 beforeEach(() => {
+  invalidateShellProfile();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -133,6 +135,7 @@ it("refreshes the name after a confirmed profile update", async () => {
   expect(
     host.querySelector('[aria-label="Profile actions"]')?.textContent,
   ).toContain("Morgan Lee");
+  invalidateShellProfile();
   await act(async () => window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT)));
   expect(
     host

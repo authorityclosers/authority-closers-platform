@@ -9,7 +9,11 @@ import {
   type AccountProfileRecord,
 } from "./account-profile-client";
 import { useProfileFirstName } from "./profile-first-name";
-import { updateShellState } from "./shell/shell-store";
+import { getShellState } from "./shell/shell-store";
+import {
+  invalidateShellProfile,
+  readShellProfile,
+} from "./shell/profile-store";
 
 vi.mock("./account-profile-client", () => ({
   readAccountProfile: vi.fn(),
@@ -41,7 +45,7 @@ describe("useProfileFirstName", () => {
   beforeEach(() => {
     host = document.createElement("div");
     document.body.append(host);
-    updateShellState({ profileName: null });
+    invalidateShellProfile();
     vi.clearAllMocks();
   });
 
@@ -49,13 +53,15 @@ describe("useProfileFirstName", () => {
     if (root) await act(async () => root?.unmount());
     root = undefined;
     host.remove();
-    updateShellState({ profileName: null });
+    invalidateShellProfile();
     vi.unstubAllEnvs();
   });
 
   it("keeps the server and initial client render name-free, then uses cache", async () => {
     vi.stubEnv("NODE_ENV", "development");
-    updateShellState({ profileName: "  Ada Lovelace " });
+    vi.mocked(readAccountProfile).mockResolvedValue(profile("  Ada Lovelace "));
+    await readShellProfile("document");
+    vi.clearAllMocks();
     expect(renderToString(<FirstName />)).toBe("<span></span>");
 
     const mountedRoot = createRoot(host);
@@ -85,7 +91,7 @@ describe("useProfileFirstName", () => {
     expect(host.textContent).toBe("");
     expect(readAccountProfile).toHaveBeenCalledOnce();
     const signal = vi.mocked(readAccountProfile).mock.calls[0]?.[0];
-    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal).toBeUndefined();
 
     await act(async () => resolveProfile(profile(" Ada Lovelace ")));
     expect(host.textContent).toBe("Ada");
@@ -116,7 +122,7 @@ describe("useProfileFirstName", () => {
     expect(host.textContent).toBe("");
   });
 
-  it("aborts the profile read and ignores a late response after unmount", async () => {
+  it("keeps the shared profile read alive after a consumer unmounts", async () => {
     vi.stubEnv("NODE_ENV", "development");
     let resolveProfile!: (value: AccountProfileRecord) => void;
     vi.mocked(readAccountProfile).mockReturnValue(
@@ -129,11 +135,11 @@ describe("useProfileFirstName", () => {
     root = mountedRoot;
     act(() => mountedRoot.render(<FirstName />));
     const signal = vi.mocked(readAccountProfile).mock.calls[0]?.[0];
-    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal).toBeUndefined();
 
     await act(async () => mountedRoot.unmount());
     root = undefined;
-    expect(signal?.aborted).toBe(true);
+    expect(signal).toBeUndefined();
 
     const readLateName = vi.fn(() => "Ada Lovelace");
     const lateProfile: AccountProfileRecord = {
@@ -150,7 +156,9 @@ describe("useProfileFirstName", () => {
       resolveProfile(lateProfile);
       await Promise.resolve();
     });
-    expect(readLateName).not.toHaveBeenCalled();
+    expect(getShellState().profileName).toBe("Ada Lovelace");
+    await expect(readShellProfile("document")).resolves.toBe(lateProfile);
+    expect(readAccountProfile).toHaveBeenCalledOnce();
   });
 
   it("keeps the existing test-environment profile request guard", async () => {
