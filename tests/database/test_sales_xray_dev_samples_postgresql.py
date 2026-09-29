@@ -31,6 +31,7 @@ from ac_platform.development.sales_xray_samples import (
 )
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import _make_due
 from tests.database.test_conversation_submission_http_postgresql import (
@@ -199,7 +200,9 @@ def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
                                 select(
                                     ConversationInferenceTask.stage,
                                     ConversationInferenceTask.state,
+                                    Job.last_error,
                                 )
+                                .join(Job, Job.id == ConversationInferenceTask.job_id)
                             )
                         ).all()
                     safe_progress = [
