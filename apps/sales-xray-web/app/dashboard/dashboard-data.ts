@@ -64,7 +64,11 @@ function exactKeys(
 export function parseCallSummary(value: unknown): CallSummary {
   const item = record(value);
   const code = "dashboard_summary";
-  exactKeys(item, ["total", "processing", "completed", "needs_attention"], code);
+  exactKeys(
+    item,
+    ["total", "processing", "completed", "needs_attention"],
+    code,
+  );
   const summary = {
     total: count(item.total, code),
     processing: count(item.processing, code),

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  AlertCircle,
-  ArrowRight,
-  Clock,
-  FolderOpen,
-  Plus,
-} from "lucide-react";
+import { AlertCircle, ArrowRight, Clock, FolderOpen, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -71,6 +65,39 @@ function formatDayLabel(dateStr: string): string {
 
 export default function DashboardPage() {
   const access = useWorkspaceAccess();
+  if (access?.authenticated !== false) return <DashboardDetails />;
+  return (
+    <LightboxShell
+      active="dashboard"
+      authenticated={false}
+      homeHref="/dashboard"
+    >
+      <section className={styles.emptyCard} aria-labelledby="dashboard-signin">
+        <h2 id="dashboard-signin" className={styles.emptyTitle}>
+          Sign in to see your dashboard
+        </h2>
+        <p className={styles.emptyDescription}>
+          Your saved calls, reports and minutes appear after you sign in.
+        </p>
+        <Link
+          className={styles.primaryAction}
+          href="/login"
+          onClick={(event) => {
+            if (access.requestAccountSignIn) {
+              event.preventDefault();
+              access.requestAccountSignIn();
+            }
+          }}
+        >
+          Sign in
+        </Link>
+      </section>
+    </LightboxShell>
+  );
+}
+
+function DashboardDetails() {
+  const access = useWorkspaceAccess();
 
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
@@ -88,28 +115,24 @@ export default function DashboardPage() {
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
 
   const loadSummary = useCallback((signal?: AbortSignal) => {
-    setSummaryState({ status: "loading" });
     readCallSummary(signal)
       .then((value) => setSummaryState({ status: "ready", value }))
       .catch(() => setSummaryState({ status: "error" }));
   }, []);
 
   const loadActivity = useCallback((signal?: AbortSignal) => {
-    setActivityState({ status: "loading" });
     readCallActivity(signal)
       .then((value) => setActivityState({ status: "ready", value }))
       .catch(() => setActivityState({ status: "error" }));
   }, []);
 
   const loadAllowance = useCallback((signal?: AbortSignal) => {
-    setAllowanceState({ status: "loading" });
     readAllowance(signal)
       .then((value) => setAllowanceState({ status: "ready", value }))
       .catch(() => setAllowanceState({ status: "error" }));
   }, []);
 
   const loadRecent = useCallback((signal?: AbortSignal) => {
-    setRecentState({ status: "loading" });
     readRecentCalls(signal)
       .then((value) => setRecentState({ status: "ready", value }))
       .catch(() => setRecentState({ status: "error" }));
@@ -257,9 +280,12 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadActivity()}
+                  onClick={() => {
+                    setActivityState({ status: "loading" });
+                    loadActivity();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               ) : activity === null ? (
                 "Not available yet"
@@ -293,9 +319,12 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadSummary()}
+                  onClick={() => {
+                    setSummaryState({ status: "loading" });
+                    loadSummary();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               ) : summary === null ? (
                 "Not available yet"
@@ -327,9 +356,12 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadAllowance()}
+                  onClick={() => {
+                    setAllowanceState({ status: "loading" });
+                    loadAllowance();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               ) : (
                 minutesLeft(allowanceState.value).subtext
@@ -361,9 +393,12 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadSummary()}
+                  onClick={() => {
+                    setSummaryState({ status: "loading" });
+                    loadSummary();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               ) : summary === null ? (
                 "Not available yet"
@@ -396,14 +431,19 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadActivity()}
+                  onClick={() => {
+                    setActivityState({ status: "loading" });
+                    loadActivity();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               </div>
             ) : activity === null ? (
               <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>Not available yet.</span>
+                <span className={styles.chartEmptyText}>
+                  Not available yet.
+                </span>
               </div>
             ) : activityAllZero ? (
               <div className={styles.chartEmptyWrap}>
@@ -541,18 +581,25 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   className={styles.retryAction}
-                  onClick={() => loadSummary()}
+                  onClick={() => {
+                    setSummaryState({ status: "loading" });
+                    loadSummary();
+                  }}
                 >
-                  Couldn't load · Retry
+                  Couldn&apos;t load · Retry
                 </button>
               </div>
             ) : summary === null ? (
               <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>Not available yet.</span>
+                <span className={styles.chartEmptyText}>
+                  Not available yet.
+                </span>
               </div>
             ) : summary.total === 0 ? (
               <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>No saved calls yet.</span>
+                <span className={styles.chartEmptyText}>
+                  No saved calls yet.
+                </span>
               </div>
             ) : (
               <div className={styles.skillsList}>
@@ -658,9 +705,12 @@ export default function DashboardPage() {
               <button
                 type="button"
                 className={styles.retryAction}
-                onClick={() => loadRecent()}
+                onClick={() => {
+                  setRecentState({ status: "loading" });
+                  loadRecent();
+                }}
               >
-                Couldn't load · Retry
+                Couldn&apos;t load · Retry
               </button>
             </div>
           ) : recent === null || recent.length === 0 ? (
@@ -669,9 +719,7 @@ export default function DashboardPage() {
                 <FolderOpen size={24} aria-hidden="true" />
               </div>
               <h4 className={styles.emptyTitle}>
-                {isAccountEmpty
-                  ? "Analyse your first call"
-                  : "No calls yet"}
+                {isAccountEmpty ? "Analyse your first call" : "No calls yet"}
               </h4>
               <p className={styles.emptyDescription}>
                 {isAccountEmpty
