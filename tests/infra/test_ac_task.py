@@ -259,6 +259,12 @@ def test_lanes_run_in_parallel_but_hold_one_task_each() -> None:
         gate(repo).start("24-promote", "platform")
 
 
+def test_devenv_lane_runs_beside_the_platform_lane() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/platform/23-release-notes")
+    assert gate(repo).start("260-devenv-lane", "devenv") == "task/devenv/260-devenv-lane"
+
+
 def test_an_exclusive_task_blocks_every_lane_and_is_blocked_by_any() -> None:
     repo = FakeRepo()
     repo.branches.append("task/83-development-hosted")
@@ -292,7 +298,8 @@ def test_status_json_reports_each_lane(capsys) -> None:
         '{"main": "green", "active_branches": ["task/platform/23-notes"], '
         '"open_prs": [], "lanes": {"sales-xray": {"holder": null, "free": true}, '
         '"platform": {"holder": "task/platform/23-notes", "free": false}, '
-        '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}}, '
+        '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}, '
+        '"devenv": {"holder": null, "free": true}}, '
         '"exclusive_free": false}\n'
     )
     status = json.loads(output)

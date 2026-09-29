@@ -35,7 +35,7 @@ from pathlib import Path
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
 TASK_NAME_RE = re.compile(r"[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*")
-LANES = ("sales-xray", "platform", "admin", "ui")
+LANES = ("sales-xray", "platform", "admin", "ui", "devenv")
 EXCLUSIVE = "exclusive"
 SHARED_PREFIXES = ("db/migrations/", ".github/")
 SHARED_FILES = frozenset(
