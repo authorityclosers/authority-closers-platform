@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationProcessingPlan,
     ConversationQuote,
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
@@ -27,6 +28,7 @@ from ac_platform.development.sales_xray_samples import build_fake_router, seed_a
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
 from tests.database.test_conversation_postgresql import run
+from tests.database.test_conversation_processing_plan_postgresql import _make_due
 from tests.database.test_conversation_submission_http_postgresql import (
     ORIGIN,
     _setup,
@@ -132,9 +134,21 @@ def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
             inference = ConversationInferenceWorker(
                 setup.sessions, setup.runtime.storage, router, authority=setup.authority
             )
-            scheduler = ProcessingPlanScheduler(
-                setup.sessions, setup.authority, setup.runtime.storage
-            )
+
+            class DueScheduler(ProcessingPlanScheduler):
+                async def step(self) -> bool:
+                    async with setup.sessions() as db:
+                        plan_id = await db.scalar(
+                            select(ConversationProcessingPlan.id)
+                            .where(ConversationProcessingPlan.state == "active")
+                            .order_by(ConversationProcessingPlan.next_check_at)
+                            .limit(1)
+                        )
+                    if plan_id is not None:
+                        await _make_due(setup, plan_id)
+                    return await super().step()
+
+            scheduler = DueScheduler(setup.sessions, setup.authority, setup.runtime.storage)
 
             async def publish_pending() -> None:
                 await _reconcile(setup.sessions, setup.state)
