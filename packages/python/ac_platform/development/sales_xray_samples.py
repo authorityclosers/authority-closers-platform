@@ -15,9 +15,10 @@ import secrets
 import stat
 import sys
 import time
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid5
 
 import httpx
@@ -46,6 +47,7 @@ from ac_platform.development.sales_xray_sample_fakes import (
     fictional_audio,
 )
 from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
@@ -171,9 +173,7 @@ def _install_sample_routes(
     settings: Settings,
     sessions: async_sessionmaker[AsyncSession],
     actor: ResolvedActorContext,
-) -> tuple[FastAPI, object, SocketNativeRuntime]:
-    from ac_platform.http.conversation_intake import ConversationIntakeRuntime
-
+) -> tuple[FastAPI, ConversationIntakeRuntime, SocketNativeRuntime]:
     intake = compose_hosted_intake(settings)
     if not isinstance(intake, ConversationIntakeRuntime) or intake.authority is None:
         raise SampleRefused("Refusing: hosted dev upload and report runtime is not ready.")
@@ -194,7 +194,7 @@ def _install_sample_routes(
         expected_image_ref=settings.sales_xray_native_image_ref,
     )
 
-    async def require_actor(request: Request):
+    async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         # This in-process adapter binds the request to an already active account
         # session selected by ID. It never creates or changes an identity session.
         async with sessions() as db, db.begin():
@@ -203,7 +203,8 @@ def _install_sample_routes(
     require_actor.read_only = require_actor  # type: ignore[attr-defined]
     app = FastAPI(title="Fictional development sample runner", docs_url=None, redoc_url=None)
     register_problem_handlers(app)
-    operations_tenant_id = intake.authority.operations_tenant_id or settings.operations_tenant_id
+    authority = intake.authority
+    operations_tenant_id = authority.operations_tenant_id or settings.operations_tenant_id
     policy_revision = settings.sales_xray_acquisition_policy_revision
     if settings.public_learner_tenant_id is None or not policy_revision:
         raise SampleRefused("Refusing: the dev learner upload policy is not configured.")
@@ -213,7 +214,7 @@ def _install_sample_routes(
             db,
             tenant_id=settings.public_learner_tenant_id,  # type: ignore[arg-type]
             policy_revision=policy_revision,
-            tester_policy=intake.authority.tester_policy,
+            tester_policy=authority.tester_policy,
             operations_tenant_id=operations_tenant_id,
         )
 
@@ -311,7 +312,7 @@ async def seed_account_samples(
     recording_ids: set[UUID] = set()
     completed: list[UUID] = []
 
-    async def request(method: str, path: str, **kwargs: object) -> httpx.Response:
+    async def request(method: str, path: str, **kwargs: Any) -> httpx.Response:
         response = await client.request(method, base + path, **kwargs)
         if response.status_code not in {200, 201, 202, 204}:
             raise SampleRefused(f"The Sales Xray route returned HTTP {response.status_code}.")
@@ -343,12 +344,12 @@ async def seed_account_samples(
         label = f"Sample call {number} · fictional"
         current = by_label.get(label)
         if current and current.get("state") == "report_ready" and current.get("has_report"):
-            submission_id = UUID(current["submission_id"])
+            submission_id = UUID(str(current["submission_id"]))
             completed.append(submission_id)
             print(f"Skipping existing {label}.")
             continue
         submission_id = (
-            UUID(current["submission_id"])
+            UUID(str(current["submission_id"]))
             if current
             else uuid5(_SAMPLE_NAMESPACE, f"{person_id}:{number}")
         )
