@@ -650,18 +650,14 @@ def test_failed_web_attempt_does_not_append_a_release(tmp_path: Path) -> None:
 
 def test_release_record_action_rules_and_rollback_parent(tmp_path: Path) -> None:
     with pytest.raises(MODULE.ReleaseError, match="promoted release cannot"):
-        MODULE._validate_release_record(
-            release_event("v0.3.0", rolled_back_from="v0.2.0")
-        )
+        MODULE._validate_release_record(release_event("v0.3.0", rolled_back_from="v0.2.0"))
     with pytest.raises(MODULE.ReleaseError, match="rollback release must"):
         MODULE._validate_release_record(release_event("v0.3.0", action="rollback"))
 
     engine = make_engine(tmp_path)
     engine.append_release(release_event("v0.3.0"))
     with pytest.raises(MODULE.ReleaseError, match="current production version"):
-        engine.append_release(
-            release_event("v0.2.0", action="rollback", rolled_back_from="v0.2.9")
-        )
+        engine.append_release(release_event("v0.2.0", action="rollback", rolled_back_from="v0.2.9"))
 
 
 @pytest.mark.parametrize(

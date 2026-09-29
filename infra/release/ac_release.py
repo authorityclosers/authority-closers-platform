@@ -834,8 +834,7 @@ class Engine:
             if not self.passed_staging(core_sha, "core") or not self.passed_staging(web_sha, "web"):
                 raise ReleaseError("both staging components must have a successful staging deploy")
             if any(
-                self.paths.failed_flag("staging", component).exists()
-                for component in COMPONENTS
+                self.paths.failed_flag("staging", component).exists() for component in COMPONENTS
             ):
                 raise ReleaseError("staging has a failed deploy that must be cleared first")
             core_build = self.stored_build(core_sha, "core")
