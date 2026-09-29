@@ -12,6 +12,10 @@ from typing import Any
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.reports import (
+    FACT_PROMPT_COMPACT_MARKER,
+    compact_fact_limits,
+)
 
 # This dialogue is invented for a report UI fixture. Names are fictional first
 # names. It includes a price objection, an under-explored buying signal, and a
@@ -609,13 +613,28 @@ class FictionalReportingBroker:
             if user.startswith("{"):
                 request = json.loads(user)
                 segments = request["segments"]
+                system = (
+                    body["systemInstruction"]["parts"][0]["text"]
+                    if provider == "gemini"
+                    else body["messages"][0]["content"]
+                )
+                if FACT_PROMPT_COMPACT_MARKER in system:
+                    maximum = (
+                        body["generationConfig"]["maxOutputTokens"]
+                        if provider == "gemini"
+                        else body["max_completion_tokens"]
+                    )
+                    observation_limit = compact_fact_limits(maximum)[0]
+                else:
+                    observation_limit = 8
+                stride = max(1, (len(segments) + observation_limit - 1) // observation_limit)
                 observations = [
                     {
                         "fact": "The speaker described a concrete call workflow.",
                         "segment_id": segment["id"],
                         "quote": segment["text"],
                     }
-                    for segment in segments[::3]
+                    for segment in segments[::stride]
                 ]
                 data = {
                     "overview": (

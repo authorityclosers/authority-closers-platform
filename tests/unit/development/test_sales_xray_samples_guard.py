@@ -155,7 +155,12 @@ def test_fake_c4_result_uses_gemini_envelope_and_zero_usage() -> None:
         source_sha256=source_sha256,
     )
     transcript["duration_ms"] = _AUDIO_DURATION_SECONDS * 1000
-    prepared = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
+    prepared = prepare_fact_inputs(
+        transcript,
+        provider="gemini",
+        model="gemini-3.8-flash",
+        prompt_revision="facts-v2",
+    )[0]
     reservation = SimpleNamespace(
         quote=SimpleNamespace(
             provider_id="gemini",
@@ -167,6 +172,7 @@ def test_fake_c4_result_uses_gemini_envelope_and_zero_usage() -> None:
     facts = validate_fact_result(result, prepared, transcript).data()
 
     assert facts["observations"]
+    assert len(facts["observations"]) <= 8
     assert all(value == 0 for value in result.usage.values())
 
 
