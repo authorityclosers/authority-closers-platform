@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  AlertCircle,
   AudioLines,
-  CheckCircle2,
   ChevronDown,
   ChevronsUpDown,
   CircleUserRound,
   FolderOpen,
   HelpCircle,
   LayoutGrid,
-  Loader,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -41,6 +38,7 @@ import {
 } from "../dashboard/dashboard-data";
 import {
   getShellState,
+  recentCallsForContext,
   updateShellState,
 } from "./shell-store";
 import styles from "./lightbox-shell.module.css";
@@ -125,24 +123,46 @@ export function LightboxShell({
   allowance = null,
   displayName = null,
 }: LightboxShellProps) {
+  const access = useWorkspaceAccess();
   const cached = getShellState();
+  const accountKey = access?.context
+    ? JSON.stringify([access.context.personId, access.context.sessionId])
+    : null;
   const [collapsed, setCollapsed] = useState(cached.collapsed);
-  const [counts, setCounts] = useState<CallSummary | null>(cached.counts);
+  const [, setCounts] = useState<CallSummary | null>(cached.counts);
   const [workspaces, setWorkspaces] = useState(cached.workspaces);
-  const [selectedTenantId, setSelectedTenantId] = useState(cached.selectedTenantId);
+  const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
+    cached.selectedTenantAccountKey,
+  );
+  const [selectedTenantId, setSelectedTenantId] = useState(() =>
+    accountKey && cached.selectedTenantAccountKey === accountKey
+      ? cached.selectedTenantId
+      : (access?.context?.tenantId ?? null),
+  );
+  const effectiveTenantId =
+    accountKey && selectedTenantAccountKey === accountKey
+      ? selectedTenantId
+      : (access?.context?.tenantId ?? null);
+  const recentContextKey =
+    authenticated && access?.context && effectiveTenantId
+      ? JSON.stringify([
+          access.context.personId,
+          access.context.sessionId,
+          effectiveTenantId,
+        ])
+      : null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [statusQuery] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return new URLSearchParams(window.location.search).get("status");
-  });
   const [profileName, setProfileName] = useState(cached.profileName);
-  const [recentCalls, setRecentCalls] = useState(cached.recentCalls);
+  const [recentCalls, setRecentCalls] = useState(() =>
+    recentCallsForContext(cached, recentContextKey),
+  );
+  const [recentCallsContextKey, setRecentCallsContextKey] = useState(
+    cached.recentCallsContextKey,
+  );
   const [recentsOpen, setRecentsOpen] = useState(cached.recentsOpen);
 
   const switcherRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const access = useWorkspaceAccess();
-
   const accountHref = authenticated ? "/account" : "/login";
   const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
@@ -172,34 +192,62 @@ export function LightboxShell({
   }, []);
 
   useEffect(() => {
-    if (!authenticated || process.env.NODE_ENV === "test") {
-      setRecentCalls([]);
-      updateShellState({ recentCalls: [] });
+    if (
+      !authenticated ||
+      recentContextKey === null ||
+      process.env.NODE_ENV === "test"
+    ) {
+      updateShellState({
+        recentCalls: [],
+        recentCallsContextKey: null,
+        recentFetchedAt: null,
+      });
       return;
     }
     const cached = getShellState();
-    if (cached.fetchedAt !== null && Date.now() - cached.fetchedAt < 60_000) {
+    if (
+      cached.recentCallsContextKey === recentContextKey &&
+      cached.recentFetchedAt !== null &&
+      Date.now() - cached.recentFetchedAt < 60_000
+    ) {
       return;
     }
     const controller = new AbortController();
+    updateShellState({
+      recentCalls: [],
+      recentCallsContextKey: null,
+      recentFetchedAt: null,
+    });
     readRecentCalls(controller.signal)
       .then((submissions) => {
+        if (controller.signal.aborted) return;
         const mapped = submissions.map((call) => ({
           id: call.id,
           name: call.label?.displayName ?? "Untitled call",
-          date: new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-            new Date(call.createdAt),
-          ),
+          date: new Intl.DateTimeFormat(undefined, {
+            dateStyle: "medium",
+          }).format(new Date(call.createdAt)),
         }));
         setRecentCalls(mapped);
-        updateShellState({ recentCalls: mapped, fetchedAt: Date.now() });
+        setRecentCallsContextKey(recentContextKey);
+        updateShellState({
+          recentCalls: mapped,
+          recentCallsContextKey: recentContextKey,
+          recentFetchedAt: Date.now(),
+        });
       })
       .catch(() => {
+        if (controller.signal.aborted) return;
         setRecentCalls([]);
-        updateShellState({ recentCalls: [] });
+        setRecentCallsContextKey(recentContextKey);
+        updateShellState({
+          recentCalls: [],
+          recentCallsContextKey: recentContextKey,
+          recentFetchedAt: null,
+        });
       });
     return () => controller.abort();
-  }, [authenticated]);
+  }, [authenticated, recentContextKey]);
 
   useEffect(() => {
     if (!authenticated || process.env.NODE_ENV === "test") {
@@ -208,18 +256,20 @@ export function LightboxShell({
     const controller = new AbortController();
     readCallSummary(controller.signal)
       .then((data) => {
+        if (controller.signal.aborted) return;
         setCounts(data);
         updateShellState({ counts: data });
       })
       .catch(() => {
+        if (controller.signal.aborted) return;
         setCounts(null);
         updateShellState({ counts: null });
       });
     return () => controller.abort();
-  }, [authenticated]);
+  }, [authenticated, recentContextKey]);
 
   useEffect(() => {
-    if (!authenticated || process.env.NODE_ENV === "test") {
+    if (!authenticated || !accountKey || process.env.NODE_ENV === "test") {
       return;
     }
     const controller = new AbortController();
@@ -232,14 +282,22 @@ export function LightboxShell({
         promise
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
-            if (data && Array.isArray(data.workspaces)) {
+            if (
+              !controller.signal.aborted &&
+              data &&
+              Array.isArray(data.workspaces)
+            ) {
               setWorkspaces(data.workspaces);
               const chosen =
-                data.selected_tenant_id || data.workspaces[0]?.tenant_id || null;
+                data.selected_tenant_id ||
+                data.workspaces[0]?.tenant_id ||
+                null;
+              setSelectedTenantAccountKey(accountKey);
               setSelectedTenantId(chosen);
               updateShellState({
                 workspaces: data.workspaces,
                 selectedTenantId: chosen,
+                selectedTenantAccountKey: accountKey,
                 fetchedAt: Date.now(),
               });
             }
@@ -248,7 +306,7 @@ export function LightboxShell({
       }
     } catch {}
     return () => controller.abort();
-  }, [authenticated]);
+  }, [authenticated, accountKey]);
 
   useEffect(() => {
     if (!authenticated || process.env.NODE_ENV === "test") {
@@ -291,7 +349,7 @@ export function LightboxShell({
   }, [switcherOpen]);
 
   async function handleSelectWorkspace(tenantId: string) {
-    if (tenantId === selectedTenantId) {
+    if (tenantId === effectiveTenantId) {
       setSwitcherOpen(false);
       return;
     }
@@ -304,7 +362,17 @@ export function LightboxShell({
       });
       if (res.ok) {
         setSelectedTenantId(tenantId);
+        setSelectedTenantAccountKey(accountKey);
         setSwitcherOpen(false);
+        setRecentCalls([]);
+        setRecentCallsContextKey(null);
+        updateShellState({
+          selectedTenantId: tenantId,
+          selectedTenantAccountKey: accountKey,
+          recentCalls: [],
+          recentCallsContextKey: null,
+          recentFetchedAt: null,
+        });
         const data = await readCallSummary();
         setCounts(data);
         updateShellState({ counts: data });
@@ -320,16 +388,22 @@ export function LightboxShell({
   }
 
   const currentWorkspace =
-    workspaces.find((w) => w.tenant_id === selectedTenantId) ||
+    workspaces.find((w) => w.tenant_id === effectiveTenantId) ||
     workspaces[0] ||
     null;
   const currentWorkspaceName =
     profileName ||
-    (currentWorkspace?.name && !currentWorkspace.name.toLowerCase().includes("closers academy")
+    (currentWorkspace?.name &&
+    !currentWorkspace.name.toLowerCase().includes("closers academy")
       ? currentWorkspace.name
       : null) ||
     displayName ||
     "Workspace";
+  const visibleRecentCalls =
+    recentCallsContextKey === recentContextKey &&
+    getShellState().recentCallsContextKey === recentContextKey
+      ? recentCalls
+      : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
 
   return (
@@ -423,7 +497,10 @@ export function LightboxShell({
         {/* 248px Panel */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <div className={styles.workspaceSwitcherContainer} ref={switcherRef}>
+            <div
+              className={styles.workspaceSwitcherContainer}
+              ref={switcherRef}
+            >
               <button
                 type="button"
                 className={styles.workspaceTrigger}
@@ -441,7 +518,10 @@ export function LightboxShell({
                   {getInitials(currentWorkspaceName)}
                 </div>
                 <div className={styles.workspaceCopy}>
-                  <div className={styles.workspaceName} title={currentWorkspaceName}>
+                  <div
+                    className={styles.workspaceName}
+                    title={currentWorkspaceName}
+                  >
                     {currentWorkspaceName}
                   </div>
                   <div className={styles.workspaceSub}>Private workspace</div>
@@ -456,7 +536,7 @@ export function LightboxShell({
               {switcherOpen && workspaces.length > 1 && (
                 <div className={styles.workspacePopover} role="menu">
                   {workspaces.map((w) => {
-                    const isSelected = w.tenant_id === selectedTenantId;
+                    const isSelected = w.tenant_id === effectiveTenantId;
                     return (
                       <button
                         key={w.tenant_id}
@@ -470,7 +550,9 @@ export function LightboxShell({
                         >
                           {isSelected ? "●" : "○"}
                         </span>
-                        <span className={styles.workspaceItemName}>{w.name}</span>
+                        <span className={styles.workspaceItemName}>
+                          {w.name}
+                        </span>
                       </button>
                     );
                   })}
@@ -511,20 +593,28 @@ export function LightboxShell({
                 />
                 <span className={styles.recentsTitle}>Recents</span>
               </button>
-              <Link href="/calls" className={styles.recentsViewAll} title="View all calls">
+              <Link
+                href="/calls"
+                className={styles.recentsViewAll}
+                title="View all calls"
+              >
                 View all
               </Link>
             </div>
             {recentsOpen && (
               <div className={styles.recentsList}>
-                {recentCalls.map((call) => (
+                {visibleRecentCalls.map((call) => (
                   <Link
                     key={call.id}
                     href={`/calls?id=${call.id}`}
                     className={styles.recentItem}
                     title={call.name}
                   >
-                    <AudioLines size={14} className={styles.recentIcon} aria-hidden="true" />
+                    <AudioLines
+                      size={14}
+                      className={styles.recentIcon}
+                      aria-hidden="true"
+                    />
                     <span className={styles.recentName}>{call.name}</span>
                     <span className={styles.recentDate}>{call.date}</span>
                   </Link>
@@ -557,7 +647,9 @@ export function LightboxShell({
               <div className={styles.titleWrap}>
                 <div className={styles.topBarTitle}>
                   <span className={styles.titleContext}>Sales Xray</span>
-                  <span className={styles.titleSlash} aria-hidden="true">/</span>
+                  <span className={styles.titleSlash} aria-hidden="true">
+                    /
+                  </span>
                   <span className={styles.titleText}>{pageTitle}</span>
                   {active === "dashboard" && (
                     <span className={styles.titleBadge}>
@@ -571,7 +663,11 @@ export function LightboxShell({
           </div>
           <div className={styles.topBarRight}>
             <div className={styles.searchBox}>
-              <Search size={15} className={styles.searchIcon} aria-hidden="true" />
+              <Search
+                size={15}
+                className={styles.searchIcon}
+                aria-hidden="true"
+              />
               <input
                 ref={searchInputRef}
                 type="search"
@@ -581,14 +677,6 @@ export function LightboxShell({
               />
               <kbd className={styles.searchKbd}>⌘K</kbd>
             </div>
-            <a
-              href="mailto:support@authorityclosers.com"
-              className={styles.helpButton}
-              aria-label="Help & support"
-              title="Help & support"
-            >
-              <HelpCircle size={18} aria-hidden="true" />
-            </a>
             <ProfileMenu
               authenticated={authenticated}
               accountHref={accountHref}

@@ -25,8 +25,11 @@ export interface ShellStoreState {
   collapsed: boolean;
   workspaces: ShellWorkspace[];
   selectedTenantId: string | null;
+  selectedTenantAccountKey: string | null;
   counts: ShellSummaryCounts | null;
   recentCalls: ShellRecentCall[];
+  recentCallsContextKey: string | null;
+  recentFetchedAt: number | null;
   profileName: string | null;
   recentsOpen: boolean;
   /** Timestamp (ms) of the last successful workspace/profile fetch, or null. */
@@ -37,8 +40,11 @@ let globalState: ShellStoreState = {
   collapsed: false,
   workspaces: [],
   selectedTenantId: null,
+  selectedTenantAccountKey: null,
   counts: null,
   recentCalls: [],
+  recentCallsContextKey: null,
+  recentFetchedAt: null,
   profileName: null,
   recentsOpen: true,
   fetchedAt: null,
@@ -58,7 +64,18 @@ export function getShellState(): ShellStoreState {
   return globalState;
 }
 
-export function updateShellState(patch: Partial<ShellStoreState>): ShellStoreState {
+export function updateShellState(
+  patch: Partial<ShellStoreState>,
+): ShellStoreState {
   globalState = { ...globalState, ...patch };
   return globalState;
+}
+
+export function recentCallsForContext(
+  state: Pick<ShellStoreState, "recentCalls" | "recentCallsContextKey">,
+  contextKey: string | null,
+): ShellRecentCall[] {
+  return contextKey !== null && state.recentCallsContextKey === contextKey
+    ? state.recentCalls
+    : [];
 }
