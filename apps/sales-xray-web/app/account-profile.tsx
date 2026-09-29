@@ -26,6 +26,7 @@ import {
 } from "./account-profile-client";
 import styles from "./account-profile.module.css";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
+import { invalidateShellProfile } from "./shell/profile-store";
 
 export type SelectedFileMetadata = Readonly<{
   name: string;
@@ -291,6 +292,7 @@ export function AccountProfile({
         },
         currentController.signal,
       );
+      invalidateShellProfile();
       if (!active()) return;
       saved = true;
       window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));

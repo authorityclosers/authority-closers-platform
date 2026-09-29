@@ -22,6 +22,8 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
 }));
 
 import Page from "./page";

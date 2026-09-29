@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { AcquisitionShell } from "./acquisition-shell";
 import { ThemeProvider } from "./lightbox/theme-provider";
+import { updateShellState } from "./shell/shell-store";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -26,6 +27,7 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  updateShellState({ collapsed: false });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -35,40 +37,53 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   localStorage.clear();
+  updateShellState({ collapsed: false });
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-theme-preference");
   document.documentElement.style.colorScheme = "";
   vi.unstubAllGlobals();
 });
 
-it("keeps navigation, one main landmark and help, without placeholder chrome", () => {
-  const shell = render(
-    renderToStaticMarkup(
+it("keeps navigation, one main landmark and help, without placeholder chrome", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new Error("offline profile")),
+  );
+  await act(async () =>
+    root.render(
       <AcquisitionShell authenticated heroStage="welcome">
         <p>Workspace content</p>
       </AcquisitionShell>,
     ),
   );
+  const shell = host;
+  const navigation = shell.querySelector(
+    'aside[aria-label="Sales Xray navigation"]',
+  )!;
+  expect(navigation).not.toBeNull();
   expect(
-    shell.querySelector('[aria-label="Sales Xray navigation"]'),
-  ).not.toBeNull();
-  expect(
-    shell.querySelector('nav[aria-label="Workspace"] a')?.getAttribute("href"),
-  ).toBe("/?new=1");
+    navigation
+      .querySelector('a[aria-label="New analysis"]')
+      ?.getAttribute("href"),
+  ).toBe("/analysis/new");
   expect(
     shell
-      .querySelector('nav[aria-label="Mobile Sales Xray navigation"] a')
+      .querySelector(
+        'nav[aria-label="Mobile Sales Xray navigation"] a[aria-current="page"]',
+      )
       ?.getAttribute("href"),
-  ).toBe("/?new=1");
-  expect(shell.querySelector('a[href="/calls"]')).not.toBeNull();
+  ).toBe("/analysis/new");
+  expect(shell.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
   // Account is its own destination, not a second link to Calls.
-  const account = shell.querySelector<HTMLAnchorElement>(
-    'nav[aria-label="Workspace"] a[href="/account"]',
+  const account = navigation.querySelector<HTMLAnchorElement>(
+    'a[aria-label="Account"][href="/account"]',
   );
   expect(account?.textContent).toBe("Account");
   expect(shell.textContent).not.toContain("Account & saved calls");
   expect(
-    shell.querySelectorAll('nav[aria-label="Workspace"] a[href="/calls"]'),
+    navigation.querySelectorAll(
+      'a[aria-label="Calls"][href="/analysis/calls"]',
+    ),
   ).toHaveLength(1);
   expect(shell.querySelectorAll("main")).toHaveLength(1);
   expect(shell.querySelector("main")?.id).toBe("main-content");
@@ -77,20 +92,32 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", (
   );
   expect(shell.querySelector('a[aria-label="Sales Xray home"]')).not.toBeNull();
 
-  // The former help card and footer links now live behind the "?" control.
-  const help = shell.querySelector("[data-help-menu]")!;
-  expect(help.querySelector('summary[aria-label="Help"]')).not.toBeNull();
-  expect(help.textContent).toContain(
-    "Choose a supported audio file up to 32 MB.",
-  );
-  const legal = help.querySelector('nav[aria-label="Legal and support"]')!;
+  // Studio request 2 moves legal/support actions into the header profile menu.
+  const trigger = shell.querySelector<HTMLButtonElement>(
+    'header button[aria-label="Open AC account menu"]',
+  )!;
+  trigger.focus();
+  await act(async () => trigger.click());
+  const legal = shell.querySelector(
+    '[role="region"][aria-label="Profile actions"]',
+  )!;
+  expect(legal).not.toBeNull();
   expect(
-    [...legal.querySelectorAll("a")].map((link) => link.getAttribute("href")),
+    [...legal.querySelectorAll('a[href^="https://"], a[href^="mailto:"]')].map(
+      (link) => link.getAttribute("href"),
+    ),
   ).toEqual([
     "https://app.authorityclosers.com/privacy",
     "https://app.authorityclosers.com/terms",
     "mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help",
   ]);
+  await act(async () =>
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  expect(shell.querySelector('[aria-label="Profile actions"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
 
   for (const removed of [
     "Need help?",
@@ -175,7 +202,9 @@ it("shows trial minutes only from a verified allowance", () => {
   );
   expect(shell.textContent).toContain("42 of 60 left");
   expect(shell.textContent).toContain("42 min left");
-  expect(shell.textContent).not.toMatch(/\d+%/);
+  // Owner decision (29 Sep 2026): the header ring shows the exact share of
+  // the verified allowance, computed from the session read, never estimated.
+  expect(shell.textContent).toContain("70%");
 
   const unlimited = render(
     renderToStaticMarkup(
@@ -191,24 +220,40 @@ it("shows trial minutes only from a verified allowance", () => {
   expect(unlimited.textContent).toContain("Unlimited analysis time");
 });
 
-it("never claims privacy in the shell chrome; each saved report states it", () => {
+it("never claims privacy in the shell chrome; each saved report states it", async () => {
   const signedIn = renderToStaticMarkup(
     <AcquisitionShell authenticated>
       <p>Content</p>
     </AcquisitionShell>,
   );
-  const guest = renderToStaticMarkup(
-    <AcquisitionShell authenticated={false}>
-      <p>Content</p>
-    </AcquisitionShell>,
+  await act(async () =>
+    root.render(
+      <AcquisitionShell authenticated={false}>
+        <p>Content</p>
+      </AcquisitionShell>,
+    ),
   );
   expect(signedIn).not.toContain("Private to your account");
-  expect(guest).not.toContain("Private to your account");
-  expect(guest).toContain("Profile &amp; account");
-  expect(guest).toContain("Sign in to analyse calls");
+  expect(host.textContent).not.toContain("Private to your account");
+  expect(
+    host
+      .querySelector('a[aria-label="Profile & account"]')
+      ?.getAttribute("href"),
+  ).toBe("/login");
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        'header button[aria-label="Open profile menu"]',
+      )!
+      .click(),
+  );
+  const menu = host.querySelector('[aria-label="Profile actions"]')!;
+  expect(menu.textContent).toContain("Sign in to analyse calls");
+  expect(menu.querySelector('a[href="/login"]')?.textContent).toBe("Sign in");
+  expect(host.textContent).not.toContain("Private to your account");
 });
 
-it("collapses the rail from its own toggle and keeps focus on it", async () => {
+it("collapses the rail from its own toggle and keeps focus on the visible toggle", async () => {
   await act(async () =>
     root.render(
       <AcquisitionShell authenticated={false}>
@@ -217,18 +262,34 @@ it("collapses the rail from its own toggle and keeps focus on it", async () => {
     ),
   );
   const toggle = host.querySelector<HTMLButtonElement>(
-    '[aria-label="Collapse Sales Xray navigation"]',
+    'button[aria-label="Collapse sidebar navigation"]',
   )!;
-  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  const panel = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+  expect(panel).not.toBeNull();
+  expect(panel.contains(toggle)).toBe(true);
+  expect(panel.hasAttribute("inert")).toBe(false);
+  toggle.focus();
+  expect.soft(toggle.getAttribute("aria-expanded")).toBe("true");
   await act(async () => toggle.click());
-  expect(toggle.getAttribute("aria-label")).toBe(
-    "Expand Sales Xray navigation",
-  );
-  expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(document.activeElement).toBe(toggle);
-  expect(
-    host.querySelector('[data-sidebar-collapsed="true"] aside [data-compact]'),
-  ).not.toBeNull();
+  expect(host.querySelector('[data-sidebar-collapsed="true"]')).not.toBeNull();
+  expect(localStorage.getItem("sx.sidebar.collapsed")).toBe("true");
+  const expand = host.querySelector<HTMLButtonElement>(
+    'button[aria-label="Expand sidebar navigation"]',
+  )!;
+  expect(expand).not.toBeNull();
+  // DOM coverage of the native keyboard exclusion; browser Tab proof is separate.
+  expect(panel.hasAttribute("inert")).toBe(true);
+  expect(panel.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
+  expect(expand.getAttribute("aria-controls")).toBe(panel.id);
+  expect(expand.closest("[inert]")).toBeNull();
+  expect.soft(expand.getAttribute("aria-expanded")).toBe("false");
+  expect.soft(document.activeElement).toBe(expand);
+  expand.focus();
+  await act(async () => expand.click());
+  expect(host.querySelector('[data-sidebar-collapsed="false"]')).not.toBeNull();
+  expect(localStorage.getItem("sx.sidebar.collapsed")).toBe("false");
+  expect(panel.hasAttribute("inert")).toBe(false);
+  expect.soft(document.activeElement).toBe(toggle);
 });
 
 it("offers the theme control in the account menu only when the theme is released", async () => {
@@ -242,10 +303,14 @@ it("offers the theme control in the account menu only when the theme is released
   );
   const openMenu = async () => {
     const trigger = host.querySelector<HTMLButtonElement>(
-      "aside button[aria-expanded]:not([aria-controls])",
+      'header button[aria-label="Open profile menu"]',
     )!;
     await act(async () => trigger.click());
-    return host.querySelector('[aria-label="Profile actions"]');
+    const menu = host.querySelector(
+      '[role="region"][aria-label="Profile actions"]',
+    );
+    expect(menu).not.toBeNull();
+    return menu!;
   };
 
   await act(async () =>

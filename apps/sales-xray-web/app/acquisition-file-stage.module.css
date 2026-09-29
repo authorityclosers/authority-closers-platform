@@ -15,10 +15,10 @@
   justify-content: center;
   gap: 10px;
   padding: 18px 18px 20px;
-  border: 1px dashed #a5dadd;
+  border: 1px dashed var(--lx-teal-edge);
   border-radius: 14px;
-  background: #f5fdfd;
-  color: #112340;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
   text-align: center;
   transition:
     background-color 150ms ease,
@@ -26,12 +26,12 @@
 }
 
 .dropArea[data-drag-active="true"] {
-  border-color: #08a99a;
-  background: #e6fcf7;
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-tint);
 }
 
 .dropArea:focus-within {
-  border-color: #0c938e;
+  border-color: var(--lx-teal);
 }
 
 .cloud {
@@ -42,14 +42,14 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #ddf8f1;
-  color: #099394;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
 }
 
 .cloud::after {
   position: absolute;
   inset: -8px;
-  border: 1px solid #12a99c45;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 50%;
   animation: upload-halo 3.2s ease-out infinite;
   content: "";
@@ -127,7 +127,7 @@
   padding: 1px 7px;
   border: 0;
   background: transparent;
-  color: #0b7f7a;
+  color: var(--lx-teal);
   cursor: pointer;
   font: inherit;
   font-size: 14px;
@@ -170,7 +170,7 @@
 .select:focus-visible,
 .remove:focus-visible,
 .pagination button:focus-visible {
-  outline: 3px solid #7194ff;
+  outline: 3px solid var(--lx-closing);
   outline-offset: 2px;
 }
 
@@ -200,7 +200,7 @@
   justify-content: center;
   gap: 6px 17px;
   margin-top: 4px;
-  color: #4f6689;
+  color: var(--lx-muted);
   font-size: 12.5px;
   line-height: 1.3;
 }
@@ -214,7 +214,7 @@
 
 .facts svg {
   flex: 0 0 auto;
-  color: #245be5;
+  color: var(--lx-closing);
 }
 
 .stage[data-has-files="true"] .dropArea {
@@ -275,14 +275,14 @@
 }
 
 .selectionHeader strong {
-  color: #112340;
+  color: var(--lx-ink);
   font-size: 15px;
   font-weight: 760;
 }
 
 .selectionHeader small {
   overflow: hidden;
-  color: #5a7193;
+  color: var(--lx-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -293,14 +293,14 @@
   padding: 4px 2px;
   border: 0;
   background: transparent;
-  color: #4e668b;
+  color: var(--lx-muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
 }
 
 .clear:hover {
-  color: #d23c4d;
+  color: var(--lx-danger);
 }
 
 .fileList {
@@ -319,15 +319,15 @@
   align-items: center;
   gap: 10px;
   padding: 7px 9px;
-  border: 1px solid #d9e6f9;
+  border: 1px solid var(--lx-line);
   border-radius: 11px;
-  background: #fff;
-  box-shadow: 0 4px 12px #22458b08;
+  background: var(--lx-surface);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
 }
 
 .fileCard[data-selected="true"] {
-  border-color: #a8dddd;
-  background: #fbffff;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
 }
 
 .fileIcon {
@@ -337,8 +337,8 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
-  background: #def8f1;
-  color: #06938d;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
 }
 
 .fileCopy {
@@ -350,7 +350,7 @@
 
 .fileCopy strong {
   overflow: hidden;
-  color: #112340;
+  color: var(--lx-ink);
   font-size: 13px;
   font-weight: 740;
   text-overflow: ellipsis;
@@ -359,7 +359,7 @@
 
 .fileCopy small {
   overflow: hidden;
-  color: #60799f;
+  color: var(--lx-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -376,22 +376,22 @@
   padding: 3px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: #ddf8f0;
-  color: #047d76;
+  background: var(--lx-teal-soft);
+  color: var(--lx-strength-ink);
   font: inherit;
   font-size: 11px;
   font-weight: 750;
 }
 
 .select {
-  border-color: #d5e0fb;
-  background: #fff;
-  color: #2256d1;
+  border-color: var(--lx-line);
+  background: var(--lx-surface);
+  color: var(--lx-closing-ink);
   cursor: pointer;
 }
 
 .select:hover:not(:disabled) {
-  background: #eff5ff;
+  background: var(--lx-closing-soft);
 }
 
 .remove {
@@ -404,13 +404,13 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #557198;
+  color: var(--lx-muted);
   cursor: pointer;
 }
 
 .remove:hover:not(:disabled) {
-  background: #fff0f1;
-  color: #c62f46;
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
 }
 
 .pagination {
@@ -418,7 +418,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #60799f;
+  color: var(--lx-muted);
   font-size: 11px;
 }
 
@@ -426,7 +426,7 @@
   padding: 3px 5px;
   border: 0;
   background: transparent;
-  color: #245be5;
+  color: var(--lx-closing);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
@@ -609,4 +609,59 @@
   .uploadArrow {
     animation: none;
   }
+}
+
+/* Empty state: one calm, centred drop target. */
+.stage[data-has-files="false"] .dropArea {
+  display: flex;
+  min-height: 260px;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 24px;
+  border: 1.5px dashed var(--lx-teal-edge);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  text-align: center;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.stage[data-has-files="false"] .dropArea:hover,
+.stage[data-has-files="false"] .dropArea[data-drag-active="true"] {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-tint);
+}
+.stage[data-has-files="false"] .dropCopy {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.stage[data-has-files="false"] .dropCopy strong {
+  color: var(--lx-ink);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.limits {
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+.stage[data-has-files="false"] .browse {
+  margin-top: 10px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.stage[data-has-files="false"] .browse:hover:not(:disabled) {
+  background: var(--lx-teal-hover);
 }

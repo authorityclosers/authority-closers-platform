@@ -125,7 +125,7 @@ export function AccountNavigation({ compact = false }: { compact?: boolean }) {
   if (access?.authenticated === true)
     return (
       <nav className={className} aria-label="Sales Xray account navigation">
-        <Link href="/calls" className="account-nav-link">
+        <Link href="/analysis/calls" className="account-nav-link">
           Saved calls
         </Link>
         <button

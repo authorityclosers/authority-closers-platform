@@ -7,10 +7,47 @@
 .meter[data-variant="rail"] {
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid var(--lx-line);
-  border-radius: var(--lx-radius-md);
-  background: var(--lx-paper-2);
+  border-radius: 10px;
+  background: var(--lx-paper);
+}
+
+.usageRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.donut {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+
+.donutBg {
+  stroke: var(--lx-line-soft);
+}
+
+.donutVal {
+  stroke: var(--lx-teal);
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.availableLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lx-ink);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.infoIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--lx-muted);
+  cursor: pointer;
+  flex: none;
 }
 
 .meter[data-variant="pill"] {

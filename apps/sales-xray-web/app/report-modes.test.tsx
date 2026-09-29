@@ -377,6 +377,45 @@ it("keeps an explicit reading bookmark on a desktop viewport", async () => {
   }
 });
 
+it("keeps view and section choices on a path-addressed report after remount", async () => {
+  const restore = desktopViewport(true);
+  try {
+    const path = `/analysis/calls/${call}`;
+    window.history.replaceState(null, "", path);
+    await render(call);
+    expect(mode().dataset.view).toBe("tabs");
+    await act(async () => buttonNamed("Reading view")!.click());
+    expect(mode().dataset.view).toBe("reading");
+    expect(sections().every((section) => !section.hidden)).toBe(true);
+    await act(async () => buttonNamed("Tabbed view")!.click());
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Moments"]')!
+        .click(),
+    );
+    expect(window.location.pathname).toBe(path);
+    expect(new URLSearchParams(window.location.search).has("call")).toBe(false);
+    expect(mode().dataset.reportSection).toBe("moments");
+    await act(async () => root.render(null));
+    await render(call);
+    expect(mode().dataset.view).toBe("tabs");
+    expect(mode().dataset.reportSection).toBe("moments");
+  } finally {
+    restore();
+  }
+});
+
+it("does not apply a query bookmark to a different path-addressed call", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/analysis/calls/7b6443d3-9b2d-4f97-9e70-5e82e54f8738?call=${call}&view=tabs&section=skills`,
+  );
+  await render(call);
+  expect(mode().dataset.reportSection).toBe("overview");
+  expect(mode().dataset.view).toBe("reading");
+});
+
 it("stays in Reading view on a narrow viewport without a choice", async () => {
   const restore = desktopViewport(false);
   try {
