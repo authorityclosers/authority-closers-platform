@@ -44,9 +44,11 @@
    how to check it on dev, and CI is green. Then stop: the CTO reviews and the CEO
    approves.
 5. The CEO approves merges on the owner's behalf; the watchdog merges exactly the
-   approved commit. Billing settings, payment settings, purchases, secrets,
-   production data and data deletion still require the owner's explicit
-   permission.
+   approved change, re-tested on the latest `main`. When a branch update from
+   `main` is the only new commit and the pull request's own diff is unchanged,
+   the approval carries over; any other change needs a new review. Billing
+   settings, payment settings, purchases, secrets, production data and data
+   deletion still require the owner's explicit permission.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
    deploys automatically -> the owner promotes the same build to production from
    Admin -> Releases. No laptop deploys, no manual server edits, no rebuilds
