@@ -538,7 +538,29 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             page.screenshot(path=str(evidence / "workspace-chooser.png"), full_page=True)
             checks.append("Workspace choices came from GET /v1/me/workspaces.")
 
-            own_button.click()
+            # Workspace selection mounts the dashboard after the current
+            # document has already reached networkidle. Wait for its reads
+            # before navigating away, rather than reusing that earlier state.
+            with ExitStack() as dashboard_reads:
+                responses = [
+                    dashboard_reads.enter_context(
+                        page.expect_response(
+                            lambda response, path=path: (
+                                response.request.method == "GET"
+                                and urlsplit(response.url).path == path
+                            )
+                        )
+                    )
+                    for path in (
+                        "/v1/conversation/acquisition/submissions/summary",
+                        "/v1/conversation/acquisition/activity",
+                        "/v1/conversation/acquisition/session",
+                        "/v1/conversation/acquisition/submissions",
+                    )
+                ]
+                own_button.click()
+            for response in responses:
+                response.value.finished()
             page.wait_for_load_state("networkidle")
             page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
                 "link", name="New analysis", exact=True
