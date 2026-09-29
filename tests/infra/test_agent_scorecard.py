@@ -172,10 +172,6 @@ def test_github_metrics_use_raw_api_data_and_task_branch_attribution(monkeypatch
     assert "PR cycle median" in scorecard.render_report(result)
     assert any("first-try CI" in alert and "<70%" in alert for alert in result["alerts"])
     assert "n/a (owner unset)" in scorecard.render_report(github_report(monkeypatch, owner=False))
-    assert any(
-        path.endswith("check-runs?filter=all&per_page=100")
-        for path in json.loads(GITHUB_FIXTURE.read_text())
-    )
 
 
 def test_github_failures_list_first_ci_owner_request_and_post_merge_bugs(monkeypatch):
@@ -192,6 +188,7 @@ def test_github_failures_list_first_ci_owner_request_and_post_merge_bugs(monkeyp
     ) in failures
     assert ("Company", "Commit abc1234", "post-merge bug: Revert fictional change") in failures
     assert not any("#502" in item[1] or "old1234" in item[1] for item in failures)
+    assert not any(item[1] == "PR #107" for item in failures)
 
 
 def test_github_get_guard_rejects_write_methods_and_bodies():

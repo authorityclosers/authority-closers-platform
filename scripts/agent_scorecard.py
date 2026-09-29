@@ -191,9 +191,11 @@ def github_data(repo, start, end, owner=None):
         suites = gh_list(f"repos/{repo}/commits/{first_sha}/check-suites?per_page=100", "check_suites") if first_sha else []
         actions_suites = [s for s in suites if (s.get("app") or {}).get("slug") == "github-actions"
                           and (s.get("latest_check_runs_count") or 0) > 0]
-        first_try_ci = (next((s.get("conclusion") for s in actions_suites
-                              if s.get("conclusion") not in ("success", "neutral", "skipped")), "success")
-                        if actions_suites and all(s.get("status") == "completed" for s in actions_suites) else None)
+        first_try_ci = None
+        if actions_suites and all(s.get("status") == "completed" for s in actions_suites):
+            bad = [s.get("conclusion") for s in actions_suites
+                   if s.get("conclusion") not in ("success", "neutral", "skipped")]
+            first_try_ci = next((c for c in bad if c != "cancelled"), None if bad else "success")
         head = (details.get("head") or {}).get("sha")
         checks = gh_list(f"repos/{repo}/commits/{head}/check-runs?filter=all&per_page=100", "check_runs") if head else []
         gate = [c for c in checks if c.get("name") == "single-track"
@@ -224,7 +226,9 @@ def github_data(repo, start, end, owner=None):
             pr = max(merged, key=lambda p: timestamp(p["merged_at"]))
             bugs.append({"issue": issue["number"], "title": issue.get("title", ""),
                          "merged_at": pr["merged_at"], "lane": lane_agent((pr.get("head") or {}).get("ref", ""))})
-    commits = gh_list(f"repos/{repo}/commits?sha=main&since={dt.datetime.fromtimestamp(cutoff, dt.UTC).isoformat()}&until={dt.datetime.fromtimestamp(end, dt.UTC).isoformat()}&per_page=100")
+    since = dt.datetime.fromtimestamp(cutoff, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    until = dt.datetime.fromtimestamp(end, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    commits = gh_list(f"repos/{repo}/commits?sha=main&since={since}&until={until}&per_page=100")
     reverts = [{"sha": c.get("sha", "")[:7], "message": c.get("commit", {}).get("message", "").splitlines()[0],
                 "committed_at": c.get("commit", {}).get("committer", {}).get("date")}
                for c in commits if c.get("commit", {}).get("message", "").startswith("Revert")]
