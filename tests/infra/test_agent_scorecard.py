@@ -9,6 +9,7 @@ SPEC = importlib.util.spec_from_file_location("scorecard", ROOT / "scripts/agent
 scorecard = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(scorecard)
 FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/week.json"
+BUILDER_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/builder_attribution.json"
 
 
 def report(source=None):
@@ -29,6 +30,33 @@ def test_real_activity_shapes_metrics_alerts_and_week_end():
     assert result["failures"][0] == ("Fictional Agent", "DEMO-2", "cancelled")
     assert result["failures"][1] == ("Fictional Agent", "DEMO-2", "failed")
     assert "209.00 (2 runs unreported)" in rendered and "n/a (AUT-57)" in rendered
+
+
+def test_done_metrics_follow_builder_across_handoff_and_direct_completion():
+    monday, start, end = scorecard.week_window("2026-09-21")
+    source = json.loads(BUILDER_FIXTURE.read_text())
+    rows = dict(scorecard.build_report(source, monday, start, end)["rows"])
+
+    builder = rows["Fictional Builder A"]
+    assert (builder["done"], builder["bounces"]) == (1, 1)
+    assert (builder["tokens"], builder["unreported_runs"], builder["runs_per_task"]) == (400, 0, 2)
+    assert builder["median"] == pytest.approx(6)
+    assert rows["Fictional Reviewer B"]["done"] == 0
+    assert rows["Fictional Reviewer B"]["bounces"] == 0
+    assert rows["Fictional Approver C"]["done"] == 0
+    assert rows["Fictional Approver C"]["bounces"] == 0
+    assert rows["Fictional Direct Builder D"]["done"] == 1
+    assert (rows["Company"]["done"], rows["Company"]["bounces"]) == (3, 1)
+
+
+def test_reopen_after_first_done_does_not_change_builder():
+    monday, start, end = scorecard.week_window("2026-09-21")
+    source = json.loads(BUILDER_FIXTURE.read_text())
+    rows = dict(scorecard.build_report(source, monday, start, end)["rows"])
+
+    assert rows["Fictional Builder E"]["done"] == 1
+    assert rows["Fictional Approver C"]["done"] == 0
+    assert rows["Fictional Builder A"]["median"] == pytest.approx(6)
 
 
 def test_monday_boundary_non_monday_and_no_usage():

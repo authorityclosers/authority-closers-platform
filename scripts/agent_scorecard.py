@@ -93,6 +93,27 @@ def run_tokens(run):
         return None
 
 
+def activity_status(event):
+    details = event.get("details") or {}
+    status = (details.get("changes") or {}).get("status") or {}
+    before = status.get("from") or (details.get("_previous") or {}).get("status")
+    after = status.get("to") or details.get("status")
+    return before, after
+
+
+def builder_for(issue, events):
+    review_builder = done_builder = None
+    for event in events:
+        if event.get("actorType") != "agent" or not event.get("agentId"):
+            continue
+        before, after = activity_status(event)
+        if before == "in_progress" and after == "in_review":
+            review_builder = event["agentId"]
+        elif after == "done" and before != "done":
+            done_builder = event["agentId"]
+    return review_builder or done_builder or issue.get("assigneeAgentId")
+
+
 def build_report(data, monday, start, end):
     issues = {item["id"]: item for item in data["issues"] if item.get("id")}
     names = {
@@ -109,15 +130,20 @@ def build_report(data, monday, start, end):
     cycles = defaultdict(list)
     for issue_id, events in data["activity"].items():
         issue = issues.get(issue_id, {})
-        owner = issue.get("assigneeAgentId")
+        events = sorted(events, key=lambda e: timestamp(e.get("createdAt")) or 0)
+        builder_events = events
+        for index, event in enumerate(events):
+            before, after = activity_status(event)
+            if after == "done" and before != "done":
+                builder_events = events[: index + 1]
+                break
+        owner = builder_for(issue, builder_events)
         starts = [t for t in [timestamp(issue.get("startedAt"))] if t is not None]
         completions, last_status = [], None
-        for event in sorted(events, key=lambda e: timestamp(e.get("createdAt")) or 0):
+        for event in events:
             when = timestamp(event.get("createdAt"))
             details = event.get("details") or {}
-            status = (details.get("changes") or {}).get("status") or {}
-            before = status.get("from") or (details.get("_previous") or {}).get("status")
-            after = status.get("to") or details.get("status")
+            before, after = activity_status(event)
             started = (details.get("changes") or {}).get("startedAt") or {}
             starts.extend(filter(None, map(timestamp, (started.get("from"), started.get("to")))))
             checkout = event.get("type") == "issue.checked_out"
