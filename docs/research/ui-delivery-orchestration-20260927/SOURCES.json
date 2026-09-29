@@ -1,0 +1,406 @@
+{
+  "research_date": "2026-09-27",
+  "sources": [
+    {
+      "id": "claude-subagents",
+      "url": "https://code.claude.com/docs/en/sub-agents",
+      "kind": "official documentation",
+      "claims": [
+        "Dedicated context and bounded tools/models/effort",
+        "Same subscription limits",
+        "Explore now inherits session model",
+        "maxTurns and worktree isolation available"
+      ],
+      "evidence_status": "read current document; local runtime unverified"
+    },
+    {
+      "id": "claude-teams",
+      "url": "https://code.claude.com/docs/en/agent-teams",
+      "kind": "official documentation",
+      "claims": [
+        "Experimental/off by default",
+        "Separate sessions with messaging",
+        "Higher token/coordination overhead",
+        "Sequential/same-file work better suited to single sessions or subagents"
+      ],
+      "evidence_status": "read current document"
+    },
+    {
+      "id": "claude-model-effort",
+      "url": "https://code.claude.com/docs/en/model-config",
+      "kind": "official documentation",
+      "claims": [
+        "claude-opus-5-5 requires CLI 2.1.280+",
+        "Opus 5.5 default medium; low medium high xhigh max supported",
+        "max may overthink; ultracode also orchestrates"
+      ],
+      "evidence_status": "read current document; account availability unverified"
+    },
+    {
+      "id": "claude-auth",
+      "url": "https://code.claude.com/docs/en/authentication",
+      "kind": "official documentation",
+      "claims": [
+        "API key precedence differs interactive vs headless",
+        "Check effective credential via status"
+      ],
+      "evidence_status": "read current document; no credential inspected"
+    },
+    {
+      "id": "claude-credits",
+      "url": "https://support.claude.com/en/articles/12429409-manage-usage-credits-for-paid-claude-plans",
+      "kind": "official support",
+      "claims": [
+        "Usage credits apply to Claude and Claude Code",
+        "Disable credits to use included limits only",
+        "Auto-reload is separately configurable"
+      ],
+      "evidence_status": "read current document; account settings unverified"
+    },
+    {
+      "id": "claude-best-practices",
+      "url": "https://code.claude.com/docs/en/best-practices",
+      "kind": "official documentation",
+      "claims": [
+        "Give agent screenshot/test verification",
+        "Focused context",
+        "Independent review useful"
+      ],
+      "evidence_status": "read current document; one-screen process is our recommendation"
+    },
+    {
+      "id": "paperclip-readme",
+      "url": "https://github.com/paperclipai/paperclip",
+      "kind": "upstream repository",
+      "claims": [
+        "Task claims/dependencies/workspaces/adapters and durable orchestration"
+      ],
+      "evidence_status": "read upstream documentation; no deployed instance tested"
+    },
+    {
+      "id": "paperclip-claude",
+      "url": "https://github.com/paperclipai/paperclip/blob/640dee18029f7651d56ae0f1828d04228f9ab044/docs/adapters/claude-local.md",
+      "kind": "pinned upstream documentation",
+      "claims": [
+        "Subscription login supported",
+        "cwd-aware sessions",
+        "Typed provider quota wait",
+        "Default Opus5 and 300 turns",
+        "Environment test has live probe"
+      ],
+      "evidence_status": "read pinned bytes"
+    },
+    {
+      "id": "paperclip-codex",
+      "url": "https://github.com/paperclipai/paperclip/blob/640dee18029f7651d56ae0f1828d04228f9ab044/docs/adapters/codex-local.md",
+      "kind": "pinned upstream documentation",
+      "claims": [
+        "Subscription or API auth",
+        "Per-agent homes",
+        "Explicit API key wins",
+        "Remote managed host auth and rotating-token concurrency caveat"
+      ],
+      "evidence_status": "read pinned bytes; no auth material inspected"
+    },
+    {
+      "id": "paperclip-budget-constants",
+      "url": "https://github.com/paperclipai/paperclip/blob/640dee18029f7651d56ae0f1828d04228f9ab044/packages/shared/src/constants.ts#L811-L818",
+      "kind": "pinned upstream source",
+      "claims": [
+        "Scopes company/agent/project",
+        "Only billed_cents budget metric",
+        "calendar_month_utc/lifetime windows"
+      ],
+      "evidence_status": "read pinned source; does not prove subscription quota control"
+    },
+    {
+      "id": "paperclip-budget-guide",
+      "url": "https://github.com/paperclipai/paperclip/blob/640dee18029f7651d56ae0f1828d04228f9ab044/docs/guides/board-operator/costs-and-budgets.md",
+      "kind": "upstream documentation",
+      "claims": [
+        "Recorded cost budget warnings and pauses"
+      ],
+      "evidence_status": "read master documentation; enforcement not executed"
+    },
+    {
+      "id": "paperclip-subscription-issue",
+      "url": "https://github.com/paperclipai/paperclip/issues/6728",
+      "kind": "upstream user issue report",
+      "claims": [
+        "Reported zero-dollar subscription telemetry can miss dollar budget gates"
+      ],
+      "evidence_status": "unverified report; caveat/test target only, not generalized current bug claim"
+    },
+    {
+      "id": "claude-squad",
+      "url": "https://github.com/smtg-ai/claude-squad",
+      "kind": "upstream repository documentation",
+      "claims": [
+        "tmux session and git worktree management for multiple CLI agents"
+      ],
+      "evidence_status": "read documentation; not installed; no fidelity benchmark"
+    },
+    {
+      "id": "ruflo-codex",
+      "url": "https://github.com/ruvnet/ruflo/blob/main/v3/%40claude-flow/codex/README.md",
+      "kind": "upstream repository documentation",
+      "claims": [
+        "Shared coordination/memory with Codex worker doing execution"
+      ],
+      "evidence_status": "read documentation; performance claims not validated"
+    },
+    {
+      "id": "playwright-snapshots",
+      "title": "Visual comparisons | Playwright",
+      "url": "https://playwright.dev/docs/test-snapshots",
+      "accessed": "2026-09-27",
+      "supports": "Screenshot baseline generation on first run, subsequent comparisons, environment-related rendering variance, and reviewed updates.",
+      "limitations": "Vendor documentation describes tooling behavior; pixel diffs do not establish design quality or accessibility."
+    },
+    {
+      "id": "playwright-emulation",
+      "title": "Emulation | Playwright",
+      "url": "https://playwright.dev/docs/emulation",
+      "accessed": "2026-09-27",
+      "supports": "Configurable device parameters, viewport, touch, locale, timezone, permissions, color scheme and device emulation.",
+      "limitations": "Emulation is not full physical-device validation."
+    },
+    {
+      "id": "playwright-projects",
+      "title": "Projects | Playwright",
+      "url": "https://playwright.dev/docs/test-projects",
+      "accessed": "2026-09-27",
+      "supports": "Project matrix across browsers/devices/configurations and configurable execution ordering/parallelism.",
+      "limitations": "Broad matrix can increase local resource use; recommendation to limit concurrency is based on supplied machine constraint."
+    },
+    {
+      "id": "playwright-accessibility",
+      "title": "Accessibility testing | Playwright",
+      "url": "https://playwright.dev/docs/accessibility-testing",
+      "accessed": "2026-09-27",
+      "supports": "axe integration, state-specific scans, examples, and explicit limitation that automated checks do not detect all accessibility problems.",
+      "limitations": "Automated scans need manual assessment as documented by Playwright."
+    },
+    {
+      "id": "playwright-page-screenshot",
+      "title": "Page API | Playwright",
+      "url": "https://playwright.dev/docs/api/class-page",
+      "accessed": "2026-09-27",
+      "supports": "Screenshot controls for animation, caret, fullPage, masks, styles, scale and related capture behavior.",
+      "limitations": "Configuration stabilizes capture mechanics but cannot ensure semantic equivalence or quality."
+    },
+    {
+      "id": "storybook-interaction",
+      "title": "Interaction tests | Storybook",
+      "url": "https://storybook.js.org/docs/writing-tests/interaction-testing",
+      "accessed": "2026-09-27",
+      "supports": "Stories as initial component state plus simulated actions/assertions; Vitest addon execution paths.",
+      "limitations": "Component-state tests complement, rather than replace, full-screen review."
+    },
+    {
+      "id": "storybook-a11y",
+      "title": "Accessibility tests | Storybook",
+      "url": "https://storybook.js.org/docs/writing-tests/accessibility-testing",
+      "accessed": "2026-09-27",
+      "supports": "axe-based accessibility addon and integrating tests into component tests/CI.",
+      "limitations": "Storybook documentation describes automated heuristics; manual accessibility testing remains necessary."
+    },
+    {
+      "id": "storybook-repo-license",
+      "title": "storybookjs/storybook GitHub repository",
+      "url": "https://github.com/storybookjs/storybook",
+      "accessed": "2026-09-27",
+      "supports": "Official repository identifies MIT license.",
+      "limitations": "Check current exact package and transitive dependency notices when installing."
+    },
+    {
+      "id": "playwright-repo-license",
+      "title": "microsoft/playwright LICENSE",
+      "url": "https://github.com/microsoft/playwright/blob/main/LICENSE",
+      "accessed": "2026-09-27",
+      "supports": "Official source repository LICENSE is Apache License 2.0.",
+      "limitations": "Check package-specific and bundled browser/dependency notices before distribution."
+    },
+    {
+      "id": "axe-license",
+      "title": "dequelabs/axe-core GitHub repository",
+      "url": "https://github.com/dequelabs/axe-core",
+      "accessed": "2026-09-27",
+      "supports": "Repository identifies axe-core as Mozilla Public License 2.0 and notes bundled dependencies have their own terms.",
+      "limitations": "Exact dependency bundle/license obligations need project-specific review."
+    },
+    {
+      "id": "radix-accessibility",
+      "title": "Accessibility – Radix Primitives",
+      "url": "https://www.radix-ui.com/primitives/docs/overview/accessibility",
+      "accessed": "2026-09-27",
+      "supports": "Radix documents ARIA/role, focus management and keyboard support, with application-provided labels/context still required.",
+      "limitations": "Library documentation cannot guarantee an individual application integration is accessible."
+    },
+    {
+      "id": "radix-repo-license",
+      "title": "radix-ui/primitives GitHub repository",
+      "url": "https://github.com/radix-ui/primitives",
+      "accessed": "2026-09-27",
+      "supports": "Official source repository identifies MIT license.",
+      "limitations": "Confirm exact package/version and transitive dependency notices."
+    },
+    {
+      "id": "shadcn-intro",
+      "title": "Introduction – shadcn/ui",
+      "url": "https://ui.shadcn.com/docs",
+      "accessed": "2026-09-27",
+      "supports": "Project describes distributing editable component source code rather than only importing a closed component package.",
+      "limitations": "The project’s visual defaults are not the authority for this app’s selected design direction."
+    },
+    {
+      "id": "shadcn-license",
+      "title": "shadcn-ui/ui LICENSE.md",
+      "url": "https://github.com/shadcn-ui/ui/blob/main/LICENSE.md",
+      "accessed": "2026-09-27",
+      "supports": "Official source repository license text identifies MIT.",
+      "limitations": "Open-source code license does not determine the license of separately selected assets or all generated components."
+    },
+    {
+      "id": "apple-motion",
+      "title": "Motion | Apple Human Interface Guidelines",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/motion",
+      "accessed": "2026-09-27",
+      "supports": "Apple recommends purposeful, optional, brief motion and alternative feedback, with user ability to cancel where possible.",
+      "limitations": "Apple HIG targets Apple platforms; application to web is a design-principle inference, not web conformance guidance."
+    },
+    {
+      "id": "apple-materials",
+      "title": "Materials | Apple Human Interface Guidelines",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/materials",
+      "accessed": "2026-09-27",
+      "supports": "Apple advises selecting materials/effects by semantic use and ensuring legibility.",
+      "limitations": "Apple-specific material APIs and platform effects do not transfer literally to browser UI."
+    },
+    {
+      "id": "apple-typography",
+      "title": "Typography | Apple Human Interface Guidelines",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/typography",
+      "accessed": "2026-09-27",
+      "supports": "Apple HIG typography guidance as a source for readable type hierarchy.",
+      "limitations": "Platform source; chosen web fonts and actual rendering need local validation. Search result opened but rendered no extractable page body."
+    },
+    {
+      "id": "apple-color",
+      "title": "Color | Apple Human Interface Guidelines",
+      "url": "https://developer.apple.com/design/human-interface-guidelines/color",
+      "accessed": "2026-09-27",
+      "supports": "Consistent semantic use of colors and adapting for accessibility/appearance contexts.",
+      "limitations": "Apple platform guidance is not directly a web standard."
+    },
+    {
+      "id": "wcag-keyboard",
+      "title": "WCAG 2.2 Quick Reference – Keyboard",
+      "url": "https://www.w3.org/WAI/WCAG22/quickref/",
+      "accessed": "2026-09-27",
+      "supports": "WCAG SC 2.1.1: all functionality is operable from a keyboard interface, with its defined exception.",
+      "limitations": "Conformance is broader than the single keyboard criterion; assess the full applicable standard."
+    },
+    {
+      "id": "wcag-reflow",
+      "title": "Understanding SC 1.4.10: Reflow | W3C WAI",
+      "url": "https://www.w3.org/WAI/WCAG21/Understanding/reflow",
+      "accessed": "2026-09-27",
+      "supports": "320 CSS-pixel vertical reflow condition and exception for content needing two-dimensional layout.",
+      "limitations": "The cited page explains WCAG 2.1; verify project’s required target conformance edition and all other applicable success criteria."
+    },
+    {
+      "id": "playwright-cli",
+      "title": "Getting started - CLI | Playwright",
+      "url": "https://github.com/microsoft/playwright/blob/main/docs/src/getting-started-cli.md",
+      "accessed": "2026-09-27",
+      "supports": "Official Playwright CLI documentation recommends CLI skills as token-efficient compared with browser automation MCPs for coding-agent tasks.",
+      "limitations": "Recommendation concerns agent tooling/token use; it does not establish performance or cost for this project. Parent supplied the local-app and authenticated-browser boundaries."
+    },
+    {
+      "id": "codex-subagents",
+      "url": "https://learn.chatgpt.com/docs/agent-configuration/subagents",
+      "kind": "official source",
+      "supports": "Native agent roles, explicit model/effort settings; recommended starting settings. Not a measured UI benchmark.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "codex-sdk-current",
+      "url": "https://learn.chatgpt.com/docs/codex-sdk",
+      "kind": "official source",
+      "supports": "SDK/app-server integration; legacy codex mcp-server removed.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "openai-model-selection",
+      "url": "https://developers.openai.com/api/docs/guides/model-selection",
+      "kind": "official source",
+      "supports": "Model/effort workload guidance; evaluate with same inputs.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "openai-luna",
+      "url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "kind": "official source",
+      "supports": "Exact model ID and supported reasoning; API prices do not establish subscription billing.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "openai-reasoning",
+      "url": "https://developers.openai.com/api/docs/guides/reasoning",
+      "kind": "official source",
+      "supports": "Effort controls and latency/usage tradeoff are model dependent.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "openai-frontend",
+      "url": "https://developers.openai.com/api/docs/guides/frontend-prompt",
+      "kind": "official source",
+      "supports": "Respect existing application conventions and reference direction; generic guidance does not override selected design.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "openai-skill-context",
+      "url": "https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra",
+      "kind": "official source",
+      "supports": "Reconsider accumulated prompt/skill context; no project-specific saving measured.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "anthropic-multiagent-case",
+      "url": "https://www.anthropic.com/engineering/multi-agent-research-system",
+      "kind": "official source",
+      "supports": "Published research-workload case study; token overhead and dependency limitations, not UI fidelity experiment.",
+      "accessed": "2026-09-27",
+      "checked_by": "root"
+    },
+    {
+      "id": "paperclip-costs-quota-current",
+      "url": "https://docs.paperclip.ing/guides/day-to-day/costs/",
+      "kind": "official source",
+      "supports": "Quota displays identify provider/estimated/cached readings; dollar budgets are a separate mechanism. Documentation only, no account runtime test.",
+      "accessed": "2026-09-27",
+      "checked_by": "root-after-cloud-handoff"
+    },
+    {
+      "id": "playwright-browser-channels",
+      "url": "https://playwright.dev/docs/browsers",
+      "kind": "official source",
+      "supports": "Branded Chrome versus bundled Chromium, codec differences, sequential project checks; emulation is not physical-device verification.",
+      "accessed": "2026-09-27",
+      "checked_by": "root-after-cloud-handoff"
+    }
+  ],
+  "source_count": 45,
+  "limitations": [
+    "Documentation and source inspection only; no UI delivery experiment run.",
+    "Selected Drive library delivery supported by previous receipt and owner statement; no new per-file cloud revision reconciliation."
+  ]
+}

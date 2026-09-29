@@ -163,6 +163,10 @@ class ReportingBroker(FakeBroker):
                 "review_status": "draft_not_dipak_adjudicated",
             }
             data["overview"] = overview_for(data)
+            data["overview"]["strength_details"] += [
+                {"finding_index": 2, "why_it_matters": "Invalid reference"},
+                data["overview"]["strength_details"][0],
+            ]
         envelope = {"choices": [{"message": {"content": json.dumps(data)}}]}
         if provider == "gemini":
             envelope = {
@@ -387,6 +391,10 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                 response = await reports.get(prepared.state.actor, UUID(cview["id"]))
                 assert response["report"]["review_status"] == "draft_not_dipak_adjudicated"
                 assert response["report"]["summary"] == "A synthetic draft from saved facts."
+                assert len(response["report"]["overview"]["strength_details"]) == 1
+                assert response["report"]["provider_extras"]["compatibility"]["overview_drops"][
+                    "strength_details"
+                ] == {"reference_out_of_range": 1, "reference_duplicate": 1}
                 transcript = await reports.transcript(prepared.state.actor, prepared.recording_id)
                 assert transcript["source_sha256"] == hashlib.sha256(prepared.data).hexdigest()
                 stages = (await db.scalars(select(ConversationCheckpoint.stage))).all()

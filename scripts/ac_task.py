@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Work gate: one task at a time per lane, up to three lanes in parallel.
+"""Work gate: one task at a time per lane, up to four lanes in parallel.
 
 GitHub is the shared lock. A task is active while its branch exists on GitHub;
 merging its pull request deletes the branch and frees the lock.
 
 - A lane task lives on `task/<lane>/<issue>-<name>`. Each lane (sales-xray,
-  platform, admin) holds one task at a time; different lanes run in parallel.
+  platform, admin, ui) holds one task at a time; different lanes run in parallel.
 - A plain `task/<issue>-<name>` branch is exclusive: it runs alone, as before.
 - Nobody starts new work while the latest `main` build is not green.
 - Pull requests may not change the same file, and only one open pull request at
@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
 TASK_NAME_RE = re.compile(r"[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*")
-LANES = ("sales-xray", "platform", "admin")
+LANES = ("sales-xray", "platform", "admin", "ui")
 EXCLUSIVE = "exclusive"
 SHARED_PREFIXES = ("db/migrations/", ".github/")
 SHARED_FILES = frozenset(

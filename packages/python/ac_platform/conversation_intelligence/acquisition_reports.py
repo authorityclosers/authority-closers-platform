@@ -65,6 +65,8 @@ _VALIDATION_FAILURE_CODES = frozenset(
         "report_dimension_status_invalid",
         "report_overview_missing",
         "report_overview_invalid",
+        "report_overview_schema_invalid",
+        "report_overview_reference_invalid",
         "report_payload_invalid",
         "report_payload_missing_field",
         "fact_packet_invalid",
