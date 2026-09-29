@@ -1,0 +1,168 @@
+.anchor {
+  display: none;
+}
+
+.rail {
+  position: fixed;
+  z-index: 30;
+  width: 10px;
+  border-radius: 99px;
+  cursor: pointer;
+  animation: rail-in var(--lx-dur-reveal) var(--lx-ease-move) both;
+}
+/* A hairline track that widens on hover. */
+.rail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--lx-line);
+  transform: translateX(-50%);
+  transition: width var(--lx-dur-move) var(--lx-ease-quick);
+}
+.rail:hover::before {
+  width: 6px;
+}
+.thumb {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 99px;
+  background: var(--lx-gradient-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-teal) 12%, transparent);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    width var(--lx-dur-move) var(--lx-ease-quick),
+    margin var(--lx-dur-move) var(--lx-ease-quick);
+}
+.rail:hover .thumb,
+.thumb[data-dragging] {
+  width: 8px;
+  margin-left: -4px;
+}
+.thumb:active {
+  cursor: grabbing;
+}
+.top {
+  position: fixed;
+  z-index: 31;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--lx-line-strong) 55%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--lx-surface) 75%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-ink-3);
+  cursor: pointer;
+  animation: rail-in var(--lx-dur-reveal) var(--lx-ease-pop) both;
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.top:hover {
+  color: var(--lx-teal);
+  transform: translateY(-2px);
+}
+.top:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+@keyframes rail-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 899.98px) {
+  .rail,
+  .top {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .top {
+    animation: none;
+  }
+}
+
+/* ---------- Section checkpoints ---------- */
+.thumb {
+  z-index: 1;
+}
+.checkpoint {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  margin: -9px 0 0 -9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.checkpoint::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lx-surface);
+  box-shadow: 0 0 0 1.5px var(--lx-line-strong);
+  transition:
+    transform var(--lx-dur-move) var(--lx-ease-pop),
+    background-color var(--lx-dur-move) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-move) var(--lx-ease-quick);
+}
+.checkpoint[data-active]::before {
+  background: var(--lx-teal);
+  box-shadow: 0 0 0 3px var(--lx-teal-soft);
+  transform: scale(1.3);
+}
+.checkpoint:hover::before,
+.checkpoint:focus-visible::before {
+  box-shadow: 0 0 0 2px var(--lx-teal);
+  transform: scale(1.45);
+}
+.checkpoint:focus-visible {
+  outline: none;
+}
+.checkpointLabel {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  padding: 5px 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-ink);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-surface);
+  font: 600 11.5px/1 var(--lx-font-ui);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(6px, -50%);
+  transition:
+    opacity var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-move);
+}
+.checkpoint:hover .checkpointLabel,
+.checkpoint:focus-visible .checkpointLabel {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .checkpoint::before,
+  .checkpointLabel {
+    transition: none;
+  }
+}
