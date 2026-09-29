@@ -32,12 +32,25 @@ from ac_platform.conversation_intelligence.acquisition_sessions import Acquisiti
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.activation_contract import HostedApprovalBundle
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
+from ac_platform.conversation_intelligence.entitlements import (
+    BudgetAccount,
+    MinuteAccount,
+    SettlementReceipt,
+    settle,
+)
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
-from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
+from ac_platform.conversation_intelligence.inference_worker import (
+    ConversationInferenceWorker,
+    save_accounts,
+)
 from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
     ConversationInferenceTask,
+    ConversationMinuteAccount,
     ConversationProcessingPlan,
+    ConversationQuote,
+    ConversationRecording,
 )
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
@@ -291,12 +304,136 @@ async def _assert_sample_queue_scope(
             )
 
 
+async def _settle_fictional_reservations(
+    sessions: async_sessionmaker[AsyncSession],
+    recording_ids: set[UUID],
+) -> None:
+    """Settle only completed reservations backed by this package's zero-use fake."""
+    if not recording_ids:
+        return
+    async with sessions() as db, db.begin():
+        tasks = (
+            await db.scalars(
+                select(ConversationInferenceTask)
+                .where(ConversationInferenceTask.recording_id.in_(recording_ids))
+                .order_by(ConversationInferenceTask.created_at)
+                .with_for_update()
+            )
+        ).all()
+        for task in tasks:
+            if task.state != "completed":
+                continue
+            job = await db.get(Job, task.job_id)
+            provider_receipt = None if job is None else job.provider_receipt
+            usage = provider_receipt.get("usage") if isinstance(provider_receipt, Mapping) else None
+            request_id = (
+                provider_receipt.get("provider_request_id")
+                if isinstance(provider_receipt, Mapping)
+                else None
+            )
+            response_sha256 = (
+                provider_receipt.get("response_sha256")
+                if isinstance(provider_receipt, Mapping)
+                else None
+            )
+            if (
+                not isinstance(provider_receipt, Mapping)
+                or not isinstance(request_id, str)
+                or not request_id.startswith("fictional-sample-")
+                or not isinstance(response_sha256, str)
+                or len(response_sha256) != 64
+                or provider_receipt.get("validation_state") != "validated"
+                or not isinstance(usage, Mapping)
+                or any(
+                    type(usage.get(key)) is not int or usage[key] != 0
+                    for key in (
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens",
+                        "input_tokens",
+                        "output_tokens",
+                        "cached_tokens",
+                        "cache_write_tokens",
+                        "reasoning_tokens",
+                    )
+                )
+            ):
+                raise SampleRefused(
+                    "Refusing: a fictional provider result did not prove zero usage."
+                )
+            recording = await db.get(ConversationRecording, task.recording_id)
+            quote_row = await db.get(ConversationQuote, task.quote_id)
+            if recording is None or quote_row is None:
+                raise SampleRefused("Refusing: a fictional provider reservation is unavailable.")
+            minutes = await db.scalar(
+                select(ConversationMinuteAccount)
+                .where(
+                    ConversationMinuteAccount.tenant_id == task.tenant_id,
+                    ConversationMinuteAccount.person_id == task.person_id,
+                )
+                .with_for_update()
+            )
+            budget = await db.scalar(
+                select(ConversationBudgetAccount)
+                .where(ConversationBudgetAccount.scope_id == quote_row.budget_scope_id)
+                .with_for_update()
+            )
+            if minutes is None or budget is None:
+                raise SampleRefused("Refusing: a fictional provider ledger is unavailable.")
+            minute_snapshot = MinuteAccount.from_dict(minutes.snapshot)
+            budget_snapshot = BudgetAccount.from_dict(budget.snapshot)
+            reservation = next(
+                (
+                    item
+                    for item in minute_snapshot.reservations
+                    if item.reservation_id == str(task.run_id)
+                ),
+                None,
+            )
+            if reservation is None:
+                raise SampleRefused("Refusing: a fictional provider reservation is missing.")
+            if reservation.state == "settled":
+                if reservation.settlement is None or reservation.settlement.actual_paise != 0:
+                    raise SampleRefused("Refusing: a fictional provider reservation was not free.")
+                continue
+            if reservation.state not in {"in_flight", "uncertain"} or not reservation.attempt_id:
+                raise SampleRefused("Refusing: a fictional provider reservation is unresolved.")
+            receipt = SettlementReceipt(
+                reservation_id=str(task.run_id),
+                quote_fingerprint=reservation.quote.fingerprint,
+                provider_id=reservation.quote.provider_id,
+                attempt_id=reservation.attempt_id,
+                actual_seconds=0,
+                actual_paise=0,
+                receipt_ref=(f"fictional-no-network:{task.run_id}:{response_sha256}"),
+            )
+            transition = settle(
+                minute_snapshot,
+                budget_snapshot,
+                str(task.run_id),
+                receipt,
+            )
+            save_accounts(minutes, budget, transition)
+
+
+def quote_within_budget(quote: Mapping[str, Any], budget_cap_paise: int) -> bool:
+    """Permit the fake route's approved quote only within the current dev cap."""
+    maximum = quote.get("max_cost_paise")
+    return (
+        type(budget_cap_paise) is int
+        and budget_cap_paise >= 0
+        and type(maximum) is int
+        and 0 <= maximum <= budget_cap_paise
+    )
+
+
 async def seed_account_samples(
     client: httpx.AsyncClient,
     sessions: async_sessionmaker[AsyncSession],
     *,
     person_id: UUID,
     count: int,
+    budget_cap_paise: int,
     settings: Settings,
     local_worker: object,
     inference_worker: object,
@@ -409,8 +546,8 @@ async def seed_account_samples(
                 headers={**headers, "Idempotency-Key": quote_key},
             )
         ).json()
-        if type(quote.get("max_cost_paise")) is not int or quote["max_cost_paise"] != 0:
-            raise SampleRefused("Refusing: the dev report quote is not zero cost.")
+        if not quote_within_budget(quote, budget_cap_paise):
+            raise SampleRefused("Refusing: the dev report quote exceeds the approved budget cap.")
         approval = {
             "plan_id": quote["id"],
             "plan_fingerprint": quote["plan_fingerprint"],
@@ -431,6 +568,7 @@ async def seed_account_samples(
                 await publish_pending()
             await _assert_sample_queue_scope(sessions, sample_ids, recording_ids)
             await inference_worker.run_once()  # type: ignore[attr-defined]
+            await _settle_fictional_reservations(sessions, recording_ids)
             if publish_pending is not None:
                 await publish_pending()
             await _assert_sample_queue_scope(sessions, sample_ids, recording_ids)
@@ -487,6 +625,7 @@ async def _run(settings: Settings, email: str, count: int) -> tuple[UUID, ...]:
                 sessions,
                 person_id=actor.actor.person_id,
                 count=count,
+                budget_cap_paise=bundle.budget_cap_paise,
                 settings=settings,
                 local_worker=local,
                 inference_worker=inference,
