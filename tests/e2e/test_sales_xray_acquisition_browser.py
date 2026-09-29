@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 import uvicorn
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 from pydantic import SecretStr
 from sqlalchemy import select
@@ -36,11 +37,15 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
-from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
+from ac_platform.conversation_intelligence.models import (
+    ConversationInferenceTask,
+    ConversationProcessingPlan,
+)
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
+from ac_platform.outbox.models import Job
 from ac_platform.providers import FakeEmailAdapter
 from ac_platform.tenancy.models import Tenant
 from ac_platform.worker import DurableWorker, build_default_dispatcher
@@ -358,12 +363,15 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     source_request_hashes = []
                     errors = []
                     plan_posts = []
+                    plan_accepted = asyncio.Event()
                     journey_checks: dict[str, Any] = {}
 
                     def record_response(response):
                         if response.url.startswith(ORIGIN + "/v1/"):
                             if response.url.endswith("/plan") and response.request.method == "POST":
                                 plan_posts.append(response)
+                                if response.ok:
+                                    plan_accepted.set()
                             network.append(
                                 {
                                     "path": response.url.split(ORIGIN)[-1],
@@ -596,17 +604,64 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         environment="test",
                     )
                     assert await db(local.run_once())
-                    # Depending on poll timing, the freshly consented upload may
-                    # already be auto-approved, or may still expose the explicit
-                    # Continue action. Give the automatic path time to settle and
-                    # only click when no acceptance request has completed.
-                    await page.wait_for_timeout(5000)
+                    # The upload may be accepted automatically, or the UI may
+                    # enable its explicit Continue action. Wait for either outcome.
                     continue_button = page.get_by_role(
                         "button", name="Continue analysis", exact=True
                     )
-                    if not plan_posts and await continue_button.is_visible():
+
+                    async def latest_plan_state():
+                        async with setup.sessions() as diagnostic_db:
+                            return await diagnostic_db.scalar(
+                                select(ConversationProcessingPlan.state)
+                                .where(
+                                    ConversationProcessingPlan.recording_id
+                                    == UUID(uploaded["recording_id"])
+                                )
+                                .order_by(ConversationProcessingPlan.created_at.desc())
+                                .limit(1)
+                            )
+
+                    accepted_plan_states = {"active", "completed"}
+                    continue_enabled = False
+
+                    async def is_continue_enabled() -> bool:
+                        if await continue_button.count() == 0:
+                            return False
+                        try:
+                            return await continue_button.is_enabled(timeout=250)
+                        except PlaywrightTimeoutError:
+                            return False
+
+                    try:
+                        async with asyncio.timeout(120):
+                            while not plan_accepted.is_set():
+                                plan_state = await db(latest_plan_state())
+                                if plan_state in accepted_plan_states:
+                                    break
+                                if await is_continue_enabled():
+                                    continue_enabled = True
+                                    break
+                                await asyncio.sleep(0.25)
+                    except TimeoutError:
+                        plan_state = await db(latest_plan_state())
+                        continue_enabled = await is_continue_enabled()
+                        if (
+                            not plan_accepted.is_set()
+                            and plan_state not in accepted_plan_states
+                            and not continue_enabled
+                        ):
+                            pytest.fail(
+                                "Neither plan acceptance nor enabled Continue analysis "
+                                f"appeared within 120 seconds; plan_state={plan_state!r}"
+                            )
+
+                    # Recheck canonical state immediately before acting. The start
+                    # request can commit even when its browser response is lost.
+                    plan_state = await db(latest_plan_state())
+                    accepted = plan_accepted.is_set() or plan_state in accepted_plan_states
+                    if not accepted and continue_enabled:
                         assert broker.calls == 0
-                        await expect(continue_button).to_be_enabled()
                         async with page.expect_response(
                             lambda response: (
                                 response.url.endswith("/plan") and response.request.method == "POST"
@@ -627,15 +682,55 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                             )
                             return None if row is None else row.id
 
-                    for _ in range(16):
-                        await db(worker.run_once())
-                        plan_id = await db(latest_plan_id())
-                        if plan_id is not None:
-                            await db(_make_due(setup, plan_id))
-                        await db(scheduler.step())
-                    await expect(
-                        page.get_by_role("region", name="Sales call report")
-                    ).to_be_visible(timeout=30000)
+                    async def latest_plan_and_job_states():
+                        async with setup.sessions() as diagnostic_db:
+                            plan_state = await diagnostic_db.scalar(
+                                select(ConversationProcessingPlan.state)
+                                .where(
+                                    ConversationProcessingPlan.recording_id
+                                    == UUID(uploaded["recording_id"])
+                                )
+                                .order_by(ConversationProcessingPlan.created_at.desc())
+                                .limit(1)
+                            )
+                            job_states = list(
+                                (
+                                    await diagnostic_db.scalars(
+                                        select(Job.status)
+                                        .join(
+                                            ConversationInferenceTask,
+                                            Job.id == ConversationInferenceTask.job_id,
+                                        )
+                                        .where(
+                                            ConversationInferenceTask.recording_id
+                                            == UUID(uploaded["recording_id"]),
+                                            ConversationInferenceTask.erased_at.is_(None),
+                                        )
+                                        .order_by(ConversationInferenceTask.created_at.desc())
+                                        .limit(10)
+                                    )
+                                ).all()
+                            )
+                            return plan_state, job_states
+
+                    report_region = page.get_by_role("region", name="Sales call report")
+                    try:
+                        async with asyncio.timeout(90):
+                            while not await report_region.is_visible():
+                                await db(worker.run_once())
+                                plan_id = await db(latest_plan_id())
+                                if plan_id is not None:
+                                    await db(_make_due(setup, plan_id))
+                                await db(scheduler.step())
+                                await asyncio.sleep(0.25)
+                    except TimeoutError:
+                        pass
+                    if not await report_region.is_visible():
+                        plan_state, job_states = await db(latest_plan_and_job_states())
+                        pytest.fail(
+                            "Sales call report did not become visible within 90 seconds; "
+                            f"plan_state={plan_state!r}, job_states={job_states!r}"
+                        )
                     recovered_response = await context.request.get(
                         ORIGIN + PREFIX + f"/submissions/{submission_id}/report"
                     )

@@ -27,6 +27,7 @@ class FakeRepo:
         self.branches = ["main"]
         self.prs: list[dict[str, object]] = []
         self.main_runs = [{"run_number": 1, "status": "completed", "conclusion": "success"}]
+        self.main_sha: str | None = MAIN
         self.current = "main"
         self.dirty = False
         self.main_gate_script = Path(MODULE.__file__).read_text(encoding="utf-8")
@@ -38,11 +39,14 @@ class FakeRepo:
         if argv[:3] == ["git", "ls-remote", "--heads"]:
             return "".join(f"{MAIN}\trefs/heads/{name}\n" for name in self.branches)
         if argv[:3] == ["git", "ls-remote", "origin"]:
-            return f"{MAIN}\trefs/heads/main\n"
+            return f"{self.main_sha}\trefs/heads/main\n" if self.main_sha else ""
         if argv[:2] == ["gh", "pr"]:
             return json.dumps(self.prs)
         if argv[:2] == ["gh", "api"]:
-            return json.dumps({"workflow_runs": self.main_runs})
+            assert "event=push" not in argv[-1]
+            return json.dumps(
+                {"workflow_runs": [{"event": "push", **run} for run in self.main_runs]}
+            )
         if argv[:2] == ["git", "rev-parse"]:
             return self.current + "\n"
         if argv[:2] == ["git", "status"]:
@@ -85,26 +89,69 @@ def test_open_pull_request_blocks_new_work() -> None:
 
 
 @pytest.mark.parametrize(
-    ("runs", "state"),
+    ("runs", "state", "free"),
     [
-        ([], "running"),
-        ([{"run_number": 3, "status": "in_progress", "conclusion": None}], "running"),
-        ([{"run_number": 3, "status": "completed", "conclusion": "failure"}], "red"),
+        ([], "running", True),
+        ([{"run_number": 3, "status": "in_progress", "conclusion": None}], "running", True),
+        ([{"run_number": 3, "status": "completed", "conclusion": "failure"}], "red", False),
         (
             [
                 {"run_number": 2, "status": "completed", "conclusion": "failure"},
                 {"run_number": 3, "status": "completed", "conclusion": "success"},
             ],
             "green",
+            True,
         ),
     ],
 )
-def test_main_must_be_green_to_start(runs, state) -> None:
+def test_main_state_controls_new_start_assessment(runs, state, free) -> None:
     repo = FakeRepo()
     repo.main_runs = runs
     verdict = gate(repo).assess()
     assert verdict.main_state == state
-    assert verdict.free is (state == "green")
+    assert verdict.free is free
+
+
+def test_missing_main_sha_is_unknown_and_blocks_start() -> None:
+    repo = FakeRepo()
+    repo.main_sha = None
+
+    verdict = gate(repo).assess()
+
+    assert verdict.main_state == "unknown"
+    assert verdict.reasons == ["main is not green yet (unknown)"]
+
+
+def workflow_run(event: str, run_number: int, conclusion: str) -> dict[str, object]:
+    return {
+        "event": event,
+        "run_number": run_number,
+        "status": "completed",
+        "conclusion": conclusion,
+    }
+
+
+@pytest.mark.parametrize(
+    ("runs", "state"),
+    [
+        ([workflow_run("workflow_dispatch", 1, "success")], "green"),
+        ([workflow_run("workflow_dispatch", 1, "failure")], "red"),
+        ([workflow_run("pull_request", 1, "success")], "running"),
+        (
+            [workflow_run("workflow_dispatch", 2, "failure"), workflow_run("push", 3, "success")],
+            "green",
+        ),
+        (
+            [workflow_run("push", 2, "success"), workflow_run("workflow_dispatch", 3, "failure")],
+            "red",
+        ),
+    ],
+)
+def test_main_state_counts_dispatch_runs_and_ignores_other_events(runs, state) -> None:
+    repo = FakeRepo()
+    repo.main_runs = runs
+
+    assert gate(repo).main_state() == state
 
 
 def test_start_claims_the_lock_from_latest_main() -> None:
@@ -113,6 +160,63 @@ def test_start_claims_the_lock_from_latest_main() -> None:
     assert branch == "task/76-single-track-gate"
     assert ["git", "switch", "--quiet", "--create", branch, "origin/main"] in repo.calls
     assert branch in repo.branches
+
+
+def test_start_in_running_main_branches_from_origin_main_and_pushes() -> None:
+    repo = FakeRepo()
+    repo.main_runs = [{"run_number": 2, "status": "in_progress", "conclusion": None}]
+
+    assert MODULE.main(["start", "sales-xray", "99-demo"], gate(repo)) == 0
+
+    branch = "task/sales-xray/99-demo"
+    assert ["git", "switch", "--quiet", "--create", branch, "origin/main"] in repo.calls
+    assert ["git", "push", "--quiet", "--set-upstream", "origin", branch] in repo.calls
+    assert branch in repo.branches
+
+
+def test_start_in_red_main_refuses_without_switch_or_push(capsys) -> None:
+    repo = FakeRepo()
+    repo.main_runs = [{"run_number": 2, "status": "completed", "conclusion": "failure"}]
+
+    assert MODULE.main(["start", "sales-xray", "99-demo"], gate(repo)) == MODULE.EXIT_BUSY
+
+    error = capsys.readouterr().err
+    assert "main is red: only the task that fixes it may start" in error
+    assert "Stop: main is red; only the task that fixes it may start" in error
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_start_in_red_main_allows_the_fix_flag() -> None:
+    repo = FakeRepo()
+    repo.main_runs = [{"run_number": 2, "status": "completed", "conclusion": "failure"}]
+
+    assert MODULE.main(["start", "sales-xray", "99-demo", "--fixes-red-main"], gate(repo)) == 0
+
+    branch = "task/sales-xray/99-demo"
+    assert ["git", "switch", "--quiet", "--create", branch, "origin/main"] in repo.calls
+    assert ["git", "push", "--quiet", "--set-upstream", "origin", branch] in repo.calls
+
+
+def test_red_main_fix_flag_does_not_clear_a_busy_lane(capsys) -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/sales-xray/98-existing")
+    repo.main_runs = [{"run_number": 2, "status": "completed", "conclusion": "failure"}]
+
+    assert (
+        MODULE.main(["start", "sales-xray", "99-demo", "--fixes-red-main"], gate(repo))
+        == MODULE.EXIT_BUSY
+    )
+
+    assert "sales-xray lane" in capsys.readouterr().err
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_fix_flag_does_not_allow_unknown_main() -> None:
+    repo = FakeRepo()
+    repo.main_sha = None
+
+    with pytest.raises(MODULE.BusyError, match="unknown"):
+        gate(repo).start("99-demo", "sales-xray", fixes_red_main=True)
 
 
 def test_start_from_a_merged_task_branch_refuses_and_exits_two(capsys) -> None:
@@ -259,6 +363,12 @@ def test_lanes_run_in_parallel_but_hold_one_task_each() -> None:
         gate(repo).start("24-promote", "platform")
 
 
+def test_devenv_lane_runs_beside_the_platform_lane() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/platform/23-release-notes")
+    assert gate(repo).start("260-devenv-lane", "devenv") == "task/devenv/260-devenv-lane"
+
+
 def test_an_exclusive_task_blocks_every_lane_and_is_blocked_by_any() -> None:
     repo = FakeRepo()
     repo.branches.append("task/83-development-hosted")
@@ -292,7 +402,8 @@ def test_status_json_reports_each_lane(capsys) -> None:
         '{"main": "green", "active_branches": ["task/platform/23-notes"], '
         '"open_prs": [], "lanes": {"sales-xray": {"holder": null, "free": true}, '
         '"platform": {"holder": "task/platform/23-notes", "free": false}, '
-        '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}}, '
+        '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}, '
+        '"devenv": {"holder": null, "free": true}}, '
         '"exclusive_free": false}\n'
     )
     status = json.loads(output)
@@ -337,9 +448,43 @@ def test_status_text_shows_current_task_check_while_main_runs(capsys) -> None:
 
     assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
     output = capsys.readouterr().out
+    assert output.splitlines()[0] == (
+        "main: running (new tasks may start; merges wait for a green main)"
+    )
     assert f"your task {branch}: free to continue" in output
     assert "BUSY applies to starting new work" in output
     assert "admin: BUSY: " in output
+
+
+def test_status_text_and_json_report_running_main_with_free_lanes(capsys) -> None:
+    repo = FakeRepo()
+    repo.main_runs = [{"run_number": 9, "status": "in_progress", "conclusion": None}]
+
+    assert MODULE.main(["status"], gate(repo)) == 0
+    text_status = capsys.readouterr().out
+    assert text_status.splitlines()[0] == (
+        "main: running (new tasks may start; merges wait for a green main)"
+    )
+    assert "sales-xray: FREE" in text_status
+    assert "platform: FREE" in text_status
+    assert "exclusive: FREE" in text_status
+
+    assert MODULE.main(["status", "--json"], gate(repo)) == 0
+    json_status = json.loads(capsys.readouterr().out)
+    assert json_status["main"] == "running"
+    assert json_status["exclusive_free"] is True
+    assert all(lane["free"] for lane in json_status["lanes"].values())
+
+
+def test_status_text_explains_red_main_restriction(capsys) -> None:
+    repo = FakeRepo()
+    repo.main_runs = [{"run_number": 9, "status": "completed", "conclusion": "failure"}]
+
+    assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
+
+    assert capsys.readouterr().out.splitlines()[0] == (
+        "main: red (only the task that fixes it may start, with --fixes-red-main)"
+    )
 
 
 def test_cli_start_accepts_a_lane(capsys) -> None:

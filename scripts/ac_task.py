@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Work gate: one task at a time per lane, up to four lanes in parallel.
+"""Work gate: one task at a time per lane, up to five lanes in parallel.
 
 GitHub is the shared lock. A task is active while its branch exists on GitHub;
 merging its pull request deletes the branch and frees the lock.
 
 - A lane task lives on `task/<lane>/<issue>-<name>`. Each lane (sales-xray,
-  platform, admin, ui) holds one task at a time; different lanes run in parallel.
+  platform, admin, ui, devenv) holds one task at a time; different lanes run in parallel.
 - A plain `task/<issue>-<name>` branch is exclusive: it runs alone, as before.
-- Nobody starts new work while the latest `main` build is not green.
+- A red or unknown `main` blocks new work; the task that fixes a red `main` may
+  start with `--fixes-red-main`. A running `main` build does not block a start;
+  merges still wait for a green `main`.
 - Pull requests may not change the same file, and only one open pull request at
   a time may touch shared files (migrations, lockfiles, workflows, AGENTS.md).
 
@@ -35,7 +37,7 @@ from pathlib import Path
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
 TASK_NAME_RE = re.compile(r"[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*")
-LANES = ("sales-xray", "platform", "admin", "ui")
+LANES = ("sales-xray", "platform", "admin", "ui", "devenv")
 EXCLUSIVE = "exclusive"
 SHARED_PREFIXES = ("db/migrations/", ".github/")
 SHARED_FILES = frozenset(
@@ -128,7 +130,7 @@ class Gate:
         return list(json.loads(data or "[]"))
 
     def main_state(self) -> str:
-        """green | running | red | unknown for the latest main commit's validation."""
+        """Only push and workflow_dispatch runs count for the latest main validation."""
 
         head = self.git("ls-remote", "origin", "refs/heads/main").split("\t", 1)[0].strip()
         if not re.fullmatch(r"[0-9a-f]{40}", head):
@@ -137,11 +139,15 @@ class Gate:
             self.gh(
                 "api",
                 f"repos/{REPOSITORY}/actions/workflows/{VALIDATION_WORKFLOW}/runs"
-                f"?branch=main&event=push&head_sha={head}&per_page=5",
+                f"?branch=main&head_sha={head}&per_page=100",
             )
             or "{}"
         )
-        runs = data.get("workflow_runs", [])
+        runs = [
+            item
+            for item in data.get("workflow_runs", [])
+            if item.get("event") in ("push", "workflow_dispatch")
+        ]
         if not runs:
             return "running"
         latest = max(runs, key=lambda item: (item.get("run_number", 0), item.get("run_attempt", 0)))
@@ -190,11 +196,15 @@ class Gate:
             verdict.reasons.append(f"another task is in progress{where}: " + ", ".join(blocking))
         if blocking_prs:
             verdict.reasons.append("open pull request(s): " + "; ".join(blocking_prs))
-        if verdict.main_state != "green":
-            verdict.reasons.append(f"main is not green yet ({verdict.main_state})")
+        if verdict.main_state == "red":
+            verdict.reasons.append(
+                "main is red: only the task that fixes it may start (start ... --fixes-red-main)"
+            )
+        elif verdict.main_state == "unknown":
+            verdict.reasons.append("main is not green yet (unknown)")
         return verdict
 
-    def start(self, name: str, lane: str = EXCLUSIVE) -> str:
+    def start(self, name: str, lane: str = EXCLUSIVE, fixes_red_main: bool = False) -> str:
         if lane != EXCLUSIVE and lane not in LANES:
             raise TaskError(f"unknown lane {lane!r}; lanes are {', '.join(LANES)}")
         if not TASK_NAME_RE.fullmatch(name):
@@ -218,10 +228,13 @@ class Gate:
                 else "run `git switch main && git merge --ff-only origin/main` first"
             )
             raise TaskError(
-                "running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; "
-                + remedy
+                "running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; " + remedy
             )
         verdict = self.assess(lane=lane)
+        if fixes_red_main and verdict.main_state == "red":
+            verdict.reasons = [
+                reason for reason in verdict.reasons if not reason.startswith("main is red:")
+            ]
         if not verdict.free:
             raise BusyError(verdict)
         self.git("switch", "--quiet", "--create", branch, "origin/main")
@@ -322,7 +335,7 @@ def _status_verdict_line(label: str, verdict: Verdict) -> str:
 def _describe_status(gate: Gate, verdict: Verdict) -> str:
     """Describe start verdicts and, on task branches, the current task verdict."""
 
-    lines = [f"main: {verdict.main_state}"]
+    lines = [_main_status_line(verdict.main_state)]
     lines.append("active task branches: " + (", ".join(verdict.active_branches) or "none"))
     lines.append("open pull requests: " + ("; ".join(verdict.open_prs) or "none"))
     if verdict.lanes:
@@ -365,6 +378,14 @@ def _status_json(gate: Gate) -> dict[str, object]:
     }
 
 
+def _main_status_line(state: str) -> str:
+    if state == "running":
+        return "main: running (new tasks may start; merges wait for a green main)"
+    if state == "red":
+        return "main: red (only the task that fixes it may start, with --fixes-red-main)"
+    return f"main: {state}"
+
+
 def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="ac_task", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -378,6 +399,11 @@ def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
         nargs="+",
         metavar="[LANE] NAME",
         help=f"optional lane ({', '.join(LANES)}) then <issue>-<short-name>",
+    )
+    start.add_argument(
+        "--fixes-red-main",
+        action="store_true",
+        help="allow this task to start while it fixes a red main build",
     )
     sub.add_parser("check")
     sub.add_parser("done")
@@ -398,7 +424,10 @@ def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
             if len(args.names) > 2:
                 raise TaskError("start takes [LANE] NAME")
             lane, name = (EXCLUSIVE, args.names[0]) if len(args.names) == 1 else args.names
-            print(f"started {gate.start(name, lane)} from the latest main; the lock is claimed")
+            print(
+                f"started {gate.start(name, lane, args.fixes_red_main)} "
+                "from the latest main; the lock is claimed"
+            )
             return 0
         if args.command == "check":
             verdict = gate.check()
@@ -418,7 +447,15 @@ def main(argv: Sequence[str] | None = None, gate: Gate | None = None) -> int:
         return 0
     except BusyError as error:
         print(_describe(error.verdict), file=sys.stderr)
-        print("Stop: finish the open task first (one task per lane, AGENTS.md).", file=sys.stderr)
+        if any(reason.startswith("main is red:") for reason in error.verdict.reasons):
+            print(
+                "Stop: main is red; only the task that fixes it may start, with --fixes-red-main.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "Stop: finish the open task first (one task per lane, AGENTS.md).", file=sys.stderr
+            )
         return EXIT_BUSY
     except TaskError as error:
         print(f"ac_task: {error}", file=sys.stderr)
