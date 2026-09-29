@@ -21,6 +21,7 @@ exclusive: BUSY: another task is in progress: task/admin/57-github-metrics, task
 ```text
 ac_task: current task branch task/ui/66-shell is missing from GitHub; run `python3 scripts/ac_task.py done` first
 ac_task: running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; run `python3 scripts/ac_task.py done` first
+ac_task: running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; run `git switch main && git merge --ff-only origin/main` first
 ```
 
-The tests also verify that a matching gate starts from `origin/main`, that the fetch happens before the comparison, and that `check` does not compare the current gate file with main.
+The tests also verify that a matching gate starts from `origin/main`, that the fetch happens before the comparison, and that `check` does not compare the current gate file with main. A stale gate on a `task/*` branch uses the `done` remedy; a stale gate on `main` directs the operator to update local main before trying again. `start` does not switch branches or push in either refusal case.

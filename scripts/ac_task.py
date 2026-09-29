@@ -212,9 +212,14 @@ class Gate:
                 "run `python3 scripts/ac_task.py done` first"
             )
         if not self.gate_matches_main():
+            remedy = (
+                "run `python3 scripts/ac_task.py done` first"
+                if current.startswith("task/")
+                else "run `git switch main && git merge --ff-only origin/main` first"
+            )
             raise TaskError(
                 "running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; "
-                "run `python3 scripts/ac_task.py done` first"
+                + remedy
             )
         verdict = self.assess(lane=lane)
         if not verdict.free:

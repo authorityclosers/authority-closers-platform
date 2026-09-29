@@ -131,6 +131,8 @@ def test_start_from_a_merged_task_branch_refuses_and_exits_two(capsys) -> None:
 
 def test_start_refuses_when_gate_copy_differs_from_fetched_main(capsys) -> None:
     repo = FakeRepo()
+    repo.current = "task/platform/94-gate-edit"
+    repo.branches.append(repo.current)
     repo.main_gate_script = "stale gate copy\n"
 
     assert MODULE.main(["start", "platform", "94-stale-gate"], gate(repo)) == 2
@@ -142,6 +144,20 @@ def test_start_refuses_when_gate_copy_differs_from_fetched_main(capsys) -> None:
     fetch_index = repo.calls.index(["git", "fetch", "--quiet", "--prune", "origin"])
     show_index = repo.calls.index(["git", "show", "origin/main:scripts/ac_task.py"])
     assert fetch_index < show_index
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_start_on_main_with_stale_gate_refuses_with_main_update_remedy(capsys) -> None:
+    repo = FakeRepo()
+    repo.main_gate_script = "newer main gate\n"
+
+    assert MODULE.main(["start", "platform", "94-stale-gate"], gate(repo)) == 2
+
+    assert capsys.readouterr().err == (
+        "ac_task: running scripts/ac_task.py differs from "
+        "origin/main:scripts/ac_task.py; run `git switch main && git merge --ff-only "
+        "origin/main` first\n"
+    )
     assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
 
 
