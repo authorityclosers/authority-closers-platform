@@ -5,17 +5,22 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import statistics
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
+from urllib.parse import urlparse
 
 FAILED = {"failed", "cancelled", "timed_out"}
 ISSUE_PAGE_SIZE = 1000
 CORE_COLUMNS = ["Agent", "Tasks done", "Cycle median", "Cycle p90",
                 "Bounces", "Tokens / done task", "Runs / done task", "Failed-run %"]  # fmt: skip
-GITHUB_COLUMNS = ["First-try CI", "Owner changes", "Post-merge bugs", "Scope", "Evidence", "Gate"]
+GITHUB_COLUMNS = ["PR cycle median", "PR cycle p90", "First-try CI", "Rework pushes",
+                  "Owner changes", "Post-merge bugs", "Scope", "Evidence", "Gate"]  # fmt: skip
+LANE_AGENTS = {"sales-xray": "Lead Engineer", "platform": "Platform Engineer", "admin": "Software Engineer"}
 
 
 def fetch_json(path, method="GET"):
@@ -77,6 +82,182 @@ def timestamp(value):
         return parsed.timestamp()
     except (AttributeError, TypeError, ValueError):
         return None
+
+
+def validate_gh_command(command):
+    if command[:2] != ["gh", "api"]:
+        raise ValueError("GitHub reads must use gh api")
+    for i, arg in enumerate(command):
+        if arg in ("-f", "-F", "--input") or arg.startswith(("-f", "-F", "--input=")):
+            raise ValueError("agent scorecard permits read-only gh api calls")
+        if arg in ("-X", "--method") and (i + 1 == len(command) or command[i + 1].upper() != "GET"):
+            raise ValueError("agent scorecard permits GET requests only")
+        if arg.startswith("--method=") and arg.partition("=")[2].upper() != "GET":
+            raise ValueError("agent scorecard permits GET requests only")
+        if arg.startswith("-X") and arg[2:].upper() != "GET":
+            raise ValueError("agent scorecard permits GET requests only")
+
+
+def gh_api(path, paginate=False):
+    command = ["gh", "api", "--method", "GET"] + (["--paginate", "--slurp"] if paginate else []) + [path]
+    validate_gh_command(command)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603
+    except OSError as exc:
+        raise RuntimeError("GitHub read failed") from exc
+    if result.returncode:
+        raise RuntimeError("GitHub read failed")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("GitHub read failed") from exc
+
+
+def gh_list(path, field=None):
+    pages = gh_api(path, paginate=True)
+    return [x for page in (pages if isinstance(pages, list) else [pages])
+            for x in (page.get(field, []) if field else page)]
+
+
+def github_repository():
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if not repo:
+        try:
+            result = subprocess.run(["git", "remote", "get-url", "origin"],  # noqa: S607
+                                    capture_output=True, text=True, check=False)
+        except OSError as exc:
+            raise RuntimeError("GitHub repository is unavailable") from exc
+        remote = result.stdout.strip() if result.returncode == 0 else ""
+        repo = remote.split(":", 1)[1] if remote.startswith("git@github.com:") else urlparse(remote).path.lstrip("/")
+    repo = repo.removesuffix(".git")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        raise RuntimeError("GitHub repository is unavailable")
+    return repo
+
+
+def in_window(value, start, end):
+    when = timestamp(value)
+    return when is not None and start <= when < end
+
+
+def recent_30(value, end):
+    when = timestamp(value)
+    return when is not None and end - 30 * 86400 <= when < end
+
+
+def lane_agent(branch):
+    return next((agent for lane, agent in LANE_AGENTS.items()
+                 if branch.startswith(f"task/{lane}/")), None)
+
+
+def github_data(repo, start, end, owner=None):
+    pulls = gh_list(f"repos/{repo}/pulls?state=all&per_page=100&sort=created&direction=asc")
+    active = [p for p in pulls if in_window(p.get("created_at"), start, end)
+              or in_window(p.get("merged_at"), start, end) or in_window(p.get("updated_at"), start, end)
+              ]
+    result = []
+    for pull in active:
+        number, created = pull["number"], pull.get("created_at")
+        event = {"number": number, "branch": (pull.get("head") or {}).get("ref", ""),
+                 "created_at": created, "merged_at": pull.get("merged_at")}
+        if not in_window(created, start, end) and not in_window(pull.get("updated_at"), start, end):
+            result.append(event)
+            continue
+        base = f"repos/{repo}/pulls/{number}"
+        details = gh_api(base)
+        reviews = gh_list(f"{base}/reviews?per_page=100")
+        commits = gh_list(f"{base}/commits?per_page=100")
+        files = gh_list(f"{base}/files?per_page=100")
+        timeline = gh_list(f"repos/{repo}/issues/{number}/timeline?per_page=100")
+        reviews = sorted((r for r in reviews if timestamp(r.get("submitted_at"))),
+                         key=lambda r: timestamp(r["submitted_at"]))
+        first_review = reviews[0] if reviews else {}
+        reviewed_at = timestamp(first_review.get("submitted_at"))
+        owner_reviews = [r for r in reviews if owner and (r.get("user") or {}).get("login", "").lower() == owner.lower()
+                         and in_window(r.get("submitted_at"), start, end)]
+        pushes = sum(e.get("event") == "committed" and reviewed_at is not None
+                     and (t := timestamp(e.get("created_at"))) is not None and reviewed_at < t
+                     and start <= t < end for e in timeline)
+        force = next((e for e in timeline if e.get("event") == "head_ref_force_pushed"), {})
+        first_sha = (force.get("before_commit") or {}).get("sha")
+        if not first_sha:
+            dated = [(timestamp((c.get("commit", {}).get("committer") or {}).get("date")), c.get("sha"))
+                     for c in commits]
+            prior = [(t, sha) for t, sha in dated if t is not None and t <= (timestamp(created) or start)]
+            first_sha = max(prior)[1] if prior else (details.get("head") or {}).get("sha")
+        suites = gh_list(f"repos/{repo}/commits/{first_sha}/check-suites?per_page=100", "check_suites") if first_sha else []
+        suite = min(suites, key=lambda s: timestamp(s.get("created_at")) or 0) if suites else {}
+        head = (details.get("head") or {}).get("sha")
+        checks = gh_list(f"repos/{repo}/commits/{head}/check-runs?per_page=100", "check_runs") if head else []
+        gate = [c for c in checks if c.get("name") == "single-track"
+                and c.get("conclusion") in ("failure", "timed_out", "startup_failure")
+                and in_window(c.get("completed_at"), start, end)]
+        test_file = any(re.search(r"(^|/)(tests?|__tests__)(/|$)|(^|/)(test_[^/]+|[^/]+\.(test|spec)\.)",
+                                  f.get("filename", "")) for f in files)
+        result.append({**event,
+                       "first_try_ci": suite.get("conclusion") if suite.get("completed_at") else None,
+                       "first_try_at": suite.get("completed_at"), "rework_pushes": pushes,
+                       "owner_changes": len(owner_reviews) if owner else None,
+                       "owner_change_requests": [r for r in owner_reviews if r.get("state") == "CHANGES_REQUESTED"],
+                       "changed_lines": (details.get("additions") or 0) + (details.get("deletions") or 0),
+                       "evidence_missing": "how to check on dev" not in (details.get("body") or "").lower() or not test_file,
+                       "gate_failures": gate})
+    cutoff = end - 30 * 86400
+    bugs = []
+    for issue in gh_list(f"repos/{repo}/issues?state=all&labels=bug&per_page=100"):
+        if issue.get("pull_request"):
+            continue
+        events = gh_list(f"repos/{repo}/issues/{issue['number']}/timeline?per_page=100")
+        linked = [e.get("source", {}).get("issue", {}) for e in events if e.get("event") == "cross-referenced"]
+        merged = [p for p in pulls if timestamp(p.get("merged_at")) and cutoff <= timestamp(p["merged_at"]) < end
+                  and any(x.get("number") == p.get("number") and x.get("pull_request") for x in linked)]
+        if merged:
+            pr = max(merged, key=lambda p: timestamp(p["merged_at"]))
+            bugs.append({"issue": issue["number"], "title": issue.get("title", ""),
+                         "merged_at": pr["merged_at"], "lane": lane_agent((pr.get("head") or {}).get("ref", ""))})
+    commits = gh_list(f"repos/{repo}/commits?sha=main&since={dt.datetime.fromtimestamp(cutoff, dt.UTC).isoformat()}&until={dt.datetime.fromtimestamp(end, dt.UTC).isoformat()}&per_page=100")
+    reverts = [{"sha": c.get("sha", "")[:7], "message": c.get("commit", {}).get("message", "").splitlines()[0],
+                "committed_at": c.get("commit", {}).get("committer", {}).get("date")}
+               for c in commits if c.get("commit", {}).get("message", "").startswith("Revert")]
+    return {"pull_requests": result, "bugs": bugs, "reverts": reverts, "owner_login": owner}
+
+
+def percentile90(values):
+    return sorted(values)[max(0, int(0.9 * len(values) - 0.1))] if values else None
+
+
+def github_metrics(data, start, end):
+    source = data.get("github")
+    if source is None:
+        return None
+    blank = {"cycles": [], "pass": 0, "total": 0, "rework": 0,
+             "owner": 0 if source.get("owner_login") else None, "bugs": 0, "scope": 0, "evidence": 0, "gate": 0}
+    totals = defaultdict(lambda: {**blank, "cycles": []})
+    for p in source["pull_requests"]:
+        lane = lane_agent(p.get("branch", ""))
+        targets = ["__company__"] + ([lane] if lane else [])
+        created, merged = in_window(p.get("created_at"), start, end), in_window(p.get("merged_at"), start, end)
+        for target in targets:
+            m = totals[target]
+            if merged:
+                m["cycles"].append((timestamp(p["merged_at"]) - timestamp(p["created_at"])) / 86400)
+            m["rework"] += p.get("rework_pushes", 0)
+            m["gate"] += len(p.get("gate_failures", []))
+            if source.get("owner_login"):
+                m["owner"] += p.get("owner_changes") or 0
+            if created:
+                ci = p.get("first_try_ci") if in_window(p.get("first_try_at"), start, end) else None
+                if ci:
+                    m["total"] += 1
+                    m["pass"] += ci == "success"
+                m["scope"] += (p.get("changed_lines") or 0) > 400
+                m["evidence"] += bool(p.get("evidence_missing"))
+    for bug in source["bugs"]:
+        if recent_30(bug.get("merged_at"), end):
+            for target in ["__company__"] + ([bug["lane"]] if bug.get("lane") else []):
+                totals[target]["bugs"] += 1
+    totals["__company__"]["bugs"] += sum(recent_30(x.get("committed_at"), end) for x in source["reverts"])
+    return totals
 
 
 def run_tokens(run):
@@ -179,7 +360,13 @@ def build_report(data, monday, start, end):
 
     groups = set(names) | set(done_by) | set(bounces)
     groups.update(run["agentId"] for run in week_runs if run.get("agentId"))
+    gh_metrics = github_metrics(data, start, end)
+    groups.update(lane_agent(p.get("branch", "")) for p in (data.get("github") or {}).get("pull_requests", []))
+    groups.discard(None)
     company_key = "__company__"
+
+    def label(group):
+        return group if group in LANE_AGENTS.values() else names.get(group, "Unassigned")
 
     def metrics(group):
         selected = relevant if group == company_key else done_by.get(group, set())
@@ -206,11 +393,12 @@ def build_report(data, monday, start, end):
             "unreported_runs": len(token_values) - len(reported_tokens),
             "runs_per_task": runs_per_task,
             "failed_pct": failed_pct,
+            "github": gh_metrics[group if group == company_key else label(group)] if gh_metrics is not None else {},
         }
 
     rows = [
-        (names.get(group, "Unassigned"), metrics(group))
-        for group in sorted(groups, key=lambda g: str(names.get(g, "Unassigned")).lower())
+        (label(group), metrics(group))
+        for group in sorted(groups, key=lambda g: label(g).lower())
     ]
     company = metrics(company_key)
     rows.append(("Company", company))
@@ -225,6 +413,18 @@ def build_report(data, monday, start, end):
                     run.get("status"),
                 )
             )
+    github = data.get("github") or {}
+    for p in github.get("pull_requests", []):
+        agent, pr = lane_agent(p.get("branch", "")) or "Company", f"PR #{p.get('number', 'n/a')}"
+        ci = p.get("first_try_ci")
+        if in_window(p.get("first_try_at"), start, end) and ci and ci not in ("success", "neutral", "skipped"):
+            failures.append((agent, pr, f"first-try CI {ci}"))
+        failures.extend((agent, pr, "owner changes requested") for _ in p.get("owner_change_requests", []))
+    failures.extend((b.get("lane") or "Company", f"Issue #{b.get('issue', 'n/a')}",
+                     f"post-merge bug: {b.get('title', '')}".rstrip())
+                    for b in github.get("bugs", []) if recent_30(b.get("merged_at"), end))
+    failures.extend(("Company", f"Commit {r.get('sha', '')}", f"post-merge bug: {r.get('message', '')}".rstrip())
+                    for r in github.get("reverts", []) if recent_30(r.get("committed_at"), end))
     alerts = []
     for label, row in rows:
         if row["cycle_missing"]:
@@ -233,6 +433,9 @@ def build_report(data, monday, start, end):
             alerts.append(f"{label}: failed runs {row['failed_pct']:.1f}% (>10%)")
         if row["p90"] is not None and row["p90"] > 3:
             alerts.append(f"{label}: cycle-time p90 {row['p90']:.2f}d (>3d)")
+        gh = row["github"]
+        if gh.get("total") and 100 * gh["pass"] / gh["total"] < 70:
+            alerts.append(f"{label}: first-try CI {100 * gh['pass'] / gh['total']:.1f}% (<70%)")
     return {"week": monday, "rows": rows, "failures": failures, "alerts": alerts}
 
 
@@ -265,12 +468,23 @@ def render_report(report):
             if row["runs_per_task"] is not None
             else "n/a (missing runs)",
             f"{row['failed_pct']:.1f}%" if row["failed_pct"] is not None else "n/a (no runs)",
-        ] + ["n/a (AUT-57)" for _ in GITHUB_COLUMNS]
+        ] + github_cells(row["github"])
         output.append("| " + " | ".join(str(v).replace("|", "\\|") for v in cells) + " |")
     output += ["", "## Alerts", ""] + [f"- {a}" for a in report["alerts"] or ["None"]]
     output += ["", "## Failures", "", "| Agent | Issue | Status |", "| --- | --- | --- |"]
     output += [f"| {a} | {i} | {s} |" for a, i, s in report["failures"] or [("None", "n/a", "n/a")]]
     return "\n".join(output) + "\n"
+
+
+def github_cells(m):
+    if not m:
+        return ["n/a (GitHub unavailable)"] * len(GITHUB_COLUMNS)
+    cycles = m["cycles"]
+    ci = f"{100*m['pass']/m['total']:.1f}% ({m['pass']}/{m['total']})" if m["total"] else "n/a (no checks)"
+    owner = str(m["owner"]) if m["owner"] is not None else "n/a (owner unset)"
+    return [f"{statistics.median(cycles):.2f}d" if cycles else "n/a (no merged PRs)",
+            f"{percentile90(cycles):.2f}d" if cycles else "n/a (no merged PRs)", ci,
+            str(m["rework"]), owner, str(m["bugs"]), str(m["scope"]), str(m["evidence"]), str(m["gate"])]
 
 
 def main(argv=None):
@@ -285,6 +499,8 @@ def main(argv=None):
     try:
         monday, start, end = week_window(args.week)
         data = fetch_report_data(os.environ["PAPERCLIP_COMPANY_ID"], start)
+        data["github"] = github_data(github_repository(), start, end,
+                                     os.environ.get("AC_SCORECARD_OWNER_GITHUB_LOGIN"))
         print(render_report(build_report(data, monday, start, end)), end="")
     except (ValueError, RuntimeError) as exc:
         print(str(exc) if isinstance(exc, ValueError) else "Paperclip read failed", file=sys.stderr)

@@ -10,6 +10,7 @@ scorecard = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(scorecard)
 FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/week.json"
 BUILDER_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/builder_attribution.json"
+GITHUB_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/github.json"
 
 
 def report(source=None):
@@ -29,7 +30,7 @@ def test_real_activity_shapes_metrics_alerts_and_week_end():
     rendered = scorecard.render_report(result)
     assert result["failures"][0] == ("Fictional Agent", "DEMO-2", "cancelled")
     assert result["failures"][1] == ("Fictional Agent", "DEMO-2", "failed")
-    assert "209.00 (2 runs unreported)" in rendered and "n/a (AUT-57)" in rendered
+    assert "209.00 (2 runs unreported)" in rendered and "n/a (GitHub unavailable)" in rendered
 
 
 def test_done_metrics_follow_builder_across_handoff_and_direct_completion():
@@ -110,3 +111,76 @@ def test_get_only_and_missing_env_names_only(monkeypatch, capsys):
     error = capsys.readouterr().err
     assert error == "Missing required environment variable(s): PAPERCLIP_COMPANY_ID\n"
     assert "SENTINEL" not in error
+    calls = []
+    monkeypatch.setattr(
+        scorecard.subprocess,
+        "run",
+        lambda c, **_: calls.append(c) or type("R", (), {"returncode": 0, "stdout": "[]"})(),
+    )
+    assert scorecard.gh_api("repos/example/project/pulls", paginate=True) == [] and calls[0][
+        2:4
+    ] == ["--method", "GET"]
+
+
+def github_report(owner=True):
+    source = json.loads(FIXTURE.read_text())
+    source["github"] = json.loads(GITHUB_FIXTURE.read_text())
+    source["github"]["owner_login"] = "fictional-owner" if owner else None
+    return scorecard.build_report(source, *scorecard.week_window("2026-09-21"))
+
+
+def test_github_metrics_use_task_branch_attribution_and_company_totals():
+    result = github_report()
+    rows = dict(result["rows"])
+    admin, lead, platform, company = (
+        rows[x]["github"]
+        for x in ("Software Engineer", "Lead Engineer", "Platform Engineer", "Company")
+    )
+
+    assert [admin["cycles"], lead["cycles"], platform["cycles"], company["cycles"]] == [
+        [2],
+        [],
+        [3],
+        [2, 3],
+    ]
+    assert (
+        admin["pass"],
+        admin["total"],
+        lead["pass"],
+        lead["total"],
+        company["pass"],
+        company["total"],
+    ) == (0, 1, 1, 1, 2, 5)
+    assert (admin["rework"], lead["rework"], platform["rework"], company["rework"]) == (2, 1, 0, 7)
+    assert (admin["owner"], platform["owner"], company["owner"]) == (2, 1, 4)
+    assert (admin["scope"], platform["scope"], admin["evidence"], admin["gate"]) == (1, 0, 1, 1)
+    assert (admin["bugs"], company["bugs"]) == (1, 2)
+    assert "UI Engineer" not in rows
+    assert scorecard.github_cells(company)[:3] == ["2.50d", "3.00d", "40.0% (2/5)"]
+    assert "PR cycle median" in scorecard.render_report(result)
+    assert any("first-try CI" in alert and "<70%" in alert for alert in result["alerts"])
+    assert "n/a (owner unset)" in scorecard.render_report(github_report(owner=False))
+
+
+def test_github_failures_list_first_ci_owner_request_and_recent_bugs():
+    failures = github_report()["failures"]
+    assert ("Software Engineer", "PR #101", "first-try CI failure") in failures
+    assert ("Platform Engineer", "PR #103", "first-try CI failure") in failures
+    assert ("Company", "PR #105", "first-try CI timed_out") in failures
+    assert ("Software Engineer", "PR #101", "owner changes requested") in failures
+    assert ("Software Engineer", "Issue #501", "post-merge bug: Fictional linked bug") in failures
+    assert ("Company", "Commit abc1234", "post-merge bug: Revert fictional change") in failures
+    assert not any("#502" in item[1] or "old1234" in item[1] for item in failures)
+
+
+def test_github_get_guard_rejects_write_methods_and_bodies():
+    for flags in (
+        ("-X", "POST"),
+        ("--method", "PATCH"),
+        ("--method=DELETE",),
+        ("-f", "state=closed"),
+        ("-F", "body=@file"),
+        ("--input", "body.json"),
+    ):
+        with pytest.raises(ValueError):
+            scorecard.validate_gh_command(["gh", "api", *flags, "repos/example/project/pulls"])

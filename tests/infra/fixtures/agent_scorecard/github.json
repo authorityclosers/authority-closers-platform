@@ -1,0 +1,83 @@
+{
+  "owner_login": "fictional-owner",
+  "pull_requests": [
+    {
+      "number": 101,
+      "branch": "task/admin/57-github-metrics",
+      "created_at": "2026-09-21T01:00:00Z",
+      "merged_at": "2026-09-23T01:00:00Z",
+      "first_try_ci": "failure",
+      "first_try_at": "2026-09-21T01:10:00Z",
+      "rework_pushes": 2,
+      "owner_changes": 2,
+      "owner_change_requests": [{"state": "CHANGES_REQUESTED"}],
+      "changed_lines": 401,
+      "evidence_missing": true,
+      "gate_failures": [{"name": "single-track", "conclusion": "failure"}]
+    },
+    {
+      "number": 102,
+      "branch": "task/sales-xray/81-http-source-readers",
+      "created_at": "2026-09-22T01:00:00Z",
+      "merged_at": null,
+      "first_try_ci": "success",
+      "first_try_at": "2026-09-22T01:10:00Z",
+      "rework_pushes": 1,
+      "owner_changes": 0,
+      "owner_change_requests": [],
+      "changed_lines": 20,
+      "evidence_missing": false,
+      "gate_failures": []
+    },
+    {
+      "number": 103,
+      "branch": "task/platform/24-r3-promote",
+      "created_at": "2026-09-22T02:00:00Z",
+      "merged_at": "2026-09-25T02:00:00Z",
+      "first_try_ci": "failure",
+      "first_try_at": "2026-09-22T02:10:00Z",
+      "rework_pushes": 0,
+      "owner_changes": 1,
+      "owner_change_requests": [],
+      "changed_lines": 400,
+      "evidence_missing": false,
+      "gate_failures": []
+    },
+    {
+      "number": 104,
+      "branch": "task/ui/66-shell",
+      "created_at": "2026-09-23T01:00:00Z",
+      "merged_at": null,
+      "first_try_ci": "success",
+      "first_try_at": "2026-09-23T01:10:00Z",
+      "rework_pushes": 3,
+      "owner_changes": 1,
+      "owner_change_requests": [],
+      "changed_lines": 50,
+      "evidence_missing": false,
+      "gate_failures": []
+    },
+    {
+      "number": 105,
+      "branch": "feature/untracked-task",
+      "created_at": "2026-09-24T01:00:00Z",
+      "merged_at": null,
+      "first_try_ci": "timed_out",
+      "first_try_at": "2026-09-24T01:10:00Z",
+      "rework_pushes": 1,
+      "owner_changes": 0,
+      "owner_change_requests": [],
+      "changed_lines": 10,
+      "evidence_missing": false,
+      "gate_failures": []
+    }
+  ],
+  "bugs": [
+    {"issue": 501, "title": "Fictional linked bug", "merged_at": "2026-09-15T00:00:00Z", "lane": "Software Engineer"},
+    {"issue": 502, "title": "Fictional old bug", "merged_at": "2026-08-15T00:00:00Z", "lane": "Software Engineer"}
+  ],
+  "reverts": [
+    {"sha": "abc1234", "message": "Revert fictional change", "committed_at": "2026-09-16T00:00:00Z"},
+    {"sha": "old1234", "message": "Revert old fictional change", "committed_at": "2026-08-01T00:00:00Z"}
+  ]
+}
