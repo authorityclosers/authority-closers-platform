@@ -80,6 +80,18 @@ _LOCAL_JOB = "conversation.inspect_local.v1"
 _DELETE_JOB = "conversation.erase_local.v1"
 _INFERENCE_JOB = "conversation.infer_provider.v1"
 _ACTIVE_JOB_STATES = ("queued", "retry_wait")
+_UPLOAD_FRAME_BYTES = 256 * 1024
+
+
+class _ChunkedAudio(httpx.AsyncByteStream):
+    """Send the generated WAV in bounded frames while keeping its exact length."""
+
+    def __init__(self, audio: bytes) -> None:
+        self.audio = audio
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for offset in range(0, len(self.audio), _UPLOAD_FRAME_BYTES):
+            yield self.audio[offset : offset + _UPLOAD_FRAME_BYTES]
 
 
 class SampleRefused(ValueError):
@@ -497,10 +509,11 @@ async def seed_account_samples(
         await request(
             "PUT",
             f"/submissions/{submission_id}/source",
-            content=audio,
+            content=_ChunkedAudio(audio),
             headers={
                 **headers,
                 "Content-Type": "application/octet-stream",
+                "Content-Length": str(len(audio)),
                 "X-Source-SHA256": hashlib.sha256(audio).hexdigest(),
                 "X-Upload-Policy": policy["policy_sha256"],
                 "X-Upload-Consent": "accepted",
