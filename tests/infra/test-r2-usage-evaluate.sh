@@ -25,6 +25,31 @@ tmp_dir="$(mktemp -d -t ac-r2-policy-test.XXXXXX)"
 cleanup() { rm -rf -- "$tmp_dir"; }
 trap cleanup EXIT
 
+# Exercise the exact policy resolver used by the guard without provider calls.
+guard="$repo_root/infra/vps-foundation/scripts/r2-usage-guard.sh"
+sed -n '/^resolve_installed_policy() {$/,/^}$/p' "$guard" > "$tmp_dir/policy-resolver.sh"
+# shellcheck disable=SC1091  # This exact resolver function was extracted from the reviewed guard.
+source "$tmp_dir/policy-resolver.sh"
+foundation_root="$tmp_dir/foundation"
+scope_record="$tmp_dir/backup.release"
+scope_id="foundation-$(printf 'a%.0s' {1..40})"
+[[ "$(resolve_installed_policy "$foundation_root" "$scope_record")" == \
+  "$foundation_root/current/config/r2/free-tier-policy.conf" ]]
+printf '%s\n' "$scope_id" > "$scope_record"
+[[ "$(resolve_installed_policy "$foundation_root" "$scope_record")" == \
+  "$foundation_root/releases/$scope_id/config/r2/free-tier-policy.conf" ]]
+: > "$scope_record"
+if output="$(resolve_installed_policy "$foundation_root" "$scope_record" 2>&1)"; then
+  printf 'R2 policy resolver accepted an empty backup scope record.\n' >&2
+  exit 1
+fi
+[[ "$output" == *'scope record is empty'* ]]
+printf 'invalid\n' > "$scope_record"
+if resolve_installed_policy "$foundation_root" "$scope_record" >/dev/null 2>&1; then
+  printf 'R2 policy resolver accepted an invalid backup scope record.\n' >&2
+  exit 1
+fi
+
 write_storage_fixture() {
   local standard_value="$1"
   local infrequent_value="${2:-0}"
