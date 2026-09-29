@@ -338,15 +338,16 @@ async def _session_course_client(
     async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
     sessions = async_sessionmaker(async_engine, expire_on_commit=False)
     token_pepper = "course-http-session-pepper-long-enough"  # noqa: S105
+    session_now = datetime.now(UTC)
     try:
         async with sessions() as database, database.begin():
             identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
-            issued = await identity.issue_authenticated_session(seed.learner_id, now=NOW)
+            issued = await identity.issue_authenticated_session(seed.learner_id, now=session_now)
             if selected_tenant_id is not None:
                 selected = await identity.select_tenant(
                     issued.token,
                     selected_tenant_id,
-                    now=NOW,
+                    now=session_now,
                 )
                 assert selected.actor.tenant_id == selected_tenant_id
 
@@ -355,7 +356,7 @@ async def _session_course_client(
         ) -> AsyncIterator[AuthenticatedTransaction]:
             async with sessions() as database, database.begin():
                 identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
-                resolved = await identity.resolve_actor(issued.token, now=NOW)
+                resolved = await identity.resolve_actor(issued.token, now=session_now)
                 yield AuthenticatedTransaction(
                     database=database,
                     identity=identity,
