@@ -14,6 +14,7 @@ import argparse
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -57,6 +58,140 @@ REQUIRED_ASSERTIONS = {
 
 class GateError(RuntimeError):
     """A bounded diagnostic safe to expose in CI logs."""
+
+
+def _redact_failure_summary(value: str) -> str:
+    """Remove common credentials and personal details from a one-line diagnostic."""
+    value = " ".join(value.split())
+    value = re.sub(
+        r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|sqlite|mssql|sqlserver)"
+        r"(?:\+[\w.-]+)?://[^\s\"'<>]+",
+        "[redacted database URL]",
+        value,
+    )
+    value = re.sub(
+        r"(?i)\b(?:set-cookie|cookie)\s*[:=]\s*[^\r\n]+",
+        "[redacted cookie]",
+        value,
+    )
+    value = re.sub(
+        r"(?i)\b(?:otp|one[- ]time(?:\s+(?:code|password))?|verification(?:\s+code)?|"
+        r"email\s+code|sign[- ]in\s+code|code)\b\s*(?:[:=]\s*)?#?\s*\d{4,10}\b",
+        "[redacted code]",
+        value,
+    )
+    value = re.sub(r"(?<=['\"])\d{4,10}(?=['\"])", "[redacted code]", value)
+    value = re.sub(
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
+        "Bearer [redacted token]",
+        value,
+    )
+    value = re.sub(r"\?[^\s]*", "?[redacted query]", value)
+    value = re.sub(
+        r"(?i)\b[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?"
+        r"(?:\.[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?)+\b",
+        "[redacted email]",
+        value,
+    )
+    return value[:300]
+
+
+def _failure_location(value: str) -> str:
+    locations = list(re.finditer(r"(?P<path>(?:[A-Za-z]:)?[\w./\\-]+\.py):(?P<line>\d+)", value))
+    locations.extend(
+        re.finditer(
+            r"File\s+[\"'](?P<path>[^\"']+\.py)[\"'],\s*line\s+(?P<line>\d+)",
+            value,
+        )
+    )
+    expected_path = TEST_FILE.relative_to(ROOT).as_posix()
+    expected = [
+        location
+        for location in locations
+        if location.group("path").replace("\\", "/").endswith(expected_path)
+    ]
+    if expected:
+        match = expected[-1]
+    elif locations:
+        test_paths = [
+            location
+            for location in locations
+            if "/tests/" in location.group("path").replace("\\", "/")
+        ]
+        match = test_paths[-1] if test_paths else locations[0]
+    else:
+        return "unknown"
+    path = match.group("path").replace("\\", "/")
+    parts = [part for part in path.split("/") if part]
+    if "tests" in parts:
+        path = "/".join(parts[parts.index("tests") :])
+    else:
+        path = parts[-1] if parts else "unknown"
+    return f"{path}:{match.group('line')}"
+
+
+def _failure_exception(failure: ET.Element) -> tuple[str, str]:
+    message = failure.attrib.get("message", "")
+    text = failure.text or ""
+    lines = [message, *text.splitlines()]
+    for line in lines:
+        candidate = re.sub(r"^\s*E\s+", "", line.strip())
+        match = re.match(
+            r"(?:(?:[A-Za-z_]\w*\.)+)?"
+            r"(?P<type>[A-Za-z_]\w*(?:Error|Exception|Failure))"
+            r"(?::\s*(?P<message>.*))?$",
+            candidate,
+        )
+        if match is not None:
+            return match.group("type"), (match.group("message") or "")
+    exception_type = failure.attrib.get("type", "unknown").rsplit(".", 1)[-1]
+    first_line = next((line.strip() for line in lines if line.strip()), "unknown")
+    prefix = f"{exception_type}:"
+    if first_line.startswith(prefix):
+        first_line = first_line[len(prefix) :].strip()
+    return exception_type, first_line
+
+
+def _pytest_failure_summary(path: Path) -> str:
+    """Extract a bounded, redacted summary from pytest's JUnit failure receipt."""
+    fallback = (
+        f"node={TEST_NODE} location=unknown exception=unknown "
+        "message=pytest failed without a readable JUnit failure"
+    )
+    try:
+        raw = path.read_bytes()
+        if len(raw) > 1_000_000:
+            return _redact_failure_summary(fallback)
+        text = raw.decode("utf-8")
+        if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
+            return _redact_failure_summary(fallback)
+        root = ET.fromstring(text)  # noqa: S314 - bounded local JUnit; DTD refused above
+    except (OSError, UnicodeError, ET.ParseError):
+        return _redact_failure_summary(fallback)
+    testcase = next(
+        (case for case in root.iter("testcase") if case.attrib.get("name") == TEST_NAME),
+        None,
+    )
+    if testcase is None:
+        return _redact_failure_summary(fallback)
+    failure = testcase.find("failure")
+    if failure is None:
+        failure = testcase.find("error")
+    if failure is None:
+        return _redact_failure_summary(fallback)
+    details = "\n".join((failure.attrib.get("message", ""), failure.text or ""))
+    exception_type, first_line = _failure_exception(failure)
+    summary = (
+        f"node={TEST_NODE} location={_failure_location(details)} "
+        f"exception={exception_type} message={first_line}"
+    )
+    return _redact_failure_summary(summary)
+
+
+def _record_failure_summary(proof: dict[str, Any], summary: str) -> None:
+    summary = _redact_failure_summary(summary)
+    proof["failure_summary"] = summary
+    print(f"Sales Xray browser failure: {summary}", file=sys.stderr, flush=True)
 
 
 def _require_test_source() -> None:
@@ -245,12 +380,16 @@ def _write_sanitized_receipt(path: Path, source: dict[str, Any], build_id: str) 
 
 def _write_failure_receipt(path: Path, proof: dict[str, Any]) -> None:
     """Leave a bounded artifact even when setup fails before browser execution."""
+    summary = proof.get("failure_summary")
+    if isinstance(summary, str):
+        summary = _redact_failure_summary(summary)
     path.write_text(
         json.dumps(
             {
                 "schema": "ac.sales_xray.acquisition-browser-gate.v1",
                 "status": "failed",
                 "reason": proof.get("reason", "The browser gate did not complete"),
+                "failure_summary": summary,
                 "provider_acceptance": False,
                 "synthetic_only": True,
             },
@@ -314,6 +453,7 @@ def main() -> int:
                 check=False,
             )
         if result.returncode:
+            _record_failure_summary(proof, _pytest_failure_summary(junit))
             raise GateError("The required Sales Xray browser case failed")
         _parse_junit(junit)
         source = _load_browser_receipt(evidence / "browser-network.json", build_id)
@@ -325,6 +465,11 @@ def main() -> int:
         )
         return 0
     except subprocess.TimeoutExpired:
+        _record_failure_summary(
+            proof,
+            f"node={TEST_NODE} location=unknown exception=TimeoutExpired "
+            "message=pytest exceeded the gate time limit",
+        )
         proof["reason"] = "The required Sales Xray browser case timed out"
         return 1
     except GateError as error:
