@@ -28,17 +28,17 @@
 
   /* ---------- Neutrals ---------- */
   --lx-ink: #0b1424; /* primary text, strong UI */
-  --lx-ink-2: #1e2b40; /* quote text on light surfaces */
-  --lx-ink-3: #334158; /* secondary text */
+  --lx-ink-2: #1c2940; /* quote text on light surfaces */
+  --lx-ink-3: #33415a; /* secondary text */
   --lx-muted: #56637a; /* tertiary text; 5.6:1 on paper */
   --lx-muted-2: #646d7f; /* captions/meta; 4.8:1 on paper - never below 12px, never on sunken */
-  --lx-line: #e6e3da; /* hairlines on paper/surface */
-  --lx-line-soft: #ece9e1;
-  --lx-line-strong: #cfcabe;
-  --lx-paper: #f6f5f1; /* app ground */
-  --lx-paper-2: #fbfaf7; /* nested/secondary surface */
+  --lx-line: #e2e7f0; /* hairlines on paper/surface */
+  --lx-line-soft: #eaeef5;
+  --lx-line-strong: #cbd3e1;
+  --lx-paper: #f4f6fb; /* app ground */
+  --lx-paper-2: #f9fafd; /* nested/secondary surface */
   --lx-surface: #ffffff; /* cards */
-  --lx-sunken: #ece9e1; /* segmented controls, "still unknown" wells */
+  --lx-sunken: #edf1f7; /* segmented controls, "still unknown" wells */
 
   /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
   --lx-film: #0a1220;
@@ -53,52 +53,52 @@
   --lx-film-lens-fill: #ffffff;
 
   /* ---------- Brand ---------- */
-  --lx-teal: #087e79; /* primary action, links, strength */
-  --lx-teal-hover: #06635f;
-  --lx-teal-2: #24b5a8; /* wordmark gradient end */
-  --lx-teal-soft: #e6f5f2;
-  --lx-teal-tint: #f2faf8;
-  --lx-teal-edge: #d5ece8;
+  --lx-teal: #097870; /* primary action, links, strength */
+  --lx-teal-hover: #06615b;
+  --lx-teal-2: #14b8a6; /* wordmark gradient end */
+  --lx-teal-soft: #dcf6ef;
+  --lx-teal-tint: #eefaf7;
+  --lx-teal-edge: #b6e9de;
   --lx-glow: #2dd4bf; /* ONLY on film backgrounds (contrast), never text on light */
   --lx-glow-ink: #0f8b7e; /* Lens sound waves */
   --lx-on-teal: #ffffff; /* text on teal actions */
 
   /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
-  --lx-strength: #087e79;
-  --lx-strength-soft: #e6f5f2;
-  --lx-strength-edge: #cde8e3;
+  --lx-strength: #097870;
+  --lx-strength-soft: #dcf6ef;
+  --lx-strength-edge: #b6e9de;
   --lx-strength-on-film: #2dd4bf;
   --lx-strength-ink: #06736f;
   --lx-focus: #b45309;
-  --lx-focus-soft: #fef3e2;
-  --lx-focus-edge: #f2c27a;
+  --lx-focus-soft: #fff0da;
+  --lx-focus-edge: #f5c378;
   --lx-focus-on-film: #f59e0b;
   --lx-focus-ink: #92400e;
-  --lx-missed: #5b3fd6;
-  --lx-missed-soft: #efebff;
-  --lx-missed-edge: #ddd5ff;
+  --lx-missed: #6341e0;
+  --lx-missed-soft: #eeeaff;
+  --lx-missed-edge: #d9d0ff;
   --lx-missed-on-film: #8b74ff;
-  --lx-missed-ink: #4a31b8;
-  --lx-objection: #be2a55;
-  --lx-objection-soft: #fdecf1;
-  --lx-objection-edge: #f3c9d5;
+  --lx-missed-ink: #4c2fc0;
+  --lx-objection: #c81d55;
+  --lx-objection-soft: #ffe9f0;
+  --lx-objection-edge: #f7c6d6;
   --lx-objection-on-film: #f0527f;
-  --lx-objection-ink: #be2a55;
-  --lx-closing: #2453d6;
-  --lx-closing-soft: #eaf0ff;
-  --lx-closing-ink: #1f4fb8;
+  --lx-objection-ink: #b31749;
+  --lx-closing: #2459e0;
+  --lx-closing-soft: #e6eeff;
+  --lx-closing-ink: #1d4cc4;
   --lx-hypothesis: #56637a;
   --lx-hypothesis-edge: #aeb6c4; /* dashed border */
 
   /* ---------- Status ---------- */
   --lx-success: var(--lx-teal);
-  --lx-info: #2453d6;
-  --lx-info-soft: #eaf0ff;
+  --lx-info: #2459e0;
+  --lx-info-soft: #e6eeff;
   --lx-warning: #b45309;
-  --lx-warning-soft: #fef3e2;
-  --lx-danger: #b42318;
-  --lx-danger-soft: #fdecea;
-  --lx-danger-edge: #f1c7c2;
+  --lx-warning-soft: #fff5e8;
+  --lx-danger: #c0261b;
+  --lx-danger-soft: #fdebe9;
+  --lx-danger-edge: #f3c6c1;
 
   /* ---------- Type ---------- */
   --lx-font-display:
@@ -174,6 +174,8 @@
   --lx-chapter-rail-w: 196px;
   --lx-bottom-nav-h: 76px;
   --lx-mini-player-h: 62px;
+  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 
 /* Devanagari: never synthesise italics, always give it more leading. */
@@ -201,13 +203,13 @@
   --lx-ink-3: #b7c2d3;
   --lx-muted: #93a0b5;
   --lx-muted-2: #8390a6;
-  --lx-line: #223049;
-  --lx-line-soft: #1b2740;
-  --lx-line-strong: #2e3e5c;
-  --lx-paper: #070d18;
-  --lx-paper-2: #0c1424;
-  --lx-surface: #101a2c;
-  --lx-sunken: #0c1424;
+  --lx-line: #1e2a42;
+  --lx-line-soft: #18223a;
+  --lx-line-strong: #2b3a59;
+  --lx-paper: #060a14;
+  --lx-paper-2: #0b1222;
+  --lx-surface: #0f1829;
+  --lx-sunken: #0a1120;
   --lx-teal: #2dd4bf;
   --lx-teal-hover: #5eead4;
   --lx-teal-soft: rgba(45, 212, 191, 0.12);
@@ -220,22 +222,24 @@
   --lx-focus: #f59e0b;
   --lx-focus-soft: rgba(245, 158, 11, 0.12);
   --lx-focus-ink: #fbbf24;
-  --lx-missed: #a18fff;
-  --lx-missed-soft: rgba(139, 116, 255, 0.14);
+  --lx-missed: #a78bfa;
+  --lx-missed-soft: rgba(167, 139, 250, 0.15);
   --lx-missed-ink: #c4b8ff;
-  --lx-objection: #f0527f;
-  --lx-objection-soft: rgba(240, 82, 127, 0.14);
+  --lx-objection: #fb7185;
+  --lx-objection-soft: rgba(251, 113, 133, 0.14);
   --lx-objection-ink: #ff8cae;
-  --lx-closing: #7ea2ff;
-  --lx-closing-soft: rgba(126, 162, 255, 0.14);
+  --lx-closing: #7aa7ff;
+  --lx-closing-soft: rgba(122, 167, 255, 0.15);
   --lx-closing-ink: #bfd0ff;
   --lx-hypothesis: #93a0b5;
-  --lx-info: #7ea2ff;
-  --lx-info-soft: rgba(126, 162, 255, 0.14);
+  --lx-info: #7aa7ff;
+  --lx-info-soft: rgba(122, 167, 255, 0.15);
   --lx-warning: #f59e0b;
   --lx-warning-soft: rgba(245, 158, 11, 0.12);
   --lx-danger: #f97066;
   --lx-danger-soft: rgba(249, 112, 102, 0.12);
+  --lx-gradient-brand: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 50%, #818cf8 100%);
+  --lx-gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 100%);
 }
 
 /* ---------- Light report surface ----------
@@ -248,49 +252,51 @@
 [data-lx-surface="light"] {
   color-scheme: light;
   --lx-ink: #0b1424;
-  --lx-ink-2: #1e2b40;
-  --lx-ink-3: #334158;
+  --lx-ink-2: #1c2940;
+  --lx-ink-3: #33415a;
   --lx-muted: #56637a;
   --lx-muted-2: #646d7f;
-  --lx-line: #e6e3da;
-  --lx-line-soft: #ece9e1;
-  --lx-line-strong: #cfcabe;
-  --lx-paper: #f6f5f1;
-  --lx-paper-2: #fbfaf7;
+  --lx-line: #e2e7f0;
+  --lx-line-soft: #eaeef5;
+  --lx-line-strong: #cbd3e1;
+  --lx-paper: #f4f6fb;
+  --lx-paper-2: #f9fafd;
   --lx-surface: #ffffff;
-  --lx-sunken: #ece9e1;
-  --lx-teal: #087e79;
-  --lx-teal-hover: #06635f;
-  --lx-teal-soft: #e6f5f2;
-  --lx-teal-tint: #f2faf8;
-  --lx-teal-edge: #d5ece8;
+  --lx-sunken: #edf1f7;
+  --lx-teal: #097870;
+  --lx-teal-hover: #06615b;
+  --lx-teal-soft: #dcf6ef;
+  --lx-teal-tint: #eefaf7;
+  --lx-teal-edge: #b6e9de;
   --lx-on-teal: #ffffff;
-  --lx-strength: #087e79;
-  --lx-strength-soft: #e6f5f2;
+  --lx-strength: #097870;
+  --lx-strength-soft: #dcf6ef;
   --lx-strength-ink: #06736f;
   --lx-focus: #b45309;
-  --lx-focus-soft: #fef3e2;
+  --lx-focus-soft: #fff0da;
   --lx-focus-ink: #92400e;
-  --lx-missed: #5b3fd6;
-  --lx-missed-soft: #efebff;
-  --lx-missed-ink: #4a31b8;
-  --lx-objection: #be2a55;
-  --lx-objection-soft: #fdecf1;
-  --lx-objection-ink: #be2a55;
-  --lx-closing: #2453d6;
-  --lx-closing-soft: #eaf0ff;
-  --lx-closing-ink: #1f4fb8;
+  --lx-missed: #6341e0;
+  --lx-missed-soft: #eeeaff;
+  --lx-missed-ink: #4c2fc0;
+  --lx-objection: #c81d55;
+  --lx-objection-soft: #ffe9f0;
+  --lx-objection-ink: #b31749;
+  --lx-closing: #2459e0;
+  --lx-closing-soft: #e6eeff;
+  --lx-closing-ink: #1d4cc4;
   --lx-hypothesis: #56637a;
   --lx-success: var(--lx-teal);
-  --lx-info: #2453d6;
-  --lx-info-soft: #eaf0ff;
+  --lx-info: #2459e0;
+  --lx-info-soft: #e6eeff;
   --lx-warning: #b45309;
-  --lx-warning-soft: #fef3e2;
-  --lx-danger: #b42318;
-  --lx-danger-soft: #fdecea;
+  --lx-warning-soft: #fff5e8;
+  --lx-danger: #c0261b;
+  --lx-danger-soft: #fdebe9;
   --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
   background-color: var(--lx-paper);
   color: var(--lx-ink);
+  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 
 /* On a dark app ground the outermost light report reads as a deliberate sheet. */

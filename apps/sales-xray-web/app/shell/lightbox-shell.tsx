@@ -6,7 +6,6 @@ import {
   ChevronsUpDown,
   CircleUserRound,
   FolderOpen,
-  HelpCircle,
   LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
@@ -16,7 +15,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  createContext,
+  useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
@@ -24,12 +26,13 @@ import {
 } from "react";
 
 import { readAccountProfile } from "../account-profile-client";
-import type { Allowance } from "../acquisition-client";
+import { callHref, type Allowance } from "../acquisition-client";
 import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
+import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import {
   readCallSummary,
@@ -41,6 +44,7 @@ import {
   recentCallsForContext,
   updateShellState,
 } from "./shell-store";
+import { ThemeToggle } from "./theme-toggle";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -83,11 +87,7 @@ function pageHeading(
           title: "Analysing your call",
           description: "Find this call and its progress in Calls.",
         };
-  if (stage === "welcome")
-    return {
-      title: "New analysis",
-      description: "Upload a sales call to generate insights and a report.",
-    };
+  if (stage === "welcome") return { title: "New analysis" };
   return null;
 }
 
@@ -110,7 +110,7 @@ function getInitials(name: string): string {
   return (name.slice(0, 2) || "CA").toUpperCase();
 }
 
-export function LightboxShell({
+function LightboxShellFrame({
   children,
   authenticated,
   homeHref = "/",
@@ -163,6 +163,9 @@ export function LightboxShell({
 
   const switcherRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const focusTogglePendingRef = useRef(false);
   const accountHref = authenticated ? "/account" : "/login";
   const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
@@ -170,21 +173,32 @@ export function LightboxShell({
   const pageTitle = resolvePageTitle(active, heading);
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      updateShellState({ collapsed: next });
-      try {
-        localStorage.setItem("sx.sidebar.collapsed", String(next));
-      } catch {}
-      return next;
-    });
+    const next = !collapsed;
+    focusTogglePendingRef.current = true;
+    setCollapsed(next);
+    updateShellState({ collapsed: next });
+    try {
+      localStorage.setItem("sx.sidebar.collapsed", String(next));
+    } catch {}
   };
+
+  useLayoutEffect(() => {
+    // Only a toggle action moves focus, after the visible control is ready.
+    if (!focusTogglePendingRef.current) return;
+    focusTogglePendingRef.current = false;
+    const target = collapsed ? expandButtonRef : collapseButtonRef;
+    target.current?.focus({ preventScroll: true });
+  }, [collapsed]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        // Search lives in the sidebar: open it first when it is collapsed.
+        if (expandButtonRef.current) {
+          expandButtonRef.current.click();
+          window.setTimeout(() => searchInputRef.current?.focus(), 80);
+        } else searchInputRef.current?.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -433,9 +447,12 @@ export function LightboxShell({
               {collapsed && (
                 <button
                   type="button"
+                  ref={expandButtonRef}
                   className={styles.logoExpandBtn}
                   onClick={toggleCollapsed}
                   aria-label="Expand sidebar navigation"
+                  aria-expanded={false}
+                  aria-controls="sales-xray-sidebar-panel"
                   title="Expand navigation"
                 >
                   <PanelLeftOpen size={18} aria-hidden="true" />
@@ -464,7 +481,7 @@ export function LightboxShell({
             </Link>
             <Link
               className={`${styles.stripBtn}${active === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/calls"
+              href="/analysis/calls"
               aria-label="Calls"
               aria-current={active === "calls" ? "page" : undefined}
             >
@@ -483,19 +500,15 @@ export function LightboxShell({
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.tooltip}>{accountLabel}</span>
             </Link>
-            <a
-              className={styles.stripBtn}
-              href="mailto:support@authorityclosers.com"
-              aria-label="Help"
-            >
-              <HelpCircle size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.tooltip}>Help</span>
-            </a>
           </div>
         </div>
 
         {/* 248px Panel */}
-        <div className={styles.panel}>
+        <div
+          id="sales-xray-sidebar-panel"
+          className={styles.panel}
+          inert={collapsed}
+        >
           <div className={styles.panelHeader}>
             <div
               className={styles.workspaceSwitcherContainer}
@@ -561,13 +574,32 @@ export function LightboxShell({
             </div>
             <button
               type="button"
+              ref={collapseButtonRef}
               className={styles.collapseBtn}
               onClick={toggleCollapsed}
               aria-label="Collapse sidebar navigation"
+              aria-expanded={!collapsed}
+              aria-controls="sales-xray-sidebar-panel"
               title="Collapse navigation"
             >
               <PanelLeftClose size={16} aria-hidden="true" />
             </button>
+          </div>
+
+          <div className={`${styles.searchBox} ${styles.panelSearch}`}>
+            <Search
+              size={15}
+              className={styles.searchIcon}
+              aria-hidden="true"
+            />
+            <input
+              ref={searchInputRef}
+              type="search"
+              className={styles.searchInput}
+              placeholder="Search calls…"
+              aria-label="Search calls"
+            />
+            <kbd className={styles.searchKbd}>⌘K</kbd>
           </div>
 
           {/* Recents Section */}
@@ -594,7 +626,7 @@ export function LightboxShell({
                 <span className={styles.recentsTitle}>Recents</span>
               </button>
               <Link
-                href="/calls"
+                href="/analysis/calls"
                 className={styles.recentsViewAll}
                 title="View all calls"
               >
@@ -606,7 +638,7 @@ export function LightboxShell({
                 {visibleRecentCalls.map((call) => (
                   <Link
                     key={call.id}
-                    href={`/calls?id=${call.id}`}
+                    href={callHref(call.id)}
                     className={styles.recentItem}
                     title={call.name}
                   >
@@ -624,10 +656,6 @@ export function LightboxShell({
           </div>
 
           <div className={styles.panelSpacer} />
-
-          <div className={styles.panelMeter}>
-            <MinutesMeter allowance={allowance} />
-          </div>
         </div>
       </aside>
       <div className={styles.content}>
@@ -650,7 +678,15 @@ export function LightboxShell({
                   <span className={styles.titleSlash} aria-hidden="true">
                     /
                   </span>
-                  <span className={styles.titleText}>{pageTitle}</span>
+                  {heading ? (
+                    <h1 key={heading.title} className={styles.titleText}>
+                      {heading.title}
+                    </h1>
+                  ) : (
+                    <span key={pageTitle} className={styles.titleText}>
+                      {pageTitle}
+                    </span>
+                  )}
                   {active === "dashboard" && (
                     <span className={styles.titleBadge}>
                       <span className={styles.titleDot} aria-hidden="true" />
@@ -662,21 +698,8 @@ export function LightboxShell({
             )}
           </div>
           <div className={styles.topBarRight}>
-            <div className={styles.searchBox}>
-              <Search
-                size={15}
-                className={styles.searchIcon}
-                aria-hidden="true"
-              />
-              <input
-                ref={searchInputRef}
-                type="search"
-                className={styles.searchInput}
-                placeholder="Search calls…"
-                aria-label="Search calls"
-              />
-              <kbd className={styles.searchKbd}>⌘K</kbd>
-            </div>
+            <AllowanceRing allowance={allowance} />
+            <ThemeToggle />
             <ProfileMenu
               authenticated={authenticated}
               accountHref={accountHref}
@@ -707,7 +730,7 @@ export function LightboxShell({
         </Link>
         <Link
           className={styles.bottomLink}
-          href="/calls"
+          href="/analysis/calls"
           aria-current={active === "calls" ? "page" : undefined}
         >
           <FolderOpen size={20} aria-hidden="true" />
@@ -726,4 +749,46 @@ export function LightboxShell({
       </nav>
     </div>
   );
+}
+
+type ShellPage = Omit<LightboxShellProps, "children">;
+
+const PersistentShellContext = createContext<
+  ((page: ShellPage) => void) | null
+>(null);
+
+/**
+ * One app frame (sidebar, top bar, page area) that stays mounted while the
+ * person moves between app pages, so navigation swaps only the page content.
+ * Pages keep rendering <LightboxShell>; inside this frame it describes the
+ * chrome (active item, heading, allowance) instead of drawing a second one.
+ */
+export function PersistentShell({ children }: { children: ReactNode }) {
+  const [page, setPage] = useState<ShellPage>({ authenticated: false });
+  return (
+    <PersistentShellContext.Provider value={setPage}>
+      <LightboxShellFrame {...page}>{children}</LightboxShellFrame>
+    </PersistentShellContext.Provider>
+  );
+}
+
+function ShellPageSettings({
+  setPage,
+  children,
+  ...page
+}: LightboxShellProps & { setPage: (page: ShellPage) => void }) {
+  // The chrome settings are plain data, so their serialised form is both the
+  // change signal and the value handed to the frame.
+  const settings = JSON.stringify(page);
+  // Before paint, so the frame never shows the previous page's chrome.
+  useLayoutEffect(() => {
+    setPage(JSON.parse(settings) as ShellPage);
+  }, [setPage, settings]);
+  return children;
+}
+
+export function LightboxShell(props: LightboxShellProps) {
+  const setPage = useContext(PersistentShellContext);
+  if (!setPage) return <LightboxShellFrame {...props} />;
+  return <ShellPageSettings setPage={setPage} {...props} />;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { callIdFromPath } from "./analysis-routes";
 import {
   AudioLines,
   BookOpen,
@@ -522,7 +523,10 @@ export function ReportModes({
       const calls = current.searchParams.getAll("call");
       if (calls.length > 1 || (calls.length === 1 && calls[0] !== boundCallId))
         return;
-      current.searchParams.set("call", boundCallId);
+      // On /analysis/calls/<id> the path already names the call.
+      if (callIdFromPath(current.pathname) === boundCallId)
+        current.searchParams.delete("call");
+      else current.searchParams.set("call", boundCallId);
       current.searchParams.delete("new");
       current.searchParams.set("view", nextView);
       current.searchParams.set("section", section);

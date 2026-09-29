@@ -25,6 +25,7 @@ import {
   type CallActivity,
   type CallSummary,
 } from "./dashboard-data";
+import { DashboardGreeting } from "./dashboard-greeting";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -90,6 +91,9 @@ export default function DashboardPage() {
           }}
         >
           Sign in
+        </Link>
+        <Link className={styles.guestAction} href="/analysis/new">
+          Or analyse a call without an account
         </Link>
       </section>
     </LightboxShell>
@@ -225,15 +229,8 @@ function DashboardDetails() {
       <div className={styles.dashboardRoot}>
         {/* Top greeting / actions */}
         <div className={styles.dashboardHeader}>
-          <div className={styles.headerCopy}>
-            <div className={styles.pageTitleRow}>
-              <h2 className={styles.headerTitle}>Overview</h2>
-            </div>
-            <p className={styles.headerSubtitle}>
-              Your saved calls, reports and minutes.
-            </p>
-          </div>
-          <Link href="/" className={styles.primaryAction}>
+          <DashboardGreeting />
+          <Link href="/analysis/new" className={styles.primaryAction}>
             <Plus size={16} aria-hidden="true" />
             <span>New analysis</span>
           </Link>
@@ -689,7 +686,7 @@ function DashboardDetails() {
               </p>
             </div>
             {recent && recent.length > 0 && (
-              <Link href="/calls" className={styles.viewAllLink}>
+              <Link href="/analysis/calls" className={styles.viewAllLink}>
                 <span>View all calls</span>
                 <ArrowRight size={15} aria-hidden="true" />
               </Link>
@@ -726,7 +723,7 @@ function DashboardDetails() {
                   ? "Upload a sales call to start your analysis."
                   : "No calls yet"}
               </p>
-              <Link href="/" className={styles.primaryAction}>
+              <Link href="/analysis/new" className={styles.primaryAction}>
                 <Plus size={16} aria-hidden="true" />
                 <span>New analysis</span>
               </Link>

@@ -10,17 +10,17 @@
 
   /* ---------- Neutrals ---------- */
   --lx-ink: #0B1424;          /* primary text, strong UI */
-  --lx-ink-2: #1E2B40;        /* quote text on light surfaces */
-  --lx-ink-3: #334158;        /* secondary text */
+  --lx-ink-2: #1c2940;        /* quote text on light surfaces */
+  --lx-ink-3: #33415a;        /* secondary text */
   --lx-muted: #56637A;        /* tertiary text; 5.6:1 on paper */
   --lx-muted-2: #6B7486;      /* captions/meta; 4.6:1 on paper - never below 12px */
-  --lx-line: #E6E3DA;         /* hairlines on paper/surface */
-  --lx-line-soft: #ECE9E1;
-  --lx-line-strong: #CFCABE;
-  --lx-paper: #F6F5F1;        /* app ground */
-  --lx-paper-2: #FBFAF7;      /* nested/secondary surface */
+  --lx-line: #e2e7f0;         /* hairlines on paper/surface */
+  --lx-line-soft: #eaeef5;
+  --lx-line-strong: #cbd3e1;
+  --lx-paper: #f4f6fb;        /* app ground */
+  --lx-paper-2: #f9fafd;      /* nested/secondary surface */
   --lx-surface: #FFFFFF;      /* cards */
-  --lx-sunken: #ECE9E1;       /* segmented controls, "still unknown" wells */
+  --lx-sunken: #edf1f7;       /* segmented controls, "still unknown" wells */
 
   /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
   --lx-film: #0A1220;
@@ -33,27 +33,27 @@
   --lx-film-wave: #3A4C66;    /* unplayed waveform */
 
   /* ---------- Brand ---------- */
-  --lx-teal: #087E79;         /* primary action, links, strength */
-  --lx-teal-hover: #06635F;
-  --lx-teal-2: #24B5A8;       /* wordmark gradient end */
-  --lx-teal-soft: #E6F5F2;
-  --lx-teal-tint: #F2FAF8;
-  --lx-teal-edge: #D5ECE8;
+  --lx-teal: #097870;         /* primary action, links, strength */
+  --lx-teal-hover: #06615b;
+  --lx-teal-2: #14b8a6;       /* wordmark gradient end */
+  --lx-teal-soft: #dcf6ef;
+  --lx-teal-tint: #eefaf7;
+  --lx-teal-edge: #b6e9de;
   --lx-glow: #2DD4BF;         /* ONLY on film backgrounds (contrast), never text on light */
 
   /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
-  --lx-strength: #087E79;      --lx-strength-soft: #E6F5F2;  --lx-strength-edge: #CDE8E3;  --lx-strength-on-film: #2DD4BF;
-  --lx-focus: #B45309;         --lx-focus-soft: #FEF3E2;     --lx-focus-edge: #F2C27A;     --lx-focus-on-film: #F59E0B;  --lx-focus-ink: #92400E;
-  --lx-missed: #5B3FD6;        --lx-missed-soft: #EFEBFF;    --lx-missed-edge: #DDD5FF;    --lx-missed-on-film: #8B74FF; --lx-missed-ink: #4A31B8;
-  --lx-objection: #BE2A55;     --lx-objection-soft: #FDECF1; --lx-objection-edge: #F3C9D5; --lx-objection-on-film: #F0527F;
-  --lx-closing: #2453D6;       --lx-closing-soft: #EAF0FF;   --lx-closing-ink: #1F4FB8;
+  --lx-strength: #097870;      --lx-strength-soft: #dcf6ef;  --lx-strength-edge: #b6e9de;  --lx-strength-on-film: #2DD4BF;
+  --lx-focus: #B45309;         --lx-focus-soft: #fff0da;     --lx-focus-edge: #f5c378;     --lx-focus-on-film: #F59E0B;  --lx-focus-ink: #92400E;
+  --lx-missed: #6341e0;        --lx-missed-soft: #eeeaff;    --lx-missed-edge: #d9d0ff;    --lx-missed-on-film: #8B74FF; --lx-missed-ink: #4c2fc0;
+  --lx-objection: #c81d55;     --lx-objection-soft: #ffe9f0; --lx-objection-edge: #f7c6d6; --lx-objection-on-film: #F0527F;
+  --lx-closing: #2459e0;       --lx-closing-soft: #e6eeff;   --lx-closing-ink: #1d4cc4;
   --lx-hypothesis: #56637A;    --lx-hypothesis-edge: #AEB6C4; /* dashed border */
 
   /* ---------- Status ---------- */
   --lx-success: var(--lx-teal);
-  --lx-info: #2453D6;          --lx-info-soft: #EAF0FF;
-  --lx-warning: #B45309;       --lx-warning-soft: #FEF3E2;
-  --lx-danger: #B42318;        --lx-danger-soft: #FDECEA;    --lx-danger-edge: #F1C7C2;
+  --lx-info: #2459e0;          --lx-info-soft: #e6eeff;
+  --lx-warning: #B45309;       --lx-warning-soft: #fff5e8;
+  --lx-danger: #c0261b;        --lx-danger-soft: #fdebe9;    --lx-danger-edge: #f3c6c1;
 
   /* ---------- Type ---------- */
   --lx-font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", "Plus Jakarta Sans Variable", system-ui, sans-serif;
@@ -114,6 +114,8 @@
   --lx-chapter-rail-w: 196px;
   --lx-bottom-nav-h: 76px;
   --lx-mini-player-h: 62px;
+  --lx-gradient-brand: linear-gradient(135deg, #14b8a6 0%, #06b6d4 50%, #6366f1 100%);
+  --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
 }
 
 /* Devanagari: never synthesise italics, always give it more leading. */
@@ -131,24 +133,26 @@
   --lx-ink-3: #B7C2D3;
   --lx-muted: #93A0B5;
   --lx-muted-2: #8390A6;
-  --lx-line: #223049;
-  --lx-line-soft: #1B2740;
-  --lx-line-strong: #2E3E5C;
-  --lx-paper: #070D18;
-  --lx-paper-2: #0C1424;
-  --lx-surface: #101A2C;
-  --lx-sunken: #0C1424;
-  --lx-teal: #2DD4BF;
-  --lx-teal-hover: #5EEAD4;
+  --lx-line: #1e2a42;
+  --lx-line-soft: #18223a;
+  --lx-line-strong: #2b3a59;
+  --lx-paper: #060a14;
+  --lx-paper-2: #0b1222;
+  --lx-surface: #0f1829;
+  --lx-sunken: #0a1120;
+  --lx-teal: #2dd4bf;
+  --lx-teal-hover: #5eead4;
   --lx-teal-soft: rgba(45, 212, 191, .12);
   --lx-teal-tint: rgba(45, 212, 191, .08);
   --lx-teal-edge: rgba(45, 212, 191, .28);
   --lx-strength: #2DD4BF;   --lx-strength-soft: rgba(45, 212, 191, .12);
   --lx-focus: #F59E0B;      --lx-focus-soft: rgba(245, 158, 11, .12);   --lx-focus-ink: #FBBF24;
-  --lx-missed: #A18FFF;     --lx-missed-soft: rgba(139, 116, 255, .14); --lx-missed-ink: #C4B8FF;
-  --lx-objection: #F0527F;  --lx-objection-soft: rgba(240, 82, 127, .14);
-  --lx-closing: #7EA2FF;    --lx-closing-soft: rgba(126, 162, 255, .14);
+  --lx-missed: #a78bfa;     --lx-missed-soft: rgba(167, 139, 250, 0.15); --lx-missed-ink: #C4B8FF;
+  --lx-objection: #fb7185;  --lx-objection-soft: rgba(251, 113, 133, 0.14);
+  --lx-closing: #7aa7ff;    --lx-closing-soft: rgba(122, 167, 255, 0.15);
   --lx-danger: #F97066;     --lx-danger-soft: rgba(249, 112, 102, .12);
+  --lx-gradient-brand: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 50%, #818cf8 100%);
+  --lx-gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -51,7 +51,9 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
 
   // Real shell owners: rail navigation, top bar and mobile navigation.
   expect(container.querySelector("[data-lightbox-shell]")).not.toBeNull();
-  expect(container.querySelector('nav[aria-label="Workspace"]')).not.toBeNull();
+  expect(
+    container.querySelector('aside[aria-label="Sales Xray navigation"]'),
+  ).not.toBeNull();
   expect(
     container.querySelector('nav[aria-label="Mobile Sales Xray navigation"]'),
   ).not.toBeNull();

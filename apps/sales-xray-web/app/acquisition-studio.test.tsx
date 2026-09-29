@@ -6,11 +6,16 @@ const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
   replaceToLogin: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin, prefetch: vi.fn() }),
+  useRouter: () => ({
+    push: navigateToAccount,
+    replace: replaceToLogin,
+    prefetch: vi.fn(),
+  }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/",
 }));
 import Page from "./page";
+import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,
   remainingAllowanceLabel,
@@ -20,6 +25,11 @@ import {
   UploadSessionStore,
 } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
+import {
+  WorkspaceAccessContext,
+  WorkspaceAccessProvider,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
 import { STATUS_READ_TIMEOUT_MS } from "./observe-submission";
 import * as sourcePlaybackContext from "./source-playback-context";
 import * as processingReviewPort from "./processing-review-port";
@@ -75,6 +85,7 @@ let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
 let savedLookupDelayed: boolean;
 let sourcePutAttempted: boolean;
+let lostSourceUpload: { id: string; sha: string } | null;
 let resolveDeferredSourcePut: ((value: Response) => void) | null;
 let deferSourcePut: boolean;
 let sourcePutLosesResponse: boolean;
@@ -86,6 +97,16 @@ const response = (value: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
+const authenticatedWorkspaceAccess: WorkspaceAccessValue = {
+  status: "ready",
+  authenticated: true,
+  context: {
+    personId: "person-1",
+    sessionId: "session-1",
+    tenantId: "tenant-1",
+  },
+  retry: () => {},
+};
 const flush = async () => {
   await act(async () => {
     for (let n = 0; n < 15; n++) await Promise.resolve();
@@ -166,8 +187,60 @@ async function navigateToNewCall() {
   await act(async () => root.render(page));
   await flush();
 }
+async function mountWithAccountAccess() {
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={authenticatedWorkspaceAccess}>
+        {page}
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  await flush();
+}
+async function mountWithObservedUploadAccess() {
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () =>
+    root.render(
+      <UploadSessionProvider>
+        <WorkspaceAccessProvider value={authenticatedWorkspaceAccess}>
+          {page}
+        </WorkspaceAccessProvider>
+        <UploadIndicator />
+      </UploadSessionProvider>,
+    ),
+  );
+  await flush();
+}
+async function mountWithAppSession() {
+  const calls = new URLSearchParams(window.location.search).getAll("call");
+  const page = await Page({
+    searchParams: Promise.resolve({
+      call: calls.length > 1 ? calls : calls[0],
+    }),
+  });
+  await act(async () =>
+    root.render(
+      <UploadSessionProvider>
+        <AppSession>{page}</AppSession>
+      </UploadSessionProvider>,
+    ),
+  );
+  await flush();
+}
 async function select() {
   sourcePutAttempted = false;
+  lostSourceUpload = null;
   const input =
     container.querySelector<HTMLInputElement>('input[type="file"]')!;
   const file = new File(["synthetic"], "Sales call.wav", { type: "audio/wav" });
@@ -257,6 +330,7 @@ beforeEach(() => {
   analysisPaused = false;
   savedLookupDelayed = false;
   sourcePutAttempted = false;
+  lostSourceUpload = null;
   resolveDeferredSourcePut = null;
   deferSourcePut = false;
   sourcePutLosesResponse = false;
@@ -327,6 +401,8 @@ beforeEach(() => {
           });
         if (sourcePutLosesResponse) {
           sourcePutLosesResponse = false;
+          // The server accepted this source, but the client lost its response.
+          lostSourceUpload = { id: generatedId, sha: "0".repeat(64) };
           return Promise.reject(new TypeError("Failed to fetch"));
         }
         if (failedUpload) return response({}, 503);
@@ -389,6 +465,17 @@ beforeEach(() => {
         claimed = false;
         return response({ state: "claimed", allowance });
       }
+      if (
+        lostSourceUpload &&
+        path.endsWith(`/submissions/${lostSourceUpload.id}`) &&
+        init.method !== "DELETE"
+      )
+        return response({
+          ...progress,
+          submission_id: lostSourceUpload.id,
+          source_sha256: lostSourceUpload.sha,
+          duration_ms: 5000,
+        });
       if (
         sourceUploadIntent &&
         !sourcePutAttempted &&
@@ -473,10 +560,11 @@ afterEach(async () => {
 });
 
 it("keeps the new account home clear of empty recent-call panels", async () => {
-  await mount();
+  await mountWithAccountAccess();
   expect(
-    container.querySelector('[aria-label="Workspace"] [aria-current="page"]')
-      ?.textContent,
+    container.querySelector(
+      '[aria-label="Sales Xray navigation"] [aria-current="page"]',
+    )?.textContent,
   ).toBe("New analysis");
   expect(container.querySelector(".calls-library-preview")).toBeNull();
   expect(container.textContent).not.toContain("No saved calls yet");
@@ -508,7 +596,7 @@ it("shows real account recent calls on home and opens the selected saved report"
     ],
     next_cursor: null,
   };
-  await mount();
+  await mountWithAccountAccess();
   const preview = container.querySelector(".calls-library-preview");
   expect(preview?.textContent).toContain("Recent calls");
   expect(preview?.textContent).toContain("Report ready");
@@ -519,15 +607,15 @@ it("shows real account recent calls on home and opens the selected saved report"
       ?.querySelector(".calls-library-duration")
       ?.getAttribute("aria-label"),
   ).toBe("Estimated length: About 01:01");
-  expect(preview?.querySelector('a[href="/calls"]')?.textContent).toContain(
-    "View all calls",
-  );
+  expect(
+    preview?.querySelector('a[href="/analysis/calls"]')?.textContent,
+  ).toContain("View all calls");
   expect(container.querySelectorAll("main")).toHaveLength(1);
   await act(async () =>
     preview?.querySelector<HTMLButtonElement>(".calls-library-item")?.click(),
   );
   expect(navigateToAccount).toHaveBeenCalledWith(
-    `/?call=${secondSubmissionId}`,
+    `/analysis/calls/${secondSubmissionId}`,
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(
     secondSubmissionId,
@@ -537,7 +625,7 @@ it("shows real account recent calls on home and opens the selected saved report"
 
 it("opens account access on guest file selection and keeps Analyze gated without a guest upload", async () => {
   workspaceUnauthorized = true;
-  await mount();
+  await mountWithAppSession();
   await select();
   expect(container.textContent).toContain("Sales call.wav");
   expect(
@@ -601,8 +689,8 @@ it("keeps a fresh standalone call focused on upload without empty dashboards or 
   expect(
     container.querySelector('[aria-label="Supported audio file limits"]')
       ?.textContent,
-  ).toMatch(/Up to \d+ MB/);
-  expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
+  ).toMatch(/up to \d+ MB/i);
+  expect(container.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
   for (const text of [
     "No saved calls yet",
     "No recent activity",
@@ -682,7 +770,7 @@ it("keeps one source upload alive across client navigation and shows the confirm
   expect(quotes()).toHaveLength(1);
   expect(accepts()).toHaveLength(1);
   expect(
-    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+    container.querySelector('a[href="/analysis/calls/' + submissionId + '"]'),
   ).not.toBeNull();
   expect(container.textContent).toContain(secondReportSummary);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
@@ -710,7 +798,9 @@ it.each(["analyse", "view", "escape"] as const)(
     expect(dialog).not.toBeNull();
     const link = dialog?.querySelector<HTMLAnchorElement>("a[href]");
     expect(link?.textContent).toBe("View earlier report");
-    expect(link?.getAttribute("href")).toBe(`/?call=${secondSubmissionId}`);
+    expect(link?.getAttribute("href")).toBe(
+      `/analysis/calls/${secondSubmissionId}`,
+    );
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
     const title = dialog?.querySelector("h2");
     expect(title?.textContent).toBe("You've analysed this recording before.");
@@ -898,7 +988,7 @@ it("settles never-ready native checks to a visible action and keeps the saved ca
   expect(quotes()).toHaveLength(0);
   expect(accepts()).toHaveLength(0);
   expect(
-    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+    container.querySelector('a[href="/analysis/calls/' + submissionId + '"]'),
   ).not.toBeNull();
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
 });
@@ -922,12 +1012,12 @@ it("never recreates the Analyse authorization after a full reload", async () => 
 
 it("reconciles the locally hashed source after a lost PUT response without a second PUT", async () => {
   sourcePutLosesResponse = true;
-  await mountWithUploadSession();
+  await mountWithObservedUploadAccess();
   await select();
   await consent();
   await click("Complete upload check");
   await click("Analyse my call");
-  await flush();
+  await settleAll();
 
   expect(
     calls.filter(
@@ -955,7 +1045,7 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
     container.querySelector('[data-upload-indicator="saved"]'),
   ).not.toBeNull();
   expect(
-    container.querySelector('a[href="/?call=' + submissionId + '"]'),
+    container.querySelector('a[href="/analysis/calls/' + submissionId + '"]'),
   ).not.toBeNull();
   expect(
     calls.filter(
@@ -965,29 +1055,32 @@ it("reconciles the locally hashed source after a lost PUT response without a sec
 });
 
 it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
-  await mount();
+  await mountWithAccountAccess();
   expect(
     container.querySelector('[aria-label="Sales Xray navigation"]'),
   ).not.toBeNull();
-  expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
+  expect(container.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
   expect(container.querySelector('a[href="/account"]')?.textContent).toBe(
     "Account",
   );
   expect(container.querySelectorAll("main")).toHaveLength(1);
   const sidebarToggle = container.querySelector<HTMLButtonElement>(
-    '[aria-label="Collapse Sales Xray navigation"]',
+    '[aria-label="Collapse sidebar navigation"]',
   );
   expect(sidebarToggle).not.toBeNull();
   await act(async () => sidebarToggle!.click());
   await flush();
   expect(
-    container.querySelector('[aria-label="Expand Sales Xray navigation"]'),
+    container.querySelector('[aria-label="Expand sidebar navigation"]'),
   ).not.toBeNull();
-  expect(document.activeElement).toBe(sidebarToggle);
+  const expandToggle = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Expand sidebar navigation"]',
+  );
+  expect(document.activeElement).toBe(expandToggle);
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(
-        '[aria-label="Expand Sales Xray navigation"]',
+        '[aria-label="Expand sidebar navigation"]',
       )!
       .click(),
   );
@@ -1438,12 +1531,16 @@ it("a stale saved-call read that settles after New analysis cannot restore its r
 
 it("desktop and mobile Analyse navigation explicitly starts a new call", async () => {
   await mount();
-  const desktop = container.querySelector('nav[aria-label="Workspace"] a');
-  const mobile = container.querySelector(
-    'nav[aria-label="Mobile Sales Xray navigation"] a',
+  const desktop = container.querySelector<HTMLAnchorElement>(
+    'aside[aria-label="Sales Xray navigation"] a[aria-label="New analysis"]',
   );
-  expect(desktop?.getAttribute("href")).toBe("/?new=1");
-  expect(mobile?.getAttribute("href")).toBe("/?new=1");
+  const mobile = Array.from(
+    container.querySelectorAll<HTMLAnchorElement>(
+      'nav[aria-label="Mobile Sales Xray navigation"] a',
+    ),
+  ).find((link) => link.textContent?.trim() === "New");
+  expect(desktop?.getAttribute("href")).toBe("/analysis/new");
+  expect(mobile?.getAttribute("href")).toBe("/analysis/new");
 });
 
 it("explicit new-call entry skips remembered work and claim prompts without mutating either", async () => {
@@ -1689,12 +1786,12 @@ it("gives guests their owner-checked call link instead of promising an account l
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
   const link = container.querySelector(
-    `[aria-label="Analysis progress"] a[href="/?call=${submissionId}"]`,
+    `[aria-label="Analysis progress"] a[href="/analysis/calls/${submissionId}"]`,
   );
   expect(link?.textContent).toContain("This call’s link");
   expect(
     container.querySelector(
-      '[aria-label="Analysis progress"] a[href="/calls"]',
+      '[aria-label="Analysis progress"] a[href="/analysis/calls"]',
     ),
   ).toBeNull();
   expect(container.textContent).toContain(
@@ -2412,7 +2509,9 @@ it("shows delayed-update guidance without changing progress, identity or submitt
     "Queued",
   );
   expect(container.querySelector('[data-paused="true"]')).toBeNull();
-  expect(container.querySelector('a[href="/calls"]')?.textContent).toBeTruthy();
+  expect(
+    container.querySelector('a[href="/analysis/calls"]')?.textContent,
+  ).toBeTruthy();
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(
     calls.filter(({ init }) => init.method && init.method !== "GET"),
@@ -2946,8 +3045,9 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   window.history.replaceState(null, "", `/?call=${submissionId}`);
   await mount();
   expect(
-    container.querySelector('[aria-label="Workspace"] [aria-current="page"]')
-      ?.textContent,
+    container.querySelector(
+      '[aria-label="Sales Xray navigation"] [aria-current="page"]',
+    )?.textContent,
   ).toBe("Calls");
   const savedAudio = container.querySelector(
     '[aria-label="Call audio player"] audio',

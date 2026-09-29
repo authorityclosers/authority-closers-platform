@@ -372,7 +372,7 @@ export function AcquisitionLowerPanels({
         <div className={styles.lowerHeading}>
           <FolderOpen size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2 id="saved-calls-title">Your saved calls</h2>
-          <Link href="/calls">
+          <Link href="/analysis/calls">
             View all <ArrowRight size={16} aria-hidden="true" />
           </Link>
         </div>
@@ -417,7 +417,7 @@ export function AcquisitionLowerPanels({
         <div className={styles.lowerHeading}>
           <Clock3 size={28} strokeWidth={1.8} aria-hidden="true" />
           <h2 id="recent-activity-title">Recent activity</h2>
-          <Link href="/calls">
+          <Link href="/analysis/calls">
             View all <ArrowRight size={16} aria-hidden="true" />
           </Link>
         </div>

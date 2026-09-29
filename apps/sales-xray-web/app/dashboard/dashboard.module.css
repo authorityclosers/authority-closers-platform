@@ -3,7 +3,6 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 1280px;
 }
 
 .dashboardHeader {
@@ -12,32 +11,6 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-}
-
-.headerCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.pageTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.headerTitle {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--lx-ink);
-  letter-spacing: -0.02em;
-  margin: 0;
-}
-
-.headerSubtitle {
-  font-size: 14px;
-  color: var(--lx-muted);
-  margin: 0;
 }
 
 .sampleDataChip {
@@ -107,7 +80,9 @@
   background: var(--lx-surface);
   border: 1px solid var(--lx-line);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .kpiCard:hover {
@@ -512,4 +487,157 @@
   max-width: 44ch;
   margin: 0 0 20px;
   line-height: 1.5;
+}
+
+/* Viewport fit: the dashboard is one screen with no page scroll. Tiles and
+   analytics take only the height they need; Recent calls takes the rest. */
+@media (min-width: 900px) {
+  .dashboardRoot {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    gap: 14px;
+  }
+  .kpiGrid {
+    gap: 14px;
+  }
+  .kpiCard {
+    position: relative;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 14px;
+    padding: 14px 16px;
+  }
+  .kpiTop {
+    grid-row: span 3;
+    margin: 0;
+  }
+  .kpiTop .trendBadge {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+  }
+  .kpiValue {
+    grid-column: 2;
+    font-size: 22px;
+    line-height: 1.15;
+  }
+  .kpiLabel,
+  .kpiSubtext {
+    grid-column: 2;
+    margin-top: 0;
+  }
+  .kpiLabel {
+    font-size: 13px;
+  }
+  .analyticsGrid {
+    gap: 14px;
+  }
+  .chartCard,
+  .skillsCard {
+    min-height: 0;
+    padding: 16px 18px;
+  }
+  .tableCard {
+    min-height: 0;
+    padding: 16px 18px;
+    overflow: hidden;
+  }
+  .tableCard > :last-child {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+  .cardHeader {
+    margin-bottom: 10px;
+  }
+}
+
+/* One precise icon tile for every KPI: same size, centred glyph, theme colours. */
+.kpiIconWrap,
+.kpiIconWrapTeal,
+.kpiIconWrapAmber {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+}
+.kpiIconWrapTeal {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.kpiIconWrapAmber {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+/* Empty analytics: a quiet one-line state instead of a large blank card. */
+.chartEmptyWrap {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+}
+.chartEmptyText {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+/* Recent calls empty state: centred in the remaining space, no inner frame. */
+.tableCard > .emptyCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+.tableCard .emptyIcon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--lx-teal-soft);
+}
+.tableCard .emptyTitle {
+  font-size: 16px;
+}
+.tableCard .emptyDescription {
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+/* Short laptop screens: trim secondary lines so the screen still fits. */
+@media (min-width: 900px) and (max-height: 760px) {
+  .dashboardRoot {
+    gap: 10px;
+  }
+  .kpiSubtext,
+  .cardSubtitle {
+    display: none;
+  }
+  .kpiCard {
+    padding: 10px 14px;
+  }
+}
+
+.guestAction {
+  margin-top: 12px;
+  color: var(--lx-teal);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.guestAction:hover {
+  text-decoration: underline;
 }

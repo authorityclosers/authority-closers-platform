@@ -144,7 +144,7 @@ it("retains password access during code config failure and redirects only after 
     "/v1/auth/password/login",
     "/v1/me/workspaces",
   ]);
-  expect(assign).toHaveBeenCalledWith("/");
+  expect(assign).toHaveBeenCalledWith("/dashboard");
   expect(host.querySelector<HTMLInputElement>("#account-password")).toBeNull();
 });
 

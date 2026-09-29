@@ -17,6 +17,7 @@ import {
 } from "./account-navigation";
 import { readAccountProfile } from "./account-profile-client";
 import { useUploadSession } from "./hooks/upload-session";
+import { ThemeControl } from "./lightbox/theme-provider";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
 
@@ -298,7 +299,7 @@ export function ProfileMenu({
               </Link>
             )}
             <Link
-              href="/calls"
+              href="/analysis/calls"
               className={styles.item}
               onClick={() => setOpen(false)}
             >
@@ -306,6 +307,7 @@ export function ProfileMenu({
               <span>Calls</span>
             </Link>
           </div>
+          <ThemeControl />
           <div className={styles.separator} role="separator" />
           <div className={styles.actions}>
             <a

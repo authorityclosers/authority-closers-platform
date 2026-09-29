@@ -1,5 +1,7 @@
 "use client";
 
+import { CALLS_PATH } from "./analysis-routes";
+import { callHref } from "./acquisition-client";
 import {
   ArrowRight,
   AudioLines,
@@ -33,7 +35,6 @@ const duplicateError =
   "The saved calls list could not be verified. Try again before opening a call.";
 const libraryReadTimeoutMs = 12_000;
 const processingRefreshIntervalMs = 15_000;
-
 
 /*
  * The library's duration_seconds is the reserved (estimated) length recorded
@@ -593,11 +594,11 @@ function CallsLibraryContent({
     if (opening) return;
     setOpeningId(submission.id);
     rememberSubmission(submission.id);
-    router.push(`${studioHref}?call=${submission.id}`);
+    router.push(callHref(submission.id, studioHref));
   }
 
   const initialLoading = access?.authenticated === true && loading;
-  const callsHref = "/calls";
+  const callsHref = CALLS_PATH;
   const counts = submissions.reduce(
     (total, submission) => {
       total[callTone(submission)] += 1;
@@ -620,16 +621,26 @@ function CallsLibraryContent({
     ? submissions.find(
         (s) =>
           s.id === selectedId ||
-          (selectedId === "call-1" && (s.id === "call-1" || s.id === "call-001")) ||
-          (selectedId === "call-2" && (s.id === "call-2" || s.id === "call-002")) ||
-          (selectedId === "call-3" && (s.id === "call-3" || s.id === "call-003")) ||
-          (selectedId === "call-4" && (s.id === "call-4" || s.id === "call-004")) ||
-          (selectedId === "call-5" && (s.id === "call-5" || s.id === "call-005")) ||
-          (selectedId === "call-001" && (s.id === "call-1" || s.id === "call-001")) ||
-          (selectedId === "call-002" && (s.id === "call-2" || s.id === "call-002")) ||
-          (selectedId === "call-003" && (s.id === "call-3" || s.id === "call-003")) ||
-          (selectedId === "call-004" && (s.id === "call-4" || s.id === "call-004")) ||
-          (selectedId === "call-005" && (s.id === "call-5" || s.id === "call-005")),
+          (selectedId === "call-1" &&
+            (s.id === "call-1" || s.id === "call-001")) ||
+          (selectedId === "call-2" &&
+            (s.id === "call-2" || s.id === "call-002")) ||
+          (selectedId === "call-3" &&
+            (s.id === "call-3" || s.id === "call-003")) ||
+          (selectedId === "call-4" &&
+            (s.id === "call-4" || s.id === "call-004")) ||
+          (selectedId === "call-5" &&
+            (s.id === "call-5" || s.id === "call-005")) ||
+          (selectedId === "call-001" &&
+            (s.id === "call-1" || s.id === "call-001")) ||
+          (selectedId === "call-002" &&
+            (s.id === "call-2" || s.id === "call-002")) ||
+          (selectedId === "call-003" &&
+            (s.id === "call-3" || s.id === "call-003")) ||
+          (selectedId === "call-004" &&
+            (s.id === "call-4" || s.id === "call-004")) ||
+          (selectedId === "call-005" &&
+            (s.id === "call-5" || s.id === "call-005")),
       )
     : null;
   const submissionButton = (submission: LibrarySubmission) => {
@@ -637,8 +648,7 @@ function CallsLibraryContent({
     const tone = callTone(submission);
     const isOpening = openingId === submission.id;
     const isSelected =
-      submission.id === selectedId ||
-      selectedSubmission?.id === submission.id;
+      submission.id === selectedId || selectedSubmission?.id === submission.id;
     const title = callTitle(
       submission.label,
       `Sales call · ${formatCreatedDate(submission.createdAt)}`,
@@ -786,7 +796,9 @@ function CallsLibraryContent({
         {/* One page heading; privacy is one quiet line, not a second title. */}
         <header className="calls-library-intro">
           <div>
-            <h1 id="calls-library-title" style={{ display: "none" }}>Calls</h1>
+            <h1 id="calls-library-title" style={{ display: "none" }}>
+              Calls
+            </h1>
             <p className="calls-library-summary">
               {access?.authenticated === true && submissions.length > 0
                 ? `${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"} · private to your account and workspace`
@@ -868,8 +880,12 @@ function CallsLibraryContent({
                   boxShadow: "0 2px 8px rgba(13, 148, 136, 0.08)",
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
                     <span
                       style={{
                         display: "inline-block",
@@ -891,16 +907,27 @@ function CallsLibraryContent({
                     </strong>
                   </div>
                   <span style={{ fontSize: 12, color: "var(--lx-muted)" }}>
-                    {submissionState(selectedSubmission)} · {formatDuration(selectedSubmission.durationSeconds)} · {formatCreatedDate(selectedSubmission.createdAt)}
+                    {submissionState(selectedSubmission)} ·{" "}
+                    {formatDuration(selectedSubmission.durationSeconds)} ·{" "}
+                    {formatCreatedDate(selectedSubmission.createdAt)}
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexShrink: 0,
+                  }}
+                >
                   <button
                     type="button"
                     className="primary-button"
                     onClick={() => openSubmission(selectedSubmission)}
                   >
-                    {selectedSubmission.hasReport ? "Open report" : "View progress"}{" "}
+                    {selectedSubmission.hasReport
+                      ? "Open report"
+                      : "View progress"}{" "}
                     <ArrowRight size={15} aria-hidden="true" />
                   </button>
                   <button

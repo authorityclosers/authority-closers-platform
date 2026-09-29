@@ -102,6 +102,8 @@ import {
 import { startAnalysis } from "./analysis-start";
 import { reconcileSource, sendSource } from "./new-analysis/source-upload";
 import { useWorkspaceAccess } from "./workspace-access";
+import { useTheme } from "./lightbox/theme-provider";
+import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
 import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
 import { ReportHeader } from "./report-header";
@@ -181,6 +183,7 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const resolvedTheme = useTheme()?.resolved ?? "light";
   const accessStatus = access?.status ?? null;
   const accessAuthenticated = access?.authenticated ?? null;
   const accessPersonId = access?.context?.personId ?? null;
@@ -1827,7 +1830,7 @@ export function AcquisitionStudio({
         <p>{review.message || "Verifying live access…"}</p>
         <a href="/__review/">Review controls</a>
         {activeRequestedCallId && (
-          <Link href={`?call=${activeRequestedCallId}`}>
+          <Link href={callHref(activeRequestedCallId, homeHref)}>
             Open the live call
           </Link>
         )}
@@ -2158,22 +2161,24 @@ export function AcquisitionStudio({
         </div>
       ) : null;
 
+    const studioStage =
+      localObservation?.phase === "upload.validation.error"
+        ? "upload-error"
+        : report
+          ? "report"
+          : submission
+            ? "processing"
+            : busy
+              ? "uploading"
+              : "upload";
     const content = (
       <div
         className={`xray-app simple-app ${styles.app}`}
-        data-theme="light"
+        // Only the upload stage follows the app theme so far; processing and
+        // report keep their light surfaces until their own theme pass.
+        data-theme={studioStage === "upload" ? resolvedTheme : "light"}
         data-variant={variant}
-        data-stage={
-          localObservation?.phase === "upload.validation.error"
-            ? "upload-error"
-            : report
-              ? "report"
-              : submission
-                ? "processing"
-                : busy
-                  ? "uploading"
-                  : "upload"
-        }
+        data-stage={studioStage}
         data-selected={displayFileSelected ? "true" : "false"}
         onClickCapture={
           reviewSelectionActive
@@ -2415,6 +2420,9 @@ export function AcquisitionStudio({
             className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
             <div className={styles.primaryColumn}>
+              {studioStage === "upload" && !embedded ? (
+                <NewAnalysisHero />
+              ) : null}
               <section
                 className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
                 aria-label="Your call"
@@ -2437,7 +2445,10 @@ export function AcquisitionStudio({
                     addFiles(event.dataTransfer.files);
                 }}
               >
-                {!submission && !deletionOnlyId && (
+                {!submission && !deletionOnlyId && studioStage === "upload" ? (
+                  <h2 className="visually-hidden">Add a call to review</h2>
+                ) : null}
+                {!submission && !deletionOnlyId && studioStage !== "upload" && (
                   <div className={styles.uploadCardHeader}>
                     <div className={styles.uploadCardTitle}>
                       <svg
@@ -3093,7 +3104,10 @@ export function AcquisitionStudio({
                       {checkingStatus ? "Checking status…" : "Check status"}
                     </button>
                     <Link
-                      href={`${embedded ? "/sales-xray" : "/"}?call=${submission.id}`}
+                      href={callHref(
+                        submission.id,
+                        embedded ? "/sales-xray" : "/",
+                      )}
                       className="secondary-button"
                     >
                       <FolderOpen size={17} aria-hidden="true" />
@@ -3187,6 +3201,15 @@ export function AcquisitionStudio({
                   </div>
                 )}
               </section>
+              {studioStage === "upload" && !embedded ? (
+                <NewAnalysisFooter
+                  allowanceLabel={remainingAllowanceLabel(
+                    allowance,
+                    entry?.allowance_seconds ?? null,
+                    allowanceUnknown,
+                  )}
+                />
+              ) : null}
               {embedded && !submission && !report && !deletionOnlyId && (
                 <AcquisitionLowerPanels compact={displayFileSelected} />
               )}

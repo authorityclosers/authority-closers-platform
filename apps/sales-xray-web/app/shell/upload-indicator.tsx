@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import Link from "next/link";
 import type { MouseEvent } from "react";
 
+import { callHref } from "../acquisition-client";
 import { useUploadSession, useUploadSnapshot } from "../hooks/upload-session";
 import { Glyph } from "../lightbox/glyph";
 import styles from "./upload-indicator.module.css";
@@ -50,7 +51,7 @@ export function UploadIndicator({
           </span>
         </div>
         <div className={styles.actions}>
-          <Link className={styles.action} href="/calls">
+          <Link className={styles.action} href="/analysis/calls">
             Open Calls
           </Link>
         </div>
@@ -66,12 +67,6 @@ export function UploadIndicator({
     if (!onOpenIntake) return;
     event.preventDefault();
     onOpenIntake();
-  };
-  const callHref = (id: string) => {
-    const url = new URL(upload.homeHref, "https://sales-xray.invalid");
-    url.searchParams.delete("new");
-    url.searchParams.set("call", id);
-    return `${url.pathname}${url.search}`;
   };
   return (
     <aside
@@ -137,7 +132,7 @@ export function UploadIndicator({
         {upload.phase === "saved" ? (
           <Link
             className={styles.action}
-            href={callHref(upload.submissionId)}
+            href={callHref(upload.submissionId, upload.homeHref)}
             onClick={settle}
           >
             Open call

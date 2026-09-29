@@ -246,7 +246,7 @@ export function NewAnalysisView({
             <h2 id="recent-card-heading" className={styles.cardTitle}>
               Recent analyses
             </h2>
-            <Link href="/calls" className={styles.viewAll}>
+            <Link href="/analysis/calls" className={styles.viewAll}>
               View all &gt;
             </Link>
           </header>

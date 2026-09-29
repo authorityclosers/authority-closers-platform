@@ -1,6 +1,6 @@
 .skeleton {
-  --sk-bg: var(--lx-sunken, #f3f4f6);
-  --sk-border: 1px solid var(--lx-line-soft, #e5e7eb);
+  --sk-bg: var(--lx-sunken);
+  --sk-border: 1px solid var(--lx-line-soft);
   --sk-radius: var(--lx-radius-md, 8px);
   --sk-dur: var(--lx-dur-reveal, 300ms);
   display: contents;
@@ -14,9 +14,15 @@
 }
 
 @keyframes shimmer {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

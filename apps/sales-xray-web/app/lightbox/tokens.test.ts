@@ -203,10 +203,8 @@ describe("Lightbox token derivative", () => {
 
   it("documents real source failures that the corrections resolve", () => {
     expect(contrast(sourceLight, "muted-2", "paper")).toBeLessThan(4.5);
-    expect(contrast(sourceLight, "teal", "strength-soft")).toBeLessThan(4.5);
-    expect(
-      contrast(sourceDarkResolved, "objection", "objection-soft"),
-    ).toBeLessThan(4.5);
+    // The 29 Sep 2026 vibrant palette resolved teal on strength-soft in the source.
+    // It also resolved dark objection on objection-soft.
     expect(
       contrast(sourceDarkResolved, "closing-ink", "closing-soft"),
     ).toBeLessThan(4.5);

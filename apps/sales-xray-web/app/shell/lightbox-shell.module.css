@@ -716,6 +716,7 @@
 }
 
 .titleText {
+  margin: 0;
   font-size: 19px;
   font-weight: 700;
   color: var(--lx-ink);
@@ -1003,8 +1004,21 @@
   }
 
   .sidebar,
-  .rail,
+  .rail {
+    display: none;
+  }
+
   .topBar {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .topBarRight {
     display: none;
   }
 
@@ -1111,4 +1125,106 @@
 :global([data-lightbox-shell]) :global(.studio-intro),
 :global([data-lightbox-shell]) :global(.studio-header) {
   display: none !important;
+}
+
+/* App-screen layout: the shell fills the viewport, the page area scrolls inside
+   itself, and content uses the full width so it widens smoothly while the
+   sidebar collapses instead of leaving a gap on the right. */
+.main,
+.pageHeading,
+.pageDescription {
+  max-width: none;
+}
+
+@media (min-width: 900px) {
+  .shell {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .content {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .main {
+    min-height: 0;
+    padding-bottom: 24px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.panel {
+  transition:
+    width 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    min-width 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    padding 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 180ms ease,
+    border-color 260ms ease;
+}
+
+/* The panel clips its contents while it slides, so text never rewraps. */
+.panel > * {
+  min-width: 224px;
+}
+
+.collapsed .panel {
+  border-right: 1px solid transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
+  }
+}
+
+/* Search sits in the sidebar under the workspace switcher. */
+.panelSearch {
+  width: 100%;
+  height: 36px;
+  margin: -6px 0 16px;
+  box-shadow: none;
+}
+
+/* The sidebar clips sideways, so it never shows a horizontal scrollbar. */
+.panel {
+  overflow-x: hidden;
+}
+
+/* Compact, modern title in a slimmer top bar; the page name glides in. */
+.topBar {
+  height: 56px;
+}
+
+.titleContext {
+  font-size: 12.5px;
+}
+
+.titleSlash {
+  font-size: 12px;
+}
+
+.titleText {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  animation: title-in 360ms var(--lx-ease-move) both;
+}
+
+@keyframes title-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titleText {
+    animation: none;
+  }
 }
