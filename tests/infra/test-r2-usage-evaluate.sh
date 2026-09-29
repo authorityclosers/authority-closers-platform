@@ -28,6 +28,7 @@ trap cleanup EXIT
 # Exercise the exact policy resolver used by the guard without provider calls.
 guard="$repo_root/infra/vps-foundation/scripts/r2-usage-guard.sh"
 sed -n '/^resolve_installed_policy() {$/,/^}$/p' "$guard" > "$tmp_dir/policy-resolver.sh"
+# shellcheck disable=SC1091  # This exact resolver function was extracted from the reviewed guard.
 source "$tmp_dir/policy-resolver.sh"
 foundation_root="$tmp_dir/foundation"
 scope_record="$tmp_dir/backup.release"

@@ -454,7 +454,7 @@ if AC_TEST_MODE=1 \
   printf 'Scoped installer accepted a tampered archive checksum.\n' >&2
   exit 1
 fi
-scoped_release_id=foundation-test-backup-scope
+scoped_release_id='foundation-test-backup-scope'
 AC_TEST_MODE=1 \
 AC_INSTALL_SCOPE=backup \
 AC_INSTALL_ROOT="$backup_root" \

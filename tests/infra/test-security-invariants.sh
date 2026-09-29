@@ -111,16 +111,21 @@ grep -Fxq '/usr/local/sbin/ac-infisical-run-backup' \
   "$foundation/config/release/install-scope-backup.txt"
 [[ "$(grep -Ec '^/' "$foundation/config/release/install-scope-backup.txt")" -eq 26 ]]
 grep -Fq 'AC_INSTALL_SCOPE accepts only backup.' "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 grep -Fq 'if [[ "$test_mode" == 0 && "$scoped_backup_install" == 0 ]]; then' \
   "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 [[ "$(grep -Fc 'if [[ "$scoped_backup_install" == 0 ]]; then' \
   "$foundation/scripts/install-foundation-release.sh")" -eq 3 ]]
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 grep -Fq 'elif [[ "$test_mode" == 0 ]]; then' \
   "$foundation/scripts/install-foundation-release.sh"
 [[ "$(grep -Ec '^[[:space:]]+systemctl daemon-reload$' "$foundation/scripts/install-foundation-release.sh")" -eq 2 ]]
 scope_check_line="$(grep -n 'AC_INSTALL_SCOPE accepts only backup' "$foundation/scripts/install-foundation-release.sh" | cut -d: -f1)"
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 root_create_line="$(grep -nF 'install -d -m 0750 "$srv_root"' "$foundation/scripts/install-foundation-release.sh" | cut -d: -f1)"
 [[ "$scope_check_line" -lt "$root_create_line" ]]
+# shellcheck disable=SC2016  # This exact activation branch is a static assertion.
 backup_activation_block="$(sed -n \
   '/^activate_current_release() {$/,$p' "$foundation/scripts/install-foundation-release.sh" \
   | sed -n '/^if \[\[ "$scoped_backup_install" == 1 \]\]; then$/,/^elif \[\[ "$test_mode" == 0 \]\]; then$/p' \
@@ -132,9 +137,11 @@ for forbidden in ac-os-baseline-verify install-pinned-toolchain.sh reconcile_com
     exit 1
   fi
 done
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 [[ "$(grep -nF 'if [[ "$test_mode" == 0 && "$scoped_backup_install" == 0 ]]; then' \
   "$foundation/scripts/install-foundation-release.sh" | head -n 1 | cut -d: -f1)" -lt \
   "$(grep -nF 'AC_BASELINE_POLICY_DIR=' "$foundation/scripts/install-foundation-release.sh" | cut -d: -f1)" ]]
+# shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 grep -Fq 'resolve_installed_policy "$installed_root" "$scope_record"' \
   "$foundation/scripts/r2-usage-guard.sh"
 grep -Fq 'foundation_policy_path(host_root)' "$foundation/scripts/ac-postgres-backup.py"

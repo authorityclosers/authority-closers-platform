@@ -161,8 +161,7 @@ def test_postgres_policy_follows_backup_scope_record(tmp_path: Path) -> None:
     source_policy = (FOUNDATION / "config" / "r2" / "free-tier-policy.conf").read_text()
     current_policy = tmp_path / "srv/authority-closers/current/config/r2/free-tier-policy.conf"
     scoped_policy = tmp_path / (
-        "srv/authority-closers/releases/foundation-" + "a" * 40
-        + "/config/r2/free-tier-policy.conf"
+        "srv/authority-closers/releases/foundation-" + "a" * 40 + "/config/r2/free-tier-policy.conf"
     )
     current_policy.parent.mkdir(parents=True)
     scoped_policy.parent.mkdir(parents=True)
@@ -207,9 +206,7 @@ def test_restored_managed_files_use_scoped_release_only_for_listed_targets(tmp_p
     (scoped / "config/release/install-manifest.tsv").write_text(
         "executable\tscripts/backup\t/usr/local/sbin/ac-backup\t0755\troot\troot\n"
     )
-    (scoped / "config/release/install-scope-backup.txt").write_text(
-        "/usr/local/sbin/ac-backup\n"
-    )
+    (scoped / "config/release/install-scope-backup.txt").write_text("/usr/local/sbin/ac-backup\n")
     (scoped / "scripts/backup").write_text("scoped backup\n")
     (scoped / "RELEASE-ID").write_text(scope_id + "\n")
     (scoped / "RELEASE-COMMIT").write_text(scope_id.removeprefix("foundation-") + "\n")
@@ -237,8 +234,7 @@ def test_restored_managed_files_use_scoped_release_only_for_listed_targets(tmp_p
     record.parent.mkdir(parents=True)
     record.write_text(scope_id + "\n")
     script = (
-        "set -euo pipefail\n" + function
-        + "\ncompare_restored_managed_files \"$1\" \"$2\" \"$3\" 0\n"
+        "set -euo pipefail\n" + function + '\ncompare_restored_managed_files "$1" "$2" "$3" 0\n'
     )
     bash = Path("/usr/bin/bash")
     if not bash.is_file():
