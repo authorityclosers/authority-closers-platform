@@ -214,10 +214,57 @@ def test_status_json_reports_each_lane(capsys) -> None:
     repo = FakeRepo()
     repo.branches.append("task/platform/23-notes")
     assert MODULE.main(["status", "--json"], gate(repo)) == 0
-    status = json.loads(capsys.readouterr().out)
+    output = capsys.readouterr().out
+    assert output == (
+        '{"main": "green", "active_branches": ["task/platform/23-notes"], '
+        '"open_prs": [], "lanes": {"sales-xray": {"holder": null, "free": true}, '
+        '"platform": {"holder": "task/platform/23-notes", "free": false}, '
+        '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}}, '
+        '"exclusive_free": false}\n'
+    )
+    status = json.loads(output)
     assert status["lanes"]["platform"] == {"holder": "task/platform/23-notes", "free": False}
     assert status["lanes"]["sales-xray"]["free"] is True
     assert status["exclusive_free"] is False
+
+
+def test_status_text_labels_each_lane_and_exclusive_verdict(capsys) -> None:
+    repo = FakeRepo()
+    repo.branches += ["task/sales-xray/81-http-source-readers", "task/ui/66-shell"]
+    repo.prs = [
+        {
+            "number": 104,
+            "headRefName": "task/sales-xray/81-http-source-readers",
+            "title": "Resolve sources",
+        }
+    ]
+
+    assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
+    output = capsys.readouterr().out
+    assert "Start verdicts (BUSY applies to starting new work):" in output
+    assert "admin: FREE" in output
+    assert "platform: FREE" in output
+    assert "sales-xray: BUSY (" in output
+    assert "task/sales-xray/81-http-source-readers" in output
+    assert "#104 Resolve sources" in output
+    assert "ui: BUSY (" in output
+    assert "exclusive (no lane): BUSY (" in output
+    assert "BUSY:" not in output
+
+
+def test_status_text_shows_current_task_check_while_main_runs(capsys) -> None:
+    repo = FakeRepo()
+    branch = "task/admin/15-agent-scorecard"
+    repo.branches.append(branch)
+    repo.prs = [{"number": 99, "headRefName": branch, "title": "Scorecard"}]
+    repo.main_runs = [{"run_number": 9, "status": "in_progress", "conclusion": None}]
+    repo.current = branch
+
+    assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
+    output = capsys.readouterr().out
+    assert f"your task {branch}: free to continue" in output
+    assert "BUSY applies to starting new work" in output
+    assert "admin: BUSY (" in output
 
 
 def test_cli_start_accepts_a_lane(capsys) -> None:
