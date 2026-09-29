@@ -241,7 +241,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                 )
                 for _ in range(100):
                     try:
-                        ready = await client.get(ORIGIN, timeout=2)
+                        ready = await client.get(ORIGIN + "/health", timeout=2)
                         if ready.status_code == 200:
                             break
                     except httpx.HTTPError:
@@ -249,6 +249,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await asyncio.sleep(0.2)
                 else:
                     pytest.fail("The compiled local UI did not become ready.")
+                landing = await client.get(ORIGIN, follow_redirects=False)
+                assert landing.status_code == 307
+                assert landing.headers["location"] == "/dashboard"
 
             data = _wav_one_second_48k()
             broker = ReportingBroker(data)
@@ -402,10 +405,20 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     )
                     await page.goto(ORIGIN, wait_until="domcontentloaded")
                     await expect(
+                        page.get_by_role(
+                            "heading", name="Sign in to see your dashboard", exact=True
+                        )
+                    ).to_be_visible()
+                    await (
+                        page.get_by_role("complementary", name="Sales Xray navigation", exact=True)
+                        .get_by_role("link", name="New analysis", exact=True)
+                        .click()
+                    )
+                    await expect(
                         page.get_by_role("heading", name="Add a call to review", exact=True)
                     ).to_be_visible()
                     await page.screenshot(path=str(receipt / "upload-desktop.png"), full_page=True)
-                    browse = page.get_by_role("button", name="or click to browse", exact=True)
+                    browse = page.get_by_role("button", name="Choose a file", exact=True)
                     await expect(browse).to_be_enabled(timeout=15_000)
                     async with page.expect_file_chooser() as chooser:
                         await browse.click()
@@ -736,7 +749,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # document navigation. Observe that navigation before this
                     # fresh context requests the saved-call library.
                     await library_page.wait_for_url(
-                        ORIGIN + "/", wait_until="domcontentloaded", timeout=20000
+                        ORIGIN + "/dashboard", wait_until="domcontentloaded", timeout=20000
                     )
                     await library_page.goto(ORIGIN + "/calls", wait_until="domcontentloaded")
                     assert (
@@ -744,7 +757,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         is None
                     )
                     await (
-                        library_page.get_by_role("navigation", name="Workspace", exact=True)
+                        library_page.get_by_role(
+                            "complementary", name="Sales Xray navigation", exact=True
+                        )
                         .get_by_role("link", name="Calls", exact=True)
                         .click()
                     )
@@ -817,7 +832,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(
                         library_page.get_by_text("Deletion requested.", exact=False)
                     ).to_be_visible()
-                    account_menu = library_page.get_by_role(
+                    account_menu = library_page.get_by_role("banner").get_by_role(
                         "button", name="Open Synthetic Browser Learner menu", exact=True
                     )
                     await expect(account_menu).to_be_visible()
@@ -833,7 +848,9 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         ).click()
                     assert (await logout.value).status == 204
                     await expect(
-                        library_page.get_by_role("heading", name="Add a call to review", exact=True)
+                        library_page.get_by_role(
+                            "heading", name="Sign in to see your dashboard", exact=True
+                        )
                     ).to_be_visible()
                     assert (
                         await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")
