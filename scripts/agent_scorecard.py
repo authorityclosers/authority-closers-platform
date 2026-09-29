@@ -20,7 +20,12 @@ CORE_COLUMNS = ["Agent", "Tasks done", "Cycle median", "Cycle p90",
                 "Bounces", "Tokens / done task", "Runs / done task", "Failed-run %"]  # fmt: skip
 GITHUB_COLUMNS = ["PR cycle median", "PR cycle p90", "First-try CI", "Rework pushes",
                   "Owner changes", "Post-merge bugs", "Scope", "Evidence", "Gate"]  # fmt: skip
-LANE_AGENTS = {"sales-xray": "Lead Engineer", "platform": "Platform Engineer", "admin": "Software Engineer"}
+LANE_AGENTS = {
+    "sales-xray": "Lead Engineer",
+    "platform": "Platform Engineer",
+    "admin": "Software Engineer",
+    "devenv": "Dev Environment Lead",
+}
 
 
 def fetch_json(path, method="GET"):
