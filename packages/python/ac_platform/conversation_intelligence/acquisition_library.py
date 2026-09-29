@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import ConversationNotFound
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
@@ -148,6 +149,7 @@ def _account_library_query(
         .where(
             usage.tenant_id == actor.tenant_id,
             _submission_owner_filter(usage, claim, person_id=actor.person_id, visitor_id=None),
+            ~recording_is_canary(),
         )
     )
     if now is not None:
