@@ -182,7 +182,7 @@
   justify-content: center;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--lx-teal), var(--lx-strength-ink));
-  color: #fff;
+  color: var(--lx-film-text);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.01em;
