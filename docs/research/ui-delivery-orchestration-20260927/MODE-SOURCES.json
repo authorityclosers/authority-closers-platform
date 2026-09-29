@@ -1,0 +1,20 @@
+{
+  "research_date": "2026-09-27",
+  "status": "documentation-verified; no task-matched benchmark",
+  "sources": [
+    {"id":"M1","url":"https://learn.chatgpt.com/docs/models","supports":"Codex effort options and Ultra delegation","class":"official documentation","limitation":"Availability still depends on actual client/account; not an outcome benchmark."},
+    {"id":"M2","url":"https://developers.openai.com/api/docs/models/gpt-6-astra","supports":"Exact Astra model ID and supported API reasoning efforts","class":"official documentation","limitation":"API catalog is not proof of this subscription's billing or entitlement."},
+    {"id":"M3","url":"https://developers.openai.com/api/docs/guides/reasoning","supports":"Effort tradeoff; separate standard/pro API reasoning mode","class":"official documentation","limitation":"No assumed mapping of API pro to a Codex UI option."},
+    {"id":"M4","url":"https://developers.openai.com/api/docs/guides/model-selection","supports":"Astra for demanding work, model/effort selection by quality and usage needs","class":"official guidance","limitation":"No selected-Drive-screen comparison."},
+    {"id":"M5","url":"https://learn.chatgpt.com/docs/developer-settings","supports":"Model/effort controls, per-run overrides and effective configuration inspection","class":"official documentation","limitation":"Recipes not executed or installed here."},
+    {"id":"M6","url":"https://learn.chatgpt.com/docs/config-file/config-reference","supports":"Model/effort settings and separate Plan effort override","class":"official documentation","limitation":"Existing installed client compatibility requires inspection at launch."},
+    {"id":"M7","url":"https://code.claude.com/docs/en/model-config","supports":"Opus 5.5 effort settings, default medium and Ultracode distinction","class":"official documentation","limitation":"Effort names are calibrated by model; entitlement/config overrides unverified."},
+    {"id":"M8","url":"https://code.claude.com/docs/en/cli-reference","supports":"--model, --effort and separate --permission-mode options","class":"official documentation","limitation":"No CLI inference session started."},
+    {"id":"M9","url":"https://code.claude.com/docs/en/fast-mode","supports":"Fast mode uses subscription usage credits; speed versus effort","class":"official documentation","limitation":"Account setting was not inspected or changed."},
+    {"id":"M10","url":"https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5","supports":"Effort calibration, visual tools, frontend defaults and API caching caveat","class":"official model guidance","limitation":"Not a direct benchmark of this app; API cache behavior must not be blindly mapped to CLI."},
+    {"id":"M11","url":"https://platform.claude.com/docs/en/about-claude/models/optimizing-for-cost-and-intelligence","supports":"Published Opus 5.5 effort comparison and benchmark methodology","class":"vendor benchmark","limitation":"Coding benchmark, not UI fidelity or account-specific quota measurement; prices/cost method belong to vendor study."},
+    {"id":"M12","url":"https://code.claude.com/docs/en/workflows","supports":"Ultracode dynamic orchestration and concurrency caveat in cloud handoff","class":"official documentation","limitation":"No workflow launched; ordinary Agent-tool and workflow-runtime concurrency controls are not identical."}
+  ],
+  "experiment": {"status":"not run","paid_api_calls":false,"measured_savings":null},
+  "research_chat":"https://chatgpt.com/c/6ab8b0ab-0a80-83e9-857e-b9c4cf77f425"
+}
