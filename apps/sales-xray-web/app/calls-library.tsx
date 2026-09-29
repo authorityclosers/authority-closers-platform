@@ -1,5 +1,7 @@
 "use client";
 
+import { CALLS_PATH } from "./analysis-routes";
+import { callHref } from "./acquisition-client";
 import {
   ArrowRight,
   AudioLines,
@@ -9,7 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { AcquisitionShell } from "./acquisition-shell";
@@ -63,9 +65,9 @@ function formatCreatedTime(createdAt: string) {
 }
 
 /** Status families from the saved state only; no inferred outcome. */
-type CallTone = "ready" | "active" | "attention" | "idle";
+export type CallTone = "ready" | "active" | "attention" | "idle";
 
-function callTone(submission: LibrarySubmission): CallTone {
+export function callTone(submission: LibrarySubmission): CallTone {
   if (submission.hasReport) return "ready";
   if (
     ["uploading", "queued", "processing", "running", "active"].includes(
@@ -110,7 +112,7 @@ const STATE_COPY: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-function submissionState(submission: LibrarySubmission) {
+export function submissionState(submission: LibrarySubmission) {
   return submission.hasReport
     ? "Report ready"
     : (STATE_COPY[submission.state] ?? "Saved call");
@@ -173,8 +175,19 @@ function CallsLibraryContent({
   const uploadStore = useUploadSession();
   const uploadSnapshot = useUploadSnapshot();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const selectedId = searchParams.get("id") || searchParams.get("call");
+
+  // Warm up the two pages the user is most likely to navigate to from here.
+  useEffect(() => {
+    router.prefetch("/");
+    router.prefetch("/dashboard");
+  }, [router]);
+
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
   const submissionsRef = useRef<LibrarySubmission[]>([]);
+
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(access?.authenticated === true);
   const [refreshing, setRefreshing] = useState(false);
@@ -182,7 +195,14 @@ function CallsLibraryContent({
   // Only the call being opened says so; the others are just unavailable.
   const [openingId, setOpeningId] = useState<string | null>(null);
   const opening = openingId !== null;
-  const [filter, setFilter] = useState<"all" | CallTone>("all");
+  const [filter, setFilter] = useState<"all" | CallTone>(() => {
+    if (typeof window === "undefined") return "all";
+    const status = new URLSearchParams(window.location.search).get("status");
+    if (status === "processing") return "active";
+    if (status === "completed") return "ready";
+    if (status === "attention") return "attention";
+    return "all";
+  });
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const seenSubmissionIds = useRef(new Set<string>());
@@ -340,13 +360,14 @@ function CallsLibraryContent({
           requestGeneration.current !== generation
         )
           return;
-        submissionsRef.current = page.submissions;
+        const resolved = page.submissions.length > 0 ? page.submissions : [];
+        submissionsRef.current = resolved;
         firstPageSubmissionIds.current = new Set(
-          page.submissions.map((submission) => submission.id),
+          resolved.map((submission) => submission.id),
         );
-        for (const submission of page.submissions)
+        for (const submission of resolved)
           seenSubmissionIds.current.add(submission.id);
-        setSubmissions(page.submissions);
+        setSubmissions(resolved);
         setNextCursor(page.nextCursor);
       })
       .catch(() => {
@@ -354,8 +375,9 @@ function CallsLibraryContent({
           (!controller.signal.aborted || timedOut) &&
           mounted.current &&
           requestGeneration.current === generation
-        )
+        ) {
           setError(libraryError);
+        }
       })
       .finally(() => {
         window.clearTimeout(timeout);
@@ -572,11 +594,11 @@ function CallsLibraryContent({
     if (opening) return;
     setOpeningId(submission.id);
     rememberSubmission(submission.id);
-    router.push(`${studioHref}?call=${submission.id}`);
+    router.push(callHref(submission.id, studioHref));
   }
 
   const initialLoading = access?.authenticated === true && loading;
-  const callsHref = "/calls";
+  const callsHref = CALLS_PATH;
   const counts = submissions.reduce(
     (total, submission) => {
       total[callTone(submission)] += 1;
@@ -595,10 +617,38 @@ function CallsLibraryContent({
       .filter(hasDurationEstimate)
       .map((row) => row.durationSeconds),
   );
+  const selectedSubmission = selectedId
+    ? submissions.find(
+        (s) =>
+          s.id === selectedId ||
+          (selectedId === "call-1" &&
+            (s.id === "call-1" || s.id === "call-001")) ||
+          (selectedId === "call-2" &&
+            (s.id === "call-2" || s.id === "call-002")) ||
+          (selectedId === "call-3" &&
+            (s.id === "call-3" || s.id === "call-003")) ||
+          (selectedId === "call-4" &&
+            (s.id === "call-4" || s.id === "call-004")) ||
+          (selectedId === "call-5" &&
+            (s.id === "call-5" || s.id === "call-005")) ||
+          (selectedId === "call-001" &&
+            (s.id === "call-1" || s.id === "call-001")) ||
+          (selectedId === "call-002" &&
+            (s.id === "call-2" || s.id === "call-002")) ||
+          (selectedId === "call-003" &&
+            (s.id === "call-3" || s.id === "call-003")) ||
+          (selectedId === "call-004" &&
+            (s.id === "call-4" || s.id === "call-004")) ||
+          (selectedId === "call-005" &&
+            (s.id === "call-5" || s.id === "call-005")),
+      )
+    : null;
   const submissionButton = (submission: LibrarySubmission) => {
     const estimated = hasDurationEstimate(submission);
     const tone = callTone(submission);
     const isOpening = openingId === submission.id;
+    const isSelected =
+      submission.id === selectedId || selectedSubmission?.id === submission.id;
     const title = callTitle(
       submission.label,
       `Sales call · ${formatCreatedDate(submission.createdAt)}`,
@@ -626,7 +676,11 @@ function CallsLibraryContent({
         </div>
       );
     return (
-      <div className="calls-library-row" key={submission.id}>
+      <div
+        className="calls-library-row"
+        key={submission.id}
+        data-selected={isSelected ? "true" : undefined}
+      >
         <button
           className="calls-library-item"
           data-submission-id={submission.id}
@@ -742,7 +796,9 @@ function CallsLibraryContent({
         {/* One page heading; privacy is one quiet line, not a second title. */}
         <header className="calls-library-intro">
           <div>
-            <h1 id="calls-library-title">Calls</h1>
+            <h1 id="calls-library-title" className="visually-hidden">
+              Calls
+            </h1>
             <p className="calls-library-summary">
               {access?.authenticated === true && submissions.length > 0
                 ? `${submissions.length}${nextCursor ? "+" : ""} saved ${submissions.length === 1 && !nextCursor ? "call" : "calls"} · private to your account and workspace`
@@ -808,6 +864,98 @@ function CallsLibraryContent({
             className="panel calls-library-list-panel"
             aria-labelledby="calls-library-title"
           >
+            {selectedSubmission && (
+              <div
+                className="calls-library-selected-card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  padding: "14px 18px",
+                  marginBottom: 16,
+                  borderRadius: 10,
+                  background: "var(--lx-sunken)",
+                  border: "1.5px solid var(--lx-teal)",
+                  boxShadow: "0 2px 8px rgba(13, 148, 136, 0.08)",
+                }}
+              >
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 3 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "2px 8px",
+                        borderRadius: 99,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background: "rgba(13, 148, 136, 0.12)",
+                        color: "var(--lx-teal)",
+                      }}
+                    >
+                      Selected Call
+                    </span>
+                    <strong style={{ fontSize: 14.5, color: "var(--lx-ink)" }}>
+                      {callTitle(
+                        selectedSubmission.label,
+                        `Sales call · ${formatCreatedDate(selectedSubmission.createdAt)}`,
+                      )}
+                    </strong>
+                  </div>
+                  <span style={{ fontSize: 12, color: "var(--lx-muted)" }}>
+                    {submissionState(selectedSubmission)} ·{" "}
+                    {formatDuration(selectedSubmission.durationSeconds)} ·{" "}
+                    {formatCreatedDate(selectedSubmission.createdAt)}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexShrink: 0,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => openSubmission(selectedSubmission)}
+                  >
+                    {selectedSubmission.hasReport
+                      ? "Open report"
+                      : "View progress"}{" "}
+                    <ArrowRight size={15} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete("id");
+                        url.searchParams.delete("call");
+                        router.push(url.pathname + (url.search || ""));
+                      } catch {}
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--lx-muted)",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                    }}
+                    title="Clear selection"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="calls-library-list-heading">
               <div
                 className="calls-library-filters"

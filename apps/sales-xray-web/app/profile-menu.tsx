@@ -1,24 +1,30 @@
 "use client";
 
-import { ChevronDown, CircleUserRound, FolderOpen, LogOut } from "lucide-react";
+import {
+  ChevronDown,
+  FolderOpen,
+  LogOut,
+  Mail,
+  MoreHorizontal,
+  User,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   requestSalesXrayLogout,
   UploadNeedsSignOutConfirmationError,
 } from "./account-navigation";
-import { readAccountProfile } from "./account-profile-client";
+import { invalidateShellProfile, useShellProfile } from "./shell/profile-store";
 import { useUploadSession } from "./hooks/upload-session";
 import { ThemeControl } from "./lightbox/theme-provider";
-import { LocalSettingsButton } from "./live-data-banner";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
 
 const SIGN_OUT_UPLOAD_WARNING =
   "The upload is still in progress or unconfirmed. Signing out will stop it and clear this tab’s recovery state. If the server already received it, you can find it in Calls. Continue?";
 
-export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
+export { PROFILE_UPDATED_EVENT } from "./shell/profile-store";
 
 function initials(name: string | null): string {
   if (!name) return "AC";
@@ -30,11 +36,24 @@ function initials(name: string | null): string {
     .toLocaleUpperCase();
 }
 
+function getFirstName(name: string | null, email: string | null): string {
+  if (name && name.trim().length > 0) {
+    const first = name.trim().split(/\s+/)[0];
+    if (first) return first;
+  }
+  if (email && email.includes("@")) {
+    const prefix = email.split("@")[0]?.trim();
+    if (prefix) return prefix;
+  }
+  return "Account";
+}
+
 export function ProfileMenu({
   authenticated,
   accountHref,
   placement = "below",
   compact = false,
+  variant = "header",
 }: {
   authenticated: boolean;
   accountHref: string;
@@ -42,44 +61,19 @@ export function ProfileMenu({
   placement?: "below" | "above";
   /** Avatar only, for the collapsed rail. */
   compact?: boolean;
+  variant?: "rail" | "header";
 }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
-  const [profileName, setProfileName] = useState<string | null>(null);
+  const profile = useShellProfile(authenticated);
+  const profileName = profile?.name?.trim() || null;
+  const profileEmail = profile?.email?.trim() || null;
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
   const access = useWorkspaceAccess();
   const upload = useUploadSession();
-
-  useEffect(() => {
-    if (!authenticated) return;
-    let controller: AbortController | null = null;
-    const refresh = () => {
-      controller?.abort();
-      const current = new AbortController();
-      controller = current;
-      void readAccountProfile(current.signal)
-        .then((profile) => {
-          if (!current.signal.aborted)
-            setProfileName(profile.name?.trim() || null);
-        })
-        .catch(() => {
-          // The menu remains usable when a profile read is unavailable.
-        });
-    };
-    const refreshAfterUpdate = () => {
-      setProfileName(null);
-      refresh();
-    };
-    refresh();
-    window.addEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
-    return () => {
-      window.removeEventListener(PROFILE_UPDATED_EVENT, refreshAfterUpdate);
-      controller?.abort();
-    };
-  }, [authenticated]);
 
   const accountName = authenticated ? profileName : null;
   const accountLabel = authenticated
@@ -92,7 +86,7 @@ export function ProfileMenu({
       if (event.target instanceof Node && !menu.current?.contains(event.target))
         setOpen(false);
     };
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
         trigger.current?.focus();
@@ -106,6 +100,38 @@ export function ProfileMenu({
     };
   }, [open]);
 
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      trigger.current?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const popoverEl = menu.current?.querySelector(`.${styles.popover}`);
+      if (!popoverEl) return;
+      const focusable = Array.from(
+        popoverEl.querySelectorAll<HTMLElement>("a, button:not([disabled])"),
+      );
+      if (focusable.length === 0) return;
+      const currentIndex = focusable.indexOf(
+        document.activeElement as HTMLElement,
+      );
+      if (event.key === "ArrowDown") {
+        const nextIndex =
+          currentIndex >= 0 && currentIndex < focusable.length - 1
+            ? currentIndex + 1
+            : 0;
+        focusable[nextIndex]?.focus();
+      } else {
+        const prevIndex =
+          currentIndex > 0 ? currentIndex - 1 : focusable.length - 1;
+        focusable[prevIndex]?.focus();
+      }
+    }
+  }
+
   async function signOut() {
     if (signingOutRef.current) return;
     const unresolved = upload?.requiresSignOutConfirmation() ?? false;
@@ -115,6 +141,7 @@ export function ProfileMenu({
     setError("");
     try {
       await requestSalesXrayLogout(upload, unresolved);
+      invalidateShellProfile();
       // Discard the mounted report, audio and client route cache after logout.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign out must discard private document state.
       window.location.assign("/");
@@ -129,59 +156,99 @@ export function ProfileMenu({
     }
   }
 
+  const userInitials = initials(accountName);
+  const displayName = accountLabel;
+  const firstName = getFirstName(accountName, profileEmail);
+  const displayEmail =
+    profileEmail ||
+    (authenticated ? "Private workspace" : "Sign in to analyse calls");
+
   return (
     <div
       ref={menu}
       className={styles.menu}
       data-placement={placement}
+      data-variant={variant}
       data-compact={compact || undefined}
     >
-      <button
-        ref={trigger}
-        type="button"
-        className={styles.trigger}
-        aria-expanded={open}
-        aria-label={
-          authenticated ? `Open ${accountLabel} menu` : "Open profile menu"
-        }
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className={styles.avatar} aria-hidden="true">
-          <CircleUserRound />
-        </span>
-        <span className={styles.triggerCopy}>
-          <strong title={accountName || undefined}>{accountLabel}</strong>
-          <small>
-            {authenticated ? "Private workspace" : "Sign in to analyse calls"}
-          </small>
-        </span>
-        <ChevronDown className={styles.chevron} size={15} aria-hidden="true" />
-      </button>
+      {variant === "header" ? (
+        <button
+          ref={trigger}
+          type="button"
+          className={styles.headerTrigger}
+          aria-expanded={open}
+          aria-label={
+            authenticated ? `Open ${displayName} menu` : "Open profile menu"
+          }
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className={styles.avatarInitials} aria-hidden="true">
+            {userInitials}
+          </span>
+          <span className={styles.headerName}>{firstName}</span>
+          <ChevronDown
+            className={styles.chevron}
+            size={14}
+            aria-hidden="true"
+          />
+        </button>
+      ) : (
+        <button
+          ref={trigger}
+          type="button"
+          className={styles.trigger}
+          aria-expanded={open}
+          aria-label={
+            authenticated ? `Open ${displayName} menu` : "Open profile menu"
+          }
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className={styles.avatarInitials} aria-hidden="true">
+            {userInitials}
+          </span>
+          <span className={styles.triggerCopy}>
+            <strong title={displayName}>{displayName}</strong>
+            <small>{displayEmail}</small>
+          </span>
+          <MoreHorizontal
+            className={styles.moreIcon}
+            size={18}
+            aria-hidden="true"
+          />
+        </button>
+      )}
       {open ? (
         <div
           className={styles.popover}
           role="region"
           aria-label="Profile actions"
+          onKeyDown={handleMenuKeyDown}
         >
-          <div className={styles.summary}>
+          <div className={styles.menuHeader}>
             <span className={styles.summaryAvatar} aria-hidden="true">
-              {authenticated ? initials(accountName) : "G"}
+              {userInitials}
             </span>
-            <span className={styles.summaryCopy}>
-              <strong>
+            <div className={styles.menuHeaderCopy}>
+              <strong className={styles.headerFullName}>
                 {authenticated
                   ? accountName || "Authority Closers account"
                   : "Guest workspace"}
               </strong>
-              <small>
-                {authenticated
-                  ? "Calls and reports stay scoped to your workspace."
-                  : "Sign in to analyse calls and open your reports."}
-              </small>
-            </span>
+              <small className={styles.headerEmail}>{displayEmail}</small>
+            </div>
           </div>
+          <div className={styles.separator} role="separator" />
           <div className={styles.actions}>
-            {!authenticated && access?.requestAccountSignIn ? (
+            {authenticated ? (
+              <Link
+                href={accountHref}
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <User size={16} aria-hidden="true" />
+                <span>Account</span>
+              </Link>
+            ) : access?.requestAccountSignIn ? (
               <button
                 type="button"
                 className={styles.item}
@@ -190,33 +257,74 @@ export function ProfileMenu({
                   access.requestAccountSignIn?.();
                 }}
               >
-                <FolderOpen size={16} aria-hidden="true" />
-                Sign in to my AC account
+                <User size={16} aria-hidden="true" />
+                <span>Sign in</span>
               </button>
             ) : (
               <Link
-                href={accountHref}
+                href="/login"
                 className={styles.item}
                 onClick={() => setOpen(false)}
               >
-                <FolderOpen size={16} aria-hidden="true" />
-                {authenticated ? "Account" : "Sign in to my AC account"}
+                <User size={16} aria-hidden="true" />
+                <span>Sign in</span>
               </Link>
             )}
-            <LocalSettingsButton className={styles.item} />
-            {authenticated ? (
-              <button
-                type="button"
-                className={styles.item}
-                disabled={signingOut}
-                onClick={() => void signOut()}
-              >
-                <LogOut size={16} aria-hidden="true" />
-                {signingOut ? "Signing out…" : "Sign out"}
-              </button>
-            ) : null}
+            <Link
+              href="/analysis/calls"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <FolderOpen size={16} aria-hidden="true" />
+              <span>Calls</span>
+            </Link>
           </div>
-          <ThemeControl className={styles.theme} />
+          <ThemeControl />
+          <div className={styles.separator} role="separator" />
+          <div className={styles.actions}>
+            <a
+              href="https://app.authorityclosers.com/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <span>Privacy</span>
+            </a>
+            <a
+              href="https://app.authorityclosers.com/terms"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <span>Terms</span>
+            </a>
+            <a
+              href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <Mail size={16} aria-hidden="true" />
+              <span>Email the AC team</span>
+            </a>
+          </div>
+          {authenticated ? (
+            <>
+              <div className={styles.separator} role="separator" />
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.item}
+                  disabled={signingOut}
+                  onClick={() => void signOut()}
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  <span>{signingOut ? "Signing out…" : "Sign out"}</span>
+                </button>
+              </div>
+            </>
+          ) : null}
           {error ? (
             <p className={styles.error} role="alert">
               {error}

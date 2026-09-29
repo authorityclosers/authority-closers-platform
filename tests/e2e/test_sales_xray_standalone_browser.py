@@ -41,6 +41,7 @@ from ac_platform.http.conversation_acquisition_runtime import install_acquisitio
 from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.password_auth import hash_password
@@ -191,10 +192,17 @@ def _make_backend(
         coach_app_url="http://coach.test",
         api_url="http://api.test",
         sales_xray_app_url=origin,
-        operations_tenant_id=account.own_tenant_id,
+        public_learner_tenant_id=None,
+        operations_tenant_id=uuid4(),
         session_token_pepper=uuid4().hex + uuid4().hex,
         oauth_transaction_secret=uuid4().hex + uuid4().hex,
         email_challenge_secret=uuid4().hex + uuid4().hex,
+    )
+    # Keep this legacy multi-workspace login explicit. Enabling the public
+    # learner tenant on identity also selects that workspace during login.
+    # The real profile router still enforces its own public-tenant boundary.
+    profile_settings = Settings.model_validate(
+        {**settings.model_dump(), "public_learner_tenant_id": account.own_tenant_id}
     )
     control: dict[str, Any] = {}
     stopped = threading.Event()
@@ -206,6 +214,9 @@ def _make_backend(
             application = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(application)
             require_actor = install_identity_http(application, settings=settings, sessions=sessions)
+            install_sales_xray_profile_http(
+                application, settings=profile_settings, require_actor=require_actor
+            )
             install_conversation_http(
                 application,
                 settings=settings,
@@ -511,9 +522,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             password_input.fill(backend.account.password)
             with _navigation_window(page, navigation_windows):
                 page.get_by_role("button", name="Sign in").click()
-                expect(page).to_have_url(f"{backend.origin}/")
+                expect(page).to_have_url(f"{backend.origin}/dashboard/")
                 page.wait_for_load_state("networkidle")
-            checks.append("Correct password login navigates the standalone host to /.")
+            checks.append("Correct password login navigates the standalone host to /dashboard/.")
 
             expect(
                 page.get_by_role("heading", name="Choose your Sales Xray workspace.")
@@ -527,11 +538,41 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             page.screenshot(path=str(evidence / "workspace-chooser.png"), full_page=True)
             checks.append("Workspace choices came from GET /v1/me/workspaces.")
 
-            own_button.click()
+            # Workspace selection mounts the dashboard after the current
+            # document has already reached networkidle. Wait for its reads
+            # before navigating away, rather than reusing that earlier state.
+            with ExitStack() as dashboard_reads:
+                responses = [
+                    dashboard_reads.enter_context(
+                        page.expect_response(
+                            lambda response, path=path: (
+                                response.request.method == "GET"
+                                and urlsplit(response.url).path == path
+                            )
+                        )
+                    )
+                    for path in (
+                        "/v1/conversation/acquisition/submissions/summary",
+                        "/v1/conversation/acquisition/activity",
+                        "/v1/conversation/acquisition/session",
+                        "/v1/conversation/acquisition/submissions",
+                    )
+                ]
+                own_button.click()
+            for response in responses:
+                response.value.finished()
+            page.wait_for_load_state("networkidle")
+            page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
+                "link", name="New analysis", exact=True
+            ).click()
+            expect(page).to_have_url(f"{backend.origin}/analysis/new/")
             expect(page.get_by_text("Start with your sales call", exact=True)).to_be_visible()
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(1)
-            checks.append("Selecting the assigned workspace opens CallStudio and private history.")
+            checks.append(
+                "Selecting the assigned workspace then New analysis opens CallStudio "
+                "and private history."
+            )
 
             saved_call = page.locator(".recording-history-item").first
             expect(saved_call.get_by_text("Open report", exact=True)).to_be_visible()
@@ -801,10 +842,14 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "HEAD /login/: net::ERR_ABORTED",
                 "HEAD /calls/: net::ERR_ABORTED",
                 "HEAD /account/: net::ERR_ABORTED",
+                "HEAD /dashboard/: net::ERR_ABORTED",
+                "HEAD /analysis/new/: net::ERR_ABORTED",
+                "HEAD /analysis/calls/: net::ERR_ABORTED",
             }
             for method, path, status in (
                 ("POST", "/v1/auth/password/login", 200),
                 ("POST", "/v1/auth/logout", 204),
+                ("GET", "/v1/me/sales-xray-profile", 200),
                 (
                     "GET",
                     f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",

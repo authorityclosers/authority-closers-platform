@@ -2814,3 +2814,139 @@ a.overviewCard:hover {
     font-size: 13px;
   }
 }
+
+/* Theme-aware upload stage. The page canvas shows through, and in dark theme
+   every surface and text colour comes from the --lx tokens. Processing and
+   report keep their light surfaces until their own theme pass. */
+.app[data-stage="upload"],
+.app[data-stage="upload"][data-selected="false"] :global(.studio-main) {
+  background: transparent;
+}
+.app[data-stage="upload"][data-theme="dark"] {
+  --mint: var(--lx-teal);
+  --ink: var(--lx-ink);
+  --muted: var(--lx-muted);
+}
+.app[data-stage="upload"][data-theme="dark"] :global(.studio-intro) h1,
+.app[data-stage="upload"][data-theme="dark"] .dropTitle,
+.app[data-stage="upload"][data-theme="dark"] .selectionHeading,
+.app[data-stage="upload"][data-theme="dark"] .uploadCardTitle,
+.app[data-stage="upload"][data-theme="dark"] :global(.studio-file) h2 {
+  color: var(--lx-ink);
+}
+.app[data-stage="upload"][data-theme="dark"]
+  :global(.studio-intro)
+  > p:last-child,
+.app[data-stage="upload"][data-theme="dark"] .formatFacts,
+.app[data-stage="upload"][data-theme="dark"] .allowance,
+.app[data-stage="upload"][data-theme="dark"] :global(.studio-file) p,
+.app[data-stage="upload"][data-theme="dark"] .previewDetails summary,
+.app[data-stage="upload"][data-theme="dark"] .privacyDetails summary,
+.app[data-stage="upload"][data-theme="dark"]
+  :global(.studio-consent)
+  .consentLabel {
+  color: var(--lx-muted);
+}
+.app[data-stage="upload"][data-theme="dark"] .upload,
+.app[data-stage="upload"][data-theme="dark"][data-selected="true"] .upload,
+.app[data-stage="upload"][data-theme="dark"][data-selected="false"] .upload {
+  border-color: var(--lx-line);
+  background: var(--lx-surface);
+  box-shadow: none;
+}
+.app[data-stage="upload"][data-theme="dark"] .dropZone,
+.app[data-stage="upload"][data-theme="dark"][data-selected="false"] .dropZone {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+.app[data-stage="upload"][data-theme="dark"] .dropZone::before {
+  border-color: var(--lx-teal-edge);
+}
+.app[data-stage="upload"][data-theme="dark"] .dropZone:hover,
+.app[data-stage="upload"][data-theme="dark"] .dropZone:focus-within,
+.app[data-stage="upload"][data-theme="dark"][data-selected="false"]
+  .upload.dragging {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-soft);
+  box-shadow: 0 0 0 4px var(--lx-teal-tint);
+}
+.app[data-stage="upload"][data-theme="dark"]
+  .dropZone
+  :global(.studio-upload-icon),
+.app[data-stage="upload"][data-theme="dark"][data-selected="false"]
+  .dropZone
+  :global(.studio-upload-icon),
+.app[data-stage="upload"][data-theme="dark"]
+  :global(.studio-file)
+  :global(.studio-upload-icon) {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.app[data-stage="upload"][data-theme="dark"] .uploadCue,
+.app[data-stage="upload"][data-theme="dark"] .dropSelect {
+  color: var(--lx-teal);
+}
+.app[data-stage="upload"][data-theme="dark"] .formatFacts svg,
+.app[data-stage="upload"][data-theme="dark"] .allowanceBadge svg {
+  color: var(--lx-closing);
+}
+.app[data-stage="upload"][data-theme="dark"] .allowanceBadge {
+  border-color: var(--lx-line);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+}
+.app[data-stage="upload"][data-theme="dark"] .selectionHeading > span {
+  border-color: var(--lx-closing-soft);
+  background: var(--lx-closing-soft);
+  color: var(--lx-closing-ink);
+}
+.app[data-stage="upload"][data-theme="dark"] :global(.studio-file) {
+  border-color: var(--lx-line);
+  background: var(--lx-sunken);
+}
+.app[data-stage="upload"][data-theme="dark"]
+  :global(.studio-file)
+  > :global(.secondary-button) {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.app[data-stage="upload"][data-theme="dark"] .privacyDetails[open] {
+  background: var(--lx-sunken);
+}
+.app[data-stage="upload"][data-theme="dark"] .consentLabel input {
+  accent-color: var(--lx-teal);
+}
+.app[data-stage="upload"][data-theme="dark"]
+  .uploadActions
+  :global(.studio-wide) {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+.app[data-stage="upload"][data-theme="dark"][data-selected="true"] .expect {
+  border-color: var(--lx-line);
+  background: var(--lx-sunken);
+}
+.app[data-stage="upload"][data-theme="dark"] .expect li > svg {
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed);
+}
+.app[data-stage="upload"][data-theme="dark"] .expect li:nth-child(2) > svg {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.app[data-stage="upload"][data-theme="dark"] .expect li:nth-child(3) > svg {
+  background: var(--lx-closing-soft);
+  color: var(--lx-closing);
+}
+.app[data-stage="upload"][data-theme="dark"] .stepNumber {
+  background: var(--lx-closing-soft);
+}
+
+/* Empty upload stage: the drop target is the card, with no outer frame. */
+.app[data-stage="upload"][data-selected="false"] .upload,
+.app[data-stage="upload"][data-theme="dark"][data-selected="false"] .upload {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}

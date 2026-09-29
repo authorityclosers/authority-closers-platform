@@ -67,10 +67,11 @@ async function renderStage(props: Partial<AcquisitionFileStageProps> = {}) {
 
 it("offers accessible local browse and only supplied file limits", async () => {
   await renderStage();
-  expect(host.textContent).toContain("Drag and drop your audio file here");
-  expect(host.textContent).toContain("MP3 · MPEG · WAV · M4A · OGG · FLAC");
-  expect(host.textContent).toContain("Up to 32 MB");
-  expect(host.textContent).toContain("60 min per call");
+  expect(host.textContent).toContain("Drop your call recording here");
+  expect(host.textContent).toContain(
+    "MP3, MPEG, WAV, M4A, OGG or FLAC · up to 32 MB · 60 min per call",
+  );
+  expect(host.textContent).toContain("Choose a file");
   const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
   const click = vi.spyOn(input, "click").mockImplementation(() => {});
   await act(async () =>

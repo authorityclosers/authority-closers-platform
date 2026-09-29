@@ -5,7 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const { openSelectedCall } = vi.hoisted(() => ({ openSelectedCall: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: openSelectedCall }),
+  useRouter: () => ({ push: openSelectedCall, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 // The shell's profile widgets load their own account summary. Keep these
 // library requests isolated from that unrelated fetch sequence.
@@ -373,7 +374,7 @@ it("reads as one full-width Calls page with estimated lengths and per-row openin
   expect(items[0].textContent).toContain("Open report");
 
   await act(async () => items[1].click());
-  expect(openSelectedCall).toHaveBeenCalledWith(`/?call=${secondId}`);
+  expect(openSelectedCall).toHaveBeenCalledWith(`/analysis/calls/${secondId}`);
   const openingLabels = items.map((item) =>
     item.querySelector(".calls-library-open")?.textContent?.trim(),
   );
@@ -398,7 +399,7 @@ it("starts New analysis as a fresh call without cancelling the remembered one", 
   const newAnalysis =
     host.querySelector<HTMLAnchorElement>(".calls-library-new");
   // Fresh-call intent: the studio must not reopen the remembered report.
-  expect(newAnalysis?.getAttribute("href")).toBe("/?new=1");
+  expect(newAnalysis?.getAttribute("href")).toBe("/analysis/new");
   // The saved call stays saved and listed; nothing was deleted or cancelled.
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(firstId);
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(1);
@@ -452,7 +453,7 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
   expect(host.querySelectorAll("main")).toHaveLength(1);
   expect(
-    host.querySelector('a[href="/calls"][aria-current="page"]'),
+    host.querySelector('a[href="/analysis/calls"][aria-current="page"]'),
   ).not.toBeNull();
   expect(host.querySelector('[aria-current="page"]')?.textContent).toContain(
     "Calls",
@@ -508,7 +509,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
     ).click(),
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(secondId);
-  expect(openSelectedCall).toHaveBeenCalledWith(`/?call=${secondId}`);
+  expect(openSelectedCall).toHaveBeenCalledWith(`/analysis/calls/${secondId}`);
   expect(fetchMock.mock.calls).toHaveLength(2);
 });
 
@@ -1277,7 +1278,7 @@ it("shows at most three live rows in the home preview with a Calls link", async 
 
   expect(host.querySelector("h2")?.textContent).toBe("Recent calls");
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(3);
-  expect(host.querySelector('a[href="/calls"]')?.textContent).toBe(
+  expect(host.querySelector('a[href="/analysis/calls"]')?.textContent).toBe(
     "View all calls",
   );
   expect(host.querySelector("main")).toBeNull();

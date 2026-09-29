@@ -1,0 +1,153 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--lx-ink);
+}
+
+.line {
+  display: inline-block;
+  animation: rise-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.name {
+  background: linear-gradient(
+    90deg,
+    var(--lx-teal),
+    var(--lx-glow-ink),
+    var(--lx-closing-ink),
+    var(--lx-teal)
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s ease-in-out infinite;
+}
+
+.mark {
+  display: inline-block;
+  font-size: 0.85em;
+  animation: bob 2.8s ease-in-out 600ms infinite;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--lx-muted);
+  animation: rise-in 600ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  color: var(--lx-muted);
+  font-size: 13px;
+  animation: rise-in 600ms 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.allowance {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.allowance svg {
+  color: var(--lx-teal);
+}
+
+.trail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trail li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trail li + li::before {
+  margin-right: 4px;
+  color: var(--lx-line-strong);
+  content: "›";
+}
+
+.number {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(-6deg);
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@media (max-width: 720px) {
+  .title {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line,
+  .name,
+  .mark,
+  .subtitle,
+  .footer {
+    animation: none;
+  }
+}

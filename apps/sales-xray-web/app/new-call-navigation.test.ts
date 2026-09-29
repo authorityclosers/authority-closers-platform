@@ -8,7 +8,7 @@ import {
 afterEach(() => window.history.replaceState(null, "", "/"));
 
 it("builds an explicit new-call URL for standalone and embedded navigation", () => {
-  expect(newCallHref()).toBe("/?new=1");
+  expect(newCallHref()).toBe("/analysis/new");
   expect(newCallHref("/sales-xray?call=old&view=compact#upload")).toBe(
     "/sales-xray?view=compact&new=1#upload",
   );

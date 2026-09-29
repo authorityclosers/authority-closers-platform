@@ -222,7 +222,9 @@ it("validates the earlier-report signal and builds a same-page call link", () =>
   expect(() =>
     parseSubmission({ ...upload, earlier_report_submission_id: "not-a-uuid" }),
   ).toThrow();
-  expect(callHref(submissionId, "/?new=1")).toBe(`/?call=${submissionId}`);
+  expect(callHref(submissionId, "/?new=1")).toBe(
+    `/analysis/calls/${submissionId}`,
+  );
 });
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {

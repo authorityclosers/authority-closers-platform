@@ -1,3 +1,9 @@
+import {
+  callIdFromPath,
+  callPath,
+  isAppHome,
+  NEW_ANALYSIS_PATH,
+} from "./analysis-routes";
 import { parseCallLabel, type CallLabel } from "./call-label";
 import { ReportContractError } from "./report-contract";
 import {
@@ -363,6 +369,8 @@ export function callHref(id: string, homeHref = "/"): string {
   if (!UUID.test(id)) throw new ReportContractError("submission_id");
   const url = new URL(homeHref, "https://sales-xray.invalid");
   url.searchParams.delete("new");
+  url.searchParams.delete("call");
+  if (isAppHome(url)) return callPath(id);
   url.searchParams.set("call", id);
   return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -491,13 +499,17 @@ export const submissionPath = (id: string) => {
   return `/submissions/${id}`;
 };
 export function requestedSubmissionId(): string | null {
-  const id = new URLSearchParams(window.location.search).get("call");
+  const id =
+    new URLSearchParams(window.location.search).get("call") ??
+    callIdFromPath(window.location.pathname);
   return id && UUID.test(id) ? id : null;
 }
 export function clearRequestedSubmission() {
   const url = new URL(window.location.href);
-  if (!url.searchParams.has("call")) return;
+  const onCallPath = callIdFromPath(url.pathname) !== null;
+  if (!url.searchParams.has("call") && !onCallPath) return;
   url.searchParams.delete("call");
+  if (onCallPath) url.pathname = NEW_ANALYSIS_PATH;
   window.history.replaceState(window.history.state, "", url);
 }
 export function savedSubmissionId(): string | null {
@@ -515,6 +527,15 @@ export function rememberSubmission(id: string | null) {
   } catch {
     /* A blocked local store never prevents a private upload. */
   }
+  // A new analysis gets its own address as soon as its call exists, so a
+  // reload or a shared link opens that call.
+  if (
+    id &&
+    UUID.test(id) &&
+    typeof window !== "undefined" &&
+    window.location.pathname === NEW_ANALYSIS_PATH
+  )
+    window.history.replaceState(window.history.state, "", callPath(id));
 }
 // An upload whose server outcome is not confirmed yet. It is kept apart from
 // the saved-call selector above, so an interrupted upload is reconciled with
