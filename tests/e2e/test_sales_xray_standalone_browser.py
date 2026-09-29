@@ -511,9 +511,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             password_input.fill(backend.account.password)
             with _navigation_window(page, navigation_windows):
                 page.get_by_role("button", name="Sign in").click()
-                expect(page).to_have_url(f"{backend.origin}/")
+                expect(page).to_have_url(f"{backend.origin}/dashboard/")
                 page.wait_for_load_state("networkidle")
-            checks.append("Correct password login navigates the standalone host to /.")
+            checks.append("Correct password login navigates the standalone host to /dashboard/.")
 
             expect(
                 page.get_by_role("heading", name="Choose your Sales Xray workspace.")
@@ -528,10 +528,18 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             checks.append("Workspace choices came from GET /v1/me/workspaces.")
 
             own_button.click()
+            page.wait_for_load_state("networkidle")
+            page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
+                "link", name="New analysis", exact=True
+            ).click()
+            expect(page).to_have_url(f"{backend.origin}/analysis/new/")
             expect(page.get_by_text("Start with your sales call", exact=True)).to_be_visible()
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(1)
-            checks.append("Selecting the assigned workspace opens CallStudio and private history.")
+            checks.append(
+                "Selecting the assigned workspace then New analysis opens CallStudio "
+                "and private history."
+            )
 
             saved_call = page.locator(".recording-history-item").first
             expect(saved_call.get_by_text("Open report", exact=True)).to_be_visible()
