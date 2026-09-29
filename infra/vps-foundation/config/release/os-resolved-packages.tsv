@@ -412,7 +412,7 @@ libsqlite3-0:amd64	3.45.1-1ubuntu2.7
 libsratom-0-0:amd64	0.6.16-1build1
 libsrt1.5-gnutls:amd64	1.5.3-1build2
 libss2:amd64	1.47.0-2.4~exp1ubuntu4.1
-libssh-4:amd64	0.10.6-2ubuntu0.4
+libssh-4:amd64	0.10.6-2ubuntu0.5
 libssh-gcrypt-4:amd64	0.10.6-2ubuntu0.5
 libssl3t64:amd64	3.0.13-0ubuntu3.15
 libstdc++6:amd64	14.2.0-4ubuntu2~24.04.1
