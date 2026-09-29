@@ -4,7 +4,7 @@ Date: 2026-09-29
 
 ## Verification
 
-- `uv run pytest tests/infra/test_ac_task.py -q` — 39 passed.
+- `uv run pytest tests/infra/test_ac_task.py -q` — 40 passed.
 - `python3 scripts/ac_task.py check` — `ok: task/platform/94-stale-gate-guard may be worked on` while this task branch edits `scripts/ac_task.py`.
 - `python3 scripts/ac_task.py status` — printed one verdict line for each lane and one exclusive verdict. The command returned exit 3 because multiple lanes were active; the output included:
 
