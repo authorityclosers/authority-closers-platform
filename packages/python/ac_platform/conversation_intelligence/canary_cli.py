@@ -155,7 +155,8 @@ async def poll(
                 return
             if progress["local_state"] == "completed" and not accepted:
                 actor = await owner.resolve_processing_actor(submission_id, token=token)
-                assert runtime.authority is not None
+                if runtime.authority is None:
+                    raise CommandError("The approved processing authority is required.")
                 plans = ConversationProcessingPlans(
                     reports.application, runtime.authority, runtime.storage
                 )
@@ -229,34 +230,41 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
     )
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:
-        async with asyncio.timeout(args.timeout_seconds):
-            sessions = async_sessionmaker(engine, expire_on_commit=False)
-            submission_id = uuid4()
-            result["stage_reached"] = "C1"
-            async with _FencedExecutor(runtime.storage.root) as fenced:
-                with tempfile.TemporaryDirectory(prefix="work-", dir=runtime.scratch.root) as work:
-                    path = Path(work) / "source.wav"
-                    fixture = resources.files("ac_platform.conversation_intelligence").joinpath(
-                        "canary_fixture/sales_call_v1.wav"
-                    )
-                    path.write_bytes(fixture.read_bytes())
-                    upload = await fenced.run(
-                        NativeUploadPreflight(native).measure,
-                        path,
-                        submission_id,
-                        FIXTURE_SHA256,
-                    )
-                    async with sessions() as db, db.begin():
-                        token = await submit(
-                            ownership(db, settings), runtime, upload, path, environment
+        try:
+            async with asyncio.timeout(args.timeout_seconds):
+                sessions = async_sessionmaker(engine, expire_on_commit=False)
+                submission_id = uuid4()
+                result["stage_reached"] = "C1"
+                async with _FencedExecutor(runtime.storage.root) as fenced:
+                    with tempfile.TemporaryDirectory(
+                        prefix="work-", dir=runtime.scratch.root
+                    ) as work:
+                        path = Path(work) / "source.wav"
+                        fixture = resources.files("ac_platform.conversation_intelligence").joinpath(
+                            "canary_fixture/sales_call_v1.wav"
                         )
-            await poll(sessions, settings, runtime, submission_id, token, result)
+                        path.write_bytes(fixture.read_bytes())
+                        upload = await fenced.run(
+                            NativeUploadPreflight(native).measure,
+                            path,
+                            submission_id,
+                            FIXTURE_SHA256,
+                        )
+                        async with sessions() as db, db.begin():
+                            token = await submit(
+                                ownership(db, settings), runtime, upload, path, environment
+                            )
+                await poll(sessions, settings, runtime, submission_id, token, result)
+        finally:
+            await engine.dispose()
     except TimeoutError:
-        result["failure_code"] = "timeout"
+        result.update(ok=False, failure_code="timeout")
     except ConversationError:
-        result["failure_code"] = "canary_failed"
-    finally:
-        await engine.dispose()
+        result.update(ok=False, failure_code="canary_failed")
+    except (ValueError, OSError, SQLAlchemyError):
+        raise
+    except Exception:
+        result.update(ok=False, failure_code="canary_failed")
     result["total_seconds"] = time.monotonic() - started
     return result
 
