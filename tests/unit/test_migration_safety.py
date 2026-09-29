@@ -16,8 +16,17 @@ from scripts.ops.migration_safety import (
 )
 
 
-def source_for(upgrade: str, revision: str = "r1", down_revision: str = "None") -> str:
-    return f"revision = {revision!r}\ndown_revision = {down_revision}\ndef upgrade():\n{upgrade}\n"
+def source_for(
+    upgrade: str,
+    revision: str = "r1",
+    down_revision: str = "None",
+    depends_on: str | None = None,
+) -> str:
+    dependency = f"depends_on = {depends_on}\n" if depends_on is not None else ""
+    return (
+        f"revision = {revision!r}\ndown_revision = {down_revision}\n"
+        f"{dependency}def upgrade():\n{upgrade}\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -41,11 +50,20 @@ def test_additive_schema_operations(operation: str) -> None:
         ('sa.Column("name", sa.String(), nullable=True)', "additive"),
         ('sa.Column("name", sa.String(), nullable=False)', "unknown"),
         ('sa.Column("name", sa.String(), nullable=None)', "unknown"),
+        ('sa.Column("name", sa.String(), primary_key=True)', "unknown"),
+        (
+            'sa.Column("name", sa.String(), primary_key=True, nullable=True)',
+            "additive",
+        ),
         (
             'sa.Column("name", sa.String(), nullable=False, server_default=sa.text("x"))',
             "additive",
         ),
         ('sa.Column("name", sa.String(), nullable=False, server_default=None)', "unknown"),
+        (
+            'sa.Column("name", sa.String(), nullable=False, server_default=DEFAULT)',
+            "unknown",
+        ),
         ('sa.Column("name", sa.String(), nullable=runtime_flag)', "unknown"),
     ],
 )
@@ -93,6 +111,31 @@ def test_destructive_operation_wins_over_unknown_operation() -> None:
     assert migration.verdict == "destructive"
 
 
+@pytest.mark.parametrize("dependency", ['"d"', '("d1", "d2")', "runtime_dependency"])
+def test_depends_on_is_unknown(dependency: str) -> None:
+    migration = classify_source(source_for('    op.create_table("items")', depends_on=dependency))
+    assert migration.verdict == "unknown"
+    assert "depends_on pulls in revisions outside the down_revision chain" in migration.reasons
+
+
+def test_none_depends_on_does_not_change_additive_verdict() -> None:
+    migration = classify_source(source_for('    op.create_table("items")', depends_on="None"))
+    assert migration.verdict == "additive"
+
+
+def test_depends_on_cannot_hide_a_destructive_revision(tmp_path: Path) -> None:
+    (tmp_path / "d.py").write_text(
+        source_for('    op.drop_table("old")', revision="d"), encoding="utf-8"
+    )
+    (tmp_path / "a.py").write_text(
+        source_for('    op.create_table("new")', revision="a", depends_on='"d"'),
+        encoding="utf-8",
+    )
+    migrations = load_migrations(tmp_path)
+    result = classify_range(migration_range(migrations, "base", "a"))
+    assert result["verdict"] == "unknown"
+
+
 def test_source_is_parsed_but_never_executed() -> None:
     source = source_for('    op.create_table("items")') + 'raise RuntimeError("must not run")\n'
     assert classify_source(source).verdict == "additive"
@@ -125,6 +168,13 @@ def test_revision_chain_excludes_from_and_includes_to(tmp_path: Path) -> None:
         "r3",
     ]
     assert migration_range(migrations, "r2", "r2") == []
+
+
+def test_revision_cycle_is_a_usage_error(tmp_path: Path) -> None:
+    write_migration(tmp_path, "r1", "r2", 'op.create_table("one")')
+    write_migration(tmp_path, "r2", "r1", 'op.create_table("two")')
+    with pytest.raises(ClassifierError, match="revision cycle at: r1"):
+        migration_range(load_migrations(tmp_path), "base", "r1")
 
 
 @pytest.mark.parametrize(
@@ -181,4 +231,15 @@ def test_all_repository_migrations_parse_and_receive_a_verdict() -> None:
         migration = classify_source(source, str(path))
         assert migration.verdict in {"additive", "destructive", "unknown"}
         counts[migration.verdict] += 1
+    migrations = load_migrations(versions)
+    parent_revisions = {
+        migration.down_revision
+        for migration in migrations.values()
+        if migration.down_revision is not None
+    }
+    heads = set(migrations) - parent_revisions
+    assert len(heads) == 1
+    chain = migration_range(migrations, "base", next(iter(heads)))
+    assert {migration.revision for migration in chain} == set(migrations)
+    assert len(chain) == len(files)
     print(f"migration verdict counts: {dict(sorted(counts.items()))}")

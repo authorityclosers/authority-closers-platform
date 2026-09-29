@@ -102,6 +102,19 @@ def _literal_assignment(module: ast.Module, name: str) -> Any:
     return _MISSING
 
 
+def _has_assignment(module: ast.Module, name: str) -> bool:
+    for statement in module.body:
+        if isinstance(statement, ast.Assign):
+            targets = statement.targets
+        elif isinstance(statement, ast.AnnAssign):
+            targets = [statement.target]
+        else:
+            continue
+        if any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            return True
+    return False
+
+
 _MISSING = object()
 
 
@@ -165,13 +178,21 @@ def _classify_upgrade(module: ast.Module) -> tuple[str, tuple[str, ...]]:
                             (kw.value for kw in column.keywords if kw.arg == "server_default"),
                             no_keyword,
                         )
+                        primary_key = next(
+                            (kw.value for kw in column.keywords if kw.arg == "primary_key"),
+                            no_keyword,
+                        )
                         explicit_not_null = (
                             isinstance(nullable, ast.Constant) and nullable.value is False
+                        ) or (
+                            isinstance(primary_key, ast.Constant)
+                            and primary_key.value is True
+                            and not (isinstance(nullable, ast.Constant) and nullable.value is True)
                         )
-                        has_server_default = server_default is not no_keyword and not (
+                        has_server_default = (
                             isinstance(server_default, ast.Constant)
-                            and server_default.value is None
-                        )
+                            and server_default.value is not None
+                        ) or isinstance(server_default, ast.Call)
                         if explicit_not_null and not has_server_default:
                             record(
                                 "unknown",
@@ -243,6 +264,13 @@ def classify_source(source: str, file: str = "<memory>") -> Migration:
             ("down_revision is not a single literal revision",),
         )
     verdict, reasons = _classify_upgrade(module)
+    depends_on = _literal_assignment(module, "depends_on")
+    if _has_assignment(module, "depends_on") and depends_on is not None:
+        reason = "depends_on pulls in revisions outside the down_revision chain"
+        if reason not in reasons:
+            reasons = (*reasons, reason)
+        if verdict == "additive":
+            verdict = "unknown"
     return Migration(revision, down_revision, file, verdict, reasons)
 
 
@@ -282,7 +310,11 @@ def migration_range(
 
     reverse_chain: list[Migration] = []
     cursor = to_revision
+    seen: set[str] = set()
     while cursor != from_revision:
+        if cursor in seen:
+            raise ClassifierError(f"revision cycle at: {cursor}")
+        seen.add(cursor)
         migration = migrations.get(cursor)
         if migration is None:
             raise ClassifierError(f"revision chain is broken at: {cursor}")
