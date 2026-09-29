@@ -1,0 +1,29 @@
+{
+  "issues": [
+    {"id": "builder-task", "identifier": "DEMO-3", "assigneeAgentId": "agent-c", "startedAt": "2026-09-21T00:00:00Z"},
+    {"id": "direct-task", "identifier": "DEMO-4", "assigneeAgentId": "agent-b", "startedAt": "2026-09-23T00:00:00Z"}
+  ],
+  "agents": [
+    {"id": "agent-a", "name": "Fictional Builder A"},
+    {"id": "agent-b", "name": "Fictional Reviewer B"},
+    {"id": "agent-c", "name": "Fictional Approver C"},
+    {"id": "agent-d", "name": "Fictional Direct Builder D"}
+  ],
+  "activity": {
+    "builder-task": [
+      {"type": "issue.status_updated", "actorType": "agent", "agentId": "agent-a", "createdAt": "2026-09-22T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "in_review"}}}},
+      {"type": "issue.status_updated", "actorType": "agent", "agentId": "agent-b", "createdAt": "2026-09-23T00:00:00Z", "details": {"status": "in_review"}},
+      {"type": "issue.reopened", "actorType": "agent", "agentId": "agent-b", "createdAt": "2026-09-24T00:00:00Z", "details": {"_previous": {"status": "in_review"}, "status": "in_progress"}},
+      {"type": "issue.status_updated", "actorType": "agent", "agentId": "agent-a", "createdAt": "2026-09-25T00:00:00Z", "details": {"_previous": {"status": "in_progress"}, "status": "in_review"}},
+      {"type": "issue.status_updated", "actorType": "agent", "agentId": "agent-c", "createdAt": "2026-09-27T00:00:00Z", "details": {"_previous": {"status": "in_review"}, "status": "done"}}
+    ],
+    "direct-task": [
+      {"type": "issue.status_updated", "actorType": "agent", "agentId": "agent-d", "createdAt": "2026-09-26T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "done"}}}}
+    ]
+  },
+  "runs": [
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-23T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"inputTokens": 100, "outputTokens": 50}},
+    {"agentId": "agent-b", "status": "succeeded", "startedAt": "2026-09-24T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"inputTokens": 200, "outputTokens": 50}},
+    {"agentId": "agent-d", "status": "succeeded", "startedAt": "2026-09-25T00:00:00Z", "contextSnapshot": {"issueId": "direct-task"}, "usageJson": {"inputTokens": 50, "outputTokens": 25}}
+  ]
+}

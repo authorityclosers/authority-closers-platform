@@ -93,6 +93,22 @@ def run_tokens(run):
         return None
 
 
+def builder_for(issue, events):
+    review_builder = done_builder = None
+    for event in events:
+        if event.get("actorType") != "agent" or not event.get("agentId"):
+            continue
+        details = event.get("details") or {}
+        status = (details.get("changes") or {}).get("status") or {}
+        before = status.get("from") or (details.get("_previous") or {}).get("status")
+        after = status.get("to") or details.get("status")
+        if before == "in_progress" and after == "in_review":
+            review_builder = event["agentId"]
+        elif after == "done" and before != "done":
+            done_builder = event["agentId"]
+    return review_builder or done_builder or issue.get("assigneeAgentId")
+
+
 def build_report(data, monday, start, end):
     issues = {item["id"]: item for item in data["issues"] if item.get("id")}
     names = {
@@ -109,10 +125,11 @@ def build_report(data, monday, start, end):
     cycles = defaultdict(list)
     for issue_id, events in data["activity"].items():
         issue = issues.get(issue_id, {})
-        owner = issue.get("assigneeAgentId")
+        events = sorted(events, key=lambda e: timestamp(e.get("createdAt")) or 0)
+        owner = builder_for(issue, events)
         starts = [t for t in [timestamp(issue.get("startedAt"))] if t is not None]
         completions, last_status = [], None
-        for event in sorted(events, key=lambda e: timestamp(e.get("createdAt")) or 0):
+        for event in events:
             when = timestamp(event.get("createdAt"))
             details = event.get("details") or {}
             status = (details.get("changes") or {}).get("status") or {}
