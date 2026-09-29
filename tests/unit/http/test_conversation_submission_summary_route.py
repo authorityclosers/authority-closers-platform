@@ -60,10 +60,12 @@ async def test_summary_route_and_account_guards(tmp_path, monkeypatch, host):
         assert response.headers["vary"] == "Cookie"
         assert summary.call_args.args[1] == actor
         assert summary.call_args.kwargs == {"shared_identity_locks": True}
-        for query in ("?before=00000000-0000-0000-0000-000000000001", "?unexpected=1"):
-            assert (await client.get(path + "/summary" + query)).status_code == 422
+        ignored = await client.get(path + "/summary?before=00000000-0000-0000-0000-000000000001")
+        assert ignored.status_code == 200 and ignored.json() == counts
+        for route in (path, path + "/summary"):
+            assert (await client.get(route + "?unexpected=1")).status_code == 422
         signed_in = False
         denied, library = await client.get(path + "/summary"), await client.get(path)
         assert denied.status_code == library.status_code == 401
         assert denied.json() == library.json()
-        assert summary.await_count == 1
+        assert summary.await_count == 2

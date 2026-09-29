@@ -483,8 +483,6 @@ def install_submission_http(
     @router.get("/submissions/summary")
     async def saved_calls_summary(request: Request, response: Response) -> dict[str, int]:
         host = guard(request, response, library=True)
-        if request.query_params:
-            raise fail(422, "Upload access comes from your current session.")
         try:
             context = (
                 learner_read_account(request)
