@@ -24,7 +24,11 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.conversation_intelligence.worker import OfflineConversationWorker
-from ac_platform.development.sales_xray_samples import build_fake_router, seed_account_samples
+from ac_platform.development.sales_xray_samples import (
+    SampleRefused,
+    build_fake_router,
+    seed_account_samples,
+)
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
 from tests.database.test_conversation_postgresql import run
@@ -149,6 +153,15 @@ def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
                     return await super().step()
 
             scheduler = DueScheduler(setup.sessions, setup.authority, setup.runtime.storage)
+            scheduler_steps: list[bool] = []
+            scheduler_step = scheduler.step
+
+            async def record_scheduler_step() -> bool:
+                result = await scheduler_step()
+                scheduler_steps.append(result)
+                return result
+
+            monkeypatch.setattr(scheduler, "step", record_scheduler_step)
 
             async def publish_pending() -> None:
                 await _reconcile(setup.sessions, setup.state)
@@ -157,19 +170,52 @@ def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
                 _sign_in(setup, client)
-                first = await seed_account_samples(
-                    client,
-                    setup.sessions,
-                    person_id=setup.state.person_id,
-                    count=2,
-                    budget_cap_paise=bundle.budget_cap_paise,
-                    settings=setup.settings,
-                    local_worker=local,
-                    inference_worker=inference,
-                    scheduler=scheduler,
-                    publish_pending=publish_pending,
-                    wait_seconds=180,
-                )
+                try:
+                    first = await seed_account_samples(
+                        client,
+                        setup.sessions,
+                        person_id=setup.state.person_id,
+                        count=2,
+                        budget_cap_paise=bundle.budget_cap_paise,
+                        settings=setup.settings,
+                        local_worker=local,
+                        inference_worker=inference,
+                        scheduler=scheduler,
+                        publish_pending=publish_pending,
+                        wait_seconds=180,
+                    )
+                except SampleRefused as error:
+                    async with setup.sessions() as db:
+                        plans = (
+                            await db.execute(
+                                select(
+                                    ConversationProcessingPlan.state,
+                                    ConversationProcessingPlan.progress,
+                                )
+                            )
+                        ).all()
+                        tasks = (
+                            await db.execute(
+                                select(
+                                    ConversationInferenceTask.stage,
+                                    ConversationInferenceTask.state,
+                                )
+                            )
+                        ).all()
+                    safe_progress = [
+                        (
+                            state,
+                            progress.get("failure_code"),
+                            progress.get("diagnostic_code"),
+                        )
+                        for state, progress in plans
+                    ]
+                    raise AssertionError(
+                        "Fictional route pipeline did not finish; "
+                        f"plans={safe_progress}, tasks={tasks}, "
+                        f"scheduler_steps={len(scheduler_steps)}, "
+                        f"advances={sum(scheduler_steps)}"
+                    ) from error
                 listed = (await client.get("/v1/conversation/acquisition/submissions")).json()[
                     "submissions"
                 ]
