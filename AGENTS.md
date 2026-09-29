@@ -18,8 +18,9 @@
 # DELIVERY CONSTITUTION (binding for every agent and person)
 
 1. One task at a time per lane, for every agent, person and device. There are
-   four lanes: `sales-xray`, `platform`, `admin` and `ui` (Sales Xray screens,
-   shown live on the dev site). Lanes run in parallel; each holds one task. A task is one small, reviewable change tied to one tracked
+   five lanes: `sales-xray`, `platform`, `admin`, `ui` and `devenv` (the dev
+   environment's own stack). Lanes run in parallel; each holds one task. A task
+   is one small, reviewable change tied to one tracked
    issue. No new task starts in a lane while that lane holds a task branch or pull
    request, or while the latest `main` build is not green. Pull requests may not
    change the same files, and only one at a time may change shared files
