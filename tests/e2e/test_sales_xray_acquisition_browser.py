@@ -623,19 +623,28 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
 
                     accepted_plan_states = {"active", "completed"}
                     continue_enabled = False
+
+                    async def is_continue_enabled() -> bool:
+                        if await continue_button.count() == 0:
+                            return False
+                        try:
+                            return await continue_button.is_enabled(timeout=0)
+                        except TimeoutError:
+                            return False
+
                     try:
                         async with asyncio.timeout(120):
                             while not plan_accepted.is_set():
                                 plan_state = await db(latest_plan_state())
                                 if plan_state in accepted_plan_states:
                                     break
-                                if await continue_button.is_enabled():
+                                if await is_continue_enabled():
                                     continue_enabled = True
                                     break
                                 await asyncio.sleep(0.25)
                     except TimeoutError:
                         plan_state = await db(latest_plan_state())
-                        continue_enabled = await continue_button.is_enabled()
+                        continue_enabled = await is_continue_enabled()
                         if (
                             not plan_accepted.is_set()
                             and plan_state not in accepted_plan_states
