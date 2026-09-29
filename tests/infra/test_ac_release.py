@@ -81,8 +81,9 @@ class FakeGitHub:
 class FakeRunner:
     """Answers the git and docker commands the engine issues."""
 
-    def __init__(self, head: str = HEAD) -> None:
+    def __init__(self, head: str = HEAD, tags: list[str] | None = None) -> None:
         self.head = head
+        self.tags = list(tags or [])
         self.ancestors: set[tuple[str, str]] = set()
         self.web_image = ""
         self.image_marker: dict[str, str] = {}
@@ -94,6 +95,10 @@ class FakeRunner:
         out, code = "", 0
         if argv[:2] == ["git", "init"] or "fetch" in argv:
             pass
+        elif "for-each-ref" in argv:
+            out = "\n".join(self.tags)
+            if out:
+                out += "\n"
         elif "rev-parse" in argv:
             out = self.head + "\n"
         elif "merge-base" in argv:
@@ -455,6 +460,299 @@ def test_status_reports_pause_and_failures(tmp_path: Path) -> None:
     assert staging["paused"] is True and staging["auto_deploy"] is False
     assert staging["failed"] == {"core": None, "web": HEAD}
     assert json.loads(json.dumps(report))
+
+
+def release_event(
+    version: str,
+    core_sha: str = HEAD,
+    web_sha: str = OLD,
+    *,
+    action: str = "promote",
+    rolled_back_from: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "version": version,
+        "core_sha": core_sha,
+        "web_sha": web_sha,
+        "requested_by": "release-operator@example.invalid",
+        "at": "2026-09-29T00:00:00Z",
+        "action": action,
+        "rolled_back_from": rolled_back_from,
+    }
+
+
+def promotion_setup(
+    tmp_path: Path, *, production_core: str | None = OLD, production_web: str | None = OUTSIDE
+):
+    runner = FakeRunner()
+    if production_core is not None:
+        runner.ancestors.add((production_core, HEAD))
+    engine = make_engine(tmp_path, runner=runner)
+    engine.paths.production_enabled.write_text("enabled\n")
+    core = {"staging": HEAD, "production": production_core}
+    web = {"staging": HEAD, "production": production_web}
+    engine.current_core = lambda environment: core[environment]
+    engine.current_web = lambda environment: (web[environment], "sha256:" + "e" * 64)
+    for component in MODULE.COMPONENTS:
+        provenance = engine.paths.store / HEAD / f"{component}.provenance.json"
+        provenance.parent.mkdir(parents=True, exist_ok=True)
+        provenance.write_text(
+            json.dumps(
+                {
+                    "run_id": 100,
+                    "artifact_id": 7,
+                    "artifact_name": f"{component}-{HEAD}",
+                    "artifact_digest": DIGEST,
+                }
+            )
+        )
+        engine.record(
+            {"environment": "staging", "component": component, "sha": HEAD, "result": "success"}
+        )
+    return engine, runner, core, web
+
+
+@pytest.mark.parametrize(
+    ("guard", "message"),
+    [
+        ("disabled", "not enabled"),
+        ("incomplete_core", "complete core and web pair"),
+        ("incomplete_web", "complete core and web pair"),
+        ("core_not_main", "must be on main"),
+        ("web_not_main", "must be on main"),
+        ("core_not_staged", "successful staging deploy"),
+        ("web_not_staged", "successful staging deploy"),
+        ("staging_failed", "failed deploy"),
+        ("core_build_missing", "stored builds"),
+        ("web_build_missing", "stored builds"),
+        ("not_forward", "not an ancestor"),
+        ("already_pair", "already runs"),
+        ("wrong_version", "next version"),
+        ("stale_sha", "changed since"),
+    ],
+)
+def test_promote_refuses_every_guard_without_attempt_or_release(
+    tmp_path: Path, guard: str, message: str
+) -> None:
+    engine, _, core, web = promotion_setup(tmp_path)
+    attempts: list[tuple[str, str]] = []
+    engine.attempt = lambda environment, component, build, **kwargs: (
+        attempts.append((environment, component)) or {"result": "success"}
+    )
+    expected_sha = None
+    version = "v0.2.1"
+    if guard == "disabled":
+        engine.paths.production_enabled.unlink()
+    elif guard == "incomplete_core":
+        core["staging"] = None
+    elif guard == "incomplete_web":
+        web["staging"] = None
+    elif guard == "core_not_main":
+        core["staging"] = OUTSIDE
+    elif guard == "web_not_main":
+        web["staging"] = OUTSIDE
+    elif guard in ("core_not_staged", "web_not_staged"):
+        component = "core" if guard == "core_not_staged" else "web"
+        records = [entry for entry in engine.history() if entry["component"] != component]
+        engine.paths.history.write_text("".join(json.dumps(entry) + "\n" for entry in records))
+    elif guard == "staging_failed":
+        engine.paths.failed_flag("staging", "web").write_text(HEAD + "\n")
+    elif guard in ("core_build_missing", "web_build_missing"):
+        component = "core" if guard == "core_build_missing" else "web"
+        (engine.paths.store / HEAD / f"{component}.provenance.json").unlink()
+    elif guard == "not_forward":
+        core["production"] = OUTSIDE
+    elif guard == "already_pair":
+        core["production"] = web["production"] = HEAD
+    elif guard == "wrong_version":
+        version = "v0.2.2"
+    elif guard == "stale_sha":
+        expected_sha = OUTSIDE
+
+    with pytest.raises(MODULE.ReleaseError, match=message):
+        engine.promote(
+            "patch", version, requested_by="test", trigger="test", expected_sha=expected_sha
+        )
+    assert attempts == []
+    assert engine.release_records() == []
+
+
+def test_promote_deploys_core_then_web_and_records_the_typed_release(tmp_path: Path) -> None:
+    engine, _, _, _ = promotion_setup(tmp_path)
+    attempts: list[tuple[str, str, str, bool, str]] = []
+
+    def attempt(environment, component, build, *, dry_run, trigger):
+        attempts.append((environment, component, build.sha, dry_run, trigger))
+        return {"result": "success", "component": component}
+
+    engine.attempt = attempt
+    result = engine.promote(
+        "patch",
+        "v0.2.1",
+        requested_by="cli:operator",
+        trigger="cli",
+        expected_sha=engine.current_core("production"),
+    )
+    assert [entry["component"] for entry in result] == ["core", "web"]
+    assert attempts == [
+        ("production", "core", HEAD, False, "cli"),
+        ("production", "web", HEAD, False, "cli"),
+    ]
+    record, previous = engine.production_releases()
+    assert previous is None
+    assert {
+        key: record[key]
+        for key in (
+            "version",
+            "core_sha",
+            "web_sha",
+            "requested_by",
+            "action",
+            "rolled_back_from",
+        )
+    } == {
+        "version": "v0.2.1",
+        "core_sha": HEAD,
+        "web_sha": HEAD,
+        "requested_by": "cli:operator",
+        "action": "promote",
+        "rolled_back_from": None,
+    }
+    assert record["at"]
+
+
+def test_promote_retry_skips_core_when_production_already_runs_it(tmp_path: Path) -> None:
+    engine, _, _, _ = promotion_setup(tmp_path, production_core=HEAD)
+    attempts: list[str] = []
+    engine.attempt = lambda environment, component, build, **kwargs: (
+        attempts.append(component) or {"result": "success"}
+    )
+    result = engine.promote("patch", "v0.2.1", requested_by="test", trigger="test")
+    assert [entry["result"] for entry in result] == ["success"]
+    assert attempts == ["web"]
+    assert engine.production_releases()[0]["version"] == "v0.2.1"
+
+
+def test_failed_web_attempt_does_not_append_a_release(tmp_path: Path) -> None:
+    engine, _, _, _ = promotion_setup(tmp_path)
+    attempts: list[str] = []
+
+    def attempt(environment, component, build, **kwargs):
+        attempts.append(component)
+        return {"result": "failed" if component == "web" else "success"}
+
+    engine.attempt = attempt
+    result = engine.promote("patch", "v0.2.1", requested_by="test", trigger="test")
+    assert [entry["result"] for entry in result] == ["success", "failed"]
+    assert attempts == ["core", "web"]
+    assert engine.release_records() == []
+
+
+def test_release_record_action_rules_and_rollback_parent(tmp_path: Path) -> None:
+    with pytest.raises(MODULE.ReleaseError, match="promoted release cannot"):
+        MODULE._validate_release_record(release_event("v0.3.0", rolled_back_from="v0.2.0"))
+    with pytest.raises(MODULE.ReleaseError, match="rollback release must"):
+        MODULE._validate_release_record(release_event("v0.3.0", action="rollback"))
+
+    engine = make_engine(tmp_path)
+    engine.append_release(release_event("v0.3.0"))
+    with pytest.raises(MODULE.ReleaseError, match="current production version"):
+        engine.append_release(release_event("v0.2.0", action="rollback", rolled_back_from="v0.2.9"))
+
+
+@pytest.mark.parametrize(
+    ("tags", "bump", "expected"),
+    [
+        ([], "minor", "v0.3.0"),
+        (["v0.9.1"], "minor", "v0.10.0"),
+        ([], "major", "v1.0.0"),
+        (["nightly", "v1.2", "v2.3.4-rc1"], "minor", "v0.3.0"),
+    ],
+)
+def test_next_version_uses_highest_semantic_tag_or_baseline(
+    tmp_path: Path, tags: list[str], bump: str, expected: str
+) -> None:
+    runner = FakeRunner(tags=tags)
+    engine = make_engine(tmp_path, runner=runner)
+    assert engine.next_version(bump) == expected
+    fetch = next(call for call in runner.calls if "fetch" in call)
+    assert "+refs/tags/v*:refs/tags/v*" in fetch
+
+
+def test_next_version_uses_release_record_above_every_tag(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, runner=FakeRunner(tags=["v1.5.0", "v1.3.9", "nightly"]))
+    engine.append_release(release_event("v1.8.2"))
+    assert engine.next_version("minor") == "v1.9.0"
+
+
+def test_release_records_append_and_reader_returns_current_and_previous(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    first = release_event("v0.3.0", HEAD, OLD)
+    engine.append_release(first)
+    first_line = engine.paths.releases.read_text(encoding="utf-8").splitlines()[0]
+
+    second = release_event("v0.4.0", OLD, OUTSIDE)
+    rollback = release_event("v0.3.0", HEAD, OLD, action="rollback", rolled_back_from="v0.4.0")
+    engine.append_release(second)
+    engine.append_release(rollback)
+
+    lines = engine.paths.releases.read_text(encoding="utf-8").splitlines()
+    current, previous = engine.production_releases()
+    assert len(lines) == 3
+    assert lines[0] == first_line
+    assert current == rollback
+    assert previous == second
+
+
+def test_store_keeps_previous_production_builds_after_ten_newer_staging_builds(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    previous_core = release_sha("production-previous-core")
+    previous_web = release_sha("production-previous-web")
+    current_core = release_sha("production-current-core")
+    current_web = release_sha("production-current-web")
+    staging_shas = [release_sha(f"staging-{index}") for index in range(12)]
+
+    for sha in (previous_core, previous_web, current_core, current_web, *staging_shas):
+        (engine.paths.store / sha / "core").mkdir(parents=True)
+    engine.append_release(release_event("v0.3.0", previous_core, previous_web))
+    engine.append_release(release_event("v0.4.0", current_core, current_web))
+    for sha in staging_shas:
+        engine.record(
+            {"environment": "staging", "component": "core", "sha": sha, "result": "success"}
+        )
+
+    engine.prune_store()
+    remaining = {path.name for path in engine.paths.store.iterdir()}
+    assert {previous_core, previous_web, current_core, current_web} <= remaining
+    assert set(staging_shas[-10:]) <= remaining
+    assert not set(staging_shas[:-10]) & remaining
+
+
+def test_successful_staging_attempt_keeps_store_when_release_ledger_is_truncated(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    store_shas = [f"{index:040x}" for index in range(12)]
+    for sha in store_shas:
+        (engine.paths.store / sha / "core").mkdir(parents=True)
+    engine.paths.releases.write_text('{"version":"v0.3.0"', encoding="utf-8")
+    engine.deploy_core = lambda environment, build, dry_run: {"previous": None}
+
+    result = engine.attempt(
+        "staging",
+        "core",
+        MODULE.Build(HEAD, 100, 7, f"ac-application-{HEAD}", DIGEST),
+        dry_run=False,
+        trigger="test",
+    )
+
+    assert result["result"] == "success"
+    assert result["pruned"] == []
+    assert {path.name for path in engine.paths.store.iterdir()} == set(store_shas)
 
 
 def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:
