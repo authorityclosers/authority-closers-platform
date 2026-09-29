@@ -73,6 +73,27 @@ def test_redactor_removes_emails_codes_tokens_cookies_queries_and_database_urls(
     assert len(gate._redact_failure_summary("x" * 400)) == 300
 
 
+def test_redactor_removes_driver_qualified_database_urls() -> None:
+    database_urls = (
+        "postgresql+psycopg://fixture-user:fixture-password@db/fixture-db "
+        "postgresql+asyncpg://fixture-async-user:fixture-async-password@"
+        "127.0.0.1:55432/fixture-async-db"
+    )
+
+    summary = gate._redact_failure_summary(database_urls)
+
+    for secret in (
+        "fixture-user",
+        "fixture-password",
+        "fixture-db",
+        "fixture-async-user",
+        "fixture-async-password",
+        "fixture-async-db",
+    ):
+        assert secret not in summary
+    assert summary == "[redacted database URL] [redacted database URL]"
+
+
 def test_failure_receipt_includes_a_redacted_failure_summary(tmp_path: Path) -> None:
     receipt = tmp_path / "failure.json"
     gate._write_failure_receipt(

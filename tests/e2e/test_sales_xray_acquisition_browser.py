@@ -608,26 +608,42 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     continue_button = page.get_by_role(
                         "button", name="Continue analysis", exact=True
                     )
-                    if not plan_accepted.is_set():
-                        accepted_wait = asyncio.create_task(plan_accepted.wait())
-                        continue_wait = asyncio.create_task(
-                            expect(continue_button).to_be_enabled(timeout=30_000)
+
+                    async def latest_plan_state():
+                        async with setup.sessions() as diagnostic_db:
+                            return await diagnostic_db.scalar(
+                                select(ConversationProcessingPlan.state)
+                                .where(
+                                    ConversationProcessingPlan.recording_id
+                                    == UUID(uploaded["recording_id"])
+                                )
+                                .order_by(ConversationProcessingPlan.created_at.desc())
+                                .limit(1)
+                            )
+
+                    accepted_plan_states = {"active", "completed"}
+                    continue_enabled = False
+                    try:
+                        async with asyncio.timeout(30):
+                            while not plan_accepted.is_set():
+                                plan_state = await db(latest_plan_state())
+                                if plan_state in accepted_plan_states:
+                                    break
+                                if await continue_button.is_enabled():
+                                    continue_enabled = True
+                                    break
+                                await asyncio.sleep(0.25)
+                    except TimeoutError:
+                        pytest.fail(
+                            "Neither plan acceptance nor enabled Continue analysis "
+                            "appeared within 30 seconds"
                         )
-                        try:
-                            completed, _ = await asyncio.wait(
-                                {accepted_wait, continue_wait},
-                                return_when=asyncio.FIRST_COMPLETED,
-                            )
-                            if continue_wait in completed:
-                                await continue_wait
-                        finally:
-                            for task in (accepted_wait, continue_wait):
-                                if not task.done():
-                                    task.cancel()
-                            await asyncio.gather(
-                                accepted_wait, continue_wait, return_exceptions=True
-                            )
-                    if not plan_accepted.is_set():
+
+                    # Recheck canonical state immediately before acting. The start
+                    # request can commit even when its browser response is lost.
+                    plan_state = await db(latest_plan_state())
+                    accepted = plan_accepted.is_set() or plan_state in accepted_plan_states
+                    if not accepted and continue_enabled:
                         assert broker.calls == 0
                         async with page.expect_response(
                             lambda response: (

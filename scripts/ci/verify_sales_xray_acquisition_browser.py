@@ -65,7 +65,7 @@ def _redact_failure_summary(value: str) -> str:
     value = " ".join(value.split())
     value = re.sub(
         r"(?i)\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|sqlite|mssql|sqlserver)"
-        r"://[^\s\"'<>]+",
+        r"(?:\+[\w.-]+)?://[^\s\"'<>]+",
         "[redacted database URL]",
         value,
     )
