@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 import uvicorn
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 from pydantic import SecretStr
 from sqlalchemy import select
@@ -628,8 +629,8 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         if await continue_button.count() == 0:
                             return False
                         try:
-                            return await continue_button.is_enabled(timeout=0)
-                        except TimeoutError:
+                            return await continue_button.is_enabled(timeout=250)
+                        except PlaywrightTimeoutError:
                             return False
 
                     try:
