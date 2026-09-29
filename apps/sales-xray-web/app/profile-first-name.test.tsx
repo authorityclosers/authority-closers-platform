@@ -8,11 +8,13 @@ import {
   readAccountProfile,
   type AccountProfileRecord,
 } from "./account-profile-client";
+import { WorkspaceAccessProvider } from "./workspace-access";
 import { useProfileFirstName } from "./profile-first-name";
 import { getShellState } from "./shell/shell-store";
 import {
   invalidateShellProfile,
   readShellProfile,
+  useShellProfile,
 } from "./shell/profile-store";
 
 vi.mock("./account-profile-client", () => ({
@@ -169,4 +171,45 @@ describe("useProfileFirstName", () => {
     expect(host.textContent).toBe("");
     expect(readAccountProfile).not.toHaveBeenCalled();
   });
+});
+
+it("does not clear a signed-in read while the shell still shows its guest placeholder", async () => {
+  vi.stubEnv("NODE_ENV", "development");
+  invalidateShellProfile();
+  vi.mocked(readAccountProfile).mockResolvedValue(profile("Morgan Lee"));
+  vi.mocked(readAccountProfile).mockClear();
+  function Placeholder() {
+    useShellProfile(false);
+    return null;
+  }
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: {
+              personId: "person",
+              sessionId: "session",
+              tenantId: "tenant",
+            },
+            retry: () => {},
+          }}
+        >
+          <FirstName />
+          <Placeholder />
+          <FirstName />
+        </WorkspaceAccessProvider>,
+      ),
+    );
+    expect(readAccountProfile).toHaveBeenCalledOnce();
+    expect(host.textContent).toBe("MorganMorgan");
+  } finally {
+    await act(async () => root.unmount());
+    invalidateShellProfile();
+    vi.unstubAllEnvs();
+  }
 });

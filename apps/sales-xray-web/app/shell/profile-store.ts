@@ -44,13 +44,14 @@ export function useShellProfile(authenticated: boolean, enabled = true) {
     ? JSON.stringify([context.personId, context.sessionId, context.tenantId])
     : "document";
   const signedIn = authenticated && (!access || access.authenticated === true);
+  const signedOut = access ? access.authenticated === false : !authenticated;
   const [value, setValue] = useState<{
     key: string;
     profile: AccountProfileRecord;
   } | null>(null);
   useEffect(() => {
     if (!signedIn) {
-      invalidateShellProfile();
+      if (signedOut) invalidateShellProfile();
       return;
     }
     if (!enabled) return;
@@ -72,6 +73,6 @@ export function useShellProfile(authenticated: boolean, enabled = true) {
       active = false;
       window.removeEventListener(PROFILE_UPDATED_EVENT, refresh);
     };
-  }, [signedIn, enabled, key]);
+  }, [signedIn, signedOut, enabled, key]);
   return signedIn && value?.key === key ? value.profile : null;
 }
