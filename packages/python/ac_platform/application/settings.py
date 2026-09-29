@@ -37,6 +37,12 @@ _SALES_XRAY_ORIGINS = {
     "staging": "https://salesxray-staging.authorityclosers.com",
     "production": "https://salesxray.authorityclosers.com",
 }
+# The owner's live UI studio (the Cloudflare-Access-protected dev site) proxies Sales Xray API
+# calls to staging so new screens are designed against real staging reports. One exact origin,
+# staging only; production has none. It is not a CORS origin: the studio's proxy is same-origin.
+_SALES_XRAY_STUDIO_ORIGINS = {
+    "staging": "https://salesxray-dev.authorityclosers.com",
+}
 _DEPLOYMENT_URL_ENV_FIELDS = {
     "public_app_url": "AC_PUBLIC_APP_URL",
     "admin_app_url": "AC_ADMIN_APP_URL",
@@ -742,6 +748,14 @@ class Settings(BaseSettings):
         if self.sales_xray_app_url is not None:
             origins.append(str(self.sales_xray_app_url).rstrip("/"))
         return origins
+
+    @property
+    def sales_xray_studio_origin(self) -> str | None:
+        """The UI studio origin trusted on this environment's Sales Xray host, if any."""
+
+        if self.sales_xray_app_url is None:
+            return None
+        return _SALES_XRAY_STUDIO_ORIGINS.get(self.environment)
 
     @property
     def secure_cookies(self) -> bool:
