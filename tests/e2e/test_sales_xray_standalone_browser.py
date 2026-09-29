@@ -809,10 +809,14 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "HEAD /login/: net::ERR_ABORTED",
                 "HEAD /calls/: net::ERR_ABORTED",
                 "HEAD /account/: net::ERR_ABORTED",
+                "HEAD /dashboard/: net::ERR_ABORTED",
+                "HEAD /analysis/new/: net::ERR_ABORTED",
+                "HEAD /analysis/calls/: net::ERR_ABORTED",
             }
             for method, path, status in (
                 ("POST", "/v1/auth/password/login", 200),
                 ("POST", "/v1/auth/logout", 204),
+                ("GET", "/v1/me/sales-xray-profile", 200),
                 (
                     "GET",
                     f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",
