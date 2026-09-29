@@ -37,7 +37,10 @@ export async function renameCall(
 
 /** Fired after the server confirms a rename, so every view shows the name. */
 export const CALL_LABEL_EVENT = "sales-xray:call-label";
-export type CallLabelChange = Readonly<{ submissionId: string; label: CallLabel }>;
+export type CallLabelChange = Readonly<{
+  submissionId: string;
+  label: CallLabel;
+}>;
 
 function announceCallLabel(submissionId: string, label: CallLabel) {
   if (typeof window === "undefined") return;

@@ -71,9 +71,7 @@
   animation:
     bar-in var(--lx-dur-reveal) var(--lx-ease-pop) backwards,
     talk 2.6s ease-in-out infinite;
-  animation-delay:
-    calc(80ms + var(--i) * 45ms),
-    calc(0.7s + var(--i) * 170ms);
+  animation-delay: calc(80ms + var(--i) * 45ms), calc(0.7s + var(--i) * 170ms);
 }
 
 .trace {

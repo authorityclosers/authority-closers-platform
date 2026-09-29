@@ -3077,7 +3077,8 @@ a.overviewCard:hover {
   width: 100%;
   margin-inline: 0;
 }
-.app.app[data-stage="upload"][data-selected="true"] .upload:global(.studio-upload) {
+.app.app[data-stage="upload"][data-selected="true"]
+  .upload:global(.studio-upload) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(320px, 28vw, 392px);
   align-items: start;
@@ -3112,7 +3113,9 @@ a.overviewCard:hover {
 .app.app[data-stage="upload"][data-selected="true"] .verifyHeading {
   display: none;
 }
-.app.app[data-stage="upload"][data-selected="true"] :global(.studio-consent) h3 {
+.app.app[data-stage="upload"][data-selected="true"]
+  :global(.studio-consent)
+  h3 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3180,7 +3183,9 @@ a.overviewCard:hover {
   cursor: pointer;
   transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
-.app.app[data-stage="upload"][data-selected="true"] .reportLanguage select:hover {
+.app.app[data-stage="upload"][data-selected="true"]
+  .reportLanguage
+  select:hover {
   border-color: var(--lx-muted-2);
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -3745,7 +3750,10 @@ a.overviewCard:hover {
   color: var(--lx-muted-2);
   font-size: 12.5px;
 }
-.app.app[data-stage="processing"] .upload > :global(.studio-consent) .privacyDetails {
+.app.app[data-stage="processing"]
+  .upload
+  > :global(.studio-consent)
+  .privacyDetails {
   width: 100%;
   margin: 8px 0 0;
   border: 1px solid var(--lx-line-soft);
@@ -3897,7 +3905,9 @@ a.overviewCard:hover {
 .app.app[data-stage="report"] .reportMenu .reportMenuSupport svg {
   color: var(--lx-danger);
 }
-.app.app[data-stage="report"] .reportMenu .reportMenuSupport:hover:not(:disabled) {
+.app.app[data-stage="report"]
+  .reportMenu
+  .reportMenuSupport:hover:not(:disabled) {
   background: var(--lx-danger-soft);
   color: var(--lx-danger);
 }
@@ -3933,7 +3943,8 @@ a.overviewCard:hover {
   place-items: center;
   border-radius: 50%;
   background: var(--lx-danger-soft);
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
+  box-shadow: 0 0 0 8px
+    color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
   color: var(--lx-danger);
   font: 800 24px/1 var(--lx-font-display);
 }

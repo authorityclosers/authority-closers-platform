@@ -85,7 +85,9 @@ function xraySpeaker(index: number) {
 }
 
 function xrayMoment(index: number) {
-  return XRAY_MOMENTS.find((moment) => index >= moment.from && index <= moment.to);
+  return XRAY_MOMENTS.find(
+    (moment) => index >= moment.from && index <= moment.to,
+  );
 }
 
 function XrayScene() {

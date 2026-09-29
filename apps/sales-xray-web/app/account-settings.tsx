@@ -127,9 +127,7 @@ export function AccountSettings({
   const [attempt, setAttempt] = useState(0);
   const [section, setSection] = useState<SectionId>("general");
   const [stage, setStage] = useState<"list" | "pane">("list");
-  const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>(
-    {},
-  );
+  const tabs = useRef<Partial<Record<SectionId, HTMLButtonElement | null>>>({});
   const { signOut, signingOut, error: signOutError } = useSalesXraySignOut();
 
   // The URL hash keeps the open section across reloads and shared links.
@@ -217,11 +215,7 @@ export function AccountSettings({
   const who = profile.state === "ready" ? profile.value : null;
 
   return (
-    <div
-      className={styles.settings}
-      data-variant={variant}
-      data-stage={stage}
-    >
+    <div className={styles.settings} data-variant={variant} data-stage={stage}>
       <aside className={styles.nav}>
         <header className={styles.navHead}>
           <span className={styles.navMark} aria-hidden="true">
@@ -315,8 +309,7 @@ export function AccountSettings({
             <p className={styles.muted} role="status" aria-busy="true">
               Loading your profile…
             </p>
-          ) : profile.state === "error" ||
-            profile.state === "needs_refresh" ? (
+          ) : profile.state === "error" || profile.state === "needs_refresh" ? (
             <div className={styles.error} role="alert">
               <p>
                 {profile.state === "error"

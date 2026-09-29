@@ -56,7 +56,9 @@ export function ReportScrollRail() {
     const travel = height - thumbHeight;
     const progress = scrollTop / range;
     const sections = Array.from(
-      element.querySelectorAll<HTMLElement>("section[data-report-mode-section]"),
+      element.querySelectorAll<HTMLElement>(
+        "section[data-report-mode-section]",
+      ),
     ).filter((section) => !section.hidden && section.offsetParent !== null);
     const offsets = sections.map(
       (section) =>

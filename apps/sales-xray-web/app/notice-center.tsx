@@ -127,7 +127,11 @@ function NoticeCard({ notice }: { notice: Notice }) {
  * script failures so they never surface as a developer panel.
  */
 export function NoticeCenter() {
-  const list = useSyncExternalStore(subscribe, () => notices, () => EMPTY);
+  const list = useSyncExternalStore(
+    subscribe,
+    () => notices,
+    () => EMPTY,
+  );
 
   useEffect(() => {
     let last = 0;

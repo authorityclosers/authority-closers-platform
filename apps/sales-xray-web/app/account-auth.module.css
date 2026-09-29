@@ -95,7 +95,11 @@
     linear-gradient(var(--lx-film-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--lx-film-grid) 1px, transparent 1px);
   background-size: 36px 36px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 55%, black 30%, transparent 85%);
+  mask-image: radial-gradient(
+    ellipse 80% 70% at 50% 55%,
+    black 30%,
+    transparent 85%
+  );
 }
 /* A slow breathing light behind the scene. */
 .stage::after {
@@ -199,7 +203,11 @@
   background: var(--lx-film-wave);
 }
 .bar[data-speaker="rep"] {
-  background: color-mix(in srgb, var(--lx-film-text-3) 55%, var(--lx-film-wave));
+  background: color-mix(
+    in srgb,
+    var(--lx-film-text-3) 55%,
+    var(--lx-film-wave)
+  );
 }
 /* The scan develops each bar as it passes. */
 .bar::after {

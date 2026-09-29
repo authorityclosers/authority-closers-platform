@@ -322,7 +322,10 @@ export function ReportHeader({
               </details>
               {canRequestDeletion && (
                 <>
-                  <span className={styles.reportMenuSeparator} aria-hidden="true" />
+                  <span
+                    className={styles.reportMenuSeparator}
+                    aria-hidden="true"
+                  />
                   <button
                     type="button"
                     className={styles.reportMenuSupport}
