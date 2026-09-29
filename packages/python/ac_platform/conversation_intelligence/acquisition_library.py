@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select, tuple_
+from sqlalchemy import Select, and_, func, or_, select, tuple_
 
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
@@ -13,12 +14,16 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.application import ConversationNotFound
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import (
     ConversationPermission,
+    ConversationProcessingPlan,
     ConversationRecording,
+    ConversationReportDraft,
 )
+from ac_platform.conversation_intelligence.recovery_models import ConversationRetainedC5Version
 from ac_platform.conversation_intelligence.submission_labels import read_submission_label
 from ac_platform.kernel.authz import ActorContext
 
@@ -102,27 +107,10 @@ async def earlier_report_submission_id(
     return None
 
 
-async def account_library(
-    ownership: GuestOwnership,
-    actor: ActorContext,
-    *,
-    before: UUID | None = None,
-    shared_identity_locks: bool = False,
-) -> dict[str, Any]:
-    """Read retained direct/claimed uploads without renewing or assigning ownership.
-
-    The cursor is a selector into this account's immutable receipts, never an
-    owner assertion. It remains usable after deletion of a previous page's last
-    call. Rounded duration comes from the immutable source allowance receipt.
-    Every selected row is rechecked through the same port as playback/report reads.
-    """
-    now = await ownership.sessions._admit()
-    await ownership.sessions._owner(
-        None,
-        actor,
-        now,
-        shared_identity_locks=shared_identity_locks,
-    )
+def _account_library_query(
+    actor: ActorContext, now: datetime | None = None
+) -> Select[tuple[ConversationAcquisitionUsage]]:
+    """Share the library scope; omit availability only for immutable cursor lookup."""
     usage, claim = ConversationAcquisitionUsage, ConversationVisitorClaim
     link, recording = ConversationGuestSubmission, ConversationRecording
     permission = ConversationPermission
@@ -161,21 +149,51 @@ async def account_library(
         .where(
             usage.tenant_id == actor.tenant_id,
             _submission_owner_filter(usage, claim, person_id=actor.person_id, visitor_id=None),
+            ~recording_is_canary(),
         )
     )
+    if now is not None:
+        query = query.where(
+            recording.state.in_(("awaiting_upload", "ready")),
+            permission.revoked_at.is_(None),
+            permission.retention_until > now,
+        )
+    return query
+
+
+async def account_library(
+    ownership: GuestOwnership,
+    actor: ActorContext,
+    *,
+    before: UUID | None = None,
+    shared_identity_locks: bool = False,
+) -> dict[str, Any]:
+    """Read retained direct/claimed uploads without renewing or assigning ownership.
+
+    The cursor is a selector into this account's immutable receipts, never an
+    owner assertion. It remains usable after deletion of a previous page's last
+    call. Rounded duration comes from the immutable source allowance receipt.
+    Every selected row is rechecked through the same port as playback/report reads.
+    """
+    now = await ownership.sessions._admit()
+    await ownership.sessions._owner(
+        None,
+        actor,
+        now,
+        shared_identity_locks=shared_identity_locks,
+    )
+    usage = ConversationAcquisitionUsage
+    query = _account_library_query(actor, now)
     if before is not None:
-        cursor = await ownership.database.scalar(query.where(usage.submission_id == before))
+        cursor = await ownership.database.scalar(
+            _account_library_query(actor).where(usage.submission_id == before)
+        )
         if cursor is None:
             raise ConversationNotFound("This saved-call page is unavailable.")
         query = query.where(
             tuple_(usage.created_at, usage.submission_id)
             < (cursor.created_at, cursor.submission_id)
         )
-    query = query.where(
-        recording.state.in_(("awaiting_upload", "ready")),
-        permission.revoked_at.is_(None),
-        permission.retention_until > now,
-    )
     rows = (
         await ownership.database.scalars(
             query.order_by(usage.created_at.desc(), usage.submission_id.desc()).limit(PAGE_SIZE + 1)
@@ -215,3 +233,74 @@ async def account_library(
         "submissions": entries,
         "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
     }
+
+
+async def account_library_summary(
+    ownership: GuestOwnership, actor: ActorContext, *, shared_identity_locks: bool = False
+) -> dict[str, int]:
+    """Count all visible submissions in one statement, skipping per-row report re-validation."""
+    now = await ownership.sessions._admit()
+    await ownership.sessions._owner(None, actor, now, shared_identity_locks=shared_identity_locks)
+    recording, link = ConversationRecording, ConversationGuestSubmission
+    draft, retained, plan = (
+        ConversationReportDraft,
+        ConversationRetainedC5Version,
+        ConversationProcessingPlan,
+    )
+    has_report = or_(
+        select(draft.id)
+        .where(
+            draft.recording_id == recording.id,
+            draft.tenant_id == recording.tenant_id,
+            draft.person_id == recording.person_id,
+            draft.erased_at.is_(None),
+        )
+        .exists(),
+        select(retained.id)
+        .where(
+            retained.recording_id == recording.id,
+            retained.tenant_id == recording.tenant_id,
+            retained.person_id == recording.person_id,
+            retained.erased_at.is_(None),
+            retained.payload.is_not(None),
+            retained.generation == recording.generation,
+        )
+        .exists(),
+    )
+    latest_plan = (
+        select(plan.state)
+        .where(
+            plan.recording_id == recording.id,
+            plan.tenant_id == recording.tenant_id,
+            plan.person_id == recording.person_id,
+            plan.processing_lease_id == link.processing_lease_id,
+            plan.generation == recording.generation,
+            plan.erased_at.is_(None),
+        )
+        .order_by(plan.created_at.desc(), plan.id.desc())
+        .limit(1)
+        .correlate(recording, link)
+        .scalar_subquery()
+    )
+    rows = (
+        _account_library_query(actor, now)
+        .with_only_columns(
+            has_report.label("has_report"), latest_plan.label("state"), maintain_column_froms=True
+        )
+        .subquery()
+    )
+    counts = (
+        await ownership.database.execute(
+            select(
+                func.count().label("total"),
+                func.count().filter(rows.c.has_report).label("completed"),
+                func.count()
+                .filter(~rows.c.has_report, rows.c.state == "active")
+                .label("processing"),
+                func.count()
+                .filter(~rows.c.has_report, rows.c.state == "held")
+                .label("needs_attention"),
+            ).select_from(rows)
+        )
+    ).one()
+    return dict(counts._mapping)
