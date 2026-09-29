@@ -176,6 +176,17 @@ sudo AC_RELEASE_ID="foundation-${release_sha}" \
 
 The trusted controller verifies the archive before any remote extraction. The installer then verifies the SHA-256 and embedded Git commit again, rejects unexpected archive paths and non-regular entries, requires the complete bootstrap payload to equal that archive, generates a release content manifest, reconciles Infisical/rclone to binary hashes in the release policy, installs every explicitly declared script and unit, recreates and health-checks the target Compose foundation, and only then changes `current`. A transaction snapshot restores the previous binaries, managed files, symlink, Compose project, firewall, and timers if any post-mutation gate fails. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
 
+To install only the reviewed backup/R2 targets while the host OS baseline is older, verify and extract the reviewed release archive, then run its installer:
+
+```bash
+sudo AC_INSTALL_SCOPE=backup AC_RELEASE_ID=foundation-<sha> \
+  AC_RELEASE_ARCHIVE=/abs/ac-foundation-<sha>.tar \
+  AC_RELEASE_ARCHIVE_SHA256=<sha256> \
+  /path/to/reviewed/infra/vps-foundation/scripts/install-foundation-release.sh
+```
+
+A later full foundation install clears the backup scope record and makes the full release authoritative again.
+
 Resend uses a domain-restricted Sending-access key. A send test returning HTTP 200 is the expected runtime check; delivery-log lookup is intentionally unavailable to a sending-only key. Google Workspace remains the receiving system for both domains.
 
 The Infisical runtime and backup Universal Auth client secrets were rotated on 2026-08-27. If either bootstrap identity must be rotated again, create the replacement first, update the recovery project and root-only VPS bootstrap atomically, run `ac-infisical-verify`, then revoke the old client secret.
