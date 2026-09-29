@@ -495,15 +495,14 @@ class PrivateLocalRecordingStorage:
                 except FileExistsError:
                     if not isinstance(key, SourceAudioKey):
                         raise StorageError("storage_object_exists") from None
-                    existing_size = sum(
-                        len(block)
-                        for block in self.iter_bytes(key, expected_sha256=expected_sha256)
-                    )
-                    if existing_size != size:
-                        raise StorageError("storage_size_mismatch") from None
-                return StoredObject(key, digest.hexdigest(), size)
             finally:
                 directory.unlink(temporary)
+            if isinstance(key, SourceAudioKey):
+                info = directory.stat(key.filename)
+                _validate_entry(info)
+                if info.st_size != size:
+                    raise StorageError("storage_object_changed")
+            return StoredObject(key, digest.hexdigest(), size)
 
     def iter_bytes(self, key: StorageKey, *, expected_sha256: str) -> Iterator[bytes]:
         """Verify size/hash before first yield; consumers must close abandoned iterators."""

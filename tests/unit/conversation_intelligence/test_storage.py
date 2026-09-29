@@ -380,18 +380,45 @@ def test_shared_source_put_verifies_both_incoming_and_existing_bytes(tmp_path: P
     adapter = storage.PrivateLocalRecordingStorage(tmp_path / "private")
     content = b"fictional shared audio"
     key = storage.SourceAudioKey(uuid4(), _hash(content))
+    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+        adapter.put(key, [b"wrong incoming audio"], expected_sha256=key.sha256)
+    assert not adapter.root.joinpath(*key.directories, key.filename).exists()
     first = adapter.put(key, [content], expected_sha256=key.sha256)
     assert adapter.put(key, [content], expected_sha256=key.sha256) == first
     with pytest.raises(storage.StorageError, match="digest_mismatch"):
         adapter.put(key, [b"wrong incoming audio"], expected_sha256=key.sha256)
     path = adapter.root.joinpath(*key.directories, key.filename)
-    path.write_bytes(b"corrupted stored audio")
+    damaged = b"x" * len(content)
+    path.write_bytes(damaged)
+    assert adapter.put(key, [content], expected_sha256=key.sha256) == first
+    assert path.read_bytes() == damaged
     with pytest.raises(storage.StorageError, match="digest_mismatch"):
         next(adapter.iter_bytes(key, expected_sha256=key.sha256))
-    with pytest.raises(storage.StorageError, match="digest_mismatch"):
+    path.write_bytes(b"wrong size")
+    with pytest.raises(storage.StorageError, match="object_changed"):
         adapter.put(key, [content], expected_sha256=key.sha256)
-    assert path.read_bytes() == b"corrupted stored audio"
     assert not list(adapter.root.rglob("*.tmp"))
+
+
+def test_shared_source_publication_never_reads_stored_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter = storage.PrivateLocalRecordingStorage(tmp_path / "private")
+    content = b"fictional shared audio"
+    key = storage.SourceAudioKey(uuid4(), _hash(content))
+    original_open = storage._Directory.open
+
+    def no_read(directory: Any, name: str, flags: int) -> int:
+        assert flags & os.O_ACCMODE != os.O_RDONLY
+        return original_open(directory, name, flags)
+
+    def forbidden_read(*args: Any, **kwargs: Any) -> Any:
+        pytest.fail("shared publication attempted a stored-content read")
+
+    monkeypatch.setattr(storage._Directory, "open", no_read)
+    monkeypatch.setattr(adapter, "iter_bytes", forbidden_read)
+    first = adapter.put(key, [content], expected_sha256=key.sha256)
+    assert adapter.put(key, [content], expected_sha256=key.sha256) == first
 
 
 def test_shared_source_key_digest_cannot_be_overridden(tmp_path: Path) -> None:
