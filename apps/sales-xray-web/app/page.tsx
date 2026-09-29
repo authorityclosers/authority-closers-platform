@@ -3,7 +3,6 @@ import {
   requestedExistingCallId,
   type SalesXraySearchParams,
 } from "./existing-call-entry";
-import { StandaloneStudio } from "./standalone-studio";
 
 export default async function Page({
   searchParams,
@@ -15,11 +14,9 @@ export default async function Page({
     ? undefined
     : requestedExistingCallId(await searchParams);
   return (
-    <StandaloneStudio openingExistingCall={requestedCallId != null}>
-      <AcquisitionStudio
-        requestedCallId={requestedCallId}
-        deferRouteSelection={staticPreview}
-      />
-    </StandaloneStudio>
+    <AcquisitionStudio
+      requestedCallId={requestedCallId}
+      deferRouteSelection={staticPreview}
+    />
   );
 }

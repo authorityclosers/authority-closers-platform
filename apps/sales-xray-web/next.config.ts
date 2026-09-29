@@ -36,6 +36,9 @@ const config: NextConfig = {
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
+  experimental: {
+    staleTimes: { dynamic: 30 },
+  },
   devIndicators: false,
   poweredByHeader: false,
   transpilePackages: ["@ac/ui", "@ac/sales-xray-client"],
@@ -88,6 +91,52 @@ const config: NextConfig = {
                 })),
               ]
             : [];
+        },
+        async redirects() {
+          // Preview and review links keep their own query routes.
+          const review = [
+            { type: "query" as const, key: "sx-fixture" },
+            { type: "query" as const, key: "sx-review-local" },
+          ];
+          return [
+            {
+              source: "/calls",
+              destination: "/analysis/calls",
+              permanent: false,
+            },
+            {
+              source: "/",
+              has: [
+                {
+                  type: "query" as const,
+                  key: "call",
+                  value: "(?<call>[0-9a-fA-F-]{36})",
+                },
+              ],
+              missing: review,
+              destination: "/analysis/calls/:call",
+              permanent: false,
+            },
+            {
+              source: "/",
+              has: [{ type: "query" as const, key: "new", value: "1" }],
+              missing: review,
+              destination: "/analysis/new",
+              permanent: false,
+            },
+            // The app home is the dashboard; guests can still start an
+            // analysis from its signed-out view.
+            {
+              source: "/",
+              missing: [
+                ...review,
+                { type: "query" as const, key: "call" },
+                { type: "query" as const, key: "new" },
+              ],
+              destination: "/dashboard",
+              permanent: false,
+            },
+          ];
         },
         async headers() {
           return [

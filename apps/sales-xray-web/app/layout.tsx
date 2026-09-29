@@ -11,6 +11,7 @@ import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
+import { AppSession } from "./app-session";
 export const metadata: Metadata = {
   title: "Dipak’s Sales Xray · Authority Closers",
   description:
@@ -40,11 +41,13 @@ export default function Layout({
           {/* The root layout persists across client navigation, so a live
               upload is owned here rather than by the page that started it. */}
           <UploadSessionProvider>
-            {liveDataMode ? (
-              <LiveDataBanner>{children}</LiveDataBanner>
-            ) : (
-              children
-            )}
+            <AppSession>
+              {liveDataMode ? (
+                <LiveDataBanner>{children}</LiveDataBanner>
+              ) : (
+                children
+              )}
+            </AppSession>
             <UploadIndicator />
           </UploadSessionProvider>
         </ThemeProvider>

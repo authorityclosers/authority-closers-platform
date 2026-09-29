@@ -1,5 +1,6 @@
 "use client";
 
+import { callIdFromPath } from "./analysis-routes";
 import { ArrowRight, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   type CSSProperties,
@@ -9,6 +10,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
@@ -16,7 +18,8 @@ import { AccountAuth } from "./account-auth";
 import { AccountProfile } from "./account-profile";
 import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
-import { SalesXrayPreloader } from "./sales-xray-preloader";
+import { PersistentShell } from "./shell/lightbox-shell";
+import { PageSkeleton } from "./shell/page-skeleton";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -152,6 +155,17 @@ async function selectWorkspace(tenantId: string, signal: AbortSignal) {
     throw new Error("workspace_selection_mismatch");
 }
 
+/** Standalone app pages share one persistent frame; embeds keep their own. */
+function AppFrame({
+  embedded,
+  children,
+}: {
+  embedded: boolean;
+  children: ReactNode;
+}) {
+  return embedded ? children : <PersistentShell>{children}</PersistentShell>;
+}
+
 export function StandaloneStudio({
   children = <CallStudio />,
   variant = "standalone",
@@ -184,6 +198,30 @@ function StandaloneStudioView({
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
+  const pathname = usePathname();
+  const activeFor = (
+    path: string,
+  ): "dashboard" | "analyse" | "calls" | "account" => {
+    if (path === "/dashboard") return "dashboard";
+    if (
+      path === "/calls" ||
+      path === "/analysis" ||
+      path === "/analysis/calls" ||
+      callIdFromPath(path) !== null
+    )
+      return "calls";
+    if (path === "/account") return "account";
+    return "analyse";
+  };
+  const skeletonVariant = (
+    path: string,
+  ): "dashboard" | "list" | "account" | "studio" => {
+    if (path === "/dashboard") return "dashboard";
+    if (path === "/calls" || path === "/analysis" || path === "/analysis/calls")
+      return "list";
+    if (path === "/account") return "account";
+    return "studio";
+  };
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
@@ -499,29 +537,32 @@ function StandaloneStudioView({
     );
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        {embedded ? (
-          <div style={{ ...shellStyle, minHeight: "auto" }}>{profile}</div>
-        ) : (
-          <AcquisitionShell authenticated homeHref="/">
-            {profile}
-          </AcquisitionShell>
-        )}
+        <AppFrame embedded={embedded}>
+          {embedded ? (
+            <div style={{ ...shellStyle, minHeight: "auto" }}>{profile}</div>
+          ) : (
+            <AcquisitionShell authenticated homeHref="/">
+              {profile}
+            </AcquisitionShell>
+          )}
+        </AppFrame>
       </WorkspaceAccessProvider>
     );
   }
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        {children}
+        <AppFrame embedded={embedded}>{children}</AppFrame>
       </WorkspaceAccessProvider>
     );
   if (view.kind === "loading" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <SalesXrayPreloader
-          phase="session"
-          openingExistingCall={openingExistingCall}
-        />
+        <AppFrame embedded={embedded}>
+          <AcquisitionShell authenticated={false} active={activeFor(pathname)}>
+            <PageSkeleton variant={skeletonVariant(pathname)} />
+          </AcquisitionShell>
+        </AppFrame>
       </WorkspaceAccessProvider>
     );
   const chooser = view.kind === "chooser" || view.kind === "selecting";

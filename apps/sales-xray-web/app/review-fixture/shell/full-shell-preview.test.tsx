@@ -6,7 +6,9 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
 }));
 
 import Page from "./page";
@@ -49,7 +51,9 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
 
   // Real shell owners: rail navigation, top bar and mobile navigation.
   expect(container.querySelector("[data-lightbox-shell]")).not.toBeNull();
-  expect(container.querySelector('nav[aria-label="Workspace"]')).not.toBeNull();
+  expect(
+    container.querySelector('aside[aria-label="Sales Xray navigation"]'),
+  ).not.toBeNull();
   expect(
     container.querySelector('nav[aria-label="Mobile Sales Xray navigation"]'),
   ).not.toBeNull();

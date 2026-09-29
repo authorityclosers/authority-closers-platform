@@ -3,7 +3,9 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: navigate }),
+  useRouter: () => ({ push: navigate, prefetch: vi.fn() }),
+  usePathname: () => window.location.pathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 import Page from "./page";
 import CallsPage from "./calls/page";

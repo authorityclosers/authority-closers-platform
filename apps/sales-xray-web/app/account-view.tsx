@@ -3,7 +3,9 @@
 import {
   CircleUserRound,
   Clock3,
+  LifeBuoy,
   LogOut,
+  Mail,
   Pencil,
   RefreshCw,
   ShieldCheck,
@@ -236,7 +238,7 @@ function AccountDetails() {
           Calls and reports stay private to your account and selected workspace.
         </p>
         <div className={styles.actions}>
-          <Link className={styles.secondary} href="/calls">
+          <Link className={styles.secondary} href="/analysis/calls">
             Open Calls
           </Link>
           <button
@@ -254,6 +256,26 @@ function AccountDetails() {
             {signOutError}
           </p>
         ) : null}
+      </section>
+
+      <section className={styles.panel} aria-labelledby="account-help">
+        <div className={styles.panelHead}>
+          <h2 id="account-help">Help &amp; support</h2>
+          <LifeBuoy size={18} aria-hidden="true" className={styles.headIcon} />
+        </div>
+        <p className={styles.muted}>
+          Questions about a call, a report or your account? Write to the
+          Authority Closers team.
+        </p>
+        <div className={styles.actions}>
+          <a
+            className={styles.secondary}
+            href="mailto:support@authorityclosers.com"
+          >
+            <Mail size={15} aria-hidden="true" />
+            Email support
+          </a>
+        </div>
       </section>
     </div>
   );

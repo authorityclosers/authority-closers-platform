@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
+import React from "react";
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { StandaloneStudio } from "./standalone-studio";
+import { AppSession } from "./app-session";
 import { usePendingAnalysis } from "./pending-analysis";
 import { useWorkspaceAccess } from "./workspace-access";
 
 let authSelectedFile: { name: string; size: number } | null = null;
 let authPending: ReturnType<typeof usePendingAnalysis> = null;
+let pathname = "/";
 vi.mock("./account-auth", () => ({
   AccountAuth: ({
     selectedFile,
@@ -39,6 +42,20 @@ vi.mock("./account-auth", () => ({
 vi.mock("./profile-menu", () => ({
   PROFILE_UPDATED_EVENT: "sales-xray:profile-updated",
   ProfileMenu: () => null,
+}));
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("./shell/page-skeleton", () => ({
+  PageSkeleton: ({ variant }: { variant: string }) => (
+    <div data-testid="page-skeleton" data-variant={variant} />
+  ),
+}));
+vi.mock("./acquisition-shell", () => ({
+  AcquisitionShell: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="acquisition-shell">{children}</div>
+  ),
 }));
 
 (
@@ -100,6 +117,7 @@ async function mount(openingExistingCall = false) {
 }
 
 beforeEach(() => {
+  pathname = "/";
   authSelectedFile = null;
   authPending = null;
   container = document.createElement("div");
@@ -169,17 +187,55 @@ it("passes through unauthenticated sessions and selected sessions without contex
   expect(fetchMock).toHaveBeenCalledOnce();
 });
 
+it.each(["/dashboard/", "/analysis/new/", "/analysis/calls/"])(
+  "requires workspace selection on the static-export route %s",
+  async (route) => {
+    pathname = route;
+    fetchMock.mockResolvedValueOnce(response(workspaceChoices()));
+    await act(async () =>
+      root.render(
+        <AppSession>
+          <div data-testid="protected-page">Account content</div>
+        </AppSession>,
+      ),
+    );
+    await flush();
+    expect(
+      container.querySelector('[data-testid="protected-page"]'),
+    ).toBeNull();
+    expect(container.textContent).toContain(
+      "Choose your Sales Xray workspace.",
+    );
+    expect(container.querySelectorAll("button[data-tenant-id]")).toHaveLength(
+      2,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0][0]).toBe("/v1/me/workspaces");
+  },
+);
+
+it("leaves the static-export login route outside the workspace chooser", async () => {
+  pathname = "/login/";
+  await act(async () =>
+    root.render(
+      <AppSession>
+        <div data-testid="login-page">Sign in</div>
+      </AppSession>,
+    ),
+  );
+  await flush();
+  expect(container.querySelector('[data-testid="login-page"]')).not.toBeNull();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
 it("does not announce a confirmed session while access is still pending", async () => {
   const pending = deferred<Response>();
   fetchMock.mockReturnValueOnce(pending.promise);
   await mount();
-  expect(container.querySelector("ac-preloader")?.getAttribute("phase")).toBe(
-    "session",
-  );
-  expect(container.textContent).not.toContain("Session found");
   expect(
-    container.querySelector("ac-preloader")?.getAttribute("environment"),
-  ).toBe("production");
+    container.querySelector('[data-testid="page-skeleton"]'),
+  ).not.toBeNull();
+  expect(container.textContent).not.toContain("Session found");
   pending.resolve(response({}, 401));
   await flush();
   expect(container.querySelector('[data-testid="call-studio"]')).not.toBeNull();
@@ -189,9 +245,9 @@ it("keeps a requested saved call on a neutral access-check surface", async () =>
   const pending = deferred<Response>();
   fetchMock.mockReturnValueOnce(pending.promise);
   await mount(true);
-  expect(container.textContent).toContain("Opening your saved call");
-  expect(container.textContent).toContain("Checking workspace access");
-  expect(container.textContent).not.toContain("Getting Sales Xray ready");
+  expect(
+    container.querySelector('[data-testid="page-skeleton"]'),
+  ).not.toBeNull();
   expect(container.querySelector('[data-testid="call-studio"]')).toBeNull();
   pending.resolve(response(workspaceChoices(firstTenantId)));
   await flush();

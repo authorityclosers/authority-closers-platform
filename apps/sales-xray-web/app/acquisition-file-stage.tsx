@@ -55,6 +55,15 @@ export function AcquisitionFileStage({
   );
   const activeFile = files.find((file) => file === selectedFile) ?? null;
   const hasFiles = files.length > 0;
+  const limits = [
+    "MP3, MPEG, WAV, M4A, OGG or FLAC",
+    maxBytes !== undefined && maxBytes > 0
+      ? `up to ${Math.floor(maxBytes / 1048576)} MB`
+      : null,
+    maxMinutes !== undefined && maxMinutes > 0
+      ? `${maxMinutes} min per call`
+      : null,
+  ].filter(Boolean);
 
   function addFiles(value: FileList | File[] | null) {
     if (disabled || !value || value.length === 0) return;
@@ -154,15 +163,23 @@ export function AcquisitionFileStage({
               ? "Drop your audio files here"
               : hasFiles
                 ? "Add another audio file"
-                : "Drag and drop your audio file here"}
+                : "Drop your call recording here"}
           </strong>
+          {hasFiles ? null : (
+            <span
+              className={styles.limits}
+              aria-label="Supported audio file limits"
+            >
+              {limits.join(" · ")}
+            </span>
+          )}
           <button
             className={styles.browse}
             type="button"
             disabled={disabled}
             onClick={() => input.current?.click()}
           >
-            or click to browse
+            {hasFiles ? "or click to browse" : "Choose a file"}
           </button>
         </div>
         <input
@@ -176,24 +193,29 @@ export function AcquisitionFileStage({
           disabled={disabled}
           onChange={chooseFromInput}
         />
-        <div className={styles.facts} aria-label="Supported audio file limits">
-          <span>
-            <FileAudio size={16} aria-hidden="true" />
-            MP3 · MPEG · WAV · M4A · OGG · FLAC
-          </span>
-          {maxBytes !== undefined && maxBytes > 0 ? (
+        {hasFiles ? (
+          <div
+            className={styles.facts}
+            aria-label="Supported audio file limits"
+          >
             <span>
-              <HardDrive size={16} aria-hidden="true" />
-              Up to {Math.floor(maxBytes / 1048576)} MB
+              <FileAudio size={16} aria-hidden="true" />
+              MP3 · MPEG · WAV · M4A · OGG · FLAC
             </span>
-          ) : null}
-          {maxMinutes !== undefined && maxMinutes > 0 ? (
-            <span>
-              <Clock3 size={16} aria-hidden="true" />
-              {maxMinutes} min per call
-            </span>
-          ) : null}
-        </div>
+            {maxBytes !== undefined && maxBytes > 0 ? (
+              <span>
+                <HardDrive size={16} aria-hidden="true" />
+                Up to {Math.floor(maxBytes / 1048576)} MB
+              </span>
+            ) : null}
+            {maxMinutes !== undefined && maxMinutes > 0 ? (
+              <span>
+                <Clock3 size={16} aria-hidden="true" />
+                {maxMinutes} min per call
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {hasFiles ? (

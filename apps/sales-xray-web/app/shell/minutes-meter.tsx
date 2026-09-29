@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import type { Allowance } from "../acquisition-client";
@@ -22,8 +23,12 @@ export function MinutesMeter({
       </p>
     );
   const left = Math.floor(allowance.available_seconds / 60);
+  const secs = allowance.available_seconds % 60;
   const total = Math.floor(allowance.allowance_seconds / 60);
+  const availableText =
+    secs > 0 ? `${left}m ${secs}s available` : `${left}m available`;
   const text = `${left} of ${total} trial minutes left`;
+  const balanceText = `${left} of ${total} left`;
   if (variant === "pill")
     return (
       <p className={styles.meter} data-variant="pill" data-minutes-meter>
@@ -37,12 +42,31 @@ export function MinutesMeter({
     allowance.allowance_seconds > 0
       ? Math.min(1, allowance.available_seconds / allowance.allowance_seconds)
       : 0;
+  const strokeDashoffset = 100 - fill * 100;
   return (
     <div className={styles.meter} data-variant="rail" data-minutes-meter>
-      <div className={styles.row}>
-        <span className={styles.label}>Trial minutes</span>
-        <span className={styles.value}>
-          {left} of {total} left
+      <div className={styles.usageRow}>
+        <svg className={styles.donut} viewBox="0 0 36 36" aria-hidden="true">
+          <path
+            className={styles.donutBg}
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="var(--lx-line-soft)"
+            strokeWidth="3.5"
+          />
+          <path
+            className={styles.donutVal}
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="var(--lx-teal)"
+            strokeWidth="3.5"
+            strokeDasharray="100, 100"
+            strokeDashoffset={strokeDashoffset}
+          />
+        </svg>
+        <span className={styles.availableLabel}>{availableText}</span>
+        <span className={styles.infoIcon} title={text} aria-hidden="true">
+          <Info size={15} />
         </span>
       </div>
       <div
@@ -57,6 +81,7 @@ export function MinutesMeter({
       >
         <span className={styles.fill} />
       </div>
+      <span className={styles.visuallyHidden}>{balanceText}</span>
     </div>
   );
 }
