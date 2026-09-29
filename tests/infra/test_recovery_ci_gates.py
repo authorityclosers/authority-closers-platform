@@ -60,7 +60,7 @@ def test_media_and_worker_proofs_use_a_separate_matching_postgres_service() -> N
         "ac_owner",
         {},
     )
-    assert service["ports"] == ["55432:5432"]
+    assert service["ports"] == ["127.0.0.1:55432:5432"]
     assert media.database == service["env"]["POSTGRES_DB"]
     assert media.username == service["env"]["POSTGRES_USER"]
     assert media.password == service["env"]["POSTGRES_PASSWORD"]
@@ -80,6 +80,39 @@ def test_media_and_worker_proofs_use_a_separate_matching_postgres_service() -> N
         "tests/integration/test_studio_video_worker_fence_postgresql.py",
         "tests/integration/test_operations_bootstrap_postgresql.py",
     ]
+
+
+def test_recovery_evidence_artifacts_are_scoped_to_the_current_attempt() -> None:
+    workflow = yaml.safe_load((WORKFLOWS / "application.yml").read_text(encoding="utf-8"))
+    browser = workflow["jobs"]["validate-sales-xray-acquisition-browser"]
+    browser_receipt = next(
+        step
+        for step in browser["steps"]
+        if step.get("name") == "Upload sanitized Sales Xray acquisition receipt"
+    )
+    assert browser_receipt["with"]["name"] == (
+        "sales-xray-acquisition-browser-${{ github.sha }}-${{ github.run_attempt }}"
+    )
+
+    python_tests = workflow["jobs"]["validate-python-tests"]
+    shard_receipt = next(
+        step
+        for step in python_tests["steps"]
+        if step.get("name") == "Retain Python shard evidence"
+    )
+    assert shard_receipt["with"]["name"] == (
+        "python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}"
+    )
+
+    validation = workflow["jobs"]["validate"]
+    shard_download = next(
+        step
+        for step in validation["steps"]
+        if step.get("name") == "Download Python shard evidence"
+    )
+    assert shard_download["with"]["pattern"] == (
+        "python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-*"
+    )
 
 
 def test_populated_migration_is_required_on_its_own_created_database() -> None:
