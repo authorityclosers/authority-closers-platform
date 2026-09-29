@@ -33,6 +33,7 @@ from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
 )
 from ac_platform.conversation_intelligence.acquisition_library import (
     account_library,
+    account_library_summary,
     earlier_report_submission_id,
 )
 from ac_platform.conversation_intelligence.acquisition_processing import (
@@ -472,6 +473,28 @@ def install_submission_http(
                     ownership(auth.database),
                     auth.resolved.actor,
                     before=before,
+                    shared_identity_locks=True,
+                )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
+
+    @router.get("/submissions/summary")
+    async def saved_calls_summary(request: Request, response: Response) -> dict[str, int]:
+        host = guard(request, response, library=True)
+        if request.query_params:
+            raise fail(422, "Upload access comes from your current session.")
+        try:
+            context = (
+                learner_read_account(request)
+                if host == "learner"
+                else asynccontextmanager(read_require_actor)(request)
+            )
+            async with context as auth:
+                return await account_library_summary(
+                    ownership(auth.database),
+                    auth.resolved.actor,
                     shared_identity_locks=True,
                 )
         except ConversationError as error:
