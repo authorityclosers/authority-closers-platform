@@ -60,7 +60,7 @@ export function SpeakerEditor({
   profile: SpeakerProfile | null | undefined;
   youName: string | null;
   suggestedIcon: string;
-  onSave: (profile: SpeakerProfile) => void;
+  onSave: (profile: SpeakerProfile) => boolean;
   onClose: () => void;
 }) {
   const id = useId();
@@ -70,6 +70,7 @@ export function SpeakerEditor({
   const [role, setRole] = useState<SpeakerRole | null>(profile?.role ?? null);
   const [icon, setIcon] = useState<string | null>(profile?.icon ?? null);
   const [query, setQuery] = useState("");
+  const [saveFailed, setSaveFailed] = useState(false);
   const icons = searchSpeakerIcons(query);
 
   useLayoutEffect(() => {
@@ -150,11 +151,13 @@ export function SpeakerEditor({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    onSave({
-      name: name.trim(),
-      role,
-      icon: role === "you" ? null : icon,
-    });
+    setSaveFailed(
+      !onSave({
+        name: name.trim(),
+        role,
+        icon: role === "you" ? null : icon,
+      }),
+    );
   }
 
   return (
@@ -256,6 +259,11 @@ export function SpeakerEditor({
           </div>
         )}
 
+        {saveFailed && (
+          <p role="alert" className={styles.empty}>
+            Couldn’t save on this device. Try again.
+          </p>
+        )}
         <div className={styles.foot}>
           <small>Saved on this device for now</small>
           <button type="button" className={styles.cancel} onClick={onClose}>

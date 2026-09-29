@@ -20,7 +20,7 @@ const UNTITLED = "Untitled call";
 
 /**
  * One call in the sidebar's Recents: hover reveals a ⋯ menu (rename, copy
- * link, open in a new tab, delete); a double-click renames it in place.
+ * link, open in a new tab, delete). Rename opens an inline editor.
  * Rename and delete use the same owner-scoped API as the rest of the app.
  */
 export function RecentCallItem({
@@ -143,6 +143,12 @@ export function RecentCallItem({
       if (!["deleting", "deleted"].includes(String(deleted.state)))
         throw new Error("delete_unconfirmed");
       setMenuOpen(false);
+      // A full navigation discards the deleted report and its playback state.
+      if (
+        window.location.pathname ===
+        new URL(href, window.location.origin).pathname
+      )
+        window.location.replace("/analysis/calls");
       onChange(null);
     } catch {
       setProblem("Couldn’t delete this call. Try again.");
@@ -180,15 +186,7 @@ export function RecentCallItem({
           />
         </form>
       ) : (
-        <Link
-          href={href}
-          className={styles.link}
-          title={`${call.name} · double-click to rename`}
-          onDoubleClick={(event) => {
-            event.preventDefault();
-            startRename();
-          }}
-        >
+        <Link href={href} className={styles.link} title={call.name}>
           <AudioLines size={14} className={styles.icon} aria-hidden="true" />
           <span className={styles.name}>{call.name}</span>
           <span className={styles.date}>{call.date}</span>

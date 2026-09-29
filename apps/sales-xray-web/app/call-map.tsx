@@ -463,8 +463,9 @@ export function CallMap({
                     youName={accountName}
                     suggestedIcon={prospectIcon}
                     onSave={(profile) => {
-                      save({ [editingId]: profile });
+                      if (!save({ [editingId]: profile })) return false;
                       setEditing(null);
+                      return true;
                     }}
                     onClose={closeEditor}
                   />

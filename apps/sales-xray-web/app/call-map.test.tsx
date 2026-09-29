@@ -56,6 +56,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
   localStorage.clear();
 });
 
@@ -190,6 +191,39 @@ it("names a speaker, gives them a role and an icon, and remembers it", async () 
   expect(host.querySelector("figcaption")?.textContent).toContain(
     "Talk ratio · Speaker 1 : Rahul Mehta",
   );
+});
+
+it("keeps speaker edits available for retry when device storage rejects a save", async () => {
+  await act(async () => chips()[1].click());
+  const editor = host.querySelector<HTMLElement>('[role="dialog"]')!;
+  const name = editor.querySelector<HTMLInputElement>("input")!;
+  await act(async () => type(name, "Fictional speaker"));
+  const prospect = Array.from(editor.querySelectorAll("button")).find(
+    (button) => button.textContent === "Prospect",
+  )!;
+  await act(async () => prospect.click());
+  const save = Array.from(editor.querySelectorAll("button")).find(
+    (button) => button.textContent === "Save",
+  )!;
+  const write = vi.spyOn(localStorage, "setItem").mockImplementation(() => {
+    throw new DOMException("Storage full", "QuotaExceededError");
+  });
+  await act(async () => save.click());
+  expect(write).toHaveBeenCalledOnce();
+  expect(host.querySelector('[role="dialog"]') === editor).toBe(true);
+  expect(editor.querySelector('[role="alert"]')?.textContent).toContain(
+    "Couldn’t save on this device. Try again.",
+  );
+  expect(name.value).toBe("Fictional speaker");
+  expect(prospect.getAttribute("aria-pressed")).toBe("true");
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+  write.mockRestore();
+  await act(async () => save.click());
+  expect(host.querySelector('[role="dialog"]')).toBeNull();
+  expect(readSpeakerProfiles(CALL_ID).closer).toMatchObject({
+    name: "Fictional speaker",
+    role: "prospect",
+  });
 });
 
 it("suggests which voice is you from an introduction, confirmed in one tap", async () => {
