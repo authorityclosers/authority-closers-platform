@@ -192,11 +192,17 @@ def _make_backend(
         coach_app_url="http://coach.test",
         api_url="http://api.test",
         sales_xray_app_url=origin,
-        public_learner_tenant_id=account.own_tenant_id,
+        public_learner_tenant_id=None,
         operations_tenant_id=uuid4(),
         session_token_pepper=uuid4().hex + uuid4().hex,
         oauth_transaction_secret=uuid4().hex + uuid4().hex,
         email_challenge_secret=uuid4().hex + uuid4().hex,
+    )
+    # Keep this legacy multi-workspace login explicit. Enabling the public
+    # learner tenant on identity also selects that workspace during login.
+    # The real profile router still enforces its own public-tenant boundary.
+    profile_settings = Settings.model_validate(
+        {**settings.model_dump(), "public_learner_tenant_id": account.own_tenant_id}
     )
     control: dict[str, Any] = {}
     stopped = threading.Event()
@@ -209,7 +215,7 @@ def _make_backend(
             register_problem_handlers(application)
             require_actor = install_identity_http(application, settings=settings, sessions=sessions)
             install_sales_xray_profile_http(
-                application, settings=settings, require_actor=require_actor
+                application, settings=profile_settings, require_actor=require_actor
             )
             install_conversation_http(
                 application,
