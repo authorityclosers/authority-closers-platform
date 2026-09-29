@@ -22,7 +22,9 @@
    environment's own stack). Lanes run in parallel; each holds one task. A task
    is one small, reviewable change tied to one tracked
    issue. No new task starts in a lane while that lane holds a task branch or pull
-   request, or while the latest `main` build is not green. Pull requests may not
+   request, or while the latest `main` build is red (only the task that fixes it
+   may start, with `--fixes-red-main`). A running `main` build does not block a
+   start; merges still wait for a green `main`. Pull requests may not
    change the same files, and only one at a time may change shared files
    (migrations, lockfiles, workflows, AGENTS.md, the gate). Do not widen scope or
    refactor on the side; record other findings as proposed tasks.
