@@ -6,7 +6,9 @@ const { navigateToAccount, replaceToLogin } = vi.hoisted(() => ({
   replaceToLogin: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin }),
+  useRouter: () => ({ push: navigateToAccount, replace: replaceToLogin, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => "/",
 }));
 import Page from "./page";
 import {

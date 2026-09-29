@@ -1,0 +1,118 @@
+.skeleton {
+  --sk-bg: var(--lx-sunken, #f3f4f6);
+  --sk-border: 1px solid var(--lx-line-soft, #e5e7eb);
+  --sk-radius: var(--lx-radius-md, 8px);
+  --sk-dur: var(--lx-dur-reveal, 300ms);
+  display: contents;
+}
+
+.block {
+  background: var(--sk-bg);
+  border: var(--sk-border);
+  border-radius: var(--sk-radius);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block {
+    animation: none;
+  }
+}
+
+/* ── Dashboard variant ── */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  width: 100%;
+}
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.kpiCard {
+  height: 96px;
+  composes: block;
+}
+
+.analyticsRow {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+.chartBlock {
+  height: 220px;
+  composes: block;
+}
+
+.tableRows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tableRow {
+  height: 48px;
+  composes: block;
+}
+
+/* ── List variant ── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+  width: 100%;
+}
+
+.listRow {
+  height: 64px;
+  composes: block;
+}
+
+/* ── Account variant ── */
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  width: 100%;
+}
+
+.accountHeader {
+  height: 56px;
+  composes: block;
+}
+
+.accountCard {
+  height: 140px;
+  composes: block;
+}
+
+/* ── Studio variant ── */
+.studio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  width: 100%;
+  min-height: 320px;
+}
+
+.uploadPanel {
+  width: min(100%, 520px);
+  height: 240px;
+  composes: block;
+}

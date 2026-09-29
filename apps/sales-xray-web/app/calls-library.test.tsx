@@ -5,7 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const { openSelectedCall } = vi.hoisted(() => ({ openSelectedCall: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: openSelectedCall }),
+  useRouter: () => ({ push: openSelectedCall, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 // The shell's profile widgets load their own account summary. Keep these
 // library requests isolated from that unrelated fetch sequence.

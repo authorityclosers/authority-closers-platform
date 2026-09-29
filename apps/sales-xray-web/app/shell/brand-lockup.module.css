@@ -15,6 +15,18 @@
   outline-offset: 2px;
 }
 
+.markOnly {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--lx-surface);
+}
+
 .symbol {
   width: 28px;
   height: 28px;

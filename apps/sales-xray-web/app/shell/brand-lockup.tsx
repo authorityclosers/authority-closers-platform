@@ -4,9 +4,19 @@ import Link from "next/link";
 
 import styles from "./brand-lockup.module.css";
 
-export function BrandLockup({ href }: { href: string }) {
+export function BrandLockup({
+  href,
+  markOnly = false,
+}: {
+  href: string;
+  markOnly?: boolean;
+}) {
   return (
-    <Link className={styles.brand} href={href} aria-label="Sales Xray home">
+    <Link
+      className={`${styles.brand}${markOnly ? ` ${styles.markOnly}` : ""}`}
+      href={href}
+      aria-label="Sales Xray home"
+    >
       <svg
         className={styles.symbol}
         viewBox="0 0 32 32"
@@ -47,10 +57,12 @@ export function BrandLockup({ href }: { href: string }) {
           fill="var(--lx-teal)"
         />
       </svg>
-      <span className={styles.wordmark} aria-hidden="true">
-        <span className={styles.name}>Sales Xray</span>
-        <span className={styles.by}>by Authority Closers</span>
-      </span>
+      {!markOnly && (
+        <span className={styles.wordmark} aria-hidden="true">
+          <span className={styles.name}>Sales Xray</span>
+          <span className={styles.by}>by Authority Closers</span>
+        </span>
+      )}
     </Link>
   );
 }

@@ -36,6 +36,9 @@ const config: NextConfig = {
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
+  experimental: {
+    staleTimes: { dynamic: 30 },
+  },
   devIndicators: false,
   poweredByHeader: false,
   transpilePackages: ["@ac/ui", "@ac/sales-xray-client"],

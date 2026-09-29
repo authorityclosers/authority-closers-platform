@@ -1,8 +1,15 @@
 "use client";
 
-import { ChevronDown, FolderOpen, LogOut, MoreHorizontal } from "lucide-react";
+import {
+  ChevronDown,
+  FolderOpen,
+  LogOut,
+  Mail,
+  MoreHorizontal,
+  User,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   requestSalesXrayLogout,
@@ -10,8 +17,6 @@ import {
 } from "./account-navigation";
 import { readAccountProfile } from "./account-profile-client";
 import { useUploadSession } from "./hooks/upload-session";
-import { ThemeControl } from "./lightbox/theme-provider";
-import { LocalSettingsButton } from "./live-data-banner";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./profile-menu.module.css";
 
@@ -30,12 +35,24 @@ function initials(name: string | null): string {
     .toLocaleUpperCase();
 }
 
+function getFirstName(name: string | null, email: string | null): string {
+  if (name && name.trim().length > 0) {
+    const first = name.trim().split(/\s+/)[0];
+    if (first) return first;
+  }
+  if (email && email.includes("@")) {
+    const prefix = email.split("@")[0]?.trim();
+    if (prefix) return prefix;
+  }
+  return "Account";
+}
+
 export function ProfileMenu({
   authenticated,
   accountHref,
   placement = "below",
   compact = false,
-  variant = "rail",
+  variant = "header",
 }: {
   authenticated: boolean;
   accountHref: string;
@@ -97,7 +114,7 @@ export function ProfileMenu({
       if (event.target instanceof Node && !menu.current?.contains(event.target))
         setOpen(false);
     };
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
         trigger.current?.focus();
@@ -110,6 +127,38 @@ export function ProfileMenu({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
+
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      trigger.current?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const popoverEl = menu.current?.querySelector(`.${styles.popover}`);
+      if (!popoverEl) return;
+      const focusable = Array.from(
+        popoverEl.querySelectorAll<HTMLElement>("a, button:not([disabled])"),
+      );
+      if (focusable.length === 0) return;
+      const currentIndex = focusable.indexOf(
+        document.activeElement as HTMLElement,
+      );
+      if (event.key === "ArrowDown") {
+        const nextIndex =
+          currentIndex >= 0 && currentIndex < focusable.length - 1
+            ? currentIndex + 1
+            : 0;
+        focusable[nextIndex]?.focus();
+      } else {
+        const prevIndex =
+          currentIndex > 0 ? currentIndex - 1 : focusable.length - 1;
+        focusable[prevIndex]?.focus();
+      }
+    }
+  }
 
   async function signOut() {
     if (signingOutRef.current) return;
@@ -136,6 +185,7 @@ export function ProfileMenu({
 
   const userInitials = initials(accountName);
   const displayName = accountLabel;
+  const firstName = getFirstName(accountName, profileEmail);
   const displayEmail =
     profileEmail ||
     (authenticated ? "Private workspace" : "Sign in to analyse calls");
@@ -162,7 +212,7 @@ export function ProfileMenu({
           <span className={styles.avatarInitials} aria-hidden="true">
             {userInitials}
           </span>
-          <span className={styles.headerName}>{displayName}</span>
+          <span className={styles.headerName}>{firstName}</span>
           <ChevronDown
             className={styles.chevron}
             size={14}
@@ -199,26 +249,33 @@ export function ProfileMenu({
           className={styles.popover}
           role="region"
           aria-label="Profile actions"
+          onKeyDown={handleMenuKeyDown}
         >
-          <div className={styles.summary}>
+          <div className={styles.menuHeader}>
             <span className={styles.summaryAvatar} aria-hidden="true">
-              {authenticated ? initials(accountName) : "G"}
+              {userInitials}
             </span>
-            <span className={styles.summaryCopy}>
-              <strong>
+            <div className={styles.menuHeaderCopy}>
+              <strong className={styles.headerFullName}>
                 {authenticated
                   ? accountName || "Authority Closers account"
                   : "Guest workspace"}
               </strong>
-              <small>
-                {authenticated
-                  ? "Calls and reports stay scoped to your workspace."
-                  : "Sign in to analyse calls and open your reports."}
-              </small>
-            </span>
+              <small className={styles.headerEmail}>{displayEmail}</small>
+            </div>
           </div>
+          <div className={styles.separator} role="separator" />
           <div className={styles.actions}>
-            {!authenticated && access?.requestAccountSignIn ? (
+            {authenticated ? (
+              <Link
+                href={accountHref}
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <User size={16} aria-hidden="true" />
+                <span>Account</span>
+              </Link>
+            ) : access?.requestAccountSignIn ? (
               <button
                 type="button"
                 className={styles.item}
@@ -227,33 +284,73 @@ export function ProfileMenu({
                   access.requestAccountSignIn?.();
                 }}
               >
-                <FolderOpen size={16} aria-hidden="true" />
-                Sign in to my AC account
+                <User size={16} aria-hidden="true" />
+                <span>Sign in</span>
               </button>
             ) : (
               <Link
-                href={accountHref}
+                href="/login"
                 className={styles.item}
                 onClick={() => setOpen(false)}
               >
-                <FolderOpen size={16} aria-hidden="true" />
-                {authenticated ? "Account" : "Sign in to my AC account"}
+                <User size={16} aria-hidden="true" />
+                <span>Sign in</span>
               </Link>
             )}
-            <LocalSettingsButton className={styles.item} />
-            {authenticated ? (
-              <button
-                type="button"
-                className={styles.item}
-                disabled={signingOut}
-                onClick={() => void signOut()}
-              >
-                <LogOut size={16} aria-hidden="true" />
-                {signingOut ? "Signing out…" : "Sign out"}
-              </button>
-            ) : null}
+            <Link
+              href="/calls"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <FolderOpen size={16} aria-hidden="true" />
+              <span>Calls</span>
+            </Link>
           </div>
-          <ThemeControl className={styles.theme} />
+          <div className={styles.separator} role="separator" />
+          <div className={styles.actions}>
+            <a
+              href="https://app.authorityclosers.com/privacy"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <span>Privacy</span>
+            </a>
+            <a
+              href="https://app.authorityclosers.com/terms"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <span>Terms</span>
+            </a>
+            <a
+              href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help"
+              className={styles.item}
+              onClick={() => setOpen(false)}
+            >
+              <Mail size={16} aria-hidden="true" />
+              <span>Email the AC team</span>
+            </a>
+          </div>
+          {authenticated ? (
+            <>
+              <div className={styles.separator} role="separator" />
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.item}
+                  disabled={signingOut}
+                  onClick={() => void signOut()}
+                >
+                  <LogOut size={16} aria-hidden="true" />
+                  <span>{signingOut ? "Signing out…" : "Sign out"}</span>
+                </button>
+              </div>
+            </>
+          ) : null}
           {error ? (
             <p className={styles.error} role="alert">
               {error}

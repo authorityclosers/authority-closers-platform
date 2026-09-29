@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
@@ -17,6 +18,7 @@ import { AccountProfile } from "./account-profile";
 import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { SalesXrayPreloader } from "./sales-xray-preloader";
+import { PageSkeleton } from "./shell/page-skeleton";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -184,6 +186,19 @@ function StandaloneStudioView({
 }) {
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
+  const pathname = usePathname();
+  const activeFor = (path: string): "dashboard" | "analyse" | "calls" | "account" => {
+    if (path === "/dashboard") return "dashboard";
+    if (path === "/calls") return "calls";
+    if (path === "/account") return "account";
+    return "analyse";
+  };
+  const skeletonVariant = (path: string): "dashboard" | "list" | "account" | "studio" => {
+    if (path === "/dashboard") return "dashboard";
+    if (path === "/calls") return "list";
+    if (path === "/account") return "account";
+    return "studio";
+  };
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
@@ -518,10 +533,9 @@ function StandaloneStudioView({
   if (view.kind === "loading" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <SalesXrayPreloader
-          phase="session"
-          openingExistingCall={openingExistingCall}
-        />
+        <AcquisitionShell authenticated={false} active={activeFor(pathname)}>
+          <PageSkeleton variant={skeletonVariant(pathname)} />
+        </AcquisitionShell>
       </WorkspaceAccessProvider>
     );
   const chooser = view.kind === "chooser" || view.kind === "selecting";
