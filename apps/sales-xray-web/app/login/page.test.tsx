@@ -47,6 +47,7 @@ async function click(text: string) {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/login");
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -58,6 +59,61 @@ afterEach(async () => {
   host.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/login");
+});
+
+it.each([
+  ["/%09/evil.example", "/dashboard"],
+  ["/%0A/evil.example", "/dashboard"],
+  ["/%0D/evil.example", "/dashboard"],
+  ["//evil.example", "/dashboard"],
+  ["/%5Cevil.example", "/dashboard"],
+  ["https://evil.example", "/dashboard"],
+  ["/login?next=/x", "/dashboard"],
+  ["/analysis/../login?next=/x", "/dashboard"],
+  ["//[invalid", "/dashboard"],
+  ["", "/dashboard"],
+  [
+    encodeURIComponent(
+      "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d?view=report#overview",
+    ),
+    "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d?view=report#overview",
+  ],
+])("after sign-in, next=%s navigates to %s", async (next, expected) => {
+  window.history.replaceState(null, "", `/login?next=${next}`);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("/config")) return new Response(null, { status: 503 });
+      if (url === "/v1/auth/password/login")
+        return Response.json({ authenticated: true });
+      if (url === "/v1/me/workspaces") return Response.json(session);
+      throw new Error(`Unexpected ${url}`);
+    }),
+  );
+  await mount();
+  await click("Use my existing password");
+  const email = host.querySelector<HTMLInputElement>(
+    "#account-password-email",
+  )!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(email, "existing@example.test");
+    email.dispatchEvent(new Event("input", { bubbles: true }));
+    email.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  host.querySelector<HTMLInputElement>("#account-password")!.value =
+    "synthetic-password";
+  expect(assign).not.toHaveBeenCalled();
+  await act(async () =>
+    host
+      .querySelector<HTMLFormElement>("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+  );
+  await flush();
+  expect(assign).toHaveBeenCalledExactlyOnceWith(expected);
 });
 
 it("opens the versioned code-first flow without initiating sign-in before consent", async () => {

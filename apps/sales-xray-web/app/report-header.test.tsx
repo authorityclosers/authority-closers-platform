@@ -41,6 +41,10 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  window.history.replaceState(null, "", "/");
 });
 
 function openMenu() {
@@ -101,5 +105,33 @@ it("the download action runs once and closes its disclosure", async () => {
     menu.querySelector<HTMLButtonElement>("button")!.click(),
   );
   expect(onDownload).toHaveBeenCalledOnce();
+  expect(menu.open).toBe(false);
+});
+
+it.each([
+  [
+    "/sales-xray?call=eaed7960-d4d0-4675-bd34-5b6a7d9c598d&view=report&token=fictional#overview",
+    "/sales-xray?call=eaed7960-d4d0-4675-bd34-5b6a7d9c598d#overview",
+  ],
+  [
+    "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d?view=report#overview",
+    "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d#overview",
+  ],
+  ["/sales-xray?call=&view=report", "/sales-xray"],
+])("copies the report URL from %s as %s", async (path, expected) => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, "", path);
+  const writeText = vi
+    .spyOn(navigator.clipboard, "writeText")
+    .mockResolvedValue(undefined);
+  const { menu } = openMenu();
+  const copy = Array.from(menu.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("Copy link"),
+  )!;
+  await act(async () => copy.click());
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(
+    `${window.location.origin}${expected}`,
+  );
+  expect(copy.textContent).toContain("Link copied");
   expect(menu.open).toBe(false);
 });

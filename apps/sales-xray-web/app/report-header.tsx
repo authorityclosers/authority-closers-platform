@@ -274,7 +274,9 @@ export function ReportHeader({
                 type="button"
                 onClick={(event) => {
                   const url = new URL(window.location.href);
+                  const call = url.searchParams.get("call");
                   url.search = "";
+                  if (call) url.searchParams.set("call", call);
                   void navigator.clipboard
                     ?.writeText(url.toString())
                     .then(() => {
