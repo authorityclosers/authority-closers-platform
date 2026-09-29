@@ -34,6 +34,7 @@ The report has four separate layers. Each layer has its own output block and ver
 - **D9 — Automatic checks:** Use plain code, with no AI and no new dependency, for reading grade 6–8 (Flesch–Kincaid with our own syllable counter), at most 20 words per sentence, a versioned banned-jargon list with plain replacements, a quote and time for every claim, call type matching the manifest's expected type, no analysis or coaching for `not_a_sales_call`, and no skip-listed skill for any type. Run checks in CI on the fictional set and on dev on the golden set. The scorecard shows tokens and cost per call.
 - **D10 — Coaching cost rule:** L1–L3 run automatically. The Coaching tab is on request. RL8 measures the coaching share of C5 output on the golden set and the cost of a separate on-request run. The CEO/owner then fixes the rule. Build L4 v2 only if on-request generation saves money.
 - **D11 — API shape:** Give the Call Record (numbers, facts, tags, and call type) its own endpoint, `GET /v1/conversation/submissions/{id}/call-record`, so the strict web parsers (`report-contract.ts`, `overview-contract.ts`) and stored report hashes (`report_store.py`) do not break. New report-draft fields default to excluded.
+- **D12 — No sentiment line in v1 (CEO, 29 Sep 2026):** Buyer concerns show only in the buyer's own words, with quote and time (`concern` fact tag). The current C5 rule stays: words only, with no emotion, tone or trait claims. A mood line from text, or emotion from audio, stays out of scope until after Reviewer Studio v2.
 
 ## Alternatives
 
@@ -59,7 +60,7 @@ Changing the layer outputs, call-type taxonomy, rubrics, or API shape requires c
 
 ## Evidence
 
-- [AUT-127 architecture document](/AUT/issues/AUT-127#document-architecture), revision 3, sections 1, 2 (D1–D11), and 5. It records the owner-approved AUT-72 plan revision 3 dated 29 Sep 2026.
+- [AUT-127 architecture document](/AUT/issues/AUT-127#document-architecture), revision 3, sections 1, 2 (D1–D12), and 5. It records the owner-approved AUT-72 plan revision 3 dated 29 Sep 2026.
 - Current pipeline details and implementation references are recorded in section 1 of that architecture document.
 
 ## Owner
@@ -72,4 +73,4 @@ None.
 
 ## Trigger to revisit
 
-Revisit if the golden set shows poor type accuracy; if RL8 shows that a separate on-request coaching run saves money; if the owner-approved call-type list or signed-off rubrics change; or when the AC-SVAL gates change the numeric-scoring boundary.
+Revisit if the golden set shows poor type accuracy; if RL8 shows that a separate on-request coaching run saves money; if the owner-approved call-type list or signed-off rubrics change; when the AC-SVAL gates change the numeric-scoring boundary; or when Reviewer Studio v2 reopens mood or emotion.
