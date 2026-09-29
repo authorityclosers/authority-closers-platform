@@ -8,7 +8,11 @@ export default function DashboardLoading() {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   return (
-    <AcquisitionShell authenticated={authenticated} active="dashboard">
+    <AcquisitionShell
+      authenticated={authenticated}
+      loading={!access}
+      active="dashboard"
+    >
       <PageSkeleton variant="dashboard" />
     </AcquisitionShell>
   );

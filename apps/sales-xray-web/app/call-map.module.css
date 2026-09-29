@@ -1,0 +1,761 @@
+/* The call map: one card holding a scrubbable waveform (played part lit,
+   report moments as dots) over four quiet facts divided by hairlines. One
+   neutral tone plus teal; moment colours appear only as small dots. */
+.map {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 18px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+  animation: map-in var(--lx-dur-develop) var(--lx-ease-move) both;
+}
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px 12px;
+}
+/* Speakers on the left, moment kinds on the right. */
+.head {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.who {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+/* Speaker chips: avatar, name, role. Click one to name it. Each voice's
+   colour (--voice) is set inline from speaker-profiles.ts. */
+.speakers {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 11px 3px 3px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  color: var(--lx-ink-2);
+  font: 600 12.5px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    border-color var(--lx-dur-quick) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.speaker i {
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: var(--voice);
+}
+.speaker:hover {
+  border-color: color-mix(in srgb, var(--voice) 45%, var(--lx-line));
+  background: color-mix(in srgb, var(--voice) 7%, var(--lx-surface));
+  transform: translateY(-1px);
+}
+.speaker[aria-expanded="true"] {
+  border-color: var(--voice);
+  background: color-mix(in srgb, var(--voice) 10%, var(--lx-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--voice) 14%, transparent);
+}
+.speaker:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+.speakerName {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.speaker small {
+  padding: 2px 6px;
+  border-radius: var(--lx-radius-pill);
+  background: color-mix(in srgb, var(--voice) 14%, transparent);
+  color: color-mix(in srgb, var(--voice) 75%, var(--lx-ink));
+  font: 700 10px/1.2 var(--lx-font-ui);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+/* "Speaker 1 looks like you · Yes · No": one tap to confirm. */
+.ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-teal-tint);
+  box-shadow: inset 0 0 0 1px var(--lx-teal-edge);
+  color: var(--lx-ink-2);
+  font: 500 12px/1 var(--lx-font-ui);
+  animation: ask-in var(--lx-dur-reveal) var(--lx-ease-pop) both;
+}
+.ask > svg {
+  color: var(--lx-teal);
+}
+.ask b {
+  font-weight: 700;
+}
+.ask button {
+  min-height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--lx-radius-pill);
+  background: transparent;
+  color: var(--lx-ink-3);
+  font: 650 11.5px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition: background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.ask button:first-of-type {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+.ask button:hover {
+  background: var(--lx-sunken);
+}
+.ask button:first-of-type:hover {
+  background: var(--lx-teal-hover);
+}
+.ask button:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+@keyframes ask-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px) scale(0.96);
+  }
+}
+
+.timeline {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+.track {
+  position: relative;
+  height: 56px;
+}
+/* One thin lane per speaker: when each voice holds the floor. */
+.lanes {
+  display: grid;
+  gap: 3px;
+}
+.lane {
+  display: block;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--lx-line-soft) 80%, transparent);
+  fill: var(--voice);
+  transition: opacity var(--lx-dur-move) var(--lx-ease-quick);
+  animation: lane-in 700ms var(--lx-ease-move) 120ms backwards;
+}
+.lane + .lane {
+  animation-delay: 200ms;
+}
+.lane[data-dim] {
+  opacity: 0.22;
+}
+.wave {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.wave line {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bar-in 560ms var(--lx-ease-move) backwards;
+  animation-delay: calc(var(--i, 0) * 2ms);
+  transition:
+    stroke var(--lx-dur-quick) var(--lx-ease-quick),
+    stroke-width var(--lx-dur-quick) var(--lx-ease-quick),
+    opacity var(--lx-dur-move) var(--lx-ease-quick);
+}
+/* A speaker in focus keeps only their own stretches of the waveform lit. */
+.wave line.dim {
+  opacity: 0.2;
+}
+.wave[data-voice] line.pending:not(.dim),
+.wave[data-voice] line.ahead:not(.dim) {
+  stroke: var(--voice);
+}
+.pending {
+  stroke: color-mix(in srgb, var(--lx-line-strong) 80%, var(--lx-surface));
+}
+/* Hovering ahead of the playhead previews the stretch you would skip. */
+.ahead {
+  stroke: color-mix(in srgb, var(--lx-teal) 38%, var(--lx-line-strong));
+}
+.played {
+  stroke: var(--lx-teal);
+}
+.wave line.hot {
+  stroke: var(--lx-ink);
+  stroke-width: 2.8;
+}
+.noWave {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--lx-line);
+}
+
+/* The spoken turn under the pointer, as a soft band. */
+.turn {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  min-width: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--lx-teal) 9%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--lx-teal) 16%, transparent);
+  pointer-events: none;
+  animation: fade-in var(--lx-dur-quick) var(--lx-ease-quick) both;
+}
+
+/* The whole track is one slider: hover to peek, click or drag to play. */
+.scrub {
+  position: absolute;
+  inset: -6px 0;
+  z-index: 2;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: none;
+}
+.scrub:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+
+.playhead {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  z-index: 1;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--lx-teal);
+  pointer-events: none;
+  transition: left 250ms linear;
+}
+.playhead::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--lx-teal);
+  box-shadow: 0 0 0 3px var(--lx-surface);
+}
+.playhead[data-playing]::before {
+  animation: knob-pulse 1.6s var(--lx-ease-quick) infinite;
+}
+
+/* Pointer cursor: a hairline with a peek card beneath the waveform. */
+.cursor {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  z-index: 4;
+  width: 1.5px;
+  margin-left: -0.75px;
+  border-radius: 2px;
+  background: var(--lx-ink);
+  pointer-events: none;
+}
+.peek {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  display: grid;
+  width: max-content;
+  max-width: 300px;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lx-surface) 92%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(16px);
+  backdrop-filter: saturate(1.6) blur(16px);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-ink);
+  font: 500 12.5px/1.45 var(--lx-font-ui);
+  text-align: left;
+  transform: translateX(-50%);
+  animation: peek-in var(--lx-dur-quick) var(--lx-ease-move) both;
+}
+.peek[data-edge="start"] {
+  left: -6px;
+  transform: none;
+}
+.peek[data-edge="end"] {
+  right: -6px;
+  left: auto;
+  transform: none;
+}
+.peekHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.peekHead b {
+  font: 700 13px/1 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.peekHead > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font: 650 11px/1 var(--lx-font-ui);
+}
+.peekHead > span[data-voice] {
+  padding: 2px 8px 2px 2px;
+  background: color-mix(in srgb, var(--voice) 14%, var(--lx-surface));
+  color: color-mix(in srgb, var(--voice) 70%, var(--lx-ink));
+}
+.peek q {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--lx-ink-2);
+  quotes: "“" "”";
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.peek small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lx-muted-2);
+  font: 600 11px/1 var(--lx-font-ui);
+}
+
+/* ---------- Moment dots on the top edge ---------- */
+.pin {
+  position: absolute;
+  top: -8px;
+  z-index: 3;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  margin-left: -11px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity var(--lx-dur-move) var(--lx-ease-quick);
+}
+.pin::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 2.5px var(--lx-surface);
+  transition:
+    transform var(--lx-dur-move) var(--lx-ease-pop),
+    box-shadow var(--lx-dur-move) var(--lx-ease-quick);
+}
+/* On hover a soft column marks the moment in the waveform. */
+.pin::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  width: 2px;
+  height: 50px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--tone) 55%, transparent);
+  opacity: 0;
+  transition: opacity var(--lx-dur-quick) var(--lx-ease-quick);
+  pointer-events: none;
+}
+.pin:hover::before,
+.pin:focus-visible::before {
+  transform: scale(1.45);
+}
+.pin[data-active]::before {
+  box-shadow:
+    0 0 0 2.5px var(--lx-surface),
+    0 0 0 5px color-mix(in srgb, var(--tone) 35%, transparent);
+  transform: scale(1.3);
+}
+.pin:hover::after,
+.pin:focus-visible::after {
+  opacity: 1;
+}
+.pin:focus-visible {
+  outline: none;
+}
+.pin[data-tone="strength"],
+.legend [data-tone="strength"] {
+  --tone: var(--lx-strength);
+}
+.pin[data-tone="objection"],
+.legend [data-tone="objection"] {
+  --tone: var(--lx-objection);
+}
+.pin[data-tone="missed"],
+.legend [data-tone="missed"] {
+  --tone: var(--lx-missed);
+}
+.pin[data-tone="closing"],
+.legend [data-tone="closing"] {
+  --tone: var(--lx-closing);
+}
+.pin[data-tone="improve"],
+.legend [data-tone="improve"] {
+  --tone: var(--lx-warning);
+}
+/* Hovering a legend entry keeps only that kind of moment in focus. */
+.map[data-focus="strength"] .pin:not([data-tone="strength"]),
+.map[data-focus="objection"] .pin:not([data-tone="objection"]),
+.map[data-focus="missed"] .pin:not([data-tone="missed"]),
+.map[data-focus="closing"] .pin:not([data-tone="closing"]),
+.map[data-focus="improve"] .pin:not([data-tone="improve"]) {
+  opacity: 0.18;
+}
+.map[data-focus] .pin::before {
+  transform: scale(1.25);
+}
+/* Cards open below the waveform, inside the page. */
+.tip {
+  position: absolute;
+  /* Below the waveform and every speaker lane (5px lanes, 3px apart). */
+  top: calc(79px + var(--lanes, 0) * 8px);
+  left: 50%;
+  z-index: 6;
+  display: grid;
+  width: max-content;
+  max-width: 280px;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  color: var(--lx-ink);
+  font: 600 12.5px/1.4 var(--lx-font-ui);
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition:
+    opacity var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-move);
+}
+.pin[data-edge="start"] .tip {
+  left: -4px;
+  transform: translate(0, -4px);
+}
+.pin[data-edge="end"] .tip {
+  right: -4px;
+  left: auto;
+  transform: translate(0, -4px);
+}
+.tip em {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-muted);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tip em::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+.pin:hover .tip,
+.pin:focus-visible .tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.pin[data-edge]:hover .tip,
+.pin[data-edge]:focus-visible .tip {
+  transform: translate(0, 0);
+}
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.time {
+  min-width: 36px;
+  color: var(--lx-muted-2);
+  font: 600 11px/1 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.time:last-child {
+  text-align: right;
+}
+.time[data-live] {
+  color: var(--lx-teal);
+}
+.legend {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  color: var(--lx-muted);
+  font: 500 11.5px/1.3 var(--lx-font-ui);
+}
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--lx-radius-pill);
+  cursor: default;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.legend > span:hover {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+}
+.legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+/* ---------- Four facts in the same card, split by hairlines ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--lx-line-soft);
+}
+.stat {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px 15px;
+  transition: background-color var(--lx-dur-move) var(--lx-ease-quick);
+}
+.stat + .stat {
+  border-left: 1px solid var(--lx-line-soft);
+}
+.stat:first-child {
+  border-bottom-left-radius: 17px;
+}
+.stat:last-child {
+  border-bottom-right-radius: 17px;
+}
+.stat:hover {
+  background: color-mix(in srgb, var(--tile-soft) 45%, transparent);
+}
+.stat[data-tone="teal"] {
+  --tile: var(--lx-teal);
+  --tile-soft: var(--lx-teal-soft);
+}
+.stat[data-tone="amber"] {
+  --tile: var(--lx-warning);
+  --tile-soft: var(--lx-warning-soft);
+}
+.stat[data-tone="blue"] {
+  --tile: var(--lx-closing);
+  --tile-soft: var(--lx-closing-soft);
+}
+.stat[data-tone="violet"] {
+  --tile: var(--lx-missed);
+  --tile-soft: var(--lx-missed-soft);
+}
+.icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--tile-soft);
+  color: var(--tile);
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.stat:hover .icon {
+  transform: scale(1.08) rotate(-4deg);
+}
+.body {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+.body b {
+  color: var(--lx-ink);
+  font: 800 18px/1.2 var(--lx-font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.body b small {
+  color: var(--lx-muted);
+  font: 600 12px/1 var(--lx-font-ui);
+  letter-spacing: 0;
+}
+.body > small {
+  overflow: hidden;
+  color: var(--lx-muted);
+  font: 500 11.5px/1.3 var(--lx-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Slim bars: each voice's share of the talking, in its lane colour; and
+   wins against things to work on. */
+.ratio {
+  display: flex;
+  height: 3px;
+  gap: 2px;
+  margin-top: 5px;
+}
+.ratio > span {
+  min-width: 3px;
+  border-radius: 99px;
+  background: var(--voice);
+  animation: fill var(--lx-dur-develop) var(--lx-ease-move) 150ms both;
+  transform-origin: left center;
+}
+.balance {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+}
+.balance {
+  background: var(--lx-warning-soft);
+}
+.balance > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--lx-strength);
+  animation: fill var(--lx-dur-develop) var(--lx-ease-move) 250ms both;
+  transform-origin: left center;
+}
+
+@keyframes map-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes bar-in {
+  from {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes lane-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+@keyframes knob-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px var(--lx-surface),
+      0 0 0 3px color-mix(in srgb, var(--lx-teal) 30%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px var(--lx-surface),
+      0 0 0 8px color-mix(in srgb, var(--lx-teal) 0%, transparent);
+  }
+}
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 1180px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat:nth-child(3) {
+    border-left: 0;
+  }
+  .stat:nth-child(n + 3) {
+    border-top: 1px solid var(--lx-line-soft);
+  }
+  .stat:first-child {
+    border-bottom-left-radius: 0;
+  }
+  .stat:nth-child(3) {
+    border-bottom-left-radius: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map,
+  .wave line,
+  .turn,
+  .peek,
+  .playhead[data-playing]::before,
+  .lane,
+  .ratio > span,
+  .balance > span {
+    animation: none;
+  }
+  .playhead,
+  .tip,
+  .pin,
+  .pin::before,
+  .stat,
+  .icon {
+    transition: none;
+  }
+}
