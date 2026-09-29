@@ -25,6 +25,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.acquisition_activity import account_activity
 from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
     benchmark_for_submission,
     build_benchmark_request,
@@ -491,6 +492,26 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_library_summary(
+                    ownership(auth.database),
+                    auth.resolved.actor,
+                    shared_identity_locks=True,
+                )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
+
+    @router.get("/activity")
+    async def saved_calls_activity(request: Request, response: Response) -> dict[str, Any]:
+        host = guard(request, response)
+        try:
+            context = (
+                learner_read_account(request)
+                if host == "learner"
+                else asynccontextmanager(read_require_actor)(request)
+            )
+            async with context as auth:
+                return await account_activity(
                     ownership(auth.database),
                     auth.resolved.actor,
                     shared_identity_locks=True,
