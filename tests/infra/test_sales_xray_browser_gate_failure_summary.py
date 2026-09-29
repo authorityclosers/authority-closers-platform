@@ -94,6 +94,17 @@ def test_redactor_removes_driver_qualified_database_urls() -> None:
     assert summary == "[redacted database URL] [redacted database URL]"
 
 
+def test_redactor_removes_quoted_numeric_pytest_assertion_values() -> None:
+    detail = "AssertionError: assert '123456' == '928371'; TimeoutError: 30000ms"
+
+    summary = gate._redact_failure_summary(detail)
+
+    assert "123456" not in summary
+    assert "928371" not in summary
+    assert summary.count("[redacted code]") == 2
+    assert "30000ms" in summary
+
+
 def test_failure_receipt_includes_a_redacted_failure_summary(tmp_path: Path) -> None:
     receipt = tmp_path / "failure.json"
     gate._write_failure_receipt(

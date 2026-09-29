@@ -80,6 +80,7 @@ def _redact_failure_summary(value: str) -> str:
         "[redacted code]",
         value,
     )
+    value = re.sub(r"(?<=['\"])\d{4,10}(?=['\"])", "[redacted code]", value)
     value = re.sub(
         r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
         "Bearer [redacted token]",
