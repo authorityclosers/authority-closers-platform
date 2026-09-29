@@ -17,6 +17,8 @@ resolved_packages_sha="$(awk -F= '$1 == "AC_OS_RESOLVED_PACKAGES_SHA256" {print 
 baseline_fixtures="$repo_root/tests/infra/fixtures/os-baseline"
 base_resolved_fixture="$baseline_fixtures/ubuntu-noble-amd64-2026-08-30-v1.tsv"
 ffmpeg_delta_fixture="$baseline_fixtures/ubuntu-noble-amd64-2026-09-28-v1-ffmpeg.tsv"
+# Security updates that replaced a pinned version after its old version left the Ubuntu archive.
+updates_fixture="$baseline_fixtures/ubuntu-noble-amd64-2026-09-29-v1-updates.tsv"
 expected_resolved="$(mktemp)"
 trap 'rm -f -- "$expected_resolved"' EXIT
 base_resolved_sha="$(sha256sum "$base_resolved_fixture" | awk '{print $1}')"
@@ -25,8 +27,15 @@ base_resolved_sha="$(sha256sum "$base_resolved_fixture" | awk '{print $1}')"
 ffmpeg_policy_version="$(awk -F '\t' '$1 == "ffmpeg" {print $2}' "$packages")"
 ffmpeg_delta_version="$(awk -F '\t' '$1 == "ffmpeg" {print $2}' "$ffmpeg_delta_fixture")"
 [[ -n "$ffmpeg_policy_version" && "$ffmpeg_policy_version" == "$ffmpeg_delta_version" ]]
-grep -Fxq 'AC_OS_BASELINE_ID=ubuntu-noble-amd64-2026-09-28-v1' "$policy"
-cat "$base_resolved_fixture" "$ffmpeg_delta_fixture" | LC_ALL=C sort > "$expected_resolved"
+grep -Fxq 'AC_OS_BASELINE_ID=ubuntu-noble-amd64-2026-09-29-v1' "$policy"
+[[ "$(wc -l < "$updates_fixture" | tr -d ' ')" == 1 ]]
+# Each update replaces the version of a package already in the list; it never adds one.
+cat "$base_resolved_fixture" "$ffmpeg_delta_fixture" | awk -F '\t' '
+  NR == FNR { update[$1] = $2; next }
+  $1 in update { print $1 "\t" update[$1]; replaced[$1] = 1; next }
+  { print }
+  END { for (package in update) if (!(package in replaced)) exit 1 }
+' "$updates_fixture" - | LC_ALL=C sort > "$expected_resolved"
 if ! cmp -s "$expected_resolved" "$resolved_packages"; then
   diff -u "$expected_resolved" "$resolved_packages" >&2
   exit 1
