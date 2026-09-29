@@ -121,7 +121,7 @@ def test_four_valid_source_spans_remain_rejected_at_source_note_bound(
     assert ((*path, "evidence"), "too_long") in {
         (tuple(error["loc"]), error["type"]) for error in exc.value.errors()
     }
-    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
+    with pytest.raises(reports.ReportError, match="report_evidence_invalid"):
         reports.parse_report_draft(draft, transcript)
 
 
@@ -143,8 +143,8 @@ def test_conversation_change_rejects_overlapping_native_source_timestamps(
         change[key]["evidence"] = [_evidence(transcript, index)]
     original = deepcopy(draft)
 
-    with pytest.raises(reports.ReportError, match="report_overview_invalid"):
-        reports.parse_report_draft(draft, transcript)
+    result = reports.parse_report_draft(draft, transcript)
+    assert result.overview is not None and result.overview.conversation_change is None
     assert draft == original
 
 

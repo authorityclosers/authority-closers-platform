@@ -295,14 +295,11 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/5"
-    # OpenAI extends prompt-provider admission only; parser/adaptation semantics
-    # remain revision 5. Coaching-v6 admission reuses the v5 evidence rules and is
-    # blocked at runtime by coaching_validation_gate until AC-SVAL approval. The
-    # combined module was reviewed before repinning.
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/6"
+    # AUT-59 changes overview admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "ca3aa8de8be7e469697db6a2fc5959f0873cc407da61f114f3cc9b8a45f86f82"
+        "8d441ad920bd2a68dd6ce1e6e0112db686d823b9a146b6aa9fb42921672b637a"
     )
 
 

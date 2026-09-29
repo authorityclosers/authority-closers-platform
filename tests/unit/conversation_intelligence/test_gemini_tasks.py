@@ -282,7 +282,7 @@ def test_retained_v2_schema_is_frozen_and_requires_its_original_marker() -> None
 
 
 @pytest.mark.parametrize("mutation", ["too_many_strengths", "too_many_rewatch", "bad_index"])
-def test_v3_still_rejects_invalid_semantic_cardinality_and_indices(mutation: str) -> None:
+def test_v3_keeps_finding_limits_strict_and_drops_malformed_overview_items(mutation: str) -> None:
     transcript, task, draft = coaching_case()
     if mutation == "too_many_strengths":
         draft["strengths"] *= 4
@@ -293,8 +293,16 @@ def test_v3_still_rejects_invalid_semantic_cardinality_and_indices(mutation: str
         ]
     else:
         draft["overview"]["improvement_details"][0]["finding_index"] = 999
-    with pytest.raises(InferenceTaskError):
-        validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    if mutation == "too_many_strengths":
+        with pytest.raises(InferenceTaskError):
+            validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    else:
+        report = validate_coaching_result(result(task, envelope(draft)), task, transcript).data()
+        field = "rewatch" if mutation == "too_many_rewatch" else "improvement_details"
+        assert len(report["overview"][field]) == (1 if field == "rewatch" else 0)
+        assert report["provider_extras"]["compatibility"]["overview_drops"][field] == (
+            {"reference_duplicate": 3} if field == "rewatch" else {"item_schema_invalid": 1}
+        )
 
 
 def test_schema_context_consumes_the_existing_coaching_input_budget() -> None:
