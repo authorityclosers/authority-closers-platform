@@ -48,8 +48,8 @@ export function openSettings(section?: string) {
 }
 
 /**
- * "back" pops the entry the dialog pushed; "replace" is for a link inside the
- * dialog, which pushes its own route right after.
+ * "back" pops the entry the dialog pushed; "replace" removes the hash in place.
+ * Links leaving the dialog must also replace this entry with their destination.
  */
 export function closeSettings(mode: "back" | "replace" = "back") {
   if (!settingsHashOpen(window.location.hash)) return;

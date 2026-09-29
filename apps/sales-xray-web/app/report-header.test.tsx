@@ -135,3 +135,32 @@ it.each([
   expect(copy.textContent).toContain("Link copied");
   expect(menu.open).toBe(false);
 });
+
+it.each(["unavailable", "denied"])(
+  "keeps Copy link actionable when clipboard access is %s",
+  async (failure) => {
+    vi.useFakeTimers();
+    const clipboard = navigator.clipboard;
+    const write = vi
+      .spyOn(clipboard, "writeText")
+      .mockRejectedValue(new Error("denied"));
+    const access = vi.spyOn(navigator, "clipboard", "get");
+    if (failure === "unavailable") access.mockReturnValue(undefined!);
+    const { menu } = openMenu();
+    const copy = Array.from(menu.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Copy link"),
+    )!;
+    await act(async () => copy.click());
+    expect(menu.open).toBe(true);
+    expect(menu.querySelector('[role="alert"]')?.textContent).toContain(
+      "Couldn’t copy the link. Try again or copy the address from your browser.",
+    );
+    expect(copy.textContent).toContain("Copy link");
+    access.mockRestore();
+    write.mockResolvedValue(undefined);
+    await act(async () => copy.click());
+    expect(copy.textContent).toContain("Link copied");
+    expect(menu.querySelector('[role="alert"]')).toBeNull();
+    expect(menu.open).toBe(false);
+  },
+);

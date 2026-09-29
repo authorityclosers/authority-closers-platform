@@ -9,6 +9,38 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
 }));
 
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    replace,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { replace?: boolean }) => (
+    <a
+      {...props}
+      href={href}
+      onClick={(event) => {
+        const navigate =
+          !event.defaultPrevented &&
+          event.button === 0 &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          (!event.currentTarget.target ||
+            event.currentTarget.target === "_self") &&
+          !event.currentTarget.hasAttribute("download");
+        event.preventDefault();
+        if (navigate)
+          window.history[replace ? "replaceState" : "pushState"](
+            null,
+            "",
+            href,
+          );
+      }}
+    />
+  ),
+}));
+
 import { SettingsDialogHost } from "./settings-dialog";
 import { closeSettings, openSettings } from "./settings-open";
 import { UploadSessionProvider } from "./hooks/upload-session";
@@ -111,3 +143,48 @@ it("never opens account settings for a signed-out visitor", async () => {
   expect(host.querySelector("dialog")).toBeNull();
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it("replaces the settings entry with an internal destination", async () => {
+  await render(true);
+  const initialLength = window.history.length;
+  await act(async () => openSettings("profile"));
+  await flush();
+  expect(window.history.length).toBe(initialLength + 1);
+  const link = host.querySelector<HTMLAnchorElement>(
+    'a[href="/analysis/calls"]',
+  )!;
+  await act(async () => link.click());
+  await flush();
+  expect(window.location.pathname).toBe("/analysis/calls");
+  expect(window.location.hash).toBe("");
+  expect(window.history.length).toBe(initialLength + 1);
+  expect(host.querySelector("dialog")).toBeNull();
+});
+
+it.each(["ctrl", "meta", "shift", "blank", "download"])(
+  "preserves the open settings entry for a %s link click",
+  async (kind) => {
+    await render(true);
+    await act(async () => openSettings("profile"));
+    await flush();
+    const link = host.querySelector<HTMLAnchorElement>(
+      'a[href="/analysis/calls"]',
+    )!;
+    if (kind === "blank") link.target = "_blank";
+    if (kind === "download") link.download = "report";
+    await act(async () =>
+      link.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: kind === "ctrl",
+          metaKey: kind === "meta",
+          shiftKey: kind === "shift",
+        }),
+      ),
+    );
+    expect(window.location.pathname).toBe("/dashboard");
+    expect(window.location.hash).toBe("#settings/profile");
+    expect(host.querySelector("dialog")).not.toBeNull();
+  },
+);

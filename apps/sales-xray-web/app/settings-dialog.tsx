@@ -8,6 +8,7 @@ import {
   SETTINGS_HASH_PREFIX,
   closeSettings,
   forgetSettingsEntry,
+  opensInPlace,
   settingsHashOpen,
 } from "./settings-open";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -72,9 +73,19 @@ export function SettingsDialogHost() {
       closeSettings();
       return;
     }
-    const link = (event.target as HTMLElement).closest?.("a[href]");
+    const link = (event.target as HTMLElement).closest?.<HTMLAnchorElement>(
+      "a[href]",
+    );
     const href = link?.getAttribute("href") ?? "";
-    if (link && href.startsWith("/")) closeSettings("replace");
+    if (
+      link &&
+      opensInPlace(event) &&
+      href.startsWith("/") &&
+      !href.startsWith("//") &&
+      (!link.target || link.target === "_self") &&
+      !link.hasAttribute("download")
+    )
+      closeSettings("replace");
   };
 
   return (
@@ -86,7 +97,7 @@ export function SettingsDialogHost() {
         event.preventDefault();
         closeSettings();
       }}
-      onClick={onClick}
+      onClickCapture={onClick}
     >
       <AccountSettings
         key={identityKey}

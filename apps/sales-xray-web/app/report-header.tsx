@@ -96,6 +96,7 @@ export function ReportHeader({
   const hasCompact = Boolean(visual && compactVisual);
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const title = callTitle(label, "Sales call report");
   const canRename = claimed && label !== null && rename !== undefined;
 
@@ -272,24 +273,32 @@ export function ReportHeader({
               </button>
               <button
                 type="button"
-                onClick={(event) => {
+                onClick={async () => {
                   const url = new URL(window.location.href);
                   const call = url.searchParams.get("call");
                   url.search = "";
                   if (call) url.searchParams.set("call", call);
-                  void navigator.clipboard
-                    ?.writeText(url.toString())
-                    .then(() => {
-                      setCopied(true);
-                      window.setTimeout(() => setCopied(false), 1200);
-                    })
-                    .catch(() => {});
-                  closeMenu(event);
+                  setCopyFailed(false);
+                  setCopied(false);
+                  try {
+                    await navigator.clipboard.writeText(url.toString());
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1200);
+                    if (menu.current) menu.current.open = false;
+                  } catch {
+                    setCopyFailed(true);
+                  }
                 }}
               >
                 <Link2 size={16} aria-hidden="true" />
                 {copied ? "Link copied" : "Copy link"}
               </button>
+              {copyFailed && (
+                <p role="alert" className={styles.reportMenuSupport}>
+                  Couldn’t copy the link. Try again or copy the address from
+                  your browser.
+                </p>
+              )}
               <button
                 type="button"
                 disabled={busy}
