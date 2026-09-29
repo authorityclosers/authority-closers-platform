@@ -925,6 +925,15 @@ def require_safe_origin(
         and request.url.hostname == sales_host
     ):
         return
+    studio_origin = settings.sales_xray_studio_origin
+    if (
+        studio_origin is not None
+        and normalized_origin == studio_origin
+        and sales_host is not None
+        and request.url.hostname == sales_host
+    ):
+        # The owner's UI studio reaches this Sales Xray host through its own proxy (staging only).
+        return
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
     coach_origin = str(settings.coach_app_url).rstrip("/")
