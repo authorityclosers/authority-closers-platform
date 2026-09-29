@@ -81,8 +81,9 @@ class FakeGitHub:
 class FakeRunner:
     """Answers the git and docker commands the engine issues."""
 
-    def __init__(self, head: str = HEAD) -> None:
+    def __init__(self, head: str = HEAD, tags: list[str] | None = None) -> None:
         self.head = head
+        self.tags = list(tags or [])
         self.ancestors: set[tuple[str, str]] = set()
         self.web_image = ""
         self.image_marker: dict[str, str] = {}
@@ -94,6 +95,10 @@ class FakeRunner:
         out, code = "", 0
         if argv[:2] == ["git", "init"] or "fetch" in argv:
             pass
+        elif "for-each-ref" in argv:
+            out = "\n".join(self.tags)
+            if out:
+                out += "\n"
         elif "rev-parse" in argv:
             out = self.head + "\n"
         elif "merge-base" in argv:
@@ -455,6 +460,97 @@ def test_status_reports_pause_and_failures(tmp_path: Path) -> None:
     assert staging["paused"] is True and staging["auto_deploy"] is False
     assert staging["failed"] == {"core": None, "web": HEAD}
     assert json.loads(json.dumps(report))
+
+
+def release_event(
+    version: str,
+    core_sha: str = HEAD,
+    web_sha: str = OLD,
+    *,
+    action: str = "promote",
+    rolled_back_from: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "version": version,
+        "core_sha": core_sha,
+        "web_sha": web_sha,
+        "requested_by": "release-operator@example.invalid",
+        "at": "2026-09-29T00:00:00Z",
+        "action": action,
+        "rolled_back_from": rolled_back_from,
+    }
+
+
+@pytest.mark.parametrize(
+    ("tags", "bump", "expected"),
+    [
+        ([], "minor", "v0.3.0"),
+        (["v0.9.1"], "minor", "v0.10.0"),
+        ([], "major", "v1.0.0"),
+        (["nightly", "v1.2", "v2.3.4-rc1"], "minor", "v0.3.0"),
+    ],
+)
+def test_next_version_uses_highest_semantic_tag_or_baseline(
+    tmp_path: Path, tags: list[str], bump: str, expected: str
+) -> None:
+    runner = FakeRunner(tags=tags)
+    engine = make_engine(tmp_path, runner=runner)
+    assert engine.next_version(bump) == expected
+    fetch = next(call for call in runner.calls if "fetch" in call)
+    assert "+refs/tags/v*:refs/tags/v*" in fetch
+
+
+def test_next_version_uses_release_record_above_every_tag(tmp_path: Path) -> None:
+    engine = make_engine(tmp_path, runner=FakeRunner(tags=["v1.5.0", "v1.3.9", "nightly"]))
+    engine.append_release(release_event("v1.8.2"))
+    assert engine.next_version("minor") == "v1.9.0"
+
+
+def test_release_records_append_and_reader_returns_current_and_previous(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    first = release_event("v0.3.0", HEAD, OLD)
+    engine.append_release(first)
+    first_line = engine.paths.releases.read_text(encoding="utf-8").splitlines()[0]
+
+    second = release_event("v0.4.0", OLD, OUTSIDE)
+    rollback = release_event("v0.3.0", HEAD, OLD, action="rollback", rolled_back_from="v0.4.0")
+    engine.append_release(second)
+    engine.append_release(rollback)
+
+    lines = engine.paths.releases.read_text(encoding="utf-8").splitlines()
+    current, previous = engine.production_releases()
+    assert len(lines) == 3
+    assert lines[0] == first_line
+    assert current == rollback
+    assert previous == second
+
+
+def test_store_keeps_previous_production_builds_after_ten_newer_staging_builds(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    previous_core = release_sha("production-previous-core")
+    previous_web = release_sha("production-previous-web")
+    current_core = release_sha("production-current-core")
+    current_web = release_sha("production-current-web")
+    staging_shas = [release_sha(f"staging-{index}") for index in range(12)]
+
+    for sha in (previous_core, previous_web, current_core, current_web, *staging_shas):
+        (engine.paths.store / sha / "core").mkdir(parents=True)
+    engine.append_release(release_event("v0.3.0", previous_core, previous_web))
+    engine.append_release(release_event("v0.4.0", current_core, current_web))
+    for sha in staging_shas:
+        engine.record(
+            {"environment": "staging", "component": "core", "sha": sha, "result": "success"}
+        )
+
+    engine.prune_store()
+    remaining = {path.name for path in engine.paths.store.iterdir()}
+    assert {previous_core, previous_web, current_core, current_web} <= remaining
+    assert set(staging_shas[-10:]) <= remaining
+    assert not set(staging_shas[:-10]) & remaining
 
 
 def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:

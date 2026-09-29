@@ -101,6 +101,10 @@ ARTIFACT_REFERENCE_RE = re.compile(rb"artifacts/([0-9a-f]{40})(?![0-9a-f])")
 PRUNE_LEFTOVER_RE = re.compile(r"\.prune-[0-9a-f]{40}\.[0-9a-f]+")
 REFERENCE_SCAN_MAX_BYTES = 1_000_000
 SHA_RE = re.compile(r"[0-9a-f]{40}")
+VERSION_RE = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
+RELEASE_RECORD_FIELDS = frozenset(
+    {"version", "core_sha", "web_sha", "requested_by", "at", "action", "rolled_back_from"}
+)
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE_REF_RE = re.compile(r"sha256:[0-9a-f]{64}")
 SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -109,6 +113,36 @@ EDGE = "http://127.0.0.1:8080"
 
 class ReleaseError(RuntimeError):
     """A deploy step failed; the message is safe to show and record."""
+
+
+def _version_parts(value: Any) -> tuple[int, int, int] | None:
+    if not isinstance(value, str):
+        return None
+    match = VERSION_RE.fullmatch(value)
+    if match is None:
+        return None
+    parts = tuple(int(part) for part in match.groups())
+    return parts[0], parts[1], parts[2]
+
+
+def _validate_release_record(entry: Mapping[str, Any]) -> dict[str, Any]:
+    if set(entry) != RELEASE_RECORD_FIELDS:
+        raise ReleaseError("production release record has an unexpected field set")
+    record = dict(entry)
+    if _version_parts(record["version"]) is None:
+        raise ReleaseError("production release version is not semantic")
+    for field_name in ("core_sha", "web_sha"):
+        if not isinstance(record[field_name], str) or not SHA_RE.fullmatch(record[field_name]):
+            raise ReleaseError(f"production release {field_name} is invalid")
+    for field_name in ("requested_by", "at"):
+        if not isinstance(record[field_name], str) or not record[field_name].strip():
+            raise ReleaseError(f"production release {field_name} is missing")
+    if record["action"] not in ("promote", "rollback"):
+        raise ReleaseError("production release action is invalid")
+    rolled_back_from = record["rolled_back_from"]
+    if rolled_back_from is not None and _version_parts(rolled_back_from) is None:
+        raise ReleaseError("production release rolled_back_from is invalid")
+    return record
 
 
 @dataclass(frozen=True)
@@ -141,6 +175,10 @@ class Paths:
     @property
     def history(self) -> Path:
         return self.state / "history.jsonl"
+
+    @property
+    def releases(self) -> Path:
+        return self.state / "releases.jsonl"
 
     def paused_flag(self, environment: str) -> Path:
         return self.state / f"{environment}.paused"
@@ -583,6 +621,45 @@ class Engine:
         lines = self.paths.history.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines[-limit:] if line.strip()]
 
+    def release_records(self) -> list[dict[str, Any]]:
+        """Read the append-only production release ledger in event order."""
+
+        if not self.paths.releases.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        for line_number, line in enumerate(
+            self.paths.releases.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError as error:
+                message = f"production release record {line_number} is invalid JSON"
+                raise ReleaseError(message) from error
+            if not isinstance(value, dict):
+                raise ReleaseError(f"production release record {line_number} is invalid")
+            records.append(_validate_release_record(value))
+        return records
+
+    def append_release(self, entry: Mapping[str, Any]) -> None:
+        """Append one production release event without changing prior history."""
+
+        record = _validate_release_record(entry)
+        self.paths.state.mkdir(parents=True, exist_ok=True)
+        with self.paths.releases.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+    def production_releases(
+        self,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return the current and previous production events, newest first."""
+
+        records = self.release_records()
+        current = records[-1] if records else None
+        previous = records[-2] if len(records) > 1 else None
+        return current, previous
+
     def passed_staging(self, sha: str) -> bool:
         return any(
             entry.get("environment") == "staging"
@@ -670,9 +747,42 @@ class Engine:
                 "--prune",
                 REPOSITORY_URL,
                 "+refs/heads/main:refs/heads/main",
+                "+refs/tags/v*:refs/tags/v*",
             ],
             timeout=300,
         )
+
+    def next_version(self, bump: str) -> str:
+        """Calculate a patch, minor, or major version from tags and releases."""
+
+        if bump not in ("patch", "minor", "major"):
+            raise ReleaseError("version bump must be patch, minor, or major")
+        self.sync_mirror()
+        result = self.run(
+            [
+                "git",
+                f"--git-dir={self.paths.mirror}",
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/tags/v*",
+            ]
+        )
+        versions = [
+            parts
+            for tag in result.stdout.splitlines()
+            if (parts := _version_parts(tag.strip())) is not None
+        ]
+        versions.extend(
+            parts
+            for record in self.release_records()
+            if (parts := _version_parts(record["version"])) is not None
+        )
+        major, minor, patch = max(versions, default=(0, 2, 0))
+        if bump == "major":
+            return f"v{major + 1}.0.0"
+        if bump == "minor":
+            return f"v{major}.{minor + 1}.0"
+        return f"v{major}.{minor}.{patch + 1}"
 
     def is_ancestor(self, older: str, newer: str) -> bool:
         return (
@@ -1474,6 +1584,9 @@ class Engine:
                 if len(recent) >= KEEP_RECENT_BUILDS:
                     break
         keep.update(recent)
+        for release in self.production_releases():
+            if release is not None:
+                keep.update((release["core_sha"], release["web_sha"]))
         removed: list[str] = []
         if not self.paths.store.exists():
             return removed
