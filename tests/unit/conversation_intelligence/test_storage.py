@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import os
+import threading
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -417,8 +418,36 @@ def test_shared_source_publication_never_reads_stored_content(
 
     monkeypatch.setattr(storage._Directory, "open", no_read)
     monkeypatch.setattr(adapter, "iter_bytes", forbidden_read)
-    first = adapter.put(key, [content], expected_sha256=key.sha256)
-    assert adapter.put(key, [content], expected_sha256=key.sha256) == first
+    descriptors, close_threads = [], []
+    original_submit, original_close = storage._SPOOL_CLOSER.submit, os.close
+    release = threading.Event()
+
+    def close_spool(descriptor: int) -> None:
+        close_threads.append(threading.get_ident())
+        original_close(descriptor)
+
+    def capture_submit(function: Any, descriptor: int) -> Any:
+        assert function is os.close
+        descriptors.append(descriptor)
+        return original_submit(close_spool, descriptor)
+
+    storage._drain_spool_closer()
+    original_submit(release.wait)
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(storage._SPOOL_CLOSER, "submit", capture_submit)
+            first = adapter.put(key, [content], expected_sha256=key.sha256)
+            assert adapter.put(key, [content], expected_sha256=key.sha256) == first
+        assert not list(adapter.root.rglob("*.tmp"))
+        assert len(descriptors) == (2 if os.name == "posix" else 0)
+        assert [os.fstat(fd).st_nlink for fd in descriptors] == ([1, 0] if descriptors else [])
+    finally:
+        release.set()
+        storage._drain_spool_closer()
+    assert all(thread != threading.get_ident() for thread in close_threads)
+    for fd in descriptors:
+        with pytest.raises(OSError):
+            os.fstat(fd)
 
 
 def test_shared_source_key_digest_cannot_be_overridden(tmp_path: Path) -> None:

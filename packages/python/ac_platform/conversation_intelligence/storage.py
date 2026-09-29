@@ -13,7 +13,8 @@ import os
 import re
 import stat
 from collections.abc import Iterable, Iterator
-from contextlib import contextmanager, suppress
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -29,6 +30,12 @@ _REPARSE_POINT = 0x400
 _O_NOFOLLOW = int(getattr(os, "O_NOFOLLOW", 0))
 _O_DIRECTORY = int(getattr(os, "O_DIRECTORY", 0))
 _O_BINARY = int(getattr(os, "O_BINARY", 0))
+_SPOOL_CLOSER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="source-spool-close")
+
+
+def _drain_spool_closer() -> None:
+    """Test hook: wait for previously handed-off spool descriptors to close."""
+    _SPOOL_CLOSER.submit(lambda: None).result()
 
 
 class StorageError(ValueError):
@@ -470,12 +477,15 @@ class PrivateLocalRecordingStorage:
             raise StorageError("storage_invalid_expected_size")
         path = self._path(key)
         temporary = ".upload-" + uuid4().hex + ".tmp"
-        with _directory(path, create_under=self.root) as directory:
+        with _directory(path, create_under=self.root) as directory, ExitStack() as cleanup:
             descriptor = directory.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            deferred_close = isinstance(key, SourceAudioKey) and os.name == "posix"
+            if deferred_close:
+                cleanup.callback(os.close, descriptor)
             size = 0
             digest = hashlib.sha256()
             try:
-                with os.fdopen(descriptor, "wb") as output:
+                with os.fdopen(descriptor, "wb", closefd=not deferred_close) as output:
                     for chunk in chunks:
                         if not isinstance(chunk, bytes) or len(chunk) > CHUNK_BYTES:
                             raise StorageError("storage_invalid_chunk")
@@ -502,6 +512,9 @@ class PrivateLocalRecordingStorage:
                 _validate_entry(info)
                 if info.st_size != size:
                     raise StorageError("storage_object_changed")
+            if deferred_close:
+                _SPOOL_CLOSER.submit(os.close, descriptor)
+                cleanup.pop_all()  # Ownership passed to the closer; errors still close locally.
             return StoredObject(key, digest.hexdigest(), size)
 
     def iter_bytes(self, key: StorageKey, *, expected_sha256: str) -> Iterator[bytes]:
