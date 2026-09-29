@@ -1,6 +1,7 @@
 """Read-only port inspection; ephemeral test listener, no application processes."""
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -35,8 +36,9 @@ def test_native_tcp_inspection_detects_and_releases_exact_loopback_listener():
         [PWSH, "-NoProfile", "-NonInteractive", "-Command", command],
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=60,
         check=True,
+        env={**os.environ, "POWERSHELL_TELEMETRY_OPTOUT": "1", "POWERSHELL_UPDATECHECK": "Off"},
     )
     observed = json.loads(result.stdout)
     assert observed["found"] == 1

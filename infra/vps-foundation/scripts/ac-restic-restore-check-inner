@@ -187,27 +187,113 @@ restored_rclone="$restore_dir/usr/local/bin/rclone"
 
 install_manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$install_manifest" ]] || { printf 'FAIL  Restored install manifest is absent.\n' >&2; exit 1; }
-while IFS=$'\t' read -r kind source target mode owner group; do
-  [[ -z "$kind" || "$kind" == \#* ]] && continue
-  source_path="$release_dir/$source"
-  restored_target="$restore_dir$target"
-  [[ -f "$source_path" && -f "$restored_target" ]] || {
-    printf 'FAIL  Restored managed file is absent: %s\n' "$target" >&2
-    exit 1
-  }
-  cmp --silent "$source_path" "$restored_target" || {
-    printf 'FAIL  Restored managed file differs from release: %s\n' "$target" >&2
-    exit 1
-  }
-  [[ "$(stat -c '%a' "$restored_target")" == "${mode#0}" ]] || {
-    printf 'FAIL  Restored managed file mode differs from manifest: %s\n' "$target" >&2
-    exit 1
-  }
-  [[ "$(stat -c '%u:%g' "$restored_target")" == '0:0' && "$owner:$group" == 'root:root' ]] || {
-    printf 'FAIL  Restored managed file ownership differs from manifest: %s\n' "$target" >&2
-    exit 1
-  }
-done < "$install_manifest"
+compare_restored_managed_files() {
+  local restored_root="$1" current_release="$2" trusted_releases="$3" require_root_owner="${4:-1}"
+  local current_manifest="$current_release/config/release/install-manifest.tsv"
+  local record="$restored_root/var/lib/authority-closers/foundation-scopes/backup.release"
+  local scope_release='' trusted_scope='' scope_manifest='' scope_list=''
+  local kind source target mode owner group source_path restored_target scope_release_id
+  declare -A scope_targets=() scope_sources=() scope_modes=() scope_owners=() scope_groups=() scope_found=()
+
+  if [[ -e "$record" || -L "$record" ]]; then
+    [[ -f "$record" && ! -L "$record" && -r "$record" ]] || {
+      printf 'FAIL  Restored backup scope record is unsafe.\n' >&2; return 1;
+    }
+    IFS= read -r scope_release_id < "$record" || {
+      printf 'FAIL  Restored backup scope record is empty.\n' >&2
+      return 1
+    }
+    [[ "$scope_release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
+      printf 'FAIL  Restored backup scope release ID is invalid.\n' >&2; return 1;
+    }
+    scope_release="$restored_root/srv/authority-closers/releases/$scope_release_id"
+    trusted_scope="$trusted_releases/$scope_release_id"
+    [[ -d "$scope_release" && -r "$scope_release/RELEASE-FILES.sha256" && \
+       "$(<"$scope_release/RELEASE-ID")" == "$scope_release_id" && \
+       "$(<"$scope_release/RELEASE-COMMIT")" == "${scope_release_id#foundation-}" ]] || {
+      printf 'FAIL  Restored backup scope release metadata is invalid.\n' >&2; return 1;
+    }
+    (cd "$scope_release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null) || {
+      printf 'FAIL  Restored backup scope release checksum failed.\n' >&2; return 1;
+    }
+    [[ -d "$trusted_scope" && -r "$trusted_scope/RELEASE-FILES.sha256" ]] || {
+      printf 'FAIL  Backup scope release has no installed trust anchor.\n' >&2; return 1;
+    }
+    cmp --silent "$trusted_scope/RELEASE-FILES.sha256" "$scope_release/RELEASE-FILES.sha256" || {
+      printf 'FAIL  Backup scope release differs from its installed trust anchor.\n' >&2; return 1;
+    }
+    scope_manifest="$scope_release/config/release/install-manifest.tsv"
+    scope_list="$scope_release/config/release/install-scope-backup.txt"
+    [[ -r "$scope_manifest" && -r "$scope_list" ]] || {
+      printf 'FAIL  Restored backup scope metadata is absent.\n' >&2; return 1;
+    }
+    while IFS= read -r target || [[ -n "$target" ]]; do
+      [[ -z "$target" || "$target" == \#* ]] && continue
+      [[ "$target" =~ ^/(usr/local/(sbin/ac-[A-Za-z0-9._-]+|libexec/authority-closers/[A-Za-z0-9._-]+)|etc/systemd/system/ac-[A-Za-z0-9@._%-]+)$ ]] && \
+        [[ -z "${scope_targets[$target]:-}" ]] || {
+        printf 'FAIL  Restored backup scope list is invalid.\n' >&2; return 1;
+      }
+      scope_targets[$target]=1
+    done < "$scope_list"
+    while IFS=$'\t' read -r kind source target mode owner group; do
+      [[ -z "$kind" || "$kind" == \#* || -z "${scope_targets[$target]:-}" ]] && continue
+      [[ "$source" != /* && "$source" != *'..'* && -f "$scope_release/$source" ]] || {
+        printf 'FAIL  Restored backup scope source is invalid: %s\n' "$target" >&2; return 1;
+      }
+      scope_sources[$target]="$source"
+      scope_modes[$target]="$mode"
+      scope_owners[$target]="$owner"
+      scope_groups[$target]="$group"
+      scope_found[$target]=1
+    done < "$scope_manifest"
+    for target in "${!scope_targets[@]}"; do
+      [[ -n "${scope_found[$target]:-}" ]] || {
+        printf 'FAIL  Backup scope target is absent from its manifest: %s\n' "$target" >&2; return 1;
+      }
+    done
+  fi
+
+  while IFS=$'\t' read -r kind source target mode owner group; do
+    [[ -z "$kind" || "$kind" == \#* || -n "${scope_targets[$target]:-}" ]] && continue
+    source_path="$current_release/$source"
+    restored_target="$restored_root$target"
+    [[ -f "$source_path" && -f "$restored_target" ]] || {
+      printf 'FAIL  Restored managed file is absent: %s\n' "$target" >&2; return 1;
+    }
+    cmp --silent "$source_path" "$restored_target" || {
+      printf 'FAIL  Restored managed file differs from release: %s\n' "$target" >&2; return 1;
+    }
+    [[ "$(stat -c '%a' "$restored_target")" == "${mode#0}" ]] || {
+      printf 'FAIL  Restored managed file mode differs from manifest: %s\n' "$target" >&2; return 1;
+    }
+    if [[ "$require_root_owner" == 1 ]]; then
+      [[ "$(stat -c '%u:%g' "$restored_target")" == '0:0' && "$owner:$group" == 'root:root' ]] || {
+        printf 'FAIL  Restored managed file ownership differs from manifest: %s\n' "$target" >&2; return 1;
+      }
+    fi
+  done < "$current_manifest"
+
+  for target in "${!scope_targets[@]}"; do
+    source_path="$scope_release/${scope_sources[$target]}"
+    restored_target="$restored_root$target"
+    mode="${scope_modes[$target]}"; owner="${scope_owners[$target]}"; group="${scope_groups[$target]}"
+    [[ -f "$source_path" && -f "$restored_target" ]] || {
+      printf 'FAIL  Restored managed file is absent: %s\n' "$target" >&2; return 1;
+    }
+    cmp --silent "$source_path" "$restored_target" || {
+      printf 'FAIL  Restored managed file differs from scoped release: %s\n' "$target" >&2; return 1;
+    }
+    [[ "$(stat -c '%a' "$restored_target")" == "${mode#0}" ]] || {
+      printf 'FAIL  Restored managed file mode differs from manifest: %s\n' "$target" >&2; return 1;
+    }
+    if [[ "$require_root_owner" == 1 ]]; then
+      [[ "$(stat -c '%u:%g' "$restored_target")" == '0:0' && "$owner:$group" == 'root:root' ]] || {
+        printf 'FAIL  Restored managed file ownership differs from manifest: %s\n' "$target" >&2; return 1;
+      }
+    fi
+  done
+}
+compare_restored_managed_files "$restore_dir" "$release_dir" /srv/authority-closers/releases
 
 if [[ -d "$restore_dir/etc/authority-closers/secrets" ]] \
   && find "$restore_dir/etc/authority-closers/secrets" -type f -print -quit | grep -q .; then

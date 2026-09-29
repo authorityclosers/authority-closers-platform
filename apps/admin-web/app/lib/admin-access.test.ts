@@ -101,6 +101,41 @@ describe("admin route access policy", () => {
     expect(response.headers.get("x-middleware-next")).toBeNull();
   });
 
+  it.each([
+    ["admin-dev.authorityclosers.com", 307],
+    ["admin-staging.authorityclosers.com", 307],
+    ["admin.authorityclosers.com", 307],
+    ["admin-dev.authorityclosers.com.evil.test", 421],
+    ["admin-dev.authorityclosers.com:3017", 421],
+    ["unlisted.example.test", 421],
+  ])(
+    "handles signed-out production requests with Host %s",
+    async (host, status) => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.stubEnv(
+        "AC_INTERNAL_API_URL",
+        "http://api.development.ac.internal.invalid:8000",
+      );
+      vi.stubEnv("AC_INTERNAL_API_HOST", "api.development.ac.internal.invalid");
+      const fetcher = vi.fn<typeof fetch>();
+      vi.stubGlobal("fetch", fetcher);
+
+      const response = await proxy(
+        new NextRequest("http://localhost:3001/", {
+          headers: { host, "x-forwarded-host": "attacker.example.test" },
+        }),
+      );
+
+      expect(response.status).toBe(status);
+      expect(response.headers.get("location")).toBe(
+        status === 307 ? `https://${host}/login` : null,
+      );
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("x-middleware-next")).toBeNull();
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
+
   it("serves health only to the container loopback host", async () => {
     vi.stubEnv("NODE_ENV", "production");
 
