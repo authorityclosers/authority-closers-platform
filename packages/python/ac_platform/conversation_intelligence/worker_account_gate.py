@@ -13,6 +13,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.models import ConversationRecording
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.repository import RecoveryStateRepository
@@ -72,6 +73,14 @@ async def require_recording_owner_profile(
     """Require a current complete canonical profile for this recording owner."""
 
     person_id = await _customer_person_id(session, recording, now=now)
+    if person_id is None and await session.scalar(
+        select(ConversationRecording.id).where(
+            ConversationRecording.id == recording.id,
+            ConversationRecording.tenant_id == recording.tenant_id,
+            recording_is_canary(),
+        )
+    ):
+        return
     await require_person_profile(session, person_id=person_id)
 
 
