@@ -12,17 +12,20 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AudioLines,
+  AlertCircle,
   ArrowRight,
+  AudioLines,
   Check,
   ChevronDown,
   Clock3,
+  Copy,
   FileAudio,
   FileText,
   FolderOpen,
   HardDrive,
   LoaderCircle,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { formatClipRange, formatClock, isPlayableRange } from "./lightbox/time";
 import {
@@ -77,7 +80,10 @@ import {
   type Submission,
   type UploadPolicy,
 } from "./acquisition-client";
-import { ProcessingVisual } from "./processing-visual";
+import { XrayWave } from "./xray-wave";
+import { PageSkeleton } from "./shell/page-skeleton";
+import { ReportScrollRail } from "./report-scroll-rail";
+import { CallMap } from "./call-map";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
@@ -85,6 +91,7 @@ import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
   parseReportLanguage,
   reportLanguageLabels,
+  secondLanguageLabels,
   type ReportLanguage,
 } from "./report-language";
 import {
@@ -1761,6 +1768,20 @@ export function AcquisitionStudio({
     seekTo(evidence);
   }
 
+  /** Plays the whole recording on from a chosen time (the call map). */
+  function playFrom(ms: number) {
+    if (!audio.current || !result) return;
+    setMoment(null);
+    audio.current.currentTime = Math.max(0, ms) / 1000;
+    void audio.current
+      .play()
+      .catch(() =>
+        setPlaybackMessage(
+          "Press play in the audio controls to hear this moment.",
+        ),
+      );
+  }
+
   /** A plain transcript seek: always starts the chosen segment. */
   function seekTo(evidence: ReportEvidence) {
     if (!audio.current || !result) return;
@@ -1998,118 +2019,134 @@ export function AcquisitionStudio({
       const entryView = (
         <div
           className={`xray-app simple-app ${styles.app}`}
-          data-theme="light"
+          data-theme={resolvedTheme}
           data-variant={variant}
           data-stage={opening ? "opening" : "recovery"}
           aria-busy={opening}
         >
           <div className="studio-main">
-            <section
-              className={`panel ${styles.processingPanel}`}
-              role={opening ? "status" : "alert"}
-              aria-live="polite"
-              aria-labelledby="existing-call-entry-heading"
-            >
-              {opening ? (
-                <LoaderCircle size={24} aria-hidden="true" />
-              ) : (
-                <FileText size={24} aria-hidden="true" />
-              )}
-              <div className={styles.progressCopy}>
-                <p className={styles.progressKicker}>SAVED CALL</p>
-                <h1 id="existing-call-entry-heading">
-                  {opening
-                    ? "Opening your saved call"
-                    : deletionOnlyId
-                      ? "Saved call unavailable"
-                      : "Could not open your saved call"}
-                </h1>
-                <p>
-                  {opening
-                    ? "Checking your access and loading the saved call…"
-                    : failedMessage}
+            {opening ? (
+              <>
+                <p className="visually-hidden" role="status" aria-live="polite">
+                  Opening your saved call
                 </p>
-                {!opening && (
-                  <div className={styles.errorActions}>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={() => {
-                        setError("");
-                        setStatusIssue("");
-                        if (activeRequestedCallId)
-                          setExistingCallEntry({
-                            submissionId: activeRequestedCallId,
-                            state: "opening",
-                          });
-                        if (submission) {
-                          setConsentedSubmissionId(null);
-                          setPollAttempt((n) => n + 1);
-                        } else setAttempt((n) => n + 1);
-                      }}
-                    >
-                      Check again
-                    </button>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={startAnotherCall}
-                    >
-                      <ArrowRight size={16} aria-hidden="true" />
-                      Start a new call
-                    </button>
-                    {needsSignIn && (
-                      <Link className="text-button" href="/login">
-                        Sign in to recover it
-                      </Link>
-                    )}
-                  </div>
+                <PageSkeleton variant="call" />
+              </>
+            ) : (
+              <section
+                className={`panel ${styles.processingPanel}`}
+                role={opening ? "status" : "alert"}
+                aria-live="polite"
+                aria-labelledby="existing-call-entry-heading"
+              >
+                {opening ? (
+                  <LoaderCircle size={24} aria-hidden="true" />
+                ) : (
+                  <FileText size={24} aria-hidden="true" />
                 )}
-                {!opening && deletionOnlyId && (
-                  <div className={styles.errorActions}>
-                    {!deleteConfirm ? (
+                <div className={styles.progressCopy}>
+                  <p className={styles.progressKicker}>SAVED CALL</p>
+                  <h1 id="existing-call-entry-heading">
+                    {opening
+                      ? "Opening your saved call"
+                      : deletionOnlyId
+                        ? "Saved call unavailable"
+                        : "Could not open your saved call"}
+                  </h1>
+                  <p>
+                    {opening
+                      ? "Checking your access and loading the saved call…"
+                      : failedMessage}
+                  </p>
+                  {!opening && (
+                    <div className={styles.errorActions}>
                       <button
-                        className="text-button"
+                        className="secondary-button"
                         type="button"
-                        disabled={!!busy || analysisWriteBlocked}
-                        onClick={() => setDeleteConfirm(true)}
+                        disabled={!!busy}
+                        onClick={() => {
+                          setError("");
+                          setStatusIssue("");
+                          if (activeRequestedCallId)
+                            setExistingCallEntry({
+                              submissionId: activeRequestedCallId,
+                              state: "opening",
+                            });
+                          if (submission) {
+                            setConsentedSubmissionId(null);
+                            setPollAttempt((n) => n + 1);
+                          } else setAttempt((n) => n + 1);
+                        }}
                       >
-                        Request deletion
+                        Check again
                       </button>
-                    ) : (
-                      <>
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          disabled={!!busy || analysisWriteBlocked}
-                          onClick={() => void erase()}
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={!!busy}
+                        onClick={startAnotherCall}
+                      >
+                        <ArrowRight size={16} aria-hidden="true" />
+                        Start a new call
+                      </button>
+                      {needsSignIn && (
+                        <Link
+                          className="primary-button"
+                          href={`/login?next=${encodeURIComponent(
+                            activeRequestedCallId
+                              ? `/analysis/calls/${activeRequestedCallId}`
+                              : "/analysis/calls",
+                          )}`}
                         >
-                          Request recording deletion
-                        </button>
+                          Sign in to recover it
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                  {!opening && deletionOnlyId && (
+                    <div className={styles.errorActions}>
+                      {!deleteConfirm ? (
                         <button
                           className="text-button"
                           type="button"
                           disabled={!!busy || analysisWriteBlocked}
-                          onClick={() => setDeleteConfirm(false)}
+                          onClick={() => setDeleteConfirm(true)}
                         >
-                          Keep call
+                          Request deletion
                         </button>
-                      </>
-                    )}
-                    <button
-                      className="text-button"
-                      type="button"
-                      disabled={!!busy}
-                      onClick={forgetSavedCall}
-                    >
-                      Forget this saved call on this device
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
+                      ) : (
+                        <>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            disabled={!!busy || analysisWriteBlocked}
+                            onClick={() => void erase()}
+                          >
+                            Request recording deletion
+                          </button>
+                          <button
+                            className="text-button"
+                            type="button"
+                            disabled={!!busy || analysisWriteBlocked}
+                            onClick={() => setDeleteConfirm(false)}
+                          >
+                            Keep call
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={!!busy}
+                        onClick={forgetSavedCall}
+                      >
+                        Forget this saved call on this device
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       );
@@ -2118,6 +2155,7 @@ export function AcquisitionStudio({
         <AcquisitionShell
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
+          loading={opening && access?.authenticated !== true}
           homeHref={homeHref}
           mobileFit
           allowance={allowance}
@@ -2168,9 +2206,9 @@ export function AcquisitionStudio({
     const content = (
       <div
         className={`xray-app simple-app ${styles.app}`}
-        // Only the upload stage follows the app theme so far; processing and
-        // report keep their light surfaces until their own theme pass.
-        data-theme={studioStage === "upload" ? resolvedTheme : "light"}
+        // Upload, uploading and processing follow the app theme; the report
+        // keeps its light surface until its own theme pass.
+        data-theme={studioStage === "report" ? "light" : resolvedTheme}
         data-variant={variant}
         data-stage={studioStage}
         data-selected={displayFileSelected ? "true" : "false"}
@@ -2344,17 +2382,39 @@ export function AcquisitionStudio({
           {savedCallRecovery}
           {visibleError && !savedCallNeedsSession && (
             <div className={`notice error ${styles.error}`} role="alert">
+              <div className={styles.errorHead}>
+                <AlertCircle
+                  size={18}
+                  aria-hidden="true"
+                  className={styles.errorIcon}
+                />
+                <p className={styles.errorTitle}>
+                  {errorTitle(visibleError, Boolean(statusIssue && !error))}
+                </p>
+                {error ? (
+                  <button
+                    type="button"
+                    className={styles.errorClose}
+                    aria-label="Dismiss"
+                    onClick={() => setError("")}
+                  >
+                    <X size={15} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
               {statusIssue && !error && (
                 <p>
                   Status could not be refreshed. This does not mean analysis
                   failed.
                 </p>
               )}
-              <p>
-                {visibleError instanceof AcquisitionError
-                  ? visibleError.message
-                  : visibleError}
-              </p>
+              <ErrorMessage
+                message={
+                  visibleError instanceof AcquisitionError
+                    ? visibleError.message
+                    : String(visibleError)
+                }
+              />
               <div className={styles.errorActions}>
                 <button
                   className="secondary-button"
@@ -2411,7 +2471,7 @@ export function AcquisitionStudio({
             </div>
           )}
           <div
-            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId && stagedFiles.length < 2 ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
+            className={`${styles.layout} ${!embedded && !report && !submission && !deletionOnlyId ? styles.quietIntake : ""} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
           >
             <div className={styles.primaryColumn}>
               {studioStage === "upload" && !embedded ? (
@@ -2539,7 +2599,7 @@ export function AcquisitionStudio({
                     role="status"
                     aria-live="polite"
                   >
-                    <ProcessingVisual phase="upload" paused={false} />
+                    <XrayWave mode="scanning" legend={false} />
                     <div className={styles.progressCopy}>
                       <p className={styles.progressKicker}>
                         UPLOAD IN PROGRESS
@@ -2828,45 +2888,66 @@ export function AcquisitionStudio({
                           <label htmlFor="report-language">
                             Report language
                           </label>
-                          <select
-                            id="report-language"
-                            value={displayReportLanguage ?? ""}
-                            disabled={!!busy || reviewSelectionActive}
-                            onChange={(event) => {
-                              const selected = parseReportLanguage(
-                                event.target.value,
-                              );
-                              chosenReportLanguage.current = selected;
-                              setReportLanguage(selected);
-                            }}
-                          >
-                            {localObservation && (
-                              <option value="">
-                                No language selection observed
-                              </option>
-                            )}
-                            {displayReportLanguage &&
-                              !entry.report_languages.includes(
-                                displayReportLanguage,
-                              ) && (
-                                <option
-                                  value={displayReportLanguage}
-                                  key={displayReportLanguage}
-                                >
-                                  {reportLanguageLabels[displayReportLanguage]}{" "}
-                                  (observed)
+                          <div className={styles.languagePair}>
+                            <span className={styles.languageFixed}>
+                              <Check size={13} aria-hidden="true" />
+                              English
+                            </span>
+                            <span
+                              className={styles.languagePlus}
+                              aria-hidden="true"
+                            >
+                              +
+                            </span>
+                            <select
+                              id="report-language"
+                              aria-describedby="report-language-help"
+                              value={displayReportLanguage ?? ""}
+                              disabled={
+                                !!busy ||
+                                reviewSelectionActive ||
+                                entry.report_languages.length < 2
+                              }
+                              onChange={(event) => {
+                                const selected = parseReportLanguage(
+                                  event.target.value,
+                                );
+                                chosenReportLanguage.current = selected;
+                                setReportLanguage(selected);
+                              }}
+                            >
+                              {localObservation && (
+                                <option value="">
+                                  No language selection observed
                                 </option>
                               )}
-                            {entry.report_languages.map((language) => (
-                              <option key={language} value={language}>
-                                {reportLanguageLabels[language]}
-                              </option>
-                            ))}
-                          </select>
-                          <p>
-                            Hindi and Marathi use Devanagari with natural
-                            English sales terms. Original transcript quotes stay
-                            unchanged.
+                              {displayReportLanguage &&
+                                !entry.report_languages.includes(
+                                  displayReportLanguage,
+                                ) && (
+                                  <option
+                                    value={displayReportLanguage}
+                                    key={displayReportLanguage}
+                                  >
+                                    {
+                                      reportLanguageLabels[
+                                        displayReportLanguage
+                                      ]
+                                    }{" "}
+                                    (observed)
+                                  </option>
+                                )}
+                              {entry.report_languages.map((language) => (
+                                <option key={language} value={language}>
+                                  {secondLanguageLabels[language]}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <p id="report-language-help">
+                            {entry.report_languages.length > 1
+                              ? "A second language is written in Devanagari with familiar English sales terms. Quotes stay as spoken; the call’s own language is detected automatically."
+                              : "The call’s spoken language is detected automatically. Second report languages appear here once enabled."}
                           </p>
                         </div>
                       )}
@@ -3215,16 +3296,14 @@ export function AcquisitionStudio({
                 !report &&
                 !deletionOnlyId && <CallsLibrary preview />}
             </div>
-            {(embedded || stagedFiles.length >= 2) &&
-              !report &&
-              !deletionOnlyId &&
-              !submission && (
-                <AcquisitionGuideRail
-                  stage={displayFileSelected ? "selected" : "empty"}
-                  stagedFiles={stagedFiles}
-                  maximumFileBytes={policy?.maximum_file_bytes}
-                />
-              )}
+            {/* The standalone sheet's inspector replaces the guide rail. */}
+            {embedded && !report && !deletionOnlyId && !submission && (
+              <AcquisitionGuideRail
+                stage={displayFileSelected ? "selected" : "empty"}
+                stagedFiles={stagedFiles}
+                maximumFileBytes={policy?.maximum_file_bytes}
+              />
+            )}
           </div>
           {result && report && (
             <SourceWaveformProvider
@@ -3270,6 +3349,16 @@ export function AcquisitionStudio({
                   canRequestDeletion={!!submission}
                   deletionDisabled={analysisWriteBlocked}
                   onAnalyseAnother={startAnotherCall}
+                  visual={
+                    <CallMap
+                      callId={submission?.id ?? null}
+                      transcript={result.transcript}
+                      report={report}
+                      durationMs={result.transcript.duration_ms}
+                      onSelectEvidence={seek}
+                      onSeek={playFrom}
+                    />
+                  }
                   onDownload={() => void downloadReport()}
                   onRequestDeletion={() => setDeleteConfirm(true)}
                 />
@@ -3382,6 +3471,7 @@ export function AcquisitionStudio({
                     },
                   ]}
                 />
+                {!embedded ? <ReportScrollRail /> : null}
               </section>
               <CallAudioDock
                 audioRef={audio}
@@ -3434,4 +3524,44 @@ export function AcquisitionStudio({
       </AcquisitionShell>
     );
   }
+}
+
+function errorTitle(error: unknown, statusOnly: boolean) {
+  if (statusOnly) return "Status not refreshed";
+  if (error instanceof AcquisitionError) {
+    if (error.status === 401) return "You’re signed out";
+    if (error.status === 403) return "Access needs a check";
+    if (error.status === 404) return "Call not found";
+    if (error.status === 429) return "One moment";
+  }
+  return "That didn’t go through";
+}
+
+/** The message, with any request reference as a small copyable chip. */
+function ErrorMessage({ message }: { message: string }) {
+  const [copied, setCopied] = useState(false);
+  const match = /\s*Request reference: ([^\s]+?)\.?$/.exec(message);
+  const text = match ? message.slice(0, match.index) : message;
+  const reference = match?.[1];
+  return (
+    <>
+      <p className={styles.errorText}>{text}</p>
+      {reference ? (
+        <button
+          type="button"
+          className={styles.errorRef}
+          title={`Request reference: ${reference}`}
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(reference)
+              .then(() => setCopied(true))
+              .catch(() => {});
+          }}
+        >
+          <Copy size={12} aria-hidden="true" />
+          {copied ? "Reference copied" : `Ref ${reference.slice(0, 8)}`}
+        </button>
+      ) : null}
+    </>
+  );
 }

@@ -41,6 +41,10 @@ beforeEach(async () => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.restoreAllMocks();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  window.history.replaceState(null, "", "/");
 });
 
 function openMenu() {
@@ -87,10 +91,12 @@ it("outside pointer dismissal preserves the clicked action", async () => {
 
 it("tabbing away dismisses the popup without returning focus", () => {
   const { menu } = openMenu();
-  const source = host.querySelectorAll<HTMLElement>("summary")[1];
-  source.focus();
+  // Source details now live inside the menu; tab to something outside it.
+  const outside = document.createElement("button");
+  host.appendChild(outside);
+  outside.focus();
   expect(menu.open).toBe(false);
-  expect(document.activeElement).toBe(source);
+  expect(document.activeElement).toBe(outside);
 });
 
 it("the download action runs once and closes its disclosure", async () => {
@@ -101,3 +107,60 @@ it("the download action runs once and closes its disclosure", async () => {
   expect(onDownload).toHaveBeenCalledOnce();
   expect(menu.open).toBe(false);
 });
+
+it.each([
+  [
+    "/sales-xray?call=eaed7960-d4d0-4675-bd34-5b6a7d9c598d&view=report&token=fictional#overview",
+    "/sales-xray?call=eaed7960-d4d0-4675-bd34-5b6a7d9c598d#overview",
+  ],
+  [
+    "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d?view=report#overview",
+    "/analysis/calls/eaed7960-d4d0-4675-bd34-5b6a7d9c598d#overview",
+  ],
+  ["/sales-xray?call=&view=report", "/sales-xray"],
+])("copies the report URL from %s as %s", async (path, expected) => {
+  vi.useFakeTimers();
+  window.history.replaceState(null, "", path);
+  const writeText = vi
+    .spyOn(navigator.clipboard, "writeText")
+    .mockResolvedValue(undefined);
+  const { menu } = openMenu();
+  const copy = Array.from(menu.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("Copy link"),
+  )!;
+  await act(async () => copy.click());
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(
+    `${window.location.origin}${expected}`,
+  );
+  expect(copy.textContent).toContain("Link copied");
+  expect(menu.open).toBe(false);
+});
+
+it.each(["unavailable", "denied"])(
+  "keeps Copy link actionable when clipboard access is %s",
+  async (failure) => {
+    vi.useFakeTimers();
+    const clipboard = navigator.clipboard;
+    const write = vi
+      .spyOn(clipboard, "writeText")
+      .mockRejectedValue(new Error("denied"));
+    const access = vi.spyOn(navigator, "clipboard", "get");
+    if (failure === "unavailable") access.mockReturnValue(undefined!);
+    const { menu } = openMenu();
+    const copy = Array.from(menu.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Copy link"),
+    )!;
+    await act(async () => copy.click());
+    expect(menu.open).toBe(true);
+    expect(menu.querySelector('[role="alert"]')?.textContent).toContain(
+      "Couldn’t copy the link. Try again or copy the address from your browser.",
+    );
+    expect(copy.textContent).toContain("Copy link");
+    access.mockRestore();
+    write.mockResolvedValue(undefined);
+    await act(async () => copy.click());
+    expect(copy.textContent).toContain("Link copied");
+    expect(menu.querySelector('[role="alert"]')).toBeNull();
+    expect(menu.open).toBe(false);
+  },
+);

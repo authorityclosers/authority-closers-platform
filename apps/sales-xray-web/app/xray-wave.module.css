@@ -1,0 +1,266 @@
+/* X-ray wave: a theme-coloured call waveform. While scanning, a light passes
+   and each kind of moment the analysis looks for glows in its own colour. */
+.xray {
+  --cycle: 6.2s;
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+}
+.track {
+  position: relative;
+  display: flex;
+  height: var(--xray-height, clamp(96px, 17vh, 168px));
+  align-items: center;
+  gap: clamp(2px, 0.28vw, 4px);
+  padding-inline: 2px;
+  isolation: isolate;
+}
+/* A faint centre line, like a scope's baseline. */
+.track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: -1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lx-line-strong) 12%,
+    var(--lx-line-strong) 88%,
+    transparent
+  );
+}
+.bar {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 2px;
+  height: var(--h);
+  border-radius: 99px;
+  background: var(--lx-line-strong);
+  transform-origin: center;
+}
+.bar[data-speaker="a"] {
+  background: color-mix(in srgb, var(--lx-teal) 38%, var(--lx-line-strong));
+}
+.bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--lx-teal);
+  opacity: 0;
+}
+.bar[data-kind="strength"]::after {
+  background: var(--lx-strength);
+}
+.bar[data-kind="objection"]::after {
+  background: var(--lx-objection);
+}
+.bar[data-kind="missed"]::after {
+  background: var(--lx-missed);
+}
+.bar[data-kind="next"]::after {
+  background: var(--lx-closing);
+}
+
+/* Resting: the call breathes while we wait for the next confirmed update. */
+.xray[data-mode="resting"] .bar {
+  animation: breathe 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -90ms);
+}
+
+/* Scanning: a light passes; bars develop, and moment kinds glow. */
+.xray[data-mode="scanning"] .bar::after {
+  animation: develop var(--cycle) linear infinite;
+  animation-delay: var(--d);
+}
+.xray[data-mode="scanning"] .bar[data-kind]::after {
+  animation-name: moment;
+}
+.xray[data-mode="scanning"] .bar[data-kind] {
+  animation: lift var(--cycle) var(--lx-ease-quick) infinite;
+  animation-delay: var(--d);
+}
+.beam {
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    var(--lx-teal) 18%,
+    var(--lx-teal) 82%,
+    transparent
+  );
+  box-shadow:
+    0 0 10px 1px color-mix(in srgb, var(--lx-teal) 55%, transparent),
+    0 0 36px 8px color-mix(in srgb, var(--lx-teal) 16%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+.beam::before {
+  content: "";
+  position: absolute;
+  top: 12%;
+  bottom: 12%;
+  right: 1px;
+  width: 80px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--lx-teal) 10%, transparent)
+  );
+}
+.xray[data-mode="scanning"] .beam {
+  animation: sweep var(--cycle) linear infinite;
+}
+
+/* ---------- Legend: what the analysis looks for ---------- */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+.legendLead {
+  color: var(--lx-muted-2);
+  font-weight: 600;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--lx-ink-3);
+  font-weight: 600;
+}
+.chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.chip[data-kind="strength"] {
+  --tone: var(--lx-strength);
+}
+.chip[data-kind="objection"] {
+  --tone: var(--lx-objection);
+}
+.chip[data-kind="missed"] {
+  --tone: var(--lx-missed);
+}
+.chip[data-kind="next"] {
+  --tone: var(--lx-closing);
+}
+.xray[data-mode="scanning"] .chip i {
+  animation: chip-pulse var(--cycle) ease-in-out infinite;
+}
+.xray[data-mode="scanning"] .chip:nth-child(3) i {
+  animation-delay: 1.2s;
+}
+.xray[data-mode="scanning"] .chip:nth-child(4) i {
+  animation-delay: 2.4s;
+}
+.xray[data-mode="scanning"] .chip:nth-child(5) i {
+  animation-delay: 3.6s;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.78);
+  }
+}
+/* The sweep covers 0–77% of the cycle, then rests. */
+@keyframes sweep {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  74% {
+    opacity: 1;
+  }
+  77.4%,
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+@keyframes develop {
+  0% {
+    opacity: 0;
+  }
+  1% {
+    opacity: 0.7;
+  }
+  9%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes moment {
+  0% {
+    opacity: 0;
+  }
+  1.5% {
+    opacity: 1;
+  }
+  22% {
+    opacity: 1;
+  }
+  30%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes lift {
+  0% {
+    transform: scaleY(1);
+  }
+  2% {
+    transform: scaleY(1.12);
+  }
+  12%,
+  100% {
+    transform: scaleY(1);
+  }
+}
+@keyframes chip-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  8% {
+    transform: scale(1.35);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xray .bar,
+  .xray .bar::after,
+  .xray .beam,
+  .xray .chip i {
+    animation: none;
+  }
+  .xray[data-mode="scanning"] .bar[data-kind]::after {
+    opacity: 1;
+  }
+}

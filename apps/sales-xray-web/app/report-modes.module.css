@@ -403,3 +403,202 @@
     padding-block: 0;
   }
 }
+
+/* The ribbon stays pinned to the top of the report while you read: frosted
+   glass over the text below it, flush with the scroll edge, never moving. */
+.navRow {
+  margin-inline: -16px;
+  padding: 8px 16px 0;
+  border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--lx-paper) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  backdrop-filter: saturate(1.6) blur(18px);
+  box-shadow:
+    0 1px 0 var(--report-border),
+    0 12px 20px -20px color-mix(in srgb, var(--lx-film) 45%, transparent);
+}
+
+.toolbarLabel {
+  white-space: nowrap;
+}
+
+/* ---------- Top-bar placement (wide screens) ----------
+   The sections live in the app's top bar like a document toolbar: one
+   segmented control whose white highlight glides to the current section, and
+   an icon switch for Reading/Tabbed. Nothing scrolls it away. */
+.navRow[data-placement="toolbar"] {
+  position: static;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  font-family: var(--lx-font-ui);
+  line-height: 1.2;
+  pointer-events: auto;
+  animation: toolbar-in var(--lx-dur-reveal) var(--lx-ease-move) both;
+}
+.navRow[data-placement="toolbar"] .tabNavigation,
+.navRow[data-placement="toolbar"] .contents,
+.navRow[data-placement="toolbar"] .toolbar {
+  position: relative;
+  flex: 0 1 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lx-sunken) 78%, transparent);
+  -webkit-backdrop-filter: saturate(1.5) blur(14px);
+  backdrop-filter: saturate(1.5) blur(14px);
+}
+.navRow[data-placement="toolbar"] .tabNavigation::before,
+.navRow[data-placement="toolbar"] .contents::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: var(--pill-w, 0px);
+  border-radius: 10px;
+  background: var(--lx-surface);
+  box-shadow:
+    var(--lx-shadow-1),
+    0 0 0 0.5px var(--lx-line);
+  transform: translateX(var(--pill-x, 0px));
+  transition:
+    transform 360ms var(--lx-ease-move),
+    width 360ms var(--lx-ease-move);
+  pointer-events: none;
+}
+.navRow[data-placement="toolbar"] .tabNavigation button,
+.navRow[data-placement="toolbar"] .contents a {
+  position: relative;
+  z-index: 1;
+  min-height: 32px;
+  gap: 6px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-muted);
+  font: 600 13px/1 var(--lx-font-ui);
+  letter-spacing: -0.005em;
+  transition:
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.navRow[data-placement="toolbar"] .tabNavigation button:hover,
+.navRow[data-placement="toolbar"] .contents a:hover {
+  color: var(--lx-ink);
+}
+.navRow[data-placement="toolbar"]
+  .tabNavigation
+  button:not([aria-selected="true"]):hover,
+.navRow[data-placement="toolbar"]
+  .contents
+  a:not([aria-current="location"]):hover {
+  background: color-mix(in srgb, var(--lx-ink) 5%, transparent);
+}
+.navRow[data-placement="toolbar"] .tabNavigation button[aria-selected="true"],
+.navRow[data-placement="toolbar"] .contents a[aria-current="location"] {
+  color: var(--lx-ink);
+}
+.navRow[data-placement="toolbar"] .sectionIcon {
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+  transition:
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.navRow[data-placement="toolbar"] button[aria-selected="true"] .sectionIcon,
+.navRow[data-placement="toolbar"] a[aria-current="location"] .sectionIcon {
+  color: var(--lx-teal);
+  transform: scale(1.06);
+}
+.navRow[data-placement="toolbar"] .tabNavigation button:active .sectionIcon,
+.navRow[data-placement="toolbar"] .contents a:active .sectionIcon {
+  transform: scale(0.9);
+}
+.navRow[data-placement="toolbar"] .fullLabel {
+  display: none;
+}
+.navRow[data-placement="toolbar"] .compactLabel {
+  display: inline;
+}
+.navRow[data-placement="toolbar"] .toolbar > button {
+  display: grid;
+  width: 32px;
+  min-width: 0;
+  min-height: 32px;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-muted);
+  transition:
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.navRow[data-placement="toolbar"] .toolbar > button:hover {
+  color: var(--lx-ink);
+}
+.navRow[data-placement="toolbar"] .toolbar > button[aria-pressed="true"] {
+  background: var(--lx-surface);
+  box-shadow:
+    var(--lx-shadow-1),
+    0 0 0 0.5px var(--lx-line);
+  color: var(--lx-teal);
+}
+.navRow[data-placement="toolbar"] .toolbar svg {
+  width: 16px;
+  height: 16px;
+}
+.navRow[data-placement="toolbar"] .toolbarLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* A narrower top bar keeps labels only on the current section. */
+@container shell-toolbar (max-width: 660px) {
+  .navRow[data-placement="toolbar"] .tabNavigation button,
+  .navRow[data-placement="toolbar"] .contents a {
+    padding: 0 9px;
+  }
+  .navRow[data-placement="toolbar"]
+    .tabNavigation
+    button:not([aria-selected="true"])
+    > span,
+  .navRow[data-placement="toolbar"]
+    .contents
+    a:not([aria-current="location"])
+    .compactLabel {
+    display: none;
+  }
+}
+@keyframes toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navRow[data-placement="toolbar"],
+  .navRow[data-placement="toolbar"] .tabNavigation::before,
+  .navRow[data-placement="toolbar"] .contents::before,
+  .navRow[data-placement="toolbar"] .sectionIcon {
+    animation: none;
+    transition: none;
+  }
+}
