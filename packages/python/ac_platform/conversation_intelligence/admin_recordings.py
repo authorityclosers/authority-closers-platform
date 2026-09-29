@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     utc,
 )
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount, Quote
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.models import (
@@ -649,6 +650,7 @@ class AdminConversationRecordings:
             .where(
                 ConversationRecording.tenant_id.in_(self.recording_tenant_ids),
                 ConversationRecording.state != "deleted",
+                ~recording_is_canary(),
             )
             .distinct()
         )
