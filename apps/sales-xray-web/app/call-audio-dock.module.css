@@ -220,6 +220,16 @@
     bottom: 76px;
   }
 
+  .dock:not([data-embedded="true"]) {
+    grid-template-areas:
+      "play identity clock speed hide"
+      "play timeline timeline speed mute";
+  }
+
+  .hide {
+    grid-area: hide;
+  }
+
   .play {
     grid-area: play;
     width: 44px;
@@ -275,11 +285,12 @@
 
 /* Narrow phones at 200% zoom: give each control its own line instead of overflowing. */
 @media (max-width: 279.98px) {
-  .dock {
+  .dock,
+  .dock:not([data-embedded="true"]) {
     grid-template-areas:
       "play clock clock"
       "timeline timeline timeline"
-      "speed mute ."
+      "speed mute hide"
       "identity identity identity";
     grid-template-columns: 44px 44px minmax(0, 1fr);
     row-gap: var(--lx-space-2);
@@ -288,17 +299,6 @@
   .clock {
     align-self: center;
     white-space: normal;
-  }
-}
-
-/* Short viewports and 200% zoom: the player joins the document flow after the
-   report, so it can never cover report content or actions. */
-@media (max-height: 560px) {
-  .dock {
-    position: static;
-    margin-top: var(--lx-space-6);
-    padding-bottom: var(--lx-space-3);
-    box-shadow: none;
   }
 }
 
@@ -411,4 +411,16 @@
 }
 .dock.dock .hide:hover {
   color: var(--lx-ink);
+}
+
+/* Short viewports and 200% zoom: keep this after the floating island rules
+   with matching specificity so the player cannot cover report actions. */
+@media (max-height: 560px) {
+  .dock,
+  .dock.dock:not([data-embedded="true"]) {
+    position: static;
+    margin-top: var(--lx-space-6);
+    padding-bottom: var(--lx-space-3);
+    box-shadow: none;
+  }
 }
