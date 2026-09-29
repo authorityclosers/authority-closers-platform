@@ -1,0 +1,28 @@
+{
+  "issues": [
+    {"id": "task-a", "identifier": "DEMO-1", "assigneeAgentId": "agent-a", "startedAt": "2026-09-21T00:00:00Z", "updatedAt": "2026-09-26T00:00:00Z"},
+    {"id": "task-b", "identifier": "DEMO-2", "assigneeAgentId": "agent-a", "updatedAt": "2026-09-27T23:59:59Z"}
+  ],
+  "agents": [{"id": "agent-a", "name": "Fictional Agent"}],
+  "activity": {
+    "task-a": [
+      {"type": "issue.status_updated", "createdAt": "2026-09-21T00:00:00Z", "details": {"changes": {"status": {"from": "todo", "to": "in_review"}}}},
+      {"type": "issue.checked_out", "createdAt": "2026-09-22T00:00:00Z", "details": {}},
+      {"type": "issue.status_updated", "createdAt": "2026-09-26T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "done"}}}}
+    ],
+    "task-b": [
+      {"type": "issue.status_updated", "createdAt": "2026-09-22T00:00:00Z", "details": {"changes": {"startedAt": {"to": "2026-09-22T00:00:00Z"}}, "_previous": {"status": "todo"}, "status": "in_review"}},
+      {"type": "issue.reopened", "createdAt": "2026-09-23T00:00:00Z", "details": {"_previous": {"status": "in_review"}, "status": "in_progress"}},
+      {"type": "issue.status_updated", "createdAt": "2026-09-24T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress", "to": "in_review"}}}},
+      {"type": "issue.status_updated", "createdAt": "2026-09-25T00:00:00Z", "details": {"changes": {"status": {"from": "in_progress"}}}},
+      {"type": "issue.status_updated", "createdAt": "2026-09-27T23:59:59Z", "details": {"_previous": {"status": "in_progress"}, "status": "done"}}
+    ]
+  },
+  "runs": [
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-23T00:00:00Z", "contextSnapshot": {"issueId": "task-a"}, "usageJson": "{\"inputTokens\":100,\"outputTokens\":50}"},
+    {"agentId": "agent-a", "status": "cancelled", "startedAt": "2026-09-24T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": null},
+    {"agentId": "agent-a", "status": "failed", "startedAt": "2026-09-25T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": {"reason": "missing token fields"}},
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-26T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": {"inputTokens": 200, "outputTokens": 50}},
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-28T00:00:00Z", "contextSnapshot": {"issueId": "task-b"}, "usageJson": {"inputTokens": 9, "outputTokens": 9}}
+  ]
+}
