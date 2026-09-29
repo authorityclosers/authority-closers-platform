@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, CircleUserRound, FolderOpen, LogOut } from "lucide-react";
+import { ChevronDown, FolderOpen, LogOut, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -35,6 +35,7 @@ export function ProfileMenu({
   accountHref,
   placement = "below",
   compact = false,
+  variant = "rail",
 }: {
   authenticated: boolean;
   accountHref: string;
@@ -42,11 +43,13 @@ export function ProfileMenu({
   placement?: "below" | "above";
   /** Avatar only, for the collapsed rail. */
   compact?: boolean;
+  variant?: "rail" | "header";
 }) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const [profileName, setProfileName] = useState<string | null>(null);
+  const [profileEmail, setProfileEmail] = useState<string | null>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const signingOutRef = useRef(false);
@@ -62,8 +65,10 @@ export function ProfileMenu({
       controller = current;
       void readAccountProfile(current.signal)
         .then((profile) => {
-          if (!current.signal.aborted)
+          if (!current.signal.aborted) {
             setProfileName(profile.name?.trim() || null);
+            setProfileEmail(profile.email?.trim() || null);
+          }
         })
         .catch(() => {
           // The menu remains usable when a profile read is unavailable.
@@ -129,34 +134,66 @@ export function ProfileMenu({
     }
   }
 
+  const userInitials = initials(accountName);
+  const displayName = accountLabel;
+  const displayEmail =
+    profileEmail ||
+    (authenticated ? "Private workspace" : "Sign in to analyse calls");
+
   return (
     <div
       ref={menu}
       className={styles.menu}
       data-placement={placement}
+      data-variant={variant}
       data-compact={compact || undefined}
     >
-      <button
-        ref={trigger}
-        type="button"
-        className={styles.trigger}
-        aria-expanded={open}
-        aria-label={
-          authenticated ? `Open ${accountLabel} menu` : "Open profile menu"
-        }
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span className={styles.avatar} aria-hidden="true">
-          <CircleUserRound />
-        </span>
-        <span className={styles.triggerCopy}>
-          <strong title={accountName || undefined}>{accountLabel}</strong>
-          <small>
-            {authenticated ? "Private workspace" : "Sign in to analyse calls"}
-          </small>
-        </span>
-        <ChevronDown className={styles.chevron} size={15} aria-hidden="true" />
-      </button>
+      {variant === "header" ? (
+        <button
+          ref={trigger}
+          type="button"
+          className={styles.headerTrigger}
+          aria-expanded={open}
+          aria-label={
+            authenticated ? `Open ${displayName} menu` : "Open profile menu"
+          }
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className={styles.avatarInitials} aria-hidden="true">
+            {userInitials}
+          </span>
+          <span className={styles.headerName}>{displayName}</span>
+          <ChevronDown
+            className={styles.chevron}
+            size={14}
+            aria-hidden="true"
+          />
+        </button>
+      ) : (
+        <button
+          ref={trigger}
+          type="button"
+          className={styles.trigger}
+          aria-expanded={open}
+          aria-label={
+            authenticated ? `Open ${displayName} menu` : "Open profile menu"
+          }
+          onClick={() => setOpen((value) => !value)}
+        >
+          <span className={styles.avatarInitials} aria-hidden="true">
+            {userInitials}
+          </span>
+          <span className={styles.triggerCopy}>
+            <strong title={displayName}>{displayName}</strong>
+            <small>{displayEmail}</small>
+          </span>
+          <MoreHorizontal
+            className={styles.moreIcon}
+            size={18}
+            aria-hidden="true"
+          />
+        </button>
+      )}
       {open ? (
         <div
           className={styles.popover}

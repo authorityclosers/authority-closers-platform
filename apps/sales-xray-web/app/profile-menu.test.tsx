@@ -81,6 +81,10 @@ it("keeps a neutral label when the canonical profile has no name", async () => {
   expect(
     host.querySelector<HTMLButtonElement>("button[aria-expanded]")?.textContent,
   ).toContain("AC account");
+  expect(
+    host.querySelector('button[aria-expanded] > span[aria-hidden="true"]')
+      ?.textContent,
+  ).toBe("AC");
 });
 it("refreshes the name after a confirmed profile update", async () => {
   vi.stubGlobal(

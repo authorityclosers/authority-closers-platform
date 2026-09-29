@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  ChevronsLeft,
+  ChevronsRight,
   CircleUserRound,
   FolderOpen,
   LogIn,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Phone,
   Plus,
+  Settings,
+  SquarePlus,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -67,7 +70,11 @@ function pageHeading(
           title: "Analysing your call",
           description: "Find this call and its progress in Calls.",
         };
-  if (stage === "welcome") return { title: "New analysis" };
+  if (stage === "welcome")
+    return {
+      title: "New analysis",
+      description: "Upload a sales call to generate insights and a report.",
+    };
   return null;
 }
 
@@ -147,9 +154,9 @@ export function LightboxShell({
             }}
           >
             {collapsed ? (
-              <PanelLeftOpen size={18} aria-hidden="true" />
+              <ChevronsRight size={18} aria-hidden="true" />
             ) : (
-              <PanelLeftClose size={18} aria-hidden="true" />
+              <ChevronsLeft size={18} aria-hidden="true" />
             )}
           </button>
         </div>
@@ -160,7 +167,7 @@ export function LightboxShell({
             href={newAnalysisHref}
             aria-current={active === "analyse" ? "page" : undefined}
           >
-            <Plus size={18} aria-hidden="true" />
+            <SquarePlus size={18} aria-hidden="true" />
             <span>New analysis</span>
           </Link>
           <Link
@@ -168,7 +175,7 @@ export function LightboxShell({
             href="/calls"
             aria-current={active === "calls" ? "page" : undefined}
           >
-            <FolderOpen size={19} strokeWidth={1.75} aria-hidden="true" />
+            <Phone size={18} strokeWidth={1.75} aria-hidden="true" />
             <span>Calls</span>
           </Link>
           <Link
@@ -177,7 +184,7 @@ export function LightboxShell({
             onClick={openAccount}
             aria-current={active === "account" ? "page" : undefined}
           >
-            <CircleUserRound size={19} strokeWidth={1.75} aria-hidden="true" />
+            <Settings size={18} strokeWidth={1.75} aria-hidden="true" />
             <span>{accountLabel}</span>
           </Link>
           <LocalSettingsButton className={styles.navLink} />
@@ -223,11 +230,16 @@ export function LightboxShell({
           </div>
         </header>
         <header className={styles.topBar}>
-          <span className={styles.crumb}>
-            {active === "calls" ? "Calls" : null}
-          </span>
+          <a className={styles.skipToContent} href="#main-content">
+            Skip to content
+          </a>
           <div className={styles.barActions}>
             <HelpMenu />
+            <ProfileMenu
+              authenticated={authenticated}
+              accountHref={accountHref}
+              variant="header"
+            />
           </div>
         </header>
         {heading ? (
