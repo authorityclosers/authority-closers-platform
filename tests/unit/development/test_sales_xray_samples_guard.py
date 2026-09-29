@@ -106,6 +106,27 @@ def test_cli_refuses_before_settings_or_database_creation(
     assert samples.main(args) == 2
 
 
+def test_unexpected_cli_error_prints_class_without_message(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in tuple(os.environ):
+        if name.upper().startswith("PG"):
+            monkeypatch.delenv(name, raising=False)
+    for name, target_value in TARGET.items():
+        monkeypatch.setenv(name, target_value)
+    monkeypatch.setattr(samples, "Settings", lambda **_: SimpleNamespace())
+
+    async def fail(_settings: object, _email: str, _count: int) -> None:
+        raise RuntimeError("https://fixture.invalid/path?token=fictional")
+
+    monkeypatch.setattr(samples, "_run", fail)
+    assert samples.main(["--email", "tester@example.test", "--acknowledge-dev-samples"]) == 1
+    error = capsys.readouterr().err
+    assert "RuntimeError" in error
+    assert "https://" not in error
+    assert "token=fictional" not in error
+
+
 @pytest.mark.parametrize(
     ("maximum", "cap", "accepted"),
     [
@@ -179,6 +200,8 @@ def test_fake_c4_result_uses_gemini_envelope_and_zero_usage() -> None:
 def test_fake_report_is_complete_and_passes_source_quote_validation() -> None:
     source_sha256 = "a" * 64
     text, words = _transcript_words("elevenlabs")
+    assert "into second meetings" in text
+    assert "promising first call" in text
     transcription_data = {"text": text, "words": words}
     transcription_raw = canonical(transcription_data)
     transcription_sha256 = hashlib.sha256(transcription_raw).hexdigest()
@@ -211,6 +234,7 @@ def test_fake_report_is_complete_and_passes_source_quote_validation() -> None:
     )
     result = asyncio.run(FictionalReportingBroker().execute(reservation, payload))
     response = json.loads(result.data["candidates"][0]["content"]["parts"][0]["text"])
+    assert "Monday coaching" in json.dumps(response, ensure_ascii=False)
     report = parse_report_draft(
         response,
         transcript,

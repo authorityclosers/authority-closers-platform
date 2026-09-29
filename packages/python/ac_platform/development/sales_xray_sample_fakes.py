@@ -27,8 +27,8 @@ _DIALOGUE = (
     (
         "Noah",
         (
-            "Our two new reps struggle to turn product demos into"
-            "second meetings. We lose momentum after a promising first"
+            "Our two new reps struggle to turn product demos into "
+            "second meetings. We lose momentum after a promising first "
             "call."
         ),
     ),
@@ -36,7 +36,7 @@ _DIALOGUE = (
     (
         "Noah",
         (
-            "We run around twelve demos. Four or five stop there, often"
+            "We run around twelve demos. Four or five stop there, often "
             "after a buyer asks what onboarding would involve."
         ),
     ),
@@ -45,7 +45,7 @@ _DIALOGUE = (
     (
         "Maya",
         (
-            "So you spend Friday reviewing calls, while some buyers do"
+            "So you spend Friday reviewing calls, while some buyers do "
             "not get a next conversation. What have you tried already?"
         ),
     ),
@@ -60,14 +60,14 @@ _DIALOGUE = (
     (
         "Maya",
         (
-            "A rep can revisit a moment and practise a response. The"
+            "A rep can revisit a moment and practise a response. The "
             "report links its observations to the transcript."
         ),
     ),
     (
         "Noah",
         (
-            "I want to see that it separates what someone said from a"
+            "I want to see that it separates what someone said from a "
             "coach's interpretation. I do not want a mystery score."
         ),
     ),
@@ -76,14 +76,14 @@ _DIALOGUE = (
     (
         "Maya",
         (
-            "For two reps, the plan is twelve thousand rupees per"
+            "For two reps, the plan is twelve thousand rupees per "
             "month, including practice and reports."
         ),
     ),
     (
         "Noah",
         (
-            "Twelve thousand is more than I expected. I need to compare"
+            "Twelve thousand is more than I expected. I need to compare "
             "it with the coaching hours we spend."
         ),
     ),
@@ -92,14 +92,14 @@ _DIALOGUE = (
     (
         "Maya",
         (
-            "Which would be more useful to verify first: reducing"
+            "Which would be more useful to verify first: reducing "
             "review time or helping reps ask better questions?"
         ),
     ),
     (
         "Noah",
         (
-            "Reducing review time. If you can show a workflow that"
+            "Reducing review time. If you can show a workflow that "
             "saves even an hour, I can put a proposal to my director."
         ),
     ),
@@ -258,17 +258,17 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "finding_index": 0,
                 "what_happened": _source_note(
                     (
-                        "The prospect asked to see an example tied to Monday"
+                        "The prospect asked to see an example tied to Monday "
                         "coaching; the response stayed at feature level."
                     ),
                     evidence["practice_signal"],
                 ),
                 "why_it_matters": (
-                    "Exploring the requested example could connect the"
+                    "Exploring the requested example could connect the "
                     "demonstration to the buyer's current workflow."
                 ),
                 "replacement_behavior": (
-                    "Ask which Monday call the prospect would want to review,"
+                    "Ask which Monday call the prospect would want to review, "
                     "then show one source-linked practice example."
                 ),
                 "business_impact": {
@@ -289,7 +289,7 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
                     "The concern calls for a neutral comparison using thebuyer's own time data."
                 ),
                 "replacement_behavior": (
-                    "Ask how many review hours are typical and what evidence"
+                    "Ask how many review hours are typical and what evidence "
                     "would make a proposal useful."
                 ),
                 "business_impact": {
@@ -320,14 +320,14 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "finding_index": 0,
                 "prospect_signal": _source_note(
                     (
-                        "The prospect connected the practice loop to Monday"
+                        "The prospect connected the practice loop to Monday "
                         "coaching and requested an example."
                     ),
                     evidence["practice_signal"],
                 ),
                 "closer_response": _source_note(
                     (
-                        "The response described features without asking which"
+                        "The response described features without asking which "
                         "example would be most useful."
                     ),
                     _evidence(rows, 14),
@@ -341,14 +341,14 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "finding_index": 1,
                 "prospect_signal": _source_note(
                     (
-                        "The prospect offered to take a proposal to a director if"
+                        "The prospect offered to take a proposal to a director if "
                         "the workflow saves an hour."
                     ),
                     evidence["buying_signal"],
                 ),
                 "closer_response": _source_note(
                     (
-                        "The closer booked a walkthrough but did not clarify what"
+                        "The closer booked a walkthrough but did not clarify what "
                         "proof the director needs."
                     ),
                     evidence["close_attempt"],
@@ -361,7 +361,7 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "source": _source_note(
                     (
-                        "The prospect said the price was above expectation and"
+                        "The prospect said the price was above expectation and "
                         "compared it with coaching hours."
                     ),
                     evidence["price"],
@@ -374,7 +374,7 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "source": _source_note(
                     (
-                        "The prospect asked for an example that separates"
+                        "The prospect asked for an example that separates "
                         "observation from interpretation."
                     ),
                     _evidence(rows, 15),
@@ -434,7 +434,7 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "next_call_focus": {
             "improvement_index": 0,
             "behavior": (
-                "Ask one question about the prospect's Monday review"
+                "Ask one question about the prospect's Monday review "
                 "workflow before showing a feature."
             ),
             "target": "Use the requested example to test fit with the prospect's stated routine.",
@@ -442,7 +442,7 @@ def _overview(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "practice": {
             "improvement_index": 0,
             "instructions": (
-                "Rehearse asking which recent call the prospect would like"
+                "Rehearse asking which recent call the prospect would like "
                 "to review, then show one source-linked moment."
             ),
             "success_condition": (
@@ -486,7 +486,7 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Connects the problem to review time",
                 "explanation": (
-                    "The question about team time led the prospect to describe"
+                    "The question about team time led the prospect to describe "
                     "a Friday review burden."
                 ),
                 "evidence": [evidence["review_time"]],
@@ -494,7 +494,7 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Makes a clear close attempt",
                 "explanation": (
-                    "The closer proposed a short workflow walkthrough, and the"
+                    "The closer proposed a short workflow walkthrough, and the "
                     "prospect accepted the meeting."
                 ),
                 "evidence": [evidence["close_attempt"], evidence["agreed_next_step"]],
@@ -504,8 +504,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Explore the requested practice example",
                 "explanation": (
-                    "The prospect asked to see an example for Monday coaching."
-                    "The response described features but did not ask which call"
+                    "The prospect asked to see an example for Monday coaching. "
+                    "The response described features but did not ask which call "
                     "would make the example useful."
                 ),
                 "evidence": [evidence["practice_signal"], evidence["practice_response"]],
@@ -513,8 +513,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Clarify the director's proof requirement",
                 "explanation": (
-                    "The prospect offered to bring a proposal to a director if"
-                    "the workflow saves an hour. The close moved to scheduling"
+                    "The prospect offered to bring a proposal to a director if "
+                    "the workflow saves an hour. The close moved to scheduling "
                     "without clarifying what evidence the director needs."
                 ),
                 "evidence": [evidence["buying_signal"], evidence["close_attempt"]],
@@ -524,7 +524,7 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Shape the example around Monday coaching",
                 "explanation": (
-                    "Ask which recent call the prospect would use, then show"
+                    "Ask which recent call the prospect would use, then show "
                     "one source-linked moment from that workflow."
                 ),
                 "evidence": [evidence["practice_signal"]],
@@ -532,8 +532,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Respond to price with the buyer's own time data",
                 "explanation": (
-                    "Ask how many review hours are typical and what evidence"
-                    "would make a proposal useful. No savings estimate is"
+                    "Ask how many review hours are typical and what evidence "
+                    "would make a proposal useful. No savings estimate is "
                     "established in this fictional call."
                 ),
                 "evidence": [evidence["price"], evidence["review_time"]],
@@ -543,8 +543,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Price exceeded expectation",
                 "explanation": (
-                    "The prospect said the monthly price was higher than"
-                    "expected and wanted to compare it with current coaching"
+                    "The prospect said the monthly price was higher than "
+                    "expected and wanted to compare it with current coaching "
                     "hours."
                 ),
                 "evidence": [evidence["price"]],
@@ -552,8 +552,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Value must be shown in the workflow",
                 "explanation": (
-                    "The prospect said another dashboard would not save review"
-                    "time. The response would be stronger with a buyer-specific"
+                    "The prospect said another dashboard would not save review "
+                    "time. The response would be stronger with a buyer-specific "
                     "example."
                 ),
                 "evidence": [evidence["value_concern"], evidence["practice_response"]],
@@ -570,8 +570,8 @@ def _fictional_report(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
             {
                 "title": "Next step and attendee confirmed",
                 "explanation": (
-                    "The prospect accepted Thursday morning and offered to"
-                    "invite a director; the closer recapped the outline and"
+                    "The prospect accepted Thursday morning and offered to "
+                    "invite a director; the closer recapped the outline and "
                     "time."
                 ),
                 "evidence": [evidence["agreed_next_step"], evidence["recap"]],
@@ -638,7 +638,7 @@ class FictionalReportingBroker:
                 ]
                 data = {
                     "overview": (
-                        "A fictional sales conversation with discovery, a price"
+                        "A fictional sales conversation with discovery, a price "
                         "concern, and a proposed next step."
                     ),
                     "observations": observations,

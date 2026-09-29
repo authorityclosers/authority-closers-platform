@@ -675,8 +675,11 @@ def main(argv: list[str] | None = None) -> int:
     except SampleRefused as error:
         print(str(error), file=sys.stderr)
         return 2
-    except Exception:
-        print("Sample call creation failed. No provider API was contacted.", file=sys.stderr)
+    except Exception as error:
+        print(
+            f"Sample call creation failed ({type(error).__name__}). No provider API was contacted.",
+            file=sys.stderr,
+        )
         return 1
     print(f"Ready: {len(result)} fictional sample calls. No official score was produced.")
     return 0
