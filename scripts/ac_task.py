@@ -30,6 +30,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 REPOSITORY = "authorityclosers/authority-closers-platform"
 VALIDATION_WORKFLOW = "application.yml"
@@ -154,6 +155,13 @@ class Gate:
     def is_clean(self) -> bool:
         return not self.git("status", "--porcelain", "--untracked-files=no").strip()
 
+    def gate_matches_main(self) -> bool:
+        """Whether this copy of the work gate matches the fetched main branch."""
+
+        current = Path(__file__).read_text(encoding="utf-8")
+        main = self.git("show", "origin/main:scripts/ac_task.py")
+        return current == main
+
     # -- decisions ---------------------------------------------------------------
 
     def assess(self, own_branch: str | None = None, lane: str = EXCLUSIVE) -> Verdict:
@@ -197,6 +205,22 @@ class Gate:
         if not self.is_clean():
             raise TaskError("this folder has uncommitted changes; finish or stash them first")
         self.git("fetch", "--quiet", "--prune", "origin")
+        current = self.current_branch()
+        if current.startswith("task/") and current not in self.remote_branches():
+            raise TaskError(
+                f"current task branch {current} is missing from GitHub; "
+                "run `python3 scripts/ac_task.py done` first"
+            )
+        if not self.gate_matches_main():
+            remedy = (
+                "run `python3 scripts/ac_task.py done` first"
+                if current.startswith("task/")
+                else "run `git switch main && git merge --ff-only origin/main` first"
+            )
+            raise TaskError(
+                "running scripts/ac_task.py differs from origin/main:scripts/ac_task.py; "
+                + remedy
+            )
         verdict = self.assess(lane=lane)
         if not verdict.free:
             raise BusyError(verdict)
@@ -290,10 +314,9 @@ def _describe(verdict: Verdict) -> str:
 
 
 def _status_verdict_line(label: str, verdict: Verdict) -> str:
-    state = "FREE" if verdict.free else "BUSY"
-    blockers = "; ".join(verdict.reasons)
-    detail = f" ({blockers})" if blockers else ""
-    return f"{label}: {state}{detail}"
+    if verdict.free:
+        return f"{label}: FREE"
+    return f"{label}: BUSY: {'; '.join(verdict.reasons)}"
 
 
 def _describe_status(gate: Gate, verdict: Verdict) -> str:
@@ -321,7 +344,7 @@ def _describe_status(gate: Gate, verdict: Verdict) -> str:
     lines.append("Start verdicts (BUSY applies to starting new work):")
     for lane in LANES:
         lines.append(_status_verdict_line(lane, gate.assess(lane=lane)))
-    lines.append(_status_verdict_line("exclusive (no lane)", verdict))
+    lines.append(_status_verdict_line("exclusive", verdict))
     return "\n".join(lines)
 
 

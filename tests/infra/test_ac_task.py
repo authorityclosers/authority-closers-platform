@@ -29,6 +29,7 @@ class FakeRepo:
         self.main_runs = [{"run_number": 1, "status": "completed", "conclusion": "success"}]
         self.current = "main"
         self.dirty = False
+        self.main_gate_script = Path(MODULE.__file__).read_text(encoding="utf-8")
         self.calls: list[list[str]] = []
 
     def __call__(self, argv: Sequence[str]) -> str:
@@ -46,6 +47,9 @@ class FakeRepo:
             return self.current + "\n"
         if argv[:2] == ["git", "status"]:
             return " M file.py\n" if self.dirty else ""
+        if argv[:2] == ["git", "show"]:
+            assert argv[2] == "origin/main:scripts/ac_task.py"
+            return self.main_gate_script
         if argv[:2] == ["git", "switch"]:
             self.current = argv[-2] if "--create" in argv else argv[-1]
             return ""
@@ -109,6 +113,75 @@ def test_start_claims_the_lock_from_latest_main() -> None:
     assert branch == "task/76-single-track-gate"
     assert ["git", "switch", "--quiet", "--create", branch, "origin/main"] in repo.calls
     assert branch in repo.branches
+
+
+def test_start_from_a_merged_task_branch_refuses_and_exits_two(capsys) -> None:
+    repo = FakeRepo()
+    repo.current = "task/ui/66-shell"
+
+    assert MODULE.main(["start", "platform", "94-stale-gate"], gate(repo)) == 2
+
+    assert capsys.readouterr().err == (
+        "ac_task: current task branch task/ui/66-shell is missing from GitHub; "
+        "run `python3 scripts/ac_task.py done` first\n"
+    )
+    assert ["git", "fetch", "--quiet", "--prune", "origin"] in repo.calls
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_start_refuses_when_gate_copy_differs_from_fetched_main(capsys) -> None:
+    repo = FakeRepo()
+    repo.current = "task/platform/94-gate-edit"
+    repo.branches.append(repo.current)
+    repo.main_gate_script = "stale gate copy\n"
+
+    assert MODULE.main(["start", "platform", "94-stale-gate"], gate(repo)) == 2
+
+    assert capsys.readouterr().err == (
+        "ac_task: running scripts/ac_task.py differs from "
+        "origin/main:scripts/ac_task.py; run `python3 scripts/ac_task.py done` first\n"
+    )
+    fetch_index = repo.calls.index(["git", "fetch", "--quiet", "--prune", "origin"])
+    show_index = repo.calls.index(["git", "show", "origin/main:scripts/ac_task.py"])
+    assert fetch_index < show_index
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_start_on_main_with_stale_gate_refuses_with_main_update_remedy(capsys) -> None:
+    repo = FakeRepo()
+    repo.main_gate_script = "newer main gate\n"
+
+    assert MODULE.main(["start", "platform", "94-stale-gate"], gate(repo)) == 2
+
+    assert capsys.readouterr().err == (
+        "ac_task: running scripts/ac_task.py differs from "
+        "origin/main:scripts/ac_task.py; run `git switch main && git merge --ff-only "
+        "origin/main` first\n"
+    )
+    assert not any(call[:2] in (["git", "switch"], ["git", "push"]) for call in repo.calls)
+
+
+def test_start_with_matching_gate_branches_from_origin_main() -> None:
+    repo = FakeRepo()
+
+    branch = gate(repo).start("94-stale-gate", "platform")
+
+    assert branch == "task/platform/94-stale-gate"
+    fetch_index = repo.calls.index(["git", "fetch", "--quiet", "--prune", "origin"])
+    show_index = repo.calls.index(["git", "show", "origin/main:scripts/ac_task.py"])
+    assert fetch_index < show_index
+    assert ["git", "switch", "--quiet", "--create", branch, "origin/main"] in repo.calls
+
+
+def test_check_on_gate_edit_branch_does_not_compare_gate_copy() -> None:
+    repo = FakeRepo()
+    branch = "task/platform/94-gate-edit"
+    repo.branches.append(branch)
+    repo.current = branch
+    repo.main_gate_script = "different from this task branch\n"
+
+    assert gate(repo).check().free
+    assert not any(call[:2] == ["git", "show"] for call in repo.calls)
 
 
 def test_start_refuses_while_busy_and_touches_nothing() -> None:
@@ -242,14 +315,16 @@ def test_status_text_labels_each_lane_and_exclusive_verdict(capsys) -> None:
     assert MODULE.main(["status"], gate(repo)) == MODULE.EXIT_BUSY
     output = capsys.readouterr().out
     assert "Start verdicts (BUSY applies to starting new work):" in output
-    assert "admin: FREE" in output
-    assert "platform: FREE" in output
-    assert "sales-xray: BUSY (" in output
-    assert "task/sales-xray/81-http-source-readers" in output
-    assert "#104 Resolve sources" in output
-    assert "ui: BUSY (" in output
-    assert "exclusive (no lane): BUSY (" in output
-    assert "BUSY:" not in output
+    lines = output.splitlines()
+    assert (
+        "sales-xray: BUSY: another task is in progress in the sales-xray lane: "
+        "task/sales-xray/81-http-source-readers; open pull request(s): #104 Resolve sources"
+    ) in lines
+    assert "platform: FREE" in lines
+    assert "admin: FREE" in lines
+    assert "ui: BUSY: another task is in progress in the ui lane: task/ui/66-shell" in lines
+    assert any(line.startswith("exclusive: BUSY: ") for line in lines)
+    assert sum(line.startswith("exclusive:") for line in lines) == 1
 
 
 def test_status_text_shows_current_task_check_while_main_runs(capsys) -> None:
@@ -264,7 +339,7 @@ def test_status_text_shows_current_task_check_while_main_runs(capsys) -> None:
     output = capsys.readouterr().out
     assert f"your task {branch}: free to continue" in output
     assert "BUSY applies to starting new work" in output
-    assert "admin: BUSY (" in output
+    assert "admin: BUSY: " in output
 
 
 def test_cli_start_accepts_a_lane(capsys) -> None:
