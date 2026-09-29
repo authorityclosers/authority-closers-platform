@@ -43,6 +43,7 @@ function internalContextUrl(
 }
 
 const TRUSTED_INTERNAL_API_HOSTS = new Set([
+  "api.development.ac.internal.invalid",
   "api.production.ac.internal.invalid",
   "api.staging.ac.internal.invalid",
 ]);

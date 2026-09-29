@@ -21,6 +21,5 @@ if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
   exit $?
 fi
 
-export R2_POLICY_FILE='/srv/authority-closers/current/config/r2/free-tier-policy.conf'
 exec /usr/local/sbin/ac-infisical-run-backup \
   -- /usr/local/libexec/authority-closers/r2-usage-guard

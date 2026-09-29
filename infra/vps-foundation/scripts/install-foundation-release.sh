@@ -11,6 +11,14 @@ install_root="${AC_INSTALL_ROOT:-}"
 test_fail_after_install="${AC_TEST_FAIL_AFTER_INSTALL:-0}"
 test_fail_after_activate="${AC_TEST_FAIL_AFTER_ACTIVATE:-0}"
 approved_legacy_release_id="${AC_APPROVED_LEGACY_RELEASE_ID:-}"
+install_scope="${AC_INSTALL_SCOPE:-}"
+install_scope_was_set="${AC_INSTALL_SCOPE+x}"
+if [[ "$install_scope_was_set" == x && "$install_scope" != backup ]]; then
+  printf 'AC_INSTALL_SCOPE accepts only backup.\n' >&2
+  exit 2
+fi
+scoped_backup_install=0
+[[ "$install_scope" == backup ]] && scoped_backup_install=1
 
 [[ "$test_mode" == 0 || "$test_mode" == 1 ]] || {
   printf 'AC_TEST_MODE must be 0 or 1.\n' >&2
@@ -78,8 +86,10 @@ srv_root="${install_root}/srv/authority-closers"
 releases_root="$srv_root/releases"
 release_dir="$releases_root/$release_id"
 current_link="$srv_root/current"
+scope_record="${install_root}/var/lib/authority-closers/foundation-scopes/backup.release"
 stage_dir=''
 rollback_dir=''
+scope_record_tmp=''
 transaction_active=0
 transaction_committed=0
 compose_mutated=0
@@ -207,7 +217,9 @@ restore_failed_transaction() {
     tar --acls --xattrs --numeric-owner --directory=/ \
       --extract --file="$rollback_dir/host-files.tar" || rollback_failed=1
   fi
-  restore_current_link || rollback_failed=1
+  if [[ "$scoped_backup_install" == 0 ]]; then
+    restore_current_link || rollback_failed=1
+  fi
   if [[ "$application_edge_routes_root_created" == 1 ]]; then
     rmdir -- "$application_edge_routes_root" || rollback_failed=1
   fi
@@ -260,6 +272,9 @@ cleanup() {
       "$releases_root"/.stage-*) rm -rf -- "$stage_dir" ;;
       *) printf 'Refusing to remove unexpected staging path: %s\n' "$stage_dir" >&2; status=1 ;;
     esac
+  fi
+  if [[ -n "$scope_record_tmp" && -e "$scope_record_tmp" ]]; then
+    rm -f -- "$scope_record_tmp" || status=1
   fi
   if [[ -n "$rollback_dir" && -e "$rollback_dir" ]]; then
     case "$rollback_dir" in
@@ -428,8 +443,26 @@ fi
 manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$manifest" ]] || { printf 'Released install manifest is not readable: %s\n' "$manifest" >&2; exit 1; }
 declare -A installed_targets=()
+declare -A backup_scope_targets=() backup_scope_found=()
 declare -a install_sources=() install_targets=()
 declare -a install_modes=() install_owners=() install_groups=()
+if [[ "$scoped_backup_install" == 1 ]]; then
+  scope_list="$release_dir/config/release/install-scope-backup.txt"
+  [[ -r "$scope_list" ]] || { printf 'Backup install scope list is not readable.\n' >&2; exit 1; }
+  while IFS= read -r target || [[ -n "$target" ]]; do
+    [[ -z "$target" || "$target" == \#* ]] && continue
+    [[ "$target" =~ ^/(usr/local/(sbin/ac-[A-Za-z0-9._-]+|libexec/authority-closers/[A-Za-z0-9._-]+)|etc/systemd/system/ac-[A-Za-z0-9@._%-]+)$ ]] && \
+      [[ -z "${backup_scope_targets[$target]:-}" ]] || {
+      printf 'Invalid or duplicate backup install scope target: %s\n' "$target" >&2
+      exit 1
+    }
+    backup_scope_targets[$target]=1
+  done < "$scope_list"
+  ((${#backup_scope_targets[@]} > 0)) || {
+    printf 'Backup install scope list is empty.\n' >&2
+    exit 1
+  }
+fi
 while IFS=$'\t' read -r kind source target mode owner group; do
   [[ -z "$kind" || "$kind" == \#* ]] && continue
   [[ "$kind" == executable || "$kind" == unit ]] || {
@@ -456,6 +489,13 @@ while IFS=$'\t' read -r kind source target mode owner group; do
   installed_targets[$target]=1
   source_path="$release_dir/$source"
   [[ -f "$source_path" ]] || { printf 'Manifest source is missing: %s\n' "$source" >&2; exit 1; }
+  if [[ "$scoped_backup_install" == 1 ]]; then
+    if [[ -n "${backup_scope_targets[$target]:-}" ]]; then
+      backup_scope_found[$target]=1
+    else
+      continue
+    fi
+  fi
   install_sources+=("$source")
   install_targets+=("$target")
   install_modes+=("$mode")
@@ -464,8 +504,18 @@ while IFS=$'\t' read -r kind source target mode owner group; do
   transaction_targets+=("${install_root}${target}")
 done < "$manifest"
 
+if [[ "$scoped_backup_install" == 1 ]]; then
+  for target in "${!backup_scope_targets[@]}"; do
+    [[ -n "${backup_scope_found[$target]:-}" ]] || {
+      printf 'Backup install scope target is absent from the manifest: %s\n' "$target" >&2
+      exit 1
+    }
+  done
+fi
+
 ((${#install_targets[@]} > 0)) || { printf 'Released install manifest is empty.\n' >&2; exit 1; }
-if [[ "$test_mode" == 0 ]]; then
+transaction_targets+=("$scope_record")
+if [[ "$test_mode" == 0 && "$scoped_backup_install" == 0 ]]; then
   AC_BASELINE_POLICY_DIR="$release_dir/config/release" \
     "$release_dir/scripts/ac-os-baseline-verify"
   transaction_targets+=(
@@ -475,6 +525,7 @@ if [[ "$test_mode" == 0 ]]; then
   )
 fi
 
+if [[ "$scoped_backup_install" == 0 ]]; then
 if [[ -e "$application_edge_route_releases_root" || -L "$application_edge_route_releases_root" ]]; then
   [[ -d "$application_edge_route_releases_root" && \
      ! -L "$application_edge_route_releases_root" ]] || {
@@ -618,8 +669,10 @@ for route_environment in production staging; do
     fi
   fi
 done
+fi
 begin_transaction
 
+if [[ "$scoped_backup_install" == 0 ]]; then
 if [[ ! -d "$application_edge_routes_root" ]]; then
   if [[ "$test_mode" == 1 ]]; then
     install -d -m 0755 "$application_edge_routes_root"
@@ -648,8 +701,9 @@ for route_environment in production staging; do
     mv --no-target-directory --force "$route_selector_tmp" "$route_selector"
   fi
 done
+fi
 
-if [[ "$test_mode" == 0 ]]; then
+if [[ "$test_mode" == 0 && "$scoped_backup_install" == 0 ]]; then
   AC_RELEASE_ID="$release_id" \
   AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env" \
     "$release_dir/scripts/install-pinned-toolchain.sh"
@@ -679,6 +733,26 @@ for index in "${!install_targets[@]}"; do
   }
 done
 
+if [[ "$scoped_backup_install" == 1 ]]; then
+  scope_record_dir="$(dirname "$scope_record")"
+  if [[ "$test_mode" == 1 ]]; then
+    install -d -m 0755 "$scope_record_dir"
+  else
+    install -d -m 0755 -o root -g root "$scope_record_dir"
+  fi
+  scope_record_tmp="$(mktemp "$scope_record.XXXXXX")"
+  printf '%s\n' "$release_id" > "$scope_record_tmp"
+  if [[ "$test_mode" == 1 ]]; then
+    chmod 0644 "$scope_record_tmp"
+  else
+    chown root:root "$scope_record_tmp"
+    chmod 0644 "$scope_record_tmp"
+  fi
+  mv --no-target-directory --force "$scope_record_tmp" "$scope_record"
+else
+  rm -f -- "$scope_record"
+fi
+
 if [[ "$test_fail_after_install" == 1 ]]; then
   printf 'TEST  Injecting a post-install failure.\n' >&2
   exit 97
@@ -699,7 +773,11 @@ activate_current_release() {
   }
 }
 
-if [[ "$test_mode" == 0 ]]; then
+if [[ "$scoped_backup_install" == 1 ]]; then
+  if [[ "$test_mode" == 0 ]]; then
+    systemctl daemon-reload
+  fi
+elif [[ "$test_mode" == 0 ]]; then
   systemctl daemon-reload
   compose_mutated=1
   reconcile_compose_release "$release_dir"
