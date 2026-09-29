@@ -36,6 +36,7 @@ except ModuleNotFoundError:  # pragma: no cover - only used on the Windows dev h
 
 APPLICATION_ROOT = Path("/srv/authority-closers/application")
 FOUNDATION_CURRENT = Path("/srv/authority-closers/current")
+FOUNDATION_SCOPES = Path("/var/lib/authority-closers/foundation-scopes")
 BACKUP_ROOT = Path("/srv/authority-closers/backups/application")
 LOCK_ROOT = Path("/run/lock")
 PRIVATE_LOCK_ROOT = LOCK_ROOT / "authority-closers"
@@ -726,6 +727,24 @@ def host_path(host_root: Path, absolute_path: str | Path) -> Path:
         raise BackupError("An operational path must be absolute.")
     relative = Path(*path.parts[1:])
     return host_root / relative if host_root != Path("/") else Path("/", relative)
+
+
+def foundation_policy_path(host_root: Path) -> Path:
+    scope_record = host_path(host_root, FOUNDATION_SCOPES / "backup.release")
+    if scope_record.exists() or scope_record.is_symlink():
+        if scope_record.is_symlink() or not scope_record.is_file():
+            raise BackupError("Backup foundation scope record is unsafe.")
+        try:
+            scope_release_id = scope_record.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise BackupError("Backup foundation scope record is unreadable.") from exc
+        if not re.fullmatch(r"foundation-[0-9a-f]{40}", scope_release_id):
+            raise BackupError("Backup foundation scope record has an invalid release ID.")
+        return host_path(
+            host_root,
+            f"/srv/authority-closers/releases/{scope_release_id}/config/r2/free-tier-policy.conf",
+        )
+    return host_path(host_root, FOUNDATION_CURRENT) / "config/r2/free-tier-policy.conf"
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -1645,8 +1664,7 @@ def run(args: argparse.Namespace) -> None:
     if args.environment and args.environment not in ENVIRONMENTS:
         raise BackupError("Unsupported application environment.")
     host_root = Path(os.environ.get("AC_POSTGRES_BACKUP_HOST_ROOT", "/")).resolve()
-    foundation_current = host_path(host_root, FOUNDATION_CURRENT)
-    policy_path = foundation_current / "config/r2/free-tier-policy.conf"
+    policy_path = foundation_policy_path(host_root)
     policy = read_policy(policy_path)
     max_dump_bytes = int(policy["R2_POSTGRES_LOGICAL_MAX_DUMP_BYTES"])
     keep_points = int(policy["R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT"])

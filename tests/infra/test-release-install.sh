@@ -50,11 +50,12 @@ duplicate_targets="$(awk -F '\t' '!/^#/ && NF {count[$3]++} END {for (target in 
   exit 1
 }
 
+tmp_parent="${TMPDIR:-/tmp}"
 tmp_dir="$(mktemp -d -t ac-release-install-test.XXXXXX)"
 cleanup() {
   local status=$?
   case "$tmp_dir" in
-    /tmp/ac-release-install-test.*) rm -rf -- "$tmp_dir" ;;
+    "$tmp_parent"/ac-release-install-test.*) rm -rf -- "$tmp_dir" ;;
     *) printf 'Refusing to remove unexpected release test path: %s\n' "$tmp_dir" >&2; status=1 ;;
   esac
   exit "$status"
@@ -391,6 +392,117 @@ if AC_TEST_MODE=1 \
 fi
 [[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
+
+# A scoped install changes only declared backup targets and never moves current.
+backup_root="$tmp_dir/backup-root"
+AC_TEST_MODE=1 \
+AC_INSTALL_ROOT="$backup_root" \
+AC_RELEASE_ID=foundation-test-backup-base \
+AC_RELEASE_GIT_SHA="$release_sha" \
+AC_RELEASE_ARCHIVE="$archive" \
+AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+  bash "$installer" >/dev/null
+backup_base_release="$backup_root/srv/authority-closers/releases/foundation-test-backup-base"
+backup_current="$backup_root/srv/authority-closers/current"
+backup_target='/usr/local/sbin/ac-restic-backup-inner'
+backup_non_target='/usr/local/sbin/ac-foundation-health'
+printf '\n# scoped backup candidate\n' >> "$source_foundation/scripts/ac-restic-backup-inner"
+printf '\n# full-only candidate\n' >> "$source_foundation/scripts/ac-foundation-health"
+git -C "$source_repo" add infra/vps-foundation/scripts/ac-restic-backup-inner \
+  infra/vps-foundation/scripts/ac-foundation-health
+git -C "$source_repo" commit -qm 'fixture: scoped backup release'
+backup_candidate_sha="$(git -C "$source_repo" rev-parse HEAD)"
+backup_candidate_archive="$tmp_dir/foundation-${backup_candidate_sha}.tar"
+git -C "$source_repo" archive --format=tar --output="$backup_candidate_archive" \
+  "$backup_candidate_sha" -- infra/vps-foundation
+backup_candidate_archive_sha="$(sha256sum "$backup_candidate_archive" | awk '{print $1}')"
+scope_record="$backup_root/var/lib/authority-closers/foundation-scopes/backup.release"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_SCOPE=full \
+  AC_INSTALL_ROOT="$tmp_dir/unknown-scope-root" \
+  AC_RELEASE_ID=foundation-test-unknown-scope \
+  AC_RELEASE_GIT_SHA="$backup_candidate_sha" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Foundation installer accepted an unknown install scope.\n' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/unknown-scope-root" ]]
+if AC_TEST_MODE=1 \
+  AC_INSTALL_SCOPE=backup \
+  AC_TEST_FAIL_AFTER_INSTALL=1 \
+  AC_INSTALL_ROOT="$backup_root" \
+  AC_RELEASE_ID=foundation-test-backup-scope \
+  AC_RELEASE_GIT_SHA="$backup_candidate_sha" \
+  AC_RELEASE_ARCHIVE="$backup_candidate_archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$backup_candidate_archive_sha" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Injected scoped install failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ "$(readlink -f "$backup_current")" == "$backup_base_release" ]]
+cmp --silent "$backup_base_release/scripts/ac-restic-backup-inner" "$backup_root$backup_target"
+cmp --silent "$backup_base_release/scripts/ac-foundation-health" "$backup_root$backup_non_target"
+[[ ! -e "$scope_record" ]]
+if AC_TEST_MODE=1 \
+  AC_INSTALL_SCOPE=backup \
+  AC_INSTALL_ROOT="$tmp_dir/tampered-scoped-archive-root" \
+  AC_RELEASE_ID=foundation-test-tampered-scoped-archive \
+  AC_RELEASE_GIT_SHA="$backup_candidate_sha" \
+  AC_RELEASE_ARCHIVE="$backup_candidate_archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$(printf '0%.0s' {1..64})" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Scoped installer accepted a tampered archive checksum.\n' >&2
+  exit 1
+fi
+scoped_release_id=foundation-test-backup-scope
+AC_TEST_MODE=1 \
+AC_INSTALL_SCOPE=backup \
+AC_INSTALL_ROOT="$backup_root" \
+AC_RELEASE_ID="$scoped_release_id" \
+AC_RELEASE_GIT_SHA="$backup_candidate_sha" \
+AC_RELEASE_ARCHIVE="$backup_candidate_archive" \
+AC_RELEASE_ARCHIVE_SHA256="$backup_candidate_archive_sha" \
+  bash "$installer" >/dev/null
+scoped_release="$backup_root/srv/authority-closers/releases/$scoped_release_id"
+[[ "$(readlink -f "$backup_current")" == "$backup_base_release" ]]
+[[ "$(<"$scope_record")" == "$scoped_release_id" ]]
+[[ "$(stat -c '%a' "$scope_record")" == 644 ]]
+[[ "$(stat -c '%a' "$(dirname "$scope_record")")" == 755 ]]
+while IFS=$'\t' read -r kind source target mode owner group; do
+  [[ -z "$kind" || "$kind" == \#* ]] && continue
+  if grep -Fxq "$target" "$scoped_release/config/release/install-scope-backup.txt"; then
+    expected_release="$scoped_release"
+  else
+    expected_release="$backup_base_release"
+  fi
+  cmp --silent "$expected_release/$source" "$backup_root$target"
+  [[ "$(stat -c '%a' "$backup_root$target")" == "${mode#0}" ]]
+done < "$scoped_release/config/release/install-manifest.tsv"
+printf '/usr/local/sbin/ac-not-in-manifest\n' \
+  >> "$source_foundation/config/release/install-scope-backup.txt"
+git -C "$source_repo" add infra/vps-foundation/config/release/install-scope-backup.txt
+git -C "$source_repo" commit -qm 'fixture: invalid backup scope list'
+missing_scope_sha="$(git -C "$source_repo" rev-parse HEAD)"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_SCOPE=backup \
+  AC_INSTALL_ROOT="$tmp_dir/missing-scope-target-root" \
+  AC_RELEASE_ID=foundation-test-missing-scope-target \
+  AC_RELEASE_GIT_SHA="$missing_scope_sha" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Scoped installer accepted a target missing from its manifest.\n' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/missing-scope-target-root/usr/local/sbin/ac-not-in-manifest" ]]
+[[ ! -e "$tmp_dir/missing-scope-target-root/var/lib/authority-closers/foundation-scopes/backup.release" ]]
+AC_TEST_MODE=1 \
+AC_INSTALL_ROOT="$backup_root" \
+AC_RELEASE_ID=foundation-test-backup-full \
+AC_RELEASE_GIT_SHA="$backup_candidate_sha" \
+AC_RELEASE_ARCHIVE="$backup_candidate_archive" \
+AC_RELEASE_ARCHIVE_SHA256="$backup_candidate_archive_sha" \
+  bash "$installer" >/dev/null
+[[ ! -e "$scope_record" ]]
+[[ "$(readlink -f "$backup_current")" == "$backup_root/srv/authority-closers/releases/foundation-test-backup-full" ]]
 
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null
 printf 'PASS  Immutable installer binds release evidence and rolls back a failed host transaction.\n'
