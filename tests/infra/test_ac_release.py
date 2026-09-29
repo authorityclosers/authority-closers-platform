@@ -553,6 +553,29 @@ def test_store_keeps_previous_production_builds_after_ten_newer_staging_builds(
     assert not set(staging_shas[:-10]) & remaining
 
 
+def test_successful_staging_attempt_keeps_store_when_release_ledger_is_truncated(
+    tmp_path: Path,
+) -> None:
+    engine = make_engine(tmp_path)
+    store_shas = [f"{index:040x}" for index in range(12)]
+    for sha in store_shas:
+        (engine.paths.store / sha / "core").mkdir(parents=True)
+    engine.paths.releases.write_text('{"version":"v0.3.0"', encoding="utf-8")
+    engine.deploy_core = lambda environment, build, dry_run: {"previous": None}
+
+    result = engine.attempt(
+        "staging",
+        "core",
+        MODULE.Build(HEAD, 100, 7, f"ac-application-{HEAD}", DIGEST),
+        dry_run=False,
+        trigger="test",
+    )
+
+    assert result["result"] == "success"
+    assert result["pruned"] == []
+    assert {path.name for path in engine.paths.store.iterdir()} == set(store_shas)
+
+
 def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:
     engine = make_engine(tmp_path)
     shas = [f"{i:040x}" for i in range(15)]

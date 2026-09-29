@@ -1572,6 +1572,13 @@ class Engine:
     def prune_store(self) -> list[str]:
         """Keep what runs anywhere plus the most recent successful deploys."""
 
+        try:
+            production_releases = self.production_releases()
+        except ReleaseError:
+            # If the ledger is damaged, we cannot know which builds production
+            # needs. Keep the entire store so pruning cannot break a deploy.
+            return []
+
         keep: set[str | None] = set()
         for environment in ENVIRONMENTS:
             keep.add(self.current_core(environment))
@@ -1584,7 +1591,7 @@ class Engine:
                 if len(recent) >= KEEP_RECENT_BUILDS:
                     break
         keep.update(recent)
-        for release in self.production_releases():
+        for release in production_releases:
             if release is not None:
                 keep.update((release["core_sha"], release["web_sha"]))
         removed: list[str] = []
