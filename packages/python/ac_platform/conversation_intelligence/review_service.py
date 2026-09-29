@@ -33,6 +33,7 @@ from .application import (
     ConversationNotFound,
     utc,
 )
+from .canary import recording_is_canary
 from .checkpoints import content_hash
 from .guest_models import (
     ConversationGuestSubmission,
@@ -590,6 +591,18 @@ class ConversationReviewService:
         self, actor: ActorContext, intent: ReviewAssignmentCreateRequest, key: str
     ) -> dict[str, Any]:
         now = await self._admin(actor)
+        canary_run = await self.database.scalar(
+            select(ConversationRun.id)
+            .join(
+                ConversationRecording,
+                (ConversationRecording.id == ConversationRun.recording_id)
+                & (ConversationRecording.tenant_id == ConversationRun.tenant_id)
+                & (ConversationRecording.person_id == ConversationRun.person_id),
+            )
+            .where(ConversationRun.id == intent.run_id, recording_is_canary())
+        )
+        if canary_run is not None:
+            raise ConversationDenied("Canary calls cannot be assigned for review.")
         # Serialize assignment retries with the same current AC command. This
         # prevents two concurrent first requests from racing the unique receipt.
         await self.database.execute(
