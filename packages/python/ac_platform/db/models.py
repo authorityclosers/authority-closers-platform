@@ -18,6 +18,7 @@ from ac_platform.certificates import models as certificate_models
 from ac_platform.community import models as community_models
 from ac_platform.conversation_intelligence import (
     acquisition_models,
+    canary_models,
     execution_control_models,
     guest_models,
     recovery_models,
@@ -47,6 +48,7 @@ MODEL_MODULES = (
     community_models,
     conversation_models,
     acquisition_models,
+    canary_models,
     guest_models,
     submission_label_models,
     execution_control_models,

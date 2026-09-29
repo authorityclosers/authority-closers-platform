@@ -42,6 +42,7 @@ from ac_platform.conversation_intelligence.budget_admin import (
     is_admin_budget_approval_ref,
     is_any_admin_budget_approval_ref,
 )
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
@@ -496,6 +497,7 @@ class ConversationAuthority:
                     active,
                     ConversationRecording.tenant_id == actor.tenant_id,
                     ConversationRecording.person_id == actor.person_id,
+                    ~recording_is_canary(),
                 )
             )
         ).one()
