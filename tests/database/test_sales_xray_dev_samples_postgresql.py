@@ -95,10 +95,10 @@ def _install_routes_with_stub_native(
     assert isinstance(native, StubNativeRuntime)
     assert native.path == socket_path
     assert native.workspace_root == setup.runtime.scratch.root
-    assert any(
-        getattr(route, "path", None) == "/v1/conversation/acquisition/submissions"
-        for route in app.routes
-    )
+    # Run the HTTP assertions below against the app returned by the production
+    # route installer. FastAPI's included-router representation is versioned,
+    # so inspect the mounted route through HTTP instead of app.routes internals.
+    setup.app = app
 
 
 def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
