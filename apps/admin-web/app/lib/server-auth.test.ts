@@ -9,6 +9,8 @@ const PRODUCTION_INTERNAL_API_HOST = "api.production.ac.internal.invalid";
 const PRODUCTION_INTERNAL_API_URL = `http://${PRODUCTION_INTERNAL_API_HOST}:8000`;
 const STAGING_INTERNAL_API_HOST = "api.staging.ac.internal.invalid";
 const STAGING_INTERNAL_API_URL = `http://${STAGING_INTERNAL_API_HOST}:8000`;
+const DEVELOPMENT_INTERNAL_API_HOST = "api.development.ac.internal.invalid";
+const DEVELOPMENT_INTERNAL_API_URL = `http://${DEVELOPMENT_INTERNAL_API_HOST}:8000`;
 const VALID_SESSION_TOKEN = "s".repeat(43);
 const SECOND_VALID_SESSION_TOKEN = "t".repeat(43);
 // Keep the real wire-Host proof off the managed local API's 127.0.0.1:8000.
@@ -450,27 +452,108 @@ describe("server-owned admin context adapter", () => {
     },
   );
 
-  it("uses the exact staging API target without overriding Host", async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json(verifiedMe))
-      .mockResolvedValueOnce(Response.json(verifiedContext))
-      .mockResolvedValueOnce(Response.json(verifiedAccess));
+  it.each([
+    ["loopback", "http://127.0.0.1:8100", DEVELOPMENT_INTERNAL_API_HOST],
+    ["loopback host override", "http://127.0.0.1:8100", "127.0.0.1"],
+    [
+      "wrong dev port",
+      `http://${DEVELOPMENT_INTERNAL_API_HOST}:8100`,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+    [
+      "another dev port",
+      `http://${DEVELOPMENT_INTERNAL_API_HOST}:8080`,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+    [
+      "missing dev port",
+      `http://${DEVELOPMENT_INTERNAL_API_HOST}`,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+    [
+      "dev URL with staging host",
+      DEVELOPMENT_INTERNAL_API_URL,
+      STAGING_INTERNAL_API_HOST,
+    ],
+    [
+      "dev host with production URL",
+      PRODUCTION_INTERNAL_API_URL,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+    [
+      "look-alike URL",
+      `http://${DEVELOPMENT_INTERNAL_API_HOST}.evil.test:8000`,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+    [
+      "look-alike host override",
+      `http://${DEVELOPMENT_INTERNAL_API_HOST}.evil.test:8000`,
+      `${DEVELOPMENT_INTERNAL_API_HOST}.evil.test`,
+    ],
+    [
+      "abbreviated dev host",
+      "http://api.dev.ac.internal.invalid:8000",
+      "api.dev.ac.internal.invalid",
+    ],
+  ])(
+    "rejects %s before forwarding the dev session",
+    async (_label, internalApiUrl, internalApiHost) => {
+      const fetcher = vi.fn<typeof fetch>();
+      await expect(
+        resolveAdminServerContext({
+          cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+          internalApiUrl,
+          internalApiHost,
+          fetcher,
+        }),
+      ).resolves.toBeNull();
+      expect(fetcher).not.toHaveBeenCalled();
+    },
+  );
 
-    await resolveAdminServerContext({
-      cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
-      internalApiUrl: STAGING_INTERNAL_API_URL,
-      internalApiHost: STAGING_INTERNAL_API_HOST,
-      fetcher,
-    });
+  it.each([
+    ["staging", STAGING_INTERNAL_API_URL, STAGING_INTERNAL_API_HOST],
+    [
+      "development",
+      DEVELOPMENT_INTERNAL_API_URL,
+      DEVELOPMENT_INTERNAL_API_HOST,
+    ],
+  ])(
+    "uses the exact %s API target without overriding Host",
+    async (_label, internalApiUrl, internalApiHost) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(verifiedMe))
+        .mockResolvedValueOnce(Response.json(verifiedContext))
+        .mockResolvedValueOnce(Response.json(verifiedAccess));
 
-    expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
-      `${STAGING_INTERNAL_API_URL}/v1/me`,
-      `${STAGING_INTERNAL_API_URL}/v1/context`,
-      `${STAGING_INTERNAL_API_URL}/v1/me/studio-access`,
-    ]);
-    for (const [, init] of fetcher.mock.calls) {
-      expect(new Headers(init?.headers).has("host")).toBe(false);
-    }
-  });
+      const context = await resolveAdminServerContext({
+        cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+        internalApiUrl,
+        internalApiHost,
+        fetcher,
+      });
+
+      expect(context).toMatchObject({
+        source: "verified-server-session",
+        authenticated: true,
+        actorId: verifiedContext.person_id,
+        tenantId: verifiedContext.tenant_id,
+        permissions: ["admin_surface", "catalog_publish"],
+      });
+      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
+        `${internalApiUrl}/v1/me`,
+        `${internalApiUrl}/v1/context`,
+        `${internalApiUrl}/v1/me/studio-access`,
+      ]);
+      for (const [, init] of fetcher.mock.calls) {
+        expect(new Headers(init?.headers).has("host")).toBe(false);
+        expect(new Headers(init?.headers).get("cookie")).toBe(
+          `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+        );
+        expect(init?.redirect).toBe("manual");
+      }
+    },
+  );
 });
