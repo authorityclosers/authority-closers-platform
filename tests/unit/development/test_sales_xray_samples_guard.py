@@ -12,7 +12,10 @@ import pytest
 
 import ac_platform.development.sales_xray_samples as samples
 from ac_platform.conversation_intelligence.checkpoints import canonical
-from ac_platform.conversation_intelligence.gemini_tasks import decode_gemini_object
+from ac_platform.conversation_intelligence.inference_tasks import (
+    prepare_fact_inputs,
+    validate_fact_result,
+)
 from ac_platform.conversation_intelligence.providers import ProviderResult, scribe_transcript
 from ac_platform.conversation_intelligence.reports import (
     coaching_source_context,
@@ -132,35 +135,38 @@ def test_fictional_audio_covers_the_full_transcript_in_mono_16khz() -> None:
 
 
 def test_fake_c4_result_uses_gemini_envelope_and_zero_usage() -> None:
-    request = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "text": json.dumps(
-                            {
-                                "schema": "ac.sales-xray.native-scribe-input/1",
-                                "segments": [{"id": "s1", "text": "The price feels high."}],
-                            }
-                        )
-                    }
-                ],
-            }
-        ]
-    }
-    payload = canonical(request)
+    source_sha256 = "a" * 64
+    text, words = _transcript_words("elevenlabs")
+    transcription_data = {"text": text, "words": words}
+    transcription_raw = canonical(transcription_data)
+    transcription_sha256 = hashlib.sha256(transcription_raw).hexdigest()
+    transcript = scribe_transcript(
+        ProviderResult(
+            "elevenlabs",
+            "scribe_v2",
+            "fictional-sample-c4-unit",
+            transcription_sha256,
+            transcription_raw,
+            transcription_data,
+            {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            source_sha256,
+        ),
+        duration_ms=_AUDIO_DURATION_SECONDS * 1000,
+        source_sha256=source_sha256,
+    )
+    transcript["duration_ms"] = _AUDIO_DURATION_SECONDS * 1000
+    prepared = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
     reservation = SimpleNamespace(
         quote=SimpleNamespace(
             provider_id="gemini",
-            provider_model="gemini-3.8-flash",
-            input_sha256=hashlib.sha256(payload).hexdigest(),
+            provider_model=prepared.model,
+            input_sha256=prepared.input_sha256,
         )
     )
-    result = asyncio.run(FictionalReportingBroker().execute(reservation, payload))
-    facts = decode_gemini_object(result.data)
+    result = asyncio.run(FictionalReportingBroker().execute(reservation, prepared.payload))
+    facts = validate_fact_result(result, prepared, transcript).data()
 
-    assert facts["observations"][0]["segment_id"] == "s1"
+    assert facts["observations"]
     assert all(value == 0 for value in result.usage.values())
 
 

@@ -201,8 +201,7 @@ def test_dev_samples_reach_real_routes_and_second_run_adds_nothing(
                                     ConversationInferenceTask.stage,
                                     ConversationInferenceTask.state,
                                     Job.last_error,
-                                )
-                                .join(Job, Job.id == ConversationInferenceTask.job_id)
+                                ).join(Job, Job.id == ConversationInferenceTask.job_id)
                             )
                         ).all()
                     safe_progress = [
