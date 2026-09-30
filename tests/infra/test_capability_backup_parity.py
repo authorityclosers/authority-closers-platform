@@ -630,7 +630,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         103,
         104,
         105,
-        106,
+        108,
     )
     expected_contracts = (
         None,
