@@ -279,6 +279,29 @@ const NOT_NAMES = new Set(
     "your",
     "calling",
     "speaking",
+    "just",
+    "happy",
+    "glad",
+    "looking",
+    "sure",
+    "sorry",
+    "fine",
+    "good",
+    "great",
+    "well",
+    "ok",
+    "okay",
+    "not",
+    "very",
+    "really",
+    "also",
+    "interested",
+    "busy",
+    "going",
+    "trying",
+    "back",
+    "available",
+    "free",
     "here",
     "regarding",
     "about",
@@ -293,33 +316,47 @@ const NOT_NAMES = new Set(
     "ms",
   ].map((word) => word.toLocaleLowerCase()),
 );
-const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)";
+const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)(?![\\p{L}\\p{M}])";
 // Phrases must start a word: "Hi am I…" is not "I am …".
 const START = "(?<![\\p{L}\\p{M}])";
+const NAME_SUFFIX =
+  "(?:here|speaking|this side|बोल रहा(?:\\s+(?:हूं|हूँ))?|बोल रही(?:\\s+(?:हूं|हूँ))?|bol raha|bol rahi)";
 const SELF_INTRODUCTIONS = [
-  new RegExp(
-    `${START}(?:मेरा नाम|my name is|myself|this is|i am|i'm)\\s+${NAME}`,
-    "iu",
-  ),
+  new RegExp(`${START}(?:मेरा नाम|my name is|myself|this is)\\s+${NAME}`, "iu"),
+  new RegExp(`${START}(?:i am|i'm)\\s+${NAME}`, "iu"),
   new RegExp(
     `${START}(?:मैं|main)\\s+${NAME}\\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)`,
+    "iu",
+  ),
+  new RegExp(`${START}${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`, "iu"),
+  new RegExp(
+    `${START}(?:hi|hello|hey)\\s+${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`,
     "iu",
   ),
 ];
 const GREETINGS = [
   new RegExp(`${START}${NAME}\\s+जी\\s*,?\\s*(?:नमस्ते|नमस्कार)`, "u"),
   new RegExp(
-    `${START}(?:नमस्ते|नमस्कार|hello|hi|hey)\\s+${NAME}(\\s+जी)?`,
+    `${START}(?:नमस्ते|नमस्कार|hello|hi|hey)\\s+${NAME}(\\s+जी)?(?!\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?]))`,
     "iu",
   ),
 ];
 /** Introductions happen early: only the first minutes are read. */
 const NAME_WINDOW_MS = 150_000;
 
-function nameFrom(match: RegExpMatchArray | null): string | null {
+function nameFrom(
+  match: RegExpMatchArray | null,
+  genericIAm = false,
+): string | null {
   const word = match?.[1]?.trim();
   if (!word || Array.from(word).length < 2) return null;
   if (NOT_NAMES.has(word.toLocaleLowerCase())) return null;
+  if (
+    genericIAm &&
+    !/^(?=\p{Script=Latin})\p{Lu}[\p{L}\p{M}'’-]*$/u.test(word) &&
+    !/^(?=\p{Script=Devanagari})\p{L}[\p{L}\p{M}'’-]*$/u.test(word)
+  )
+    return null;
   return word;
 }
 
@@ -350,8 +387,8 @@ export function detectSpokenNames(transcript: Transcript): SpokenNames {
     if (segment.start_ms > NAME_WINDOW_MS) break;
     const voice = segment.speaker_id;
     if (voice === null) continue;
-    for (const pattern of SELF_INTRODUCTIONS) {
-      const name = nameFrom(segment.text.match(pattern));
+    for (const [index, pattern] of SELF_INTRODUCTIONS.entries()) {
+      const name = nameFrom(segment.text.match(pattern), index === 1);
       if (!name) continue;
       if (!names[voice]) names[voice] = name;
       if (!introducers.includes(voice)) introducers.push(voice);

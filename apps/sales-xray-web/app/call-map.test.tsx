@@ -27,19 +27,51 @@ let onSelectEvidence: ReturnType<
   typeof vi.fn<(evidence: ReportEvidence) => void>
 >;
 
-async function renderMap(source: Transcript = transcript) {
+async function renderMap(
+  source: Transcript = transcript,
+  sourceReport: SalesReport = report,
+) {
   await act(async () =>
     root.render(
       <CallMap
         callId={CALL_ID}
         transcript={source}
-        report={report}
+        report={sourceReport}
         durationMs={source.duration_ms}
         onSelectEvidence={onSelectEvidence}
         onSeek={onSeek}
       />,
     ),
   );
+}
+
+async function sayAndConfirm(text: string, sourceReport: SalesReport) {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text,
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    sourceReport,
+  );
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
 }
 
 beforeEach(async () => {
@@ -301,4 +333,39 @@ it("names another salesperson and the prospect from the opening, in one tap", as
   expect(chips()[0].textContent).toContain("Salesperson");
   expect(chips()[1].getAttribute("aria-label")).toBe("Edit नंदलाल जी");
   expect(chips()[1].textContent).toContain("Prospect");
+});
+
+it("confirms a hello-here self introduction on the speaking voice", async () => {
+  await sayAndConfirm("Hello Rahul here", {
+    ...report,
+    strengths: [],
+    improvements: [],
+  });
+
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({
+    a: { name: "Rahul", role: "salesperson", icon: null },
+    b: { name: "", role: "prospect", icon: expect.any(String) },
+  });
+});
+
+it("does not save just as a name after confirming a generic opening", async () => {
+  updateShellState({ profileName: "Suyash Rao" });
+  const cited = {
+    segment_id: "a1",
+    quote: "I am just calling about your enquiry.",
+    start_ms: 0,
+    end_ms: 1200,
+  };
+  const coachingReport: SalesReport = {
+    ...report,
+    strengths: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+    improvements: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+  };
+  await sayAndConfirm("I am just calling about your enquiry.", coachingReport);
+
+  expect(readSpeakerProfiles(CALL_ID).a).toMatchObject({
+    name: "",
+    role: "salesperson",
+  });
+  expect(readSpeakerProfiles(CALL_ID).a.name).not.toBe("just");
 });

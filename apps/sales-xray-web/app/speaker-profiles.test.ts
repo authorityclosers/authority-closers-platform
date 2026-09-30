@@ -149,6 +149,84 @@ it("reads spoken names from a Hindi opening, spelled as spoken", () => {
   expect(isAccountName("Suyash", "Suyash Rao")).toBe(true);
 });
 
+it("does not read ordinary phrases after a generic I am as names", () => {
+  for (const text of [
+    "I am just calling about your enquiry.",
+    "I'm happy to help.",
+  ]) {
+    expect(
+      detectSpokenNames(
+        call([
+          ["s0", text],
+          ["s1", "Hello."],
+        ]),
+      ),
+    ).toEqual({
+      names: {},
+      introducers: [],
+    });
+  }
+});
+
+it("accepts capitalized Latin or Devanagari names after a generic I am", () => {
+  expect(
+    detectSpokenNames(
+      call([
+        ["latin", "I am Élodie."],
+        ["lowercase", "I am rahul."],
+        ["hindi", "I am मानस."],
+        ["other", "Hello."],
+      ]),
+    ),
+  ).toEqual({
+    names: { latin: "Élodie", hindi: "मानस" },
+    introducers: ["latin", "hindi"],
+  });
+});
+
+it("treats greetings with here and speaking suffixes as self introductions", () => {
+  for (const text of [
+    "Hello Rahul here",
+    "Hi Rahul this side",
+    "Hello Rahul speaking",
+    "Hello Rahul बोल रहा हूं",
+    "Hello Rahul बोल रही हूँ",
+    "Hello Rahul bol raha",
+    "Hello Rahul bol rahi",
+  ]) {
+    expect(
+      detectSpokenNames(
+        call([
+          ["s0", text],
+          ["s1", "Hello."],
+        ]),
+      ),
+    ).toEqual({
+      names: { s0: "Rahul" },
+      introducers: ["s0"],
+    });
+  }
+});
+
+it("keeps counterpart greetings distinct from self introductions", () => {
+  expect(
+    detectSpokenNames(
+      call([
+        ["s0", "Hello Rahul, how are you"],
+        ["s1", "Hi."],
+      ]),
+    ).names,
+  ).toEqual({ s1: "Rahul" });
+  expect(
+    detectSpokenNames(
+      call([
+        ["s0", "नंदलाल जी नमस्ते"],
+        ["s1", "जी"],
+      ]),
+    ).names,
+  ).toEqual({ s1: "नंदलाल जी" });
+});
+
 it("never takes filler words for names", () => {
   const transcript = call([
     ["s0", "Hello sir, this is regarding your enquiry. नमस्ते मेरा नाम है"],
