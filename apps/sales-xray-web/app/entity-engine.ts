@@ -194,14 +194,13 @@ for (const brand of BRANDS) {
 }
 // Longest first, so "google meet" wins over "google".
 const longest = (a: string, b: string) => b.length - a.length;
-const BRAND_ANY_CASE = new RegExp(
-  word(anyCaseAliases.sort(longest).map(alias).join("|")),
-  "giu",
-);
-const BRAND_EXACT = new RegExp(
-  word(exactAliases.sort(longest).map(alias).join("|")),
-  "gu",
-);
+// Marathi (and sometimes Hindi) joins case endings to the word:
+// "व्हॉट्सॲपवर" is "on WhatsApp". The chip keeps the word as written.
+const ENDING = "वरून|वरती|वर|मध्ये|च्या|चा|ची|चे|ला|ने|नी|त|पे|पर|में|से";
+const brandWord = (aliases: string[]) =>
+  `${START}(?<a>${aliases.sort(longest).map(alias).join("|")})(?:${ENDING})?${END}`;
+const BRAND_ANY_CASE = new RegExp(brandWord(anyCaseAliases), "giu");
+const BRAND_EXACT = new RegExp(brandWord(exactAliases), "gu");
 const MATCHER = new RegExp(
   PATTERNS.map(([kind, pattern]) => `(?<${kind}>${pattern})`).join("|"),
   "gu",
@@ -215,7 +214,7 @@ function collect(text: string): Span[] {
   const spans: Span[] = [];
   for (const matcher of [BRAND_ANY_CASE, BRAND_EXACT])
     for (const match of text.matchAll(matcher)) {
-      const brand = brandOf(match[0]);
+      const brand = brandOf(match.groups?.a ?? match[0]);
       if (!brand) continue;
       const start = match.index ?? 0;
       spans.push({

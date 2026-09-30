@@ -4,9 +4,7 @@ import { brandNamed, mentions } from "./report-entities";
 
 const found = (text: string) =>
   mentions(text).map((part) =>
-    part.brand
-      ? [part.kind, part.text, part.brand.key]
-      : [part.kind, part.text],
+    part.brand ? [part.kind, part.text, part.brand.key] : [part.kind, part.text],
   );
 
 it("finds what the report mentions, with the words it used", () => {
@@ -22,9 +20,7 @@ it("finds what the report mentions, with the words it used", () => {
     ["person", "senior manager"],
   ]);
   expect(
-    found(
-      "It uncovered 15 to 20 lakh of unpaid receivables and the syllabus and workbook.",
-    ),
+    found("It uncovered 15 to 20 lakh of unpaid receivables and the syllabus and workbook."),
   ).toEqual([
     ["money", "15 to 20 lakh"],
     ["money", "unpaid receivables"],
@@ -34,12 +30,10 @@ it("finds what the report mentions, with the words it used", () => {
 });
 
 it("spots brands in Hindi and Marathi script and in any letter case", () => {
-  expect(found("मैं आपको व्हाट्सएप पे भेज देता हूं, यूट्यूब पे भी है")).toEqual(
-    [
-      ["brand", "व्हाट्सएप", "whatsapp"],
-      ["brand", "यूट्यूब", "youtube"],
-    ],
-  );
+  expect(found("मैं आपको व्हाट्सएप पे भेज देता हूं, यूट्यूब पे भी है")).toEqual([
+    ["brand", "व्हाट्सएप", "whatsapp"],
+    ["brand", "यूट्यूब", "youtube"],
+  ]);
   expect(found("join our discord and pay by phone pe or gpay")).toEqual([
     ["brand", "discord", "discord"],
     ["brand", "phone pe", "phonepe"],
@@ -65,9 +59,7 @@ it("does not mistake ordinary words for brands", () => {
 
 it("finds money, places, time and team size in Hindi too", () => {
   expect(
-    found(
-      "अहमदाबाद में 5 करोड़ का टर्नओवर है, 15 लोग काम करते हैं, 90 मिनट की रिकॉर्डिंग",
-    ),
+    found("अहमदाबाद में 5 करोड़ का टर्नओवर है, 15 लोग काम करते हैं, 90 मिनट की रिकॉर्डिंग"),
   ).toEqual([
     ["place", "अहमदाबाद"],
     ["money", "5 करोड़"],
@@ -84,9 +76,7 @@ it("finds money, places, time and team size in Hindi too", () => {
 });
 
 it("leaves plain text alone", () => {
-  expect(found("They asked about the program and the call went well.")).toEqual(
-    [],
-  );
+  expect(found("They asked about the program and the call went well.")).toEqual([]);
   expect(mentions("No mentions here.")).toEqual([]);
 });
 
@@ -94,4 +84,11 @@ it("finds a curated brand by any of its names", () => {
   expect(brandNamed("Whats App")?.key).toBe("whatsapp");
   expect(brandNamed("फेसबुक")?.key).toBe("facebook");
   expect(brandNamed("Nothing Inc")).toBeNull();
+});
+
+it("keeps Marathi case endings joined to a brand", () => {
+  expect(found("मी तुम्हाला उद्या व्हॉट्सॲपवर पाठवतो")).toEqual([
+    ["date", "उद्या"],
+    ["brand", "व्हॉट्सॲपवर", "whatsapp"],
+  ]);
 });

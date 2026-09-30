@@ -66,6 +66,18 @@
   color: inherit;
 }
 
+/* A full-colour logo keeps its own colours; one-colour marks take the brand
+   colour and black logos the text colour. */
+.logo {
+  display: block;
+  flex: none;
+  color: var(--brand);
+}
+
+.logo[data-ink] {
+  color: var(--lx-ink);
+}
+
 .monogram {
   display: inline-grid;
   flex: none;

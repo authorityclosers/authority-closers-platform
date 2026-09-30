@@ -18,7 +18,11 @@ import {
 } from "lucide-react";
 import type { CSSProperties } from "react";
 
-import { useBrandPath, useIndexedBrand } from "./brands/brand-icons";
+import {
+  useBrandPath,
+  useColorLogo,
+  useIndexedBrand,
+} from "./brands/brand-icons";
 import { findEntities, type Entity, type EntityKind } from "./entity-engine";
 import styles from "./report-entities.module.css";
 
@@ -51,12 +55,20 @@ function luminance(hex: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-type BrandLike = Readonly<{ name: string; slug: string | null; hex: string }>;
+type BrandLike = Readonly<{
+  name: string;
+  slug: string | null;
+  hex: string;
+  /** Curated brand key; with `logo`, a colour logo exists for it. */
+  key?: string;
+  logo?: boolean;
+}>;
 
 /**
- * A brand's logo in its own colour; black logos follow the text colour so
- * they stay visible in dark mode. Until the logo loads, or for a brand with
- * no logo, a monogram in the brand's colour holds the same space.
+ * A brand's logo: its full-colour logo when we have one, else its one-colour
+ * icon in the brand colour (black icons follow the text colour so they show
+ * in dark mode). Until a logo loads, or for a brand with none, a monogram in
+ * the brand's colour holds the same space.
  */
 export function BrandMark({
   brand,
@@ -65,12 +77,28 @@ export function BrandMark({
   brand: BrandLike;
   size?: number;
 }) {
-  const path = useBrandPath(brand.slug);
+  const color = useColorLogo(brand.logo && brand.key ? brand.key : null);
+  const path = useBrandPath(brand.logo ? null : brand.slug);
   const light = luminance(brand.hex);
   const style = {
     "--brand": `#${brand.hex}`,
     "--size": `${size}px`,
   } as CSSProperties;
+  if (color)
+    return (
+      <svg
+        className={styles.logo}
+        width={size}
+        height={size}
+        viewBox={`0 0 ${color.w} ${color.h}`}
+        aria-hidden="true"
+        data-ink={color.ink ? "" : undefined}
+        data-mono={color.mono ? "" : undefined}
+        style={style}
+        // Static CC0 artwork from our own public/brands/color.json.
+        dangerouslySetInnerHTML={{ __html: color.body }}
+      />
+    );
   return path ? (
     <svg
       className={styles.brandSvg}

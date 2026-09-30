@@ -1,0 +1,17 @@
+.emote {
+  display: inline-block;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  vertical-align: middle;
+}
+
+.placeholder {
+  display: inline-block;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: var(--lx-sunken);
+  vertical-align: middle;
+}

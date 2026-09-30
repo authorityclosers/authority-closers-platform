@@ -43,6 +43,7 @@ import type {
   SalesReport,
   Transcript,
 } from "./report-contract";
+import { Emote, type EmoteName } from "./emote";
 import { EntityText } from "./report-entities";
 import { useReportNavigation } from "./report-reading-context";
 import {
@@ -59,37 +60,46 @@ import styles from "./overview-hook.module.css";
 
 export const OUTCOME: Record<
   string,
-  { label: string; tone: string; Icon: LucideIcon }
+  { label: string; tone: string; Icon: LucideIcon; emote: EmoteName }
 > = {
-  closed: { label: "Deal closed", tone: "good", Icon: Handshake },
-  follow_up: { label: "Next step agreed", tone: "good", Icon: CalendarCheck },
-  future_date: { label: "Call back later", tone: "warn", Icon: CalendarClock },
-  no_sale: { label: "No sale", tone: "bad", Icon: CircleX },
-  disqualified: { label: "Not a fit", tone: "bad", Icon: Ban },
-  unclear: { label: "No clear next step", tone: "warn", Icon: CircleHelp },
+  closed: { label: "Deal closed", tone: "good", Icon: Handshake, emote: "handshake" },
+  follow_up: { label: "Next step agreed", tone: "good", Icon: CalendarCheck, emote: "spiral-calendar" },
+  future_date: { label: "Call back later", tone: "warn", Icon: CalendarClock, emote: "alarm-clock" },
+  no_sale: { label: "No sale", tone: "bad", Icon: CircleX, emote: "cross-mark" },
+  disqualified: { label: "Not a fit", tone: "bad", Icon: Ban, emote: "no-entry" },
+  unclear: { label: "No clear next step", tone: "warn", Icon: CircleHelp, emote: "red-question-mark" },
 };
 
 const LISTEN: Record<
   string,
-  { label: string; hint: string; tone: string; Icon: LucideIcon }
+  {
+    label: string;
+    hint: string;
+    tone: string;
+    Icon: LucideIcon;
+    emote: EmoteName;
+  }
 > = {
   must_watch: {
     label: "Must listen",
     hint: "The most important moment of the call",
     tone: "hot",
     Icon: Headphones,
+    emote: "fire",
   },
   watch: {
     label: "Worth a listen",
     hint: "A moment to learn from",
     tone: "calm",
     Icon: Headphones,
+    emote: "headphone",
   },
   repeat: {
     label: "You did this well",
     hint: "Do it again in your next call",
     tone: "good",
     Icon: ThumbsUp,
+    emote: "clapping-hands",
   },
 };
 
@@ -615,7 +625,7 @@ export function OverviewHook({
           <div className={styles.people}>
             {outcomeStyle ? (
               <span className={styles.outcome} data-tone={outcomeStyle.tone}>
-                <outcomeStyle.Icon size={14} aria-hidden="true" />
+                <Emote name={outcomeStyle.emote} size={17} />
                 {outcomeStyle.label}
               </span>
             ) : null}
@@ -779,7 +789,7 @@ export function OverviewHook({
                   </span>
                   <span className={styles.clipBody}>
                     <span className={styles.tag}>
-                      <item.Icon size={12} aria-hidden="true" />
+                      <Emote name={item.emote} size={15} />
                       {item.label}
                       <em>{item.hint}</em>
                     </span>
@@ -927,6 +937,7 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.unanswered ? "" : undefined}
               >
+                <Emote name="red-question-mark" size={18} className={styles.chipEmote} />
                 <b>
                   <Count value={signals.unanswered} />
                 </b>{" "}
@@ -937,12 +948,14 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.overs ? "" : undefined}
               >
+                <Emote name="speaking-head" size={18} className={styles.chipEmote} />
                 <b>
                   <Count value={signals.overs} />
                 </b>{" "}
                 times you talked over them
               </button>
               <button type="button" onClick={() => go("signals")}>
+                <Emote name="hourglass-not-done" size={18} className={styles.chipEmote} />
                 <b>
                   {signals.silence === null
                     ? "—"
@@ -953,6 +966,7 @@ export function OverviewHook({
                 silence after a price or budget mention
               </button>
               <button type="button" onClick={() => go("signals")}>
+                <Emote name="handshake" size={18} className={styles.chipEmote} />
                 <b>
                   <Count value={signals.promised} />
                 </b>{" "}
