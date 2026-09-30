@@ -96,7 +96,9 @@ it("hears numbers only when they come with a unit", () => {
 
 it("keeps ambiguous magnitudes as quantities without currency evidence", () => {
   const rows = numbersHeard(
-    call([["a", 0, 1000, "Sales 10K customers, 10 L tank and 10 thousand users."]]),
+    call([
+      ["a", 0, 1000, "Sales 10K customers, 10 L tank and 10 thousand users."],
+    ]),
   );
   expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
     ["10K", "quantity"],
