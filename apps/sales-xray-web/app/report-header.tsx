@@ -51,6 +51,8 @@ export type ReportHeaderProps = {
    * pinned title row, this one grows into the space beside the title.
    */
   compactVisual?: ReactNode;
+  /** The call at a glance, beside the title until the compact map lands. */
+  context?: ReactNode;
   /** Rename wiring; offered only for a claimed call with a server label. */
   rename?: {
     save: (
@@ -136,6 +138,7 @@ export function ReportHeader({
   rename,
   visual,
   compactVisual,
+  context,
 }: ReportHeaderProps) {
   const menu = useRef<HTMLDetailsElement>(null);
   const bar = useRef<HTMLDivElement>(null);
@@ -372,6 +375,7 @@ export function ReportHeader({
             <span className={styles.reportDraft}>Draft coaching</span>
           </p>
         </div>
+        {context}
         {hasCompact ? (
           <div
             className={styles.reportCompact}

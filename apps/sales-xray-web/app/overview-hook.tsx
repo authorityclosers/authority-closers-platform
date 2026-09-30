@@ -60,7 +60,7 @@ import { SpeakerAvatar } from "./speaker-avatar";
 import { speakerName, useSpeakerProfiles } from "./speaker-profiles";
 import styles from "./overview-hook.module.css";
 
-const OUTCOME: Record<
+export const OUTCOME: Record<
   string,
   { label: string; tone: string; Icon: LucideIcon }
 > = {

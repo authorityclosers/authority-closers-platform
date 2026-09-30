@@ -71,6 +71,19 @@ function toggleDone(callId: string, id: string) {
   window.dispatchEvent(new Event(DONE_EVENT));
 }
 
+/** A promise's stable id: its line and exact words. */
+export const promiseId = (item: Moment) => `${item.segment.id}:${item.text}`;
+
+/** The promises ticked off for this call, live across the page. */
+export function usePromisesDone(callId: string | null): ReadonlySet<string> {
+  const raw = useSyncExternalStore(
+    subscribeDone,
+    () => readDone(callId),
+    () => "[]",
+  );
+  return useMemo(() => new Set<string>(JSON.parse(raw) as string[]), [raw]);
+}
+
 /** Removes this call's ticked promises after server deletion succeeds. */
 export function clearPromisesDone(callId: string): boolean {
   try {
@@ -168,12 +181,7 @@ export function CallSignals({
     voices,
     Object.fromEntries(voices.map((id) => [id, profiles[id]?.role])),
   );
-  const doneRaw = useSyncExternalStore(
-    subscribeDone,
-    () => readDone(callId),
-    () => "[]",
-  );
-  const done = new Set<string>(JSON.parse(doneRaw) as string[]);
+  const done = usePromisesDone(callId);
 
   const data = useMemo(
     () =>
@@ -368,7 +376,7 @@ export function CallSignals({
           {data.promised.length ? (
             <ul className={styles.list}>
               {data.promised.map((item) => {
-                const id = `${item.segment.id}:${item.text}`;
+                const id = promiseId(item);
                 const ticked = done.has(id);
                 return (
                   <li

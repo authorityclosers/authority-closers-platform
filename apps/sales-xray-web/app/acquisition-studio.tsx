@@ -44,6 +44,7 @@ import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
+import { CallContext } from "./call-context";
 import { CallSignals, clearPromisesDone } from "./call-signals";
 import { OverviewHook } from "./overview-hook";
 import { SalesSkills } from "./sales-skills";
@@ -3375,6 +3376,13 @@ export function AcquisitionStudio({
                       durationMs={result.transcript.duration_ms}
                       onSelectEvidence={seek}
                       onSeek={playFrom}
+                    />
+                  }
+                  context={
+                    <CallContext
+                      callId={submission?.id ?? null}
+                      report={report}
+                      transcript={result.transcript}
                     />
                   }
                   compactVisual={
