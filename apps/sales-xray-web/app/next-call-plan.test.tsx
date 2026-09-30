@@ -32,7 +32,7 @@ afterEach(async () => {
 
 const text = () => container.textContent?.replace(/\s+/g, " ") ?? "";
 
-it("leads with one move, then keep, change with words to try, and care notes", async () => {
+it("leads with one move, then keep, change with words to try first, and care notes", async () => {
   await act(async () =>
     root.render(<NextCallPlan report={report} onSelectEvidence={vi.fn()} />),
   );
@@ -43,8 +43,9 @@ it("leads with one move, then keep, change with words to try, and care notes", a
     overview.practice!.instructions,
     report.strengths[0].explanation,
     overview.strength_details[0].why_it_matters,
-    overview.improvement_details[0].why_it_matters,
+    // The action to try leads; the reason follows.
     overview.improvement_details[0].replacement_behavior,
+    overview.improvement_details[0].why_it_matters,
     overview.ethics_notes[0].text,
   ].map((value) => all.indexOf(value.replace(/\s+/g, " ")));
   expect(order.every((at) => at >= 0)).toBe(true);
@@ -136,7 +137,7 @@ it("shows only counts for findings a guest has not unlocked", async () => {
   expect(text()).toContain("2 more changes are saved for your account.");
   expect(text()).not.toContain(report.improvements[0].title);
   const unlock = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === "Sign in to see them",
+    (button) => button.textContent === "Unlock with a free account",
   )!;
   await act(async () => unlock.click());
   expect(onUnlock).toHaveBeenCalled();

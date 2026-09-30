@@ -1136,7 +1136,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     "AI draft · not yet reviewed by Dipak",
   );
   expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
-  expect(container.textContent).toContain("Call length");
+  expect(container.textContent).toContain("The coach’s verdict");
   expect(container.textContent).toContain(
     "Draft coaching; not adjudicated by Dipak.",
   );
@@ -3010,7 +3010,8 @@ it("opens account access from a withheld report insight without another upload",
     },
   };
   await mount();
-  await click("Continue free");
+  // Withheld findings show only a count and the sign-in action.
+  await click("Unlock with a free account");
   expect(navigateToAccount).toHaveBeenCalledWith("/login");
   expect(calls.some((call) => call.init.method === "PUT")).toBe(false);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
@@ -3084,11 +3085,11 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   ).toHaveLength(0);
   const reportSections = [
     "Overview",
-    "Prospect",
     "Moments",
-    "Call signals",
-    "Sales skills",
+    "Prospect",
     "Next-call plan",
+    "Sales skills",
+    "Call signals",
     "Transcript",
     "Raw data",
   ];
@@ -3115,7 +3116,15 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
   expect(
     container.querySelector('[data-prospect-part="verbatim"]')?.textContent,
   ).toContain(prospectSource.quote);
-  await click("Play source moment");
+  // The clip shows its time; its accessible name says what it plays.
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        '[data-prospect-part="verbatim"] button[aria-label^="Play source moment"]',
+      )!
+      .click(),
+  );
+  await flush();
   expect((savedAudio as HTMLAudioElement).currentTime).toBe(
     prospectSource.start_ms / 1000,
   );

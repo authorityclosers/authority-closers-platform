@@ -1,14 +1,13 @@
 #!/usr/bin/env node
-// Builds the colour brand logos and the curated emote set for the web app.
+// Builds the colour brand logos for the web app.
 //
 //   node app/brands/generate-logos-emotes.mjs <iconify dir> <app dir>
 //
 // <iconify dir> holds the unpacked npm packages @iconify-json/logos (CC0-1.0,
 // full-colour logos by Gil Barbara), @iconify-json/cib (CC0-1.0, CoreUI
-// brands) and @iconify-json/fluent-emoji-flat (MIT, Microsoft Fluent Emoji),
+// brands),
 // as logos/, cib/ and emo/. Only what the app uses is copied:
 //   public/brands/color.json  logos for our curated brands (app/brands/brand-registry.ts)
-//   public/emotes/emotes.json the emotes listed in EMOTES below
 // and the registry rows gain `logo: true` where a colour logo exists, so the
 // app knows to wait for it instead of flashing the one-colour icon first.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -22,69 +21,6 @@ if (!iconDir || !appDir) {
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 const logos = read(join(iconDir, "logos/package/icons.json"));
 const cib = read(join(iconDir, "cib/package/icons.json"));
-const emo = read(join(iconDir, "emo/package/icons.json"));
-
-// Emotes the app may show, by the name the app uses.
-const EMOTES = [
-  "handshake",
-  "spiral-calendar",
-  "tear-off-calendar",
-  "cross-mark",
-  "no-entry",
-  "thinking-face",
-  "zipper-mouth-face",
-  "neutral-face",
-  "slightly-smiling-face",
-  "grinning-face-with-smiling-eyes",
-  "star-struck",
-  "worried-face",
-  "confused-face",
-  "face-with-raised-eyebrow",
-  "partying-face",
-  "fire",
-  "sparkles",
-  "light-bulb",
-  "direct-hit",
-  "trophy",
-  "warning",
-  "check-mark-button",
-  "stopwatch",
-  "hourglass-not-done",
-  "speaking-head",
-  "speech-balloon",
-  "raised-hand",
-  "ear",
-  "headphone",
-  "money-bag",
-  "chart-increasing",
-  "chart-decreasing",
-  "memo",
-  "telephone-receiver",
-  "alarm-clock",
-  "busts-in-silhouette",
-  "magnifying-glass-tilted-left",
-  "rocket",
-  "seedling",
-  "clapping-hands",
-  "flexed-biceps",
-  "bell",
-  "pushpin",
-  "hundred-points",
-  "red-question-mark",
-  "eyes",
-  "brain",
-  "gem-stone",
-  "chequered-flag",
-  "shushing-face",
-  "hugging-face",
-  "face-with-open-mouth",
-  "relieved-face",
-  "sleeping-face",
-  "yawning-face",
-  "person-raising-hand",
-  "backhand-index-pointing-right",
-  "bullseye",
-];
 
 // Our brand key → the logo to use, when the names differ.
 const ALIAS = {
@@ -178,22 +114,6 @@ writeFileSync(
   JSON.stringify({
     source: "@iconify-json/logos (CC0-1.0), @iconify-json/cib (CC0-1.0)",
     icons: color,
-  }),
-);
-
-const emotes = {};
-const noEmote = [];
-for (const name of EMOTES) {
-  const got = shape(emo, name);
-  if (got) emotes[name] = got;
-  else noEmote.push(name);
-}
-mkdirSync(join(appDir, "public/emotes"), { recursive: true });
-writeFileSync(
-  join(appDir, "public/emotes/emotes.json"),
-  JSON.stringify({
-    source: "@iconify-json/fluent-emoji-flat (MIT, Microsoft Fluent Emoji)",
-    icons: emotes,
   }),
 );
 

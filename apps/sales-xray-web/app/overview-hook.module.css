@@ -1133,8 +1133,8 @@
 }
 
 /* Emotes stand for what the report or the measurement says, not a feeling. */
-.chipEmote {
-  margin-right: 6px;
+.chips button > span:first-child {
+  margin-right: 8px;
 }
 
 /* Values such as <1 s never break across lines. */

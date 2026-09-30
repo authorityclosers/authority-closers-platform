@@ -2,7 +2,18 @@
 
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 
-import type { EmoteName } from "./emote";
+import {
+  Eye,
+  Flag,
+  Flame,
+  Hand,
+  Headphones,
+  Lightbulb,
+  Search,
+  Sparkles,
+  ThumbsUp,
+  type LucideIcon,
+} from "lucide-react";
 import { formatClipRange, formatClock } from "./lightbox/time";
 import type {
   Finding,
@@ -134,43 +145,43 @@ type Kind = "good" | "change" | "missed" | "objection" | "closing" | "listen";
 
 const KINDS: Record<
   Kind,
-  { label: string; filter: string; tone: Tone; emote: EmoteName }
+  { label: string; filter: string; tone: Tone; icon: LucideIcon }
 > = {
   good: {
     label: "Did well",
     filter: "Did well",
     tone: "strength",
-    emote: "clapping-hands",
+    icon: ThumbsUp,
   },
   change: {
     label: "To change",
     filter: "To change",
     tone: "change",
-    emote: "light-bulb",
+    icon: Lightbulb,
   },
   missed: {
     label: "Missed chance",
     filter: "Missed",
     tone: "missed",
-    emote: "eyes",
+    icon: Eye,
   },
   objection: {
-    label: "Objection",
-    filter: "Objections",
+    label: "Pushback",
+    filter: "Pushback",
     tone: "objection",
-    emote: "raised-hand",
+    icon: Hand,
   },
   closing: {
     label: "Closing",
     filter: "Closing",
     tone: "closing",
-    emote: "chequered-flag",
+    icon: Flag,
   },
   listen: {
     label: "Worth a listen",
     filter: "Listen",
     tone: "info",
-    emote: "headphone",
+    icon: Headphones,
   },
 };
 
@@ -371,7 +382,7 @@ export function ReportMoments({
   if (!moments.length)
     return (
       <div className={styles.moments}>
-        <Empty emote="magnifying-glass-tilted-left">
+        <Empty icon={Search}>
           This report did not point to any moment in the call.
         </Empty>
         <Locked count={hidden} noun="moments" onUnlock={onUnlock} />
@@ -457,16 +468,14 @@ export function ReportMoments({
                 <span className={styles.tags}>
                   <Tag
                     tone={kind.tone}
-                    emote={moment.golden ? "sparkles" : kind.emote}
+                    icon={moment.golden ? Sparkles : kind.icon}
                   >
-                    {moment.golden ? "Golden moment" : kind.label}
+                    {moment.golden ? "Best moment" : kind.label}
                   </Tag>
                   {moment.listen && moment.kind !== "listen" ? (
                     <Tag
                       tone="info"
-                      emote={
-                        moment.listen === "must_watch" ? "fire" : "headphone"
-                      }
+                      icon={moment.listen === "must_watch" ? Flame : Headphones}
                     >
                       {LISTEN_LABEL[moment.listen]}
                     </Tag>

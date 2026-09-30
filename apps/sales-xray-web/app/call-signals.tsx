@@ -4,7 +4,6 @@ import {
   CheckSquare,
   CircleDollarSign,
   HelpCircle,
-  MessageSquareQuote,
   Play,
   Square,
   Timer,
@@ -24,7 +23,6 @@ import {
   afterPrice,
   confirmedRoles,
   moreSignals,
-  ownWords,
   promises,
   talkOvers,
   unansweredQuestions,
@@ -190,7 +188,6 @@ export function CallSignals({
   const data = useMemo(
     () =>
       roles && {
-        own: ownWords(transcript, roles),
         unanswered: unansweredQuestions(transcript, roles),
         overs: talkOvers(transcript, roles),
         price: afterPrice(transcript, roles),
@@ -270,28 +267,6 @@ export function CallSignals({
         the salesperson and {prospect} the prospect. Tap a time to hear it.
       </p>
       <div className={styles.grid}>
-        <Card
-          index={0}
-          icon={<MessageSquareQuote size={16} />}
-          title="Their own words"
-          note="Where the prospect talked about a problem. Open the next call with their words. Found by words: listen to check."
-          count={data.own.length}
-        >
-          {data.own.length ? (
-            <ul className={styles.list}>
-              {data.own.map((item) => (
-                <PlayLine
-                  key={`${item.segment.id}-${item.text}`}
-                  item={item}
-                  onSeek={onSeek}
-                />
-              ))}
-            </ul>
-          ) : (
-            <Empty text="The prospect did not describe a problem in words we recognise." />
-          )}
-        </Card>
-
         <Card
           index={1}
           icon={<HelpCircle size={16} />}

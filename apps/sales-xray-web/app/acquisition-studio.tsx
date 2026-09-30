@@ -3468,6 +3468,8 @@ export function AcquisitionStudio({
                           />
                           <ProspectSnapshot
                             report={report}
+                            callId={submission?.id ?? null}
+                            transcript={result.transcript}
                             onSelectEvidence={seek}
                             onUnlock={() => router.push("/login")}
                           />
@@ -3495,6 +3497,8 @@ export function AcquisitionStudio({
                       content: (
                         <SalesSkills
                           dimensions={report.dimensions}
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
                           onSelectEvidence={seek}
                         />
                       ),

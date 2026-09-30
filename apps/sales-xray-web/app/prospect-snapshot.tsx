@@ -1,209 +1,182 @@
 "use client";
 
-import { ArrowRight, CircleHelp, LockKeyhole, Quote } from "lucide-react";
-import type { ReportEvidence, SalesReport } from "./report-contract";
-import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
-import { formatClipRange, spokenClipRange } from "./lightbox/time";
-import { useReportInline } from "./report-reading-context";
-import styles from "./prospect-snapshot.module.css";
+import { CircleHelp, Quote, ScanSearch } from "lucide-react";
+import { useMemo } from "react";
+
+import type {
+  ReportEvidence,
+  SalesReport,
+  Transcript,
+} from "./report-contract";
 import { RichText } from "./report-entities";
+import {
+  Card,
+  Clip,
+  Empty,
+  KitSection,
+  Locked,
+  Tag,
+  useReportPeople,
+} from "./report-kit";
+import { ownWords } from "./sales-signals";
+import styles from "./prospect-snapshot.module.css";
 
 export type ProspectSnapshotProps = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
+  callId?: string | null;
+  transcript?: Transcript;
 };
 
-function sourceAction(
-  evidence: ReportEvidence,
-  index: number,
-  onSelectEvidence: ProspectSnapshotProps["onSelectEvidence"],
-) {
-  const spoken = spokenClipRange(evidence.start_ms, evidence.end_ms);
-  return (
-    <ClipPlayState startMs={evidence.start_ms} endMs={evidence.end_ms}>
-      {(playing) => (
-        <button
-          type="button"
-          className={styles.sourceAction}
-          aria-label={`${playing ? "Pause" : "Play"} source moment, ${spoken}`}
-          aria-pressed={playing}
-          onClick={() =>
-            onSelectEvidence(evidence, `Prospect signal ${index + 1}`)
-          }
-        >
-          <span className={styles.play} aria-hidden="true">
-            <ClipPlayIcon playing={playing} size={16} />
-          </span>
-          <span className={styles.actionCopy}>
-            <strong>
-              {playing ? "Pause source moment" : "Play source moment"}
-            </strong>
-            <small>{formatClipRange(evidence.start_ms, evidence.end_ms)}</small>
-          </span>
-          <ArrowRight size={17} aria-hidden="true" />
-        </button>
-      )}
-    </ClipPlayState>
-  );
-}
+const EMPTY_TRANSCRIPT: Transcript = {
+  source_sha256: "",
+  revision: "",
+  timebase_id: "1ms",
+  duration_ms: 0,
+  segments: [],
+};
 
+/**
+ * What the prospect may have meant, kept apart from what they said: the
+ * report's observation, their exact words with a play control, and the
+ * possible meaning marked as a hypothesis to check. Then their own words
+ * about their problems. This call only; nothing becomes a lasting profile.
+ */
 export function ProspectSnapshot({
   report,
   onSelectEvidence,
   onUnlock,
+  callId = null,
+  transcript = EMPTY_TRANSCRIPT,
 }: ProspectSnapshotProps) {
-  const reading = useReportInline();
+  const people = useReportPeople(callId, transcript);
   const interpretations = report.overview?.prospect_interpretations ?? [];
   const preview = report.preview?.sections.prospect_interpretations;
-  const hiddenCount = preview?.hidden_count ?? 0;
-  const visibleCount = preview?.visible_count ?? interpretations.length;
-  const totalCount = preview?.total_count ?? interpretations.length;
+  const hidden = preview?.hidden_count ?? 0;
+  const said = useMemo(
+    () => (people.roles ? ownWords(transcript, people.roles) : []),
+    // roles comes from saved profiles; its two ids are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transcript, people.roles?.seller, people.roles?.prospect],
+  );
 
   return (
-    <section
+    <div
       className={styles.snapshot}
       aria-label="Prospect snapshot"
       data-prospect-snapshot
-      data-reading={reading || undefined}
     >
-      <header className={styles.header}>
-        <div className={styles.headingCopy}>
-          <p className={styles.eyebrow}>POINT-IN-TIME · THIS CALL ONLY</p>
-          <h2>Prospect snapshot</h2>
-          <p>
-            Source-linked observations and possible meanings from this report.
-            Possible concerns are hypotheses, not facts about a person.
-          </p>
-        </div>
-        <span className={styles.headerIcon} aria-hidden="true">
-          <Quote size={23} />
-        </span>
-      </header>
-
-      {interpretations.length ? (
-        <div className={styles.cards}>
-          {interpretations.map((item, index) => (
-            <article
-              key={`${item.source.evidence[0]?.segment_id ?? "source"}-${index}`}
-              className={styles.card}
-              data-prospect-index={index}
-            >
-              <header className={styles.cardHeader}>
-                <span className={styles.number} aria-hidden="true">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <p className={styles.eyebrow}>SOURCE-LINKED SIGNAL</p>
-                  <h3>What was said and what it may mean</h3>
-                </div>
-              </header>
-
-              <div className={styles.columns}>
-                <section
-                  className={styles.sourcePanel}
-                  aria-label={`Source for prospect signal ${index + 1}`}
-                  data-prospect-part="source"
-                >
-                  <p className={styles.sectionLabel}>Report observation</p>
-                  <p className={styles.observation}>
-                    <RichText text={item.source.text} />
+      <KitSection
+        icon={ScanSearch}
+        tone="hypothesis"
+        title="What they may have meant"
+        hint="Possible meanings to check on the next call. Not facts about the person."
+        count={interpretations.length || undefined}
+      >
+        {interpretations.length ? (
+          <div className={styles.cards}>
+            {interpretations.map((item, index) => (
+              <Card
+                key={index}
+                tone="hypothesis"
+                index={index}
+                className={styles.card}
+              >
+                <div data-prospect-index={index} className={styles.parts}>
+                  <p className={styles.observation} data-prospect-part="source">
+                    <small>What the report noticed</small>
+                    <span>
+                      <RichText text={item.source.text} />
+                    </span>
                   </p>
-                  <div
-                    className={styles.verbatim}
-                    data-prospect-part="verbatim"
-                  >
-                    <h4>Verbatim source</h4>
-                    {item.source.evidence.map((evidence, evidenceIndex) => (
-                      <figure
-                        className={styles.excerpt}
-                        key={`${evidence.segment_id}:${evidence.start_ms}:${evidenceIndex}`}
-                      >
-                        <blockquote>
-                          <Quote size={18} aria-hidden="true" />
-                          <span>
-                            <RichText text={evidence.quote} />
-                          </span>
-                        </blockquote>
-                        <figcaption>
-                          {sourceAction(evidence, index, onSelectEvidence)}
-                        </figcaption>
-                      </figure>
+                  <div data-prospect-part="verbatim" className={styles.words}>
+                    {item.source.evidence.map((evidence) => (
+                      <Clip
+                        key={`${evidence.segment_id}-${evidence.start_ms}`}
+                        evidence={evidence}
+                        title={`Prospect signal ${index + 1}`}
+                        onPlay={onSelectEvidence}
+                        person={people.speakerOf(evidence)}
+                      />
                     ))}
                   </div>
-                </section>
-
-                <section
-                  className={styles.hypothesis}
-                  aria-label={`Possible concern hypothesis ${index + 1}`}
-                  data-prospect-part="hypothesis"
-                >
-                  <div className={styles.hypothesisLabel}>
-                    <CircleHelp size={18} aria-hidden="true" />
-                    <p className={styles.sectionLabel}>Possible concern</p>
+                  <div
+                    className={styles.meaning}
+                    data-prospect-part="hypothesis"
+                    aria-label={`Possible concern hypothesis ${index + 1}`}
+                  >
+                    <Tag tone="hypothesis" icon={CircleHelp}>
+                      A guess, not a fact
+                    </Tag>
+                    <p>
+                      <b>It may mean:</b>{" "}
+                      <span>
+                        <RichText text={item.possible_concern} />
+                      </span>
+                    </p>
+                    <small>Ask on the next call rather than assume.</small>
                   </div>
-                  <p className={styles.hypothesisTag}>
-                    Hypothesis · not a fact
-                  </p>
-                  <p className={styles.hypothesisText}>
-                    {item.possible_concern}
-                  </p>
-                  <p className={styles.hypothesisNote}>
-                    This interpretation is not confirmed by the cited words.
-                  </p>
-                </section>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className={styles.empty} data-prospect-empty>
-          <CircleHelp size={24} aria-hidden="true" />
-          <div>
-            <h3>No separate prospect interpretation</h3>
-            <p>
-              This report supplies no source-linked prospect interpretation.
-              Missing information does not establish whether a concern was
-              present.
-            </p>
+                </div>
+              </Card>
+            ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div data-prospect-empty>
+            <Empty icon={CircleHelp}>
+              <b>No separate prospect interpretation.</b> Missing information
+              does not establish anything about the prospect.
+            </Empty>
+          </div>
+        )}
+        <Locked
+          count={hidden}
+          noun="prospect interpretations"
+          onUnlock={onUnlock}
+          section="prospect_interpretations"
+          visible={preview?.visible_count}
+          total={preview?.total_count}
+        />
+      </KitSection>
 
-      <aside className={styles.boundary} aria-label="Limits of this snapshot">
-        <strong>What remains unknown</strong>
-        <p>
-          This view reflects this report only. It does not establish an ongoing
-          prospect profile or what happened after the call.
-        </p>
-      </aside>
-
-      {hiddenCount > 0 && (
-        <aside
-          className={styles.locked}
-          data-preview-section="prospect_interpretations"
-          data-visible-count={visibleCount}
-          data-total-count={totalCount}
-          aria-label="More prospect interpretations in the full report"
+      {people.roles ? (
+        <KitSection
+          icon={Quote}
+          tone="info"
+          title="In their own words"
+          hint="What the prospect said about their situation, word for word."
+          count={said.length}
+          index={1}
         >
-          <span className={styles.lockIcon} aria-hidden="true">
-            <LockKeyhole size={19} />
-          </span>
-          <div className={styles.lockCopy}>
-            <strong>
-              {hiddenCount} more prospect{" "}
-              {hiddenCount === 1 ? "interpretation" : "interpretations"} in your
-              report
-            </strong>
-            <p>Unlock remaining interpretations with a free account.</p>
-          </div>
-          {onUnlock && (
-            <button type="button" className={styles.unlock} onClick={onUnlock}>
-              Continue free <ArrowRight size={16} aria-hidden="true" />
-            </button>
+          {said.length ? (
+            <div className={styles.cards}>
+              {said.map((item) => (
+                <Clip
+                  key={`${item.segment.id}-${item.text}`}
+                  evidence={{
+                    segment_id: item.segment.id,
+                    quote: item.text,
+                    start_ms: item.segment.start_ms,
+                    end_ms: item.segment.end_ms,
+                  }}
+                  title="Prospect’s own words"
+                  onPlay={onSelectEvidence}
+                  person={people.prospect}
+                />
+              ))}
+            </div>
+          ) : (
+            <Empty icon={Quote}>
+              The prospect did not describe a problem in their own words.
+            </Empty>
           )}
-        </aside>
-      )}
-    </section>
+        </KitSection>
+      ) : null}
+
+      <p className={styles.footnote}>
+        This reflects this call only. It is not an ongoing profile of the
+        prospect, and it cannot show what happened after the call.
+      </p>
+    </div>
   );
 }

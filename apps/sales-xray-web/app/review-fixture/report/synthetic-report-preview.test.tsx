@@ -61,10 +61,14 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   expect(skills?.hasAttribute("hidden")).toBe(false);
   expect(skills?.textContent).toContain(syntheticEvidence.respect.quote);
   expect(skills?.textContent).toContain("00:31–00:35");
-  expect(button("Open notes: Human Connection & Trust").hidden).toBe(true);
+  // Skills read inline: no notes dialog, one play control per excerpt.
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   await act(async () =>
-    button("Listen to Human Connection & Trust excerpt at 00:31").click(),
+    skills!
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Play source moment, 00:31 to 00:35"]',
+      )!
+      .click(),
   );
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   expect(container.querySelector('[role="status"]')?.textContent).toContain(

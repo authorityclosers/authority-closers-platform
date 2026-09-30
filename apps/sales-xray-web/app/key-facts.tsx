@@ -91,13 +91,16 @@ export function KeyFacts({
   const voices = useMemo(() => voicesOf(transcript), [transcript]);
   const promise = useMemo(() => timePromise(transcript), [transcript]);
   const price = useMemo(() => priceTalk(transcript), [transcript]);
-  const numbers = useMemo(
-    () =>
-      numbersHeard(transcript).filter(
-        (number) => number.kind === "money" || number.kind === "percent",
-      ),
-    [transcript],
-  );
+  const numbers = useMemo(() => {
+    // The same number in the same line counts once.
+    const seen = new Set<string>();
+    return numbersHeard(transcript).filter((number) => {
+      const key = `${number.segment.id}:${number.spoken}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return number.kind === "money" || number.kind === "percent";
+    });
+  }, [transcript]);
   const nameOf = (id: string) =>
     speakerName(voices.indexOf(id), profiles[id], accountName);
   const people = voices
@@ -177,7 +180,7 @@ export function KeyFacts({
     <section className={styles.facts} aria-label="Key facts">
       <header className={styles.head}>
         <div>
-          <h2>Key facts</h2>
+          <h3>Key facts</h3>
           <p>Checked before we trust them. Tap to confirm or fix.</p>
         </div>
         <small>Saved on this device for now</small>
@@ -350,7 +353,7 @@ export function KeyFacts({
 
       <div className={styles.numbers}>
         <h3>
-          Money numbers heard <span>{numbers.length}</span>
+          Money and percentages heard <span>{numbers.length}</span>
         </h3>
         {numbers.length === 0 ? (
           <p className={styles.muted}>

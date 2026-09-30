@@ -25,6 +25,11 @@ import {
   Target,
   ThumbsUp,
   UserRound,
+  MessageCircleQuestion,
+  MicVocal,
+  Hourglass,
+  ListChecks,
+  MessageSquareQuote,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -43,8 +48,7 @@ import type {
   SalesReport,
   Transcript,
 } from "./report-contract";
-import { Emote, type EmoteName } from "./emote";
-import { Locked } from "./report-kit";
+import { IconBadge, Locked } from "./report-kit";
 import { timelineMoments } from "./report-moments";
 import { EntityText } from "./report-entities";
 import { useReportNavigation } from "./report-reading-context";
@@ -62,43 +66,37 @@ import styles from "./overview-hook.module.css";
 
 export const OUTCOME: Record<
   string,
-  { label: string; tone: string; Icon: LucideIcon; emote: EmoteName }
+  { label: string; tone: string; Icon: LucideIcon }
 > = {
   closed: {
     label: "Deal closed",
     tone: "good",
     Icon: Handshake,
-    emote: "handshake",
   },
   follow_up: {
     label: "Next step agreed",
     tone: "good",
     Icon: CalendarCheck,
-    emote: "spiral-calendar",
   },
   future_date: {
     label: "Call back later",
     tone: "warn",
     Icon: CalendarClock,
-    emote: "alarm-clock",
   },
   no_sale: {
     label: "No sale",
     tone: "bad",
     Icon: CircleX,
-    emote: "cross-mark",
   },
   disqualified: {
     label: "Not a fit",
     tone: "bad",
     Icon: Ban,
-    emote: "no-entry",
   },
   unclear: {
     label: "No clear next step",
     tone: "warn",
     Icon: CircleHelp,
-    emote: "red-question-mark",
   },
 };
 
@@ -109,7 +107,6 @@ const LISTEN: Record<
     hint: string;
     tone: string;
     Icon: LucideIcon;
-    emote: EmoteName;
   }
 > = {
   must_watch: {
@@ -117,21 +114,18 @@ const LISTEN: Record<
     hint: "The most important moment of the call",
     tone: "hot",
     Icon: Headphones,
-    emote: "fire",
   },
   watch: {
     label: "Worth a listen",
     hint: "A moment to learn from",
     tone: "calm",
     Icon: Headphones,
-    emote: "headphone",
   },
   repeat: {
     label: "You did this well",
     hint: "Do it again in your next call",
     tone: "good",
     Icon: ThumbsUp,
-    emote: "clapping-hands",
   },
 };
 
@@ -662,7 +656,7 @@ export function OverviewHook({
           <div className={styles.people}>
             {outcomeStyle ? (
               <span className={styles.outcome} data-tone={outcomeStyle.tone}>
-                <Emote name={outcomeStyle.emote} size={17} />
+                <outcomeStyle.Icon size={14} aria-hidden="true" />
                 {outcomeStyle.label}
               </span>
             ) : null}
@@ -826,7 +820,7 @@ export function OverviewHook({
                   </span>
                   <span className={styles.clipBody}>
                     <span className={styles.tag}>
-                      <Emote name={item.emote} size={15} />
+                      <item.Icon size={12} aria-hidden="true" />
                       {item.label}
                       <em>{item.hint}</em>
                     </span>
@@ -974,10 +968,10 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.unanswered ? "" : undefined}
               >
-                <Emote
-                  name="red-question-mark"
-                  size={18}
-                  className={styles.chipEmote}
+                <IconBadge
+                  icon={MessageCircleQuestion}
+                  tone="missed"
+                  size={28}
                 />
                 <b>
                   <Count value={signals.unanswered} />
@@ -989,22 +983,14 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.overs ? "" : undefined}
               >
-                <Emote
-                  name="speaking-head"
-                  size={18}
-                  className={styles.chipEmote}
-                />
+                <IconBadge icon={MicVocal} tone="objection" size={28} />
                 <b>
                   <Count value={signals.overs} />
                 </b>{" "}
                 times you talked over them
               </button>
               <button type="button" onClick={() => go("signals")}>
-                <Emote
-                  name="hourglass-not-done"
-                  size={18}
-                  className={styles.chipEmote}
-                />
+                <IconBadge icon={Hourglass} tone="change" size={28} />
                 <b>
                   {signals.silence === null
                     ? "—"
@@ -1015,11 +1001,7 @@ export function OverviewHook({
                 silence after a price or budget mention
               </button>
               <button type="button" onClick={() => go("signals")}>
-                <Emote
-                  name="handshake"
-                  size={18}
-                  className={styles.chipEmote}
-                />
+                <IconBadge icon={ListChecks} tone="info" size={28} />
                 <b>
                   <Count value={signals.promised} />
                 </b>{" "}
@@ -1068,9 +1050,7 @@ export function OverviewHook({
           index={5}
         >
           <div className={styles.verdictCard}>
-            <span className={styles.verdictEmote}>
-              <Emote name="memo" size={26} />
-            </span>
+            <IconBadge icon={MessageSquareQuote} tone="missed" size={44} />
             <div className={styles.verdictBody}>
               <p className={styles.verdictText}>
                 <EntityText text={verdict?.assessment ?? report.verdict} />
@@ -1079,17 +1059,21 @@ export function OverviewHook({
                 <div className={styles.verdictPair}>
                   <span data-tone="good">
                     <small>
-                      <Emote name="clapping-hands" size={15} />
+                      <ThumbsUp size={13} aria-hidden="true" />
                       Keep
                     </small>
-                    <EntityText text={verdict.repeat} />
+                    <span>
+                      <EntityText text={verdict.repeat} />
+                    </span>
                   </span>
                   <span data-tone="fix">
                     <small>
-                      <Emote name="light-bulb" size={15} />
+                      <Lightbulb size={13} aria-hidden="true" />
                       Fix first
                     </small>
-                    <EntityText text={verdict.fix_first} />
+                    <span>
+                      <EntityText text={verdict.fix_first} />
+                    </span>
                   </span>
                 </div>
               ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Lock } from "lucide-react";
+import { Check, Copy, Info, Lock, type LucideIcon } from "lucide-react";
 import {
   useId,
   useMemo,
@@ -10,25 +10,24 @@ import {
 } from "react";
 
 import { voicesOf } from "./call-data";
-import { Emote, type EmoteName } from "./emote";
 import {
   formatClipRange,
   isPlayableRange,
   spokenClipRange,
 } from "./lightbox/time";
 import type { ReportEvidence, Transcript } from "./report-contract";
-import type { ContextualSourcePlayback } from "./source-playback-context";
 import { RichText, type EntityKind } from "./report-entities";
 import { confirmedRoles } from "./sales-signals";
 import { getShellState } from "./shell/shell-store";
+import type { ContextualSourcePlayback } from "./source-playback-context";
 import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import { SpeakerAvatar } from "./speaker-avatar";
 import { speakerName, useSpeakerProfiles } from "./speaker-profiles";
 import styles from "./report-kit.module.css";
 
 // The report's shared building blocks, so every tab reads the same way:
-// one colour per meaning, the speaker beside every quote, one play control,
-// and long text folded until asked for (print always shows it all).
+// calm surfaces, one colour per meaning shown as a small accent, the speaker
+// beside every quote, one play control, and long text folded until asked for.
 
 /** One colour per meaning, used the same way on every tab. */
 export type Tone =
@@ -39,6 +38,7 @@ export type Tone =
   | "closing"
   | "hypothesis"
   | "info"
+  | "teal"
   | "neutral";
 
 export type Person = {
@@ -90,9 +90,53 @@ export function useReportPeople(callId: string | null, transcript: Transcript) {
   };
 }
 
-/** A tab section: optional emote, title, one-line hint, count and action. */
+// A superellipse ("squircle"): softer than a rounded square.
+const SQUIRCLE =
+  "M20 0C33.6 0 40 6.4 40 20S33.6 40 20 40 0 33.6 0 20 6.4 0 20 0Z";
+
+/**
+ * Our icon mark: a line icon on a soft squircle in its tone's colour, with a
+ * light top gradient. Used in place of emoji everywhere in the report.
+ */
+export function IconBadge({
+  icon: Glyph,
+  tone = "neutral",
+  size = 32,
+}: {
+  icon: LucideIcon;
+  tone?: Tone;
+  size?: number;
+}) {
+  const id = useId();
+  return (
+    <span
+      className={`${styles.badge} ${styles.tone}`}
+      data-tone={tone}
+      style={{ "--size": `${size}px` } as CSSProperties}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 40 40" width={size} height={size}>
+        <defs>
+          <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" className={styles.badgeTop} />
+            <stop offset="1" className={styles.badgeBottom} />
+          </linearGradient>
+        </defs>
+        <path d={SQUIRCLE} fill={`url(#${id}-fill)`} />
+        <path d={SQUIRCLE} className={styles.badgeEdge} />
+      </svg>
+      <Glyph size={Math.round(size * 0.5)} strokeWidth={2} />
+    </span>
+  );
+}
+
+/**
+ * A tab section: an icon mark or a step number, a title, a one-line hint,
+ * an optional count and action.
+ */
 export function KitSection({
-  emote,
+  icon,
+  step,
   title,
   hint,
   count,
@@ -101,7 +145,8 @@ export function KitSection({
   index = 0,
   children,
 }: {
-  emote?: EmoteName;
+  icon?: LucideIcon;
+  step?: number;
   title: string;
   hint?: ReactNode;
   count?: number;
@@ -119,10 +164,12 @@ export function KitSection({
       style={{ "--i": index } as CSSProperties}
     >
       <header className={styles.head}>
-        {emote ? (
-          <span className={styles.headEmote}>
-            <Emote name={emote} size={22} />
+        {step !== undefined ? (
+          <span className={styles.step} aria-hidden="true">
+            {step}
           </span>
+        ) : icon ? (
+          <IconBadge icon={icon} tone={tone} size={30} />
         ) : null}
         <span className={styles.headText}>
           <h3 id={id}>
@@ -140,7 +187,7 @@ export function KitSection({
   );
 }
 
-/** A card in one of the report's tones. */
+/** A calm card; its tone shows only as a thin accent and its tag. */
 export function Card({
   tone = "neutral",
   children,
@@ -163,19 +210,19 @@ export function Card({
   );
 }
 
-/** A small label with an emote, in a tone. */
+/** A small label in a tone, with an optional line icon. */
 export function Tag({
   tone = "neutral",
-  emote,
+  icon: Glyph,
   children,
 }: {
   tone?: Tone;
-  emote?: EmoteName;
+  icon?: LucideIcon;
   children: ReactNode;
 }) {
   return (
     <span className={`${styles.tag} ${styles.tone}`} data-tone={tone}>
-      {emote ? <Emote name={emote} size={15} /> : null}
+      {Glyph ? <Glyph size={12} strokeWidth={2.2} aria-hidden="true" /> : null}
       {children}
     </span>
   );
@@ -192,22 +239,21 @@ const QUOTE_KINDS: readonly EntityKind[] = [
 ];
 
 /**
- * Exact words from the call: who said them, when, and one play control that
- * turns into Pause while this clip plays. Long quotes fold to three lines.
+ * Exact words from the call on one calm line: who said them, when, one play
+ * control (it turns into Pause while this clip plays). Long quotes fold to
+ * two lines; tap the words to read them all.
  */
 export function Clip({
   evidence,
   title,
   onPlay,
   person,
-  said = "said",
   context,
 }: {
   evidence: ReportEvidence;
   title: string;
   onPlay: (evidence: ReportEvidence, title: string) => void;
   person?: Person | null;
-  said?: string;
   /** A rewatch clip can also play with the lines around it. */
   context?: {
     playback: ContextualSourcePlayback;
@@ -215,14 +261,14 @@ export function Clip({
   } | null;
 }) {
   const [open, setOpen] = useState(false);
-  const long = evidence.quote.length > 240;
+  const long = evidence.quote.length > 150;
   const range = formatClipRange(evidence.start_ms, evidence.end_ms);
   return (
     <figure className={styles.clip}>
       <figcaption className={styles.clipHead}>
-        {person ? person.avatar(22) : null}
+        {person ? person.avatar(18) : null}
         <span className={styles.clipWho}>
-          {person ? `${person.name} ${said}` : "From the call"}
+          {person?.name ?? "From the call"}
         </span>
         {isPlayableRange(evidence.start_ms, evidence.end_ms) ? (
           <ClipPlayState startMs={evidence.start_ms} endMs={evidence.end_ms}>
@@ -234,8 +280,8 @@ export function Clip({
                 aria-label={`${playing ? "Pause" : "Play"} source moment, ${spokenClipRange(evidence.start_ms, evidence.end_ms)}`}
                 onClick={() => onPlay(evidence, title)}
               >
-                <ClipPlayIcon playing={playing} size={10} />
-                {range}
+                <ClipPlayIcon playing={playing} size={9} />
+                {playing ? "Pause" : range}
               </button>
             )}
           </ClipPlayState>
@@ -255,8 +301,7 @@ export function Clip({
                 aria-label={`${playing ? "Pause context playback" : "Play with context"}, ${spokenClipRange(context.playback.playback_range.start_ms, context.playback.playback_range.end_ms)}: ${title}`}
                 onClick={() => context.onPlay(context.playback, title)}
               >
-                <ClipPlayIcon playing={playing} size={10} />
-                With context
+                {playing ? "Pause" : "With context"}
               </button>
             )}
           </ClipPlayState>
@@ -265,19 +310,23 @@ export function Clip({
       <blockquote
         className={styles.quote}
         data-folded={long && !open ? "" : undefined}
+        role={long ? "button" : undefined}
+        tabIndex={long ? 0 : undefined}
+        aria-expanded={long ? open : undefined}
+        title={long && !open ? "Show all" : undefined}
+        onClick={long ? () => setOpen((value) => !value) : undefined}
+        onKeyDown={
+          long
+            ? (event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                setOpen((value) => !value);
+              }
+            : undefined
+        }
       >
         <RichText text={evidence.quote} kinds={QUOTE_KINDS} />
       </blockquote>
-      {long ? (
-        <button
-          type="button"
-          className={styles.fold}
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          {open ? "Show less" : "Show all"}
-        </button>
-      ) : null}
     </figure>
   );
 }
@@ -294,11 +343,11 @@ export function Script({
   return (
     <div className={styles.script}>
       <span className={styles.scriptHead}>
-        <Emote name="speech-balloon" size={16} />
         {label}
         <button
           type="button"
           className={styles.copy}
+          aria-label={copied ? "Copied" : `Copy: ${label}`}
           onClick={() => {
             void navigator.clipboard?.writeText(text).then(() => {
               setCopied(true);
@@ -307,11 +356,10 @@ export function Script({
           }}
         >
           {copied ? (
-            <Check size={12} aria-hidden="true" />
+            <Check size={13} aria-hidden="true" />
           ) : (
-            <Copy size={12} aria-hidden="true" />
+            <Copy size={13} aria-hidden="true" />
           )}
-          {copied ? "Copied" : "Copy"}
         </button>
       </span>
       <p>
@@ -325,54 +373,68 @@ export function Script({
 export function Note({
   label,
   children,
+  muted = false,
 }: {
   label: string;
   children: ReactNode;
+  muted?: boolean;
 }) {
   return (
-    <p className={styles.note}>
-      <b>{label}</b> {children}
+    <p className={styles.note} data-muted={muted ? "" : undefined}>
+      <b>{label}</b> <span>{children}</span>
     </p>
   );
 }
 
-/** Withheld guest findings: a count and a sign-in action, never the content. */
+/** Withheld guest findings: a count and an unlock action, never the content. */
 export function Locked({
   count,
   noun,
   onUnlock,
+  section,
+  visible,
+  total,
 }: {
   count: number;
   noun: string;
   onUnlock?: () => void;
+  /** The preview section these counts come from. */
+  section?: string;
+  visible?: number;
+  total?: number;
 }) {
   if (count <= 0) return null;
   return (
-    <aside className={styles.locked}>
+    <aside
+      className={styles.locked}
+      data-preview-section={section}
+      data-visible-count={visible}
+      data-total-count={total}
+    >
       <Lock size={14} aria-hidden="true" />
       <span>
         {count} more {noun} {count === 1 ? "is" : "are"} saved for your account.
       </span>
       {onUnlock ? (
         <button type="button" onClick={onUnlock}>
-          Sign in to see {count === 1 ? "it" : "them"}
+          Unlock with a free account
         </button>
       ) : null}
     </aside>
   );
 }
 
-/** A calm empty state that says what is missing, not what to feel. */
+/** A calm empty state that says what is missing. */
 export function Empty({
-  emote = "seedling",
+  icon: Glyph = Info,
   children,
 }: {
-  emote?: EmoteName;
+  icon?: LucideIcon;
   children: ReactNode;
 }) {
   return (
     <p className={styles.empty}>
-      <Emote name={emote} size={20} />
+      <Glyph size={16} aria-hidden="true" />
       <span>{children}</span>
     </p>
   );

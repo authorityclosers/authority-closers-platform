@@ -2,9 +2,10 @@
    confirmed, a question when only heard or guessed, "add it" when missing. */
 .facts {
   display: grid;
-  gap: 0;
-  margin: 0 0 24px;
-  padding: 16px 20px 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 10px;
+  margin: 0 0 28px;
+  padding: 16px 18px;
   border: 1px solid var(--lx-line-soft);
   border-radius: 18px;
   background: var(--lx-surface);
@@ -12,13 +13,14 @@
   font-family: var(--lx-font-ui);
 }
 .head {
+  grid-column: 1 / -1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
 }
-.head h2 {
+.head h3 {
   margin: 0;
   color: var(--lx-ink);
   font: 700 17px/1.3 var(--lx-font-ui);
@@ -34,14 +36,29 @@
   font: 500 11px/1.3 var(--lx-font-ui);
   white-space: nowrap;
 }
+/* Each fact is a tile: label and status on top, the value below. */
 .row {
   display: grid;
-  min-height: 44px;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(0, 2fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid var(--lx-line-soft);
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label status"
+    "value value";
+  align-content: start;
+  gap: 6px 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lx-sunken) 55%, var(--lx-surface));
+}
+.row .label {
+  grid-area: label;
+}
+.row .value {
+  grid-area: value;
+}
+.row .status {
+  grid-area: status;
 }
 .label {
   color: var(--lx-muted);
@@ -161,8 +178,10 @@
   color: var(--lx-ink-3);
 }
 .numbers {
-  padding: 12px 0 8px;
-  border-top: 1px solid var(--lx-line-soft);
+  grid-column: 1 / -1;
+  padding: 12px 14px 6px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
 }
 .numbers h3 {
   display: flex;

@@ -1,280 +1,229 @@
 "use client";
 
-import { useState } from "react";
 import {
-  ArrowLeft,
-  ArrowRight,
   AudioLines,
   BookOpen,
   Filter,
-  GraduationCap,
   Handshake,
-  Lightbulb,
   MessagesSquare,
   Presentation,
   ShieldCheck,
   Target,
   Users,
 } from "lucide-react";
-import type { ReportDimension, ReportEvidence } from "./report-contract";
-import { formatTranscriptTime } from "./report-transcript";
-import { formatClipRange } from "./lightbox/time";
-import { getReportUiCopy } from "./report-ui-copy";
-import { ReviewDialog } from "./review-dialog";
-import { useReportInline } from "./report-reading-context";
-import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
-import styles from "./sales-skills.module.css";
+import { useState, type CSSProperties } from "react";
+
+import type {
+  ReportDimension,
+  ReportEvidence,
+  Transcript,
+} from "./report-contract";
 import { RichText } from "./report-entities";
+import { Clip, IconBadge, useReportPeople, type Tone } from "./report-kit";
+import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
-// remain the server's eight dimensions; citations are not timed audio evidence.
-const topics = {
-  human_connection_trust: { icon: Users, tone: "blue" },
-  discovery_deep_understanding: { icon: MessagesSquare, tone: "mint" },
-  qualification: { icon: Filter, tone: "violet" },
-  problem_impact_desire: { icon: Target, tone: "orange" },
-  solution_relevance_presentation: { icon: Presentation, tone: "rose" },
-  certainty_objection_intelligence: { icon: ShieldCheck, tone: "cyan" },
-  closing_decision_management: { icon: Handshake, tone: "orange" },
-  communication_tonality: { icon: AudioLines, tone: "violet" },
-} as const;
+// remain the server's eight dimensions.
+const topics: Record<string, { icon: typeof Users; tone: Tone }> = {
+  human_connection_trust: { icon: Users, tone: "info" },
+  discovery_deep_understanding: { icon: MessagesSquare, tone: "teal" },
+  qualification: { icon: Filter, tone: "missed" },
+  problem_impact_desire: { icon: Target, tone: "change" },
+  solution_relevance_presentation: { icon: Presentation, tone: "objection" },
+  certainty_objection_intelligence: { icon: ShieldCheck, tone: "closing" },
+  closing_decision_management: { icon: Handshake, tone: "change" },
+  communication_tonality: { icon: AudioLines, tone: "missed" },
+};
+
+// Plain words for how much the call showed: evidence, never a grade.
+const STATUS: Record<string, string> = {
+  observed: "Seen in this call",
+  conflicted: "Mixed signs",
+  insufficient_evidence: "Not enough to tell",
+  not_applicable: "Doesn’t apply here",
+  unknown: "Not checked",
+};
+const STATUS_ORDER = Object.keys(STATUS);
 
 type SkillDimension = ReportDimension & { evidence?: ReportEvidence[] };
 
-export function SalesSkills({
-  dimensions,
-  onSelectEvidence,
-}: {
-  dimensions: SkillDimension[];
-  onSelectEvidence?: (evidence: ReportEvidence) => void;
-}) {
-  const reading = useReportInline();
-  const [page, setPage] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [previousReading, setPreviousReading] = useState(reading);
-  if (previousReading !== reading) {
-    setPreviousReading(reading);
-    setSelectedId(null);
-  }
-  const selectedIndex = dimensions.findIndex(
-    (item) => item.dimension_id === selectedId,
-  );
-  const selected = dimensions[selectedIndex];
-  const pageCount = Math.max(1, Math.ceil(dimensions.length / 4));
-  const activePage = Math.min(page, pageCount - 1);
-  const copy = getReportUiCopy();
+const EMPTY_TRANSCRIPT: Transcript = {
+  source_sha256: "",
+  revision: "",
+  timebase_id: "1ms",
+  duration_ms: 0,
+  segments: [],
+};
+
+/** Text that folds to three lines; tap to read it all. */
+function Folded({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 220;
   return (
-    <section
-      className={styles.skills}
-      aria-label="Sales skills"
-      data-reading={reading}
+    <p
+      className={styles.observation}
+      data-folded={long && !open ? "" : undefined}
+      role={long ? "button" : undefined}
+      tabIndex={long ? 0 : undefined}
+      aria-expanded={long ? open : undefined}
+      onClick={long ? () => setOpen((value) => !value) : undefined}
+      onKeyDown={
+        long
+          ? (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              setOpen((value) => !value);
+            }
+          : undefined
+      }
     >
-      <header className={styles.banner}>
-        <span className={styles.bannerIcon}>
-          <GraduationCap aria-hidden="true" />
-        </span>
-        <div>
-          <h2>Build your sales skills</h2>
-          <p>
-            Read the observations from this call. Choose one skill to focus on
-            next.
-          </p>
-          <small>Draft observations, not scores.</small>
-        </div>
-        <span className={styles.tip}>
-          <Lightbulb aria-hidden="true" /> One skill at a time.
-        </span>
-      </header>
-      {!dimensions.length ? (
-        <p className={styles.empty}>
-          No skill observations were supplied for this call.
-        </p>
-      ) : (
-        <>
-          <div className={styles.grid}>
-            {dimensions.map((dimension, index) => {
-              const topic = topics[
-                dimension.dimension_id as keyof typeof topics
-              ] ?? { icon: BookOpen, tone: "blue" };
-              const Icon = topic.icon;
-              return (
-                <article
-                  key={dimension.dimension_id}
-                  className={styles.card}
-                  data-tone={topic.tone}
-                  data-page-visible={Math.floor(index / 4) === activePage}
-                >
-                  <div className={styles.cardHeading}>
-                    <span className={styles.icon}>
-                      <Icon aria-hidden="true" />
-                    </span>
-                    <h3>{dimension.label}</h3>
-                  </div>
-                  <span className={styles.status}>
-                    {copy.factorStatus[dimension.status] ??
-                      copy.factorStatus.unknown}
-                  </span>
-                  <p className={styles.observation}>{dimension.observation}</p>
-                  {reading && (
-                    <SkillSources
-                      dimension={dimension}
-                      onSelectEvidence={onSelectEvidence}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    className={styles.open}
-                    hidden={reading}
-                    onClick={() => setSelectedId(dimension.dimension_id)}
-                    aria-label={`Open notes: ${dimension.label}`}
-                  >
-                    Open notes <ArrowRight size={16} aria-hidden="true" />
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-          <nav className={styles.pagination} aria-label="Skill pages">
-            <span aria-live="polite">
-              Skills {activePage * 4 + 1}–
-              {Math.min((activePage + 1) * 4, dimensions.length)} of{" "}
-              {dimensions.length}
-            </span>
-            <button
-              type="button"
-              aria-label="Previous skills"
-              disabled={activePage === 0}
-              onClick={() => setPage(activePage - 1)}
-            >
-              <ArrowLeft size={19} />
-            </button>
-            <button
-              type="button"
-              aria-label="Next skills"
-              disabled={activePage === pageCount - 1}
-              onClick={() => setPage(activePage + 1)}
-            >
-              <ArrowRight size={19} />
-            </button>
-          </nav>
-        </>
-      )}
-      {!reading && selected && (
-        <ReviewDialog
-          open
-          title={selected.label}
-          position={`Skill ${selectedIndex + 1} of ${dimensions.length}`}
-          eyebrow="Draft observation · not a performance score"
-          onClose={() => setSelectedId(null)}
-          onPrevious={() =>
-            setSelectedId(dimensions[selectedIndex - 1].dimension_id)
-          }
-          onNext={() =>
-            setSelectedId(dimensions[selectedIndex + 1].dimension_id)
-          }
-          previousDisabled={selectedIndex === 0}
-          nextDisabled={selectedIndex === dimensions.length - 1}
-          previousLabel="Previous skill"
-          nextLabel="Next skill"
-          closeLabel="Close skill notes"
-        >
-          <div className={styles.notes}>
-            <span className={styles.status}>
-              {copy.factorStatus[selected.status] ?? copy.factorStatus.unknown}
-            </span>
-            <h3>Report observation</h3>
-            <p>{selected.observation}</p>
-            <SkillSources
-              dimension={selected}
-              onSelectEvidence={
-                onSelectEvidence
-                  ? (evidence) => {
-                      setSelectedId(null);
-                      onSelectEvidence(evidence);
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        </ReviewDialog>
-      )}
-    </section>
+      <RichText text={text} />
+    </p>
   );
 }
 
-function SkillSources({
-  dimension,
+/**
+ * The eight sales skills as one calm grid: how many the call showed (a
+ * count, not a score), then each skill's note and one clip from the call.
+ */
+export function SalesSkills({
+  dimensions,
   onSelectEvidence,
+  callId = null,
+  transcript = EMPTY_TRANSCRIPT,
 }: {
-  dimension: SkillDimension;
+  dimensions: SkillDimension[];
   onSelectEvidence?: (evidence: ReportEvidence) => void;
+  callId?: string | null;
+  transcript?: Transcript;
 }) {
-  const excerpts = dimension.evidence ?? [];
+  const people = useReportPeople(callId, transcript);
+  const [openMore, setOpenMore] = useState<Set<string>>(new Set());
+  const statusOf = (status: string) => (STATUS[status] ? status : "unknown");
+  const counts = STATUS_ORDER.map((status) => ({
+    status,
+    count: dimensions.filter((d) => statusOf(d.status) === status).length,
+  })).filter((item) => item.count);
+  const seen = dimensions.filter((d) => d.status === "observed").length;
+
+  if (!dimensions.length)
+    return (
+      <p className={styles.empty}>
+        No skill observations were supplied for this call.
+      </p>
+    );
+
   return (
-    <>
-      {/* A recording panel appears only when the call actually supplied an excerpt. */}
-      {excerpts.length ? (
-        <section className={styles.source} aria-label="Recording excerpts">
-          <h3>From the recording</h3>
-          <ol className={styles.excerpts}>
-            {excerpts.map((evidence, index) => (
-              <li key={`${evidence.segment_id}-${index}`}>
-                <span className={styles.sourceTime}>
-                  {formatClipRange(evidence.start_ms, evidence.end_ms)}
-                </span>
-                <blockquote>
-                  <RichText text={evidence.quote} />
-                </blockquote>
-                {onSelectEvidence && (
-                  <ClipPlayState
-                    startMs={evidence.start_ms}
-                    endMs={evidence.end_ms}
-                  >
-                    {(playing) => (
-                      <button
-                        type="button"
-                        className={styles.listen}
-                        onClick={() => onSelectEvidence(evidence)}
-                        aria-label={`${playing ? "Pause" : "Listen to"} ${dimension.label} excerpt at ${formatTranscriptTime(evidence.start_ms)}`}
-                        aria-pressed={playing}
-                      >
-                        <ClipPlayIcon playing={playing} size={15} />{" "}
-                        {playing
-                          ? "Pause this excerpt"
-                          : "Listen to this excerpt"}
-                      </button>
-                    )}
-                  </ClipPlayState>
-                )}
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : (
-        <p className={styles.noSource}>
-          No recording excerpt was supplied for this skill.
-        </p>
-      )}
-      {/* Raw coaching-material identifiers are audit provenance, not reading
-          content: they stay available behind a closed disclosure. */}
-      {!!dimension.citations.length && (
-        <details className={styles.references}>
-          <summary>
-            <BookOpen size={16} aria-hidden="true" /> Coaching source details
-          </summary>
+    <div className={styles.skills} aria-label="Sales skills">
+      <header className={styles.summary}>
+        <div className={styles.lead}>
           <p>
-            Internal coaching-material references used for this draft
-            observation. They are not moments from your call.
+            <b>{seen}</b> of {dimensions.length} skills were seen in this call
           </p>
-          <ul>
-            {dimension.citations.map((citation, index) => (
-              <li key={`${citation.doc}-${index}`}>
-                <strong>{citation.doc}</strong> · {citation.sections.join(", ")}
+          <small>
+            Draft observations, not scores. Work on one skill at a time.
+          </small>
+        </div>
+        <div className={styles.meter}>
+          <div
+            className={styles.bar}
+            role="img"
+            aria-label={counts
+              .map(
+                ({ status, count }) =>
+                  `${count} ${STATUS[status].toLowerCase()}`,
+              )
+              .join(", ")}
+          >
+            {counts.map(({ status, count }) => (
+              <span
+                key={status}
+                data-status={status}
+                style={
+                  { "--share": count / dimensions.length } as CSSProperties
+                }
+              />
+            ))}
+          </div>
+          <ul className={styles.legend}>
+            {counts.map(({ status, count }) => (
+              <li key={status} data-status={status}>
+                <i aria-hidden="true" />
+                {STATUS[status]} <b>{count}</b>
               </li>
             ))}
           </ul>
-        </details>
-      )}
-    </>
+        </div>
+      </header>
+
+      <div className={styles.grid}>
+        {dimensions.map((dimension, index) => {
+          const topic = topics[dimension.dimension_id] ?? {
+            icon: BookOpen,
+            tone: "info" as Tone,
+          };
+          const [first, ...more] = dimension.evidence ?? [];
+          const showMore = openMore.has(dimension.dimension_id);
+          const clip = (evidence: ReportEvidence) =>
+            onSelectEvidence ? (
+              <Clip
+                key={`${evidence.segment_id}-${evidence.start_ms}`}
+                evidence={evidence}
+                title={dimension.label}
+                onPlay={(item) => onSelectEvidence(item)}
+                person={people.speakerOf(evidence)}
+              />
+            ) : (
+              <blockquote
+                key={`${evidence.segment_id}-${evidence.start_ms}`}
+                className={styles.quote}
+              >
+                <RichText text={evidence.quote} />
+              </blockquote>
+            );
+          return (
+            <article
+              key={dimension.dimension_id}
+              className={styles.card}
+              style={{ "--i": index } as CSSProperties}
+            >
+              <header className={styles.cardHead}>
+                <IconBadge icon={topic.icon} tone={topic.tone} size={28} />
+                <h3>{dimension.label}</h3>
+                <span
+                  className={styles.status}
+                  data-status={statusOf(dimension.status)}
+                >
+                  {STATUS[statusOf(dimension.status)]}
+                </span>
+              </header>
+              <Folded text={dimension.observation} />
+              {first ? clip(first) : null}
+              {showMore ? more.map(clip) : null}
+              {more.length ? (
+                <button
+                  type="button"
+                  className={styles.moreButton}
+                  aria-expanded={showMore}
+                  onClick={() =>
+                    setOpenMore((current) => {
+                      const next = new Set(current);
+                      if (next.has(dimension.dimension_id))
+                        next.delete(dimension.dimension_id);
+                      else next.add(dimension.dimension_id);
+                      return next;
+                    })
+                  }
+                >
+                  {showMore
+                    ? "Show fewer clips"
+                    : `${more.length} more ${more.length === 1 ? "clip" : "clips"}`}
+                </button>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }

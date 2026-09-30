@@ -1,45 +1,46 @@
-/* Next-call plan: one move first, then keep, change, close, promises, care. */
+/* Next-call plan: where it ended, one move, then numbered steps. */
 .plan {
   display: grid;
-  gap: 30px;
+  gap: 26px;
   min-width: 0;
 }
 
-/* Where the call ended: the report's outcome, with its moment. */
+/* Where the call ended: one calm line. */
 .outcome {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
+  border: 1px solid var(--lx-line-soft, var(--lx-line));
   border-radius: 14px;
-  background: var(--lx-sunken);
+  background: var(--lx-surface);
 }
 
 .outcomeText {
-  display: grid;
   flex: 1;
-  gap: 2px;
   min-width: 0;
+  margin: 0;
   color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 14px;
+  font-size: 13.5px;
   line-height: 1.55;
 }
 
-.outcomeText small {
-  color: var(--lx-muted);
-  font: 700 11.5px/1.3 var(--lx-font-ui, inherit);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+.outcomeText b {
+  color: var(--lx-ink);
+  font-weight: 650;
 }
 
 .outcomePlay {
+  display: inline-flex;
   flex: none;
-  padding: 4px 11px;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
   border: 0;
   border-radius: 99px;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
-  font: 650 12px/1.4 var(--lx-font-ui, inherit);
+  font: 650 11.5px/1.5 var(--lx-font-ui, inherit);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -47,96 +48,91 @@
 /* The one move: the thing to carry into the next call. */
 .move {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(260px, 0.8fr);
-  align-items: start;
-  gap: 16px 18px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px 22px;
   padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--lx-teal) 30%, var(--lx-line));
-  border-radius: 20px;
+  border-radius: 18px;
   background:
     radial-gradient(
-      circle at 0% 0%,
-      color-mix(in srgb, var(--lx-teal) 16%, transparent),
-      transparent 55%
+      120% 140% at 0% 0%,
+      color-mix(in srgb, var(--lx-teal) 13%, transparent),
+      transparent 60%
     ),
     var(--lx-surface);
-  box-shadow: var(--lx-shadow-1);
-  animation: rise 420ms var(--lx-ease-move, ease) both;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--lx-teal) 22%, var(--lx-line)),
+    0 14px 30px -24px color-mix(in srgb, var(--lx-teal) 70%, transparent);
+  animation: rise 380ms var(--lx-ease-move, ease) both;
 }
 
-.moveEmote {
+.moveMain {
   display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
-  background: var(--lx-teal-soft);
-  animation: pop 520ms var(--lx-ease-pop, ease) 200ms both;
-}
-
-.moveBody {
-  display: grid;
+  align-content: start;
   gap: 6px;
   min-width: 0;
 }
 
-.moveBody small {
+.moveLabel,
+.practiceHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--lx-teal);
-  font: 700 12px/1.3 var(--lx-font-ui, inherit);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font: 650 12px/1.4 var(--lx-font-ui, inherit);
 }
 
 .moveText {
+  max-width: 60ch;
   margin: 0;
   color: var(--lx-ink);
-  font: 700 clamp(17px, 1.6vw, 20px) / 1.4 var(--lx-font-ui, inherit);
+  font: 650 clamp(16px, 1.4vw, 19px) / 1.4 var(--lx-font-ui, inherit);
   letter-spacing: -0.01em;
 }
 
 .target {
-  margin: 0;
-  color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.target b,
-.doneWhen b {
-  color: var(--lx-ink);
-}
-
-.practice {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--lx-sunken);
-}
-
-.practiceHead {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--lx-ink);
-  font: 700 13px/1.3 var(--lx-font-ui, inherit);
-}
-
-.practice p {
+  max-width: 70ch;
   margin: 0;
   color: var(--lx-ink-2, var(--lx-ink));
   font-size: 13.5px;
   line-height: 1.55;
 }
 
-.doneWhen {
-  font-size: 13px;
+.target b,
+.doneWhen b {
+  color: var(--lx-ink);
+  font-weight: 650;
 }
 
-/* Cards side by side where there is room. */
+.practice {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lx-surface) 70%, var(--lx-sunken));
+  box-shadow: inset 0 0 0 1px var(--lx-line-soft, var(--lx-line));
+}
+
+.practiceHead {
+  color: var(--lx-ink-3, var(--lx-ink));
+}
+
+.practice p {
+  margin: 0;
+  color: var(--lx-ink-2, var(--lx-ink));
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.doneWhen {
+  color: var(--lx-muted);
+}
+
+/* Cards side by side where there is room; they keep their own height. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -145,29 +141,38 @@
   gap: 12px;
 }
 
+.changeHead {
+  display: grid;
+  gap: 6px;
+}
+
 .changeBody {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px 18px;
+  align-items: start;
+  gap: 10px 20px;
 }
 
-.changeSide {
+.side {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .impact {
   margin: 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--lx-line-soft, var(--lx-line));
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 /* Promises: a checklist to keep before the next call. */
 .promises {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -182,15 +187,15 @@
 }
 
 .promises li[data-done] figure {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .tick {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  margin-top: 4px;
+  width: 30px;
+  height: 30px;
+  margin-top: 3px;
   border: 0;
   border-radius: 9px;
   background: var(--lx-sunken);
@@ -214,26 +219,14 @@
   }
 }
 
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: scale(0.6) rotate(-8deg);
-  }
-}
-
 @media (max-width: 900px) {
   .move {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .practice {
-    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .move,
-  .moveEmote {
+  .move {
     animation: none;
   }
 }
