@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Briefcase,
   CalendarCheck,
   CheckSquare,
   Coins,
@@ -188,22 +187,8 @@ export function CallContext({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [transcript, roles?.seller, roles?.prospect],
   );
-  // Their business only when named outright about the prospect; loose
-  // keyword counts guessed wrong.
-  const heardBusiness = useMemo(
-    () => prospectBusiness(transcript.segments, roles),
-    // roles comes from saved profiles; its two ids are the real inputs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [transcript, roles?.seller, roles?.prospect],
-  );
-
   const prospectId =
     roles?.prospect ?? voices.find((id) => profiles[id]?.role === "prospect");
-  const industryLabel = facts.values.industry?.trim() || null;
-  const industry =
-    SPEAKER_ICONS.find((item) => item.label === industryLabel) ??
-    heardBusiness ??
-    undefined;
   const selling = firstEntity(texts, "program");
   const money = facts.values.budget
     ? `Budget ${facts.values.budget}`
@@ -243,20 +228,6 @@ export function CallContext({
       tone: "violet",
       go: "prospect",
       empty: "Name them",
-    },
-    {
-      key: "business",
-      label: "Business",
-      value: industry?.label ?? industryLabel,
-      heard: !facts.confirmed.industry,
-      icon: industry ? (
-        <industry.Icon size={14} aria-hidden="true" />
-      ) : (
-        icon(Briefcase)
-      ),
-      tone: "teal",
-      go: "prospect",
-      empty: "Add",
     },
     {
       key: "selling",
