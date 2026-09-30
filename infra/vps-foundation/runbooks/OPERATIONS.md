@@ -120,6 +120,8 @@ sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 ```
 
+The canary timers are installed but disabled. After the reviewed foundation release is installed, enable the staging and production checks once with `sudo systemctl enable --now ac-canary@staging.timer ac-canary@production.timer`; each run appends one non-secret result to `/var/lib/authority-closers/canary/<environment>.jsonl`.
+
 The logical PostgreSQL writer is a separate disabled-by-default gate. It uses only `/srv/authority-closers/application/current-staging` and, when present and healthy, `/srv/authority-closers/application/current-production`; it never accepts a free-standing database URL. The runtime Infisical wrapper supplies `AC_DB_BACKUP_PASSWORD` to the exact compose `postgres` service, and the backup Infisical identity supplies only the Restic/R2 environment. A failed upload does not remove the verified local dump.
 
 An activated writer captures and verifies each local pair before checking the off-host quota under the repository lock. A quota rejection prevents the upload and leaves the service failed, while the other resolved healthy environment can still receive its local capture. `--capture-only` performs no R2 query, repository lock or upload. Ordinary `--dry-run` still checks R2; `--dry-run --capture-only` checks release/health without touching the local ring or remote repository. Local capture success is not evidence of a fresh off-host backup or a passed restore/RPO gate.
