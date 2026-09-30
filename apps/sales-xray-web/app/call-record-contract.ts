@@ -49,12 +49,18 @@ function fail(code: string): never {
   throw new CallRecordContractError(code);
 }
 
-function record(value: unknown, code = "call_record_invalid"): Record<string, unknown> {
+function record(
+  value: unknown,
+  code = "call_record_invalid",
+): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail(code);
   return value as Record<string, unknown>;
 }
 
-function nonNegativeInteger(value: unknown, code = "call_record_number_invalid"): number {
+function nonNegativeInteger(
+  value: unknown,
+  code = "call_record_number_invalid",
+): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     fail(code);
   }
@@ -62,13 +68,21 @@ function nonNegativeInteger(value: unknown, code = "call_record_number_invalid")
 }
 
 function talkShare(value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > 1
+  ) {
     fail("call_record_talk_share_invalid");
   }
   return value;
 }
 
-function nonEmptyString(value: unknown, code = "call_record_string_invalid"): string {
+function nonEmptyString(
+  value: unknown,
+  code = "call_record_string_invalid",
+): string {
   if (typeof value !== "string" || !value.trim()) {
     fail(code);
   }
@@ -77,10 +91,22 @@ function nonEmptyString(value: unknown, code = "call_record_string_invalid"): st
 
 function parseEvidence(value: unknown): CallRecordEvidence {
   const item = record(value, "call_record_evidence_invalid");
-  const segment_id = nonEmptyString(item.segment_id, "call_record_evidence_segment_invalid");
-  const quote = nonEmptyString(item.quote, "call_record_evidence_quote_invalid");
-  const start_ms = nonNegativeInteger(item.start_ms, "call_record_evidence_time_invalid");
-  const end_ms = nonNegativeInteger(item.end_ms, "call_record_evidence_time_invalid");
+  const segment_id = nonEmptyString(
+    item.segment_id,
+    "call_record_evidence_segment_invalid",
+  );
+  const quote = nonEmptyString(
+    item.quote,
+    "call_record_evidence_quote_invalid",
+  );
+  const start_ms = nonNegativeInteger(
+    item.start_ms,
+    "call_record_evidence_time_invalid",
+  );
+  const end_ms = nonNegativeInteger(
+    item.end_ms,
+    "call_record_evidence_time_invalid",
+  );
   if (end_ms < start_ms) {
     fail("call_record_evidence_range_invalid");
   }
@@ -89,10 +115,19 @@ function parseEvidence(value: unknown): CallRecordEvidence {
 
 function parseSpeaker(value: unknown): CallRecordSpeaker {
   const item = record(value, "call_record_speaker_invalid");
-  const speaker_id = nonEmptyString(item.speaker_id, "call_record_speaker_id_invalid");
-  const talk_ms = nonNegativeInteger(item.talk_ms, "call_record_speaker_talk_ms_invalid");
+  const speaker_id = nonEmptyString(
+    item.speaker_id,
+    "call_record_speaker_id_invalid",
+  );
+  const talk_ms = nonNegativeInteger(
+    item.talk_ms,
+    "call_record_speaker_talk_ms_invalid",
+  );
   const talk_share = talkShare(item.talk_share);
-  const questions = nonNegativeInteger(item.questions, "call_record_speaker_questions_invalid");
+  const questions = nonNegativeInteger(
+    item.questions,
+    "call_record_speaker_questions_invalid",
+  );
   const longest_monologue_ms = nonNegativeInteger(
     item.longest_monologue_ms,
     "call_record_speaker_monologue_invalid",
@@ -102,18 +137,27 @@ function parseSpeaker(value: unknown): CallRecordSpeaker {
 
 function parseNumbers(value: unknown): CallRecordNumbers {
   const item = record(value, "call_record_numbers_invalid");
-  const duration_ms = nonNegativeInteger(item.duration_ms, "call_record_duration_invalid");
+  const duration_ms = nonNegativeInteger(
+    item.duration_ms,
+    "call_record_duration_invalid",
+  );
   if (!Array.isArray(item.speakers)) {
     fail("call_record_speakers_invalid");
   }
   const speakers = item.speakers.map(parseSpeaker);
-  const overlaps = nonNegativeInteger(item.overlaps, "call_record_overlaps_invalid");
+  const overlaps = nonNegativeInteger(
+    item.overlaps,
+    "call_record_overlaps_invalid",
+  );
   return { duration_ms, speakers, overlaps };
 }
 
 function parseFact(value: unknown): CallRecordFact | null {
   const item = record(value, "call_record_fact_invalid");
-  const statement = nonEmptyString(item.statement, "call_record_fact_statement_invalid");
+  const statement = nonEmptyString(
+    item.statement,
+    "call_record_fact_statement_invalid",
+  );
   if (!Array.isArray(item.evidence) || item.evidence.length === 0) {
     // Check 2: Facts without a quote never render
     return null;
