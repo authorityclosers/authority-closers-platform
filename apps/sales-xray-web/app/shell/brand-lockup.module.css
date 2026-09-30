@@ -24,15 +24,109 @@
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  background: var(--lx-surface);
 }
 
+/* ---------- The mark: a glass lens over a call, on an ink squircle ---------- */
 .symbol {
-  width: 28px;
-  height: 28px;
+  --size: var(--brand-mark-size, 30px);
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: none;
+  width: var(--size);
+  height: var(--size);
+  overflow: hidden;
+  border-radius: calc(var(--size) * 0.28);
+  /* Theme-stable: the icon reads the same on light, dark and film. */
+  background:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      color-mix(in srgb, var(--lx-film-text) 22%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      80% 80% at 50% 110%,
+      color-mix(in srgb, var(--lx-glow) 26%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(165deg, var(--lx-film-2), var(--lx-film) 70%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--lx-film-text) 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--lx-film-text) 9%, transparent),
+    0 1px 2px color-mix(in srgb, var(--lx-film) 30%, transparent),
+    0 8px 18px -10px color-mix(in srgb, var(--lx-film) 80%, transparent);
+  transition: transform var(--lx-dur-reveal) var(--lx-ease-pop);
+  animation: tile-in var(--lx-dur-develop) var(--lx-ease-pop) backwards;
 }
 
+.symbol svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    bar-in var(--lx-dur-reveal) var(--lx-ease-pop) backwards,
+    talk 2.6s ease-in-out infinite;
+  animation-delay: calc(80ms + var(--i) * 45ms), calc(0.7s + var(--i) * 170ms);
+}
+
+.trace {
+  fill: color-mix(in srgb, var(--lx-film-text) 34%, transparent);
+}
+
+.revealStart {
+  stop-color: var(--lx-glow);
+}
+
+.revealEnd {
+  stop-color: color-mix(in srgb, var(--lx-glow) 30%, var(--lx-missed-on-film));
+}
+
+/* The lens and its clip travel together: what it covers is x-rayed. */
+.lensTravel {
+  animation:
+    lens-in var(--lx-dur-reveal) var(--lx-ease-move) 300ms backwards,
+    lens-scan 5.2s var(--lx-ease-scan) 0.9s infinite alternate;
+}
+
+.lensGlass {
+  fill: color-mix(in srgb, var(--lx-film-text) 7%, transparent);
+  stroke: color-mix(in srgb, var(--lx-film-text) 88%, transparent);
+  stroke-width: 2.4;
+}
+
+.lensGlint {
+  fill: none;
+  stroke: var(--lx-film-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+/* Hover: the lens scans faster and the call gets livelier. */
+.brand:hover .symbol,
+a:hover > .symbol,
+button:hover > .symbol {
+  transform: scale(1.06);
+}
+
+.brand:hover .lensTravel,
+a:hover > .symbol .lensTravel,
+button:hover > .symbol .lensTravel {
+  animation-duration: var(--lx-dur-reveal), 1.6s;
+}
+
+.brand:hover .bar,
+a:hover > .symbol .bar,
+button:hover > .symbol .bar {
+  animation-duration: var(--lx-dur-reveal), 1s;
+}
+
+/* ---------- Wordmark ---------- */
 .wordmark {
   display: flex;
   min-width: 0;
@@ -59,66 +153,56 @@
   white-space: nowrap;
 }
 
-/* Living mark: the waveform breathes and an X-ray scan passes over it. */
-.barStart {
-  stop-color: var(--lx-teal-2);
+/* ---------- Motion ---------- */
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
 }
 
-.barEnd {
-  stop-color: var(--lx-teal);
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.15);
+  }
 }
 
-.bar {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: breathe 2.6s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 160ms);
-}
-
-.scan {
-  animation: scan 3.6s var(--lx-ease-scan) infinite;
-}
-
-.brand:hover .bar {
-  animation-duration: 1.2s;
-}
-
-@keyframes breathe {
+@keyframes talk {
   0%,
   100% {
     transform: scaleY(1);
   }
-  50% {
+  35% {
     transform: scaleY(0.72);
   }
-}
-
-@keyframes scan {
-  0% {
-    transform: translateX(0);
-  }
-  55%,
-  100% {
-    transform: translateX(44px);
+  70% {
+    transform: scaleY(0.9);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bar,
-  .scan {
-    animation: none;
-  }
-  .scan {
+@keyframes lens-in {
+  from {
     opacity: 0;
   }
 }
 
-.scanEdge {
-  stop-color: var(--lx-on-teal);
-  stop-opacity: 0;
+@keyframes lens-scan {
+  0% {
+    transform: translateX(-13px);
+  }
+  100% {
+    transform: translateX(13px);
+  }
 }
 
-.scanCore {
-  stop-color: var(--lx-on-teal);
-  stop-opacity: 0.85;
+@media (prefers-reduced-motion: reduce) {
+  .symbol,
+  .bar,
+  .lensTravel {
+    animation: none;
+  }
+  .symbol {
+    transition: none;
+  }
 }

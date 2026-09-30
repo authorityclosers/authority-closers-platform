@@ -15,6 +15,7 @@ import {
   stageNames,
   type ProcessingStage,
 } from "./processing-state";
+import { XrayWave } from "./xray-wave";
 import styles from "./acquisition-processing-panel.module.css";
 
 export type AcquisitionProcessingStageRow = {
@@ -62,10 +63,6 @@ const stages = [
     Icon: FileText,
   },
 ] as const;
-
-const waveHeights = [
-  23, 35, 51, 77, 38, 62, 96, 34, 58, 85, 47, 69, 31, 53, 22,
-];
 
 function visualState(state: string | null, paused: boolean) {
   if (state === "completed") return "completed";
@@ -198,40 +195,17 @@ export function AcquisitionProcessingPanel({
           className={styles.signalCard}
           data-animated={active && !motionSuspended}
         >
-          <svg
-            className={styles.waveform}
-            viewBox="0 0 352 112"
-            fill="none"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <defs>
-              <linearGradient
-                id="processing-wave-gradient"
-                x1="0"
-                y1="0"
-                x2="352"
-                y2="0"
-                gradientUnits="userSpaceOnUse"
-              >
-                <stop stopColor="#A7EEE1" />
-                <stop offset="0.54" stopColor="#3BC5B2" />
-                <stop offset="1" stopColor="#028E8D" />
-              </linearGradient>
-            </defs>
-            {waveHeights.map((height, index) => (
-              <rect
-                key={index}
-                className={styles.waveBar}
-                x={8 + index * 22}
-                y={(112 - height) / 2}
-                width="7"
-                height={height}
-                rx="3.5"
-                fill="url(#processing-wave-gradient)"
-              />
-            ))}
-          </svg>
+          <div className={styles.waveStage}>
+            <XrayWave
+              mode={
+                active && !motionSuspended
+                  ? "scanning"
+                  : motionSuspended
+                    ? "still"
+                    : "resting"
+              }
+            />
+          </div>
           <span className={styles.signalDivider} aria-hidden="true" />
           <div
             className={styles.signalCopy}
