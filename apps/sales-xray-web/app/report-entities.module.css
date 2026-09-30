@@ -1,0 +1,62 @@
+/* Entity chips inside report text: WhatsApp, programs, money, documents. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px 0 4px;
+  border-radius: 6px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+  font-weight: 600;
+  line-height: 1.35;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.chip svg {
+  flex: none;
+  align-self: center;
+}
+
+.chip[data-kind="whatsapp"] {
+  background: color-mix(in srgb, #25d366 14%, var(--lx-surface));
+}
+
+.chip[data-kind="program"] {
+  background: color-mix(in srgb, var(--lx-missed) 12%, var(--lx-surface));
+  color: var(--lx-ink);
+}
+
+.chip[data-kind="program"] svg {
+  color: var(--lx-missed);
+}
+
+.chip[data-kind="money"] {
+  background: color-mix(in srgb, var(--lx-warning) 14%, var(--lx-surface));
+}
+
+.chip[data-kind="money"] svg {
+  color: var(--lx-warning);
+}
+
+.chip[data-kind="document"] svg,
+.chip[data-kind="video"] svg {
+  color: var(--lx-info);
+}
+
+.chip[data-kind="date"] svg,
+.chip[data-kind="person"] svg {
+  color: var(--lx-teal);
+}
+
+.wa {
+  display: block;
+}
+
+.waBubble {
+  fill: #25d366;
+}
+
+.waPhone {
+  fill: #ffffff;
+}
