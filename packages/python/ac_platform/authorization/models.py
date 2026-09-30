@@ -35,6 +35,7 @@ PLATFORM_CAPABILITIES = frozenset(
         "platform_catalog_read",
         "platform_catalog_write",
         "platform_catalog_publish",
+        "platform_organisations_manage",
     }
 )
 STUDIO_CAPABILITIES = frozenset(
@@ -59,6 +60,7 @@ class CapabilityGrant(Base):
         CheckConstraint(
             "permission IN ('platform_access_manage', 'platform_tenants_read', "
             "'platform_catalog_read', 'platform_catalog_write', 'platform_catalog_publish', "
+            "'platform_organisations_manage', "
             "'catalog_read', 'catalog_write', 'catalog_publish', 'learner_diagnose', "
             "'learning_review')",
             name="permission_supported",
@@ -73,7 +75,7 @@ class CapabilityGrant(Base):
         CheckConstraint(
             "(scope_kind = 'platform' AND permission IN ('platform_access_manage', "
             "'platform_tenants_read', 'platform_catalog_read', 'platform_catalog_write', "
-            "'platform_catalog_publish')) OR "
+            "'platform_catalog_publish', 'platform_organisations_manage')) OR "
             "(scope_kind IN ('tenant', 'program') AND permission IN ('catalog_read', "
             "'catalog_write', 'catalog_publish', 'learner_diagnose', 'learning_review'))",
             name="permission_scope",
