@@ -607,7 +607,10 @@ def test_status_preserves_local_state_when_github_is_unavailable(train):
     assert result["environments"]["production"]["core"] == OLD
 
 
-def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train, monkeypatch):
+@pytest.mark.parametrize("target_active", [False, True])
+def test_deploy_core_rollback_uses_installed_controller_not_old_installer(
+    train, monkeypatch, target_active
+):
     import io
     import tarfile
 
@@ -621,8 +624,16 @@ def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train,
         (bundle / name).write_text("fake")
     engine.store_bundle = lambda *_: bundle
     engine.require_backup_support = lambda _: None
-    engine.keep_native_build = lambda _: None
-    engine.prepare_activation = lambda *_a, **_k: {}
+    core["production"] = HEAD
+    current_activation = engine.activation_path("production", HEAD)
+    current_activation.parent.mkdir(parents=True, exist_ok=True)
+    current_activation.write_text('{"fixture": "current active release"}')
+    target_activation = engine.activation_path("production", OLD)
+    if target_active:
+        target_activation.write_text('{"fixture": "historical activation"}')
+    before = {p: p.read_bytes() for p in current_activation.parent.glob("*.json")}
+    engine.keep_native_build = lambda _: pytest.fail("rollback must not acquire native builds")
+    engine.prepare_activation = lambda *_a, **_k: pytest.fail("must not carry activation backward")
     engine.check_core = lambda *_: None
     selected = []
 
@@ -651,6 +662,8 @@ def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train,
     build = engine.stored_build(OLD, "core")
     assert build is not None
     engine.deploy_core("production", build, rollback_only=True)
+    assert {p: p.read_bytes() for p in current_activation.parent.glob("*.json")} == before
+    assert target_activation.exists() == target_active
     assert selected == [OLD, HEAD]
     assert [call[-1] for call in verified_archives] == [OLD, HEAD]
     argv, kwargs = installer_calls[0]
@@ -966,3 +979,31 @@ def test_rollback_controller_verifies_and_stages_older_archive(tmp_path, failure
             "normal_deploy": "Running installer differs",
         }[failure]
         assert message in completed.stderr
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+def test_repeated_production_core_rollback_never_redeploys_departed_core(train, automatic):
+    engine, runner, core, _ = train
+    if automatic:
+        runner.smoke_result["production"] = "fail"
+        assert engine.train()["result"] == "rolled_back"
+    else:
+        assert engine.train()["result"] == "promoted"
+        assert engine.rollback_core("production")["restored_sha"] == OLD
+    assert core["production"] == OLD
+    before = engine.paths.releases.read_bytes()
+    engine.deploy_core = lambda *_a, **_k: pytest.fail("must not redeploy departed core")
+    with pytest.raises(MODULE.ReleaseError, match="core_rollback_target_departed"):
+        engine.rollback_core("production")
+    assert engine.paths.releases.read_bytes() == before and core["production"] == OLD
+
+
+def test_production_core_rollback_keeps_previous_record_boundary_on_web_only_release(train):
+    engine, _, core, web = train
+    assert engine.train()["result"] == "promoted"
+    web["production"] = OLD
+    engine.append_release(release_event("v0.2.2", HEAD, OLD))
+    engine.deploy_core = lambda *_a, **_k: pytest.fail("must not walk past previous release")
+    before = engine.paths.releases.read_bytes()
+    assert engine.rollback_core("production") == {"restored_sha": HEAD, "result": "unchanged"}
+    assert engine.paths.releases.read_bytes() == before and core["production"] == HEAD

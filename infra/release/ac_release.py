@@ -1330,6 +1330,16 @@ class Engine:
                 if current is None or previous is None or current["core_sha"] != current_sha:
                     raise ReleaseError("core_rollback_history_missing")
                 target = previous["core_sha"]
+                records = self.release_records()
+                departed = {
+                    before["core_sha"]
+                    for before, after in zip(records[:-1], records[1:], strict=True)
+                    if after["action"] == "rollback" and before["core_sha"] != after["core_sha"]
+                }
+                # The spec limits production to the previous release record.
+                # Never interpret a second rollback as permission to restore a departed core.
+                if target != current_sha and target in departed:
+                    raise ReleaseError("core_rollback_target_departed")
             else:
                 history = [
                     entry
@@ -1811,15 +1821,18 @@ class Engine:
                 ),
             }
             activation: dict[str, Any] = {}
-            try:
-                self.keep_native_build(build.sha)
-                activation = self.prepare_activation(
-                    environment, build.sha, source, stage, dry_run=dry_run, log=log
-                )
-            except ReleaseError as error:
-                if not dry_run:
-                    raise
-                blockers.append(str(error))
+            if not rollback_only:
+                # Rollback uses the target's historical activation (including absence).
+                # Forward carry-over must never create or widen an older worker's scope.
+                try:
+                    self.keep_native_build(build.sha)
+                    activation = self.prepare_activation(
+                        environment, build.sha, source, stage, dry_run=dry_run, log=log
+                    )
+                except ReleaseError as error:
+                    if not dry_run:
+                        raise
+                    blockers.append(str(error))
             if dry_run:
                 if blockers:
                     raise ReleaseError("dry run found blockers: " + "; ".join(blockers))
