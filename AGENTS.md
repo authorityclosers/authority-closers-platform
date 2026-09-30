@@ -2,9 +2,13 @@
 
 - Do not infer protected business semantics.
 - Do not use Naya-owned repos for new AC product work.
-- Do not put secrets in Git, vault, skills, logs or prompts.
-- Do not make production DB/VPS manual state authoritative.
-- Do not use direct SQL edits as an operational recovery path.
+- Do not put secrets in Git, skills, logs, chat or task text. Secrets live only
+  in Infisical and the team password manager (see OWNER-APPROVED SECRETS).
+- Change production DB/VPS state only as a recorded data change (see OWNER-APPROVED
+  DATA CHANGES); never leave unrecorded manual state.
+- Direct SQL is allowed only as an owner-approved data change: scripted, one
+  transaction, backed up, verified and logged. Never ad-hoc typing into a
+  production shell.
 - Do not couple payment provider state directly to access.
 - Do not turn analytics events into canonical progress/payment state.
 - Do not overwrite audit-critical history; supersede.
@@ -50,8 +54,10 @@
    approved change, re-tested on the latest `main`. When a branch update from
    `main` is the only new commit and the pull request's own diff is unchanged,
    the approval carries over; any other change needs a new review. Billing
-   settings, payment settings, purchases, secrets, production data and data
-   deletion still require the owner's explicit permission. UI Guard may approve
+   settings, payment settings, purchases, secrets and data deletion still
+   require the owner's explicit permission. Production data changes require the
+   owner's permission, given per change or pre-approved per kind under
+   OWNER-APPROVED DATA CHANGES. UI Guard may approve
    eligible UI-only merges under ADR 0041's SHA-bound scope, checks and hold
    rules; all other merges retain CTO review and CEO approval.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
@@ -62,7 +68,73 @@
 7. Use included subscriptions only. Stop on usage limits; never fall back to API
    keys or paid credits. Agents run in parallel only as far as the server's
    headroom allows (the launcher's slots).
-8. Secrets never go in git, prompts, logs, task comments or pull requests.
+8. Secrets never go in git, logs, chat, task comments or pull requests. Agents
+   may move them into Infisical or the team password manager as set out in
+   OWNER-APPROVED SECRETS.
+
+# OWNER-APPROVED DATA CHANGES
+
+Purpose: make urgent account, workspace and access changes in minutes, without
+waiting for a feature release.
+
+Allowed kinds (dev, staging, production):
+- memberships and roles (owner, admin, member), ownership transfer
+- permission grants and product switches per workspace (e.g. Sales Xray on)
+- workspace create/rename and verified email domains
+- unsticking a job or call when the app has no button for it
+
+- permanent deletion, only as set out in OWNER-APPROVED DELETIONS
+
+Never through this path:
+- rewriting audit history (supersede instead)
+- payments, billing, credit balances, plan prices
+- secrets or credentials (Infisical only)
+- schema changes (migrations only)
+
+How:
+1. Approval: the owner writes "approve data change: <what>, <environment>" in
+   chat or on the issue. The owner may pre-approve a repeatable kind once (e.g.
+   "add @authorityclosers.com staff to the AC organisation"); every run is
+   still logged.
+2. The change is a checked-in script in `scripts/data-changes/`: idempotent,
+   dry-run by default, prints before/after, runs in one transaction, and writes
+   an audit event naming the approver and the issue.
+3. Production: take a database snapshot first, show the owner the dry-run,
+   then apply.
+4. Verify by reading back through the app or API; post before/after, run id
+   and approver on the issue.
+5. Within 2 working days, the same result is also covered by a migration,
+   seed or Admin feature, so no environment depends on hand-made state.
+
+Who runs it: one named operator at a time (the CTO's ops agent or the owner's
+Claude session), never during a release.
+
+# OWNER-APPROVED DELETIONS
+
+Permanent deletion (users, calls, recordings, reports, duplicates, files) is
+allowed once the owner approves that exact request:
+1. The agent first shows the exact list (ids, names, environment, count) and
+   what cannot be recovered.
+2. The owner answers "approve delete: <that list>, <environment>" (or "go
+   delete" in reply to that list). The approval covers only that list.
+3. Production: take a snapshot first. Prefer the app's own delete path; use a
+   `scripts/data-changes/` script only when the app has none.
+4. Log what was deleted (ids and counts, never contents) on the issue, with
+   the approver and time. Audit history is never deleted.
+
+# OWNER-APPROVED SECRETS
+
+When the owner asks, an agent may copy a password, token or API key from where
+it is created (e.g. a provider console) into Infisical or the team password
+manager, and read it from there to configure a service.
+- Use methods that do not print the value: clipboard paste into the target
+  field, `infisical secrets set` from stdin, or injection at runtime.
+- Never repeat the value in chat, logs, task comments, commits, pull requests
+  or screenshots shared onward.
+- Record on the issue which secret name was set, in which environment, by whom
+  and when; never the value.
+- Staging and production keep separate secrets; never copy a production
+  secret into dev.
 
 # CODEX SOURCE FETCH ORDER
 
