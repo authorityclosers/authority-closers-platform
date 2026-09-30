@@ -68,14 +68,24 @@ Both units hide these host roots, including all their children:
 | `/var/lib/containerd` | container runtime data |
 
 The three tmpfs masks are read-only; only the dev recording tree is rebound
-writable. PrivateTmp hides release-engine `/var/tmp` staging. ProtectHome hides
-agent and root homes. The two provider directory binds expose only development
+writable. Amendment (CTO review, 30 September 2026): both units replace
+`PrivateTmp=yes` with `TemporaryFileSystem=` mounts: `/tmp` is a private 64 MiB
+tmpfs with `mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev`, and `/var/tmp` is
+masked read-only to hide release-engine staging; `PrivateTmp` is absent so it
+cannot override the bounded mount. ProtectHome hides agent and root homes.
+The two provider directory binds expose only development
 identities; credentials use systemd's per-unit read-only credential directory.
 Because uid 10001 is shared, `/proc` is inaccessible to prevent foreign process
-root/fd paths from bypassing the mounts; `~@debug` denies ptrace and process-memory
-syscalls. Host activation must check API and provider-child startup with these
-restrictions. Native container self-checks run in the separate native helper.
+root/fd paths from bypassing the mounts; `~@debug` denies ptrace, while explicit
+`process_vm_readv process_vm_writev` entries deny process-memory syscalls that
+systemd 255's debug group does not include. Host activation must check API and
+provider-child startup with these restrictions. Native container self-checks run
+in the separate native helper.
 These mount controls follow [systemd.exec](https://github.com/systemd/systemd/blob/v255/man/systemd.exec.xml).
+Accepted residual risk: the host PID namespace and shared uid 10001 still allow
+these units to signal staging/production container processes; revisit PID
+isolation when the host upgrades from systemd 255 to 257 or later, which supports
+`PrivatePIDs=`.
 Network families remain enabled for the dev DB and approved providers: filesystem
 isolation is not an egress firewall. Activation must supply dev-only DB endpoints
 and credentials. No production DB or provider configuration is inferred here.

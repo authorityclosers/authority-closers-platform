@@ -82,7 +82,6 @@ def test_identity_sandbox_and_resource_contract(name):
         "WorkingDirectory": BACKEND,
         "ProtectSystem": "strict",
         "ProtectHome": "yes",
-        "PrivateTmp": "yes",
         "PrivateDevices": "yes",
         "NoNewPrivileges": "yes",
         "CapabilityBoundingSet": "",
@@ -93,13 +92,17 @@ def test_identity_sandbox_and_resource_contract(name):
         "TasksMax": "64" if worker else "128",
         "Nice": "10",
         "IOSchedulingClass": "idle",
-        "SystemCallFilter": "~@debug",
+        "SystemCallFilter": "~@debug process_vm_readv process_vm_writev",
     }
     for key, value in required.items():
         assert unit["Service", key] == [value]
+    assert ("Service", "PrivateTmp") not in unit
     text = (DIRECTORY / name).read_text()
     assert all(value not in text for value in ("/home/", "uv run", "--reload"))
+    # Unit mount assertions; these paths never create host temporary files.
     assert set(words(unit, "TemporaryFileSystem")) == {
+        "/tmp:size=64M,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev",  # noqa: S108
+        "/var/tmp:ro",  # noqa: S108
         "/srv/authority-closers:ro",
         "/run/ac-sales-xray:ro",
         "/etc/authority-closers:ro",
@@ -153,7 +156,7 @@ def test_worker_argv_environment_release_and_drain():
     )
     allowed = ast.literal_eval(assignment.value.args[0])
     assert set(environment) <= allowed
-    assert environment["HOME"] == "/tmp"  # noqa: S108 - isolated by PrivateTmp
+    assert environment["HOME"] == "/tmp"  # noqa: S108 - isolated by bounded tmpfs
     assert environment["PATH"] == "/usr/local/bin:/usr/bin:/bin"
     assert argv[end:] == [
         BACKEND + "/.venv/bin/python",
