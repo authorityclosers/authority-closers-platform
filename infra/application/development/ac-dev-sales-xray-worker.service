@@ -1,0 +1,45 @@
+[Unit]
+Description=Development dedicated Sales Xray worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=10001
+Group=10001
+WorkingDirectory=/srv/authority-closers/development/backend
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+TemporaryFileSystem=/srv/authority-closers:ro /run/ac-sales-xray:ro /etc/authority-closers:ro
+BindReadOnlyPaths=/srv/authority-closers/development/backend /run/ac-sales-xray/development
+BindPaths=/srv/authority-closers/sales-xray/development
+InaccessiblePaths=-/etc/ac-release -/var/lib/ac-release -/var/log/ac-release -/run/ac-release.lock
+InaccessiblePaths=-/run/docker.sock -/run/containerd -/var/lib/docker -/var/lib/containerd
+InaccessiblePaths=/proc
+SystemCallFilter=~@debug
+MemoryMax=768M
+CPUQuota=100%
+Nice=10
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=10s
+TasksMax=64
+TimeoutStopSec=16min
+KillMode=mixed
+LoadCredential=database-url:/etc/authority-closers/development/database-url
+LoadCredential=approval.json:/etc/authority-closers/development/approval.json
+LoadCredential=service.json:/etc/authority-closers/development/service.json
+BindReadOnlyPaths=/srv/authority-closers/development/backend/.ac-release-id:/app/.ac-release-id
+BindReadOnlyPaths=/etc/authority-closers/development/identities/elevenlabs:/run/ac-sales-xray/identities/elevenlabs
+BindReadOnlyPaths=/etc/authority-closers/development/identities/gemini:/run/ac-sales-xray/identities/gemini
+BindReadOnlyPaths=/usr/local/bin/infisical:/opt/infisical
+ExecStart=/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 /srv/authority-closers/development/backend/.venv/bin/python -m ac_platform.conversation_intelligence.service --config %d/service.json --sha256 ${AC_DEV_WORKER_MANIFEST_SHA256}
+
+[Install]
+WantedBy=multi-user.target
