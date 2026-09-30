@@ -108,7 +108,12 @@ from ac_platform.tenancy.learner_provisioning import (
     LearnerConsentUpdateRequiredError,
     LearnerProvisioningError,
 )
-from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipRole,
+    MembershipStatus,
+    Organisation,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -167,6 +172,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         }
     ),
     "learner": frozenset(),
+    "member": frozenset(),
 }
 
 
@@ -861,8 +867,19 @@ def _set_onboarding_response_headers(response: Response, snapshot: OnboardingSna
     response.headers["cache-control"] = "private, no-store"
 
 
-def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorContext:
-    permissions = ROLE_PERMISSIONS.get(resolved.membership_role or "", frozenset())
+def _with_role_permissions(
+    resolved: ResolvedActorContext,
+    *,
+    is_organisation: bool = False,
+) -> ResolvedActorContext:
+    if is_organisation:
+        permissions = (
+            frozenset({"organisation_manage"})
+            if resolved.membership_role in {MembershipRole.OWNER.value, MembershipRole.ADMIN.value}
+            else frozenset()
+        )
+    else:
+        permissions = ROLE_PERMISSIONS.get(resolved.membership_role or "", frozenset())
     return replace(
         resolved,
         actor=ActorContext(
@@ -872,6 +889,24 @@ def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorConte
             permissions=permissions,
         ),
     )
+
+
+async def _resolved_with_role_permissions(
+    database: AsyncSession,
+    resolved: ResolvedActorContext,
+) -> ResolvedActorContext:
+    """Apply the distinct organisation role map after resolving tenant identity."""
+
+    tenant_id = resolved.actor.tenant_id
+    is_organisation = False
+    if tenant_id is not None:
+        is_organisation = (
+            await database.scalar(
+                select(Organisation.tenant_id).where(Organisation.tenant_id == tenant_id)
+            )
+            is not None
+        )
+    return _with_role_permissions(resolved, is_organisation=is_organisation)
 
 
 def _context_response(resolved: ResolvedActorContext) -> ContextResponse:
@@ -1566,7 +1601,9 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            resolved = _with_role_permissions(await identity.resolve_actor(token))
+            resolved = await _resolved_with_role_permissions(
+                database, await identity.resolve_actor(token)
+            )
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
@@ -1588,7 +1625,9 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            resolved = _with_role_permissions(await identity.resolve_actor_read_only(token))
+            resolved = await _resolved_with_role_permissions(
+                database, await identity.resolve_actor_read_only(token)
+            )
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
@@ -3112,8 +3151,9 @@ def install_identity_http(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ContextResponse:
         require_safe_origin(request, settings)
-        selected = _with_role_permissions(
-            await auth.identity.select_tenant(auth.token, body.tenant_id)
+        selected = await _resolved_with_role_permissions(
+            auth.database,
+            await auth.identity.select_tenant(auth.token, body.tenant_id),
         )
         return _context_response(selected)
 

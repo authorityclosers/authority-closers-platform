@@ -11,3 +11,13 @@
 The Google `picture` URL is never stored, displayed, hot-linked, or logged. No
 new Google scopes are requested. The profile row is retained in Postgres backup
 and restore inventories with the migration-bound parity contract.
+
+## Organisation invitations
+
+| Field | Storage | Source | Purpose | Where shown | Retention | Erasure path |
+| --- | --- | --- | --- | --- | --- | --- |
+| Normalized invite email | `organisation_invites.email_normalized` in Postgres | Operator-provided email for a direct member add or invitation | Match an invitation to the verified account and enforce one pending invite per organisation and email | Operator CLI shows only a masked address; API routes are outside this slice | Retained with the invitation row; no expiry or purge rule is introduced by this slice | Invitation lifecycle changes its status; this migration does not delete invite history. A retention and erasure rule must be defined before an invitation API is enabled |
+
+Invite rows are included in the migration-bound Postgres backup and restore
+parity contract. Full invite addresses must not be written to CLI output or
+audit payloads.
