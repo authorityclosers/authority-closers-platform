@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -u
+
+usage() {
+  printf 'Usage: %s {staging|production}\n' "$0" >&2
+  exit 2
+}
+
+[[ $# -eq 1 ]] || usage
+environment="$1"
+[[ "$environment" == staging || "$environment" == production ]] || usage
+
+stdout_file="$(mktemp)" || exit 1
+trap 'rm -f -- "$stdout_file"' EXIT
+
+docker_args=(
+  exec "ac-application-${environment}-api-1"
+  python -m ac_platform.conversation_intelligence.canary_cli
+  --environment "$environment"
+  --json
+)
+if [[ "$environment" == production ]]; then
+  docker_args+=(--allow-production)
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  docker "${docker_args[@]}" >"$stdout_file" 2>/dev/null
+  canary_exit_code=$?
+else
+  canary_exit_code=127
+fi
+
+history_dir="${AC_CANARY_HISTORY_DIR:-/var/lib/authority-closers/canary}"
+metadata="$(python3 - "$stdout_file" "$history_dir" "$environment" "$canary_exit_code" <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import re
+import stat
+import sys
+from datetime import datetime, timezone
+
+stdout_path, history_dir, environment, exit_code_text = sys.argv[1:]
+exit_code = int(exit_code_text)
+
+def reject_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON constant: {value}")
+
+def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
+
+try:
+    with open(stdout_path, encoding="utf-8") as source:
+        result = json.load(
+            source,
+            object_pairs_hook=unique_object,
+            parse_constant=reject_constant,
+        )
+    if not isinstance(result, dict):
+        raise ValueError("stdout is not one JSON object")
+    record = result
+except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+    record = {
+        "ok": False,
+        "environment": environment,
+        "stage_reached": None,
+        "failure_code": "canary_no_result",
+    }
+
+record["checked_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+record["exit_code"] = exit_code
+
+def alert_field(value: object) -> str:
+    if isinstance(value, str) and re.fullmatch(r"[a-z0-9_]{1,60}", value):
+        return value
+    return "unknown"
+
+failure_code = alert_field(record.get("failure_code"))
+stage_reached = alert_field(record.get("stage_reached"))
+line = (json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n").encode()
+
+history_ok = False
+try:
+    os.makedirs(history_dir, mode=0o755, exist_ok=True)
+    directory_fd = os.open(
+        history_dir,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+            raise OSError("history path is not a directory")
+        os.fchmod(directory_fd, 0o755)
+        if os.geteuid() == 0:
+            os.fchown(directory_fd, 0, 0)
+    finally:
+        os.close(directory_fd)
+
+    history_path = os.path.join(history_dir, f"{environment}.jsonl")
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    history_fd = os.open(history_path, flags, 0o644)
+    try:
+        if not stat.S_ISREG(os.fstat(history_fd).st_mode):
+            raise OSError("history file is not regular")
+        os.fchmod(history_fd, 0o644)
+        if os.geteuid() == 0:
+            os.fchown(history_fd, 0, 0)
+        remaining = memoryview(line)
+        while remaining:
+            remaining = remaining[os.write(history_fd, remaining) :]
+        os.fsync(history_fd)
+    finally:
+        os.close(history_fd)
+    history_ok = True
+except OSError:
+    print("ac-canary: history append failed", file=sys.stderr)
+
+print(f"{failure_code}\t{stage_reached}")
+sys.exit(0 if history_ok else 1)
+PY
+)"
+
+failure_code="${metadata%%$'\t'*}"
+stage_reached="${metadata#*$'\t'}"
+if [[ "$failure_code" == "$metadata" || -z "$stage_reached" ]]; then
+  failure_code=canary_no_result
+  stage_reached=unknown
+fi
+
+if (( canary_exit_code != 0 )); then
+  notify_bin="${AC_TRAIN_NOTIFY_BIN:-/usr/local/sbin/ac-train-notify}"
+  notify_text="Canary failed on ${environment}: ${failure_code} (stage ${stage_reached})"
+  if [[ -x "$notify_bin" ]] && "$notify_bin" alert --key "canary-${environment}" --text "$notify_text" >/dev/null 2>&1; then
+    :
+  else
+    printf 'ac-canary: notification failed for %s\n' "$environment" >&2
+  fi
+fi
+
+exit "$canary_exit_code"

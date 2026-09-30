@@ -1,0 +1,18 @@
+[Unit]
+Description=Authority Closers canary check (%i)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-canary %i
+User=root
+Group=root
+StateDirectory=authority-closers/canary
+StateDirectoryMode=0755
+TimeoutStartSec=1200s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/authority-closers/canary -/var/lib/ac-release/notify -/run/docker.sock

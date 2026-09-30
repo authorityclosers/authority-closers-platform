@@ -1,4 +1,5 @@
 # kind	source	target	mode	owner	group
+executable	scripts/ac-canary	/usr/local/sbin/ac-canary	0755	root	root
 executable	scripts/ac-create-infisical-bootstrap	/usr/local/sbin/ac-create-infisical-bootstrap	0755	root	root
 executable	scripts/ac-docker-firewall-validate	/usr/local/sbin/ac-docker-firewall-validate	0755	root	root
 executable	scripts/ac-docker-firewall	/usr/local/sbin/ac-docker-firewall	0755	root	root
@@ -39,6 +40,8 @@ executable	scripts/validate-foundation.sh	/usr/local/sbin/ac-validate-foundation
 executable	scripts/r2-probe.sh	/usr/local/libexec/authority-closers/r2-probe	0755	root	root
 executable	scripts/r2-usage-guard.sh	/usr/local/libexec/authority-closers/r2-usage-guard	0755	root	root
 executable	scripts/r2-usage-evaluate.sh	/usr/local/libexec/authority-closers/r2-usage-evaluate.sh	0755	root	root
+unit	config/systemd/ac-canary@.service	/etc/systemd/system/ac-canary@.service	0644	root	root
+unit	config/systemd/ac-canary@.timer	/etc/systemd/system/ac-canary@.timer	0644	root	root
 unit	config/systemd/ac-docker-firewall.service	/etc/systemd/system/ac-docker-firewall.service	0644	root	root
 unit	config/systemd/ac-docker-firewall.timer	/etc/systemd/system/ac-docker-firewall.timer	0644	root	root
 unit	config/systemd/ac-foundation-health.service	/etc/systemd/system/ac-foundation-health.service	0644	root	root
