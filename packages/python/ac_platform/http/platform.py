@@ -21,6 +21,8 @@ PlatformPermission = Literal[
     "platform_catalog_read",
     "platform_catalog_write",
     "platform_catalog_publish",
+    "platform_organisations_manage",
+    "platform_release_manage",
 ]
 
 

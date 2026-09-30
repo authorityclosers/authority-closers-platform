@@ -7,13 +7,17 @@ export const platformPermissionSchema = z.enum([
   "platform_catalog_read",
   "platform_catalog_write",
   "platform_catalog_publish",
+  "platform_organisations_manage",
+  "platform_release_manage",
 ]);
 export const platformAccessSchema = z
   .object({
     person_id: z.uuid(),
     session_id: z.uuid(),
     selected_tenant_id: z.uuid().nullable(),
-    platform_permissions: z.array(platformPermissionSchema).max(5),
+    platform_permissions: z
+      .array(platformPermissionSchema)
+      .max(platformPermissionSchema.options.length),
   })
   .strict()
   .refine(
