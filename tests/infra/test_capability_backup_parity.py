@@ -56,6 +56,7 @@ COACHING_V6_SELECTION = "20260925_0049"
 SUBMISSION_LABELS = "20260925_0050"
 SOURCE_OBJECTS = "20260928_0051"
 CANARY = "20260929_0052"
+GOOGLE_PROFILES = "20260930_0053"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -92,6 +93,7 @@ HEADS = (
     SUBMISSION_LABELS,
     SOURCE_OBJECTS,
     CANARY,
+    GOOGLE_PROFILES,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -183,6 +185,7 @@ NEW_TABLES = {
     SUBMISSION_LABELS: ("conversation_submission_label_revisions",),
     SOURCE_OBJECTS: ("conversation_source_objects", "conversation_source_references"),
     CANARY: ("conversation_canary_submissions",),
+    GOOGLE_PROFILES: ("person_google_profiles",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -618,6 +621,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         101,
         103,
         104,
+        105,
     )
     expected_contracts = (
         None,
@@ -655,6 +659,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v30",
         "ac-postgres-parity-v31",
         "ac-postgres-parity-v32",
+        "ac-postgres-parity-v33",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS
