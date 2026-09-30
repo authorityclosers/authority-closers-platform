@@ -96,9 +96,7 @@ def test_recovery_evidence_artifacts_are_scoped_to_the_current_attempt() -> None
 
     python_tests = workflow["jobs"]["validate-python-tests"]
     shard_receipt = next(
-        step
-        for step in python_tests["steps"]
-        if step.get("name") == "Retain Python shard evidence"
+        step for step in python_tests["steps"] if step.get("name") == "Retain Python shard evidence"
     )
     assert shard_receipt["with"]["name"] == (
         "python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}"
@@ -106,9 +104,7 @@ def test_recovery_evidence_artifacts_are_scoped_to_the_current_attempt() -> None
 
     validation = workflow["jobs"]["validate"]
     shard_download = next(
-        step
-        for step in validation["steps"]
-        if step.get("name") == "Download Python shard evidence"
+        step for step in validation["steps"] if step.get("name") == "Download Python shard evidence"
     )
     assert shard_download["with"]["pattern"] == (
         "python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-*"
