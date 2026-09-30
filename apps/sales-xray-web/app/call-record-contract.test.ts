@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import fixture from "../tests/fixtures/call-record.json";
+import fixture from "./review-fixture/report/call-record.json";
 import {
   CallRecordContractError,
   parseCallRecord,

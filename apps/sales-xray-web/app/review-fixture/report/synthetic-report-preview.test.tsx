@@ -47,8 +47,9 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   );
   expect(container.textContent).toContain("Draft observations, not scores.");
   expect(container.querySelector("audio")).toBeNull();
+  expect(container.textContent).toContain("Who talked most: Buyer (60%)");
   expect(container.textContent).not.toMatch(
-    /\b\d+\s*%|performance score|conversion rate/i,
+    /performance score|conversion rate/i,
   );
 
   await act(async () => button("Tabbed view").click());

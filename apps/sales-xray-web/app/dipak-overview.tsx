@@ -761,7 +761,7 @@ export function DipakOverview({
         </div>
       </section>
 
-      {callRecord !== undefined && (
+      {callRecord != null && (
         <CallRecordView
           callRecord={callRecord}
           onSelectEvidence={onSelectEvidence}

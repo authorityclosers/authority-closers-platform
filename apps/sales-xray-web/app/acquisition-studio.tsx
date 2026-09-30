@@ -84,6 +84,7 @@ import { XrayWave } from "./xray-wave";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
 import { CallMap, CallMapMini } from "./call-map";
+import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
@@ -126,6 +127,7 @@ import styles from "./acquisition-studio.module.css";
 type Result = {
   report: SalesReport;
   transcript: Transcript;
+  callRecord: CallRecord | null;
   runId: string;
   claimed: boolean;
   /** Owner call name (C1), server-confirmed; null on older servers. */

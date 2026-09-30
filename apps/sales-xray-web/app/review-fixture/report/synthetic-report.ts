@@ -1,5 +1,5 @@
 import baseFixture from "../../../tests/fixtures/dipak-overview.json";
-import callRecordFixture from "../../../tests/fixtures/call-record.json";
+import callRecordFixture from "./call-record.json";
 import { parseCallRecord, type CallRecord } from "../../call-record-contract";
 import type {
   ReportDimension,
@@ -116,4 +116,5 @@ export const syntheticReport = {
   },
 } satisfies SalesReport;
 
-export const syntheticCallRecord: CallRecord = parseCallRecord(callRecordFixture);
+export const syntheticCallRecord: CallRecord =
+  parseCallRecord(callRecordFixture);

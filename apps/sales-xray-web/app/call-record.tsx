@@ -3,12 +3,7 @@
 import type { ReportEvidence } from "./report-contract";
 import { formatClock } from "./lightbox/time";
 import { ClipListenButton } from "./source-waveform";
-import type {
-  CallRecord,
-  CallRecordEvidence,
-  CallRecordFact,
-  CallRecordSpeaker,
-} from "./call-record-contract";
+import type { CallRecord, CallRecordFact } from "./call-record-contract";
 import styles from "./call-record.module.css";
 
 export const CANONICAL_TAG_GROUPS = [
@@ -83,7 +78,7 @@ function NumbersCard({ record }: { record: CallRecord }) {
           role="img"
           aria-label={whoTalkedMostLabel}
         >
-          {speakers.map((spk, idx) => {
+          {speakers.map((spk) => {
             const widthPct = Math.max(0, Math.min(100, spk.talk_share * 100));
             if (widthPct === 0) return null;
             const isRep =
@@ -140,7 +135,9 @@ function NumbersCard({ record }: { record: CallRecord }) {
         <div className={styles.metricBlock}>
           <span className={styles.metricTitle}>Longest turn</span>
           <span className={styles.metricValue}>
-            {longestSpeaker ? formatClock(longestSpeaker.longest_monologue_ms) : "0:00"}
+            {longestSpeaker
+              ? formatClock(longestSpeaker.longest_monologue_ms)
+              : "0:00"}
           </span>
           <p className={styles.metricPlainLabel}>{longestMonologueLabel}</p>
         </div>
@@ -203,24 +200,23 @@ export function CallRecordView({
   callRecord,
   onSelectEvidence,
 }: CallRecordProps) {
-  // Check 4: Loading and errors fallback
-  if (!callRecord) {
-    return (
-      <aside
-        className={styles.unavailable}
-        data-testid="call-details-unavailable"
-      >
-        Call details unavailable
-      </aside>
-    );
-  }
+  if (!callRecord) return null;
 
   // Check 2: Facts without a quote never render
   const validFacts = callRecord.facts.filter(
-    (f) => f.evidence && f.evidence.some((e) => e.quote && e.quote.trim().length > 0),
+    (f) =>
+      f.evidence &&
+      f.evidence.some((e) => e.quote && e.quote.trim().length > 0),
   );
 
-  const hasTags = callRecord.tags !== null;
+  const groupedFacts = CANONICAL_TAG_GROUPS.map((group) => ({
+    label: group,
+    facts: validFacts.filter(
+      (fact) => fact.tag?.trim().toLowerCase() === group.toLowerCase(),
+    ),
+  }));
+  const knownFacts = new Set(groupedFacts.flatMap(({ facts }) => facts));
+  const otherFacts = validFacts.filter((fact) => !knownFacts.has(fact));
 
   return (
     <section className={styles.callRecordSection} aria-label="Call Record">
@@ -235,43 +231,27 @@ export function CallRecordView({
       {/* Check 1: Numbers card */}
       <NumbersCard record={callRecord} />
 
-      {/* Check 3: Tag grouped cards or flat list */}
-      {hasTags ? (
-        CANONICAL_TAG_GROUPS.map((group) => {
-          const groupFacts = validFacts.filter(
-            (f) => f.tag && f.tag.trim().toLowerCase() === group.toLowerCase(),
-          );
-          // Check 3: when null or empty, show nothing extra (no empty cards)
-          if (groupFacts.length === 0) return null;
-          return (
-            <article key={group} className={styles.tagGroupCard}>
-              <h3 className={styles.tagGroupHeading}>{group}</h3>
-              <ul className={styles.factsList}>
-                {groupFacts.map((fact, idx) => (
-                  <FactRow
-                    key={`${fact.statement}-${idx}`}
-                    fact={fact}
-                    onSelectEvidence={onSelectEvidence}
-                  />
-                ))}
-              </ul>
-            </article>
-          );
-        })
-      ) : validFacts.length > 0 ? (
-        <article className={styles.factsCard}>
-          <h3 className={styles.factsHeading}>Facts</h3>
-          <ul className={styles.factsList}>
-            {validFacts.map((fact, idx) => (
-              <FactRow
-                key={`${fact.statement}-${idx}`}
-                fact={fact}
-                onSelectEvidence={onSelectEvidence}
-              />
-            ))}
-          </ul>
-        </article>
-      ) : null}
+      {/* Facts keep their place even when their tag is missing or unknown. */}
+      {[
+        ...groupedFacts,
+        ...(otherFacts.length ? [{ label: "Other", facts: otherFacts }] : []),
+      ].map(({ label, facts }) => {
+        if (facts.length === 0) return null;
+        return (
+          <article key={label} className={styles.tagGroupCard}>
+            <h3 className={styles.tagGroupHeading}>{label}</h3>
+            <ul className={styles.factsList}>
+              {facts.map((fact, idx) => (
+                <FactRow
+                  key={`${fact.statement}-${idx}`}
+                  fact={fact}
+                  onSelectEvidence={onSelectEvidence}
+                />
+              ))}
+            </ul>
+          </article>
+        );
+      })}
     </section>
   );
 }
