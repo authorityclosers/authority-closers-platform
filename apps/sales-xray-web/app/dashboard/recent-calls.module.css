@@ -188,7 +188,8 @@
 
 /* Living status dots, matching the sidebar marks. */
 .status[data-tone="ready"] i {
-  animation: dot-pop 520ms var(--lx-ease-pop, ease) calc(var(--i, 0) * 45ms + 200ms) both;
+  animation: dot-pop 520ms var(--lx-ease-pop, ease)
+    calc(var(--i, 0) * 45ms + 200ms) both;
 }
 .status[data-tone="attention"] i {
   animation: dot-nudge 4s ease-in-out infinite;
@@ -240,6 +241,60 @@
 @media (prefers-reduced-motion: reduce) {
   .status i,
   .row[data-tone="active"] .icon path {
+    animation: none;
+  }
+}
+
+/* ---------- Loading rows ---------- */
+.skeletonRow {
+  display: grid;
+  height: 46px;
+  grid-template-columns: 30px minmax(0, 1fr) 148px;
+  align-items: center;
+  column-gap: 12px;
+  padding: 0 10px 0 8px;
+  animation: rowIn var(--lx-dur-reveal, 260ms) ease both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.skeletonRow i {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--lx-sunken);
+}
+.skeletonRow span,
+.skeletonRow em {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+.skeletonRow span {
+  width: var(--w);
+}
+.skeletonRow em {
+  width: 100px;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonRow,
+  .skeletonRow span,
+  .skeletonRow em {
     animation: none;
   }
 }

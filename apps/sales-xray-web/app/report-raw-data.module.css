@@ -102,10 +102,9 @@
 .headRow,
 .bodyRow {
   display: grid;
-  grid-template-columns: minmax(160px, 1.4fr) repeat(
-      3,
-      minmax(80px, 1fr)
-    ) minmax(120px, 1fr);
+  grid-template-columns:
+    minmax(160px, 1.4fr) repeat(3, minmax(80px, 1fr))
+    minmax(120px, 1fr);
   gap: 10px;
   padding: 8px 0;
   border-top: 1px solid var(--lx-line-soft);

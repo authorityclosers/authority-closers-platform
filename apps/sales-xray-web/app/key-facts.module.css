@@ -181,10 +181,9 @@
 }
 .number {
   display: grid;
-  grid-template-columns: minmax(90px, auto) auto minmax(80px, auto) minmax(
-      150px,
-      auto
-    ) minmax(0, 1fr);
+  grid-template-columns:
+    minmax(90px, auto) auto minmax(80px, auto) minmax(150px, auto)
+    minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   padding: 6px 0;
