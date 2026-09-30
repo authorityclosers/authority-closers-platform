@@ -404,6 +404,56 @@ it("does not save just as a name after confirming a generic opening", async () =
   expect(readSpeakerProfiles(CALL_ID).a.name).not.toBe("just");
 });
 
+it("does not save a generic greeting as the prospect name after seller confirmation", async () => {
+  const cited = {
+    segment_id: "a1",
+    quote: "We should review your current process.",
+    start_ms: 0,
+    end_ms: 1200,
+  };
+  const coachingReport: SalesReport = {
+    ...report,
+    strengths: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+    improvements: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+  };
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: cited.quote,
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello there.",
+        },
+      ],
+    },
+    coachingReport,
+  );
+
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
+
+  expect(readSpeakerProfiles(CALL_ID).a).toMatchObject({
+    name: "",
+    role: "salesperson",
+  });
+  expect(readSpeakerProfiles(CALL_ID).b).toMatchObject({
+    name: "",
+    role: "prospect",
+  });
+});
+
 it("does not offer a name confirmation for an ordinary here phrase", async () => {
   await renderMap(
     {

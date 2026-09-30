@@ -274,6 +274,7 @@ const NOT_NAMES = new Set(
     "the",
     "a",
     "an",
+    "there",
     "my",
     "i",
     "i'm",

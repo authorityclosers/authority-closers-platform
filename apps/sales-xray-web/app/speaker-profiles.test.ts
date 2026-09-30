@@ -231,6 +231,7 @@ it("accepts bare name suffixes only at the start of an introduction", () => {
 
 it("does not treat phrases or mid-sentence words as name suffixes", () => {
   for (const text of [
+    "Hello there.",
     "Thanks for being here.",
     "Are you still speaking to other vendors?",
     "Who is speaking?",
