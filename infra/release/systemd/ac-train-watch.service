@@ -1,0 +1,9 @@
+[Unit]
+Description=Check staging lag against validated main builds
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-train-watch
+TimeoutStartSec=120
