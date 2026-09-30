@@ -3303,3 +3303,16 @@ html:not([data-theme="dark"]) .calls-library-app.calls-library-app {
 nextjs-portal {
   display: none !important;
 }
+
+/* Account gate card entrance (sign in, choose a workspace). */
+@keyframes gate-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .simple-app section {
+    animation: none !important;
+  }
+}

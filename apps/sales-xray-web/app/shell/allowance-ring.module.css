@@ -133,3 +133,143 @@
     opacity: 0;
   }
 }
+
+/* ---------- Compact pill (30 Sep) ----------
+   One line: ring · "608 min left". Hover lifts the pill and slides out the
+   total and share; the ring gives a small spin of life. */
+.meter {
+  height: 32px;
+  gap: 7px;
+  padding: 0 11px 0 4px;
+  box-shadow: none;
+  cursor: default;
+  transition:
+    border-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms var(--lx-ease-pop);
+}
+.meter:hover {
+  border-color: var(--lx-line-strong);
+  box-shadow: var(--lx-shadow-2);
+  transform: translateY(-1px);
+}
+.ring {
+  width: 24px;
+  height: 24px;
+  transition: transform 500ms var(--lx-ease-pop);
+}
+.meter:hover .ring {
+  transform: rotate(-90deg) scale(1.08);
+}
+.track {
+  stroke-width: 4;
+}
+.value {
+  stroke-width: 4;
+}
+.meter:not([data-level="unlimited"]) .center {
+  display: none;
+}
+.meter[data-level="unlimited"] .center {
+  left: 4px;
+  width: 24px;
+  font-size: 12px;
+}
+.text {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.text strong {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.more {
+  display: grid;
+  grid-template-columns: 0fr;
+  transition: grid-template-columns 260ms var(--lx-ease-move);
+}
+.more > span {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.meter:hover .more {
+  grid-template-columns: 1fr;
+}
+.meter:hover .more > span {
+  opacity: 1;
+}
+.meter[data-level="low"] .text strong {
+  color: var(--lx-warning);
+}
+.meter[data-level="empty"] .text strong {
+  color: var(--lx-danger);
+}
+@media (prefers-reduced-motion: reduce) {
+  .meter,
+  .ring,
+  .more {
+    transition: none;
+  }
+}
+
+/* Minutes still loading: the pill keeps its size and shimmers. */
+.skeleton {
+  width: 78px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+.meter:not([data-level="pending"]) .text {
+  animation: pill-text-in 260ms ease both;
+}
+@keyframes pill-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .text {
+    animation: none;
+  }
+}
+
+/* The ring keeps the exact share inside it (owner decision, 29 Sep). */
+.ring {
+  width: 28px;
+  height: 28px;
+}
+.meter {
+  padding-left: 2px;
+}
+.meter:not([data-level="unlimited"]) .center {
+  display: block;
+  left: 2px;
+  width: 28px;
+  font-size: 7.5px;
+}

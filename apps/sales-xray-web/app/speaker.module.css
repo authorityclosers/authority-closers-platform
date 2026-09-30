@@ -314,3 +314,8 @@
     transition: none;
   }
 }
+
+/* Four roles sit in two tidy rows. */
+.roles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

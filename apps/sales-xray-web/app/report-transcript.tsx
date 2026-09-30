@@ -1,11 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { voicesOf } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type { Transcript, TranscriptSegment } from "./report-contract";
 import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
 import { useReportInline, useReportReading } from "./report-reading-context";
 import styles from "./report-transcript.module.css";
+import { getShellState } from "./shell/shell-store";
+import {
+  speakerName,
+  useSpeakerProfiles,
+  voiceStyle,
+} from "./speaker-profiles";
 
 const PAGE_SIZE = 50;
 const ALL_SPEAKERS = "all";
@@ -30,16 +37,34 @@ export type ReportTranscriptProps = {
   transcript: Transcript;
   onSelect: (segment: TranscriptSegment) => void;
   language?: ReportDisplayLanguage;
+  /** With a call, speakers show the names and colours set on the call map. */
+  callId?: string | null;
 };
 
 export function ReportTranscript({
   transcript,
   onSelect,
   language = "en",
+  callId = null,
 }: ReportTranscriptProps) {
   const reading = useReportReading();
   const inline = useReportInline();
   const copy = getReportUiCopy(language);
+  const { profiles } = useSpeakerProfiles(callId);
+  const accountName = getShellState().profileName;
+  const voices = useMemo(() => voicesOf(transcript), [transcript]);
+  const named = callId !== null;
+  const labelOf = useMemo(
+    () => (speakerId: string | null) =>
+      named && speakerId !== null
+        ? speakerName(
+            voices.indexOf(speakerId),
+            profiles[speakerId],
+            accountName,
+          )
+        : speakerLabel(speakerId, copy.unlabelledSpeaker),
+    [accountName, copy.unlabelledSpeaker, named, profiles, voices],
+  );
   const [query, setQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState(ALL_SPEAKERS);
   const [pagination, setPagination] = useState({ key: "", count: PAGE_SIZE });
@@ -48,13 +73,10 @@ export function ReportTranscript({
   const speakerOptions = useMemo(() => {
     const options = new Map<string, string>();
     transcript.segments.forEach((segment) => {
-      options.set(
-        speakerKey(segment.speaker_id),
-        speakerLabel(segment.speaker_id, copy.unlabelledSpeaker),
-      );
+      options.set(speakerKey(segment.speaker_id), labelOf(segment.speaker_id));
     });
     return [...options.entries()];
-  }, [copy.unlabelledSpeaker, transcript]);
+  }, [labelOf, transcript]);
 
   const filteredSegments = useMemo(() => {
     if (reading) return transcript.segments;
@@ -130,7 +152,9 @@ export function ReportTranscript({
             </label>
           )}
         </div>
-        <p className={styles.note}>{copy.speakerNote}</p>
+        <p className={styles.note}>
+          {named ? copy.speakerNamesNote : copy.speakerNote}
+        </p>
         <p className={styles.count} role="status" aria-live="polite">
           {resultLabel} · {copy.showing} {visibleSegments.length}
         </p>
@@ -153,8 +177,18 @@ export function ReportTranscript({
                   <span className={styles.timestamp}>
                     {start}–{end}
                   </span>
-                  <span className={styles.speaker}>
-                    {speakerLabel(segment.speaker_id, copy.unlabelledSpeaker)}
+                  <span
+                    className={styles.speaker}
+                    data-named={
+                      named && segment.speaker_id !== null ? "" : undefined
+                    }
+                    style={
+                      named && segment.speaker_id !== null
+                        ? voiceStyle(voices.indexOf(segment.speaker_id))
+                        : undefined
+                    }
+                  >
+                    {labelOf(segment.speaker_id)}
                   </span>
                   <span className={styles.text}>{segment.text}</span>
                 </button>

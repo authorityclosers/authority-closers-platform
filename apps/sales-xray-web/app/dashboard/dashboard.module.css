@@ -548,7 +548,11 @@
   .tableCard > :last-child {
     min-height: 0;
     flex: 1 1 auto;
-    overflow: auto;
+    overflow: hidden;
+  }
+  /* The chart gives up height on short screens so Recent calls keeps rows. */
+  .chartContainer {
+    height: clamp(140px, 24vh, 200px);
   }
   .cardHeader {
     margin-bottom: 10px;
@@ -640,4 +644,189 @@
 }
 .guestAction:hover {
   text-decoration: underline;
+}
+
+/* Compact desktop dashboard: smaller type and padding, so every card fits one
+   screen with room for Recent calls. The top bar already has New analysis. */
+@media (min-width: 900px) {
+  .dashboardRoot {
+    gap: 12px;
+  }
+  .dashboardHeader .primaryAction {
+    display: none;
+  }
+  .dashboardHeader h2 {
+    font-size: 20px;
+  }
+  .dashboardHeader p {
+    font-size: 13px;
+  }
+  .kpiGrid,
+  .analyticsGrid {
+    gap: 12px;
+  }
+  .kpiCard {
+    grid-template-columns: 32px minmax(0, 1fr);
+    column-gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--lx-radius-lg, 12px);
+  }
+  .kpiIconWrap,
+  .kpiIconWrapTeal,
+  .kpiIconWrapAmber {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .kpiIconWrap svg,
+  .kpiIconWrapTeal svg,
+  .kpiIconWrapAmber svg {
+    width: 16px;
+    height: 16px;
+  }
+  .kpiValue {
+    font-size: 18px;
+  }
+  .kpiLabel {
+    font-size: 12px;
+  }
+  .kpiSubtext {
+    font-size: 11.5px;
+  }
+  .kpiTop .trendBadge {
+    top: 8px;
+    right: 10px;
+    font-size: 11px;
+  }
+  .chartCard,
+  .skillsCard {
+    padding: 12px 16px;
+  }
+  .tableCard {
+    padding: 12px 14px 10px;
+  }
+  .cardHeader {
+    margin-bottom: 8px;
+  }
+  .cardTitle {
+    font-size: 14px;
+  }
+  .cardSubtitle {
+    font-size: 12px;
+  }
+  .chartContainer {
+    height: clamp(120px, 20vh, 170px);
+    margin-top: 0;
+  }
+  .skillsList {
+    gap: 10px;
+    margin-top: 0;
+  }
+  .skillItem {
+    gap: 5px;
+  }
+  .skillInfoRow {
+    font-size: 13px;
+  }
+  .progressBarTrack {
+    height: 6px;
+  }
+  .viewAllLink {
+    font-size: 13px;
+  }
+}
+
+.barCritical {
+  background: var(--lx-warning);
+}
+
+.barModerate {
+  background: var(--lx-info);
+}
+
+/* Tile extras sit on the right, centred, so no tile has an empty half. */
+.kpiAside {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+}
+@media (min-width: 900px) {
+  .kpiCard {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+  }
+  .kpiAside {
+    grid-column: 3;
+    grid-row: 1 / span 3;
+    align-self: center;
+    justify-self: end;
+    margin: 0;
+  }
+  .kpiLabel,
+  .kpiValue {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Numbers still loading: a shimmering bar in the number's place. */
+.valueSkeleton {
+  display: inline-block;
+  width: 46px;
+  height: 0.8em;
+  border-radius: 6px;
+  vertical-align: middle;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+.kpiValue {
+  animation: value-in 320ms ease both;
+}
+@keyframes value-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .valueSkeleton,
+  .kpiValue {
+    animation: none;
+  }
+}
+
+/* Calls that did not fit the Recent calls card, counted in its header. */
+.moreChip {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 11.5px;
+  font-weight: 700;
+  animation: chip-pop 360ms var(--lx-ease-pop) both;
+}
+.viewAllLink {
+  gap: 6px;
+}
+@keyframes chip-pop {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
 }

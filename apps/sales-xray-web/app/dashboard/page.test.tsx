@@ -90,7 +90,11 @@ it("starts the four account reads after sign-in and preserves missing-route erro
   // Summary/activity keep their existing unavailable state; session/recents
   // keep their errors. A missing API must not become invented empty data.
   expect(host.textContent).toContain("Not available yet");
-  expect(host.textContent?.match(/Couldn't load/g)).toHaveLength(2);
+  // Failed reads keep their skeletons and raise one corner card that retries.
+  expect(host.textContent).not.toContain("Couldn't load");
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "Some dashboard numbers could not load",
+  );
 });
 
 it("aborts pending reads and removes the cards when the session signs out", async () => {
@@ -106,4 +110,20 @@ it("aborts pending reads and removes the cards when the session signs out", asyn
   expect(host.textContent).toContain("Sign in to see your dashboard");
   expect(host.textContent).not.toContain("Calls analysed");
   expect(fetchMock).toHaveBeenCalledTimes(4);
+});
+
+it("explains a workspace without Sales Xray access instead of failing each card", async () => {
+  fetchMock.mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403 }),
+  );
+  await renderPage(true);
+  expect(host.textContent).toContain("Sales Xray is not switched on for");
+  expect(host.textContent).not.toContain("Couldn't load");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    [...host.querySelectorAll("button")].some(
+      (button) => button.textContent === "Switch account",
+    ),
+  ).toBe(true);
 });
