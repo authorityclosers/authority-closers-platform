@@ -65,7 +65,7 @@ class Harness:
         self.prs = [item]
         return item
 
-    def runner(self, argv, *, cwd, env=None):
+    def runner(self, argv, *, cwd, env=None, input_data=None):
         self.calls.append(argv)
         if argv[0] == "gh":
             if argv[1:3] == ["pr", "list"]:
@@ -91,7 +91,7 @@ class Harness:
                 self.git("switch", "-c", "task/ui/" + argv[-1], "origin/main")
                 self.git("push", "-u", "origin", "HEAD")
             return ""
-        return SYNC.command(argv, cwd=cwd, env=env)
+        return SYNC.command(argv, cwd=cwd, env=env, input_data=input_data)
 
     def tick(self, commit_only=False):
         sync = SYNC.Sync(self.repo, self.state, self.spool, runner=self.runner, now=self.now)
@@ -383,7 +383,7 @@ def test_exact_index_blob_is_scanned_and_later_edits_remain_uncommitted(repo):
 
     def changing(argv, **kwargs):
         result = original(argv, **kwargs)
-        if argv[:3] == ["git", "--literal-pathspecs", "add"]:
+        if argv[:3] == ["git", "--literal-pathspecs", "hash-object"]:
             repo.write(APP + "page.tsx", "sk-" + "fake-after-stage")
         return result
 
@@ -463,3 +463,54 @@ def test_root_is_refused_before_lock_or_git(repo, monkeypatch):
         SYNC.main(["--repo", str(repo.repo), "--lock", str(repo.repo / "never-created")])
     assert error.value.code == 2
     assert not (repo.repo / "never-created").exists()
+
+
+def test_main_deletion_of_entire_screen_directory(repo):
+    (repo.repo / (APP + "page.tsx")).unlink()
+    (repo.repo / APP).rmdir()
+    repo.tick()
+    assert APP + "page.tsx" not in repo.git("ls-tree", "-r", "--name-only", "HEAD")
+    assert not repo.git("status", "--porcelain")
+
+
+def test_broken_alert_spool_does_not_block_screen_commit(repo):
+    repo.branch()
+    repo.write(APP + "page.tsx", "preserved despite spool failure")
+    repo.write("README.md", "stray")
+    repo.spool.write_text("not a directory")
+    sync = repo.tick(True)
+    assert sync.notification_failed
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "preserved despite spool failure"
+    assert repo.git("diff", "--name-only") == "README.md"
+
+
+def test_refused_content_is_not_written_to_git_object_store(repo):
+    repo.branch()
+    payload = b"github_pat_" + b"fictional-refused-fixture"
+    repo.write(APP + "credential.txt", payload.decode())
+    oid = SYNC.command(["git", "hash-object", "--stdin"], cwd=repo.repo, input_data=payload).strip()
+    repo.write(APP + "page.tsx", "safe")
+    repo.tick(True)
+    with pytest.raises(SYNC.SyncError):
+        repo.git("cat-file", "-e", oid)
+
+
+def test_literal_filenames_and_binary_assets(repo):
+    repo.branch()
+    strange = APP + "[draft]*\npage.tsx"
+    repo.write(strange, "literal name")
+    binary = PUBLIC + "asset.bin"
+    data = bytes([255, 0, 128, 1])
+    (repo.repo / binary).write_bytes(data)
+    repo.tick(True)
+    assert repo.git("show", "HEAD:" + strange) == "literal name"
+    assert repo.git("show", "HEAD:" + binary).encode("utf-8", "surrogateescape") == data
+
+
+def test_stale_approval_does_not_freeze_new_head(repo):
+    repo.branch()
+    repo.make_pr()
+    repo.comments = [{"body": "Merge approved: PR #17 @ 0000000"}]
+    repo.write(APP + "page.tsx", "new")
+    repo.tick()
+    assert repo.remote_head() == repo.git("rev-parse", "HEAD")

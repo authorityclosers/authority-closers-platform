@@ -18,6 +18,7 @@ import json
 import os
 import pwd
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -41,9 +42,14 @@ class SyncError(Exception):
     """Only static, non-sensitive messages may cross the event boundary."""
 
 
-def command(argv, *, cwd, env=None):
+def command(argv, *, cwd, env=None, input_data=None):
     result = subprocess.run(  # noqa: S603 - fixed argv, no shell; paths are literal
-        argv, cwd=cwd, env={**os.environ, **(env or {})}, capture_output=True, timeout=45
+        argv,
+        cwd=cwd,
+        env={**os.environ, **(env or {})},
+        capture_output=True,
+        input=input_data,
+        timeout=45,
     )
     if result.returncode:
         raise SyncError(f"{Path(argv[0]).name} failed (exit {result.returncode}); inspect locally")
@@ -71,13 +77,14 @@ class Sync:
     def __init__(self, repo, state, spool, *, runner=command, now=None):
         self.repo, self.state_path, self.spool = Path(repo), Path(state), Path(spool)
         self.runner, self.now = runner, time.time() if now is None else now
+        self.notification_failed = False
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
 
-    def run(self, *args, env=None):
-        return self.runner(list(args), cwd=self.repo, env=env)
+    def run(self, *args, env=None, input_data=None):
+        return self.runner(list(args), cwd=self.repo, env=env, input_data=input_data)
 
-    def git(self, *args, env=None):
-        return self.run("git", "--literal-pathspecs", *args, env=env)
+    def git(self, *args, env=None, input_data=None):
+        return self.run("git", "--literal-pathspecs", *args, env=env, input_data=input_data)
 
     def save(self):
         atomic_json(self.state_path, self.state)
@@ -87,7 +94,16 @@ class Sync:
         if pr is not None:
             event["pr"] = pr
         name = hashlib.sha256(f"{kind}:{key}".encode()).hexdigest() + ".json"
-        atomic_json(self.spool / name, event)
+        try:
+            atomic_json(self.spool / name, event)
+        except OSError:
+            self.notification_failed = True
+            print(
+                "Studio notification spool unavailable; local preservation continues.",
+                file=sys.stderr,
+            )
+            return False
+        return True
 
     def branch(self):
         return self.git("rev-parse", "--abbrev-ref", "HEAD").strip()
@@ -111,25 +127,34 @@ class Sync:
             for pattern in (".env*", "*.pem", "*.key", "id_*")
         )
 
+    def snapshot(self, path):
+        """Read one bounded regular file without following any symlink component."""
+        if not self.safe_name(path):
+            raise SyncError("Sensitive filename")
+        parent = os.open(self.repo, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            parts = Path(path).parts
+            for part in parts[:-1]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                os.close(parent)
+                parent = child
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+            with os.fdopen(os.open(parts[-1], flags, dir_fd=parent), "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT:
+                    raise SyncError("Non-regular or oversized file")
+                data = stream.read(LIMIT + 1)
+            if len(data) > LIMIT or any(token in data for token in TOKENS):
+                raise SyncError("Refused content")
+            return ("100755" if info.st_mode & stat.S_IXUSR else "100644"), data
+        except FileNotFoundError:
+            return "0", None
+        finally:
+            os.close(parent)
+
     def commit(self, paths):
-        """A separate index captures and scans the exact blobs that will be committed."""
-        accepted = []
-        for path in paths:
-            full = self.repo / path
-            if (
-                not self.safe_name(path)
-                or full.is_symlink()
-                or any(p.is_symlink() for p in full.parents if p != self.repo.parent)
-                or (full.exists() and (not full.is_file() or full.stat().st_size > LIMIT))
-            ):
-                self.event(
-                    "alert",
-                    "refused-path",
-                    "Skipped a sensitive, non-regular or oversized screen file.",
-                )
-            else:
-                accepted.append(path)
-        if not accepted:
+        """Build a path-scoped index from scanned bytes, without filters or hooks."""
+        if not paths:
             return False
         for key, value in (("user.name", "UI Studio"), ("user.email", "studio@paperclip.ing")):
             try:
@@ -139,38 +164,24 @@ class Sync:
         with tempfile.TemporaryDirectory(prefix="ac-studio-index-") as directory:
             env = {**IDENTITY, "GIT_INDEX_FILE": str(Path(directory) / "index")}
             self.git("read-tree", "HEAD", env=env)
-            self.git("add", "-A", "--", *accepted, env=env)
-            staged = self.git("diff", "--cached", "--name-only", "--no-renames", "-z", env=env)
-            entries = self.git("ls-files", "--stage", "-z", env=env)
-            blobs = {
-                row.split("\t", 1)[1]: row.split("\t", 1)[0].split()[:2]
-                for row in entries.split("\0")
-                if row
-            }
-            for path in staged.split("\0"):
-                if path and path in blobs:
-                    mode, oid = blobs[path]
-                    size = int(self.git("cat-file", "-s", oid))
-                    blob = (
-                        self.git("cat-file", "blob", oid).encode("utf-8", "surrogateescape")
-                        if size <= LIMIT
-                        else b""
+            for path in paths:
+                try:
+                    mode, data = self.snapshot(path)
+                except (SyncError, OSError):
+                    self.event(
+                        "alert",
+                        "refused-file",
+                        "Skipped a sensitive, non-regular or oversized screen file.",
                     )
-                    if (
-                        mode not in ("100644", "100755")
-                        or size > LIMIT
-                        or any(token in blob for token in TOKENS)
-                    ):
-                        self.git("reset", "-q", "HEAD", "--", path, env=env)
-                        self.event(
-                            "alert",
-                            "refused-content",
-                            "Skipped a screen file containing a token marker or over 1 MiB.",
-                        )
+                    continue
+                if data is None:
+                    self.git("update-index", "--force-remove", "--", path, env=env)
+                else:
+                    oid = self.git("hash-object", "-w", "--stdin", input_data=data).strip()
+                    self.git("update-index", "--add", "--cacheinfo", mode, oid, path, env=env)
             included = self.git("diff", "--cached", "--name-only", "--no-renames", "-z", env=env)
             if not included:
                 return False
-            # Disable hooks: the committed tree must remain exactly the scanned tree.
             self.git(
                 "-c",
                 "core.hooksPath=/dev/null",
@@ -353,14 +364,21 @@ class Sync:
         created = datetime.fromisoformat(pr["createdAt"].replace("Z", "+00:00")).timestamp()
         eligible = self.now - pacing["unchanged_since"] >= 1800 or self.now - created >= 7200
         if eligible and self.now - pacing.get("review_at", float("-inf")) >= 7200:
-            self.event(
+            delivered = self.event(
                 "review",
                 f"pr-{key}-{int(self.now // 7200)}",
                 f"Review studio PR #{key} at {head} under ADR 0041.",
                 pr["number"],
             )
-            pacing["review_at"] = self.now
+            if delivered:
+                pacing["review_at"] = self.now
         self.save()
+
+    def modified_at(self, path):
+        full = self.repo / path
+        while not full.exists() and not full.is_symlink():
+            full = full.parent
+        return full.lstat().st_mtime
 
     def tick(self, commit_only=False):
         branch = self.branch()
@@ -378,14 +396,7 @@ class Sync:
         ):
             raise SyncError("Unsupported branch or unfinished Git operation; no Git writes")
         paths = self.paths()
-        if branch == "main" and any(
-            self.now
-            - ((self.repo / p) if (self.repo / p).exists() else (self.repo / p).parent)
-            .lstat()
-            .st_mtime
-            < 120
-            for p in paths
-        ):
+        if branch == "main" and any(self.now - self.modified_at(p) < 120 for p in paths):
             return
         pending = self.state.get("pending")
         if pending and (
@@ -444,7 +455,7 @@ def main(argv=None):
             )
             sync.event("alert", "sync-error", text)
             return 1
-    return 0
+        return int(sync.notification_failed)
 
 
 if __name__ == "__main__":
