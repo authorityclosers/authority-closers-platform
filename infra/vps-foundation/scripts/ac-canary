@@ -23,15 +23,39 @@ if [[ "$environment" == production ]]; then
   docker_args+=(--allow-production)
 fi
 
+docker_pid=""
+canary_timed_out=0
+handle_timeout() {
+  trap '' TERM INT
+  canary_timed_out=1
+  if [[ -n "$docker_pid" ]]; then
+    kill "$docker_pid" 2>/dev/null || :
+    wait "$docker_pid" 2>/dev/null || :
+  fi
+}
+trap handle_timeout TERM INT
+
 if command -v docker >/dev/null 2>&1; then
-  docker "${docker_args[@]}" >"$stdout_file" 2>/dev/null
-  canary_exit_code=$?
+  docker "${docker_args[@]}" >"$stdout_file" 2>/dev/null &
+  docker_pid=$!
+  wait "$docker_pid"
+  docker_exit_code=$?
+  if (( canary_timed_out )); then
+    canary_exit_code=124
+  else
+    canary_exit_code=$docker_exit_code
+  fi
+  docker_pid=""
 else
   canary_exit_code=127
 fi
+if (( canary_timed_out )); then
+  canary_exit_code=124
+fi
+trap - TERM INT
 
 history_dir="${AC_CANARY_HISTORY_DIR:-/var/lib/authority-closers/canary}"
-metadata="$(python3 - "$stdout_file" "$history_dir" "$environment" "$canary_exit_code" <<'PY'
+metadata="$(python3 - "$stdout_file" "$history_dir" "$environment" "$canary_exit_code" "$canary_timed_out" <<'PY'
 from __future__ import annotations
 
 import json
@@ -41,7 +65,7 @@ import stat
 import sys
 from datetime import datetime, timezone
 
-stdout_path, history_dir, environment, exit_code_text = sys.argv[1:]
+stdout_path, history_dir, environment, exit_code_text, timed_out_text = sys.argv[1:]
 exit_code = int(exit_code_text)
 
 def reject_constant(value: str) -> None:
@@ -56,12 +80,10 @@ def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 try:
+    if timed_out_text == "1":
+        raise ValueError("canary command timed out")
     with open(stdout_path, encoding="utf-8") as source:
-        result = json.load(
-            source,
-            object_pairs_hook=unique_object,
-            parse_constant=reject_constant,
-        )
+        result = json.load(source, object_pairs_hook=unique_object, parse_constant=reject_constant)
     if not isinstance(result, dict):
         raise ValueError("stdout is not one JSON object")
     record = result
@@ -70,14 +92,14 @@ except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
         "ok": False,
         "environment": environment,
         "stage_reached": None,
-        "failure_code": "canary_no_result",
+        "failure_code": "canary_timeout" if timed_out_text == "1" else "canary_no_result",
     }
 
 record["checked_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 record["exit_code"] = exit_code
 
 def alert_field(value: object) -> str:
-    if isinstance(value, str) and re.fullmatch(r"[a-z0-9_]{1,60}", value):
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_]{1,60}", value):
         return value
     return "unknown"
 
