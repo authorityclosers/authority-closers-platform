@@ -221,3 +221,24 @@ def test_app_update_receipts_are_unique_append_only_and_forward_only() -> None:
     assert "drop_table" not in downgrade
     assert "BEFORE UPDATE OR DELETE" in migration
     assert "app_update_read_receipts_append_only" in migration
+
+
+def test_job_failure_detail_is_nullable_json_and_forward_only() -> None:
+    column = model_metadata().tables["jobs"].columns["failure_detail"]
+    assert column.nullable is True
+    assert type(column.type).__name__ == "JSON"
+
+    migration = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260930_0061_job_failure_detail.py"
+    ).read_text(encoding="utf-8")
+    assert 'down_revision = "20260930_0060"' in migration
+    assert (
+        'op.add_column("jobs", sa.Column("failure_detail", sa.JSON(), nullable=True))' in migration
+    )
+    downgrade = migration.split("def downgrade() -> None:", 1)[1]
+    assert 'raise RuntimeError("forward-only")' in downgrade
+    assert "drop_column" not in downgrade
