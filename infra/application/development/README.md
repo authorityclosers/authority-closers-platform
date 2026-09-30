@@ -83,9 +83,11 @@ development native unit descriptor. It requires `AC_ENVIRONMENT=development`
 and `AC_DATABASE_MIGRATOR_URL` in `/etc/authority-closers/development/api.env`.
 It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
 renders `service.json` from the root-owned development template, writes the
-release marker and API/worker drop-ins, restarts both development units, and
-checks API health. Failures during this refresh restore the previous checkout,
-marker, manifest and drop-ins before restart.
+release marker and API/worker drop-ins, restarts both development units, then
+polls `/health/ready` for up to 60 seconds. The refresh passes only when the API
+reports the target release and its database is ready. Failures during this
+refresh restore the previous checkout, marker, manifest and drop-ins before
+restart.
 
 After backend health passes, the service runs the acdev-owned studio sync and
 merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio

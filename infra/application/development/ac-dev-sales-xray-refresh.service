@@ -13,7 +13,7 @@ CPUQuota=50%
 TasksMax=64
 Nice=10
 IOSchedulingClass=idle
-UMask=0077
+UMask=0022
 NoNewPrivileges=yes
 PrivateTmp=yes
 

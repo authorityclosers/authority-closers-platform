@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,9 @@ WORKER_UNIT = "ac-dev-sales-xray-worker.service"
 STUDIO = Path("/home/acdev/src/lanes/ui/authority-closers-platform")
 STUDIO_LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 SAFE_PATH = "/usr/local/bin:/usr/bin:/bin"
+HEALTH_WAIT_SECONDS = 60
+HEALTH_POLL_SECONDS = 2
+HEALTH_REQUEST_TIMEOUT = 3
 
 
 class RefreshError(Exception):
@@ -346,14 +350,33 @@ def restore_file(path: Path, value: tuple[bytes, int] | None) -> None:
 
 
 def health(runner, target: str) -> dict[str, Any]:
-    result = runner(
-        ["curl", "--silent", "--show-error", "--fail", "http://127.0.0.1:8100/health"], timeout=15
-    )
-    try:
-        release = json.loads(result.stdout).get("release_id") if result.returncode == 0 else None
-    except (ValueError, AttributeError):
-        release = None
-    return {"ok": release == target, "release_id": release}
+    deadline = time.monotonic() + HEALTH_WAIT_SECONDS
+    max_attempts = max(1, HEALTH_WAIT_SECONDS // HEALTH_POLL_SECONDS + 1)
+    release = None
+    for attempt in range(max_attempts):
+        try:
+            result = runner(
+                [
+                    "curl",
+                    "--silent",
+                    "--show-error",
+                    "--fail",
+                    "http://127.0.0.1:8100/health/ready",
+                ],
+                timeout=HEALTH_REQUEST_TIMEOUT,
+            )
+            release = (
+                json.loads(result.stdout).get("release_id") if result.returncode == 0 else None
+            )
+        except (RefreshError, OSError, ValueError, AttributeError):
+            release = None
+        if release == target:
+            return {"ok": True, "release_id": release}
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or attempt + 1 >= max_attempts:
+            break
+        time.sleep(min(HEALTH_POLL_SECONDS, remaining))
+    return {"ok": False, "release_id": release}
 
 
 def restart(runner) -> None:

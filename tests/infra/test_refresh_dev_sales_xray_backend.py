@@ -49,6 +49,8 @@ class FakeCommands:
         self.failed_once = False
         self.studio_conflict = False
         self.smoke_failure = False
+        self.health_failures = 0
+        self.health_calls = 0
 
     def __call__(self, argv, **kwargs):
         args = list(map(str, argv))
@@ -82,8 +84,15 @@ class FakeCommands:
                 self.failed_once = True
                 return subprocess.CompletedProcess(args, 1, b"", b"secret diagnostic")
         elif args[0] == "curl":
+            self.health_calls += 1
+            if self.health_failures:
+                self.health_failures -= 1
+                return subprocess.CompletedProcess(args, 22, b"", b"not ready")
             return subprocess.CompletedProcess(
-                args, 0, json.dumps({"release_id": self.web_sha}).encode(), b""
+                args,
+                0,
+                json.dumps({"status": "ready", "release_id": self.web_sha}).encode(),
+                b"",
             )
         elif args[0] == "runuser":
             tail = args[4:]
@@ -172,9 +181,11 @@ def tree(tmp_path, monkeypatch):
     return paths, source, work, release
 
 
-def test_first_run_and_same_sha_noop(tree, capsys):
+def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     paths, sha, _, _ = tree
     fake = FakeCommands(sha)
+    fake.health_failures = 3
+    monkeypatch.setattr(refresh.time, "sleep", lambda _: None)
     value = refresh.refresh(paths, fake, uid=0)
     assert value["target"] == sha and value["migrated"] == "yes"
     assert (paths.backend / ".ac-release-id").read_text().strip() == sha
@@ -190,6 +201,12 @@ def test_first_run_and_same_sha_noop(tree, capsys):
     output = capsys.readouterr().out
     assert len(output.splitlines()) == 1
     assert json.loads(output)["health"]["ok"]
+    assert fake.health_calls == 4
+    assert all(
+        args[-1] == "http://127.0.0.1:8100/health/ready"
+        for args, _ in fake.calls
+        if args[0] == "curl"
+    )
     assert "secret" not in output and "postgresql://" not in output
     calls = len(fake.calls)
     noop = refresh.refresh(paths, fake, uid=0)
@@ -291,6 +308,24 @@ def test_restart_failure_restores_checkout_marker_and_dropins(tree, capsys):
     assert result["error"] == "command_failed" and result["restarted"] == "rollback_attempted"
 
 
+def test_health_timeout_rolls_back_checkout_and_release_state(tree, capsys, monkeypatch):
+    paths, sha, _, _ = tree
+    fake = FakeCommands(sha)
+    fake.health_failures = 100
+    monkeypatch.setattr(refresh, "HEALTH_WAIT_SECONDS", 0)
+    with pytest.raises(refresh.RefreshError, match="health_release_mismatch"):
+        refresh.refresh(paths, fake, uid=0)
+    assert fake.health_calls == 1
+    assert not paths.backend.exists()
+    assert not paths.api_dropin.exists()
+    assert not paths.worker_dropin.exists()
+    assert not (paths.development / "service.json").exists()
+    output = capsys.readouterr().out
+    result = json.loads(output.splitlines()[-1])
+    assert result["error"] == "health_release_mismatch"
+    assert result["restarted"] == "rollback_attempted"
+
+
 def test_main_branch_uses_ff_only_and_smoke_failure_keeps_backend(tree, capsys):
     paths, sha, _, _ = tree
     fake = FakeCommands(sha)
@@ -354,6 +389,15 @@ def test_systemd_timer_and_service_contract():
     timer = (directory / "ac-dev-sales-xray-refresh.timer").read_text()
     assert "User=root" in service and "MemoryMax=" in service and "CPUQuota=" in service
     assert "/current-staging/infra/application/scripts/refresh-dev-sales-xray-backend.py" in service
+    assert "UMask=0022" in service
+    assert (
+        git(
+            "ls-files",
+            "--error-unmatch",
+            "infra/application/scripts/refresh-dev-sales-xray-backend.py",
+        )
+        == "infra/application/scripts/refresh-dev-sales-xray-backend.py"
+    )
     assert "OnUnitActiveSec=10min" in timer
     assert "Unit=ac-dev-sales-xray-refresh.service" in timer
     parsed = configparser.ConfigParser(interpolation=None)
