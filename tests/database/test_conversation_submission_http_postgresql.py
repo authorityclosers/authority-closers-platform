@@ -22,7 +22,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
-from sqlalchemy import func, select, update
+from sqlalchemy import event, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -53,7 +53,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     HostedApprovalBundle,
 )
 from ac_platform.conversation_intelligence.analysis_settings import settings_from_row
-from ac_platform.conversation_intelligence.application import ConversationApplication
+from ac_platform.conversation_intelligence.application import LOCAL_JOB, ConversationApplication
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
@@ -70,6 +70,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationPermission,
     ConversationProcessingPlan,
     ConversationProviderActivation,
     ConversationProviderConfiguration,
@@ -92,6 +93,11 @@ from ac_platform.conversation_intelligence.qualitative_pack import load_qualitat
 from ac_platform.conversation_intelligence.reports import load_report_profile
 from ac_platform.conversation_intelligence.retained_c5_recovery import (
     RetainedC5RecoveryService,
+)
+from ac_platform.conversation_intelligence.retention import ConversationRetentionScheduler
+from ac_platform.conversation_intelligence.source_object_models import (
+    ConversationSourceObject,
+    ConversationSourceReference,
 )
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.http.auth import install_identity_http
@@ -385,6 +391,142 @@ async def _upload_for_read_test(setup: Any, client: httpx.AsyncClient) -> tuple[
     )
     assert uploaded.status_code == 202, uploaded.text
     return path, submission
+
+
+@pytest.mark.parametrize("retention", [False, True])
+def test_shared_upload_is_silent_and_erasure_releases_only_its_owner(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, retention: bool
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            other = await seed(setup.engine, tenant_id=setup.state.tenant_id)
+            other_token = secrets.token_urlsafe(32)
+            async with setup.sessions() as db, db.begin():
+                session = await db.get(IdentitySession, other.session_id)
+                session.token_hash = hmac.new(
+                    setup.settings.session_token_pepper.get_secret_value().encode(),
+                    other_token.encode(),
+                    hashlib.sha256,
+                ).digest()
+            data = _wav_one_second_48k()
+            paths = [f"{PREFIX}/submissions/{uuid4()}" for _ in range(2)]
+            responses, queries = [], []
+            original_read = setup.runtime.storage.iter_bytes
+
+            def forbidden_read(*args: Any, **kwargs: Any) -> Any:
+                pytest.fail("upload read stored source content")
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                for path, token in zip(paths, [setup.token, other_token], strict=True):
+                    client.cookies.clear()
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+                    headers = await _headers(client, data)
+                    statements: list[str] = []
+
+                    def capture(
+                        _conn: Any,
+                        _cursor: Any,
+                        statement: str,
+                        *_args: Any,
+                        captured: list[str] = statements,
+                    ) -> None:
+                        captured.append(statement)
+
+                    event.listen(setup.engine.sync_engine, "before_cursor_execute", capture)
+                    monkeypatch.setattr(setup.runtime.storage, "iter_bytes", forbidden_read)
+                    try:
+                        response = await client.put(path + "/source", content=data, headers=headers)
+                    finally:
+                        event.remove(setup.engine.sync_engine, "before_cursor_execute", capture)
+                        monkeypatch.setattr(setup.runtime.storage, "iter_bytes", original_read)
+                    assert response.status_code == 202, response.text
+                    responses.append(response)
+                    queries.append(statements)
+                assert queries[0] == queries[1]
+                assert dict(responses[0].headers) == dict(responses[1].headers)
+                first, second = [r.json() for r in responses]
+                own_ids = {"submission_id", "recording_id"}
+                assert {k: v for k, v in first.items() if k not in own_ids} == {
+                    k: v for k, v in second.items() if k not in own_ids
+                }
+                for identifier in [first[k] for k in own_ids] + [
+                    str(setup.state.person_id),
+                    str(setup.state.session_id),
+                ]:
+                    assert identifier not in responses[1].text
+                async with setup.sessions() as db:
+                    refs = list((await db.scalars(select(ConversationSourceReference))).all())
+                    assert len(refs) == 2 and refs[0].source_object_id == refs[1].source_object_id
+                    object_id = refs[0].source_object_id
+                shared_path = (
+                    setup.runtime.storage.root
+                    / setup.state.tenant_id.hex
+                    / "sources"
+                    / hashlib.sha256(data).hexdigest()
+                    / "source"
+                )
+                assert shared_path.read_bytes() == data
+                await _reconcile(setup.sessions, setup.state)
+                worker = OfflineConversationWorker(
+                    setup.sessions,
+                    storage=setup.runtime.storage,
+                    scratch=setup.runtime.scratch,
+                    environment="test",
+                )
+                assert await worker.run_once()  # Owner A can analyse.
+                pending_b = await worker.claim()
+                assert pending_b is not None and pending_b.kind == LOCAL_JOB
+                _sign_in(setup, client)
+                assert (
+                    await client.delete(
+                        paths[0], headers={"Origin": ORIGIN, "Idempotency-Key": "shared-delete-a"}
+                    )
+                ).status_code == 202
+                assert await worker.run_once()  # Release A while B has not analysed yet.
+                client.cookies.clear()
+                client.cookies.set(setup.settings.session_cookie_name, other_token)
+                assert (await client.get(paths[1] + "/source")).content == data
+                await worker._run_claimed(pending_b)
+                assert (await client.get(paths[1] + "/waveform")).status_code == 200
+                if retention:
+                    async with setup.sessions() as db:
+                        recording = await db.get(
+                            ConversationRecording, UUID(second["recording_id"])
+                        )
+                        permission = await db.get(ConversationPermission, recording.permission_id)
+                        deadline = permission.retention_until
+                    assert await ConversationRetentionScheduler(
+                        setup.sessions, clock=lambda: deadline + timedelta(seconds=1)
+                    ).step()
+                else:
+                    assert (
+                        await client.delete(
+                            paths[1],
+                            headers={"Origin": ORIGIN, "Idempotency-Key": "shared-delete-b"},
+                        )
+                    ).status_code == 202
+                assert await worker.run_once()
+                assert not shared_path.exists()
+                async with setup.sessions() as db:
+                    assert (await db.get(ConversationSourceObject, object_id)).deleted_at
+                    refs = list((await db.scalars(select(ConversationSourceReference))).all())
+                    assert len(refs) == 2 and all(ref.released_at for ref in refs)
+                await _upload_for_read_test(setup, client)
+                assert shared_path.read_bytes() == data
+                async with setup.sessions() as db:
+                    live = await db.scalar(
+                        select(ConversationSourceObject).where(
+                            ConversationSourceObject.deleted_at.is_(None)
+                        )
+                    )
+                    assert live.id != object_id
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 def test_reupload_earlier_report_hint_is_scoped_to_the_current_owner(
