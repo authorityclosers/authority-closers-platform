@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
@@ -324,7 +325,7 @@ async def test_write_gate_accepts_unverified_phone_and_rejects_incomplete_or_sus
 async def test_profile_http_surface_returns_only_204_when_current_account_is_ready(
     database: Any,
 ) -> None:
-    async_database, _ = database
+    async_database, sync_database = database
     await update_sales_xray_profile(
         async_database,
         person_id=PERSON_ID,
@@ -408,9 +409,64 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
             "family_name": None,
             "locale": None,
             "company_domain": None,
+            "photo_url": None,
         }
         assert read_only_calls == 3
         assert mutating_calls == 0
+
+        missing_photo = await client.get(
+            "/v1/me/sales-xray-profile/photo",
+            cookies={"ac_session": "present"},
+        )
+        assert missing_photo.status_code == 404
+        assert missing_photo.headers["cache-control"] == "private, no-cache"
+        assert missing_photo.headers["vary"] == "Cookie"
+        assert missing_photo.headers["x-content-type-options"] == "nosniff"
+        assert missing_photo.headers["content-security-policy"] == "default-src 'none'; sandbox"
+
+        unauthenticated_photo = await client.get("/v1/me/sales-xray-profile/photo")
+        assert unauthenticated_photo.status_code == 401
+
+        photo_jpeg = b"fictional-private-jpeg"
+        photo_digest = hashlib.sha256(photo_jpeg).hexdigest()
+        sync_database.add(
+            PersonGoogleProfile(
+                person_id=PERSON_ID,
+                photo_jpeg=photo_jpeg,
+                photo_sha256=photo_digest,
+                photo_source_sha256="b" * 64,
+                photo_fetched_at=NOW,
+                claims_updated_at=NOW,
+            )
+        )
+        sync_database.commit()
+
+        photo = await client.get(
+            "/v1/me/sales-xray-profile/photo",
+            cookies={"ac_session": "present"},
+        )
+        assert photo.status_code == 200
+        assert photo.content == photo_jpeg
+        assert photo.headers["content-type"] == "image/jpeg"
+        assert photo.headers["cache-control"] == "private, no-cache"
+        assert photo.headers["etag"] == f'"{photo_digest}"'
+        assert photo.headers["vary"] == "Cookie"
+        assert photo.headers["x-content-type-options"] == "nosniff"
+        assert photo.headers["content-security-policy"] == "default-src 'none'; sandbox"
+        not_modified = await client.get(
+            "/v1/me/sales-xray-profile/photo",
+            cookies={"ac_session": "present"},
+            headers={"if-none-match": f'"{photo_digest}"'},
+        )
+        assert not_modified.status_code == 304
+        assert not_modified.content == b""
+        assert not_modified.headers["etag"] == f'"{photo_digest}"'
+
+        read_profile_with_photo = await client.get(
+            "/v1/me/sales-xray-profile",
+            cookies={"ac_session": "present"},
+        )
+        assert read_profile_with_photo.json()["photo_url"] == "/v1/me/sales-xray-profile/photo"
 
         updated = await client.put(
             "/v1/me/sales-xray-profile",
@@ -425,6 +481,7 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
         assert updated.status_code == 200
         assert updated.json()["name"] == "One Updated"
         assert updated.json()["revision"] == 2
+        assert updated.json()["photo_url"] == "/v1/me/sales-xray-profile/photo"
         assert mutating_calls == 1
 
         stale_revision = await client.put(

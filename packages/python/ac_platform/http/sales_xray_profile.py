@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.identity.google_profile import read_google_profile_photo
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileError,
     SalesXrayProfileIncomplete,
@@ -35,6 +36,7 @@ class SalesXrayProfileResponse(BaseModel):
     family_name: str | None
     locale: str | None
     company_domain: str | None
+    photo_url: str | None
 
 
 class SalesXrayProfileUpdate(BaseModel):
@@ -130,7 +132,27 @@ def install_sales_xray_profile_http(
             family_name=value.family_name,
             locale=value.locale,
             company_domain=value.hosted_domain,
+            photo_url=value.photo_url,
         ).model_dump()
+
+    def photo_headers(etag: str | None = None) -> dict[str, str]:
+        result = {
+            "Cache-Control": "private, no-cache",
+            "Vary": "Cookie",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        }
+        if etag is not None:
+            result["ETag"] = etag
+        return result
+
+    def if_none_match_matches(header: str | None, etag: str) -> bool:
+        if header is None:
+            return False
+        return any(
+            value.strip() == "*" or value.strip().removeprefix("W/") == etag
+            for value in header.split(",")
+        )
 
     @router.get("", response_model=SalesXrayProfileResponse)
     async def read_profile(
@@ -148,6 +170,27 @@ def install_sales_xray_profile_http(
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
         return response_value(value)
+
+    @router.get("/photo", response_class=Response)
+    async def read_profile_photo(
+        request: Request,
+        auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
+    ) -> Response:
+        actor = auth.resolved.actor
+        require_profile_surface(request, actor)
+        photo = await read_google_profile_photo(auth.database, actor.person_id)
+        if photo is None:
+            raise HTTPException(
+                404,
+                "Profile photo not found.",
+                headers=photo_headers(),
+            )
+        jpeg, digest = photo
+        etag = f'"{digest}"'
+        headers = photo_headers(etag)
+        if if_none_match_matches(request.headers.get("if-none-match"), etag):
+            return Response(status_code=304, headers=headers)
+        return Response(content=jpeg, media_type="image/jpeg", headers=headers)
 
     @router.put("", response_model=SalesXrayProfileResponse)
     async def update_profile(

@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.background import BackgroundTask
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
@@ -54,9 +55,14 @@ from ac_platform.identity.email_login import (
     EmailLoginCodeService,
 )
 from ac_platform.identity.google_profile import (
+    GoogleProfileClaims,
+    clear_google_profile_photo,
+    google_profile_photo_needs_fetch,
     normalize_google_claims,
     record_google_profile_claims,
+    save_google_profile_photo,
 )
+from ac_platform.identity.google_profile_photo import fetch_google_profile_photo
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
@@ -2226,7 +2232,7 @@ def install_identity_http(
         *,
         person_id: UUID,
         assertion: VerifiedProviderAssertion,
-    ) -> None:
+    ) -> GoogleProfileClaims:
         claims = normalize_google_claims(assertion)
         try:
             async with database.begin_nested():
@@ -2238,6 +2244,56 @@ def install_identity_http(
                 )
         except Exception:
             _LOGGER.warning("google_profile_claims_not_saved")
+        return claims
+
+    async def _prepare_google_profile_photo_best_effort(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        assertion: VerifiedProviderAssertion,
+        claims: GoogleProfileClaims,
+    ) -> tuple[UUID, str, str] | None:
+        if assertion.picture_url is None:
+            try:
+                async with database.begin_nested():
+                    await clear_google_profile_photo(database, person_id)
+            except Exception:
+                _LOGGER.warning("google_profile_photo_clear_failed")
+            return None
+        picture_url = claims.picture_url
+        if picture_url is None:
+            return None
+        source_sha256 = hashlib.sha256(picture_url.encode("utf-8")).hexdigest()
+        try:
+            if await google_profile_photo_needs_fetch(database, person_id, source_sha256):
+                return person_id, picture_url, source_sha256
+        except Exception:
+            _LOGGER.warning("google_profile_photo_check_failed")
+        return None
+
+    async def _refresh_google_profile_photo(
+        person_id: UUID,
+        picture_url: str,
+        source_sha256: str,
+    ) -> None:
+        try:
+            jpeg = await fetch_google_profile_photo(picture_url)
+        except Exception:
+            _LOGGER.warning("google_profile_photo_fetch_failed")
+            return
+        if jpeg is None:
+            return
+        try:
+            async with sessions() as database, database.begin():
+                await save_google_profile_photo(
+                    database,
+                    person_id,
+                    source_sha256=source_sha256,
+                    jpeg=jpeg,
+                    now=datetime.now(UTC),
+                )
+        except Exception:
+            _LOGGER.warning("google_profile_photo_save_failed")
 
     async def _prefill_sales_xray_profile_name(
         database: AsyncSession,
@@ -2782,6 +2838,7 @@ def install_identity_http(
             )
         session_token: str | None = None
         issued_session_id: UUID | None = None
+        photo_refresh: tuple[UUID, str, str] | None = None
         try:
             async with sessions() as database, database.begin():
                 identity = _identity(database)
@@ -2799,10 +2856,16 @@ def install_identity_http(
                     )
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
-                    await _record_google_profile_claims_best_effort(
+                    profile_claims = await _record_google_profile_claims_best_effort(
                         database,
                         person_id=registered.person.id,
                         assertion=assertion,
+                    )
+                    photo_refresh = await _prepare_google_profile_photo_best_effort(
+                        database,
+                        person_id=registered.person.id,
+                        assertion=assertion,
+                        claims=profile_claims,
                     )
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
@@ -2839,10 +2902,16 @@ def install_identity_http(
                     )
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
-                    await _record_google_profile_claims_best_effort(
+                    profile_claims = await _record_google_profile_claims_best_effort(
                         database,
                         person_id=issued.metadata.person_id,
                         assertion=assertion,
+                    )
+                    photo_refresh = await _prepare_google_profile_photo_best_effort(
+                        database,
+                        person_id=issued.metadata.person_id,
+                        assertion=assertion,
+                        claims=profile_claims,
                     )
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
@@ -2884,10 +2953,16 @@ def install_identity_http(
                         assertion,
                         pkce_verifier=transaction.pkce_verifier,
                     )
-                    await _record_google_profile_claims_best_effort(
+                    profile_claims = await _record_google_profile_claims_best_effort(
                         database,
                         person_id=linked.person_id,
                         assertion=assertion,
+                    )
+                    await _prepare_google_profile_photo_best_effort(
+                        database,
+                        person_id=linked.person_id,
+                        assertion=assertion,
+                        claims=profile_claims,
                     )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface == "sales_xray":
@@ -3050,6 +3125,13 @@ def install_identity_http(
                     session_id=issued_session_id,
                 ),
             )
+        if (
+            photo_refresh is not None
+            and session_token is not None
+            and issued_session_id is not None
+            and (transaction.surface != "sales_xray" or sales_xray_success)
+        ):
+            response.background = BackgroundTask(_refresh_google_profile_photo, *photo_refresh)
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
         return response
