@@ -193,7 +193,7 @@ def _overlap_ms(intervals: list[Interval], from_ms: int, to_ms: float) -> int:
 def compute_call_metrics(segments: list[TranscriptSegment], duration_ms: int | None) -> CallMetrics:
     """Compute the deterministic timing measurements for transcript segments."""
     timed = _timed_segments(segments)
-    last_end = max(0, *(segment["end_ms"] for segment in timed))
+    last_end = max((segment["end_ms"] for segment in timed), default=0)
     time_used = duration_ms if duration_ms is not None and duration_ms > 0 else last_end
 
     talk: dict[str, list[Interval]] = {}

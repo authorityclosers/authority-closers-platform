@@ -69,6 +69,59 @@ def test_python_twin_matches_every_shared_vector(vector: dict[str, Any]) -> None
     assert time_promise_overrun(promise, segments, metrics["time_used_ms"]) == expected["overrun"]
 
 
+def test_empty_transcript_has_zero_time_and_no_speakers_or_curve() -> None:
+    metrics = compute_call_metrics([], None)
+
+    assert metrics["time_used_ms"] == 0
+    assert metrics["speakers"] == {}
+    assert metrics["curve"] == []
+
+
+def test_transcript_with_only_unattributed_segments_uses_duration() -> None:
+    segments: list[TranscriptSegment] = [
+        {
+            "id": "segment-1",
+            "speaker_id": None,
+            "start_ms": 1000,
+            "end_ms": 2000,
+            "text": "Fictional unattributed speech.",
+        }
+    ]
+
+    metrics = compute_call_metrics(segments, 60000)
+
+    assert metrics["time_used_ms"] == 60000
+    assert metrics["speakers"] == {}
+    assert metrics["curve"] == [{"start_ms": 0, "shares": {}}]
+
+
+def test_transcript_with_only_zero_length_segments_has_no_timed_curve() -> None:
+    segments: list[TranscriptSegment] = [
+        {
+            "id": "segment-1",
+            "speaker_id": "speaker-1",
+            "start_ms": 1000,
+            "end_ms": 1000,
+            "text": "Fictional question?",
+        }
+    ]
+
+    metrics = compute_call_metrics(segments, None)
+
+    assert metrics["time_used_ms"] == 0
+    assert metrics["speakers"] == {
+        "speaker-1": {
+            "talk_ms": 0,
+            "talk_share": None,
+            "questions": 1,
+            "questions_per_minute": None,
+            "cut_ins": 0,
+            "longest_monologue_ms": 0,
+        }
+    }
+    assert metrics["curve"] == []
+
+
 def _string_values(value: Any) -> Iterator[str]:
     if isinstance(value, str):
         yield value
