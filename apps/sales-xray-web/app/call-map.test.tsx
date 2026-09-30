@@ -369,3 +369,35 @@ it("does not save just as a name after confirming a generic opening", async () =
   });
   expect(readSpeakerProfiles(CALL_ID).a.name).not.toBe("just");
 });
+
+it("does not offer a name confirmation for an ordinary here phrase", async () => {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: "Thanks for being here.",
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    { ...report, strengths: [], improvements: [] },
+  );
+
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Yes",
+    ),
+  ).toBe(false);
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+});

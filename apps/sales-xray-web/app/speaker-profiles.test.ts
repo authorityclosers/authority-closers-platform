@@ -208,6 +208,50 @@ it("treats greetings with here and speaking suffixes as self introductions", () 
   }
 });
 
+it("accepts bare name suffixes only at the start of an introduction", () => {
+  for (const text of [
+    "Rahul here",
+    "Rahul speaking",
+    "राहुल बोल रहा हूं",
+    "मैं राहुल बोल रहा",
+  ]) {
+    expect(
+      detectSpokenNames(
+        call([
+          ["s0", text],
+          ["s1", "Hello."],
+        ]),
+      ),
+    ).toEqual({
+      names: { s0: text.includes("Rahul") ? "Rahul" : "राहुल" },
+      introducers: ["s0"],
+    });
+  }
+});
+
+it("does not treat phrases or mid-sentence words as name suffixes", () => {
+  for (const text of [
+    "Thanks for being here.",
+    "Are you still speaking to other vendors?",
+    "Who is speaking?",
+    "I'm here to help.",
+    "Is anyone here?",
+    "rahul here",
+  ]) {
+    expect(
+      detectSpokenNames(
+        call([
+          ["s0", text],
+          ["s1", "Hello."],
+        ]),
+      ),
+    ).toEqual({
+      names: {},
+      introducers: [],
+    });
+  }
+});
+
 it("keeps counterpart greetings distinct from self introductions", () => {
   expect(
     detectSpokenNames(
@@ -225,6 +269,22 @@ it("keeps counterpart greetings distinct from self introductions", () => {
       ]),
     ).names,
   ).toEqual({ s1: "नंदलाल जी" });
+  expect(
+    detectSpokenNames(
+      call([
+        ["s0", "Hello Rahul"],
+        ["s1", "Hi."],
+      ]),
+    ).names,
+  ).toEqual({ s1: "Rahul" });
+  expect(
+    detectSpokenNames(
+      call([
+        ["s0", "नमस्ते राहुल जी"],
+        ["s1", "जी नमस्ते"],
+      ]),
+    ).names,
+  ).toEqual({ s1: "राहुल जी" });
 });
 
 it("never takes filler words for names", () => {

@@ -276,6 +276,7 @@ const NOT_NAMES = new Set(
     "an",
     "my",
     "i",
+    "i'm",
     "your",
     "calling",
     "speaking",
@@ -319,6 +320,7 @@ const NOT_NAMES = new Set(
 const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)(?![\\p{L}\\p{M}])";
 // Phrases must start a word: "Hi am I…" is not "I am …".
 const START = "(?<![\\p{L}\\p{M}])";
+const SEGMENT_START = "^[\\s\\p{P}]*";
 const NAME_SUFFIX =
   "(?:here|speaking|this side|बोल रहा(?:\\s+(?:हूं|हूँ))?|बोल रही(?:\\s+(?:हूं|हूँ))?|bol raha|bol rahi)";
 const SELF_INTRODUCTIONS = [
@@ -328,7 +330,7 @@ const SELF_INTRODUCTIONS = [
     `${START}(?:मैं|main)\\s+${NAME}\\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)`,
     "iu",
   ),
-  new RegExp(`${START}${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`, "iu"),
+  new RegExp(`${SEGMENT_START}${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`, "iu"),
   new RegExp(
     `${START}(?:hi|hello|hey)\\s+${NAME}\\s+${NAME_SUFFIX}(?=\\s|$|[,.!?])`,
     "iu",
@@ -346,13 +348,13 @@ const NAME_WINDOW_MS = 150_000;
 
 function nameFrom(
   match: RegExpMatchArray | null,
-  genericIAm = false,
+  requireNameStyle = false,
 ): string | null {
   const word = match?.[1]?.trim();
   if (!word || Array.from(word).length < 2) return null;
   if (NOT_NAMES.has(word.toLocaleLowerCase())) return null;
   if (
-    genericIAm &&
+    requireNameStyle &&
     !/^(?=\p{Script=Latin})\p{Lu}[\p{L}\p{M}'’-]*$/u.test(word) &&
     !/^(?=\p{Script=Devanagari})\p{L}[\p{L}\p{M}'’-]*$/u.test(word)
   )
@@ -388,7 +390,8 @@ export function detectSpokenNames(transcript: Transcript): SpokenNames {
     const voice = segment.speaker_id;
     if (voice === null) continue;
     for (const [index, pattern] of SELF_INTRODUCTIONS.entries()) {
-      const name = nameFrom(segment.text.match(pattern), index === 1);
+      const requireNameStyle = index === 1 || index === 3 || index === 4;
+      const name = nameFrom(segment.text.match(pattern), requireNameStyle);
       if (!name) continue;
       if (!names[voice]) names[voice] = name;
       if (!introducers.includes(voice)) introducers.push(voice);
