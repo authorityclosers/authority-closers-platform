@@ -103,3 +103,17 @@ it("reads the timing signals", () => {
   expect(more.longest_answer).toEqual({ start_ms: 48_000, length_ms: 12_000 });
   expect(more.next_step_ms).toBe(400_000);
 });
+
+it("reports the prospect's talk-share peak without reading it as openness", () => {
+  // Fictional: a buyer reading serial numbers still holds the talk share.
+  const reading = call(
+    [
+      ["rep", 0, 6_000, "Hello, this is a short call about your order."],
+      ["buyer", 6_500, 50_000, "Serial one is A1 B2 C3, serial two is D4 E5."],
+    ],
+    120_000,
+  );
+  const more = moreSignals(reading, roles);
+  expect(more.prospect_peak_ms).toBe(0);
+  expect(Object.keys(more)).not.toContain("opened_up_ms");
+});

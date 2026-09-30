@@ -71,6 +71,17 @@ function toggleDone(callId: string, id: string) {
   window.dispatchEvent(new Event(DONE_EVENT));
 }
 
+/** Removes this call's ticked promises after server deletion succeeds. */
+export function clearPromisesDone(callId: string): boolean {
+  try {
+    localStorage.removeItem(doneKey(callId));
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new Event(DONE_EVENT));
+  return true;
+}
+
 const seconds = (ms: number) =>
   ms < 1000 ? "under 1 s" : `${Math.round(ms / 1000)} s`;
 
@@ -314,7 +325,7 @@ export function CallSignals({
         <Card
           index={3}
           icon={<CircleDollarSign size={16} />}
-          title="After you said the price"
+          title="After a price or budget mention"
           note="How long the prospect stayed quiet, and what they said next."
           count={data.price.length}
         >
@@ -429,17 +440,17 @@ export function CallSignals({
               </dd>
             </div>
             <div>
-              <dt>They opened up most at</dt>
+              <dt>Their highest talk share at</dt>
               <dd>
-                {more.opened_up_ms === null ? (
+                {more.prospect_peak_ms === null ? (
                   "—"
                 ) : (
                   <button
                     type="button"
                     className={styles.link}
-                    onClick={() => onSeek(more.opened_up_ms!)}
+                    onClick={() => onSeek(more.prospect_peak_ms!)}
                   >
-                    {formatClock(more.opened_up_ms)}
+                    {formatClock(more.prospect_peak_ms)}
                   </button>
                 )}
               </dd>

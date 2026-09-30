@@ -36,7 +36,9 @@ export type MoreSignals = {
   first_question_ms: number | null;
   seller_questions_per_10_min: number | null;
   longest_answer: { start_ms: number; length_ms: number } | null;
-  opened_up_ms: number | null;
+  /** The minute where the prospect held their highest talk share (half or
+   * more). Talk share only: it says nothing about interest or openness. */
+  prospect_peak_ms: number | null;
   next_step_ms: number | null;
 };
 
@@ -261,7 +263,7 @@ export function moreSignals(transcript: Transcript, roles: Roles): MoreSignals {
         ? Math.round((sellerQuestions / duration) * 600_000 * 10) / 10
         : null,
     longest_answer: longest,
-    opened_up_ms: opened?.start_ms ?? null,
+    prospect_peak_ms: opened?.start_ms ?? null,
     next_step_ms: nextStep?.start_ms ?? null,
   };
 }

@@ -575,7 +575,7 @@ export function OverviewHook({
                       ? "<1 s"
                       : `${Math.round(signals.silence / 1000)} s`}
                 </b>{" "}
-                silence after the price
+                silence after a price or budget mention
               </button>
               <button type="button" onClick={() => go("signals")}>
                 <b>

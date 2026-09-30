@@ -70,6 +70,10 @@ function seedCallFacts() {
   saveSpeakerProfiles(call.id, {
     buyer: { name: "Fictional Buyer", role: "prospect", icon: null },
   });
+  localStorage.setItem(
+    `ac.xray.promises-done.v1:${call.id}`,
+    '["s1:I will send the fictional brochure."]',
+  );
 }
 
 it.each(["deleting", "deleted"])(
@@ -91,6 +95,9 @@ it.each(["deleting", "deleted"])(
       numberLabels: {},
     });
     expect(readSpeakerProfiles(call.id)).toEqual({});
+    expect(
+      localStorage.getItem(`ac.xray.promises-done.v1:${call.id}`),
+    ).toBeNull();
   },
 );
 
@@ -110,6 +117,9 @@ it.each([403, 500, 200])(
     );
     expect(readCallFacts(call.id).values.industry).toBe("Carpentry");
     expect(readSpeakerProfiles(call.id).buyer.name).toBe("Fictional Buyer");
+    expect(
+      localStorage.getItem(`ac.xray.promises-done.v1:${call.id}`),
+    ).toContain("fictional brochure");
   },
 );
 

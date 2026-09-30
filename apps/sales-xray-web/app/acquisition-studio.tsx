@@ -44,7 +44,7 @@ import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
-import { CallSignals } from "./call-signals";
+import { CallSignals, clearPromisesDone } from "./call-signals";
 import { OverviewHook } from "./overview-hook";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
@@ -1715,6 +1715,7 @@ export function AcquisitionStudio({
         inFlight.current = false;
         clearCallFacts(deletionId);
         clearSpeakerProfiles(deletionId);
+        clearPromisesDone(deletionId);
         reset();
         setDeleted(true);
       }
