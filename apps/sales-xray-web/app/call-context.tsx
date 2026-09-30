@@ -97,13 +97,23 @@ const FIRST_PERSON_BUSINESS =
  * business" or "मेरा carpentry का business".
  */
 export function businessNamed(text: string): SpeakerIcon | null {
-  if (/[?？]/u.test(text) || !FIRST_PERSON_BUSINESS.test(text)) return null;
-  for (const match of text.matchAll(BUSINESS_NAMED)) {
-    const word = match[1].toLocaleLowerCase();
-    const found = SPEAKER_ICONS.find(
-      (item) => !item.generic && item.keywords.includes(word),
-    );
-    if (found) return found;
+  for (const statement of text.split(/[.!?。？！\n]+/u)) {
+    if (/[?？]/u.test(statement) || !FIRST_PERSON_BUSINESS.test(statement))
+      continue;
+    // A negative ownership statement is not evidence of a current business.
+    if (
+      /\b(?:never|not|no longer)\s+(?:owned|operated|ran|had|been|started|run|own|operate|have|start)\b/iu.test(
+        statement,
+      )
+    )
+      continue;
+    for (const match of statement.matchAll(BUSINESS_NAMED)) {
+      const word = match[1].toLocaleLowerCase();
+      const found = SPEAKER_ICONS.find(
+        (item) => !item.generic && item.keywords.includes(word),
+      );
+      if (found) return found;
+    }
   }
   return null;
 }

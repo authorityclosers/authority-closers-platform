@@ -184,6 +184,52 @@ it("anchors a golden label and its initial playback to evidence_index", () => {
   expect(moment?.evidence[0]).toEqual(excerpt(2));
 });
 
+it("keeps conflicting golden and rewatch clips in separate source-backed rows", async () => {
+  const report = suppliedReport();
+  const f1 = { ...excerpt(1), segment_id: "f1", start_ms: 1_000 };
+  const f2 = { ...excerpt(5), segment_id: "f2", start_ms: 5_000 };
+  report.strengths = [
+    {
+      title: "Asked about numbers",
+      explanation: "Good discovery",
+      evidence: [f1, f2],
+    },
+  ];
+  report.overview!.golden_moments = [
+    {
+      strength_index: 0,
+      evidence_index: 1,
+      why_effective: "Selected golden clip.",
+    },
+  ];
+  report.overview!.rewatch = [
+    { purpose: "must_watch", text: "Rewatch f1.", evidence: [f1] },
+  ];
+
+  const moments = timelineMoments(report);
+  const best = moments.find((moment) => moment.golden);
+  const rewatch = moments.find((moment) => moment.title === "Rewatch f1.");
+  expect(best?.evidence[0]).toEqual(f2);
+  expect(rewatch?.evidence[0]).toEqual(f1);
+  expect(rewatch?.listen).toBe("must_watch");
+
+  const onSelectEvidence = await render(report);
+  const bestRow = container.querySelector<HTMLElement>(
+    `[data-moment="strength:0"]`,
+  )!;
+  const rewatchRow = container.querySelector<HTMLElement>(
+    `[data-moment="rewatch:0"]`,
+  )!;
+  expect(bestRow.textContent).toContain("Best moment");
+  expect(rewatchRow.textContent).toContain("Rewatch f1.");
+  await act(async () =>
+    rewatchRow
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  expect(onSelectEvidence).toHaveBeenCalledWith(f1, "Rewatch f1.");
+});
+
 it("keeps the selected rewatch clip first when it matches later finding evidence", () => {
   const report = suppliedReport();
   const selected = excerpt(2);

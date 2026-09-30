@@ -42,6 +42,12 @@ it("names the business only when the call says it outright", () => {
     "carpentry",
   );
   expect(businessNamed("I run a carpentry business.")?.key).toBe("carpentry");
+  expect(
+    businessNamed(
+      "I run an online business. My brother runs a carpentry business.",
+    ),
+  ).toBeNull();
+  expect(businessNamed("We have never owned a carpentry business.")).toBeNull();
   expect(businessNamed("They talked about the event and coaching.")).toBeNull();
   expect(businessNamed("My brother runs a carpentry business.")).toBeNull();
   expect(

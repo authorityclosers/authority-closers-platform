@@ -198,6 +198,7 @@ export type TimelineMoment = {
   evidence: ReportEvidence[];
   listen?: keyof typeof LISTEN_LABEL;
   golden?: string;
+  goldenEvidence?: ReportEvidence;
   why?: string;
   tryThis?: string;
   betterAnswer?: string;
@@ -238,6 +239,7 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
       golden && report.strengths[index].evidence[golden.evidence_index];
     return {
       golden: golden?.why_effective,
+      goldenEvidence: selected,
       evidence: selected
         ? [
             selected,
@@ -274,6 +276,20 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
     const owner = moments.find((moment) =>
       moment.evidence.some((item) => sameClip(item, clip)),
     );
+    if (
+      owner?.golden &&
+      owner.goldenEvidence &&
+      !sameClip(owner.goldenEvidence, clip)
+    ) {
+      moments.push({
+        id: `rewatch:${index}`,
+        kind: "listen",
+        title: note.text,
+        evidence: note.evidence,
+        listen: note.purpose,
+      });
+      continue;
+    }
     if (owner) {
       owner.listen ??= note.purpose;
       owner.evidence = [
