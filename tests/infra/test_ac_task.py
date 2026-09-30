@@ -384,6 +384,14 @@ def test_api_and_sales_xray_lanes_run_beside_each_other() -> None:
     )
 
 
+def test_billing_lane_runs_beside_the_api_lane() -> None:
+    repo = FakeRepo()
+    repo.branches.append("task/api/418-plans-table")
+    assert gate(repo).start("560-billing-backend", "billing") == (
+        "task/billing/560-billing-backend"
+    )
+
+
 def test_an_exclusive_task_blocks_every_lane_and_is_blocked_by_any() -> None:
     repo = FakeRepo()
     repo.branches.append("task/83-development-hosted")
@@ -418,7 +426,8 @@ def test_status_json_reports_each_lane(capsys) -> None:
         '"open_prs": [], "lanes": {"sales-xray": {"holder": null, "free": true}, '
         '"platform": {"holder": "task/platform/23-notes", "free": false}, '
         '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}, '
-        '"devenv": {"holder": null, "free": true}, "api": {"holder": null, "free": true}}, '
+        '"devenv": {"holder": null, "free": true}, "api": {"holder": null, "free": true}, '
+        '"billing": {"holder": null, "free": true}}, '
         '"exclusive_free": false}\n'
     )
     status = json.loads(output)
@@ -484,6 +493,7 @@ def test_status_text_and_json_report_running_main_with_free_lanes(capsys) -> Non
     assert "sales-xray: FREE" in text_status
     assert "platform: FREE" in text_status
     assert "api: FREE" in text_status
+    assert "billing: FREE" in text_status
     assert "exclusive: FREE" in text_status
 
     assert MODULE.main(["status", "--json"], gate(repo)) == 0
