@@ -356,7 +356,10 @@ export function CallMap({
   );
   const seller =
     suggestion?.speakerId ??
-    (spoken.introducers.length === 1 ? spoken.introducers[0] : null);
+    (spoken.introducers.length === 1 &&
+    isAccountName(spoken.names[spoken.introducers[0]], accountName)
+      ? spoken.introducers[0]
+      : null);
   // "No" on a two-person call asks about the other voice instead.
   const askId: string | null =
     canSave && !hasSeller && seller && lanes.length > 1

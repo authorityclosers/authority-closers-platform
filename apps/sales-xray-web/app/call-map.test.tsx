@@ -335,7 +335,41 @@ it("names another salesperson and the prospect from the opening, in one tap", as
   expect(chips()[1].textContent).toContain("Prospect");
 });
 
+it("does not infer salesperson from a buyer name alone", async () => {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: "My name is Rahul.",
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    { ...report, strengths: [], improvements: [] },
+  );
+
+  expect(host.textContent).not.toContain("is the salesperson");
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Yes",
+    ),
+  ).toBe(false);
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+});
+
 it("confirms a hello-here self introduction on the speaking voice", async () => {
+  updateShellState({ profileName: "Rahul" });
   await sayAndConfirm("Hello Rahul here", {
     ...report,
     strengths: [],
@@ -343,7 +377,7 @@ it("confirms a hello-here self introduction on the speaking voice", async () => 
   });
 
   expect(readSpeakerProfiles(CALL_ID)).toEqual({
-    a: { name: "Rahul", role: "salesperson", icon: null },
+    a: { name: "Rahul", role: "you", icon: null },
     b: { name: "", role: "prospect", icon: expect.any(String) },
   });
 });
