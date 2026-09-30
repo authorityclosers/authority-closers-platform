@@ -90,6 +90,8 @@ import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
 import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
+import { clearCallFacts } from "./call-facts";
+import { clearSpeakerProfiles } from "./speaker-profiles";
 import { latestStage, projectProcessing } from "./processing-state";
 import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
@@ -1709,6 +1711,8 @@ export function AcquisitionStudio({
         throw new Error("delete_unconfirmed");
       if (!signal.aborted) {
         inFlight.current = false;
+        clearCallFacts(deletionId);
+        clearSpeakerProfiles(deletionId);
         reset();
         setDeleted(true);
       }

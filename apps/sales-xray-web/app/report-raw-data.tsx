@@ -82,8 +82,9 @@ function download(name: string, type: string, text: string) {
 
 export function csvCell(value: string | number) {
   const raw = String(value);
-  const text = /^[\s\u0000-\u001f]*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const text =
+    typeof value === "string" && /^[=+\-@\t\r]/u.test(value) ? `'${raw}` : raw;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /**

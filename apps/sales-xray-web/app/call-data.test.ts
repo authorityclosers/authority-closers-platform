@@ -107,18 +107,46 @@ it("keeps ambiguous magnitudes as quantities without currency evidence", () => {
   ]);
 });
 
+it("recognizes explicit Rs and rupee evidence without a magnitude", () => {
+  const rows = numbersHeard(
+    call([["a", 0, 1000, "Rs 500, 500 rupees, price 750, and 10K customers."]]),
+  );
+  expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
+    ["Rs 500", "money"],
+    ["500 rupees", "money"],
+    ["750", "money"],
+    ["10K", "quantity"],
+  ]);
+});
+
 it("finds the time asked for in the opening minutes", () => {
   const promise = timePromise(opening)!;
   expect(promise.upToMinutes).toBe(15);
-  expect(promise.segments.map((segment) => segment.id)).toEqual(["s3", "s4"]);
+  expect(promise.segments.map((segment) => segment.id)).toEqual(["s3"]);
 });
 
 it("does not treat unrelated minutes as a time agreement", () => {
   const unrelated = call([
     ["a", 0, 1000, "The meeting starts in 30 minutes."],
     ["b", 2000, 3000, "I waited 10 minutes."],
+    ["c", 4000, 5000, "I take 10 minutes to walk to work."],
+    ["d", 6000, 7000, "We need 20 minutes to cool the machine."],
   ]);
   expect(timePromise(unrelated)).toBeNull();
+});
+
+it("recognizes requested and committed call time in English and Hindi", () => {
+  const requested = timePromise(
+    call([
+      ["a", 0, 1000, "Give me 7 minutes."],
+      ["b", 2000, 3000, "I'll call you in 5 minutes."],
+      ["c", 4000, 5000, "I'll send it in 10 minutes."],
+      ["d", 6000, 7000, "I'll get back to you in 8 minutes."],
+      ["e", 8000, 9000, "5 मिनट दीजिए."],
+    ]),
+  );
+  expect(requested?.upToMinutes).toBe(10);
+  expect(requested?.segments).toHaveLength(5);
 });
 
 it("finds price talk and reads the script mix", () => {

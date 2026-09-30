@@ -147,7 +147,7 @@ const UNIT_KIND: Array<[RegExp, HeardNumber["kind"]]> = [
   ],
 ];
 const NUMBER =
-  /(?<![\p{L}\d])(₹\s?)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/gu;
+  /(?<![\p{L}\d])((?:₹|Rs\.?|INR)\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|rupees?|रुपये|रुपए|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/giu;
 
 /**
  * Numbers said with a unit, as spoken. Magnitudes stay quantities unless
@@ -161,7 +161,6 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
     let index = 0;
     while ((match = NUMBER.exec(segment.text))) {
       const [spokenRaw, rupee, , , unit] = match;
-      if (!rupee && !unit) continue;
       const unitKind = UNIT_KIND.find(([pattern]) =>
         pattern.test(unit ?? ""),
       )?.[1];
@@ -179,6 +178,7 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
         );
       const currencyEvidence =
         rupee ||
+        /^(?:rupees?|रुपये|रुपए)$/iu.test(unit ?? "") ||
         (!objectCount &&
           (/\b(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
             before,
@@ -190,12 +190,11 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
             /^\s*(?:worth|in\s+(?:revenue|sales|turnover|profit))\b/iu.test(
               after,
             )));
-      const kind = rupee
+      if (!unit && !currencyEvidence) continue;
+      const kind = currencyEvidence
         ? "money"
         : unitKind === "quantity"
-          ? currencyEvidence
-            ? "money"
-            : "quantity"
+          ? "quantity"
           : unitKind;
       if (!kind) continue;
       rows.push({
@@ -232,14 +231,15 @@ function hasTimeRequestContext(text: string, start: number, end: number) {
   const before = text.slice(Math.max(0, start - 60), start);
   const after = text.slice(end, end + 36);
   return (
-    /\b(?:need|require|take|allow|give|reserve|block|spend)(?:\s+[\p{L}\d]+){0,3}\s*$/iu.test(
+    /\b(?:give\s+me|allow\s+me|reserve|block)(?:\s+[\p{L}\d]+){0,2}\s*$/iu.test(
       before,
     ) ||
-    /\b(?:will|would|can|could)\s+(?:take|need|require|allow|give|reserve|block|spend)(?:\s+[\p{L}\d]+){0,3}\s*$/iu.test(
+    /\b(?:i|we)\s*(?:'ll|will)\s+(?:call|send|get\s+back)\b[\s\S]{0,36}\bin\s*$/iu.test(
       before,
     ) ||
-    /(?:मुझे|हमें)(?:\s+[\p{L}\d]+){0,5}\s*$/u.test(before) ||
-    /^\s*(?:तक|के लिए)\s*(?:चलेगा|चलेगी|लगेगा|लगेगी|चाहिए)/u.test(after)
+    (/(?:मुझे|हमें)(?:\s+[\p{L}\d]+){0,5}\s*$/u.test(before) &&
+      /^\s*(?:का\s+time\s+लगेगा|तक\s+चलेगा|तक\s+चलेगी)/u.test(after)) ||
+    /^\s*(?:दीजिए|दीजिये|दें|दे दीजिए)/u.test(after)
   );
 }
 

@@ -139,6 +139,9 @@ it("prevents spreadsheet formulas in exported CSV cells", () => {
   expect(csvCell("=1+1")).toBe("'=1+1");
   expect(csvCell("+SUM(A1:A2)")).toBe("'+SUM(A1:A2)");
   expect(csvCell("-10")).toBe("'-10");
+  expect(csvCell(-10)).toBe("-10");
   expect(csvCell("@cmd,now")).toBe('"\'@cmd,now"');
+  expect(csvCell("\t=1+1")).toBe('"\'\t=1+1"');
+  expect(csvCell("\r=1+1")).toBe('"\'\r=1+1"');
   expect(csvCell("ordinary text")).toBe("ordinary text");
 });
