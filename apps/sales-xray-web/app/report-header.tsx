@@ -145,7 +145,7 @@ export function ReportHeader({
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const title = callTitle(label, "Sales call report");
+  const title = callTitle(label, "Untitled call");
   const canRename = claimed && label !== null && rename !== undefined;
 
   useEffect(() => {

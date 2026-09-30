@@ -8,6 +8,7 @@ import {
   FileText,
   Lightbulb,
   PanelsTopLeft,
+  TableProperties,
   Undo2,
   UserRound,
   X,
@@ -49,6 +50,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   skills: ChartNoAxesColumnIncreasing,
   "next-call-plan": Lightbulb,
   transcript: BookOpen,
+  "raw-data": TableProperties,
 };
 
 function SectionIcon({ id }: { id: string }) {

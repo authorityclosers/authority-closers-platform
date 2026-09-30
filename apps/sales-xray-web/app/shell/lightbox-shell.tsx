@@ -45,6 +45,7 @@ import {
 } from "../dashboard/dashboard-data";
 import {
   getShellState,
+  RECENTS_CHANGED_EVENT,
   recentCallsForContext,
   updateShellState,
   type ShellRecentCall,
@@ -227,6 +228,24 @@ function LightboxShellFrame({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Recents refetch when a call is created or finishes, and when the tab
+  // comes back into view.
+  const [recentsNudge, setRecentsNudge] = useState(0);
+  useEffect(() => {
+    const nudge = () => setRecentsNudge((count) => count + 1);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") nudge();
+    };
+    window.addEventListener(RECENTS_CHANGED_EVENT, nudge);
+    window.addEventListener("focus", nudge);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener(RECENTS_CHANGED_EVENT, nudge);
+      window.removeEventListener("focus", nudge);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   useEffect(() => {
     if (
       !authenticated ||
@@ -241,19 +260,22 @@ function LightboxShellFrame({
       return;
     }
     const cached = getShellState();
+    const sameContext = cached.recentCallsContextKey === recentContextKey;
     if (
-      cached.recentCallsContextKey === recentContextKey &&
+      sameContext &&
       cached.recentFetchedAt !== null &&
-      Date.now() - cached.recentFetchedAt < 60_000
+      Date.now() - cached.recentFetchedAt < (recentsNudge ? 3_000 : 60_000)
     ) {
       return;
     }
     const controller = new AbortController();
-    updateShellState({
-      recentCalls: [],
-      recentCallsContextKey: null,
-      recentFetchedAt: null,
-    });
+    // Keep the list on screen while refreshing the same account's Recents.
+    if (!sameContext)
+      updateShellState({
+        recentCalls: [],
+        recentCallsContextKey: null,
+        recentFetchedAt: null,
+      });
     readRecentCalls(controller.signal)
       .then((submissions) => {
         if (controller.signal.aborted) return;
@@ -284,7 +306,7 @@ function LightboxShellFrame({
         });
       });
     return () => controller.abort();
-  }, [authenticated, recentContextKey]);
+  }, [authenticated, recentContextKey, recentsNudge]);
 
   useEffect(() => {
     if (!authenticated || process.env.NODE_ENV === "test") {

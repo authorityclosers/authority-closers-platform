@@ -899,3 +899,96 @@
 .miniHead {
   opacity: 0;
 }
+
+/* ---------- One waveform, one view at a time ----------
+   A small segmented switch picks what the band under the waveform shows:
+   who talked, the call's stages, or the prospect's interest. */
+.lenses {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 11px;
+  background: var(--lx-sunken);
+}
+.lenses button {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-muted);
+  font: 600 12.5px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.lenses button:hover {
+  color: var(--lx-ink);
+}
+.lenses button[aria-pressed="true"] {
+  background: var(--lx-surface);
+  box-shadow:
+    var(--lx-shadow-1),
+    0 0 0 0.5px var(--lx-line);
+  color: var(--lx-ink);
+}
+.lenses button:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+.subhead {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+}
+.note {
+  color: var(--lx-muted);
+  font: 500 12.5px/1.4 var(--lx-font-ui);
+}
+.note b {
+  color: var(--lx-ink-2);
+  font-weight: 700;
+}
+/* Prospect's interest: their share of the talk each minute. */
+.interest {
+  position: relative;
+  height: 30px;
+  overflow: visible;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lx-line-soft) 60%, transparent);
+  animation: lane-in 700ms var(--lx-ease-move) 80ms backwards;
+}
+.interest svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.interestArea {
+  fill: color-mix(in srgb, var(--lx-teal) 18%, transparent);
+}
+.interestLine {
+  fill: none;
+  stroke: var(--lx-teal);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.quiet {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 0;
+  border-left: 1.5px dashed var(--lx-danger);
+}
+.stagesEmpty {
+  height: 14px;
+  border: 1px dashed var(--lx-line-strong);
+  border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .interest {
+    animation: none;
+  }
+}

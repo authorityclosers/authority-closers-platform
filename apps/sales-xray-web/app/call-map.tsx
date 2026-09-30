@@ -3,7 +3,7 @@
 import {
   MessagesSquare,
   Play,
-  Repeat2,
+  MessageCircleQuestion,
   Sparkles,
   Target,
   Timer,
@@ -18,6 +18,12 @@ import {
   type PointerEvent,
 } from "react";
 
+import {
+  interestSeries,
+  questionsAsked,
+  quietPoint,
+  talkAfter,
+} from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type {
   Finding,
@@ -59,14 +65,33 @@ const STEP_MS = 5000;
 const PAGE_MS = 30000;
 
 const KINDS = [
-  { key: "strengths", label: "Strength", tone: "strength" },
-  { key: "objection_analysis", label: "Objection", tone: "objection" },
-  { key: "missed_opportunities", label: "Missed", tone: "missed" },
+  { key: "strengths", label: "Done well", tone: "strength" },
+  { key: "objection_analysis", label: "Pushback", tone: "objection" },
+  { key: "missed_opportunities", label: "Missed chance", tone: "missed" },
   { key: "closing_analysis", label: "Closing", tone: "closing" },
   { key: "improvements", label: "To improve", tone: "improve" },
 ] as const;
 
 type Tone = (typeof KINDS)[number]["tone"];
+
+/** What the band under the waveform shows: one view at a time. */
+type Lens = "who" | "stages" | "interest";
+const LENSES: Array<{ key: Lens; label: string }> = [
+  { key: "who", label: "Who talked" },
+  { key: "stages", label: "Call stages" },
+  { key: "interest", label: "Prospect's interest" },
+];
+const LENS_KEY = "ac.xray.map-lens";
+
+function readLens(): Lens {
+  try {
+    const saved =
+      typeof window === "undefined" ? null : localStorage.getItem(LENS_KEY);
+    return saved === "stages" || saved === "interest" ? saved : "who";
+  } catch {
+    return "who";
+  }
+}
 type Marker = {
   key: string;
   tone: Tone;
@@ -285,6 +310,7 @@ export function CallMap({
     anchor: HTMLElement;
   } | null>(null);
   const [declined, setDeclined] = useState<string[]>([]);
+  const [lens, setLens] = useState<Lens>(readLens);
   const { profiles, save, canSave } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const total = Math.max(1, durationMs);
@@ -347,6 +373,67 @@ export function CallMap({
   const named = lanes.some(
     (lane) => lane.speakerId !== null && profiles[lane.speakerId],
   );
+
+  function chooseLens(next: Lens) {
+    setLens(next);
+    try {
+      localStorage.setItem(LENS_KEY, next);
+    } catch {
+      // A remembered view is a convenience only.
+    }
+  }
+
+  // The prospect: named as such, else the voice that is not the seller on a
+  // two-person call, else the quieter of the first two voices.
+  const prospectVoice = (() => {
+    const named = facts.voices.find((id) => profiles[id]?.role === "prospect");
+    if (named) return named;
+    const seller = facts.voices.find(
+      (id) =>
+        profiles[id]?.role === "you" || profiles[id]?.role === "salesperson",
+    );
+    if (seller && facts.voices.length === 2)
+      return facts.voices.find((id) => id !== seller) ?? null;
+    if (facts.voices.length < 2) return null;
+    return (facts.shares[1] ?? 0) <= (facts.shares[0] ?? 0)
+      ? facts.voices[1]
+      : facts.voices[0];
+  })();
+  const interest = useMemo(
+    () => (prospectVoice ? interestSeries(transcript, prospectVoice) : []),
+    [transcript, prospectVoice],
+  );
+  const quiet = useMemo(() => quietPoint(interest), [interest]);
+  const quietMs = quiet === null ? null : quiet * 60_000;
+  const quietTalkMs =
+    quietMs === null || !prospectVoice
+      ? 0
+      : talkAfter(transcript, prospectVoice, quietMs);
+  const interestPath = (() => {
+    if (!interest.length) return null;
+    const points = interest.map((share, bin) => [
+      Math.min(total, (bin + 0.5) * 60_000),
+      1 - (share ?? 0) * 0.92,
+    ]);
+    const line = points
+      .map(
+        ([x, y], index) =>
+          `${index ? "L" : "M"}${x.toFixed(0)} ${y.toFixed(3)}`,
+      )
+      .join(" ");
+    return {
+      line,
+      area: `${line} L${points[points.length - 1][0].toFixed(0)} 1 L${points[0][0].toFixed(0)} 1 Z`,
+    };
+  })();
+  const questionsPerLane = useMemo(() => {
+    const counts = new Array<number>(Math.max(1, lanes.length)).fill(0);
+    for (const row of questionsAsked(transcript)) {
+      const lane = laneOf[facts.voices.indexOf(row.voice)];
+      if (lane !== undefined) counts[lane] += 1;
+    }
+    return counts;
+  }, [transcript, laneOf, lanes.length, facts.voices]);
 
   // One tap confirms who sold on this call, suggested from what was said:
   // "you" only when the seller says (or is greeted with) your own name,
@@ -443,114 +530,36 @@ export function CallMap({
       aria-label="Call map"
       data-focus={focusTone ?? undefined}
       style={
-        { "--lanes": lanes.length > 1 ? lanes.length : 0 } as CSSProperties
+        {
+          "--lanes":
+            lens === "who"
+              ? lanes.length > 1
+                ? lanes.length
+                : 0
+              : lens === "interest"
+                ? 4
+                : 2,
+        } as CSSProperties
       }
     >
       <div className={styles.card}>
         <div className={styles.head}>
-          {lanes.length > 1 ? (
-            <div className={styles.who}>
-              <div
-                className={styles.speakers}
-                role="group"
-                aria-label="Speakers"
-                data-speaker-chips
+          <div
+            className={styles.lenses}
+            role="group"
+            aria-label="What the map shows"
+          >
+            {LENSES.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={lens === option.key}
+                onClick={() => chooseLens(option.key)}
               >
-                {lanes.map((lane) => {
-                  const profile = lane.speakerId
-                    ? profiles[lane.speakerId]
-                    : undefined;
-                  const editable = canSave && lane.speakerId !== null;
-                  const name = laneName(lane);
-                  return (
-                    <button
-                      key={lane.lane}
-                      type="button"
-                      className={styles.speaker}
-                      data-voice={lane.lane}
-                      style={voiceStyle(lane.lane)}
-                      aria-expanded={
-                        editable ? editingVoice === lane.lane : undefined
-                      }
-                      aria-label={editable ? `Edit ${name}` : name}
-                      onPointerEnter={() => setHoverVoice(lane.lane)}
-                      onPointerLeave={() => setHoverVoice(null)}
-                      onClick={(event) => {
-                        if (!editable) return;
-                        const anchor = event.currentTarget;
-                        setEditing((current) =>
-                          current?.voice === lane.lane
-                            ? null
-                            : { voice: lane.lane, anchor },
-                        );
-                      }}
-                    >
-                      {lane.speakerId !== null ? (
-                        <SpeakerAvatar
-                          voice={lane.lane}
-                          profile={profile}
-                          youName={accountName}
-                        />
-                      ) : (
-                        <i aria-hidden="true" />
-                      )}
-                      <span className={styles.speakerName}>{name}</span>
-                      {profile?.role ? (
-                        <small>{ROLE_LABELS[profile.role]}</small>
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {editing !== null && editingId !== null ? (
-                  <SpeakerEditor
-                    key={editingId}
-                    voice={editing.voice}
-                    anchor={editing.anchor}
-                    label={`Speaker ${editing.voice + 1}`}
-                    share={ratio[editing.voice] ?? 0}
-                    sample={samples.get(editingId) ?? null}
-                    profile={profiles[editingId]}
-                    youName={accountName}
-                    suggestedIcon={prospectIcon}
-                    onSave={(profile) => {
-                      if (!save({ [editingId]: profile })) return false;
-                      setEditing(null);
-                      return true;
-                    }}
-                    onClose={closeEditor}
-                  />
-                ) : null}
-              </div>
-              {askId !== null && askVoice >= 0 ? (
-                <span className={styles.ask} role="status">
-                  <Sparkles size={13} aria-hidden="true" />
-                  <span>
-                    <b>{nameOf(askVoice)}</b>
-                    {spoken.names[askId] && !askIsYou
-                      ? ` · ${spoken.names[askId]}`
-                      : ""}{" "}
-                    {askIsYou ? "looks like you" : "is the salesperson"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => confirmSeller(askId, askIsYou)}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDeclined((current) => [...current, askId])
-                    }
-                  >
-                    No
-                  </button>
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            <span />
-          )}
+                {option.label}
+              </button>
+            ))}
+          </div>
           <span className={styles.legend}>
             {present.map((kind) => (
               <span
@@ -564,6 +573,134 @@ export function CallMap({
               </span>
             ))}
           </span>
+        </div>
+        <div className={styles.subhead}>
+          {lens === "who" ? (
+            lanes.length > 1 ? (
+              <div className={styles.who}>
+                <div
+                  className={styles.speakers}
+                  role="group"
+                  aria-label="Speakers"
+                  data-speaker-chips
+                >
+                  {lanes.map((lane) => {
+                    const profile = lane.speakerId
+                      ? profiles[lane.speakerId]
+                      : undefined;
+                    const editable = canSave && lane.speakerId !== null;
+                    const name = laneName(lane);
+                    return (
+                      <button
+                        key={lane.lane}
+                        type="button"
+                        className={styles.speaker}
+                        data-voice={lane.lane}
+                        style={voiceStyle(lane.lane)}
+                        aria-expanded={
+                          editable ? editingVoice === lane.lane : undefined
+                        }
+                        aria-label={editable ? `Edit ${name}` : name}
+                        onPointerEnter={() => setHoverVoice(lane.lane)}
+                        onPointerLeave={() => setHoverVoice(null)}
+                        onClick={(event) => {
+                          if (!editable) return;
+                          const anchor = event.currentTarget;
+                          setEditing((current) =>
+                            current?.voice === lane.lane
+                              ? null
+                              : { voice: lane.lane, anchor },
+                          );
+                        }}
+                      >
+                        {lane.speakerId !== null ? (
+                          <SpeakerAvatar
+                            voice={lane.lane}
+                            profile={profile}
+                            youName={accountName}
+                          />
+                        ) : (
+                          <i aria-hidden="true" />
+                        )}
+                        <span className={styles.speakerName}>{name}</span>
+                        {profile?.role ? (
+                          <small>{ROLE_LABELS[profile.role]}</small>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {editing !== null && editingId !== null ? (
+                    <SpeakerEditor
+                      key={editingId}
+                      voice={editing.voice}
+                      anchor={editing.anchor}
+                      label={`Speaker ${editing.voice + 1}`}
+                      share={ratio[editing.voice] ?? 0}
+                      sample={samples.get(editingId) ?? null}
+                      profile={profiles[editingId]}
+                      youName={accountName}
+                      suggestedIcon={prospectIcon}
+                      onSave={(profile) => {
+                        if (!save({ [editingId]: profile })) return false;
+                        setEditing(null);
+                        return true;
+                      }}
+                      onClose={closeEditor}
+                    />
+                  ) : null}
+                </div>
+                {askId !== null && askVoice >= 0 ? (
+                  <span className={styles.ask} role="status">
+                    <Sparkles size={13} aria-hidden="true" />
+                    <span>
+                      <b>{nameOf(askVoice)}</b>
+                      {spoken.names[askId] && !askIsYou
+                        ? ` · ${spoken.names[askId]}`
+                        : ""}{" "}
+                      {askIsYou ? "looks like you" : "is the salesperson"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => confirmSeller(askId, askIsYou)}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDeclined((current) => [...current, askId])
+                      }
+                    >
+                      No
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <span className={styles.note}>One voice on this call.</span>
+            )
+          ) : lens === "stages" ? (
+            <span className={styles.note}>
+              Stages (hello, questions, pitch, wrap-up) show here once the
+              analysis marks them.
+            </span>
+          ) : prospectVoice ? (
+            <span className={styles.note}>
+              How much <b>{nameOf(facts.voices.indexOf(prospectVoice))}</b>{" "}
+              talked each minute
+              {quietMs !== null ? (
+                <>
+                  {" "}
+                  · went quiet at <b>{formatClock(quietMs)}</b> and talked{" "}
+                  {Math.round(quietTalkMs / 1000)} s after that
+                </>
+              ) : null}
+            </span>
+          ) : (
+            <span className={styles.note}>
+              Needs two voices to show interest.
+            </span>
+          )}
         </div>
 
         <div className={styles.timeline}>
@@ -582,8 +719,14 @@ export function CallMap({
               <svg
                 className={styles.wave}
                 data-morph-wave
-                data-voice={focusVoice ?? undefined}
-                style={focusVoice !== null ? voiceStyle(focusVoice) : undefined}
+                data-voice={
+                  lens === "who" ? (focusVoice ?? undefined) : undefined
+                }
+                style={
+                  lens === "who" && focusVoice !== null
+                    ? voiceStyle(focusVoice)
+                    : undefined
+                }
                 viewBox={`0 0 ${BIN_COUNT * 4} 56`}
                 preserveAspectRatio="none"
                 aria-hidden="true"
@@ -599,7 +742,9 @@ export function CallMap({
                         : styles.pending;
                   const hot = hoverBin >= 0 && Math.abs(index - hoverBin) <= 1;
                   const dim =
-                    focusVoice !== null && owners[index] !== focusVoice;
+                    lens === "who" &&
+                    focusVoice !== null &&
+                    owners[index] !== focusVoice;
                   return (
                     <line
                       key={index}
@@ -654,7 +799,7 @@ export function CallMap({
               </button>
             ))}
           </div>
-          {lanes.length > 1 ? (
+          {lens === "who" && lanes.length > 1 ? (
             <div className={styles.lanes} aria-hidden="true">
               {lanes.map((lane) => (
                 <svg
@@ -682,6 +827,27 @@ export function CallMap({
                 </svg>
               ))}
             </div>
+          ) : null}
+          {lens === "interest" && interestPath ? (
+            <div className={styles.interest} aria-hidden="true">
+              <svg viewBox={`0 0 ${total} 1`} preserveAspectRatio="none">
+                <path className={styles.interestArea} d={interestPath.area} />
+                <path
+                  className={styles.interestLine}
+                  d={interestPath.line}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+              {quietMs !== null ? (
+                <span
+                  className={styles.quiet}
+                  style={{ left: `${(quietMs / total) * 100}%` }}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          {lens === "stages" ? (
+            <div className={styles.stagesEmpty} aria-hidden="true" />
           ) : null}
           {progress > 0 ? (
             <span
@@ -782,7 +948,7 @@ export function CallMap({
           </span>
           <span className={styles.body}>
             <small>
-              Talk ratio
+              Who talked more
               {named ? ` · ${lanes.map(laneName).join(" : ")}` : ""}
             </small>
             <b>{lanes.length > 1 ? ratio.join(" : ") : "One voice"}</b>
@@ -808,7 +974,7 @@ export function CallMap({
           </span>
           <span className={styles.body}>
             <small>
-              Longest monologue
+              Longest non-stop talk
               {facts.longest.voice >= 0
                 ? ` · ${nameOf(facts.longest.voice)}`
                 : ""}
@@ -818,13 +984,15 @@ export function CallMap({
         </div>
         <div className={styles.stat} data-tone="blue">
           <span className={styles.icon} aria-hidden="true">
-            <Repeat2 size={15} />
+            <MessageCircleQuestion size={15} />
           </span>
           <span className={styles.body}>
-            <small>Speaker switches</small>
+            <small>
+              Questions asked
+              {lanes.length > 1 ? ` · ${lanes.map(laneName).join(" : ")}` : ""}
+            </small>
             <b>
-              {facts.switchesPerMinute.toFixed(1)}
-              <small> / min</small>
+              {questionsPerLane.slice(0, Math.max(1, lanes.length)).join(" : ")}
             </b>
           </span>
         </div>
@@ -833,10 +1001,10 @@ export function CallMap({
             <Target size={15} />
           </span>
           <span className={styles.body}>
-            <small>From this report</small>
+            <small>What the report found</small>
             <b>
               {wins}
-              <small> {wins === 1 ? "win" : "wins"} · </small>
+              <small> done well · </small>
               {toWorkOn}
               <small> to work on</small>
             </b>

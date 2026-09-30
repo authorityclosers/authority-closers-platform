@@ -221,7 +221,7 @@ it("names a speaker, gives them a role and an icon, and remembers it", async () 
     closer: { name: "Rahul Mehta", role: "prospect", icon: "carpentry" },
   });
   expect(host.querySelector("figcaption")?.textContent).toContain(
-    "Talk ratio · Speaker 1 : Rahul Mehta",
+    "Who talked more · Speaker 1 : Rahul Mehta",
   );
 });
 
@@ -296,10 +296,10 @@ it("suggests which voice is you from an introduction, confirmed in one tap", asy
 
 it("summarises talk ratio, monologue, switches and the report balance", () => {
   const text = host.querySelector("figcaption")?.textContent ?? "";
-  expect(text).toMatch(/Talk ratio\d+ : \d+/);
-  expect(text).toContain("Longest monologue");
-  expect(text).toContain("Speaker switches");
-  expect(text).toMatch(/1 win · \d+ to work on/);
+  expect(text).toMatch(/Who talked more\d+ : \d+/);
+  expect(text).toContain("Longest non-stop talk");
+  expect(text).toMatch(/Questions asked · Speaker 1 : Speaker 2\d+ : \d+/);
+  expect(text).toMatch(/1 done well · \d+ to work on/);
 });
 
 it("names another salesperson and the prospect from the opening, in one tap", async () => {
@@ -484,4 +484,23 @@ it("does not offer a name confirmation for an ordinary here phrase", async () =>
     ),
   ).toBe(false);
   expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+});
+
+it("switches the band under the waveform: who talked, stages, interest", async () => {
+  const lens = (name: string) =>
+    Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="What the map shows"] button',
+      ),
+    ).find((button) => button.textContent === name)!;
+  expect(lens("Who talked").getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(2);
+
+  await act(async () => lens("Prospect's interest").click());
+  expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(0);
+  expect(host.textContent).toContain("talked each minute");
+  expect(localStorage.getItem("ac.xray.map-lens")).toBe("interest");
+
+  await act(async () => lens("Call stages").click());
+  expect(host.textContent).toContain("once the analysis marks them");
 });

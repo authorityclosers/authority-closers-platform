@@ -422,3 +422,21 @@ export function isAccountName(
   const bare = spoken.replace(/\s+जी$/u, "").toLocaleLowerCase();
   return bare === first.toLocaleLowerCase();
 }
+
+export const ROLE_WORDS: Readonly<Record<SpeakerRole, string>> = {
+  you: "You",
+  salesperson: "Salesperson",
+  prospect: "Prospect",
+  other: "Other",
+};
+
+/** The name to show for a speaker: typed name, you, else "Speaker n". */
+export function speakerName(
+  index: number,
+  profile: SpeakerProfile | undefined,
+  accountName: string | null,
+): string {
+  if (profile?.name) return profile.name;
+  if (profile?.role === "you") return firstName(accountName) ?? "You";
+  return `Speaker ${index + 1}`;
+}

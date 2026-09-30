@@ -81,3 +81,6 @@ export function recentCallsForContext(
     ? state.recentCalls
     : [];
 }
+
+/** Sent when a call is created, renamed away or finishes: Recents refetch. */
+export const RECENTS_CHANGED_EVENT = "sales-xray:recents-changed";
