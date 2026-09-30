@@ -939,6 +939,8 @@ class OfflineConversationWorker:
                     await JobRepository(db).complete(work.job_id, work.lease_token)
 
     async def _erase_job(self, work: Work) -> None:
+        from ac_platform.conversation_intelligence.source_objects import release_source_object
+
         async with _FencedExecutor(self.storage.root) as fenced:  # noqa: SIM117
             async with self.sessions() as db, db.begin():
                 job = await self._job(db, work)
@@ -1007,6 +1009,7 @@ class OfflineConversationWorker:
                 )
                 if not receipt.local_inventory_empty:
                     raise StorageError("storage_erasure_incomplete")
+                await release_source_object(db, recording, self.storage, datetime.now(UTC))
                 await ConversationApplication(db).finish_erasure(
                     job_id=work.job_id,
                     lease_token=work.lease_token,

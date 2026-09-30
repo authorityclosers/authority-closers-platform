@@ -1,7 +1,7 @@
 """Fictional source readers follow real references without falling back after release."""
 
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 import pytest
@@ -17,11 +17,8 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.inference import ConversationInference
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
-from ac_platform.conversation_intelligence.models import ConversationRun
+from ac_platform.conversation_intelligence.models import ConversationRecording, ConversationRun
 from ac_platform.conversation_intelligence.signals import inspect_media
-from ac_platform.conversation_intelligence.source_object_models import (
-    ConversationSourceObject as Source,
-)
 from ac_platform.conversation_intelligence.source_object_models import (
     ConversationSourceReference as Reference,
 )
@@ -55,7 +52,18 @@ def postgres_harness():
 def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch, reader, history):
     async def exercise():
         recipe = AUDIOATLAS_HOSTED_RECIPE if reader == "hosted" else AUDIOATLAS_RECIPE
-        prepared = await _prepare(postgres_harness, tmp_path, recipe_revision=recipe)
+        store_source = ConversationApplication.store_source
+
+        async def legacy_upload(self, actor, recording_id, **kwargs):
+            # Model a pre-switch ready recording, without deleting reference history.
+            recording = await self.database.get(ConversationRecording, recording_id)
+            recording.state = "ready"
+            return await store_source(self, actor, recording_id, **kwargs)
+
+        with monkeypatch.context() as setup:
+            if history == "none":
+                setup.setattr(ConversationApplication, "store_source", legacy_upload)
+            prepared = await _prepare(postgres_harness, tmp_path, recipe_revision=recipe)
         engine = create_async_engine(postgres_harness.url)
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         state, storage = prepared.state, prepared.storage
@@ -68,32 +76,13 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
             if reader in {"report", "inference"}:
                 assert await worker.run_once()
             if history != "none":
-                storage.put(shared, [prepared.data], expected_sha256=state.source_sha256)
                 async with sessions() as db, db.begin():
-                    source = Source(
-                        id=uuid4(),
-                        tenant_id=state.tenant_id,
-                        source_sha256=state.source_sha256,
-                        created_at=state.now,
-                    )
-                    db.add(source)
-                    await db.flush()
-                    db.add(
-                        Reference(
-                            recording_id=prepared.recording_id,
-                            tenant_id=state.tenant_id,
-                            person_id=state.person_id,
-                            source_object_id=source.id,
-                            created_at=state.now,
-                        )
-                    )
-                if history == "released":
-                    async with sessions() as db, db.begin():
-                        reference = await db.get(Reference, prepared.recording_id)
+                    reference = await db.get(Reference, prepared.recording_id)
+                    assert reference is not None
+                    if history == "released":
+                        storage.put(legacy, [prepared.data], expected_sha256=state.source_sha256)
                         reference.released_at = state.now
                         reference.release_reason = "owner_erasure"
-                elif reader != "upload":
-                    storage.delete(legacy)
             reads = []
             original = storage.iter_bytes
 
@@ -213,6 +202,8 @@ def test_source_reader_reference_routing(postgres_harness, tmp_path, monkeypatch
             expected_reads = (
                 [] if history == "released" else [shared if history == "live" else legacy]
             )
+            if reader == "upload" and history == "live":
+                expected_reads = []  # Shared publication never re-reads stored bytes.
             if reader == "http":
                 expected_reads *= 2
             if reader in {"native", "hosted"} and history != "released":
