@@ -28,6 +28,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 PREFIXES = ("apps/sales-xray-web/app/", "apps/sales-xray-web/public/")
+FIXTURES = "apps/sales-xray-web/tests/fixtures/"
+LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 STUDIO = "task/ui/296-studio-"
 TOKENS = re.compile(
     rb"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|"
@@ -84,7 +86,18 @@ class Sync:
         self.runner, self.now = runner, time.time() if now is None else now
         self.notification_failed = False
         self.deferred = False
-        self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        self.state = {}
+
+    def load(self):
+        try:
+            self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+            if not isinstance(self.state, dict):
+                raise ValueError("Studio state must be an object")
+        except ValueError:
+            self.state = {}
+            self.state_path.rename(self.state_path.with_name(f"state.json.bad-{time.time_ns()}"))
+            self.event("alert", "bad-state", "Malformed studio state moved aside; starting empty.")
+            self.save()
 
     def run(self, *args, env=None, input_data=None):
         return self.runner(list(args), cwd=self.repo, env=env, input_data=input_data)
@@ -117,14 +130,21 @@ class Sync:
     def head(self):
         return self.git("rev-parse", "HEAD").strip()
 
+    def allowed(self, path):
+        return path.startswith(PREFIXES) or (
+            path.startswith(FIXTURES)
+            and "/" not in path.removeprefix(FIXTURES)
+            and path.endswith(".json")
+        )
+
     def paths(self):
         changed = self.git("diff", "--name-only", "--no-renames", "-z", "HEAD")
         staged = self.git("diff", "--cached", "--name-only", "--no-renames", "-z")
         untracked = self.git("ls-files", "--others", "--exclude-standard", "-z")
         paths = sorted(set((changed + staged + untracked).split("\0")) - {""})
-        if any(not p.startswith(PREFIXES) for p in paths):
+        if any(not self.allowed(p) for p in paths):
             self.event("alert", "outside-allowlist", "Non-screen edits remain uncommitted.")
-        return [p for p in paths if p.startswith(PREFIXES)]
+        return [p for p in paths if self.allowed(p)]
 
     def safe_name(self, path):
         return not any(
@@ -268,6 +288,9 @@ class Sync:
         commits = []
         # A refresh merge only brings main into this slice; the new slice has main.
         for commit in candidates:
+            raw = self.git("cat-file", "commit", commit).encode("utf-8", "surrogateescape")
+            if TOKENS.search(raw):
+                raise SyncError("Carry-over contains refused content; local history preserved")
             parents = self.git("rev-list", "--parents", "-n", "1", commit).split()[1:]
             if len(parents) == 2 and self.is_ancestor(parents[1], main_head):
                 try:
@@ -281,7 +304,7 @@ class Sync:
             commits.append(commit)
             paths = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", commit)
             for path in filter(None, paths.split("\0")):
-                if not path.startswith(PREFIXES) or not self.safe_name(path):
+                if not self.allowed(path) or not self.safe_name(path):
                     raise SyncError("Carry-over contains a refused path; local history preserved")
                 entry = self.git("ls-tree", commit, "--", path)
                 if entry:
@@ -296,6 +319,15 @@ class Sync:
                         raise SyncError(
                             "Carry-over contains refused content; local history preserved"
                         )
+        if (
+            commits
+            and all(self.is_ancestor(commit, head) for commit in commits)
+            and (
+                not self.git("diff", "--name-only", main_head, head).strip()
+                or not self.git("diff", "--name-only", f"{commits[0]}^", head).strip()
+            )
+        ):
+            commits = []
         tag = pending.get("archive")
         if commits and (not tag or self.git("rev-parse", f"refs/tags/{tag}").strip() != head):
             tag = f"archive/studio-{int(self.now)}-{head[:12]}"
@@ -312,6 +344,11 @@ class Sync:
                 pending.update(parked=True, main_base=self.head())
                 self.save()
             if not commits:
+                aligned = main_head
+                if self.git("diff", "--name-only", main_head, "HEAD").strip():
+                    aligned = pending["base"]
+                if not self.git("diff", "--name-only", aligned, "HEAD").strip():
+                    self.git("update-ref", "refs/heads/main", aligned, self.head())
                 self.git("merge", "--ff-only", "origin/main")
                 del self.state["pending"]
                 self.save()
@@ -324,16 +361,42 @@ class Sync:
                 pending["target"].removeprefix("task/ui/"),
             )
         except SyncError:
-            pending.setdefault("busy_since", self.now)
-            if self.now - pending["busy_since"] >= 7200 and not pending.get("alerted"):
-                self.event(
-                    "alert",
-                    "gate-busy",
-                    "Studio gate blocked for at least two hours; local history preserved.",
-                )
-                pending["alerted"] = True
-            self.save()
-            return False
+            return self.gate_busy()
+        return self.finish_transfer()
+
+    def gate_busy(self):
+        pending = self.state["pending"]
+        pending.setdefault("busy_since", self.now)
+        if self.now - pending["busy_since"] >= 7200 and not pending.get("alerted"):
+            self.event(
+                "alert",
+                "gate-busy",
+                "Studio gate blocked for at least two hours; local history preserved.",
+            )
+            pending["alerted"] = True
+        self.save()
+        return False
+
+    def retry_transfer(self):
+        target = self.state["pending"]["target"]
+        try:
+            heads = self.git("ls-remote", "--heads", "origin")
+            for line in heads.splitlines():
+                branch = line.split()[1].removeprefix("refs/heads/")
+                # Other named lanes may run in parallel; UI and exclusive tasks may not.
+                if (
+                    branch.startswith("task/")
+                    and branch != target
+                    and not re.fullmatch(r"task/(sales-xray|platform|admin|devenv)/[^/]+", branch)
+                ):
+                    raise SyncError("Studio lane claimed while start was interrupted")
+            self.git("push", "--set-upstream", "origin", target)
+        except SyncError:
+            return self.gate_busy()
+        return self.finish_transfer()
+
+    def finish_transfer(self):
+        pending = self.state["pending"]
         # The checkpoint is archived; align local main using an expected-old guard.
         self.git(
             "update-ref",
@@ -341,10 +404,10 @@ class Sync:
             self.git("rev-parse", "origin/main").strip(),
             pending["main_base"],
         )
-        if commits:
+        if pending["commits"]:
             pending["replaying"] = True
             self.save()
-            self.git("cherry-pick", "--no-commit", *commits)
+            self.git("cherry-pick", "--no-commit", *pending["commits"])
             self.git("reset", "-q")
             self.commit(self.paths())
         del self.state["pending"]
@@ -426,6 +489,7 @@ class Sync:
         return full.lstat().st_mtime
 
     def tick(self, commit_only=False):
+        self.load()
         branch = self.branch()
         gitdir = Path(self.git("rev-parse", "--absolute-git-dir").strip())
         if (branch != "main" and not branch.startswith("task/ui/")) or any(
@@ -445,6 +509,18 @@ class Sync:
             self.deferred = True
             return
         pending = self.state.get("pending")
+        if (
+            pending
+            and branch == pending["target"]
+            and pending["source"] == "main"
+            and not pending.get("replaying")
+            and not commit_only
+        ):
+            # start switched branches; re-check lane ownership before retrying the claim.
+            if not self.retry_transfer():
+                return
+            pending = None
+            paths = self.paths()
         if pending and (
             (pending["source"] != branch and not (pending.get("parked") and branch == "main"))
             or pending.get("replaying")
@@ -477,9 +553,7 @@ def main(argv=None):
         "--state", type=Path, default=Path.home() / ".local/state/ac-studio-sync/state.json"
     )
     parser.add_argument("--spool", type=Path, default=Path("/var/lib/ac-studio/notify"))
-    parser.add_argument(
-        "--lock", type=Path, default=Path(f"/run/user/{os.getuid()}/ac-studio-sync.lock")
-    )
+    parser.add_argument("--lock", type=Path, default=LOCK)
     parser.add_argument("--lock-fd", type=int, help="Inherited descriptor for the same lock file")
     parser.add_argument("--commit-only", action="store_true")
     args = parser.parse_args(argv)

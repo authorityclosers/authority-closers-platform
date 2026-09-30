@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=acdev
+RuntimeDirectory=ac-studio-sync
+RuntimeDirectoryPreserve=yes
+Environment=PATH=/home/acdev/.local/bin:/usr/local/bin:/usr/bin:/bin GH_NO_UPDATE_NOTIFIER=1 GH_PROMPT_DISABLED=1
 WorkingDirectory=/home/acdev/src/lanes/ui/authority-closers-platform
 ExecStart=/usr/bin/python3 /home/acdev/src/lanes/ui/authority-closers-platform/infra/application/development/ac-studio-sync.py
 TimeoutStartSec=300
@@ -18,7 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/acdev/src/lanes/ui/authority-closers-platform /home/acdev/.local/state/ac-studio-sync /var/lib/ac-studio/notify /run/user
+ReadWritePaths=/home/acdev/src/lanes/ui/authority-closers-platform /home/acdev/.local/state/ac-studio-sync /var/lib/ac-studio/notify /run/ac-studio-sync
 
 [Install]
 WantedBy=multi-user.target
