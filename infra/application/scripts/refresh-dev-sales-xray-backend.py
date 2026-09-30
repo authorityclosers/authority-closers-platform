@@ -13,6 +13,7 @@ import os
 import pwd
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,7 @@ STORE = BASE / "release-store"
 DEVELOPMENT = Path("/etc/authority-closers/development")
 NATIVE_UNITS = APPLICATION / "operator-inputs/development/native-units.json"
 WORKER_TEMPLATE = DEVELOPMENT / "service.operator-template.json"
+MIGRATOR_ENV = DEVELOPMENT / "migrator.env"
 API_DROPIN = Path("/etc/systemd/system/ac-dev-api.service.d/release.conf")
 WORKER_DROPIN = Path("/etc/systemd/system/ac-dev-sales-xray-worker.service.d/manifest.conf")
 API_UNIT = "ac-dev-api.service"
@@ -37,6 +39,14 @@ WORKER_UNIT = "ac-dev-sales-xray-worker.service"
 STUDIO = Path("/home/acdev/src/lanes/ui/authority-closers-platform")
 STUDIO_LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 SAFE_PATH = "/usr/local/bin:/usr/bin:/bin"
+UV_ENV = {
+    "PATH": SAFE_PATH,
+    "HOME": "/root",
+    "UV_PYTHON_DOWNLOADS": "never",
+    "UV_PYTHON_PREFERENCE": "only-system",
+    "UV_LINK_MODE": "copy",
+}
+TRAIN_NOTIFIER = Path("/opt/ac-release/current/ac_train_notify.py")
 HEALTH_WAIT_SECONDS = 60
 HEALTH_POLL_SECONDS = 2
 HEALTH_REQUEST_TIMEOUT = 3
@@ -55,6 +65,7 @@ class Paths:
     mirror: Path = MIRROR
     store: Path = STORE
     development: Path = DEVELOPMENT
+    migrator_env: Path = MIGRATOR_ENV
     native_units: Path = NATIVE_UNITS
     worker_template: Path = WORKER_TEMPLATE
     api_dropin: Path = API_DROPIN
@@ -299,7 +310,23 @@ def env_values(path: Path) -> dict[str, str]:
 
 
 def migration_environment(paths: Paths) -> dict[str, str]:
-    values = env_values(paths.development / "api.env")
+    api_values = env_values(paths.development / "api.env")
+    if "AC_DATABASE_MIGRATOR_URL" in api_values:
+        raise RefreshError("migrator_url_in_api_env")
+    if "AC_RELEASE_ID" in api_values:
+        raise RefreshError("release_id_in_api_env")
+    try:
+        metadata = paths.migrator_env.lstat()
+    except OSError as error:
+        raise RefreshError("migrator_env_invalid") from error
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != paths.owner_uid
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+        or metadata.st_nlink != 1
+    ):
+        raise RefreshError("migrator_env_invalid")
+    values = env_values(paths.migrator_env)
     if values.get("AC_ENVIRONMENT") != "development":
         raise RefreshError("development_environment_required")
     url = values.get("AC_DATABASE_MIGRATOR_URL", "")
@@ -399,7 +426,7 @@ def rollback(paths: Paths, runner, previous, marker, api, worker, service) -> bo
                     runner,
                     ["uv", "sync", "--frozen", "--no-dev", "--no-build"],
                     cwd=paths.backend,
-                    env={"PATH": SAFE_PATH, "HOME": "/root"},
+                    env=UV_ENV,
                     timeout=900,
                 ),
                 lambda: restore_file(paths.backend / ".ac-release-id", marker),
@@ -431,7 +458,7 @@ def rollback(paths: Paths, runner, previous, marker, api, worker, service) -> bo
 
 
 def alert(paths: Paths, code: str, target: str) -> None:
-    notifier = paths.application / "current-staging/infra/release/ac_train_notify.py"
+    notifier = TRAIN_NOTIFIER
     try:
         spec = importlib.util.spec_from_file_location("ac_train_notify", notifier)
         if spec is None or spec.loader is None:
@@ -637,6 +664,8 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         else:
             raise RefreshError("backend_invalid")
     check_native(paths, runner, target)
+    if shutil.which("uv", path=SAFE_PATH) is None:
+        raise RefreshError("uv_missing")
     migrate_env = migration_environment(paths)
     manifest, digest = render_manifest(paths, target)
     marker = snapshot(paths.backend / ".ac-release-id") if paths.backend.exists() else None
@@ -675,7 +704,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
             runner,
             ["uv", "sync", "--frozen", "--no-dev", "--no-build"],
             cwd=paths.backend,
-            env={"PATH": SAFE_PATH, "HOME": "/root"},
+            env=UV_ENV,
             timeout=900,
         )
         call(

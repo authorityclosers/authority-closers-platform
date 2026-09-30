@@ -143,9 +143,10 @@ def tree(tmp_path, monkeypatch):
     def release(sha):
         target = releases / sha
         target.mkdir(parents=True, exist_ok=True)
-        helper = target / "infra/application/scripts/native_artifact_compatibility.py"
+        helper = target / "scripts/native_artifact_compatibility.py"
         helper.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / "infra/application/scripts/native_artifact_compatibility.py", helper)
+        shutil.copyfile(SCRIPT, target / "scripts/refresh-dev-sales-xray-backend.py")
         return target
 
     release(source)
@@ -153,8 +154,13 @@ def tree(tmp_path, monkeypatch):
     dev = tmp_path / "etc/authority-closers/development"
     dev.mkdir(parents=True)
     (dev / "api.env").write_text(
+        "AC_ENVIRONMENT=development\nAC_DATABASE_URL=postgresql://user:fake@dev/db\n"
+    )
+    migrator_env = dev / "migrator.env"
+    migrator_env.write_text(
         "AC_ENVIRONMENT=development\nAC_DATABASE_MIGRATOR_URL=postgresql://user:secret@dev/db\n"
     )
+    migrator_env.chmod(0o600)
     (dev / "service.operator-template.json").write_text(
         json.dumps({"environment": "development", "release_id": "old"})
     )
@@ -169,6 +175,7 @@ def tree(tmp_path, monkeypatch):
         mirror=mirror,
         store=tmp_path / "release-store",
         development=dev,
+        migrator_env=migrator_env,
         native_units=native_units,
         worker_template=dev / "service.operator-template.json",
         api_dropin=tmp_path / "systemd/ac-dev-api.service.d/release.conf",
@@ -177,12 +184,24 @@ def tree(tmp_path, monkeypatch):
         studio_lock=tmp_path / "run/ac-studio-sync/ac-studio-sync.lock",
         owner_uid=os.geteuid(),
     )
-    monkeypatch.setattr(refresh.shutil, "which", lambda _: "/usr/local/bin/ac-studio-sync")
+    real_which = shutil.which
+
+    def fake_which(name, path=None):
+        if name == "uv":
+            return "/usr/local/bin/uv"
+        if name == "ac-studio-sync":
+            return "/usr/local/bin/ac-studio-sync"
+        return real_which(name, path=path)
+
+    monkeypatch.setattr(refresh.shutil, "which", fake_which)
     return paths, source, work, release
 
 
 def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     paths, sha, _, _ = tree
+    assert (
+        paths.application / "current-staging/scripts/refresh-dev-sales-xray-backend.py"
+    ).is_file()
     fake = FakeCommands(sha)
     fake.health_failures = 3
     monkeypatch.setattr(refresh.time, "sleep", lambda _: None)
@@ -198,6 +217,10 @@ def test_first_run_and_same_sha_noop(tree, capsys, monkeypatch):
     assert any(args[:4] == ["runuser", "-u", "acdev", "--"] for args, _ in fake.calls)
     migration = next(args for args, _ in fake.calls if args[0] == "setpriv")
     assert migration[-3:] == [str(paths.backend / ".venv/bin/alembic"), "upgrade", "head"]
+    uv_calls = [(args, kwargs) for args, kwargs in fake.calls if args[0] == "uv"]
+    assert uv_calls and all(kwargs["env"] == refresh.UV_ENV for _, kwargs in uv_calls)
+    assert refresh.UV_ENV["UV_PYTHON_DOWNLOADS"] == "never"
+    assert refresh.UV_ENV["UV_PYTHON_PREFERENCE"] == "only-system"
     output = capsys.readouterr().out
     assert len(output.splitlines()) == 1
     assert json.loads(output)["health"]["ok"]
@@ -258,8 +281,36 @@ def test_native_input_change_refuses_before_checkout(tree):
 
 def test_non_development_environment_refuses(tree):
     paths, sha, _, _ = tree
-    (paths.development / "api.env").write_text("AC_ENVIRONMENT=staging\n")
+    paths.migrator_env.write_text(
+        "AC_ENVIRONMENT=staging\nAC_DATABASE_MIGRATOR_URL=postgresql://fake\n"
+    )
+    paths.migrator_env.chmod(0o600)
     with pytest.raises(refresh.RefreshError, match="development_environment_required"):
+        refresh.refresh(paths, FakeCommands(sha), uid=0)
+    assert not paths.backend.exists()
+
+
+def test_missing_uv_refuses_before_backend_changes(tree, monkeypatch):
+    paths, sha, _, _ = tree
+    real_which = shutil.which
+
+    def without_uv(name, path=None):
+        if name == "uv":
+            return None
+        return real_which(name, path=path)
+
+    monkeypatch.setattr(refresh.shutil, "which", without_uv)
+    with pytest.raises(refresh.RefreshError, match="uv_missing"):
+        refresh.refresh(paths, FakeCommands(sha), uid=0)
+    assert not paths.backend.exists()
+
+
+def test_migrator_url_in_api_env_refuses_before_backend_changes(tree):
+    paths, sha, _, _ = tree
+    (paths.development / "api.env").write_text(
+        "AC_ENVIRONMENT=development\nAC_DATABASE_MIGRATOR_URL=postgresql://fake\n"
+    )
+    with pytest.raises(refresh.RefreshError, match="migrator_url_in_api_env"):
         refresh.refresh(paths, FakeCommands(sha), uid=0)
     assert not paths.backend.exists()
 
@@ -302,6 +353,8 @@ def test_restart_failure_restores_checkout_marker_and_dropins(tree, capsys):
     assert paths.api_dropin.read_bytes() == old_api
     assert paths.worker_dropin.read_bytes() == old_worker
     assert (paths.development / "service.json").read_bytes() == old_manifest
+    rollback_sync = [kwargs for args, kwargs in failed.calls if args[0] == "uv"]
+    assert rollback_sync and all(kwargs["env"] == refresh.UV_ENV for kwargs in rollback_sync)
     captured = capsys.readouterr()
     assert "secret" not in captured.out + captured.err
     result = json.loads(captured.out.splitlines()[-1])
@@ -388,7 +441,10 @@ def test_systemd_timer_and_service_contract():
     service = (directory / "ac-dev-sales-xray-refresh.service").read_text()
     timer = (directory / "ac-dev-sales-xray-refresh.timer").read_text()
     assert "User=root" in service and "MemoryMax=" in service and "CPUQuota=" in service
-    assert "/current-staging/infra/application/scripts/refresh-dev-sales-xray-backend.py" in service
+    expected_script = SCRIPT.relative_to(ROOT / "infra/application")
+    expected_exec = "/srv/authority-closers/application/current-staging/" + str(expected_script)
+    assert f"ExecStart=/usr/bin/python3 {expected_exec}" in service
+    assert expected_script == Path("scripts/refresh-dev-sales-xray-backend.py")
     assert "UMask=0022" in service
     assert (
         git(
