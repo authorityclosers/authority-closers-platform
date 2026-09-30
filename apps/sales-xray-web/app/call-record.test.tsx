@@ -68,6 +68,17 @@ describe("CallRecordView", () => {
     expect(host.textContent).toContain(emptyTags.facts[1].statement);
   });
 
+  it("shows untagged facts when record tags are null", async () => {
+    const nullTags = {
+      ...callRecord,
+      tags: null,
+      facts: [{ ...callRecord.facts[0], tag: null }],
+    };
+    await render(nullTags);
+    expect(host.textContent).toContain("Other");
+    expect(host.textContent).toContain(nullTags.facts[0].statement);
+  });
+
   it("shows facts with unknown tags in Other", async () => {
     const unknownTag = {
       ...callRecord,
