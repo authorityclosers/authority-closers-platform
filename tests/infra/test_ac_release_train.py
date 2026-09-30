@@ -28,9 +28,20 @@ NOW = dt.datetime(2026, 9, 30, 3, tzinfo=dt.UTC).timestamp()
 PAIR = (HEAD, HEAD)
 
 
-def smoke_record(engine, environment, *, result="pass", age=0, corrupt=False):
+def smoke_record(
+    engine, environment, *, result="pass", age=0, corrupt=False, omit=None, overrides=None
+):
     path = engine.paths.state / "smoke" / environment / ("-".join(PAIR) + ".json")
-    record = {"result": result, "core_sha": HEAD, "web_sha": HEAD, "spend": 0}
+    record = {
+        "result": result,
+        "environment": environment,
+        "core_sha": HEAD,
+        "web_sha": HEAD,
+        "spend": 0,
+        **(overrides or {}),
+    }
+    if omit:
+        record.pop(omit)
     digest = hashlib.sha256(
         json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -76,6 +87,9 @@ class TrainRunner(FakeRunner):
         self.dump_failure = None
         self.events = []
         self.engine = None
+        self.smoke_omit = None
+        self.smoke_overrides = None
+        self.notify_failure = None
 
     def __call__(self, argv, **kwargs):
         argv = list(argv)
@@ -85,6 +99,10 @@ class TrainRunner(FakeRunner):
             out = "\n".join(f"{k}={v}" for k, v in self.restore.items())
         elif argv[0] == "ac-train-notify":
             self.events.append(argv)
+            if self.notify_failure == "exception":
+                raise OSError("fake notification failure")
+            if self.notify_failure == "exit":
+                code = 1
         elif any(a.endswith("/ac_smoke.py") for a in argv):
             environment = argv[2]
             outcome = self.smoke_result[environment]
@@ -93,7 +111,13 @@ class TrainRunner(FakeRunner):
             if outcome == "busy":
                 code = 5
             else:
-                smoke_record(self.engine, environment, result=outcome)
+                smoke_record(
+                    self.engine,
+                    environment,
+                    result=outcome,
+                    omit=self.smoke_omit,
+                    overrides=self.smoke_overrides,
+                )
                 code = 0 if outcome == "pass" else 1
         elif any(a.endswith("/migration_safety.py") for a in argv):
             out = json.dumps({"verdict": self.verdict})
@@ -631,3 +655,184 @@ def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train,
     assert kwargs["env"]["AC_RELEASE_ID"] == OLD
     assert kwargs["env"]["AC_CORE_ROLLBACK_ONLY"] == "1"
     assert kwargs["env"]["AC_ROLLBACK_FROM"] == core["production"]
+
+
+@pytest.mark.parametrize("field", ["core_sha", "web_sha", "environment"])
+@pytest.mark.parametrize("missing", [True, False])
+def test_smoke_requires_matching_environment_and_both_pair_fields(train, field, missing):
+    engine, runner, core, _ = train
+    options = {"omit": field} if missing else {"overrides": {field: "wrong"}}
+    smoke_record(engine, "staging", **options)
+    runner.smoke_omit = options.get("omit")
+    runner.smoke_overrides = options.get("overrides")
+    assert engine.train()["reason"] == "staging_smoke_failed"
+    assert len(calls(runner, "ac_smoke.py")) == 1  # Malformed cache was not reused.
+    assert core["production"] == OLD and len(engine.release_records()) == 1
+    assert not calls(runner, "ac-postgres-backup")
+
+
+@pytest.mark.parametrize("outcome", ["pass", "fail"])
+def test_every_train_release_retains_complete_audit_evidence(train, outcome):
+    engine, runner, _, _ = train
+    runner.smoke_result["production"] = outcome
+    engine.train()
+    records = engine.release_records()[1:]
+    for record in records:
+        evidence = record["train"]
+        assert set(evidence) == {
+            "core_sha",
+            "web_sha",
+            "artifacts",
+            "patch_version",
+            "migration",
+            "dump",
+            "restore",
+            "promotion_outcome",
+            "production_smoke",
+            "rollback",
+            "paused",
+        }
+        assert (evidence["core_sha"], evidence["web_sha"]) == PAIR
+        assert evidence["artifacts"] == {"core": DIGEST, "web": DIGEST}
+        assert evidence["patch_version"] == "v0.2.1"
+        assert evidence["migration"] == {
+            "from": "20260929_0052",
+            "to": "20260929_0052",
+            "classification": "additive",
+        }
+        dump = evidence["dump"]
+        assert dump["bytes"] == Path(dump["path"]).stat().st_size == 40
+        assert dump["sha256"] == hashlib.sha256(Path(dump["path"]).read_bytes()).hexdigest()
+        assert evidence["restore"] == {
+            "unit": "ac-restic-postgres-restore-proof@production.service",
+            "exit_timestamp": runner.restore["ExecMainExitTimestamp"],
+        }
+        assert record["requested_by"] == "standing-approval:AUT-72@2026-09-29T19:05Z"
+        assert evidence["promotion_outcome"] == "promoted"
+        assert MODULE._validate_release_record(record) == record
+    assert records[0]["train"]["production_smoke"] == "pending"
+    assert records[0]["smoke"]["production"] is None  # Only evidence not available before mutation.
+    assert records[-1]["train"]["production_smoke"] == outcome
+    assert all(MODULE.DIGEST_RE.fullmatch(v) for v in records[-1]["smoke"].values())
+    assert records[-1]["train"]["paused"] == (outcome == "fail")
+    assert records[-1]["train"]["rollback"] == (
+        {"core": "restored", "web": "restored"} if outcome == "fail" else {}
+    )
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "train",
+        "smoke",
+        "core_sha",
+        "web_sha",
+        "artifacts",
+        "patch_version",
+        "migration",
+        "dump",
+        "restore",
+        "promotion_outcome",
+        "production_smoke",
+        "rollback",
+        "paused",
+    ],
+)
+def test_missing_evidence_refuses_before_production_mutation(train, missing):
+    engine, _, core, web = train
+    promote = engine.promote
+
+    def omit_evidence(*args, **kwargs):
+        if missing in ("train", "smoke"):
+            kwargs.pop(missing)
+        else:
+            kwargs["train"].pop(missing)
+        return promote(*args, **kwargs)
+
+    engine.promote = omit_evidence
+    assert engine.train()["reason"] == "train_evidence_invalid"
+    assert core["production"] == OLD and web["production"] == OUTSIDE
+    assert len(engine.release_records()) == 1
+    assert not (engine.paths.state / "train-inflight.json").exists()
+
+
+@pytest.mark.parametrize("failure", ["exit", "exception"])
+@pytest.mark.parametrize("smoke", ["pass", "fail"])
+def test_notifier_failure_preserves_release_outcome(train, failure, smoke):
+    engine, runner, _, _ = train
+    runner.notify_failure = failure
+    runner.smoke_result["production"] = smoke
+    expected = "promoted" if smoke == "pass" else "rolled_back"
+    result = engine.train()
+    assert result["result"] == expected
+    assert result["notify_failed"] == (["status"] if smoke == "pass" else ["alert", "status"])
+    assert json.loads((engine.paths.state / "last-train.json").read_text()) == result
+    assert {e["result"] for e in engine.history() if e.get("action") == "train"} == {expected}
+    assert not (engine.paths.state / "train-inflight.json").exists()
+
+
+def test_two_staging_core_rollbacks_only_walk_successful_deploys_backwards(train):
+    engine, _, core, _ = train
+    engine.paths.history.unlink()
+    for sha in (OUTSIDE, OLD, HEAD):
+        release = engine.paths.application / "releases" / sha
+        release.mkdir(exist_ok=True)
+        (release / "release-images.env").write_text("AC_MIGRATION_HEAD=20260929_0052\n")
+        provenance = engine.paths.store / sha / "core.provenance.json"
+        provenance.parent.mkdir(exist_ok=True)
+        if not provenance.exists():
+            provenance.write_text((engine.paths.store / OLD / "core.provenance.json").read_text())
+        engine.record(dict(environment="staging", component="core", sha=sha, result="success"))
+    assert engine.rollback_core("staging")["restored_sha"] == OLD
+    assert engine.rollback_core("staging")["restored_sha"] == OUTSIDE
+    assert core["staging"] == OUTSIDE
+    with pytest.raises(MODULE.ReleaseError):
+        engine.rollback_core("staging")
+    assert core["staging"] == OUTSIDE
+
+
+@pytest.mark.parametrize("component", ["core", "web"])
+def test_cli_rollback_records_history_once(train, monkeypatch, component):
+    engine, _, _, _ = train
+    assert engine.train()["result"] == "promoted"
+    monkeypatch.setattr(MODULE, "Engine", lambda **_: engine)
+    assert MODULE.main(["rollback", "production", "--component", component]) == 0
+    entries = [e for e in engine.history() if e.get("action") == "rollback"]
+    assert len(entries) == 1
+    assert entries[0]["component"] == component
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("artifacts", "core"), "bad"),
+        (("artifacts", "web"), None),
+        (("dump", "path"), "relative.dump"),
+        (("dump", "sha256"), "bad"),
+        (("dump", "bytes"), 0),
+        (("restore", "exit_timestamp"), ""),
+        (("restore", "unit"), "staging-proof.service"),
+        (("migration", "classification"), "destructive"),
+        (("migration", "to"), None),
+        (("patch_version",), "v5.0.0"),
+        (("core_sha",), OLD),
+        (("paused",), "false"),
+        (("production_smoke",), "pass"),
+        (("rollback",), {"core": "restored"}),
+    ],
+)
+def test_malformed_train_evidence_is_rejected_before_deploy(train, path, value):
+    engine, _, core, _ = train
+    promote = engine.promote
+
+    def corrupt_evidence(*args, **kwargs):
+        target = kwargs["train"]
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+        return promote(*args, **kwargs)
+
+    engine.promote = corrupt_evidence
+    assert engine.train()["reason"] == "train_evidence_invalid"
+    assert core["production"] == OLD and len(engine.release_records()) == 1
+    assert not (engine.paths.state / "train-inflight.json").exists()
