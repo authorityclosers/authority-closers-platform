@@ -369,6 +369,21 @@ def test_devenv_lane_runs_beside_the_platform_lane() -> None:
     assert gate(repo).start("260-devenv-lane", "devenv") == "task/devenv/260-devenv-lane"
 
 
+def test_api_and_sales_xray_lanes_run_beside_each_other() -> None:
+    api_repo = FakeRepo()
+    api_repo.branches.append("task/sales-xray/59-overview-tolerance")
+    assert MODULE.main(["start", "api", "554-api-lane"], gate(api_repo)) == 0
+    assert ["git", "switch", "--quiet", "--create", "task/api/554-api-lane", "origin/main"] in (
+        api_repo.calls
+    )
+
+    sales_repo = FakeRepo()
+    sales_repo.branches.append("task/api/553-existing-api-work")
+    assert gate(sales_repo).start("555-sales-xray-work", "sales-xray") == (
+        "task/sales-xray/555-sales-xray-work"
+    )
+
+
 def test_an_exclusive_task_blocks_every_lane_and_is_blocked_by_any() -> None:
     repo = FakeRepo()
     repo.branches.append("task/83-development-hosted")
@@ -403,10 +418,11 @@ def test_status_json_reports_each_lane(capsys) -> None:
         '"open_prs": [], "lanes": {"sales-xray": {"holder": null, "free": true}, '
         '"platform": {"holder": "task/platform/23-notes", "free": false}, '
         '"admin": {"holder": null, "free": true}, "ui": {"holder": null, "free": true}, '
-        '"devenv": {"holder": null, "free": true}}, '
+        '"devenv": {"holder": null, "free": true}, "api": {"holder": null, "free": true}}, '
         '"exclusive_free": false}\n'
     )
     status = json.loads(output)
+    assert tuple(status["lanes"]) == MODULE.LANES
     assert status["lanes"]["platform"] == {"holder": "task/platform/23-notes", "free": False}
     assert status["lanes"]["sales-xray"]["free"] is True
     assert status["exclusive_free"] is False
@@ -467,6 +483,7 @@ def test_status_text_and_json_report_running_main_with_free_lanes(capsys) -> Non
     )
     assert "sales-xray: FREE" in text_status
     assert "platform: FREE" in text_status
+    assert "api: FREE" in text_status
     assert "exclusive: FREE" in text_status
 
     assert MODULE.main(["status", "--json"], gate(repo)) == 0
