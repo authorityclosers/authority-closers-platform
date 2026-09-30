@@ -59,6 +59,21 @@ describe("parseCallMap", () => {
     expect(
       codeOf((map) => (map.phases[4].start_ms = 43571), null as never),
     ).toBe("call_map_time_out_of_range");
+    const unassigned = [
+      ...segments,
+      {
+        id: "s10",
+        speaker_id: null,
+        start_ms: 43570,
+        end_ms: 50000,
+        text: "(noise)",
+      },
+    ];
+    const map = draft();
+    map.phases[4].start_ms = 45000;
+    expect(() => parseCallMap(map, unassigned, null)).toThrow(
+      "call_map_time_out_of_range",
+    );
   });
 
   it.each<[string, (map: Draft) => void]>([
@@ -88,6 +103,17 @@ describe("parseCallMap", () => {
       "a score word in the verdict",
       (map) => (map.verdict_line = "Seller scored well"),
     ],
+    ...[
+      "Seller scoring was 8 out of 10",
+      "A strong grade for discovery",
+      "Seller rating: high",
+      "Eight out of ten questions landed",
+      "Talk share hit 70 percent",
+      "Seller got 7/10 on discovery",
+    ].map((verdict): [string, (map: Draft) => void] => [
+      `the verdict "${verdict}"`,
+      (map) => (map.verdict_line = verdict),
+    ]),
   ])("rejects %s as call_map_invalid", (_, change) => {
     expect(codeOf(change)).toBe("call_map_invalid");
   });

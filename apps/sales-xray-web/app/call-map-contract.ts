@@ -1,3 +1,4 @@
+import { computeCallMetrics } from "./call-metrics";
 import type { TranscriptSegment } from "./report-contract";
 
 // Strict parser for the AI half of the Overview, `call-map/1` (AUT-341 plan
@@ -62,8 +63,9 @@ const OUTCOMES = ["won", "lost", "follow_up", "disqualified", "none"] as const;
 const RUNGS = ["none", "vague", "dated_call", "invite_sent", "committed"];
 const PERIODS = ["once", "day", "week", "month", "year"] as const;
 const PROMISE_MS = { min: 60000, max: 14400000 } as const;
+// Verdicts are readings, never judgements by number (AGENTS.md, AC-SVAL).
 const SCORE_WORDS =
-  /\b(scores?|scored|grades?|graded|ratings?|rated|percent)\b|\d\s*%|\d+\s*\/\s*10\b/i;
+  /\b(scor\w*|grad(e|es|ed|ing)|rat(ing|ings|ed)|percent\w*)\b|\d\s*%|\bout\s+of\s+(\d+|five|ten|hundred)\b|\d+\s*\/\s*\d+/i;
 
 type Polarity = keyof typeof SIGNAL_KINDS_V1;
 type Qualification = (typeof QUALIFICATION_ITEMS)[number];
@@ -255,7 +257,7 @@ const unique = (values: string[]) => new Set(values).size === values.length;
 
 /** Parses a stored `call_map`; `null` means "not available yet". The segments
  * and duration are the same report's transcript; a missing duration falls
- * back to the last segment end, as in `call-metrics.ts`. */
+ * back to the time used from `call-metrics.ts`, so both agree. */
 export function parseCallMap(
   value: unknown,
   segments: readonly TranscriptSegment[],
@@ -294,7 +296,7 @@ export function parseCallMap(
     "call_map_evidence_unresolved",
   );
 
-  const end = durationMs ?? Math.max(0, ...segments.map((s) => s.end_ms));
+  const end = computeCallMetrics([...segments], durationMs).time_used_ms;
   const inside = (ms: number) => ms >= 0 && ms <= end;
   const promise = map.time_promise?.promised_ms ?? PROMISE_MS.min;
   check(
