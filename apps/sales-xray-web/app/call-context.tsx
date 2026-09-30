@@ -14,7 +14,6 @@ import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useCallFacts } from "./call-facts";
 import { promiseId, usePromisesDone } from "./call-signals";
 import { voicesOf } from "./call-data";
-import { OUTCOME } from "./overview-hook";
 import type { SalesReport, Transcript } from "./report-contract";
 import { findEntities } from "./report-entities";
 import { goToReportSection } from "./report-reading-context";
@@ -72,13 +71,47 @@ export function firstEntity(texts: string[], kind: string, test?: RegExp) {
 const BUSINESS_NAMED =
   /([\p{L}-]+)\s+(?:(?:का|की|के|ka|ki|ke)\s+)?(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|company|कंपनी|shop|दुकान|firm)/giu;
 
-/** The industry a call names outright, e.g. "carpentry का business". */
-export function businessNamed(text: string): SpeakerIcon | null {
+// Second-person words just before a business name: the seller asking about
+// the prospect's own business ("आपका carpentry का business", "your salon").
+const ADDRESSED =
+  /(?:आपका|आपकी|आपके|आपने|तुमचा|तुमची|तुमचं|तुमच्या|your|you run|you have)[^.?!।]{0,40}$/iu;
+
+/**
+ * The industry named outright in some text, e.g. "carpentry का business".
+ * With `addressed`, only a business named to the listener ("your ...").
+ */
+export function businessNamed(
+  text: string,
+  addressed = false,
+): SpeakerIcon | null {
   for (const match of text.matchAll(BUSINESS_NAMED)) {
+    if (addressed && !ADDRESSED.test(text.slice(0, match.index ?? 0))) continue;
     const word = match[1].toLocaleLowerCase();
     const found = SPEAKER_ICONS.find(
       (item) => !item.generic && item.keywords.includes(word),
     );
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * The prospect's business, from evidence about the prospect only: their own
+ * words, or the seller naming it to them. Another speaker's business never
+ * counts. Nothing without confirmed roles.
+ */
+export function prospectBusiness(
+  segments: ReadonlyArray<{ speaker_id: string | null; text: string }>,
+  roles: { seller: string; prospect: string } | null,
+): SpeakerIcon | null {
+  if (!roles) return null;
+  for (const segment of segments) {
+    const found =
+      segment.speaker_id === roles.prospect
+        ? businessNamed(segment.text)
+        : segment.speaker_id === roles.seller
+          ? businessNamed(segment.text, true)
+          : null;
     if (found) return found;
   }
   return null;
@@ -115,14 +148,13 @@ export function CallContext({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [transcript, roles?.seller, roles?.prospect],
   );
-  // Their business only when the call names it outright ("carpentry का
-  // business", "a furniture business"); loose keyword counts guessed wrong.
+  // Their business only when named outright about the prospect; loose
+  // keyword counts guessed wrong.
   const heardBusiness = useMemo(
-    () =>
-      businessNamed(
-        transcript.segments.map((segment) => segment.text).join(" "),
-      ),
-    [transcript],
+    () => prospectBusiness(transcript.segments, roles),
+    // roles comes from saved profiles; its two ids are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transcript, roles?.seller, roles?.prospect],
   );
 
   const prospectId =
@@ -136,17 +168,15 @@ export function CallContext({
   const money = facts.values.budget
     ? `Budget ${facts.values.budget}`
     : firstEntity(texts, "money", /\d/);
-  const outcome = report.overview?.outcome
-    ? OUTCOME[report.overview.outcome.kind]
-    : null;
   const outcomeText = report.overview?.outcome?.text;
   const when = outcomeText ? firstEntity([outcomeText], "date") : null;
+  // Only an explicit next step: a saved one, or a dated follow-up. An
+  // outcome such as "No sale" is not a next step.
   const next =
     facts.values.next?.trim() ||
     (report.overview?.outcome?.kind === "follow_up" && when
       ? `Follow-up ${when}`
-      : outcome?.label) ||
-    null;
+      : null);
   const ticked = promised.filter((item) => done.has(promiseId(item))).length;
 
   const tiles: Tile[] = [
@@ -224,12 +254,8 @@ export function CallContext({
       key: "next",
       label: "Next step",
       value: next,
-      icon: outcome ? (
-        <outcome.Icon size={14} aria-hidden="true" />
-      ) : (
-        icon(CalendarCheck)
-      ),
-      tone: outcome?.tone === "bad" ? "red" : "teal",
+      icon: icon(CalendarCheck),
+      tone: "teal",
       go: "next-call-plan",
       empty: "Add",
     },

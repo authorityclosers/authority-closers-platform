@@ -126,10 +126,8 @@ const PATTERNS: Array<[EntityKind, string]> = [
   [
     "document",
     [
-      String.raw`\b[Ss]yllabus\b|\b[Ww]orkbooks?\b|\b[Bb]rochures?\b|\b[Pp]roposals?\b|\bPDFs?\b|\b[Qq]uotations?\b|\b[Ii]nvoices?\b|\b[Cc]ontracts?\b|\b[Aa]greements?\b|\bGST\b`,
-      word(
-        "सिलेबस|ब्रोशर|पीडीएफ|प्रपोज़ल|प्रपोजल|कोटेशन|इनवॉइस|एग्रीमेंट|कॉन्ट्रैक्ट",
-      ),
+      String.raw`\b[Ss]yllabus\b|\b[Ww]orkbooks?\b|\b[Bb]rochures?\b|\b[Pp]roposals?\b|\bPDFs?\b|\b[Qq]uotations?\b|\b[Ii]nvoices?\b|\b[Cc]ontracts?\b|\bGST\b`,
+      word("सिलेबस|ब्रोशर|पीडीएफ|प्रपोज़ल|प्रपोजल|कोटेशन|इनवॉइस|कॉन्ट्रैक्ट"),
     ].join("|"),
   ],
   [

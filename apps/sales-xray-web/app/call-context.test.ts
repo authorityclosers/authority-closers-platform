@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { businessNamed, firstEntity } from "./call-context";
+import { businessNamed, firstEntity, prospectBusiness } from "./call-context";
 
 const texts = [
   "You pivoted from asking operational questions to pitching the 3-day Leadership Funnel Program.",
@@ -27,4 +27,41 @@ it("names the business only when the call says it outright", () => {
     "carpentry",
   );
   expect(businessNamed("They talked about the event and coaching.")).toBeNull();
+});
+
+it("takes the business only from evidence about the prospect", () => {
+  const roles = { seller: "s", prospect: "p" };
+  // The seller naming the prospect's business to them counts.
+  expect(
+    prospectBusiness(
+      [
+        {
+          speaker_id: "s",
+          text: "आपका यहां पे शायद carpentry का business है right?",
+        },
+      ],
+      roles,
+    )?.key,
+  ).toBe("carpentry");
+  // The prospect's own words count.
+  expect(
+    prospectBusiness(
+      [{ speaker_id: "p", text: "हमारा furniture business है" }],
+      roles,
+    )?.key,
+  ).toBe("carpentry");
+  // The seller's own business does not.
+  expect(
+    prospectBusiness(
+      [{ speaker_id: "s", text: "I also run a furniture business." }],
+      roles,
+    ),
+  ).toBeNull();
+  // Without confirmed roles, nothing.
+  expect(
+    prospectBusiness(
+      [{ speaker_id: "p", text: "हमारा furniture business है" }],
+      null,
+    ),
+  ).toBeNull();
 });
