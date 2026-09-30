@@ -1,0 +1,321 @@
+/* Speaker avatars and the speaker editor. Colours come from --voice (set per
+   speaker in speaker-profiles.ts) and Lightbox tokens only. */
+.avatar {
+  display: inline-grid;
+  width: var(--size, 20px);
+  height: var(--size, 20px);
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--voice) 16%, var(--lx-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voice) 30%, transparent);
+  color: var(--voice);
+  font: 750 calc(var(--size, 20px) * 0.42) / 1 var(--lx-font-ui);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.avatar[data-plain] {
+  background: var(--voice);
+  box-shadow: none;
+  color: var(--lx-surface);
+}
+.avatar[data-you] {
+  background: var(--lx-gradient-primary);
+  box-shadow: 0 0 0 1.5px var(--lx-surface);
+  color: var(--lx-on-teal);
+}
+
+/* ---------- Editor ---------- */
+/* Shown in the top layer (popover), placed beside its chip by script. */
+.editor {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  margin: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--lx-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--lx-surface) 97%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(20px);
+  backdrop-filter: saturate(1.6) blur(20px);
+  box-shadow:
+    var(--lx-shadow-2),
+    0 24px 48px -24px color-mix(in srgb, var(--lx-ink) 30%, transparent);
+  color: var(--lx-ink);
+  font-family: var(--lx-font-ui);
+  text-align: left;
+  animation: editor-in var(--lx-dur-move) var(--lx-ease-pop) both;
+  transform-origin: 24px -8px;
+  scrollbar-width: thin;
+}
+.editor[data-side="top"] {
+  transform-origin: 24px calc(100% + 8px);
+}
+.editor::backdrop {
+  background: transparent;
+}
+.editor form {
+  display: grid;
+  gap: 14px;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nameBlock {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+.name {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: 650 15px/1.3 var(--lx-font-ui);
+  transition:
+    border-color var(--lx-dur-quick) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.name:focus {
+  border-color: var(--voice);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--voice) 18%, transparent);
+}
+.nameBlock small {
+  padding-left: 2px;
+  color: var(--lx-muted);
+  font: 500 11.5px/1.3 var(--lx-font-ui);
+}
+.sample {
+  display: block;
+  overflow: hidden;
+  padding: 8px 10px;
+  border-left: 2px solid var(--voice);
+  border-radius: 0 8px 8px 0;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink-3);
+  font: italic 500 12.5px/1.45 var(--lx-font-ui);
+  quotes: "“" "”";
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 11px;
+  background: var(--lx-sunken);
+}
+.roles button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-muted);
+  font: 600 12.5px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.roles button:hover {
+  color: var(--lx-ink);
+}
+.roles button[aria-pressed="true"] {
+  background: var(--lx-surface);
+  box-shadow:
+    var(--lx-shadow-1),
+    0 0 0 0.5px var(--lx-line);
+  color: var(--lx-ink);
+}
+.roles button[aria-pressed="true"] svg {
+  color: var(--voice);
+}
+.note {
+  margin: 0;
+  color: var(--lx-muted);
+  font: 500 12px/1.45 var(--lx-font-ui);
+}
+.library {
+  display: grid;
+  gap: 8px;
+}
+.libraryHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.libraryHead > span {
+  color: var(--lx-muted);
+  font: 700 11px/1 var(--lx-font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.search {
+  display: inline-flex;
+  width: 150px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  color: var(--lx-muted-2);
+}
+.search:focus-within {
+  border-color: var(--voice);
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lx-ink);
+  font: 500 12px/1.2 var(--lx-font-ui);
+  outline: none;
+}
+.grid {
+  display: grid;
+  max-height: 148px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+.grid button {
+  position: relative;
+  display: grid;
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-ink-3);
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    color var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.grid button:hover {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+  transform: scale(1.08);
+}
+.grid button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--voice) 16%, var(--lx-surface));
+  box-shadow: inset 0 0 0 1.5px var(--voice);
+  color: var(--voice);
+}
+/* The icon the report suggests for this prospect carries a small spark. */
+.grid button[data-suggested]::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--voice);
+}
+.grid button:focus-visible,
+.roles button:focus-visible,
+.foot button:focus-visible {
+  outline: none;
+  box-shadow: var(--lx-ring-focus);
+}
+.empty {
+  grid-column: 1 / -1;
+  margin: 6px 0;
+  color: var(--lx-muted);
+  font: 500 12px/1.4 var(--lx-font-ui);
+}
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--lx-line-soft);
+}
+.foot small {
+  flex: 1;
+  color: var(--lx-muted-2);
+  font: 500 11px/1.3 var(--lx-font-ui);
+}
+.foot button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--lx-radius-pill);
+  font: 650 12.5px/1 var(--lx-font-ui);
+  cursor: pointer;
+  transition:
+    background-color var(--lx-dur-quick) var(--lx-ease-quick),
+    transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.cancel {
+  background: transparent;
+  color: var(--lx-ink-3);
+}
+.cancel:hover {
+  background: var(--lx-sunken);
+}
+.save {
+  background: var(--lx-ink);
+  color: var(--lx-surface);
+}
+.save:hover {
+  transform: translateY(-1px);
+}
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@keyframes editor-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor {
+    animation: none;
+  }
+  .grid button,
+  .foot button {
+    transition: none;
+  }
+}
+
+/* Four roles sit in two tidy rows. */
+.roles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

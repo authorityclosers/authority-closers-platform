@@ -87,10 +87,12 @@ it("outside pointer dismissal preserves the clicked action", async () => {
 
 it("tabbing away dismisses the popup without returning focus", () => {
   const { menu } = openMenu();
-  const source = host.querySelectorAll<HTMLElement>("summary")[1];
-  source.focus();
+  // Source details now live inside the menu; tab to something outside it.
+  const outside = document.createElement("button");
+  host.appendChild(outside);
+  outside.focus();
   expect(menu.open).toBe(false);
-  expect(document.activeElement).toBe(source);
+  expect(document.activeElement).toBe(outside);
 });
 
 it("the download action runs once and closes its disclosure", async () => {

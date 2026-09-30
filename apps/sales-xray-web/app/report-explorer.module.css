@@ -12,8 +12,8 @@
   padding: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  border-bottom: 1px solid #dbe6e7;
-  background: #fff;
+  border-bottom: 1px solid var(--lx-teal-edge);
+  background: var(--lx-surface);
   scrollbar-width: thin;
 }
 
@@ -25,7 +25,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #5d7080;
+  color: var(--lx-ink-3);
   font: inherit;
   font-size: 15px;
   font-weight: 650;
@@ -50,7 +50,7 @@
   left: 0;
   height: 3px;
   border-radius: 0;
-  background: #0f766e;
+  background: var(--lx-teal);
   content: "";
   opacity: 0;
   transform: scaleX(0.35);
@@ -60,11 +60,11 @@
 }
 
 .tabs button:hover {
-  color: #172b3a;
+  color: var(--lx-ink);
 }
 
 .tabs button[aria-selected="true"] {
-  color: #172b3a;
+  color: var(--lx-ink);
   font-weight: 700;
 }
 
@@ -75,7 +75,7 @@
 
 .tabs button:focus-visible,
 .panel:focus-visible {
-  outline: 3px solid #6d7ce0;
+  outline: 3px solid color-mix(in srgb, var(--lx-closing) 30%, transparent);
   outline-offset: 2px;
 }
 
@@ -88,7 +88,7 @@
 .panel > section + section {
   margin-block-start: 24px;
   padding-block-start: 24px;
-  border-top: 1px solid #dbe2ef;
+  border-top: 1px solid color-mix(in srgb, var(--lx-closing) 30%, transparent);
 }
 
 .panel > aside + section {

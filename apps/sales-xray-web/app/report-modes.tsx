@@ -16,11 +16,13 @@ import {
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { ReportReadingProvider } from "./report-reading-context";
 import styles from "./report-modes.module.css";
 
@@ -36,6 +38,8 @@ type View = "reading" | "tabs";
 type Address = { view: View | null; section: string };
 /** Desktop report width where Sections (tabbed) is the better first view. */
 const TABBED_DEFAULT_QUERY = "(min-width: 1100px)";
+/** Wide screens host the report navigation in the shell's top bar. */
+const TOOLBAR_QUERY = "(min-width: 1280px)";
 const CHANGE = "ac:report-mode-change";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
@@ -258,6 +262,29 @@ function serverDesktopSnapshot() {
   return false;
 }
 
+function subscribeToolbar(notify: () => void) {
+  if (typeof window.matchMedia !== "function") return () => {};
+  const query = window.matchMedia(TOOLBAR_QUERY);
+  query.addEventListener?.("change", notify);
+  return () => query.removeEventListener?.("change", notify);
+}
+
+/** The shell's top-bar slot, on screens wide enough to hold the sections. */
+function toolbarSlot(): HTMLElement | null {
+  if (
+    typeof window.matchMedia !== "function" ||
+    !window.matchMedia(TOOLBAR_QUERY).matches
+  )
+    return null;
+  return document.querySelector<HTMLElement>(
+    "[data-lightbox-shell] [data-shell-toolbar]",
+  );
+}
+
+function serverToolbarSlot() {
+  return null;
+}
+
 function nearestScrollport(element: HTMLElement): HTMLElement | null {
   for (
     let parent = element.parentElement;
@@ -290,7 +317,7 @@ function updateReportLayerOffsets(
     : "static";
   const mobileBarIsSticky =
     mobileBarPosition === "sticky" || mobileBarPosition === "fixed";
-  const scrollport = nearestScrollport(navRow);
+  const scrollport = nearestScrollport(workspace);
   const scrollportTop = scrollport
     ? scrollport.getBoundingClientRect().top + scrollport.clientTop
     : 0;
@@ -303,15 +330,27 @@ function updateReportLayerOffsets(
   const scrollportPadding = scrollport
     ? Number.parseFloat(window.getComputedStyle(scrollport).paddingTop) || 0
     : 0;
-  const measuredNavHeight = navRow.getBoundingClientRect().height;
+  // The pinned report title row (data-report-sticky) covers the top too.
+  const stickyBar = scrollport?.querySelector<HTMLElement>(
+    "[data-report-sticky]",
+  );
+  const stickyHeight =
+    stickyBar && window.getComputedStyle(stickyBar).position === "sticky"
+      ? stickyBar.getBoundingClientRect().height
+      : 0;
+  // A row hosted in the shell's top bar sits outside the report scrollport.
+  const navCovers = workspace.contains(navRow);
+  const measuredNavHeight = navCovers
+    ? navRow.getBoundingClientRect().height || 56
+    : 0;
   const targetOffset = Math.max(
-    64,
-    mobileBarOverlap + scrollportPadding + (measuredNavHeight || 56) + 8,
+    navCovers ? 64 : 16,
+    mobileBarOverlap + scrollportPadding + stickyHeight + measuredNavHeight + 8,
   );
 
   workspace.style.setProperty(
     "--report-nav-sticky-top",
-    `${mobileBarOverlap}px`,
+    `${mobileBarOverlap + stickyHeight}px`,
   );
   workspace.style.setProperty(
     "--report-scroll-target-offset",
@@ -347,9 +386,12 @@ export function ReportModes({
   label = "Report sections",
   panels,
   boundCallId,
+  lightSurface = true,
 }: {
   label?: string;
   panels: ReportPanel[];
+  /** Keeps the report on the light surface; false follows a dark app theme. */
+  lightSurface?: boolean;
   /** Enables view and section bookmarks for this already-bound report. */
   boundCallId?: string;
 }) {
@@ -373,6 +415,11 @@ export function ReportModes({
     serverDesktopSnapshot,
   );
   const preferredView: View = desktop ? "tabs" : "reading";
+  const slot = useSyncExternalStore(
+    subscribeToolbar,
+    toolbarSlot,
+    serverToolbarSlot,
+  );
   const [readingSection, setReadingSection] = useState(panels[0]?.id ?? "");
   const [returnPoint, setReturnPointState] = useState<ReturnPoint | null>(null);
   const returnRef = useRef<ReturnPoint | null>(null);
@@ -394,7 +441,7 @@ export function ReportModes({
 
     const shell = workspace.closest<HTMLElement>("[data-lightbox-shell]");
     const mobileBar = shell?.querySelector<HTMLElement>("header");
-    const scrollport = nearestScrollport(navRow);
+    const scrollport = nearestScrollport(workspace);
     const dock = shell?.querySelector<HTMLElement>(
       '[aria-label="Call audio player"][data-embedded="false"]',
     );
@@ -407,12 +454,16 @@ export function ReportModes({
     if (mobileBar) observer?.observe(mobileBar);
     if (scrollport) observer?.observe(scrollport);
     if (dock) observer?.observe(dock);
+    const stickyBar = scrollport?.querySelector<HTMLElement>(
+      "[data-report-sticky]",
+    );
+    if (stickyBar) observer?.observe(stickyBar);
     window.addEventListener("resize", update);
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, []);
+  }, [slot]);
 
   // Browser Back to the URL where a jump started restores that exact place,
   // including an original URL that had no section at all.
@@ -499,6 +550,31 @@ export function ReportModes({
     return () => cancelAnimationFrame(frame);
   }, [id, linked?.section, search]);
 
+  // The toolbar's highlight glides to the current section.
+  useLayoutEffect(() => {
+    const list = navRowRef.current?.querySelector<HTMLElement>(
+      "[data-report-sections]",
+    );
+    if (!list) return;
+    const place = () => {
+      const current = list.querySelector<HTMLElement>(
+        '[aria-selected="true"], [aria-current="location"]',
+      );
+      if (!current) {
+        list.style.removeProperty("--pill-w");
+        return;
+      }
+      list.style.setProperty("--pill-x", `${current.offsetLeft}px`);
+      list.style.setProperty("--pill-w", `${current.offsetWidth}px`);
+    };
+    place();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(place);
+    observer.observe(list);
+    for (const child of Array.from(list.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [currentSection, view, slot]);
+
   if (!panels.length) return null;
 
   /** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
@@ -514,7 +590,7 @@ export function ReportModes({
     if (!destination.hasAttribute("tabindex") && destination.tabIndex < 0)
       destination.setAttribute("tabindex", "-1");
     destination.focus({ preventScroll: true });
-    const scroller = navRow ? reportScroller(navRow) : null;
+    const scroller = workspace ? reportScroller(workspace) : null;
     const startTop = scroller?.scrollTop ?? 0;
     destination.scrollIntoView?.({
       block: "start",
@@ -647,118 +723,134 @@ export function ReportModes({
     if (section) navigate(section, nextView);
   }
 
+  // One horizontal row: section tabs (Tabbed) or section links (Reading),
+  // with the view choice at its trailing edge. Wide screens host it in the
+  // shell's top bar; otherwise it sticks to the top of the report.
+  const navigation = (
+    <div
+      ref={navRowRef}
+      className={styles.navRow}
+      data-report-nav
+      data-placement={slot ? "toolbar" : undefined}
+    >
+      {view === "tabs" && (
+        <nav
+          className={styles.tabNavigation}
+          role="tablist"
+          aria-label={label}
+          data-report-sections
+        >
+          {panels.map((panel, index) => (
+            <button
+              key={panel.id}
+              ref={(element) => {
+                tabButtons.current[index] = element;
+              }}
+              type="button"
+              role="tab"
+              id={`${id}-tab-${panel.id}`}
+              aria-controls={`${id}-section-${panel.id}`}
+              aria-label={panel.label}
+              title={panel.label}
+              aria-selected={selected === panel.id}
+              tabIndex={selected === panel.id ? 0 : -1}
+              onClick={() => navigate(panel.id, "tabs")}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === "ArrowRight"
+                    ? (index + 1) % panels.length
+                    : event.key === "ArrowLeft"
+                      ? (index + panels.length - 1) % panels.length
+                      : event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? panels.length - 1
+                          : null;
+                if (next === null) return;
+                event.preventDefault();
+                navigate(panels[next].id, "tabs");
+                tabButtons.current[next]?.focus();
+              }}
+            >
+              <SectionIcon id={panel.id} />
+              <span>{panel.compactLabel ?? panel.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      {view === "reading" && (
+        <nav
+          className={styles.contents}
+          aria-label={label}
+          data-report-sections
+        >
+          {panels.map((panel) => (
+            <a
+              key={panel.id}
+              href={
+                boundCallId
+                  ? `?call=${encodeURIComponent(boundCallId)}&view=reading&section=${encodeURIComponent(panel.id)}`
+                  : `#${id}-section-${panel.id}`
+              }
+              aria-current={
+                currentSection === panel.id ? "location" : undefined
+              }
+              aria-label={panel.label}
+              title={panel.label}
+              onClick={(event) => {
+                if (
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                navigate(panel.id, "reading", true);
+              }}
+            >
+              <SectionIcon id={panel.id} />
+              <span className={styles.fullLabel}>{panel.label}</span>
+              <span className={styles.compactLabel}>
+                {panel.compactLabel ?? panel.label}
+              </span>
+            </a>
+          ))}
+        </nav>
+      )}
+      <div className={styles.toolbar} role="group" aria-label={`${label} view`}>
+        <button
+          type="button"
+          title="Reading view"
+          aria-pressed={view === "reading"}
+          onClick={() => changeView("reading")}
+        >
+          <BookOpen aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Reading view</span>
+        </button>
+        <button
+          type="button"
+          title="Tabbed view"
+          aria-pressed={view === "tabs"}
+          onClick={() => changeView("tabs")}
+        >
+          <PanelsTopLeft aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Tabbed view</span>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div
       ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
-      data-lx-surface="light"
+      data-lx-surface={lightSurface ? "light" : undefined}
       data-view={view}
       data-report-section={currentSection}
     >
-      {/* One horizontal row: section tabs (Tabbed) or section links (Reading),
-          with the view choice at its trailing edge. No second report sidebar. */}
-      <div ref={navRowRef} className={styles.navRow} data-report-nav>
-        {view === "tabs" && (
-          <nav
-            className={styles.tabNavigation}
-            role="tablist"
-            aria-label={label}
-          >
-            {panels.map((panel, index) => (
-              <button
-                key={panel.id}
-                ref={(element) => {
-                  tabButtons.current[index] = element;
-                }}
-                type="button"
-                role="tab"
-                id={`${id}-tab-${panel.id}`}
-                aria-controls={`${id}-section-${panel.id}`}
-                aria-label={panel.label}
-                aria-selected={selected === panel.id}
-                tabIndex={selected === panel.id ? 0 : -1}
-                onClick={() => navigate(panel.id, "tabs")}
-                onKeyDown={(event) => {
-                  const next =
-                    event.key === "ArrowRight"
-                      ? (index + 1) % panels.length
-                      : event.key === "ArrowLeft"
-                        ? (index + panels.length - 1) % panels.length
-                        : event.key === "Home"
-                          ? 0
-                          : event.key === "End"
-                            ? panels.length - 1
-                            : null;
-                  if (next === null) return;
-                  event.preventDefault();
-                  navigate(panels[next].id, "tabs");
-                  tabButtons.current[next]?.focus();
-                }}
-              >
-                <SectionIcon id={panel.id} />
-                <span>{panel.compactLabel ?? panel.label}</span>
-              </button>
-            ))}
-          </nav>
-        )}
-        {view === "reading" && (
-          <nav className={styles.contents} aria-label={label}>
-            {panels.map((panel) => (
-              <a
-                key={panel.id}
-                href={
-                  boundCallId
-                    ? `?call=${encodeURIComponent(boundCallId)}&view=reading&section=${encodeURIComponent(panel.id)}`
-                    : `#${id}-section-${panel.id}`
-                }
-                aria-current={
-                  currentSection === panel.id ? "location" : undefined
-                }
-                aria-label={panel.label}
-                title={panel.label}
-                onClick={(event) => {
-                  if (
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey
-                  )
-                    return;
-                  event.preventDefault();
-                  navigate(panel.id, "reading", true);
-                }}
-              >
-                <SectionIcon id={panel.id} />
-                <span className={styles.fullLabel}>{panel.label}</span>
-                <span className={styles.compactLabel}>
-                  {panel.compactLabel ?? panel.label}
-                </span>
-              </a>
-            ))}
-          </nav>
-        )}
-        <div
-          className={styles.toolbar}
-          role="group"
-          aria-label={`${label} view`}
-        >
-          <button
-            type="button"
-            aria-pressed={view === "reading"}
-            onClick={() => changeView("reading")}
-          >
-            <BookOpen aria-hidden="true" /> Reading view
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "tabs"}
-            onClick={() => changeView("tabs")}
-          >
-            <PanelsTopLeft aria-hidden="true" /> Tabbed view
-          </button>
-        </div>
-      </div>
+      {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
         <ReportReadingProvider
           reading={view === "reading"}

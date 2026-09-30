@@ -3077,7 +3077,8 @@ a.overviewCard:hover {
   width: 100%;
   margin-inline: 0;
 }
-.app.app[data-stage="upload"][data-selected="true"] .upload:global(.studio-upload) {
+.app.app[data-stage="upload"][data-selected="true"]
+  .upload:global(.studio-upload) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(320px, 28vw, 392px);
   align-items: start;
@@ -3112,7 +3113,9 @@ a.overviewCard:hover {
 .app.app[data-stage="upload"][data-selected="true"] .verifyHeading {
   display: none;
 }
-.app.app[data-stage="upload"][data-selected="true"] :global(.studio-consent) h3 {
+.app.app[data-stage="upload"][data-selected="true"]
+  :global(.studio-consent)
+  h3 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3180,7 +3183,9 @@ a.overviewCard:hover {
   cursor: pointer;
   transition: border-color var(--lx-dur-quick) var(--lx-ease-quick);
 }
-.app.app[data-stage="upload"][data-selected="true"] .reportLanguage select:hover {
+.app.app[data-stage="upload"][data-selected="true"]
+  .reportLanguage
+  select:hover {
   border-color: var(--lx-muted-2);
 }
 .app.app[data-stage="upload"][data-selected="true"]
@@ -3745,7 +3750,10 @@ a.overviewCard:hover {
   color: var(--lx-muted-2);
   font-size: 12.5px;
 }
-.app.app[data-stage="processing"] .upload > :global(.studio-consent) .privacyDetails {
+.app.app[data-stage="processing"]
+  .upload
+  > :global(.studio-consent)
+  .privacyDetails {
   width: 100%;
   margin: 8px 0 0;
   border: 1px solid var(--lx-line-soft);
@@ -3897,7 +3905,9 @@ a.overviewCard:hover {
 .app.app[data-stage="report"] .reportMenu .reportMenuSupport svg {
   color: var(--lx-danger);
 }
-.app.app[data-stage="report"] .reportMenu .reportMenuSupport:hover:not(:disabled) {
+.app.app[data-stage="report"]
+  .reportMenu
+  .reportMenuSupport:hover:not(:disabled) {
   background: var(--lx-danger-soft);
   color: var(--lx-danger);
 }
@@ -3933,7 +3943,8 @@ a.overviewCard:hover {
   place-items: center;
   border-radius: 50%;
   background: var(--lx-danger-soft);
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
+  box-shadow: 0 0 0 8px
+    color-mix(in srgb, var(--lx-danger-soft) 45%, transparent);
   color: var(--lx-danger);
   font: 800 24px/1 var(--lx-font-display);
 }
@@ -4080,4 +4091,331 @@ a.overviewCard:hover {
 }
 .app.app[data-stage="report"] .reportAbout a {
   color: var(--lx-teal);
+}
+
+/* Report header, final: title and ⋯ on one row; the call map spans below. */
+.app.app[data-stage="report"] .reportHeader {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "heading actions"
+    "visual visual";
+  row-gap: 14px;
+}
+.app.app[data-stage="report"] .reportHeading {
+  grid-area: heading;
+}
+.app.app[data-stage="report"] .reportActions {
+  grid-area: actions;
+  align-self: start;
+}
+.app.app[data-stage="report"] .reportVisual {
+  grid-area: visual;
+  max-width: none;
+  margin-top: 0;
+  justify-self: stretch;
+}
+.app.app[data-stage="report"] .reportTitleRow {
+  flex-wrap: wrap;
+}
+
+/* Report rhythm: title, then 18px to the call map, then 28px to the report.
+   The map spans the same column as the report text below it. */
+.app.app[data-stage="report"] .reportHeader {
+  row-gap: 18px;
+  margin-bottom: 28px;
+  padding-top: clamp(10px, 2vh, 20px);
+}
+.app.app[data-stage="report"] .reportMetadata {
+  margin-top: 4px;
+}
+.app.app[data-stage="report"] .reportActions {
+  margin-top: 2px;
+}
+
+/* Dark app: the report stays a light document (tokens.css), shown as a sheet
+   with its own paper ground rather than letting the dark app show through. */
+:global(:root[data-theme="dark"])
+  .app.app[data-stage="report"]
+  .report:global(.studio-report) {
+  padding: clamp(16px, 2.4vw, 28px) clamp(16px, 2.4vw, 32px) 8px;
+  border-radius: 20px;
+  background: var(--lx-paper);
+  box-shadow: 0 24px 60px -32px rgb(0 0 0 / 0.6);
+}
+
+/* ---------- Pinned report row ----------
+   The title, facts and ⋯ stay where they are while the report scrolls. When
+   the full call map slides under the row, a compact map flies up into the
+   space between the title and ⋯: it lands from below with a spring, its
+   bars bounce up in a wave and a light sweeps across it. */
+.app.app[data-stage="report"] .reportHeader {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  grid-template-areas: "heading compact actions";
+  align-items: center;
+  column-gap: clamp(16px, 2.4vw, 32px);
+  row-gap: 0;
+  margin: 0 -16px 16px;
+  padding: clamp(10px, 2vh, 18px) 16px 12px;
+  border-radius: 0 0 18px 18px;
+  transition:
+    background-color var(--lx-dur-move) var(--lx-ease-quick),
+    box-shadow var(--lx-dur-move) var(--lx-ease-quick);
+}
+.app.app[data-stage="report"] .reportHeader[data-compact] {
+  background: color-mix(in srgb, var(--lx-paper) 86%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  backdrop-filter: saturate(1.6) blur(18px);
+  box-shadow:
+    0 1px 0 var(--lx-line-soft),
+    0 18px 30px -28px color-mix(in srgb, var(--lx-ink) 55%, transparent);
+}
+.app.app[data-stage="report"] .reportHeading {
+  grid-area: heading;
+  min-width: 0;
+}
+.app.app[data-stage="report"] .reportActions {
+  grid-area: actions;
+  align-self: center;
+  margin-top: 0;
+}
+.app.app[data-stage="report"] .reportVisual {
+  margin: 0 0 28px;
+}
+.app.app[data-stage="report"] .reportCompact {
+  grid-area: compact;
+  justify-self: center;
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+  opacity: 0;
+  filter: blur(10px);
+  pointer-events: none;
+  transform: translateY(64px) scale(1.4, 2.6);
+  transform-origin: 50% 0;
+  transition:
+    opacity 160ms var(--lx-ease-quick),
+    transform 260ms var(--lx-ease-quick),
+    filter 200ms var(--lx-ease-quick);
+}
+.app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+  opacity: 1;
+  filter: none;
+  pointer-events: auto;
+  transform: none;
+  transition:
+    opacity 280ms var(--lx-ease-quick),
+    transform 820ms cubic-bezier(0.16, 1.32, 0.3, 1),
+    filter 480ms var(--lx-ease-quick);
+}
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]
+  line {
+  animation: compact-bar 720ms cubic-bezier(0.3, 1.6, 0.4, 1) backwards;
+  animation-delay: calc(200ms + var(--i, 0) * 7ms);
+}
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--lx-teal) 30%, transparent) 50%,
+    transparent 80%
+  );
+  pointer-events: none;
+  animation: compact-sweep 1200ms var(--lx-ease-move) 320ms both;
+}
+@keyframes compact-bar {
+  0% {
+    transform: scaleY(0.05);
+  }
+  55% {
+    transform: scaleY(1.9);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+@keyframes compact-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+@media (max-width: 899.98px) {
+  .app.app[data-stage="report"] .reportHeader {
+    position: static;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  .app.app[data-stage="report"] .reportCompact {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app.app[data-stage="report"] .reportCompact,
+  .app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+    filter: none;
+    transform: none;
+    transition: opacity 120ms linear;
+  }
+  .app.app[data-stage="report"]
+    .reportHeader[data-compact]
+    .reportCompact
+    [data-call-map-mini]
+    line,
+  .app.app[data-stage="report"]
+    .reportHeader[data-compact]
+    .reportCompact
+    [data-call-map-mini]::after {
+    animation: none;
+  }
+}
+
+/* Scroll-linked fold (replaces the timed transitions above): --fold is set
+   from the scroll position every frame, so the compact map tracks the
+   reader's hand with no delay. Only the landing flourish is timed. */
+.app.app[data-stage="report"] .reportHeader,
+.app.app[data-stage="report"] .reportHeader[data-compact] {
+  --fold: 0;
+  background: color-mix(
+    in srgb,
+    var(--lx-paper) calc(var(--fold) * 92%),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(calc(var(--fold) * 18px));
+  backdrop-filter: blur(calc(var(--fold) * 18px));
+  box-shadow:
+    0 1px 0
+      color-mix(
+        in srgb,
+        var(--lx-line-soft) calc(var(--fold) * 100%),
+        transparent
+      ),
+    0 18px 30px -28px
+      color-mix(in srgb, var(--lx-ink) calc(var(--fold) * 55%), transparent);
+  transition: none;
+}
+.app.app[data-stage="report"] .reportCompact,
+.app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+  opacity: calc((var(--fold) - 0.2) * 1.5);
+  filter: blur(calc((1 - var(--fold)) * 8px));
+  transform: translateY(calc((1 - var(--fold)) * 60px))
+    scale(calc(1 + (1 - var(--fold)) * 0.35), calc(1 + (1 - var(--fold)) * 1.8));
+  transition: none;
+  will-change: transform, opacity;
+}
+.app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+  filter: none;
+  pointer-events: auto;
+}
+/* The full map recedes as it slides under the row. */
+.app.app[data-stage="report"] .reportVisual {
+  --fold: 0;
+  opacity: calc(1 - var(--fold) * 0.75);
+  transform: scale(calc(1 - var(--fold) * 0.04));
+  transform-origin: 50% 0;
+}
+/* Landing flourish: a quick ripple through the bars and one light sweep. */
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]
+  line {
+  animation: compact-bar 420ms cubic-bezier(0.3, 1.6, 0.4, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 3ms);
+}
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]::after {
+  animation: compact-sweep 700ms var(--lx-ease-move) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app.app[data-stage="report"] .reportCompact,
+  .app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+    filter: none;
+    transform: none;
+  }
+  .app.app[data-stage="report"] .reportVisual {
+    transform: none;
+  }
+}
+
+/* The row turns solid as soon as the map starts sliding under it (a quarter
+   of the fold), so nothing ever shows through behind the title. */
+.app.app[data-stage="report"] .reportHeader,
+.app.app[data-stage="report"] .reportHeader[data-compact] {
+  background: color-mix(
+    in srgb,
+    var(--lx-paper) calc(min(1, var(--fold) * 4) * 94%),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(calc(min(1, var(--fold) * 4) * 18px));
+  backdrop-filter: blur(calc(min(1, var(--fold) * 4) * 18px));
+}
+
+/* Pixel-exact fold: the header script drives the compact waveform along the
+   measured path, so the slot itself no longer moves, blurs or fades, the full
+   card no longer scales, and the landing flourish is gone. */
+.app.app[data-stage="report"] .reportCompact,
+.app.app[data-stage="report"] .reportHeader[data-compact] .reportCompact {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  transition: none;
+  will-change: auto;
+}
+.app.app[data-stage="report"] .reportVisual {
+  transform: none;
+}
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]
+  line {
+  animation: none;
+}
+.app.app[data-stage="report"]
+  .reportHeader[data-compact]
+  .reportCompact
+  [data-call-map-mini]::after {
+  content: none;
+  animation: none;
+}
+
+/* Dark report: the report follows the app theme now, so the light "sheet"
+   inset that framed it on a dark ground is no longer needed. */
+:global(:root[data-theme="dark"])
+  .app.app[data-stage="report"]
+  .report:global(.studio-report) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Fully opaque once folded: at 94% the bright report text behind showed
+   faintly through the row, most visibly in dark mode. */
+.app.app[data-stage="report"] .reportHeader,
+.app.app[data-stage="report"] .reportHeader[data-compact] {
+  background: color-mix(
+    in srgb,
+    var(--lx-paper) calc(min(1, var(--fold) * 4) * 100%),
+    transparent
+  );
 }
