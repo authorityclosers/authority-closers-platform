@@ -70,9 +70,10 @@ const KINDS = [
 type Tone = (typeof KINDS)[number]["tone"];
 
 /** What the band under the waveform shows: one view at a time. */
-type Lens = "who" | "talk-share";
+type Lens = "who" | "stages" | "talk-share";
 const LENSES: Array<{ key: Lens; label: string }> = [
   { key: "who", label: "Who talked" },
+  { key: "stages", label: "Call stages" },
   { key: "talk-share", label: "Talk share by minute" },
 ];
 const LENS_KEY = "ac.xray.map-lens";
@@ -82,7 +83,9 @@ function readLens(): Lens {
     const saved =
       typeof window === "undefined" ? null : localStorage.getItem(LENS_KEY);
     if (saved === "talk-share" || saved === "interest") return "talk-share";
-    // The old stages view had no stage data. Do not reopen it from storage.
+    // The owner keeps all three lenses (30 Sep); stages fill in once the
+    // analysis marks them (call-map contract, AUT-344).
+    if (saved === "stages") return "stages";
     return "who";
   } catch {
     return "who";
@@ -391,7 +394,7 @@ export function CallMap({
       return facts.voices.find((id) => id !== seller) ?? null;
     return null;
   })();
-  const activeLens = lens === "talk-share" && !prospectVoice ? "who" : lens;
+  const activeLens = lens;
   const talkShare = useMemo(
     () => (prospectVoice ? talkShareSeries(transcript, prospectVoice) : []),
     [transcript, prospectVoice],
@@ -536,9 +539,7 @@ export function CallMap({
             role="group"
             aria-label="What the map shows"
           >
-            {LENSES.filter(
-              (option) => option.key !== "talk-share" || prospectVoice,
-            ).map((option) => (
+            {LENSES.map((option) => (
               <button
                 key={option.key}
                 type="button"
@@ -668,6 +669,11 @@ export function CallMap({
             ) : (
               <span className={styles.note}>One voice on this call.</span>
             )
+          ) : activeLens === "stages" ? (
+            <span className={styles.note}>
+              Stages (hello, questions, pitch, wrap-up) show here once the
+              analysis marks them.
+            </span>
           ) : prospectVoice ? (
             <span className={styles.note}>
               <b>{nameOf(facts.voices.indexOf(prospectVoice))}</b> talk share in
@@ -804,6 +810,9 @@ export function CallMap({
                 </svg>
               ))}
             </div>
+          ) : null}
+          {activeLens === "stages" ? (
+            <div className={styles.stagesEmpty} aria-hidden="true" />
           ) : null}
           {activeLens === "talk-share" && talkSharePath ? (
             <div className={styles.interest} aria-hidden="true">

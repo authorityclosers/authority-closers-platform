@@ -1174,7 +1174,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   ).toBe("reading");
   expect(
     container.querySelectorAll('[aria-label="Explore your sales report"] a'),
-  ).toHaveLength(7);
+  ).toHaveLength(8);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
     expect(call.init.credentials).toBe("same-origin");
@@ -3086,6 +3086,7 @@ it("keeps report audio in the fixed dock without remounting the saved source", a
     "Overview",
     "Prospect",
     "Moments",
+    "Call signals",
     "Sales skills",
     "Next-call plan",
     "Transcript",
@@ -3417,6 +3418,10 @@ it("requires explicit deletion and waits for server acceptance", async () => {
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   localStorage.setItem(`ac.xray.facts.v1:${submissionId}`, "{}");
   localStorage.setItem(`ac.xray.speakers.v1:${submissionId}`, "{}");
+  localStorage.setItem(
+    `ac.xray.promises-done.v1:${submissionId}`,
+    '["s1:I will send the fictional brochure."]',
+  );
   await mount();
   await click("Request deletion");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
@@ -3425,6 +3430,9 @@ it("requires explicit deletion and waits for server acceptance", async () => {
   expect(localStorage.getItem(`ac.xray.facts.v1:${submissionId}`)).toBeNull();
   expect(
     localStorage.getItem(`ac.xray.speakers.v1:${submissionId}`),
+  ).toBeNull();
+  expect(
+    localStorage.getItem(`ac.xray.promises-done.v1:${submissionId}`),
   ).toBeNull();
   expect(container.textContent).toContain("Deletion requested");
 });
@@ -3460,6 +3468,7 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   localStorage.setItem(`ac.xray.facts.v1:${submissionId}`, "{}");
   localStorage.setItem(`ac.xray.speakers.v1:${submissionId}`, "{}");
+  localStorage.setItem(`ac.xray.promises-done.v1:${submissionId}`, "[]");
   await mount();
   await click("Request deletion");
   await click("Request recording deletion");
@@ -3467,6 +3476,9 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   expect(localStorage.getItem(`ac.xray.facts.v1:${submissionId}`)).toBe("{}");
   expect(localStorage.getItem(`ac.xray.speakers.v1:${submissionId}`)).toBe(
     "{}",
+  );
+  expect(localStorage.getItem(`ac.xray.promises-done.v1:${submissionId}`)).toBe(
+    "[]",
   );
   expect(button("Forget this saved call on this device")).toBeDefined();
   await click("Forget this saved call on this device");
