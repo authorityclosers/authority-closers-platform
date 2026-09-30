@@ -340,3 +340,48 @@ it("shows brand logos only for a confirmed prospect mention", async () => {
   expect(container.querySelector('[data-kind="brand"]')).toBeNull();
   localStorage.removeItem(`ac.xray.speakers.v1:${callId}`);
 });
+
+it("keeps prospect brand mentions eligible while excluding unconfirmed voices", async () => {
+  localStorage.clear();
+  const callId = "fictional-brand-role-matrix";
+  saveSpeakerProfiles(callId, {
+    "speaker-1": { name: "Seller", role: "salesperson", icon: null },
+    "speaker-2": { name: "Prospect", role: "prospect", icon: null },
+  });
+  const source = transcriptWithSegments(2);
+  source.segments[0].text = "My colleague uses WhatsApp.";
+  source.segments[1].text = "My brother uses WhatsApp.";
+  await render(source, undefined, "en", true, true, callId);
+  let segments = [
+    ...container.querySelectorAll<HTMLElement>("[data-segment-id]"),
+  ];
+  expect(segments[0].querySelector('[data-kind="brand"]')).toBeNull();
+  expect(segments[1].querySelector('[data-kind="brand"]')).not.toBeNull();
+
+  await act(async () => root.render(null));
+  localStorage.clear();
+  saveSpeakerProfiles(callId, {
+    "speaker-1": { name: "Seller", role: "salesperson", icon: null },
+    "speaker-2": { name: "Prospect", role: "prospect", icon: null },
+  });
+  const threeVoices = transcriptWithSegments(3);
+  threeVoices.segments[0].text = "We can discuss the next step.";
+  threeVoices.segments[1].text = "I will review the details.";
+  threeVoices.segments[2].speaker_id = "speaker-3";
+  threeVoices.segments[2].text = "My friend uses WhatsApp.";
+  await render(threeVoices, undefined, "en", true, true, callId);
+  segments = [...container.querySelectorAll<HTMLElement>("[data-segment-id]")];
+  expect(segments[2].textContent).toContain("My friend uses WhatsApp.");
+  expect(segments[2].querySelector('[data-kind="brand"]')).toBeNull();
+
+  await act(async () => root.render(null));
+  localStorage.clear();
+  const unknownRole = transcriptWithSegments(2);
+  unknownRole.segments[0].text = "We can discuss the next step.";
+  unknownRole.segments[1].text = "My brother uses WhatsApp.";
+  await render(unknownRole, undefined, "en", true, true, null);
+  segments = [...container.querySelectorAll<HTMLElement>("[data-segment-id]")];
+  expect(segments[1].textContent).toContain("My brother uses WhatsApp.");
+  expect(segments[1].querySelector('[data-kind="brand"]')).toBeNull();
+  localStorage.removeItem(`ac.xray.speakers.v1:${callId}`);
+});
