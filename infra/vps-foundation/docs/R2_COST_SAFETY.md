@@ -38,6 +38,36 @@ This is a conservative payload projection; Restic deduplication may use less sto
 
 At 5-minute cadence the theoretical maximum is 288 captures per day per active environment, or 17,280 captures per 30-day month for two environments. Exact Class A cost depends on Restic's object layout and retries, so the existing 700,000/month Class A guard remains authoritative and is run before each off-host write. No Cloudflare hard billing cap is implied. The five-minute cadence, 30-second jitter, four-minute dump timeout, and four-minute upload timeout leave a bounded healthy-run window inside the 15-minute objective; any failed or skipped run is an RPO incident, not a reason to claim the target still passed.
 
+## Foundation projection, cache and maintenance (AUT-163)
+
+All four backup/restore entrypoints require `/var/cache/authority-closers-restic` to be a real, root-owned directory and create/remove a probe there before any restic request. Missing, symlinked or unwritable caches fail with `AC_BACKUP_FAILURE=restic_cache_unavailable`. A restic `unable to open cache` warning also fails the run. Units provision the shared directory using `CacheDirectory=authority-closers-restic` and `CacheDirectoryMode=0750`; explicit writable paths remain. The logical restore proof uses an inline temporary wrapper to detect warnings hidden by Python's child-stderr suppression; it removes the wrapper on exit and stores no credentials in it.
+
+Under the host flock, the daily job runs: guard with projection **0**, stale-only `unlock`, logical `forget --group-by host,tags --keep-within 27h`, foundation `forget` (7 daily / 4 weekly / 6 monthly), then `prune`. Maintenance therefore completes before a refused foundation snapshot. The zero projection removes only the extra foundation reservation; the guard still applies its unchanged logical reservation and account-wide checks. A failed first guard makes no restic request. Stale-only unlock preserves live locks; contention or any maintenance failure stops the job.
+
+Foundation admission then uses `restic backup --dry-run --json` with exactly the real backup's sources and exclusions. Exactly one summary must contain a nonnegative integer `data_added`; a failed dry-run, absent summary or malformed value refuses the write. This is new **uncompressed** blob data, including tree metadata, rather than the entire source size; no compression credit is taken. It is passed as `R2_PROJECTED_ADDITIONAL_BYTES` to the second guard. Source changes between projection and capture and delayed provider metrics remain limitations of preflight admission.
+
+The existing secrets, application artifacts/releases and local logical-ring exclusions stay. Additional exclusions are limited to rebuildable material:
+
+| Excluded path below `/srv/authority-closers` | Reason |
+| --- | --- |
+| `release-store/*`, with ordered re-inclusion of `release-store/native` | Rebuildable transport bundles; native zips remain because GitHub expires them after a day. |
+| `media-safety/scanner-temp-v1.ext4` | 8 GiB scanner scratch image. |
+| `volumes/media-safety-tmp` | Scanner temporary files. |
+| `volumes/media-safety-signatures` | Signatures refreshed by freshclam. |
+| `volumes/media-video/*/tmp` | FFmpeg scratch. |
+| `sales-xray/*/scratch` | Rebuildable processing scratch. |
+
+Native archives, video/avatar objects, `sales-xray/*/storage` recordings and `application/operator-inputs` stay included.
+
+Expected requests with a warm cache and no retries (operation counts vary with object sizes, pagination, live locks and cache warming):
+
+| Run | Expected Class A | Expected Class B |
+| --- | --- | --- |
+| One 5-minute logical upload per environment | LIST keys/locks/snapshots/indexes; PUT lock, snapshot, new index objects and data/tree packs. No forget/prune. For two environments, two such calls; 288 calls/day/environment. | Config/key HEAD/GET, live-lock reads and newly encountered metadata. **Zero repeated GETs of cached historical snapshot/index objects**, instead of two reads per earlier capture. |
+| One daily foundation run | Six restic calls: unlock, two forgets, prune, dry-run and backup. LISTs and maintenance locks plus PUTs for repacked packs/indexes and new foundation objects. Dry-run writes no objects or repository lock. | Config/key and lock reads per call; metadata cache misses; prune GETs for retained trees and packs selected for repacking. Cached snapshots/indexes are reused. |
+
+Prune is not request-free: it lists packs, scans retained trees, downloads partially used packs when repacking, uploads replacement packs/indexes, then deletes obsolete objects. DELETE operations are free under R2's published pricing. Refusal at the second guard omits the sixth call (real foundation backup), after maintenance and dry-run have completed. A cold cache can read the retained set once; it must not repeat that download on every five-minute run. Post-install R2 observations must establish the actual per-run counts; these expectations do not replace the existing operation ceilings.
+
 ## Deployment gate
 
 No R2 writer may be enabled unless all of the following are true:
@@ -66,3 +96,5 @@ No client-side script can guarantee a Cloudflare account never incurs a charge i
 - R2 metrics and GraphQL datasets: <https://developers.cloudflare.com/r2/platform/metrics-analytics/>
 - Cloudflare usage-based billing: <https://developers.cloudflare.com/billing/understand/usage-based-billing/>
 - Cloudflare R2 lifecycle behavior: <https://developers.cloudflare.com/r2/buckets/object-lifecycles/>
+
+- Restic 0.16.4 [dry-run and exclusion rules](https://restic.readthedocs.io/en/v0.16.4/040_backup.html), [cache](https://restic.readthedocs.io/en/v0.16.4/100_references.html#local-cache) and [prune](https://restic.readthedocs.io/en/v0.16.4/060_forget.html#customize-pruning).
