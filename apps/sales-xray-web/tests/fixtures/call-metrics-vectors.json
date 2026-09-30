@@ -1,0 +1,325 @@
+{
+  "about": "Fictional call-metrics vectors (AUT-343, plan AUT-341 §3.1). Segment rows are [id, speaker_id, start_ms, end_ms, text]; the expected curve lists bin starts and one share array per speaker. Shares round half up to 2 decimals.",
+  "vectors": [
+    {
+      "name": "25-minute call, prospect quiet from minute 16, no recovery, promise overrun",
+      "duration_ms": 1500000,
+      "segments": [
+        ["s1", "seller", 0, 30000, "Twenty minutes, okay?"],
+        ["s2", "prospect", 30000, 60000, "We log it by hand."],
+        ["s3", "seller", 60000, 90000, "Okay."],
+        ["s4", "prospect", 90000, 120000, "We log it by hand."],
+        ["s5", "seller", 120000, 150000, "Okay."],
+        ["s6", "prospect", 150000, 180000, "We log it by hand."],
+        ["s7", "seller", 180000, 210000, "Okay."],
+        ["s8", "prospect", 210000, 240000, "We log it by hand."],
+        ["s9", "seller", 240000, 270000, "Okay."],
+        ["s10", "prospect", 270000, 300000, "We log it by hand."],
+        [
+          "s11",
+          "seller",
+          300000,
+          330000,
+          "Right, and how does that work today?"
+        ],
+        ["s12", "prospect", 330000, 360000, "We log it by hand."],
+        ["s13", "seller", 360000, 390000, "Okay."],
+        ["s14", "prospect", 390000, 420000, "We log it by hand."],
+        ["s15", "seller", 420000, 450000, "Okay."],
+        ["s16", "prospect", 450000, 480000, "We log it by hand."],
+        ["s17", "seller", 480000, 510000, "Okay."],
+        ["s18", "prospect", 510000, 540000, "We log it by hand."],
+        ["s19", "seller", 540000, 570000, "Okay."],
+        ["s20", "prospect", 570000, 600000, "We log it by hand."],
+        [
+          "s21",
+          "seller",
+          600000,
+          630000,
+          "Right, and how does that work today?"
+        ],
+        ["s22", "prospect", 630000, 660000, "We log it by hand."],
+        ["s23", "seller", 660000, 690000, "Okay."],
+        ["s24", "prospect", 690000, 720000, "We log it by hand."],
+        ["s25", "seller", 720000, 750000, "Okay."],
+        ["s26", "prospect", 750000, 780000, "We log it by hand."],
+        ["s27", "seller", 780000, 810000, "Okay."],
+        ["s28", "prospect", 810000, 840000, "We log it by hand."],
+        ["s29", "seller", 840000, 870000, "Okay."],
+        ["s30", "prospect", 870000, 900000, "We log it by hand."],
+        [
+          "s31",
+          "seller",
+          900000,
+          930000,
+          "Right, and how does that work today?"
+        ],
+        ["s32", "prospect", 930000, 960000, "We log it by hand."],
+        ["s33", "seller", 960000, 1017000, "So the plan covers all of that."],
+        ["s34", "prospect", 1017000, 1020000, "Mm."],
+        ["s35", "seller", 1020000, 1077000, "So the plan covers all of that."],
+        ["s36", "prospect", 1077000, 1080000, "Mm."],
+        ["s37", "seller", 1080000, 1137000, "So the plan covers all of that."],
+        ["s38", "prospect", 1137000, 1140000, "Mm."],
+        ["s39", "seller", 1140000, 1197000, "So the plan covers all of that."],
+        ["s40", "prospect", 1197000, 1200000, "Mm."],
+        ["s41", "seller", 1200000, 1257000, "So the plan covers all of that."],
+        ["s42", "prospect", 1257000, 1260000, "Mm."],
+        ["s43", "seller", 1260000, 1317000, "So the plan covers all of that."],
+        ["s44", "prospect", 1317000, 1320000, "Mm."],
+        ["s45", "seller", 1320000, 1377000, "So the plan covers all of that."],
+        ["s46", "prospect", 1377000, 1380000, "Mm."],
+        ["s47", "seller", 1380000, 1437000, "So the plan covers all of that."],
+        ["s48", "prospect", 1437000, 1440000, "Mm."],
+        ["s49", "seller", 1440000, 1497000, "So the plan covers all of that."],
+        ["s50", "prospect", 1497000, 1500000, "Mm."]
+      ],
+      "time_promise": {
+        "promised_ms": 1200000,
+        "evidence": [{ "segment_id": "s1" }]
+      },
+      "expected": {
+        "metrics": {
+          "time_used_ms": 1500000,
+          "speakers": {
+            "seller": { "talk_ms": 993000, "talk_share": 0.66, "questions": 4 },
+            "prospect": {
+              "talk_ms": 507000,
+              "talk_share": 0.34,
+              "questions": 0
+            }
+          },
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 960000, "end_ms": 1017000 },
+            { "speaker_id": "seller", "start_ms": 1020000, "end_ms": 1077000 },
+            { "speaker_id": "seller", "start_ms": 1080000, "end_ms": 1137000 }
+          ],
+          "curve": {
+            "start_ms": [
+              0, 60000, 120000, 180000, 240000, 300000, 360000, 420000, 480000,
+              540000, 600000, 660000, 720000, 780000, 840000, 900000, 960000,
+              1020000, 1080000, 1140000, 1200000, 1260000, 1320000, 1380000,
+              1440000
+            ],
+            "shares": {
+              "seller": [
+                0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                0.5, 0.5, 0.5, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95,
+                0.95
+              ],
+              "prospect": [
+                0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                0.5, 0.5, 0.5, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+                0.05
+              ]
+            }
+          }
+        },
+        "quiet": {
+          "seller": null,
+          "prospect": { "start_ms": 960000, "recovered": false }
+        },
+        "overrun": 300000
+      }
+    },
+    {
+      "name": "quiet run that recovers; a 2-bin dip is not a run; promise kept",
+      "duration_ms": 480000,
+      "segments": [
+        ["s1", "seller", 0, 30000, "Let me walk you through it."],
+        ["s2", "prospect", 30000, 60000, "Sure."],
+        ["s3", "seller", 60000, 117000, "Let me walk you through it."],
+        ["s4", "prospect", 117000, 120000, "Sure."],
+        ["s5", "seller", 120000, 177000, "Let me walk you through it."],
+        ["s6", "prospect", 177000, 180000, "Sure."],
+        ["s7", "seller", 180000, 210000, "Let me walk you through it."],
+        ["s8", "prospect", 210000, 240000, "Sure."],
+        ["s9", "seller", 240000, 297000, "Let me walk you through it."],
+        ["s10", "prospect", 297000, 300000, "Sure."],
+        ["s11", "seller", 300000, 357000, "Let me walk you through it."],
+        ["s12", "prospect", 357000, 360000, "Sure."],
+        ["s13", "seller", 360000, 417000, "Let me walk you through it."],
+        ["s14", "prospect", 417000, 420000, "Sure."],
+        ["s15", "seller", 420000, 460000, "Let me walk you through it."],
+        ["s16", "prospect", 460000, 480000, "Could you show the report?"]
+      ],
+      "time_promise": {
+        "promised_ms": 600000,
+        "evidence": [{ "segment_id": "s1" }]
+      },
+      "expected": {
+        "metrics": {
+          "time_used_ms": 480000,
+          "speakers": {
+            "seller": { "talk_ms": 385000, "talk_share": 0.8, "questions": 0 },
+            "prospect": { "talk_ms": 95000, "talk_share": 0.2, "questions": 1 }
+          },
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 60000, "end_ms": 117000 },
+            { "speaker_id": "seller", "start_ms": 120000, "end_ms": 177000 },
+            { "speaker_id": "seller", "start_ms": 240000, "end_ms": 297000 }
+          ],
+          "curve": {
+            "start_ms": [
+              0, 60000, 120000, 180000, 240000, 300000, 360000, 420000
+            ],
+            "shares": {
+              "seller": [0.5, 0.95, 0.95, 0.5, 0.95, 0.95, 0.95, 0.67],
+              "prospect": [0.5, 0.05, 0.05, 0.5, 0.05, 0.05, 0.05, 0.33]
+            }
+          }
+        },
+        "quiet": {
+          "seller": null,
+          "prospect": { "start_ms": 240000, "recovered": true }
+        },
+        "overrun": 0
+      }
+    },
+    {
+      "name": "overlapping segments count once (union); no time promise",
+      "duration_ms": 20000,
+      "time_promise": null,
+      "segments": [
+        ["a1", "a", 0, 10000, "Hello there."],
+        ["a2", "a", 5000, 15000, "Yes, same point."],
+        ["b1", "b", 12000, 20000, "Go on."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 20000,
+          "speakers": {
+            "a": { "talk_ms": 15000, "talk_share": 0.65, "questions": 0 },
+            "b": { "talk_ms": 8000, "talk_share": 0.35, "questions": 0 }
+          },
+          "monologues": [
+            { "speaker_id": "a", "start_ms": 0, "end_ms": 15000 },
+            { "speaker_id": "b", "start_ms": 12000, "end_ms": 20000 }
+          ],
+          "curve": { "start_ms": [0], "shares": { "a": [0.65], "b": [0.35] } }
+        },
+        "quiet": { "a": null, "b": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "one speaker only; missing duration falls back to the largest end_ms",
+      "duration_ms": null,
+      "time_promise": null,
+      "segments": [
+        ["a1", "a", 0, 30000, "Recording a note."],
+        ["a2", "a", 31000, 70000, "Done?"]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 70000,
+          "speakers": {
+            "a": { "talk_ms": 69000, "talk_share": 1.0, "questions": 1 }
+          },
+          "monologues": [{ "speaker_id": "a", "start_ms": 0, "end_ms": 70000 }],
+          "curve": { "start_ms": [0, 60000], "shares": { "a": [1.0, 1.0] } }
+        },
+        "quiet": { "a": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "zero-length, out-of-order and unlabelled segments",
+      "duration_ms": 90000,
+      "time_promise": null,
+      "segments": [
+        ["b2", "b", 70000, 90000, "That is fine."],
+        ["a1", "a", 0, 40000, "We start with the numbers."],
+        ["b0", "b", 40000, 40000, "Ready?"],
+        ["x1", null, 40000, 45000, "(noise)"],
+        ["b1", "b", 41000, 60000, "Tell me more."],
+        ["a2", "a", 60500, 70000, "Here it is."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 90000,
+          "speakers": {
+            "b": { "talk_ms": 39000, "talk_share": 0.44, "questions": 1 },
+            "a": { "talk_ms": 49500, "talk_share": 0.56, "questions": 0 }
+          },
+          "monologues": [
+            { "speaker_id": "a", "start_ms": 0, "end_ms": 40000 },
+            { "speaker_id": "b", "start_ms": 70000, "end_ms": 90000 },
+            { "speaker_id": "b", "start_ms": 41000, "end_ms": 60000 }
+          ],
+          "curve": {
+            "start_ms": [0, 60000],
+            "shares": { "b": [0.32, 0.68], "a": [0.68, 0.32] }
+          }
+        },
+        "quiet": { "b": null, "a": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "a silent bin is null and breaks a quiet run",
+      "duration_ms": 300000,
+      "time_promise": null,
+      "segments": [
+        ["a1", "a", 0, 57000, "First part."],
+        ["b1", "b", 57000, 60000, "Mm."],
+        ["a2", "a", 120000, 177000, "Second part."],
+        ["b2", "b", 177000, 180000, "Mm."],
+        ["a3", "a", 180000, 237000, "Third part."],
+        ["b3", "b", 237000, 240000, "Mm."],
+        ["a4", "a", 240000, 297000, "Last part."],
+        ["b4", "b", 297000, 300000, "Mm."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 300000,
+          "speakers": {
+            "a": { "talk_ms": 228000, "talk_share": 0.95, "questions": 0 },
+            "b": { "talk_ms": 12000, "talk_share": 0.05, "questions": 0 }
+          },
+          "monologues": [
+            { "speaker_id": "a", "start_ms": 0, "end_ms": 57000 },
+            { "speaker_id": "a", "start_ms": 120000, "end_ms": 177000 },
+            { "speaker_id": "a", "start_ms": 180000, "end_ms": 237000 }
+          ],
+          "curve": {
+            "start_ms": [0, 60000, 120000, 180000, 240000],
+            "shares": {
+              "a": [0.95, null, 0.95, 0.95, 0.95],
+              "b": [0.05, null, 0.05, 0.05, 0.05]
+            }
+          }
+        },
+        "quiet": { "a": null, "b": { "start_ms": 120000, "recovered": false } },
+        "overrun": null
+      }
+    },
+    {
+      "name": "ASCII and full-width question marks",
+      "duration_ms": 60000,
+      "time_promise": null,
+      "segments": [
+        ["a1", "a", 0, 20000, "Can we start? Is the line clear?"],
+        ["b1", "b", 20000, 40000, "今日は大丈夫ですか？ はい。"],
+        ["a2", "a", 40000, 60000, "Really?! Okay. No questions here."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 60000,
+          "speakers": {
+            "a": { "talk_ms": 40000, "talk_share": 0.67, "questions": 3 },
+            "b": { "talk_ms": 20000, "talk_share": 0.33, "questions": 1 }
+          },
+          "monologues": [
+            { "speaker_id": "a", "start_ms": 0, "end_ms": 20000 },
+            { "speaker_id": "b", "start_ms": 20000, "end_ms": 40000 },
+            { "speaker_id": "a", "start_ms": 40000, "end_ms": 60000 }
+          ],
+          "curve": { "start_ms": [0], "shares": { "a": [0.67], "b": [0.33] } }
+        },
+        "quiet": { "a": null, "b": null },
+        "overrun": null
+      }
+    }
+  ]
+}
