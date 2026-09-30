@@ -297,8 +297,7 @@ export function OrganisationView() {
               <p className={styles.banner}>
                 <span aria-hidden="true" />
                 Member management, domain joining and company-wide activity
-                switch on here soon.
-                Until then you see your own details only.
+                switch on here soon. Until then you see your own details only.
               </p>
             ) : null}
 
@@ -338,11 +337,7 @@ export function OrganisationView() {
                     }
                     note={activity.status === "ready" ? undefined : NOT_LIVE}
                   />
-                  <Stat
-                    label="Shared credits"
-                    value="—"
-                    note="Coming soon."
-                  />
+                  <Stat label="Shared credits" value="—" note="Coming soon." />
                 </div>
               )}
 

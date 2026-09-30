@@ -109,7 +109,7 @@ it("keeps ambiguous magnitudes as quantities without currency evidence", () => {
 
 it("recognizes explicit Rs and rupee evidence without a magnitude", () => {
   const rows = numbersHeard(
-    call([["a", 0, 1000, "Rs 500, 500 rupees, price 750, and 10K customers."]]),
+    call([["a", 0, 1000, "Rs 500; 500 rupees; price 750; and 10K customers."]]),
   );
   expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
     ["Rs 500", "money"],

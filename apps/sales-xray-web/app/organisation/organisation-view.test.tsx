@@ -79,10 +79,11 @@ const tab = (name: string) =>
     (button) => button.textContent === name,
   )!;
 
-it("says what switches on once the organisation API ships, without invented people", async () => {
+it("marks unavailable organisation features as coming soon", async () => {
   await render();
   expect(host.querySelector("h1")?.textContent).toBe("Authority Closers");
-  expect(host.textContent).toContain("as soon as the organisation API ships");
+  expect(host.textContent).toContain("Coming soon.");
+  expect(host.textContent).not.toMatch(/AUT-\d+/);
   await act(async () => tab("Members").click());
   expect(host.querySelectorAll('[role="row"]')).toHaveLength(2);
   expect(

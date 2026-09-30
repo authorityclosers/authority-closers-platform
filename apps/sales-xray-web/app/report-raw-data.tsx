@@ -84,7 +84,7 @@ export function csvCell(value: string | number) {
   const raw = String(value);
   const text =
     typeof value === "string" && /^[=+\-@\t\r]/u.test(value) ? `'${raw}` : raw;
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return /[",\t\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 /**
