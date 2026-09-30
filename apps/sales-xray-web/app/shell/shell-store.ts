@@ -3,6 +3,8 @@
  * Prevents shell flickering, state resets, and duplicate fetches during client transitions.
  */
 
+import type { CallTone } from "../call-status";
+
 export interface ShellSummaryCounts {
   total: number;
   processing: number;
@@ -21,6 +23,9 @@ export interface ShellRecentCall {
   date: string;
   /** Label revision, so a rename from the sidebar is never a stale write. */
   revision?: number;
+  /** Where the call is now, for the status dot. */
+  tone?: CallTone;
+  status?: string;
 }
 
 export interface ShellStoreState {

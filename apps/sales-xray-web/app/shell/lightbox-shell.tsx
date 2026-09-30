@@ -27,6 +27,7 @@ import {
 
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
+import { callDate, callTone, submissionState } from "../call-status";
 import { CALL_LABEL_EVENT, type CallLabelChange } from "../call-label-client";
 import { RecentCallItem } from "./recent-call-item";
 import { LocalSettingsButton } from "../live-data-banner";
@@ -283,9 +284,9 @@ function LightboxShellFrame({
           id: call.id,
           name: call.label?.displayName ?? "Untitled call",
           revision: call.label?.revision ?? 0,
-          date: new Intl.DateTimeFormat(undefined, {
-            dateStyle: "medium",
-          }).format(new Date(call.createdAt)),
+          date: callDate(call.createdAt),
+          tone: callTone(call),
+          status: submissionState(call),
         }));
         setRecentCalls(mapped);
         setRecentCallsContextKey(recentContextKey);

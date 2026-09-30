@@ -186,9 +186,23 @@ export function RecentCallItem({
           />
         </form>
       ) : (
-        <Link href={href} className={styles.link} title={call.name}>
-          <AudioLines size={14} className={styles.icon} aria-hidden="true" />
+        <Link
+          href={href}
+          className={styles.link}
+          title={call.status ? `${call.name} · ${call.status}` : call.name}
+        >
+          <span className={styles.mark} data-tone={call.tone}>
+            <AudioLines size={14} className={styles.icon} aria-hidden="true" />
+            {call.tone && (
+              <i
+                className={styles.dot}
+                data-tone={call.tone}
+                aria-hidden="true"
+              />
+            )}
+          </span>
           <span className={styles.name}>{call.name}</span>
+          {call.status && <span className={styles.srOnly}>{call.status}</span>}
           <span className={styles.date}>{call.date}</span>
         </Link>
       )}

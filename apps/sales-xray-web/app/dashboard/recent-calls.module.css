@@ -1,0 +1,245 @@
+/* Dashboard Recent calls: one quiet list that fits the space left on screen. */
+.root {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.list {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.item {
+  animation: rowIn var(--lx-dur-reveal, 260ms) var(--lx-ease-move, ease) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+.row {
+  display: grid;
+  height: var(--row);
+  grid-template-columns: 30px minmax(0, 1fr) 84px 52px 148px 16px;
+  align-items: center;
+  column-gap: 12px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--lx-radius-md, 10px);
+  color: var(--lx-ink);
+  text-decoration: none;
+  transition:
+    background-color var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease),
+    transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease);
+}
+
+.row:hover {
+  background: var(--lx-sunken);
+}
+
+.row:active {
+  transform: scale(0.995);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--lx-focus);
+  outline-offset: -2px;
+}
+
+.icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  transition:
+    background-color var(--lx-dur-quick, 140ms) ease,
+    color var(--lx-dur-quick, 140ms) ease;
+}
+
+.row:hover .icon {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name[data-untitled] {
+  color: var(--lx-muted);
+  font-weight: 500;
+}
+
+.date,
+.length {
+  color: var(--lx-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.length {
+  text-align: right;
+}
+
+.status {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--lx-radius-pill, 99px);
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status[data-tone="ready"] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.status[data-tone="active"] {
+  background: var(--lx-info-soft);
+  color: var(--lx-info);
+}
+
+.status[data-tone="active"] i {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.status[data-tone="attention"] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.chevron {
+  color: var(--lx-muted-2, var(--lx-muted));
+  transition:
+    transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease),
+    color var(--lx-dur-quick, 140ms) ease;
+}
+
+.row:hover .chevron {
+  color: var(--lx-teal);
+  transform: translateX(3px);
+}
+
+.more {
+  flex: none;
+  margin: 6px 0 0 50px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 30px minmax(0, 1fr) auto 16px;
+  }
+  .date,
+  .length {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item,
+  .status[data-tone="active"] i {
+    animation: none;
+  }
+  .row,
+  .chevron {
+    transition: none;
+  }
+}
+
+/* Living status dots, matching the sidebar marks. */
+.status[data-tone="ready"] i {
+  animation: dot-pop 520ms var(--lx-ease-pop, ease) calc(var(--i, 0) * 45ms + 200ms) both;
+}
+.status[data-tone="attention"] i {
+  animation: dot-nudge 4s ease-in-out infinite;
+}
+.row[data-tone="active"] .icon {
+  background: var(--lx-info-soft);
+  color: var(--lx-info);
+}
+.row[data-tone="active"] .icon path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: eq 900ms ease-in-out infinite;
+}
+.row[data-tone="active"] .icon path:nth-child(2n) {
+  animation-delay: -300ms;
+}
+.row[data-tone="active"] .icon path:nth-child(3n) {
+  animation-delay: -600ms;
+}
+@keyframes dot-pop {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.4);
+  }
+}
+@keyframes dot-nudge {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  85% {
+    transform: scale(1.35);
+  }
+  90% {
+    transform: scale(0.9);
+  }
+  95% {
+    transform: scale(1.15);
+  }
+}
+@keyframes eq {
+  50% {
+    transform: scaleY(0.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status i,
+  .row[data-tone="active"] .icon path {
+    animation: none;
+  }
+}
