@@ -1,0 +1,11 @@
+[Unit]
+Description=Save studio edits every thirty minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30min
+Persistent=true
+Unit=ac-studio-sync.service
+
+[Install]
+WantedBy=timers.target

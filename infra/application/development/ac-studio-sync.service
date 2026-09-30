@@ -1,0 +1,24 @@
+[Unit]
+Description=Preserve Sales Xray studio screen edits
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=acdev
+WorkingDirectory=/home/acdev/src/lanes/ui/authority-closers-platform
+ExecStart=/usr/bin/python3 /home/acdev/src/lanes/ui/authority-closers-platform/infra/application/development/ac-studio-sync.py
+TimeoutStartSec=300
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=32
+Nice=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/acdev/src/lanes/ui/authority-closers-platform /home/acdev/.local/state/ac-studio-sync /var/lib/ac-studio/notify /run/user
+
+[Install]
+WantedBy=multi-user.target
