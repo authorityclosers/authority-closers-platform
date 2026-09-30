@@ -136,6 +136,12 @@ function XrayScene() {
   );
 }
 
+// Google sign-in cannot finish on the dev site until dev has its own sign-in
+// server (AUT-157): Google returns to staging, which cannot see the dev start.
+const DEV_HOST = "salesxray-dev.authorityclosers.com";
+const noHostSubscription = () => () => {};
+const readGoogleBlocked = () => window.location.hostname === DEV_HOST;
+
 function GoogleMark() {
   // Google's own four-colour "G", as its sign-in branding requires.
   return (
@@ -693,7 +699,13 @@ export function AccountAuth({
     (preview && previewState === "auth.error");
   const available =
     activeConfig?.enabled && !!activeConfig.consent_version && !unavailable;
+  const googleBlocked = useSyncExternalStore(
+    noHostSubscription,
+    readGoogleBlocked,
+    () => false,
+  );
   const googleAvailable =
+    !googleBlocked &&
     !!activeConfig?.google_enabled &&
     !!activeConfig.consent_version &&
     !configError &&
@@ -711,7 +723,8 @@ export function AccountAuth({
     displayedStep === "code" ? (
       <>
         If this address can receive a sign-in code, check the inbox for{" "}
-        <strong>{maskedEmail(displayedEmail)}</strong>.
+        <strong>{maskedEmail(displayedEmail)}</strong>. Owner and admin accounts
+        never get codes: use Google or your password.
       </>
     ) : displayedStep === "confirmed" ? (
       "Opening your account securely…"
@@ -886,6 +899,12 @@ export function AccountAuth({
                       for my learner account.
                     </span>
                   </label>
+                  {googleBlocked ? (
+                    <p className={styles.consentHint}>
+                      Google sign-in is not available on the dev site yet. Use
+                      an email code, or your password.
+                    </p>
+                  ) : null}
                   {googleAvailable && (
                     <button
                       type="button"
