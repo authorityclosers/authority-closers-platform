@@ -1,0 +1,11 @@
+[Unit]
+Description=Check release train status every ten minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Unit=ac-train-watch.service
+
+[Install]
+WantedBy=timers.target
