@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-
 REPO = Path(__file__).resolve().parents[2]
 FOUNDATION = REPO / "infra" / "vps-foundation"
 SCRIPT = FOUNDATION / "scripts" / "ac-canary"
@@ -73,7 +72,7 @@ def invoke_canary(
             "FAKE_NOTIFY_EXIT": str(notifier_exit),
         }
     )
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - fixed repository script, arguments are not shell-evaluated
         [str(SCRIPT), environment],
         check=False,
         capture_output=True,
@@ -135,9 +134,7 @@ def test_failure_exit_and_alert_are_passed_once(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("stdout", ["", "not-json", '{"ok":false} trailing'])
 def test_refusal_or_non_json_records_no_result(tmp_path: Path, stdout: str) -> None:
-    result, history_dir, _, notification_log = invoke_canary(
-        tmp_path, stdout=stdout, docker_exit=2
-    )
+    result, history_dir, _, notification_log = invoke_canary(tmp_path, stdout=stdout, docker_exit=2)
 
     assert result.returncode == 2
     record = history_record(history_dir)
@@ -158,9 +155,7 @@ def test_refusal_or_non_json_records_no_result(tmp_path: Path, stdout: str) -> N
 
 
 def test_stderr_never_reaches_history(tmp_path: Path) -> None:
-    result, history_dir, _, _ = invoke_canary(
-        tmp_path, docker_stderr="stderr-sentinel\n"
-    )
+    result, history_dir, _, _ = invoke_canary(tmp_path, docker_stderr="stderr-sentinel\n")
 
     assert result.returncode == 0
     assert "stderr-sentinel" not in (history_dir / "staging.jsonl").read_text()
@@ -176,9 +171,7 @@ def test_docker_uses_live_container_and_production_flag_only(
     result, _, docker_args, _ = invoke_canary(
         tmp_path,
         environment=environment,
-        stdout=json.dumps(
-            {"ok": True, "environment": environment, "stage_reached": "disabled"}
-        ),
+        stdout=json.dumps({"ok": True, "environment": environment, "stage_reached": "disabled"}),
     )
 
     assert result.returncode == 0
@@ -247,7 +240,11 @@ def test_units_and_manifest_cover_timer() -> None:
     timer = TIMER.read_text(encoding="utf-8")
     manifest = MANIFEST.read_text(encoding="utf-8")
 
-    timeout = next(line.split("=", 1)[1] for line in service.splitlines() if line.startswith("TimeoutStartSec="))
+    timeout = next(
+        line.split("=", 1)[1]
+        for line in service.splitlines()
+        if line.startswith("TimeoutStartSec=")
+    )
     assert timeout.endswith("s") and int(timeout[:-1]) >= 1200
     assert "Restart=" not in service
     assert "RestrictAddressFamilies=AF_UNIX" in service
