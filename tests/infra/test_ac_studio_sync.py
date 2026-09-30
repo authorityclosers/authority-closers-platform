@@ -833,7 +833,10 @@ def test_carry_over_scans_commit_metadata_before_any_archive(repo, field):
 
 
 @pytest.mark.parametrize("claimed", [False, True])
-def test_partial_gate_start_retries_from_target_without_losing_checkpoint(repo, claimed):
+@pytest.mark.parametrize("parallel_lane", [None, "task/platform/999-other"])
+def test_partial_gate_start_retries_from_target_without_losing_checkpoint(
+    repo, claimed, parallel_lane
+):
     repo.write(APP + "page.tsx", "saved before partial start")
     original = repo.runner
 
@@ -856,6 +859,8 @@ def test_partial_gate_start_retries_from_target_without_losing_checkpoint(repo, 
         == "saved before partial start"
     )
     repo.runner = original
+    if parallel_lane:
+        repo.git("push", "origin", f"HEAD:refs/heads/{parallel_lane}")
     repo.tick()
     assert repo.git("show", "HEAD:" + APP + "page.tsx") == "saved before partial start"
     assert repo.remote_head(pending["target"]) == repo.git("rev-parse", "HEAD")
@@ -864,6 +869,50 @@ def test_partial_gate_start_retries_from_target_without_losing_checkpoint(repo, 
     assert not repo.git("status", "--porcelain")
     assert not repo.events("alert")
     assert any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+
+
+@pytest.mark.parametrize("claim", ["task/ui/999-other", "task/999-exclusive", "task/unknown/999"])
+def test_partial_gate_start_waits_for_competing_claim_before_push_or_replay(repo, claim):
+    repo.write(APP + "page.tsx", "saved before partial start")
+    original = repo.runner
+
+    def partial_start(argv, **kwargs):
+        if argv[:3] == [sys.executable, "scripts/ac_task.py", "start"]:
+            repo.git("switch", "-c", "task/ui/" + argv[-1], "origin/main")
+            raise SYNC.SyncError("start interrupted after switching")
+        return original(argv, **kwargs)
+
+    repo.runner = partial_start
+    repo.tick()
+    pending = json.loads(repo.state.read_text())["pending"]
+    repo.runner = original
+    repo.git("push", "origin", f"HEAD:refs/heads/{claim}")
+    repo.calls.clear()
+    repo.tick()
+    assert json.loads(repo.state.read_text())["pending"] == pending
+    assert not repo.events("alert")
+    repo.now += 7200
+    repo.tick()
+    first_alert = repo.events("alert")
+    assert [e["key"] for e in first_alert] == ["gate-busy"]
+    repo.now += 1800
+    repo.tick()
+    assert repo.events("alert") == first_alert
+    assert not any("push" in c or "cherry-pick" in c for c in repo.calls)
+    assert not any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+    assert not repo.git("ls-remote", "--heads", "origin", pending["target"])
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "original"
+    assert repo.git("rev-parse", "HEAD") == repo.base
+    assert not json.loads(repo.state.read_text())["pending"].get("replaying")
+    assert (
+        repo.git("show", pending["archive"] + ":" + APP + "page.tsx")
+        == "saved before partial start"
+    )
+    repo.git("push", "origin", "--delete", claim)
+    repo.tick()
+    assert "pending" not in json.loads(repo.state.read_text())
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "saved before partial start"
+    assert repo.remote_head(pending["target"]) == repo.git("rev-parse", "HEAD")
 
 
 @pytest.mark.parametrize("on_main", [False, True])
@@ -900,14 +949,14 @@ def test_net_zero_carry_over_does_not_archive_or_claim_lane(repo, on_main, advan
     assert not repo.events("alert")
 
 
-def test_malformed_state_cli_moves_aside_alerts_once_and_completes(repo, monkeypatch):
+@pytest.mark.parametrize("broken", [b'{"pending":', b'{"text":"\xe2\x82', b"[]", b"null"])
+def test_malformed_state_cli_moves_aside_alerts_once_and_completes(repo, monkeypatch, broken):
     from types import SimpleNamespace
 
     monkeypatch.setattr(SYNC.os, "geteuid", lambda: 1000)
     monkeypatch.setattr(SYNC.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="acdev"))
     repo.branch()
-    broken = '{"pending":'
-    repo.state.write_text(broken)
+    repo.state.write_bytes(broken)
     repo.write(APP + "page.tsx", "save despite broken state")
     args = [
         "--repo",
@@ -923,7 +972,7 @@ def test_malformed_state_cli_moves_aside_alerts_once_and_completes(repo, monkeyp
     assert SYNC.main(args) == 0
     assert repo.git("show", "HEAD:" + APP + "page.tsx") == "save despite broken state"
     backups = list(repo.state.parent.glob("state.json.bad-*"))
-    assert len(backups) == 1 and backups[0].read_text() == broken
+    assert len(backups) == 1 and backups[0].read_bytes() == broken
     assert json.loads(repo.state.read_text()) == {}
     assert [e["key"] for e in repo.events("alert")] == ["bad-state"]
     first_alert = repo.events("alert")[0]

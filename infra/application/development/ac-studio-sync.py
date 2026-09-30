@@ -91,7 +91,9 @@ class Sync:
     def load(self):
         try:
             self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
-        except json.JSONDecodeError:
+            if not isinstance(self.state, dict):
+                raise ValueError("Studio state must be an object")
+        except ValueError:
             self.state = {}
             self.state_path.rename(self.state_path.with_name(f"state.json.bad-{time.time_ns()}"))
             self.event("alert", "bad-state", "Malformed studio state moved aside; starting empty.")
@@ -359,16 +361,38 @@ class Sync:
                 pending["target"].removeprefix("task/ui/"),
             )
         except SyncError:
-            pending.setdefault("busy_since", self.now)
-            if self.now - pending["busy_since"] >= 7200 and not pending.get("alerted"):
-                self.event(
-                    "alert",
-                    "gate-busy",
-                    "Studio gate blocked for at least two hours; local history preserved.",
-                )
-                pending["alerted"] = True
-            self.save()
-            return False
+            return self.gate_busy()
+        return self.finish_transfer()
+
+    def gate_busy(self):
+        pending = self.state["pending"]
+        pending.setdefault("busy_since", self.now)
+        if self.now - pending["busy_since"] >= 7200 and not pending.get("alerted"):
+            self.event(
+                "alert",
+                "gate-busy",
+                "Studio gate blocked for at least two hours; local history preserved.",
+            )
+            pending["alerted"] = True
+        self.save()
+        return False
+
+    def retry_transfer(self):
+        target = self.state["pending"]["target"]
+        try:
+            heads = self.git("ls-remote", "--heads", "origin")
+            for line in heads.splitlines():
+                branch = line.split()[1].removeprefix("refs/heads/")
+                # Other named lanes may run in parallel; UI and exclusive tasks may not.
+                if (
+                    branch.startswith("task/")
+                    and branch != target
+                    and not re.fullmatch(r"task/(sales-xray|platform|admin|devenv)/[^/]+", branch)
+                ):
+                    raise SyncError("Studio lane claimed while start was interrupted")
+            self.git("push", "--set-upstream", "origin", target)
+        except SyncError:
+            return self.gate_busy()
         return self.finish_transfer()
 
     def finish_transfer(self):
@@ -492,9 +516,9 @@ class Sync:
             and not pending.get("replaying")
             and not commit_only
         ):
-            # start switched branches but failed to claim the remote; retry that claim.
-            self.git("push", "--set-upstream", "origin", branch)
-            self.finish_transfer()
+            # start switched branches; re-check lane ownership before retrying the claim.
+            if not self.retry_transfer():
+                return
             pending = None
             paths = self.paths()
         if pending and (
