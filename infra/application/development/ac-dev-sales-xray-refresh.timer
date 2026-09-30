@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh the development Sales Xray backend every ten minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+Persistent=true
+Unit=ac-dev-sales-xray-refresh.service
+
+[Install]
+WantedBy=timers.target
