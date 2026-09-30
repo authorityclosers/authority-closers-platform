@@ -1,0 +1,14 @@
+[Unit]
+Description=AC release train: smoke-gated patch promotion to production
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-release train
+Nice=10
+CPUWeight=50
+IOWeight=50
+MemoryMax=768M
+TasksMax=128
+TimeoutStartSec=5400

@@ -68,9 +68,12 @@ if [ "$first_install" = 1 ] && [ ! -e /var/lib/ac-release/staging.paused ]; then
   printf '{"reason":"first install: run a supervised deploy, then ac-release resume staging"}\n' \
     > /var/lib/ac-release/staging.paused
 fi
+install -m 0644 "$source_dir/systemd/ac-release-train.service" /etc/systemd/system/ac-release-train.service
+install -m 0644 "$source_dir/systemd/ac-release-train.timer" /etc/systemd/system/ac-release-train.timer
 systemctl daemon-reload
 systemctl enable --now ac-release-tick.timer
 systemctl enable --now ac-train-watch.timer
+systemctl enable --now ac-release-train.timer
 
 if [ ! -s /etc/ac-release/github-actions-read.token ]; then
   printf 'WARNING: /etc/ac-release/github-actions-read.token is missing; deploys cannot download builds.\n' >&2
