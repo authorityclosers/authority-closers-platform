@@ -55,6 +55,8 @@ from ac_platform.conversation_intelligence.worker import _FencedExecutor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
 FIXTURE_SHA256 = "78cb1194e987db6b8d06d0aa2a4d2e66d21bbdf0c3de6960e4e26da36ed207af"
+# Worst-case plan reservation the canary may accept (CEO decision, AUT-605).
+MAX_QUOTE_PAISE = 45_000
 
 
 def ownership(db: AsyncSession, settings: Settings) -> GuestOwnership:
@@ -163,7 +165,7 @@ async def poll(
                 recording_id = UUID(progress["recording_id"])
                 quote = await plans.quote(actor, recording_id, key=f"canary-quote:{submission_id}")
                 result["cost_paise"] = quote["max_cost_paise"]
-                if result["cost_paise"] > 500:
+                if result["cost_paise"] > MAX_QUOTE_PAISE:
                     result["failure_code"] = "canary_quote_over_cap"
                     return
                 await plans.accept(

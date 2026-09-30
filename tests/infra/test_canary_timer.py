@@ -322,7 +322,7 @@ def test_units_and_manifest_cover_timer() -> None:
     assert "RestrictAddressFamilies=AF_UNIX" in service
     assert "ReadWritePaths=/var/lib/authority-closers/canary" in service
     assert "ReadWritePaths=" in service and "/var/lib/ac-release/notify" in service
-    assert "OnCalendar=*-*-* 00,06,12,18:00:00 UTC" in timer
+    assert "OnCalendar=*-*-* 06:00:00 UTC" in timer
     assert "RandomizedDelaySec=10min" in timer
     assert "Persistent=false" in timer
     assert "scripts/ac-canary\t/usr/local/sbin/ac-canary" in manifest

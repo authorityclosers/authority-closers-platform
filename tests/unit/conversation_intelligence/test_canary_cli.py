@@ -95,7 +95,7 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "id": str(identifier),
         "plan_fingerprint": "a" * 64,
         "privacy_revision": "sales-xray-processing-plan-v1",
-        "max_cost_paise": 501 if scenario == "over_cap" else 500,
+        "max_cost_paise": 45_001 if scenario == "over_cap" else 45_000,
     }
     plans = SimpleNamespace(quote=AsyncMock(return_value=quote), accept=AsyncMock())
 
