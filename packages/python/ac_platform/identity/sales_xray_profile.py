@@ -12,6 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity.google_profile import (
+    GoogleProfileClaims,
+    erase_google_profile,
+    read_google_profile,
+)
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 
@@ -43,6 +48,10 @@ class SalesXrayProfileSnapshot:
     phone_verified: bool
     profile_complete: bool
     revision: int
+    given_name: str | None = None
+    family_name: str | None = None
+    locale: str | None = None
+    hosted_domain: str | None = None
 
 
 def normalize_profile_name(value: str) -> str:
@@ -68,7 +77,11 @@ def _resolved_name(person: Person) -> str | None:
     return normalized or None
 
 
-def _snapshot(person: Person, profile: SalesXrayProfile | None) -> SalesXrayProfileSnapshot:
+def _snapshot(
+    person: Person,
+    profile: SalesXrayProfile | None,
+    google_profile: GoogleProfileClaims,
+) -> SalesXrayProfileSnapshot:
     name = _resolved_name(person)
     email = person.email
     if email is None or person.email_verified_at is None:
@@ -82,6 +95,10 @@ def _snapshot(person: Person, profile: SalesXrayProfile | None) -> SalesXrayProf
         phone_verified=bool(profile and profile.phone_verified_at is not None),
         profile_complete=complete,
         revision=0 if profile is None else profile.revision,
+        given_name=google_profile.given_name,
+        family_name=google_profile.family_name,
+        locale=google_profile.locale,
+        hosted_domain=google_profile.hosted_domain,
     )
 
 
@@ -129,7 +146,8 @@ async def get_sales_xray_profile(
     person_id: UUID,
 ) -> SalesXrayProfileSnapshot:
     person, profile = await _read_rows(session, person_id)
-    return _snapshot(person, profile)
+    google_profile = await read_google_profile(session, person_id)
+    return _snapshot(person, profile, google_profile)
 
 
 async def require_sales_xray_profile_complete(
@@ -158,8 +176,9 @@ async def erase_sales_xray_profile(
     )
 
     removed_labels = await erase_submission_labels_for_person(session, person_id=person_id)
+    removed_google_profile = await erase_google_profile(session, person_id)
     if profile is None:
-        return removed_labels > 0
+        return removed_labels > 0 or removed_google_profile
     await session.delete(profile)
     await session.flush()
     return True
@@ -259,4 +278,5 @@ async def update_sales_xray_profile(
             reason="Self-service Sales Xray contact profile update.",
             now=datetime.now(UTC),
         )
-    return _snapshot(person, profile)
+    google_profile = await read_google_profile(session, person_id)
+    return _snapshot(person, profile, google_profile)

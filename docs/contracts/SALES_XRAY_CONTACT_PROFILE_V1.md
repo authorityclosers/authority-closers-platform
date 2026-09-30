@@ -19,10 +19,15 @@ the complete request shape below and an optimistic revision:
 
 `phone_number_e164` must be explicitly provided; it can be `null` while the
 profile is being completed. A non-null value must use strict E.164 form with an
-explicit country code. The API does not infer a country. A successful response
-contains only the caller's `name`, verified `email`, `phone_number_e164`,
-`phone_verified`, `profile_complete`, and `revision`. A stale revision returns
-409. Name and phone values are not copied into audit payloads.
+explicit country code. The API does not infer a country. A successful GET or
+PUT response contains only the caller's `name`, verified `email`,
+`phone_number_e164`, `phone_verified`, `profile_complete`, `revision`,
+`given_name`, `family_name`, `locale`, and `company_domain`. The four Google
+values are nullable display claims. `company_domain` is the Google `hd`
+hosted-domain claim; it is not an authorization or identity key. Each value is
+`null` when absent or invalid, or when no Google profile row exists. PUT does
+not accept or change these fields. A stale revision returns 409. Name and
+phone values are not copied into audit payloads.
 
 Profile completeness requires a verified, active AC account, a name, and a
 valid non-empty phone number. Phone verification is reported separately and is
