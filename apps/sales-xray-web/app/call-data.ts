@@ -176,26 +176,31 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
         /^\s*(?:customers?|users?|people|members?|clients?|staff|employees?|units?|items?|orders?|products?|families|visits|tanks?|lit(?:er|re)s?)\b/iu.test(
           after,
         );
-      const currencyEvidence =
+      const explicitCurrencyEvidence =
         rupee ||
         /^(?:rupees?|रुपये|रुपए)$/iu.test(unit ?? "") ||
         (!objectCount &&
           (/\b(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
             before,
           ) ||
-            /^\s*(?:rupees?|inr|रुप(?:ये|ए))\b/iu.test(after) ||
-            /\b(?:price|cost|budget|fee|salary|revenue|sales|turnover|profit|amount|money)\s+(?:of\s+)?$/iu.test(
-              before,
-            ) ||
-            /^\s*(?:worth|in\s+(?:revenue|sales|turnover|profit))\b/iu.test(
-              after,
-            )));
+            /^\s*(?:rupees?|inr|रुप(?:ये|ए))\b/iu.test(after)));
+      const moneyContext =
+        !objectCount &&
+        (/\b(?:price|cost|budget|fee|salary|revenue|sales|turnover|profit|amount|money)\s+(?:of\s+)?$/iu.test(
+          before,
+        ) ||
+          /^\s*(?:worth|in\s+(?:revenue|sales|turnover|profit))\b/iu.test(
+            after,
+          ));
+      const currencyEvidence = explicitCurrencyEvidence || moneyContext;
       if (!unit && !currencyEvidence) continue;
-      const kind = currencyEvidence
+      const kind = explicitCurrencyEvidence
         ? "money"
-        : unitKind === "quantity"
-          ? "quantity"
-          : unitKind;
+        : unitKind === "percent" || unitKind === "time"
+          ? unitKind
+          : currencyEvidence
+            ? "money"
+            : unitKind;
       if (!kind) continue;
       rows.push({
         id: `${segment.id}:${index}`,

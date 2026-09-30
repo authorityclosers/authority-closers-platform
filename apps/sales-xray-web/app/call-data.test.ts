@@ -109,13 +109,41 @@ it("keeps ambiguous magnitudes as quantities without currency evidence", () => {
 
 it("recognizes explicit Rs and rupee evidence without a magnitude", () => {
   const rows = numbersHeard(
-    call([["a", 0, 1000, "Rs 500; 500 rupees; price 750; and 10K customers."]]),
+    call([
+      [
+        "a",
+        0,
+        1000,
+        "Rs 500; INR 600; ₹700; 500 rupees; price 750; revenue 10K; and 10K customers.",
+      ],
+    ]),
   );
   expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
     ["Rs 500", "money"],
+    ["INR 600", "money"],
+    ["₹700", "money"],
     ["500 rupees", "money"],
     ["750", "money"],
+    ["10K", "money"],
     ["10K", "quantity"],
+  ]);
+});
+
+it("keeps explicit percent and time units beside money-context words", () => {
+  const rows = numbersHeard(
+    call([
+      [
+        "a",
+        0,
+        1000,
+        "Revenue 30 percent; profit 30%; the cost 10 days of downtime.",
+      ],
+    ]),
+  );
+  expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
+    ["30 percent", "percent"],
+    ["30%", "percent"],
+    ["10 days", "time"],
   ]);
 });
 

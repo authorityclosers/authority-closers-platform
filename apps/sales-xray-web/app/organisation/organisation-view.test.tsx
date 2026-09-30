@@ -97,7 +97,7 @@ it("lists members and adds a person by email once the API is live", async () => 
     tenant_id: "t-org",
     name: "Authority Closers",
     role: "owner",
-    verified_domains: ["authorityclosers.com"],
+    verified_domains: ["example.com"],
     auto_join: true,
     member_count: 2,
   };
@@ -106,7 +106,7 @@ it("lists members and adds a person by email once the API is live", async () => 
       {
         person_id: "p-1",
         name: "Admin",
-        email: "admin@authorityclosers.com",
+        email: "admin@example.com",
         role: "owner",
         status: "active",
         minutes_used_30d: 12,
@@ -115,7 +115,7 @@ it("lists members and adds a person by email once the API is live", async () => 
       {
         person_id: "p-2",
         name: "Dipak",
-        email: "dipak@authorityclosers.com",
+        email: "alex@example.com",
         role: "member",
         status: "invited",
         minutes_used_30d: 0,
@@ -126,7 +126,7 @@ it("lists members and adds a person by email once the API is live", async () => 
   await render();
   expect(host.textContent).toContain("2 people");
   await act(async () => tab("Members").click());
-  expect(host.textContent).toContain("dipak@authorityclosers.com");
+  expect(host.textContent).toContain("alex@example.com");
   expect(host.textContent).toContain("Invited");
   const input = host.querySelector<HTMLInputElement>(
     'input[aria-label="Email to add"]',
@@ -137,7 +137,7 @@ it("lists members and adds a person by email once the API is live", async () => 
       HTMLInputElement.prototype,
       "value",
     )!.set!;
-    setter.call(input, "suyash@authorityclosers.com");
+    setter.call(input, "new.member@example.com");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () =>
@@ -150,12 +150,12 @@ it("lists members and adds a person by email once the API is live", async () => 
   )!;
   expect(post[0]).toBe("/v1/organisation/members");
   expect(JSON.parse(String((post[1] as RequestInit).body))).toEqual({
-    email: "suyash@authorityclosers.com",
+    email: "new.member@example.com",
     role: "member",
   });
 
   await act(async () => tab("Company").click());
-  expect(host.textContent).toContain("@authorityclosers.com");
+  expect(host.textContent).toContain("@example.com");
 });
 
 it("shows the personal account card when no organisation is selected", async () => {

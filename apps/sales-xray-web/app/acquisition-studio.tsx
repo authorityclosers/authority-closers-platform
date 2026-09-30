@@ -45,6 +45,7 @@ import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
 import { CallSignals } from "./call-signals";
+import { OverviewHook } from "./overview-hook";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
@@ -3420,16 +3421,24 @@ export function AcquisitionStudio({
                       id: "overview",
                       label: "Overview",
                       content: (
-                        <DipakOverview
-                          showHeading={false}
-                          report={report}
-                          onSelectEvidence={seek}
-                          transcript={result.transcript}
-                          onSelectContextualPlayback={seekWithContext}
-                          onUnlock={() => router.push("/login")}
-                          durationMs={result.transcript.duration_ms}
-                          callRecord={result.callRecord}
-                        />
+                        <>
+                          <OverviewHook
+                            report={report}
+                            transcript={result.transcript}
+                            callId={submission?.id ?? null}
+                            onSeek={playFrom}
+                          />
+                          <DipakOverview
+                            showHeading={false}
+                            report={report}
+                            onSelectEvidence={seek}
+                            transcript={result.transcript}
+                            onSelectContextualPlayback={seekWithContext}
+                            onUnlock={() => router.push("/login")}
+                            durationMs={result.transcript.duration_ms}
+                            callRecord={result.callRecord}
+                          />
+                        </>
                       ),
                     },
                     {
