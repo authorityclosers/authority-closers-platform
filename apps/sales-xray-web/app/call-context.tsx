@@ -84,31 +84,50 @@ export function nextStepValue(
   );
 }
 
-const BUSINESS_NAMED =
-  /([\p{L}-]+)\s+(?:(?:का|की|के|ka|ki|ke)\s+)?(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|company|कंपनी|shop|दुकान|firm)/giu;
+const NEGATED_BUSINESS =
+  /\b(?:never|not|no longer|no)\b|n't|(?:नहीं|नही|न|मत)/iu;
+const INTERROGATIVE = /^(?:क्या(?:\s|$)|do\b|does\b|did\b|is\b|are\b|have\b)/iu;
+const CLAUSES = /[^.!?।\n]+[.!?।]?/gu;
 
-// First-person ownership or operation must be explicit. The caller already
-// checks that this text belongs to the confirmed prospect.
-const FIRST_PERSON_BUSINESS =
-  /(?:\b(?:i|we)\s+(?:run|own|operate|have|started|work in)\b|\b(?:my|our)\s+(?:(?!\b(?:brother|sister|father|mother|friend|partner|husband|wife|son|daughter)\b)[\p{L}-]+\s+){0,3}[\p{L}-]+\s+(?:business|company|shop|firm)\b|(?:मेरा|मेरी|मेरे|हमारा|हमारी|हमारे)[^।?!]{0,40}(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|कंपनी|दुकान|firm))/iu;
+// Keep a single captured industry candidate so a generic or unknown word
+// cannot fall through to a different keyword later in the same clause.
+const INDUSTRY_KEYWORDS = [
+  ...new Set(
+    SPEAKER_ICONS.filter((item) => !item.generic)
+      .flatMap((item) => item.keywords)
+      .map((word) => word.trim())
+      .filter(Boolean),
+  ),
+].sort((a, b) => b.length - a.length);
+const INDUSTRY_KEYWORD = INDUSTRY_KEYWORDS.map((word) =>
+  word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+).join("|");
+const ENGLISH_OWNED_BUSINESS = new RegExp(
+  `\\b(?:i|we)\\s+(?:run|own|operate|have|started)\\s+(?:a|an|the|my|our)?\\s*(?:small\\s+|own\\s+|family\\s+)?(${INDUSTRY_KEYWORD})\\s+(?:business|company|shop|firm)\\b|\\b(?:my|our)\\s+(?:small\\s+|own\\s+|family\\s+)?(${INDUSTRY_KEYWORD})\\s+(?:business|company|shop|firm)\\b`,
+  "iu",
+);
+const HINDI_OWNED_BUSINESS = new RegExp(
+  `(?:मेरा|मेरी|मेरे|हमारा|हमारी|हमारे)\\s+(${INDUSTRY_KEYWORD})\\s+(?:का|की|के)?\\s*(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|कंपनी|दुकान|firm)`,
+  "iu",
+);
 
 /**
  * The industry in a first-person statement, e.g. "I run a carpentry
  * business" or "मेरा carpentry का business".
  */
 export function businessNamed(text: string): SpeakerIcon | null {
-  for (const statement of text.split(/[.!?。？！\n]+/u)) {
-    if (/[?？]/u.test(statement) || !FIRST_PERSON_BUSINESS.test(statement))
+  for (const statement of text.match(CLAUSES) ?? []) {
+    if (/[?？]$/.test(statement) || INTERROGATIVE.test(statement.trim()))
       continue;
-    // A negative ownership statement is not evidence of a current business.
-    if (
-      /\b(?:never|not|no longer)\s+(?:owned|operated|ran|had|been|started|run|own|operate|have|start)\b/iu.test(
-        statement,
-      )
-    )
-      continue;
-    for (const match of statement.matchAll(BUSINESS_NAMED)) {
-      const word = match[1].toLocaleLowerCase();
+    for (const clause of statement.split(
+      /[,;]|\s+and\s+|\s+but\s+|\s+और\s+|\s+लेकिन\s+|\s+पर\s+/iu,
+    )) {
+      if (NEGATED_BUSINESS.test(clause)) continue;
+      const match =
+        ENGLISH_OWNED_BUSINESS.exec(clause) ??
+        HINDI_OWNED_BUSINESS.exec(clause);
+      if (!match) continue;
+      const word = (match[1] ?? match[2]).toLocaleLowerCase();
       const found = SPEAKER_ICONS.find(
         (item) => !item.generic && item.keywords.includes(word),
       );

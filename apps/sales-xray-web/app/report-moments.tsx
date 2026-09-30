@@ -197,6 +197,7 @@ export type TimelineMoment = {
   explanation?: string;
   evidence: ReportEvidence[];
   listen?: keyof typeof LISTEN_LABEL;
+  listenEvidence?: ReportEvidence;
   golden?: string;
   goldenEvidence?: ReportEvidence;
   why?: string;
@@ -207,8 +208,7 @@ export type TimelineMoment = {
 
 /**
  * Every moment the report points to, one per finding (at its first cited
- * clip), in call order. Rewatch picks join the finding that cites the same
- * clip as a "Must listen" mark; a pick no finding cites stands on its own.
+ * clip), in call order. Rewatch purpose stays bound to its selected clip.
  * Nothing is added that the report did not say.
  */
 export function timelineMoments(report: SalesReport): TimelineMoment[] {
@@ -277,33 +277,26 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
       moment.evidence.some((item) => sameClip(item, clip)),
     );
     if (
-      owner?.golden &&
-      owner.goldenEvidence &&
-      !sameClip(owner.goldenEvidence, clip)
+      owner &&
+      !owner.listenEvidence &&
+      (!owner.goldenEvidence || sameClip(owner.goldenEvidence, clip))
     ) {
-      moments.push({
-        id: `rewatch:${index}`,
-        kind: "listen",
-        title: note.text,
-        evidence: note.evidence,
-        listen: note.purpose,
-      });
-      continue;
-    }
-    if (owner) {
-      owner.listen ??= note.purpose;
+      owner.listen = note.purpose;
+      owner.listenEvidence = clip;
       owner.evidence = [
         clip,
         ...owner.evidence.filter((item) => !sameClip(item, clip)),
       ];
-    } else
+    } else {
       moments.push({
         id: `rewatch:${index}`,
         kind: "listen",
         title: note.text,
         evidence: note.evidence,
         listen: note.purpose,
+        listenEvidence: clip,
       });
+    }
   }
   return moments.sort(
     (a, b) =>
@@ -461,13 +454,13 @@ export function ReportMoments({
             data-must={moment.listen === "must_watch" ? "" : undefined}
             style={
               {
-                "--x": `${(moment.evidence[0].start_ms / duration) * 100}%`,
+                "--x": `${((moment.listenEvidence ?? moment.evidence[0]).start_ms / duration) * 100}%`,
                 "--i": index,
               } as CSSProperties
             }
             onClick={() => jump(moment.id)}
-            aria-label={`${KINDS[moment.kind].label} at ${formatClock(moment.evidence[0].start_ms)}: ${moment.title}`}
-            title={`${formatClock(moment.evidence[0].start_ms)} · ${moment.title}`}
+            aria-label={`${moment.listen ? LISTEN_LABEL[moment.listen] : KINDS[moment.kind].label} at ${formatClock((moment.listenEvidence ?? moment.evidence[0]).start_ms)}: ${moment.title}`}
+            title={`${formatClock((moment.listenEvidence ?? moment.evidence[0]).start_ms)} · ${moment.title}`}
           />
         ))}
         <span className={styles.mapStart}>00:00</span>
@@ -499,7 +492,8 @@ export function ReportMoments({
       <ol ref={list} className={styles.group}>
         {shown.map((moment) => {
           const kind = KINDS[moment.kind];
-          const [first, ...more] = moment.evidence;
+          const first = moment.listenEvidence ?? moment.evidence[0];
+          const more = moment.evidence.filter((item) => !sameClip(item, first));
           const expanded = open.has(moment.id);
           const detailId = `moment-detail-${moment.id}`;
           return (
@@ -523,7 +517,11 @@ export function ReportMoments({
                 >
                   <span className={styles.kind}>
                     <i aria-hidden="true" />
-                    {moment.golden ? "Best moment" : kind.label}
+                    {moment.golden
+                      ? "Best moment"
+                      : moment.listen
+                        ? LISTEN_LABEL[moment.listen]
+                        : kind.label}
                     {moment.listen && moment.kind !== "listen" ? (
                       <b>
                         {moment.listen === "repeat" && moment.kind !== "good"

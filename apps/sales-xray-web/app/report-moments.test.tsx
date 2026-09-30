@@ -230,6 +230,54 @@ it("keeps conflicting golden and rewatch clips in separate source-backed rows", 
   expect(onSelectEvidence).toHaveBeenCalledWith(f1, "Rewatch f1.");
 });
 
+it("keeps two rewatch purposes bound to their own displayed and played clips", async () => {
+  const report = suppliedReport();
+  const f1 = { ...excerpt(1), segment_id: "f1", start_ms: 1_000 };
+  const f2 = { ...excerpt(5), segment_id: "f2", start_ms: 5_000 };
+  report.strengths = [
+    {
+      title: "Two cited clips",
+      explanation: "Fictional evidence.",
+      evidence: [f1, f2],
+    },
+  ];
+  report.overview!.golden_moments = [];
+  report.overview!.rewatch = [
+    { purpose: "must_watch", text: "Rewatch f1.", evidence: [f1] },
+    { purpose: "watch", text: "Rewatch f2.", evidence: [f2] },
+  ];
+
+  const moments = timelineMoments(report);
+  const f1Moment = moments.find((moment) => moment.id === "strength:0");
+  const f2Moment = moments.find((moment) => moment.id === "rewatch:1");
+  expect(f1Moment).toMatchObject({ listen: "must_watch", listenEvidence: f1 });
+  expect(f2Moment).toMatchObject({ listen: "watch", listenEvidence: f2 });
+  expect(f1Moment?.evidence[0]).toEqual(f1);
+  expect(f2Moment?.evidence[0]).toEqual(f2);
+
+  const onSelectEvidence = await render(report);
+  const f1Row = container.querySelector<HTMLElement>(
+    '[data-moment="strength:0"]',
+  )!;
+  const f2Row = container.querySelector<HTMLElement>(
+    '[data-moment="rewatch:1"]',
+  )!;
+  expect(f1Row.textContent).toContain("Must listen");
+  expect(f2Row.textContent).toContain("Worth a listen");
+  await act(async () =>
+    f1Row
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  await act(async () =>
+    f2Row
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  expect(onSelectEvidence).toHaveBeenNthCalledWith(1, f1, "Two cited clips");
+  expect(onSelectEvidence).toHaveBeenNthCalledWith(2, f2, "Rewatch f2.");
+});
+
 it("keeps the selected rewatch clip first when it matches later finding evidence", () => {
   const report = suppliedReport();
   const selected = excerpt(2);

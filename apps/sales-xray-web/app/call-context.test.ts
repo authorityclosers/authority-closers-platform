@@ -10,6 +10,7 @@ import {
   programMentionLabel,
   prospectBusiness,
 } from "./call-context";
+import { SPEAKER_ICONS } from "./speaker-icons";
 
 const texts = [
   "You pivoted from asking operational questions to pitching the 3-day Leadership Funnel Program.",
@@ -42,6 +43,9 @@ it("names the business only when the call says it outright", () => {
     "carpentry",
   );
   expect(businessNamed("I run a carpentry business.")?.key).toBe("carpentry");
+  expect(businessNamed("मेरा carpentry का business है।")?.key).toBe(
+    "carpentry",
+  );
   expect(
     businessNamed(
       "I run an online business. My brother runs a carpentry business.",
@@ -53,6 +57,28 @@ it("names the business only when the call says it outright", () => {
   expect(
     businessNamed("Is your carpentry business still operating?"),
   ).toBeNull();
+});
+
+it("rejects third-party, negated and questioned business candidates", () => {
+  expect(SPEAKER_ICONS).toHaveLength(53);
+  for (const icon of SPEAKER_ICONS) {
+    for (const keyword of icon.keywords) {
+      expect(
+        businessNamed(
+          `I run an online business and my brother runs a ${keyword} business.`,
+        ),
+      ).toBeNull();
+      expect(businessNamed(`मेरा ${keyword} का business नहीं है।`)).toBeNull();
+      expect(businessNamed(`Do I run a ${keyword} business?`)).toBeNull();
+    }
+  }
+  expect(
+    businessNamed(
+      "I run an online business and my brother runs a carpentry business",
+    ),
+  ).toBeNull();
+  expect(businessNamed("मेरा carpentry का business नहीं है।")).toBeNull();
+  expect(businessNamed("Do I run a carpentry business?")).toBeNull();
 });
 
 it("does not put a sale outcome under Next step", () => {
