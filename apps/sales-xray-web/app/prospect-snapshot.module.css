@@ -1,12 +1,12 @@
 .snapshot {
-  --ink: #172b3a;
-  --muted: #536978;
-  --line: #d5e1e2;
-  --teal: #087b79;
-  --mint: #edf8f5;
-  --violet: #5944a1;
-  --violet-soft: #f6f3ff;
-  --canvas: #f7f9fa;
+  --ink: var(--lx-ink);
+  --muted: var(--lx-ink-3);
+  --line: var(--lx-teal-edge);
+  --teal: var(--lx-teal);
+  --mint: var(--lx-teal-soft);
+  --violet: var(--lx-missed);
+  --violet-soft: var(--lx-missed-soft);
+  --canvas: var(--lx-paper-2);
   display: grid;
   container-type: inline-size;
   container-name: prospect-snapshot;
@@ -38,7 +38,7 @@
 
 .eyebrow {
   margin-bottom: 5px;
-  color: #a63835;
+  color: var(--lx-danger);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -71,7 +71,7 @@
 .headerIcon {
   width: 52px;
   height: 52px;
-  border: 1px solid #d4ece7;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 16px;
   background: var(--mint);
   color: var(--teal);
@@ -86,9 +86,9 @@
 .card {
   min-width: 0;
   overflow-wrap: anywhere;
-  border: 1px solid #dce6e8;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 16px;
-  background: #fff;
+  background: var(--lx-surface);
   box-shadow: 0 8px 22px rgb(23 43 58 / 4%);
 }
 
@@ -98,8 +98,12 @@
   gap: 12px;
   min-width: 0;
   padding: 16px 18px;
-  border-bottom: 1px solid #e6ecee;
-  background: linear-gradient(105deg, #f1faf7, #fff 72%);
+  border-bottom: 1px solid var(--lx-line);
+  background: linear-gradient(
+    105deg,
+    var(--lx-teal-soft),
+    var(--lx-surface) 72%
+  );
   border-radius: 16px 16px 0 0;
 }
 
@@ -111,8 +115,8 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: #dff4ee;
-  color: #086e6b;
+  background: var(--lx-teal-soft);
+  color: var(--lx-ink-2);
   font-size: 13px;
   font-weight: 800;
 }
@@ -152,12 +156,12 @@
 }
 
 .sourcePanel {
-  background: #fbfdfd;
+  background: var(--lx-surface);
 }
 
 .sectionLabel {
   margin-bottom: 5px;
-  color: #126a67;
+  color: var(--lx-ink-2);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -179,7 +183,7 @@
 
 .verbatim h4 {
   margin-bottom: 0;
-  color: #3e5969;
+  color: var(--lx-ink-3);
   font-size: 12px;
   font-weight: 760;
 }
@@ -190,7 +194,7 @@
   min-width: 0;
   margin: 0;
   padding: 14px;
-  border: 1px solid #d8ece7;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 12px;
   background: var(--mint);
 }
@@ -201,7 +205,7 @@
   gap: 9px;
   min-width: 0;
   margin: 0;
-  color: #164d4b;
+  color: var(--lx-ink);
   font-size: 16px;
   font-weight: 610;
   line-height: 1.55;
@@ -227,10 +231,10 @@
   min-width: 0;
   min-height: 48px;
   padding: 6px 10px;
-  border: 1px solid #cde2dd;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 11px;
-  background: #fff;
-  color: #123e49;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -243,8 +247,8 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #d8f1e9;
-  color: #087b79;
+  background: var(--lx-teal-soft);
+  color: var(--lx-strength-ink);
 }
 
 .actionCopy {
@@ -260,7 +264,7 @@
 }
 
 .actionCopy small {
-  color: #536978;
+  color: var(--lx-ink-3);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
@@ -268,24 +272,24 @@
 
 .sourceAction > svg {
   flex: 0 0 auto;
-  color: #526b78;
+  color: var(--lx-ink-3);
 }
 
 .sourceAction:hover,
 .unlock:hover {
-  border-color: #7bbab0;
-  background: #f8fffc;
+  border-color: var(--lx-teal);
+  background: var(--lx-surface);
 }
 
 .sourceAction:focus-visible,
 .unlock:focus-visible {
-  outline: 3px solid #536ace;
+  outline: 3px solid var(--lx-closing);
   outline-offset: 3px;
 }
 
 .hypothesis {
   align-self: stretch;
-  border-color: #e3ddf3;
+  border-color: var(--lx-missed-edge);
   background: var(--violet-soft);
 }
 
@@ -305,10 +309,10 @@
   display: inline-flex;
   margin: 10px 0;
   padding: 4px 9px;
-  border: 1px solid #d8cef0;
+  border: 1px solid var(--lx-missed-edge);
   border-radius: 999px;
-  background: #fff;
-  color: #5944a1;
+  background: var(--lx-surface);
+  color: var(--lx-missed-ink);
   font-size: 11px;
   font-weight: 760;
   line-height: 1.4;
@@ -316,7 +320,7 @@
 
 .hypothesisText {
   margin-bottom: 12px;
-  color: #262342;
+  color: var(--lx-ink);
   font-size: 17px;
   font-weight: 650;
   line-height: 1.55;
@@ -326,7 +330,7 @@
 
 .hypothesisNote {
   margin-bottom: 0;
-  color: #5f587e;
+  color: var(--lx-missed-ink);
   font-size: 13px;
   overflow-wrap: anywhere;
 }
@@ -344,14 +348,14 @@
 }
 
 .empty {
-  border: 1px dashed #bfd1d7;
+  border: 1px dashed var(--lx-teal-edge);
   background: var(--canvas);
-  color: #465f6d;
+  color: var(--lx-ink-3);
 }
 
 .empty > svg {
   flex: 0 0 auto;
-  color: #6d7782;
+  color: var(--lx-muted);
 }
 
 .empty h3 {
@@ -368,30 +372,30 @@
 
 .boundary {
   display: block;
-  border: 1px solid #e4e8eb;
-  background: #f8f9fa;
+  border: 1px solid var(--lx-line);
+  background: var(--lx-paper-2);
   color: var(--muted);
 }
 
 .boundary strong {
   display: block;
   margin-bottom: 3px;
-  color: #334c5b;
+  color: var(--lx-ink-2);
   font-size: 13px;
 }
 
 .locked {
   align-items: center;
-  border: 1px solid #f0d8d7;
-  background: #fff8f7;
+  border: 1px solid color-mix(in srgb, var(--lx-danger) 30%, transparent);
+  background: var(--lx-paper-2);
 }
 
 .lockIcon {
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background: #fae8e6;
-  color: #aa3b38;
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
 }
 
 .lockCopy {
@@ -402,7 +406,7 @@
 .lockCopy strong {
   display: block;
   margin-bottom: 2px;
-  color: #573a3c;
+  color: var(--lx-danger);
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -420,10 +424,10 @@
   gap: 7px;
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid #e5b9b6;
+  border: 1px solid color-mix(in srgb, var(--lx-danger) 30%, transparent);
   border-radius: 10px;
-  background: #fff;
-  color: #8e3030;
+  background: var(--lx-surface);
+  color: var(--lx-danger);
   font: inherit;
   font-size: 13px;
   font-weight: 750;

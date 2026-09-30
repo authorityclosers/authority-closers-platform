@@ -1324,3 +1324,230 @@
 .topBarCenter:empty {
   padding: 0;
 }
+
+/* ---------- Tidy sidebar (30 Sep) ---------- */
+/* Rail: the current page wears a teal pill and a sliding edge bar. */
+.stripBtn {
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 180ms var(--lx-ease-pop);
+}
+.stripBtn:hover {
+  transform: translateY(-1px);
+}
+.stripBtn:active {
+  transform: scale(0.94);
+}
+.stripBtnActive {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.stripBtnActive::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: -12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lx-teal);
+  content: "";
+  animation: edge-in 260ms var(--lx-ease-pop) both;
+}
+.stripBtn:hover .tooltip,
+.stripBtn:focus-visible .tooltip {
+  animation: tip-in 150ms ease-out both;
+}
+
+/* Panel: quieter header, slimmer search, calmer section title. */
+.panel {
+  padding: 10px;
+}
+.panelHeader {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.workspaceTrigger {
+  padding: 5px 6px;
+  border-radius: 10px;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.workspaceTrigger:not([aria-disabled="true"]):hover,
+.workspaceTrigger[aria-expanded="true"] {
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+.workspaceTile {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+.workspaceCopy {
+  margin: 0 4px 0 9px;
+}
+.workspaceName {
+  font-size: 13px;
+}
+.workspaceSub {
+  font-size: 11px;
+}
+.collapseBtn {
+  width: 28px;
+  height: 28px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+.collapseBtn:hover {
+  border-color: var(--lx-line);
+  background: var(--lx-surface);
+}
+.panelSearch {
+  height: 32px;
+  margin: 0 0 14px;
+  padding: 0 10px;
+  border-radius: 9px;
+}
+.panelSearch .searchInput {
+  font-size: 13px;
+}
+.panelSearch .searchKbd {
+  padding: 0 4px;
+  font-size: 10.5px;
+}
+.recentsHeader {
+  margin-bottom: 4px;
+  padding: 0 2px 0 4px;
+}
+.recentsTitle {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.recentsViewAll {
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+.recentsViewAll:hover {
+  background: var(--lx-surface);
+  color: var(--lx-teal);
+  text-decoration: none;
+}
+.recentsList {
+  gap: 1px;
+}
+@keyframes edge-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stripBtnActive::before,
+  .stripBtn:hover .tooltip,
+  .stripBtn:focus-visible .tooltip {
+    animation: none;
+  }
+}
+
+/* A small dot on the gear while there is news the viewer has not read. */
+.stripBtn[data-news]::after {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--lx-surface);
+  border-radius: 50%;
+  background: var(--lx-teal);
+  content: "";
+  animation: news-pop 480ms var(--lx-ease-pop) 400ms both;
+}
+.stripBtn[aria-expanded="true"] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+@keyframes news-pop {
+  from {
+    transform: scale(0);
+  }
+}
+
+/* Recents while the list loads: rows with the final shape, shimmering. */
+.recentSkeleton {
+  display: flex;
+  height: 30px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 10px;
+  animation: skeleton-in 300ms ease both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.recentSkeleton i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lx-line);
+}
+.recentSkeleton span,
+.recentSkeleton em {
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+.recentSkeleton span {
+  width: var(--w);
+}
+.recentSkeleton em {
+  width: 34px;
+  margin-left: auto;
+}
+@keyframes skeleton-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recentSkeleton,
+  .recentSkeleton span,
+  .recentSkeleton em {
+    animation: none;
+  }
+}
+
+.recentsEmpty {
+  margin: 4px 10px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}

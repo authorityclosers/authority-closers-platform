@@ -13,7 +13,14 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  * percentage are computed from the session's own allowance, never estimated;
  * nothing renders until the caller has an actual allowance.
  */
-export function AllowanceRing({ allowance }: { allowance?: Allowance | null }) {
+export function AllowanceRing({
+  allowance,
+  pending = false,
+}: {
+  allowance?: Allowance | null;
+  /** Signed in but the minutes have not arrived: hold the pill's place. */
+  pending?: boolean;
+}) {
   const gradient = `ring-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   // Draw the arc after mount so it sweeps in from empty.
   const [drawn, setDrawn] = useState(false);
@@ -21,7 +28,15 @@ export function AllowanceRing({ allowance }: { allowance?: Allowance | null }) {
     const frame = requestAnimationFrame(() => setDrawn(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  if (!allowance) return null;
+  if (!allowance)
+    return pending ? (
+      <div className={styles.meter} data-level="pending" aria-hidden="true">
+        <svg className={styles.ring} viewBox="0 0 36 36">
+          <circle className={styles.track} cx="18" cy="18" r={RADIUS} />
+        </svg>
+        <span className={styles.skeleton} />
+      </div>
+    ) : null;
 
   const ring = (share: number, sweep: boolean) => (
     <svg className={styles.ring} viewBox="0 0 36 36" aria-hidden="true">
@@ -93,8 +108,10 @@ export function AllowanceRing({ allowance }: { allowance?: Allowance | null }) {
         {percent}%
       </span>
       <span className={styles.text} aria-hidden="true">
-        <strong>{left} min left</strong>
-        <small>of {total} min</small>
+        <strong>{left} min</strong> left
+        <span className={styles.more}>
+          <span>of {total} min</span>
+        </span>
       </span>
       <span className={styles.visuallyHidden}>
         {left} of {total} left

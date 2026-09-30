@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileRevisionConflict,
@@ -69,6 +70,8 @@ def test_alembic_schema_matches_the_profile_model(profile_harness: _Harness) -> 
     assert predicate == "phone_verified_at IS NOT NULL"
     unique_person = inspector.get_unique_constraints("sales_xray_profiles")
     assert any(item["column_names"] == ["person_id"] for item in unique_person)
+    google_columns = {column["name"] for column in inspector.get_columns("person_google_profiles")}
+    assert {"given_name", "family_name", "locale", "hosted_domain", "photo_jpeg"} <= google_columns
 
 
 def test_postgres_serializes_duplicate_phone_flags_and_preserves_audit(
@@ -190,8 +193,22 @@ def test_postgres_serializes_duplicate_phone_flags_and_preserves_audit(
                 report = await AuditRepository(database).verify(tenant_id)
                 assert report.valid
 
+                database.add(
+                    PersonGoogleProfile(
+                        person_id=first_id,
+                        given_name="Ada",
+                        claims_updated_at=NOW,
+                    )
+                )
+                await database.flush()
                 assert await erase_sales_xray_profile(database, person_id=first_id) is True
                 assert await erase_sales_xray_profile(database, person_id=second_id) is True
+                assert (
+                    await database.scalar(
+                        select(PersonGoogleProfile).where(PersonGoogleProfile.person_id == first_id)
+                    )
+                    is None
+                )
         finally:
             await async_engine.dispose()
 

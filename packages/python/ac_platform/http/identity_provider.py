@@ -234,6 +234,15 @@ class GoogleOIDCProvider:
             email=email,
             email_verified=True,
             display_name=display_name if isinstance(display_name, str) else None,
+            given_name=(
+                claims.get("given_name") if isinstance(claims.get("given_name"), str) else None
+            ),
+            family_name=(
+                claims.get("family_name") if isinstance(claims.get("family_name"), str) else None
+            ),
+            locale=claims.get("locale") if isinstance(claims.get("locale"), str) else None,
+            hosted_domain=claims.get("hd") if isinstance(claims.get("hd"), str) else None,
+            picture_url=(claims.get("picture") if isinstance(claims.get("picture"), str) else None),
         )
 
 

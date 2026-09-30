@@ -24,6 +24,7 @@ from ac_platform.http.sales_xray_profile import (
     require_sales_xray_write_profile,
 )
 from ac_platform.identity.application import ResolvedActorContext
+from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileIncomplete,
@@ -84,6 +85,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     )
     Person.__table__.create(engine)
     SalesXrayProfile.__table__.create(engine)
+    PersonGoogleProfile.__table__.create(engine)
     # The profile-only fixture has no conversation schema. The account-deletion
     # hook still executes its label-history purge in this same transaction.
     label_revisions = Table(
@@ -119,6 +121,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     finally:
         session.close()
         label_revisions.drop(engine)
+        PersonGoogleProfile.__table__.drop(engine)
         SalesXrayProfile.__table__.drop(engine)
         Person.__table__.drop(engine)
         engine.dispose()
@@ -401,6 +404,10 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
             "phone_verified": False,
             "profile_complete": True,
             "revision": 1,
+            "given_name": None,
+            "family_name": None,
+            "locale": None,
+            "company_domain": None,
         }
         assert read_only_calls == 3
         assert mutating_calls == 0

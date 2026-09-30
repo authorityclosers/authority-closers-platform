@@ -239,3 +239,164 @@
     transition: none;
   }
 }
+
+/* ---------- Tidy row: status mark · name · date ---------- */
+.row {
+  animation: row-in 320ms var(--lx-ease-move) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+.link {
+  position: relative;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+}
+.link[data-current] {
+  background: var(--lx-teal-soft);
+}
+.link[data-current] .name {
+  color: var(--lx-teal);
+  font-weight: 600;
+}
+.link[data-current]::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lx-teal);
+  content: "";
+  animation: bar-in 260ms var(--lx-ease-pop) both;
+}
+.date {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The status mark: ready pops in with one ripple, in progress plays a small
+   equaliser, needs attention nudges now and then, idle is a quiet ring. */
+.mark {
+  position: relative;
+  display: flex;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
+}
+.row:hover .mark {
+  transform: scale(1.18);
+}
+.mark i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.mark[data-tone="ready"] i {
+  background: var(--lx-teal);
+  animation: dot-pop 520ms var(--lx-ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 35ms + 180ms);
+}
+.mark[data-tone="ready"]::after {
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 50%;
+  background: var(--lx-teal);
+  content: "";
+  opacity: 0;
+  animation: dot-ripple 1100ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 35ms + 420ms);
+}
+.mark[data-tone="attention"] i {
+  background: var(--lx-warning);
+  box-shadow: 0 0 0 2.5px var(--lx-warning-soft);
+  animation: dot-nudge 4s ease-in-out infinite;
+}
+.mark[data-tone="idle"] i {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--lx-muted-2);
+}
+.mark[data-tone="active"] i {
+  width: 2px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--lx-info);
+  animation: eq 900ms ease-in-out infinite;
+}
+.mark[data-tone="active"] i:nth-child(2) {
+  animation-delay: -300ms;
+}
+.mark[data-tone="active"] i:nth-child(3) {
+  animation-delay: -600ms;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes bar-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes dot-pop {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.4);
+  }
+}
+@keyframes dot-ripple {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+@keyframes dot-nudge {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  85% {
+    transform: scale(1.35);
+  }
+  90% {
+    transform: scale(0.9);
+  }
+  95% {
+    transform: scale(1.15);
+  }
+}
+@keyframes eq {
+  50% {
+    transform: scaleY(0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .link[data-current]::before,
+  .mark i,
+  .mark::after {
+    animation: none;
+  }
+}

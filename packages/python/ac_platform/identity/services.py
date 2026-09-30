@@ -385,6 +385,12 @@ class VerifiedProviderAssertion:
     # Optional display-only claim from the already verified provider token.
     # It is never an identity key and callers must not overwrite a set name.
     display_name: str | None = None
+    # Optional display-only Google profile claims. They are never identity keys.
+    given_name: str | None = None
+    family_name: str | None = None
+    locale: str | None = None
+    hosted_domain: str | None = None
+    picture_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -101,7 +101,7 @@ it("keeps the draft and the old title when the server refuses", async () => {
       />,
     ),
   );
-  expect(title()).toBe("Sales call report");
+  expect(title()).toBe("Untitled call");
   await act(async () => rename()!.click());
   await act(async () => setInput("Not allowed"));
   await submit();
@@ -126,5 +126,5 @@ it("offers rename only for a claimed call on a server that supplies labels", asy
   expect(rename()).toBeNull();
   await act(async () => root.render(<Header label={null} rename={rename_} />));
   expect(rename()).toBeNull();
-  expect(title()).toBe("Sales call report");
+  expect(title()).toBe("Untitled call");
 });

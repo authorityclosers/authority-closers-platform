@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
@@ -51,6 +52,10 @@ from ac_platform.identity.email_login import (
     EMAIL_LOGIN_REQUEST_EVENT,
     EMAIL_LOGIN_RESEND_AFTER,
     EmailLoginCodeService,
+)
+from ac_platform.identity.google_profile import (
+    normalize_google_claims,
+    record_google_profile_claims,
 )
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
@@ -104,6 +109,8 @@ from ac_platform.tenancy.learner_provisioning import (
     LearnerProvisioningError,
 )
 from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
+
+_LOGGER = logging.getLogger(__name__)
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
@@ -2175,6 +2182,24 @@ def install_identity_http(
             now=consented_at,
         )
 
+    async def _record_google_profile_claims_best_effort(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        assertion: VerifiedProviderAssertion,
+    ) -> None:
+        claims = normalize_google_claims(assertion)
+        try:
+            async with database.begin_nested():
+                await record_google_profile_claims(
+                    database,
+                    person_id,
+                    claims,
+                    datetime.now(UTC),
+                )
+        except Exception:
+            _LOGGER.warning("google_profile_claims_not_saved")
+
     async def _prefill_sales_xray_profile_name(
         database: AsyncSession,
         *,
@@ -2735,6 +2760,11 @@ def install_identity_http(
                     )
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=registered.person.id,
+                        assertion=assertion,
+                    )
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
@@ -2770,6 +2800,11 @@ def install_identity_http(
                     )
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=issued.metadata.person_id,
+                        assertion=assertion,
+                    )
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
                     # unscoped session; the learner surface must select its
@@ -2804,11 +2839,16 @@ def install_identity_http(
                         raise AuthenticationRequired(
                             "A valid Authority Closers session is required."
                         )
-                    await identity.link_provider_for_session(
+                    linked = await identity.link_provider_for_session(
                         link_session_token,
                         transaction.transaction_id,
                         assertion,
                         pkce_verifier=transaction.pkce_verifier,
+                    )
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=linked.person_id,
+                        assertion=assertion,
                     )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface == "sales_xray":

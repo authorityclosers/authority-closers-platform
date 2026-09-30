@@ -1,22 +1,25 @@
 "use client";
 
-import {
-  AudioLines,
-  Ellipsis,
-  ExternalLink,
-  Link2,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { Ellipsis, ExternalLink, Link2, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 
 import { acquisition, record, submissionPath } from "../acquisition-client";
 import { renameCall } from "../call-label-client";
+import { clearCallFacts } from "../call-facts";
+import { clearSpeakerProfiles } from "../speaker-profiles";
 import type { ShellRecentCall } from "./shell-store";
 import styles from "./recent-call-item.module.css";
 
 const UNTITLED = "Untitled call";
+const noSubscription = () => () => {};
 
 /**
  * One call in the sidebar's Recents: hover reveals a ⋯ menu (rename, copy
@@ -27,13 +30,26 @@ export function RecentCallItem({
   call,
   href,
   onChange,
+  index = 0,
 }: {
   call: ShellRecentCall;
   href: string;
+  /** Position in the list, for the staggered entrance. */
+  index?: number;
   /** The updated call, or null once it has been deleted. */
   onChange: (next: ShellRecentCall | null) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // The open call's row is highlighted; the path is read on every render.
+  const pathname = useSyncExternalStore(
+    noSubscription,
+    () => window.location.pathname,
+    () => null,
+  );
+  const current =
+    pathname !== null &&
+    href.includes(call.id) &&
+    pathname === new URL(href, "https://sales-xray.invalid").pathname;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -142,6 +158,8 @@ export function RecentCallItem({
       );
       if (!["deleting", "deleted"].includes(String(deleted.state)))
         throw new Error("delete_unconfirmed");
+      clearCallFacts(call.id);
+      clearSpeakerProfiles(call.id);
       setMenuOpen(false);
       // A full navigation discards the deleted report and its playback state.
       if (
@@ -160,12 +178,27 @@ export function RecentCallItem({
     <div
       ref={rowRef}
       className={styles.row}
+      style={{ "--i": index } as CSSProperties}
       data-menu-open={menuOpen || undefined}
       data-editing={editing || undefined}
     >
       {editing ? (
         <form className={styles.renameForm} onSubmit={saveRename}>
-          <AudioLines size={14} className={styles.icon} aria-hidden="true" />
+          <span
+            className={styles.mark}
+            data-tone={call.tone ?? "idle"}
+            aria-hidden="true"
+          >
+            {call.tone === "active" ? (
+              <>
+                <i />
+                <i />
+                <i />
+              </>
+            ) : (
+              <i />
+            )}
+          </span>
           <input
             ref={inputRef}
             className={styles.renameInput}
@@ -186,9 +219,30 @@ export function RecentCallItem({
           />
         </form>
       ) : (
-        <Link href={href} className={styles.link} title={call.name}>
-          <AudioLines size={14} className={styles.icon} aria-hidden="true" />
+        <Link
+          href={href}
+          className={styles.link}
+          title={call.status ? `${call.name} · ${call.status}` : call.name}
+          data-current={current ? "" : undefined}
+          aria-current={current ? "page" : undefined}
+        >
+          <span
+            className={styles.mark}
+            data-tone={call.tone ?? "idle"}
+            aria-hidden="true"
+          >
+            {call.tone === "active" ? (
+              <>
+                <i />
+                <i />
+                <i />
+              </>
+            ) : (
+              <i />
+            )}
+          </span>
           <span className={styles.name}>{call.name}</span>
+          {call.status && <span className={styles.srOnly}>{call.status}</span>}
           <span className={styles.date}>{call.date}</span>
         </Link>
       )}

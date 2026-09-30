@@ -774,6 +774,13 @@ def test_email_login_code_parity_contract_tracks_0045_table() -> None:
     )
 
 
+def test_google_profile_parity_contract_tracks_0053_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260930_0053") == "ac-postgres-parity-v33"
+    assert restore_drill.parity_tables_for_head("20260930_0053") == (
+        restore_drill.CANARY_PARITY_TABLES + ("person_google_profiles",)
+    )
+
+
 def test_sales_xray_profile_parity_contract_tracks_0046_table() -> None:
     assert restore_drill.parity_contract_for_head("20260923_0046") == "ac-postgres-parity-v26"
     assert restore_drill.parity_tables_for_head("20260923_0046") == (

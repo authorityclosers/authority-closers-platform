@@ -1,0 +1,79 @@
+/* The selected workspace has no Sales Xray access: one calm explanation. */
+.panel {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 520px;
+  margin: 10vh auto 0;
+  padding: 32px;
+  border: 1px solid var(--lx-line);
+  border-radius: 20px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+  text-align: center;
+  animation: panel-in 320ms var(--lx-ease-pop, ease) both;
+}
+
+.icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.panel h2 {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+
+.panel p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font: 600 13.5px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
+}
+
+.switch:hover {
+  background: var(--lx-teal-hover, var(--lx-teal));
+}
+
+.switch:active {
+  transform: scale(0.97);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+}
