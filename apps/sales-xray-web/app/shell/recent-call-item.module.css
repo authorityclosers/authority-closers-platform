@@ -240,72 +240,98 @@
   }
 }
 
-/* Status mark: a small dot on the call icon that says where the call is.
-   Ready pops in once, in progress pings and the waveform plays, needs
-   attention nudges every few seconds, idle is a quiet ring. */
+/* ---------- Tidy row: status mark · name · date ---------- */
+.row {
+  animation: row-in 320ms var(--lx-ease-move) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+.link {
+  position: relative;
+  gap: 10px;
+  padding: 6px 8px 6px 10px;
+}
+.link[data-current] {
+  background: var(--lx-teal-soft);
+}
+.link[data-current] .name {
+  color: var(--lx-teal);
+  font-weight: 600;
+}
+.link[data-current]::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--lx-teal);
+  content: "";
+  animation: bar-in 260ms var(--lx-ease-pop) both;
+}
+.date {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The status mark: ready pops in with one ripple, in progress plays a small
+   equaliser, needs attention nudges now and then, idle is a quiet ring. */
 .mark {
   position: relative;
-  display: grid;
+  display: flex;
+  width: 12px;
+  height: 12px;
   flex: none;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  transition: transform var(--lx-dur-move) var(--lx-ease-pop);
 }
-.dot {
-  position: absolute;
-  right: -3px;
-  bottom: -2px;
+.row:hover .mark {
+  transform: scale(1.18);
+}
+.mark i {
+  display: block;
   width: 7px;
   height: 7px;
-  border: 1.5px solid var(--lx-paper-2, var(--lx-surface));
+  box-sizing: border-box;
   border-radius: 50%;
-  box-sizing: content-box;
 }
-.dot::after {
+.mark[data-tone="ready"] i {
+  background: var(--lx-teal);
+  animation: dot-pop 520ms var(--lx-ease-pop) both;
+  animation-delay: calc(var(--i, 0) * 35ms + 180ms);
+}
+.mark[data-tone="ready"]::after {
   position: absolute;
-  inset: 0;
+  inset: 2.5px;
   border-radius: 50%;
-  background: inherit;
+  background: var(--lx-teal);
   content: "";
   opacity: 0;
+  animation: dot-ripple 1100ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 35ms + 420ms);
 }
-.dot[data-tone="ready"] {
-  background: var(--lx-teal);
-  animation: dot-pop 520ms var(--lx-ease-pop, ease) both;
-}
-.dot[data-tone="ready"]::after {
-  animation: dot-ripple 1100ms 300ms ease-out both;
-}
-.dot[data-tone="active"] {
-  background: var(--lx-info);
-}
-.dot[data-tone="active"]::after {
-  animation: dot-ping 1600ms ease-out infinite;
-}
-.dot[data-tone="attention"] {
+.mark[data-tone="attention"] i {
   background: var(--lx-warning);
+  box-shadow: 0 0 0 2.5px var(--lx-warning-soft);
   animation: dot-nudge 4s ease-in-out infinite;
 }
-.dot[data-tone="attention"]::after {
-  animation: dot-flash 4s ease-out infinite;
+.mark[data-tone="idle"] i {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--lx-muted-2);
 }
-.dot[data-tone="idle"] {
-  width: 5px;
-  height: 5px;
-  border: 1.5px solid var(--lx-muted-2, var(--lx-muted));
-  background: var(--lx-paper-2, var(--lx-surface));
-}
-/* While a call is being analysed its waveform icon plays like an equaliser. */
-.mark[data-tone="active"] svg {
-  color: var(--lx-info);
-}
-.mark[data-tone="active"] svg path {
-  transform-box: fill-box;
-  transform-origin: center;
+.mark[data-tone="active"] i {
+  width: 2px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--lx-info);
   animation: eq 900ms ease-in-out infinite;
 }
-.mark[data-tone="active"] svg path:nth-child(2n) {
+.mark[data-tone="active"] i:nth-child(2) {
   animation-delay: -300ms;
 }
-.mark[data-tone="active"] svg path:nth-child(3n) {
+.mark[data-tone="active"] i:nth-child(3) {
   animation-delay: -600ms;
 }
 .srOnly {
@@ -313,30 +339,31 @@
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+@keyframes bar-in {
+  from {
+    transform: scaleY(0);
+  }
 }
 @keyframes dot-pop {
   0% {
     transform: scale(0);
   }
   60% {
-    transform: scale(1.35);
+    transform: scale(1.4);
   }
 }
 @keyframes dot-ripple {
   from {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(3);
-  }
-}
-@keyframes dot-ping {
-  from {
-    opacity: 0.6;
+    opacity: 0.5;
     transform: scale(1);
   }
   to {
@@ -351,7 +378,7 @@
     transform: none;
   }
   85% {
-    transform: scale(1.3);
+    transform: scale(1.35);
   }
   90% {
     transform: scale(0.9);
@@ -360,29 +387,16 @@
     transform: scale(1.15);
   }
 }
-@keyframes dot-flash {
-  0%,
-  80% {
-    opacity: 0;
-    transform: scale(1);
-  }
-  84% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(2.6);
-  }
-}
 @keyframes eq {
   50% {
-    transform: scaleY(0.45);
+    transform: scaleY(0.35);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dot,
-  .dot::after,
-  .mark[data-tone="active"] svg path {
+  .row,
+  .link[data-current]::before,
+  .mark i,
+  .mark::after {
     animation: none;
   }
 }

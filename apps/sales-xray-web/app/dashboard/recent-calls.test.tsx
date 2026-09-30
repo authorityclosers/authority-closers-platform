@@ -51,7 +51,7 @@ it("lists each call once with its real name, or Untitled call", async () => {
   expect(rows[0].getAttribute("href")).toContain(calls[0].id);
 });
 
-it("shows only the rows that fit and says how many more there are", async () => {
+it("shows only the rows that fit and reports how many did not", async () => {
   let resize: (() => void) | undefined;
   vi.stubGlobal(
     "ResizeObserver",
@@ -66,13 +66,18 @@ it("shows only the rows that fit and says how many more there are", async () => 
   const height = vi
     .spyOn(HTMLElement.prototype, "clientHeight", "get")
     .mockReturnValue(100);
-  await act(async () => root.render(<RecentCallsList calls={calls} />));
+  const onHiddenChange = vi.fn();
+  await act(async () =>
+    root.render(
+      <RecentCallsList calls={calls} onHiddenChange={onHiddenChange} />,
+    ),
+  );
   expect(host.querySelectorAll("li")).toHaveLength(2);
-  expect(host.textContent).toContain("+1 more in View all calls");
+  expect(onHiddenChange).toHaveBeenLastCalledWith(1);
 
   height.mockReturnValue(200);
   await act(async () => resize?.());
   expect(host.querySelectorAll("li")).toHaveLength(3);
-  expect(host.textContent).not.toContain("more in View all calls");
+  expect(onHiddenChange).toHaveBeenLastCalledWith(0);
   height.mockRestore();
 });

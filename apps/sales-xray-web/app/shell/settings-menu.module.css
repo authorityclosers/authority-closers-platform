@@ -1,0 +1,447 @@
+/* The account card that opens from the gear in the rail. */
+.card {
+  position: fixed;
+  z-index: 300;
+  left: 74px;
+  bottom: 16px;
+  width: 300px;
+  max-height: min(620px, calc(100dvh - 32px));
+  overflow: hidden auto;
+  padding: 8px;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  transform-origin: bottom left;
+  animation: card-in 220ms var(--lx-ease-pop, ease) both;
+}
+
+.view {
+  display: grid;
+  gap: 6px;
+  animation: view-in 220ms var(--lx-ease-move, ease) both;
+}
+
+/* ---------- Who is signed in ---------- */
+.who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 4px;
+}
+
+.avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+  color: var(--lx-on-teal);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.whoText {
+  display: grid;
+  min-width: 0;
+}
+
+.whoText b {
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whoText small {
+  overflow: hidden;
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Minutes ---------- */
+.usage {
+  display: grid;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-sunken);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
+}
+
+.usage:hover {
+  border-color: var(--lx-teal-edge, var(--lx-teal));
+}
+
+.usage:active {
+  transform: scale(0.99);
+}
+
+.usageTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.usageTop span {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.usageTop b {
+  color: var(--lx-ink);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--lx-line);
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+  transform-origin: left;
+  animation: fill-in 700ms var(--lx-ease-move, ease) 120ms both;
+}
+
+/* ---------- Rows ---------- */
+.list {
+  display: grid;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-ink);
+  font: 500 13px/1.2 var(--lx-font-ui, inherit);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.row:hover,
+.row:focus-visible {
+  background: var(--lx-sunken);
+  outline: none;
+}
+
+.rowIcon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 180ms var(--lx-ease-pop, ease);
+}
+
+.row:hover .rowIcon {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  transform: scale(1.06);
+}
+
+.rowLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowValue {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.badge {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 10.5px;
+  font-weight: 700;
+  animation: badge-in 420ms var(--lx-ease-pop, ease) 200ms both;
+}
+
+.chev {
+  color: var(--lx-muted);
+  transition: transform 160ms var(--lx-ease-quick, ease);
+}
+
+.row:hover .chev {
+  transform: translateX(2px);
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--lx-line);
+}
+
+/* ---------- Sub views ---------- */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: start;
+  padding: 6px 8px 6px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lx-ink);
+  font: 650 13.5px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+}
+
+.back:hover {
+  background: var(--lx-sunken);
+}
+
+.note {
+  margin: 4px 8px 2px;
+  color: var(--lx-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.choices {
+  display: grid;
+  gap: 2px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 9px;
+  color: var(--lx-ink);
+  font-size: 13px;
+}
+
+.choice i {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--lx-line-strong, var(--lx-line));
+  border-radius: 50%;
+}
+
+.choice[data-on] {
+  background: var(--lx-teal-soft);
+}
+
+.choice[data-on] i {
+  border: 4px solid var(--lx-teal);
+}
+
+.choice[aria-disabled="true"] {
+  color: var(--lx-muted);
+}
+
+.choice small {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.current {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--lx-teal-soft);
+}
+
+.current span {
+  color: var(--lx-teal);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.current b {
+  color: var(--lx-ink);
+  font-size: 18px;
+}
+
+.current small {
+  color: var(--lx-ink-3);
+  font-size: 12px;
+}
+
+.plans {
+  display: grid;
+  gap: 6px;
+}
+
+.plan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  animation: view-in 260ms var(--lx-ease-move, ease) both;
+  transition:
+    border-color 160ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
+}
+
+.plan:hover {
+  border-color: var(--lx-teal-edge, var(--lx-teal));
+  transform: translateY(-1px);
+}
+
+.plan b {
+  color: var(--lx-ink);
+  font-size: 13.5px;
+}
+
+.plan small {
+  grid-column: 1;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.soon {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.news {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.news > li {
+  display: grid;
+  gap: 3px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 10px;
+  animation: view-in 260ms var(--lx-ease-move, ease) both;
+}
+
+.news > li:hover {
+  background: var(--lx-sunken);
+}
+
+.news time {
+  color: var(--lx-muted);
+  font-size: 11px;
+}
+
+.news b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-ink);
+  font-size: 13.5px;
+}
+
+.news ul {
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: var(--lx-ink-3);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lx-teal);
+  box-shadow: 0 0 0 3px var(--lx-teal-soft);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+@keyframes fill-in {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes badge-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .card {
+    right: 8px;
+    left: 8px !important;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .view,
+  .meter i,
+  .badge,
+  .plan,
+  .news > li {
+    animation: none;
+  }
+}

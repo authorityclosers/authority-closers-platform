@@ -361,3 +361,151 @@
     animation: none;
   }
 }
+
+/* ---------- Tile extras ---------- */
+.trend {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  white-space: nowrap;
+}
+.trend b {
+  padding: 2px 7px;
+  border-radius: var(--lx-radius-pill, 99px);
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.trend[data-direction="up"] b {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+.trend[data-direction="down"] b {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+.trend small {
+  color: var(--lx-muted);
+  font-size: 10.5px;
+}
+.share {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+}
+.share svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.share b {
+  color: var(--lx-ink);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.used {
+  display: grid;
+  justify-items: end;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.used b {
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.used small {
+  color: var(--lx-muted);
+  font-size: 10.5px;
+}
+.review {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px 5px 10px;
+  border-radius: var(--lx-radius-pill, 99px);
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  transition: transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease);
+}
+.review svg {
+  transition: transform var(--lx-dur-quick, 140ms) var(--lx-ease-quick, ease);
+}
+.review:hover svg {
+  transform: translateX(2px);
+}
+.review:active {
+  transform: scale(0.97);
+}
+.clear {
+  color: var(--lx-teal);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- Skeletons ---------- */
+.skel {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+.legend .skel {
+  height: 9px;
+}
+.legend i.skel {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.day[data-loading] i {
+  animation: dot-breathe 1.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 40ms);
+}
+@keyframes dot-breathe {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+.month,
+.status {
+  animation: card-in 280ms ease both;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel,
+  .day[data-loading] i,
+  .month,
+  .status {
+    animation: none;
+  }
+}

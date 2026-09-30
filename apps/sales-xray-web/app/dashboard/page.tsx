@@ -19,8 +19,18 @@ import {
   type CallSummary,
 } from "./dashboard-data";
 import { DashboardGreeting } from "./dashboard-greeting";
-import { MinutesRing, MonthWave, StatusRing } from "./dashboard-visuals";
-import { RecentCallsList } from "./recent-calls";
+import {
+  AttentionAction,
+  MonthWaveSkeleton,
+  StatusRingSkeleton,
+  MinutesRing,
+  MinutesUsed,
+  MonthWave,
+  ShareRing,
+  StatusRing,
+  TrendChip,
+} from "./dashboard-visuals";
+import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
 import styles from "./dashboard.module.css";
 
 type ReadState<T> =
@@ -67,6 +77,7 @@ export default function DashboardPage() {
 function DashboardDetails() {
   const access = useWorkspaceAccess();
 
+  const [hiddenRecent, setHiddenRecent] = useState(0);
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
   >({ status: "loading" });
@@ -149,32 +160,19 @@ function DashboardDetails() {
               <div className={styles.kpiIconWrapTeal}>
                 <FolderOpen size={18} aria-hidden="true" />
               </div>
-              {trend && (
-                <span
-                  className={`${styles.trendBadge} ${
-                    trend.direction === "up"
-                      ? styles.trendUp
-                      : trend.direction === "down"
-                        ? styles.trendDown
-                        : styles.trendNeutral
-                  }`}
-                >
-                  {trend.direction === "up" && "↑ "}
-                  {trend.direction === "down" && "↓ "}
-                  {trend.text}
-                </span>
-              )}
             </div>
             <div className={styles.kpiValue}>
-              {activityState.status === "loading"
-                ? "—"
-                : activityState.status === "error"
-                  ? "—"
-                  : activity === null
-                    ? "—"
-                    : activity.analysedLast30Days}
+              {activityState.status === "loading" ? (
+                <span className={styles.valueSkeleton} aria-label="Loading" />
+              ) : activityState.status === "error" ? (
+                "—"
+              ) : activity === null ? (
+                "—"
+              ) : (
+                activity.analysedLast30Days
+              )}
             </div>
-            <div className={styles.kpiLabel}>Calls analysed · last 30 days</div>
+            <div className={styles.kpiLabel}>Calls analysed</div>
             <div className={styles.kpiSubtext}>
               {activityState.status === "loading" ? (
                 " "
@@ -195,6 +193,11 @@ function DashboardDetails() {
                 " "
               )}
             </div>
+            {trend && (
+              <div className={styles.kpiAside}>
+                <TrendChip direction={trend.direction} text={trend.text} />
+              </div>
+            )}
           </div>
 
           {/* Card 2: Reports ready */}
@@ -205,13 +208,15 @@ function DashboardDetails() {
               </div>
             </div>
             <div className={styles.kpiValue}>
-              {summaryState.status === "loading"
-                ? "—"
-                : summaryState.status === "error"
-                  ? "—"
-                  : summary === null
-                    ? "—"
-                    : summary.completed}
+              {summaryState.status === "loading" ? (
+                <span className={styles.valueSkeleton} aria-label="Loading" />
+              ) : summaryState.status === "error" ? (
+                "—"
+              ) : summary === null ? (
+                "—"
+              ) : (
+                summary.completed
+              )}
             </div>
             <div className={styles.kpiLabel}>Reports ready</div>
             <div className={styles.kpiSubtext}>
@@ -234,6 +239,11 @@ function DashboardDetails() {
                 `of ${summary.total} saved calls`
               )}
             </div>
+            {summary && summary.total > 0 && (
+              <div className={styles.kpiAside}>
+                <ShareRing part={summary.completed} total={summary.total} />
+              </div>
+            )}
           </div>
 
           {/* Card 3: Minutes left */}
@@ -249,11 +259,13 @@ function DashboardDetails() {
               </div>
             </div>
             <div className={styles.kpiValue}>
-              {allowanceState.status === "loading"
-                ? "—"
-                : allowanceState.status === "error"
-                  ? "—"
-                  : minutesLeft(allowanceState.value).value}
+              {allowanceState.status === "loading" ? (
+                <span className={styles.valueSkeleton} aria-label="Loading" />
+              ) : allowanceState.status === "error" ? (
+                "—"
+              ) : (
+                minutesLeft(allowanceState.value).value
+              )}
             </div>
             <div className={styles.kpiLabel}>Minutes left</div>
             <div className={styles.kpiSubtext}>
@@ -274,6 +286,11 @@ function DashboardDetails() {
                 minutesLeft(allowanceState.value).subtext
               )}
             </div>
+            {allowanceState.status === "ready" && (
+              <div className={styles.kpiAside}>
+                <MinutesUsed allowance={allowanceState.value} />
+              </div>
+            )}
           </div>
 
           {/* Card 4: Needs attention */}
@@ -284,13 +301,15 @@ function DashboardDetails() {
               </div>
             </div>
             <div className={styles.kpiValue}>
-              {summaryState.status === "loading"
-                ? "—"
-                : summaryState.status === "error"
-                  ? "—"
-                  : summary === null
-                    ? "—"
-                    : summary.needsAttention}
+              {summaryState.status === "loading" ? (
+                <span className={styles.valueSkeleton} aria-label="Loading" />
+              ) : summaryState.status === "error" ? (
+                "—"
+              ) : summary === null ? (
+                "—"
+              ) : (
+                summary.needsAttention
+              )}
             </div>
             <div className={styles.kpiLabel}>Needs attention</div>
             <div className={styles.kpiSubtext}>
@@ -313,6 +332,11 @@ function DashboardDetails() {
                 "Calls to check"
               )}
             </div>
+            {summary && (
+              <div className={styles.kpiAside}>
+                <AttentionAction count={summary.needsAttention} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -330,9 +354,7 @@ function DashboardDetails() {
             </div>
 
             {activityState.status === "loading" ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>—</span>
-              </div>
+              <MonthWaveSkeleton />
             ) : activityState.status === "error" ? (
               <div className={styles.chartEmptyWrap}>
                 <button
@@ -375,9 +397,7 @@ function DashboardDetails() {
             </div>
 
             {summaryState.status === "loading" ? (
-              <div className={styles.chartEmptyWrap}>
-                <span className={styles.chartEmptyText}>—</span>
-              </div>
+              <StatusRingSkeleton />
             ) : summaryState.status === "error" ? (
               <div className={styles.chartEmptyWrap}>
                 <button
@@ -421,15 +441,16 @@ function DashboardDetails() {
             {recent && recent.length > 0 && (
               <Link href="/analysis/calls" className={styles.viewAllLink}>
                 <span>View all calls</span>
+                {hiddenRecent > 0 ? (
+                  <span className={styles.moreChip}>+{hiddenRecent}</span>
+                ) : null}
                 <ArrowRight size={15} aria-hidden="true" />
               </Link>
             )}
           </div>
 
           {recentState.status === "loading" ? (
-            <div className={styles.chartEmptyWrap}>
-              <span className={styles.chartEmptyText}>—</span>
-            </div>
+            <RecentCallsSkeleton />
           ) : recentState.status === "error" ? (
             <div className={styles.chartEmptyWrap}>
               <button
@@ -462,7 +483,7 @@ function DashboardDetails() {
               </Link>
             </div>
           ) : (
-            <RecentCallsList calls={recent} />
+            <RecentCallsList calls={recent} onHiddenChange={setHiddenRecent} />
           )}
         </div>
       </div>

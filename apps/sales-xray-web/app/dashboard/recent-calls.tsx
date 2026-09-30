@@ -2,7 +2,13 @@
 
 import { AudioLines, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
 import { callDate, callTone, submissionState } from "../call-status";
@@ -10,7 +16,7 @@ import { formatClock } from "../lightbox/time";
 import styles from "./recent-calls.module.css";
 
 /** Row height and gap in px; the stylesheet reads them from --row and --gap. */
-const ROW = 46;
+const ROW = 42;
 const GAP = 2;
 
 function callLength(seconds: number): string | null {
@@ -23,7 +29,14 @@ function callLength(seconds: number): string | null {
  * fit the space left on screen, so the dashboard never scrolls; the rest are
  * one click away in View all calls.
  */
-export function RecentCallsList({ calls }: { calls: LibrarySubmission[] }) {
+export function RecentCallsList({
+  calls,
+  onHiddenChange,
+}: {
+  calls: LibrarySubmission[];
+  /** How many calls did not fit, for the card header. */
+  onHiddenChange?: (count: number) => void;
+}) {
   const listRef = useRef<HTMLUListElement>(null);
   const [fit, setFit] = useState<number | null>(null);
 
@@ -46,6 +59,9 @@ export function RecentCallsList({ calls }: { calls: LibrarySubmission[] }) {
 
   const shown = fit === null ? calls : calls.slice(0, fit);
   const hidden = calls.length - shown.length;
+  useEffect(() => {
+    onHiddenChange?.(hidden);
+  }, [hidden, onHiddenChange]);
 
   return (
     <div className={styles.root}>
@@ -99,9 +115,27 @@ export function RecentCallsList({ calls }: { calls: LibrarySubmission[] }) {
           );
         })}
       </ul>
-      {hidden > 0 && (
-        <p className={styles.more}>+{hidden} more in View all calls</p>
-      )}
+    </div>
+  );
+}
+
+/** Recent calls while the list loads: three rows with the final shape. */
+export function RecentCallsSkeleton() {
+  return (
+    <div className={styles.root} aria-label="Loading recent calls">
+      <ul className={styles.list} aria-hidden="true">
+        {[46, 30, 58].map((width, index) => (
+          <li
+            key={width}
+            className={styles.skeletonRow}
+            style={{ "--i": index, "--w": `${width}%` } as CSSProperties}
+          >
+            <i />
+            <span />
+            <em />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

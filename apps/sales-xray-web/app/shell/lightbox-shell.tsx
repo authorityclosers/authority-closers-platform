@@ -15,12 +15,14 @@ import {
 import Link from "next/link";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -34,12 +36,13 @@ import { LocalSettingsButton } from "../live-data-banner";
 import { newCallHref } from "../new-call-navigation";
 import { ProfileMenu } from "../profile-menu";
 import { SettingsDialogHost } from "../settings-dialog";
-import { openSettings, opensInPlace } from "../settings-open";
+import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
 import { AllowanceRing } from "./allowance-ring";
 import { MinutesMeter } from "./minutes-meter";
 import {
+  readAllowance,
   readCallSummary,
   readRecentCalls,
   type CallSummary,
@@ -52,6 +55,7 @@ import {
   type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
+import { SettingsMenu, useUnseenNews } from "./settings-menu";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -134,6 +138,11 @@ function LightboxShellFrame({
 }: LightboxShellProps) {
   const access = useWorkspaceAccess();
   const cached = getShellState();
+  // Until the server answers, the session is unknown: keep the signed-in
+  // frame with placeholders instead of flashing guest labels.
+  const sessionPending =
+    access !== null &&
+    (access.status === "loading" || access.authenticated === null);
   const accountKey = access?.context
     ? JSON.stringify([access.context.personId, access.context.sessionId])
     : null;
@@ -172,6 +181,11 @@ function LightboxShellFrame({
         ])
       : null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  // The gear opens the account card; the card opens settings sections.
+  const [accountCardOpen, setAccountCardOpen] = useState(false);
+  const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
+  const gearRef = useRef<HTMLAnchorElement>(null);
+  const unseenNews = useUnseenNews();
   const profile = useShellProfile(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -309,6 +323,38 @@ function LightboxShellFrame({
     return () => controller.abort();
   }, [authenticated, recentContextKey, recentsNudge]);
 
+  // The minutes pill reads the account's own allowance when the page has none.
+  const [shellAllowance, setShellAllowance] = useState<{
+    key: string | null;
+    value: Allowance;
+  } | null>(() =>
+    cached.allowance
+      ? { key: cached.allowanceContextKey, value: cached.allowance }
+      : null,
+  );
+  const hasPageAllowance = allowance !== null;
+  useEffect(() => {
+    if (
+      !authenticated ||
+      recentContextKey === null ||
+      hasPageAllowance ||
+      process.env.NODE_ENV === "test"
+    )
+      return;
+    const controller = new AbortController();
+    readAllowance(controller.signal)
+      .then((value) => {
+        if (controller.signal.aborted) return;
+        setShellAllowance({ key: recentContextKey, value });
+        updateShellState({
+          allowance: value,
+          allowanceContextKey: recentContextKey,
+        });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [authenticated, recentContextKey, hasPageAllowance, recentsNudge]);
+
   useEffect(() => {
     if (!authenticated || process.env.NODE_ENV === "test") {
       return;
@@ -432,10 +478,10 @@ function LightboxShellFrame({
       access.requestAccountSignIn();
       return;
     }
-    // Settings float over the current screen instead of leaving it.
+    // The account card floats over the current screen instead of leaving it.
     if (authenticated && active !== "account" && opensInPlace(event)) {
       event.preventDefault();
-      openSettings();
+      setAccountCardOpen((open) => !open);
     }
   }
 
@@ -455,7 +501,25 @@ function LightboxShellFrame({
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
     loading ||
+    sessionPending ||
     (authenticated && !workspacesSettled && !profileName && !displayName);
+  // Recents show skeleton rows until this account's list has arrived.
+  const recentsReady =
+    recentContextKey !== null &&
+    (recentCallsContextKey === recentContextKey ||
+      getShellState().recentCallsContextKey === recentContextKey);
+  const recentsPending =
+    process.env.NODE_ENV !== "test" &&
+    (sessionPending || (authenticated && !recentsReady));
+  const shownAllowance =
+    allowance ??
+    (shellAllowance && shellAllowance.key === recentContextKey
+      ? shellAllowance.value
+      : null);
+  const allowancePending =
+    process.env.NODE_ENV !== "test" &&
+    !shownAllowance &&
+    (sessionPending || authenticated);
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -570,8 +634,12 @@ function LightboxShellFrame({
               className={`${styles.stripBtn}${active === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
+              ref={gearRef}
               aria-label={accountLabel}
+              aria-haspopup={authenticated ? "dialog" : undefined}
+              aria-expanded={authenticated ? accountCardOpen : undefined}
               aria-current={active === "account" ? "page" : undefined}
+              data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.tooltip}>{accountLabel}</span>
@@ -711,9 +779,29 @@ function LightboxShellFrame({
             </div>
             {recentsOpen && (
               <div className={styles.recentsList}>
-                {visibleRecentCalls.map((call) => (
+                {recentsPending && visibleRecentCalls.length === 0
+                  ? [62, 44, 72].map((width, index) => (
+                      <div
+                        key={width}
+                        className={styles.recentSkeleton}
+                        style={
+                          {
+                            "--i": index,
+                            "--w": `${width}%`,
+                          } as CSSProperties
+                        }
+                        aria-hidden="true"
+                      >
+                        <i />
+                        <span />
+                        <em />
+                      </div>
+                    ))
+                  : null}
+                {visibleRecentCalls.map((call, index) => (
                   <RecentCallItem
                     key={call.id}
+                    index={index}
                     call={call}
                     href={callHref(call.id)}
                     onChange={(next) => updateRecentCall(call.id, next)}
@@ -768,13 +856,16 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
-            {authenticated && active !== "analyse" ? (
+            {(authenticated || sessionPending) && active !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
                 New analysis
               </Link>
             ) : null}
-            <AllowanceRing allowance={allowance} />
+            <AllowanceRing
+              allowance={shownAllowance}
+              pending={allowancePending}
+            />
             <ThemeToggle />
             <ProfileMenu
               authenticated={authenticated}
@@ -824,6 +915,16 @@ function LightboxShellFrame({
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
       <SettingsDialogHost />
+      {accountCardOpen && authenticated ? (
+        <SettingsMenu
+          open
+          anchorRef={gearRef}
+          onClose={closeAccountCard}
+          name={profileName}
+          email={profile?.email ?? null}
+          allowance={shownAllowance}
+        />
+      ) : null}
     </div>
   );
 }

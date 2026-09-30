@@ -1,6 +1,10 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useState, type CSSProperties } from "react";
+
+import { CALLS_PATH } from "../analysis-routes";
 
 import type { Allowance } from "../acquisition-client";
 import {
@@ -120,7 +124,8 @@ export function MonthWave({ days }: { days: ActivityDay[] }) {
 
       <div className={styles.axis} aria-hidden="true">
         {days.map((day, index) =>
-          index % 7 === 0 || index === days.length - 1 ? (
+          (index % 7 === 0 && index <= days.length - 5) ||
+          index === days.length - 1 ? (
             <span
               key={day.date}
               style={{ "--x": (index + 0.5) / days.length } as CSSProperties}
@@ -241,5 +246,136 @@ export function MinutesRing({ allowance }: { allowance: Allowance }) {
         strokeDasharray={`${left * 100} 100`}
       />
     </svg>
+  );
+}
+
+/** Small right-hand extras for the four dashboard tiles; real data only. */
+export function TrendChip({
+  direction,
+  text,
+}: {
+  direction: "up" | "down" | "flat";
+  text: string;
+}) {
+  const [delta, ...rest] = text.split(" vs ");
+  const against = rest.length ? `vs ${rest.join(" vs ")}` : "";
+  return (
+    <span
+      className={styles.trend}
+      data-direction={direction}
+      title={`${delta} ${against}`.trim()}
+    >
+      <b>
+        {direction === "up" ? "↑ " : direction === "down" ? "↓ " : ""}
+        {delta}
+      </b>
+      {against && <small>{against.replace("previous ", "prev. ")}</small>}
+    </span>
+  );
+}
+
+export function ShareRing({ part, total }: { part: number; total: number }) {
+  if (total <= 0) return null;
+  const share = Math.round((part / total) * 100);
+  return (
+    <span
+      className={styles.share}
+      title={`${part} of ${total} saved calls have a report`}
+    >
+      <svg viewBox="0 0 36 36" aria-hidden="true">
+        <circle className={styles.gaugeTrack} cx="18" cy="18" r="15" />
+        <circle
+          className={styles.gaugeFill}
+          cx="18"
+          cy="18"
+          r="15"
+          pathLength={100}
+          strokeDasharray={`${share} 100`}
+        />
+      </svg>
+      <b>{share}%</b>
+    </span>
+  );
+}
+
+export function MinutesUsed({ allowance }: { allowance: Allowance }) {
+  if (allowance.unlimited || allowance.allowance_seconds <= 0) return null;
+  const used = Math.max(
+    0,
+    Math.round(
+      (allowance.allowance_seconds - allowance.available_seconds) / 60,
+    ),
+  );
+  const total = Math.round(allowance.allowance_seconds / 60);
+  return (
+    <span className={styles.used} title={`${used} of ${total} min used`}>
+      <b>{used}</b>
+      <small>min used</small>
+    </span>
+  );
+}
+
+export function AttentionAction({ count }: { count: number }) {
+  return count > 0 ? (
+    <Link className={styles.review} href={`${CALLS_PATH}?status=attention`}>
+      Review
+      <ChevronRight size={14} aria-hidden="true" />
+    </Link>
+  ) : (
+    <span className={styles.clear}>All clear</span>
+  );
+}
+
+/** The month card while its numbers load: same boxes, same waveform line. */
+export function MonthWaveSkeleton() {
+  return (
+    <div className={styles.month} aria-label="Loading the last 30 days">
+      <div className={styles.stats} aria-hidden="true">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index}>
+            <span className={styles.skel} style={{ width: "70%" }} />
+            <span
+              className={styles.skel}
+              style={{ width: "40%", height: 14, marginTop: 6 }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className={styles.wave} aria-hidden="true">
+        {Array.from({ length: 30 }, (_, index) => (
+          <span
+            key={index}
+            className={styles.day}
+            data-empty=""
+            data-loading=""
+            style={{ "--i": index } as CSSProperties}
+          >
+            <i />
+          </span>
+        ))}
+      </div>
+      <div className={styles.axis} aria-hidden="true" />
+    </div>
+  );
+}
+
+/** The status card while its counts load: an empty ring and legend bars. */
+export function StatusRingSkeleton() {
+  return (
+    <div className={styles.status} aria-label="Loading call status">
+      <div className={styles.ring} aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          <circle className={styles.track} cx="50" cy="50" r="40" />
+        </svg>
+      </div>
+      <ul className={styles.legend} aria-hidden="true">
+        {[70, 55, 80, 45].map((width) => (
+          <li key={width}>
+            <i className={styles.skel} />
+            <span className={styles.skel} style={{ width: `${width}%` }} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
