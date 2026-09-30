@@ -40,6 +40,7 @@ In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 | `approval.json` | both / LoadCredential | each unit's `C/approval.json` |
 | `database-url` | worker / LoadCredential | `C/database-url` |
 | `service.json` | worker / LoadCredential | `C/service.json` |
+| `service.operator-template.json` | root-only input for the refresh renderer | none |
 | `identities/elevenlabs/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/elevenlabs/token` |
 | `identities/gemini/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/gemini/token` |
 
@@ -65,3 +66,30 @@ systemd expands this into argv before `env -i` strips the service environment;
 the digest does not enter the worker environment. Missing/wrong digests fail closed.
 The refresh must restart after replacing credentials or manifest; credentials
 are snapshots. Tests verify parsing and sandbox contracts without starting units.
+
+## Backend refresh
+
+`ac-dev-sales-xray-refresh.timer` runs every ten minutes. Its root oneshot
+service runs the script from
+`/srv/authority-closers/application/current-staging/infra/application/scripts/`
+and checks out the selected staging core commit from the local
+`/var/lib/ac-release/mirror.git`. Git checkout does not use GitHub credentials.
+A valid `staging_pick.core` with a stored
+core build takes precedence over `current-staging`; otherwise the symlink is the
+target.
+
+Before it changes the backend, the script compares native inputs against the
+development native unit descriptor. It requires `AC_ENVIRONMENT=development`
+and `AC_DATABASE_MIGRATOR_URL` in `/etc/authority-closers/development/api.env`.
+It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
+renders `service.json` from the root-owned development template, writes the
+release marker and API/worker drop-ins, restarts both development units, and
+checks API health. Failures during this refresh restore the previous checkout,
+marker, manifest and drop-ins before restart.
+
+After backend health passes, the service runs the acdev-owned studio sync and
+merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio
+merge failure raises an alert but leaves the refreshed backend in place. If the
+target contains `scripts/ops/ac_smoke.py`, the script runs the development smoke
+against that core and the merged UI checkout; otherwise it reports `skipped`.
+Smoke failures are reported without rolling back the backend.
