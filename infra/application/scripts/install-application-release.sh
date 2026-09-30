@@ -8,6 +8,10 @@ release_archive="${AC_RELEASE_ARCHIVE:-}"
 release_archive_sha256="${AC_RELEASE_ARCHIVE_SHA256:-}"
 image_bundle_dir="${AC_IMAGE_BUNDLE_DIR:-}"
 secret_path="${AC_INFISICAL_PATH:-/application}"
+[[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 0 || "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]] || {
+  printf 'AC_CORE_ROLLBACK_ONLY must be 0 or 1.\n' >&2
+  exit 2
+}
 
 [[ "$(id -u)" -eq 0 ]] || { printf 'Run as root.\n' >&2; exit 1; }
 [[ "$target_environment" == staging || "$target_environment" == production ]] || {
@@ -1506,6 +1510,75 @@ record_forward_recovery_required() {
   printf 'FORWARD RECOVERY  Writes may have been accepted; the pre-migration backup will not be restored. Reapply exact release %s.\n' \
     "$release_id" >&2
 }
+
+# AC_CORE_ROLLBACK_ONLY is used only by the release engine after selecting the
+# immediately previous successful release. Recheck identity/schema under the
+# application lock and never enter the database migration/restore path below.
+core_rollback_finish() {
+  local status=$?
+  trap '' HUP INT TERM
+  trap - EXIT
+  if [[ "$status" -ne 0 ]]; then
+    # Contain failed application recovery without fencing or restoring the DB.
+    activate_edge_route "$edge_hold_source" || true
+    stop_application_services_with_hosted_drain "$release_dir" true || true
+    printf 'AC_STATUS=CORE_ROLLBACK_FAILED\n' >&2
+  fi
+  cleanup_stages || status=1
+  exit "$status"
+}
+
+rollback_application_only() {
+  local expected_from="${AC_ROLLBACK_FROM:-}" current_head
+  [[ "$expected_from" =~ ^[0-9a-f]{40}$ && "${previous_release##*/}" == "$expected_from" ]] || {
+    printf 'Core rollback current release changed.\n' >&2
+    return 1
+  }
+  current_head="$(sed -n 's/^AC_MIGRATION_HEAD=//p' "$previous_release/release-images.env")"
+  [[ "$current_head" =~ ^[0-9]{8}_[0-9]{4}$ && "$current_head" == "$AC_MIGRATION_HEAD" ]] || {
+    printf 'Core rollback migration head changed.\n' >&2
+    return 1
+  }
+  trap core_rollback_finish EXIT
+  activate_edge_route "$edge_hold_source"
+  check_route "$api_host" /health/ready 503 "release-hold-$target_environment"
+  stop_application_services_with_hosted_drain "$previous_release" false
+  # --no-deps excludes PostgreSQL and the release migration profile entirely.
+  compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 \
+    api learner-web admin-web coach-web
+  current_tmp="$application_root/.core-rollback-${target_environment}-${release_id}.$$"
+  ln -s "$release_dir" "$current_tmp"
+  mv --no-target-directory --force "$current_tmp" "$current_link"
+  current_tmp=''
+  activate_edge_route "$edge_route_source"
+  check_route "$api_host" /health/ready 200 "api-$target_environment"
+  local -a rollback_workers=(worker)
+  if sales_xray_hosted_enabled "$release_dir"; then
+    rollback_workers+=(sales-xray-worker)
+  else
+    [[ "$?" -eq 1 ]] || return 1
+  fi
+  compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 "${rollback_workers[@]}"
+  local record_root="$application_root/deployments/$target_environment" record_tmp
+  install -d -m 0750 -o root -g acops "$record_root"
+  record_tmp="$(mktemp "$record_root/.core-rollback-${release_id}.XXXXXX")"
+  {
+    printf 'AC_STATUS=COMMITTED\nAC_ACTION=CORE_ROLLBACK\n'
+    printf 'AC_ENVIRONMENT=%s\nAC_RELEASE_ID=%s\n' "$target_environment" "$release_id"
+    printf 'AC_PREVIOUS_RELEASE=%s\nAC_MIGRATION_HEAD=%s\n' "$expected_from" "$AC_MIGRATION_HEAD"
+  } > "$record_tmp"
+  chmod 0640 "$record_tmp"
+  chown root:acops "$record_tmp"
+  mv --no-target-directory --no-clobber "$record_tmp" \
+    "$record_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-core-rollback-${record_tmp##*.}.env"
+  rm -- "$backup_file"  # unused empty reservation, never a recovery dump
+  printf 'AC_STATUS=COMMITTED\n'
+}
+
+if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+  rollback_application_only
+  exit 0
+fi
 
 finish() {
   local status=$?

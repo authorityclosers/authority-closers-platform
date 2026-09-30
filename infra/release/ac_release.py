@@ -13,7 +13,8 @@ Commands (``ac-release <command>``):
     deploy ENV [SHA] [--component core|web|all] [--dry-run]
     promote --bump patch|minor|major --version vX.Y.Z
     pause ENV | resume ENV          stop or restart automatic deploys
-    rollback ENV --component web    restore the previous Sales Xray web image
+    train [--now] [--dry-run]        gated automatic patch promotion
+    rollback ENV --component core|web restore a previous application component
     history [-n N]                  recent deploy records
     prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]
                                     report (default) or remove installer
@@ -128,9 +129,17 @@ def _version_parts(value: Any) -> tuple[int, int, int] | None:
 
 
 def _validate_release_record(entry: Mapping[str, Any]) -> dict[str, Any]:
-    if set(entry) != RELEASE_RECORD_FIELDS:
+    if set(entry) - {"smoke"} != RELEASE_RECORD_FIELDS:
         raise ReleaseError("production release record has an unexpected field set")
     record = dict(entry)
+    if "smoke" in record:
+        smoke = record["smoke"]
+        if not isinstance(smoke, dict) or set(smoke) != {"staging", "production"}:
+            raise ReleaseError("production release smoke evidence is invalid")
+        if any(
+            value is not None and not DIGEST_RE.fullmatch(str(value)) for value in smoke.values()
+        ):
+            raise ReleaseError("production release smoke digest is invalid")
     if _version_parts(record["version"]) is None:
         raise ReleaseError("production release version is not semantic")
     for field_name in ("core_sha", "web_sha"):
@@ -165,6 +174,7 @@ class Paths:
     foundation: Path = Path("/srv/authority-closers/current")
     sales_xray: Path = Path("/etc/authority-closers/sales-xray")
     engine: Path = Path("/opt/ac-release")
+    backups: Path = Path("/srv/authority-closers/backups/application/production")
 
     @property
     def mirror(self) -> Path:
@@ -597,6 +607,8 @@ class Engine:
     sleep: Callable[[float], None] = time.sleep
     clock: Callable[[], float] = time.time
     operator_group: str = "acops"
+    _lock_depth: int = field(default=0, init=False)
+    _read_only: bool = field(default=False, init=False)
 
     # -- state ---------------------------------------------------------------
 
@@ -608,6 +620,16 @@ class Engine:
         if paused:
             flag.write_text(json.dumps({"at": _now(), "reason": reason}) + "\n", encoding="utf-8")
         else:
+            if environment == "production" and (self.paths.state / "train-inflight.json").exists():
+                interrupted = self.paths.state / "train-inflight.json"
+                pair = json.loads(interrupted.read_text(encoding="utf-8"))["pair"]
+                if len(pair) != 2 or any(not SHA_RE.fullmatch(sha) for sha in pair):
+                    raise ReleaseError("invalid interrupted train pair")
+                self.train_state(
+                    f"train-failed/{'-'.join(pair)}.json",
+                    {"reason": "interrupted_train_acknowledged", "at": _now()},
+                )
+                interrupted.unlink()
             flag.unlink(missing_ok=True)
             for component in COMPONENTS:
                 self.paths.failed_flag(environment, component).unlink(missing_ok=True)
@@ -665,7 +687,17 @@ class Engine:
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         """Return the current and previous production events, newest first."""
 
-        records = self.release_records()
+        # A completed smoke record supersedes the initial promote event, append-only.
+        records: list[dict[str, Any]] = []
+        for entry in self.release_records():
+            if (
+                records
+                and entry["action"] == records[-1]["action"] == "promote"
+                and entry["version"] == records[-1]["version"]
+            ):
+                records[-1] = entry
+            else:
+                records.append(entry)
         current = records[-1] if records else None
         previous = records[-2] if len(records) > 1 else None
         return current, previous
@@ -730,6 +762,8 @@ class Engine:
         sha = marker.stdout.strip()
         if marker.returncode != 0 or not SHA_RE.fullmatch(sha):
             return None
+        if self._read_only:
+            return sha
         cache[image] = sha
         self.paths.state.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(cache, sort_keys=True) + "\n", encoding="utf-8")
@@ -810,6 +844,31 @@ class Engine:
             == 0
         )
 
+    def staging_pair(self, *, refresh: bool = True) -> tuple[str, str]:
+        """The exact running, successful staging pair accepted by promote."""
+        core_sha = self.current_core("staging")
+        web_sha, _ = self.current_web("staging")
+        if core_sha is None or web_sha is None:
+            raise ReleaseError("staging does not have a complete core and web pair")
+        head = (
+            self.main_head()
+            if refresh
+            else self.run(
+                ["git", f"--git-dir={self.paths.mirror}", "rev-parse", "refs/heads/main"]
+            ).stdout.strip()
+        )
+        if not self.is_ancestor(core_sha, head) or not self.is_ancestor(web_sha, head):
+            raise ReleaseError("both staging commits must be on main")
+        if not self.passed_staging(core_sha, "core") or not self.passed_staging(web_sha, "web"):
+            raise ReleaseError("both staging components must have a successful staging deploy")
+        if any(self.paths.failed_flag("staging", component).exists() for component in COMPONENTS):
+            raise ReleaseError("staging has a failed deploy that must be cleared first")
+        core_build = self.stored_build(core_sha, "core")
+        web_build = self.stored_build(web_sha, "web")
+        if core_build is None or web_build is None:
+            raise ReleaseError("the stored builds for the staging pair are incomplete")
+        return core_sha, web_sha
+
     def promote(
         self,
         bump: str,
@@ -818,29 +877,20 @@ class Engine:
         requested_by: str,
         trigger: str,
         expected_sha: str | None = None,
+        pair: tuple[str, str] | None = None,
+        smoke: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Promote the tested staging pair, recording a release only on success."""
 
         with self.locked(wait=True):
             if not self.paths.production_enabled.exists():
                 raise ReleaseError("production deploys are not enabled on this server yet")
-            core_sha = self.current_core("staging")
-            web_sha, _ = self.current_web("staging")
-            if core_sha is None or web_sha is None:
-                raise ReleaseError("staging does not have a complete core and web pair")
-            head = self.main_head()
-            if not self.is_ancestor(core_sha, head) or not self.is_ancestor(web_sha, head):
-                raise ReleaseError("both staging commits must be on main")
-            if not self.passed_staging(core_sha, "core") or not self.passed_staging(web_sha, "web"):
-                raise ReleaseError("both staging components must have a successful staging deploy")
-            if any(
-                self.paths.failed_flag("staging", component).exists() for component in COMPONENTS
-            ):
-                raise ReleaseError("staging has a failed deploy that must be cleared first")
+            core_sha, web_sha = self.staging_pair()
+            if pair is not None and pair != (core_sha, web_sha):
+                raise ReleaseError("staging_moved")
             core_build = self.stored_build(core_sha, "core")
             web_build = self.stored_build(web_sha, "web")
-            if core_build is None or web_build is None:
-                raise ReleaseError("the stored builds for the staging pair are incomplete")
+            assert core_build is not None and web_build is not None
             production_core = self.current_core("production")
             production_web, _ = self.current_web("production")
             if production_core and not self.is_ancestor(production_core, core_sha):
@@ -875,9 +925,539 @@ class Engine:
                     "at": _now(),
                     "action": "promote",
                     "rolled_back_from": None,
+                    **({"smoke": smoke} if smoke is not None else {}),
                 }
             )
             return attempts
+
+    # -- release train -------------------------------------------------------
+
+    def restore_check_ok(self) -> bool:
+        """Latest production off-host proof, not a local backup or staging drill."""
+        try:
+            result = self.run(
+                [
+                    "systemctl",
+                    "show",
+                    "ac-restic-postgres-restore-proof@production.service",
+                    "--property=LoadState,ActiveState,Result,ExecMainCode,ExecMainStatus,ExecMainExitTimestamp",
+                ],
+                env={"TZ": "UTC"},
+                check=False,
+                timeout=15,
+            )
+            values = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+            exited = dt.datetime.strptime(
+                values.get("ExecMainExitTimestamp", ""), "%a %Y-%m-%d %H:%M:%S %Z"
+            ).replace(tzinfo=dt.UTC)
+            return (
+                result.returncode == 0
+                and values.get("LoadState") == "loaded"
+                and values.get("ActiveState") == "inactive"
+                and values.get("Result") == "success"
+                and values.get("ExecMainCode") == "1"
+                and values.get("ExecMainStatus") == "0"
+                and 0 <= self.clock() - exited.timestamp() < 8 * 86400
+            )
+        except (OSError, ValueError, ReleaseError, subprocess.SubprocessError):
+            return False
+
+    def migration_head(self, sha: str | None) -> str:
+        if sha is None or not SHA_RE.fullmatch(sha):
+            raise ReleaseError("migration_head_missing")
+        manifest = self.paths.application / "releases" / sha / "release-images.env"
+        value = read_env_file(manifest).get("AC_MIGRATION_HEAD", "")
+        if not re.fullmatch(r"[0-9]{8}_[0-9]{4}", value):
+            raise ReleaseError("migration_head_missing")
+        return value
+
+    @contextlib.contextmanager
+    def train_source(self, sha: str) -> Iterator[Path]:
+        # Only the selected core commit supplies executable smoke/classifier code.
+        with self.stage(sha) as stage:
+            source = stage / "source"
+            for prefix in ("scripts/ops", "db/migrations"):
+                archive, _ = self.source_archive(sha, stage, prefix)
+                self.extract_source(archive, source, prefix)
+            yield source
+
+    def train_state(self, name: str, value: Mapping[str, Any]) -> None:
+        path = self.paths.state / name
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        temporary = path.with_name(f".{path.name}.{secrets.token_hex(6)}")
+        with temporary.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(dict(value), sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+
+    def train_event(self, kind: str, text: str, **fields: Any) -> None:
+        # Use the installed notifier's redaction and spool deduplication contract.
+        argv = [
+            "ac-train-notify",
+            kind,
+            "--spool",
+            str(self.paths.state / "notify"),
+            "--key",
+            f"train:{text}",
+            "--text",
+            text,
+        ]
+        for key, value in fields.items():
+            argv.extend(["--field", f"{key}={value}"])
+        self.run(argv, timeout=30)
+
+    def train_result(
+        self,
+        reason: str,
+        *,
+        result: str,
+        alert: bool = False,
+        pair: tuple[str, str] | None = None,
+        **details: Any,
+    ) -> dict[str, Any]:
+        entry = {
+            "at": _now(),
+            "action": "train",
+            "result": result,
+            "reason": reason,
+            "pair": list(pair) if pair else None,
+            **details,
+        }
+        self.train_state("last-train.json", entry)
+        self.record(entry)
+        if alert:
+            self.train_event(
+                "alert",
+                reason,
+                severity="critical" if result == "rolled_back" else "error",
+                pair="-".join(pair) if pair else "none",
+                **details,
+            )
+        if result in ("promoted", "rolled_back", "failed"):
+            # Unknown components are explicit fields; zeros are only display placeholders.
+            dev = self.current_core("development")
+            staging = self.current_core("staging")
+            production = self.current_core("production")
+            icon = "✅" if result == "promoted" else "❌"
+            line = (
+                f"dev {(dev or '0000000')[:7]} · staging {(staging or '0000000')[:7]} · "
+                f"prod {(production or '0000000')[:7]} · smoke {icon}"
+            )
+            self.train_event(
+                "status",
+                line,
+                result=result,
+                reason=reason,
+                unknown=",".join(
+                    k
+                    for k, v in (("dev", dev), ("staging", staging), ("prod", production))
+                    if not v
+                ),
+            )
+        return entry
+
+    def train_smoke(
+        self, environment: str, pair: tuple[str, str], source: Path, *, reuse: bool = False
+    ) -> dict[str, str]:
+        path = self.paths.state / "smoke" / environment / ("-".join(pair) + ".json")
+
+        def read_record(max_age: int) -> dict[str, str] | None:
+            try:
+                if not 0 <= self.clock() - path.stat().st_mtime < max_age:
+                    return None
+                record = json.loads(path.read_text(encoding="utf-8"))
+                claimed = str(record.pop("digest"))
+                digest = (
+                    "sha256:"
+                    + hashlib.sha256(
+                        json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+                    ).hexdigest()
+                )
+                if claimed.removeprefix("sha256:") != digest.removeprefix("sha256:"):
+                    return None
+                if record.get("result") not in ("pass", "fail", "skipped"):
+                    return None
+                for key, value in zip(("core_sha", "web_sha"), pair, strict=True):
+                    if key in record and record[key] != value:
+                        return None
+                # Preserve the full original record before T3 replaces its pair cache.
+                evidence = self.paths.state / "train-smoke" / (digest[7:] + ".json")
+                if not evidence.exists():
+                    self.train_state(
+                        str(evidence.relative_to(self.paths.state)), {**record, "digest": claimed}
+                    )
+                return {"result": record["result"], "digest": digest}
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                return None
+
+        cached = read_record(6 * 3600) if reuse else None
+        if cached is not None and cached["result"] == "pass":
+            return cached
+        started = self.clock()
+        try:
+            result = self.run(
+                [
+                    "python3",
+                    str(source / "scripts/ops/ac_smoke.py"),
+                    environment,
+                    "--core",
+                    pair[0],
+                    "--web",
+                    pair[1],
+                    "--state-dir",
+                    str(self.paths.state / "smoke"),
+                ],
+                cwd=source,
+                check=False,
+                timeout=1560,
+            )
+            record = read_record(1800)
+            if result.returncode == 0 and record and path.stat().st_mtime >= started:
+                return record
+        except (OSError, ValueError, ReleaseError, subprocess.SubprocessError):
+            pass
+        return self.failed_smoke(environment, pair)
+
+    def failed_smoke(self, environment: str, pair: tuple[str, str]) -> dict[str, str]:
+        record = {
+            "result": "fail",
+            "reason": "smoke_execution_or_record_failed",
+            "environment": environment,
+            "core_sha": pair[0],
+            "web_sha": pair[1],
+            "at": self.clock(),
+        }
+        digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+        )
+        self.train_state(f"train-smoke/{digest[7:]}.json", {**record, "digest": digest})
+        return {"result": "fail", "digest": digest}
+
+    def train_disk_check(self) -> None:
+        previous = sorted(
+            (self.paths.backups / "train").glob("*/backup.dump"),
+            key=lambda path: path.stat().st_mtime,
+        )
+        if not previous:
+            previous = sorted(
+                (self.paths.backups / "logical").glob("*/backup.dump"),
+                key=lambda path: path.stat().st_mtime,
+            )
+        if not previous or previous[-1].stat().st_size <= 0:
+            raise ReleaseError("dump_baseline_missing")
+        if shutil.disk_usage(self.paths.backups).free < 2 * previous[-1].stat().st_size:
+            raise ReleaseError("dump_disk_low")
+
+    def train_dump(self) -> str:
+        self.train_disk_check()
+        logical = self.paths.backups / "logical"
+        before = set(logical.glob("*/backup.dump"))
+        started = self.clock()
+        self.run(
+            ["ac-postgres-backup", "--environment", "production", "--capture-only"], timeout=900
+        )
+        candidates = set(logical.glob("*/backup.dump")) - before
+        if len(candidates) != 1:
+            raise ReleaseError("dump_capture_missing")
+        dump = candidates.pop()
+        if (
+            not started <= dump.stat().st_mtime <= self.clock()
+            or self.clock() - dump.stat().st_mtime >= 1800
+        ):
+            raise ReleaseError("dump_stale")
+        metadata = json.loads(dump.with_name("metadata.json").read_text(encoding="utf-8"))
+        if (
+            metadata.get("environment") != "production"
+            or metadata.get("release_id") != self.current_core("production")
+            or metadata.get("dump_sha256") != _sha256_file(dump)
+            or metadata.get("dump_bytes") != dump.stat().st_size
+        ):
+            raise ReleaseError("dump_provenance_invalid")
+        # pg_restore is supplied by the running PostgreSQL container, not a host package.
+        self.run(
+            [
+                "bash",
+                "-c",
+                "docker exec -i ac-application-production-postgres-1 "
+                'pg_restore --list < "$1" > /dev/null',
+                "train-verify",
+                str(dump),
+            ],
+            timeout=60,
+        )
+        if self.clock() - dump.stat().st_mtime >= 1800:
+            raise ReleaseError("dump_stale")
+        ring = self.paths.backups / "train"
+        ring.mkdir(mode=0o700, exist_ok=True)
+        destination = ring / dump.parent.name
+        with tempfile.TemporaryDirectory(prefix=".capture-", dir=ring) as temporary:
+            for name in ("backup.dump", "metadata.json"):
+                shutil.copy2(dump.parent / name, Path(temporary) / name)
+            os.rename(temporary, destination)
+        for old in sorted(ring.glob("*-production"), key=lambda path: path.name)[:-3]:
+            if (
+                old.is_dir()
+                and not old.is_symlink()
+                and re.fullmatch(r"[0-9]{8}T[0-9]{6}\.[0-9]{6}Z-[0-9]+-production", old.name)
+            ):
+                shutil.rmtree(old)
+        return str(destination / "backup.dump")
+
+    def rollback_core(self, environment: str, *, record_release: bool = True) -> dict[str, Any]:
+        with self.locked(wait=True):
+            current_sha = self.current_core(environment)
+            current, previous = (
+                self.production_releases() if environment == "production" else (None, None)
+            )
+            if environment == "production":
+                if current is None or previous is None or current["core_sha"] != current_sha:
+                    raise ReleaseError("core_rollback_history_missing")
+                target = previous["core_sha"]
+            else:
+                successes = [
+                    entry["sha"]
+                    for entry in self.history(10_000)
+                    if entry.get("environment") == environment
+                    and entry.get("component") == "core"
+                    and entry.get("result") == "success"
+                ]
+                if not successes or successes[-1] != current_sha:
+                    raise ReleaseError("core_rollback_history_missing")
+                target = next((sha for sha in reversed(successes[:-1]) if sha != current_sha), None)
+            if target is None or self.migration_head(target) != self.migration_head(current_sha):
+                raise ReleaseError("core_rollback_schema_changed")
+            if target == current_sha:
+                return {"restored_sha": target, "result": "unchanged"}
+            build = self.stored_build(target, "core")
+            if build is None:
+                raise ReleaseError("core_rollback_build_missing")
+            try:
+                result = self.deploy_core(environment, build, rollback_only=True)
+            except (ReleaseError, OSError, ValueError, subprocess.SubprocessError):
+                self.set_paused(
+                    environment, True, "core rollback failed; supervised recovery required"
+                )
+                raise
+            self.record(
+                {
+                    "at": _now(),
+                    "environment": environment,
+                    "component": "core",
+                    "action": "rollback",
+                    "sha": target,
+                    "previous": current_sha,
+                    "result": "success",
+                }
+            )
+            if environment == "production" and record_release:
+                self.record_rollback(current, previous, {})
+            return {**result, "restored_sha": target, "result": "success"}
+
+    def record_rollback(
+        self, current: dict[str, Any] | None, previous: dict[str, Any] | None, smoke: dict[str, Any]
+    ) -> None:
+        if current is None:
+            raise ReleaseError("core_rollback_history_missing")
+        core, web = self.current_core("production"), self.current_web("production")[0]
+        complete = previous is not None and (core, web) == (
+            previous["core_sha"],
+            previous["web_sha"],
+        )
+        self.append_release(
+            {
+                "version": previous["version"]
+                if complete and previous is not None
+                else current["version"],
+                "core_sha": core,
+                "web_sha": web,
+                "requested_by": "rollback:train-or-cli",
+                "at": _now(),
+                "action": "rollback",
+                "rolled_back_from": current["version"],
+                **({"smoke": smoke} if smoke else {}),
+            }
+        )
+
+    def train_gate(self) -> tuple[str | None, bool]:
+        for refuse, reason, alert in (
+            (not self.paths.production_enabled.exists(), "production_disabled", False),
+            (not (self.paths.config / "train.enabled").exists(), "train_disabled", False),
+            (self.is_paused("production"), "production_paused", True),
+            (
+                any(self.paths.failed_flag("production", c).exists() for c in COMPONENTS),
+                "production_failed",
+                True,
+            ),
+        ):
+            if refuse:
+                return reason, alert
+        return (None, False) if self.restore_check_ok() else ("restore_check_failed", True)
+
+    def train(self, *, now: bool = False, dry_run: bool = False) -> dict[str, Any]:
+        """--now is an operator entry point; it never bypasses any gate."""
+        with self.locked(wait=True):
+            self._read_only = dry_run
+            pair = None
+            try:
+                reason, alert = self.train_gate()
+                if reason:
+                    return (
+                        {"result": "refused", "reason": reason}
+                        if dry_run
+                        else self.train_result(reason, result="refused", alert=alert)
+                    )
+                interrupted = self.paths.state / "train-inflight.json"
+                if interrupted.exists():
+                    if not dry_run:
+                        self.set_paused(
+                            "production", True, "interrupted train requires Root recovery"
+                        )
+                    raise ReleaseError("train_interrupted")
+                pair = self.staging_pair(refresh=not dry_run)
+                if pair == (self.current_core("production"), self.current_web("production")[0]):
+                    return {"result": "nothing_to_ship"}
+                failed = f"train-failed/{'-'.join(pair)}.json"
+                if (self.paths.state / failed).exists():
+                    return {"result": "refused", "reason": "train_failed", "pair": list(pair)}
+                with self.train_source(pair[0]) as source:
+                    if not dry_run:
+                        try:
+                            staging = self.train_smoke("staging", pair, source, reuse=True)
+                        except (OSError, ValueError, ReleaseError, subprocess.SubprocessError):
+                            staging = self.failed_smoke("staging", pair)
+                        if staging["result"] != "pass":
+                            self.train_state(
+                                failed, {"reason": "staging_smoke_failed", "at": _now()}
+                            )
+                            raise ReleaseError("staging_smoke_failed")
+                    classification = self.run(
+                        [
+                            "python3",
+                            str(source / "scripts/ops/migration_safety.py"),
+                            "--versions",
+                            str(source / "db/migrations/versions"),
+                            "--from",
+                            self.migration_head(self.current_core("production")),
+                            "--to",
+                            self.migration_head(pair[0]),
+                            "--json",
+                        ],
+                        check=False,
+                        timeout=60,
+                    )
+                    try:
+                        verdict = json.loads(classification.stdout)
+                    except ValueError:
+                        verdict = None
+                    if (
+                        classification.returncode != 0
+                        or not isinstance(verdict, dict)
+                        or verdict.get("verdict") != "additive"
+                    ):
+                        raise ReleaseError("needs supervised promote")
+                    self.train_disk_check()
+                    if dry_run:
+                        return {
+                            "result": "dry-run",
+                            "pair": list(pair),
+                            "would": [
+                                "staging_smoke_or_reuse",
+                                "verified_production_dump",
+                                "patch_promote",
+                                "production_smoke_or_rollback",
+                            ],
+                        }
+                    dump = self.train_dump()
+                    reason, _ = self.train_gate()
+                    if reason:
+                        raise ReleaseError(reason)
+                    # Validate the pair before arming interruption containment.
+                    if self.staging_pair() != pair:
+                        raise ReleaseError("staging_moved")
+                    self.train_state("train-inflight.json", {"pair": list(pair), "at": _now()})
+                    smoke = {"staging": staging["digest"], "production": None}
+                    attempts = self.promote(
+                        "patch",
+                        self.next_version("patch"),
+                        pair=pair,
+                        requested_by="standing-approval:AUT-72@2026-09-29T19:05Z",
+                        trigger="train",
+                        smoke=smoke,
+                    )
+                    if any(entry.get("result") != "success" for entry in attempts):
+                        self.train_state(failed, {"reason": "promotion_failed", "at": _now()})
+                        self.set_paused("production", True, "train promotion failed")
+                        raise ReleaseError("promotion_failed")
+                    current, previous = self.production_releases()
+                    try:
+                        production = self.train_smoke("production", pair, source)
+                    except (OSError, ValueError, ReleaseError, subprocess.SubprocessError):
+                        production = self.failed_smoke("production", pair)
+                    smoke["production"] = production["digest"] or None
+                    assert current is not None
+                    if production["result"] != "pass":
+                        # Persist pause first even if writing smoke evidence or the ledger fails.
+                        self.set_paused(
+                            "production", True, "production smoke failed; Root resume required"
+                        )
+                    self.append_release({**current, "at": _now(), "smoke": smoke})
+                    if production["result"] == "pass":
+                        interrupted.unlink()
+                        return self.train_result(
+                            "promoted", result="promoted", pair=pair, dump=dump
+                        )
+                    # Persist containment before rollback: a crash cannot retry this pair.
+                    self.train_state(failed, {"reason": "production_smoke_failed", "at": _now()})
+                    self.set_paused(
+                        "production", True, "train production smoke failed; Root resume required"
+                    )
+                    rollback: dict[str, str] = {}
+                    for component, operation in (
+                        ("web", self.rollback_web),
+                        ("core", self.rollback_core),
+                    ):
+                        try:
+                            operation(
+                                "production",
+                                **({"record_release": False} if component == "core" else {}),
+                            )
+                            rollback[component] = "restored"
+                        except (
+                            OSError,
+                            ValueError,
+                            ReleaseError,
+                            subprocess.SubprocessError,
+                        ) as error:
+                            rollback[component] = (
+                                "skipped: migration head changed"
+                                if str(error) == "core_rollback_schema_changed"
+                                else "failed; supervised recovery required"
+                            )
+                    self.record_rollback(current, previous, smoke)
+                    interrupted.unlink()
+                    return self.train_result(
+                        "production_smoke_failed",
+                        result="rolled_back",
+                        alert=True,
+                        pair=pair,
+                        **rollback,
+                    )
+            except (OSError, ValueError, ReleaseError, subprocess.SubprocessError) as error:
+                # Never copy raw subprocess output or filesystem diagnostics to the spool.
+                safe = str(error) if isinstance(error, ReleaseError) else "train_check_failed"
+                if dry_run:
+                    return {"result": "refused", "reason": safe}
+                if (self.paths.state / "train-inflight.json").exists():
+                    self.set_paused(
+                        "production", True, "train interrupted or failed; Root recovery required"
+                    )
+                return self.train_result(safe, result="failed", alert=True, pair=pair)
+            finally:
+                self._read_only = False
 
     # -- artifacts -------------------------------------------------------------
 
@@ -965,7 +1545,7 @@ class Engine:
     # -- core ------------------------------------------------------------------
 
     def deploy_core(
-        self, environment: str, build: Build, *, dry_run: bool = False
+        self, environment: str, build: Build, *, dry_run: bool = False, rollback_only: bool = False
     ) -> dict[str, Any]:
         log = self.new_log(environment, "core", build.sha)
         bundle = self.store_bundle(build, "core", CORE_FILES)
@@ -997,12 +1577,33 @@ class Engine:
             for name in sorted(CORE_FILES):
                 shutil.copyfile(bundle / name, bundle_dir / name)
             installer = source / "infra/application/scripts/install-application-release.sh"
+            if rollback_only:
+                # Old target releases lack the no-database rollback mode. Use the
+                # installed engine's reviewed controller against the old artifacts.
+                controller_sha = self.installed_engine()
+                if controller_sha is None:
+                    raise ReleaseError("rollback controller provenance is missing")
+                controller_archive, _ = self.source_archive(
+                    controller_sha, stage, "infra/application"
+                )
+                controller = stage / "controller"
+                self.extract_source(controller_archive, controller, "infra/application")
+                installer = controller / "infra/application/scripts/install-application-release.sh"
+                if "AC_CORE_ROLLBACK_ONLY" not in installer.read_text(encoding="utf-8"):
+                    raise ReleaseError(
+                        "rollback controller does not support application-only rollback"
+                    )
             env = {
                 "AC_TARGET_ENVIRONMENT": environment,
                 "AC_RELEASE_ID": build.sha,
                 "AC_RELEASE_ARCHIVE": str(archive),
                 "AC_RELEASE_ARCHIVE_SHA256": archive_sha,
                 "AC_IMAGE_BUNDLE_DIR": str(bundle_dir),
+                **(
+                    {"AC_CORE_ROLLBACK_ONLY": "1", "AC_ROLLBACK_FROM": previous or ""}
+                    if rollback_only
+                    else {}
+                ),
             }
             activation: dict[str, Any] = {}
             try:
@@ -1600,6 +2201,9 @@ class Engine:
 
     @contextlib.contextmanager
     def locked(self, *, wait: bool) -> Iterator[bool]:
+        if self._lock_depth:
+            yield True
+            return
         self.paths.lock.parent.mkdir(parents=True, exist_ok=True)
         with self.paths.lock.open("a") as handle:
             if fcntl is None:
@@ -1611,8 +2215,10 @@ class Engine:
                 yield False
                 return
             try:
+                self._lock_depth += 1
                 yield True
             finally:
+                self._lock_depth -= 1
                 fcntl.flock(handle, fcntl.LOCK_UN)
 
     def attempt(
@@ -2185,6 +2791,23 @@ class Engine:
         report["production_enabled"] = self.paths.production_enabled.exists()
         report["engine"] = self.installed_engine()
         report["recent"] = self.history(5)
+        last_train = self.paths.state / "last-train.json"
+        report["train"] = {"enabled": (self.paths.config / "train.enabled").exists()}
+        report["restore_check_ok"] = self.restore_check_ok()
+        report["last_train"] = json.loads(last_train.read_text()) if last_train.exists() else None
+        # The next staging core target is the latest ready main build, falling
+        # back to the current release when its build is not yet available.
+        pick = {"core": self.current_core("staging"), "web": self.current_web("staging")[0]}
+        if self.github is not None:
+            head = self.github.get_json(f"/repos/{REPOSITORY}/commits/main").get("sha", "")
+            if SHA_RE.fullmatch(head):
+                candidate = core_candidate(self.github, head)
+                if candidate.state == "ready":
+                    pick["core"] = head
+                web = self.web_target("staging", head)
+                if web is not None:
+                    pick["web"] = web.sha
+        report["staging_pick"] = pick
         return report
 
 
@@ -2298,6 +2921,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     status = sub.add_parser("status")
     status.add_argument("--json", action="store_true")
     sub.add_parser("tick")
+    train = sub.add_parser("train")
+    train.add_argument("--now", action="store_true")
+    train.add_argument("--dry-run", action="store_true")
     deploy = sub.add_parser("deploy")
     deploy.add_argument("environment", choices=ENVIRONMENTS)
     deploy.add_argument("sha", nargs="?")
@@ -2310,7 +2936,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sub.add_parser(name).add_argument("environment", choices=ENVIRONMENTS)
     rollback = sub.add_parser("rollback")
     rollback.add_argument("environment", choices=ENVIRONMENTS)
-    rollback.add_argument("--component", choices=("web",), required=True)
+    rollback.add_argument("--component", choices=COMPONENTS, required=True)
     history = sub.add_parser("history")
     history.add_argument("-n", type=int, default=20)
     prune = sub.add_parser("prune-artifacts")
@@ -2329,26 +2955,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = Engine(paths=paths)
     try:
         if args.command == "status":
+            engine.github = _load_github(paths, required=False)
             _print(engine.status(), args.json)
         elif args.command == "history":
             _print(engine.history(args.n), True)
         elif args.command in ("pause", "resume"):
-            engine.set_paused(args.environment, args.command == "pause", "paused by operator")
+            with engine.locked(wait=True):
+                engine.set_paused(args.environment, args.command == "pause", "paused by operator")
             engine.record({"at": _now(), "environment": args.environment, "action": args.command})
             print(f"{args.environment}: {args.command}d")
         elif args.command == "rollback":
             with engine.locked(wait=True):
-                result = engine.rollback_web(args.environment)
+                operation = (
+                    engine.rollback_core if args.component == "core" else engine.rollback_web
+                )
+                result = operation(args.environment)
             engine.record(
                 {
                     "at": _now(),
                     "environment": args.environment,
-                    "component": "web",
+                    "component": args.component,
                     "action": "rollback",
                     **result,
                 }
             )
             _print(result, True)
+        elif args.command == "train":
+            result = engine.train(now=args.now, dry_run=args.dry_run)
+            _print(result, True)
+            if result["result"] in ("failed", "rolled_back", "refused"):
+                return 1
         elif args.command == "promote":
             user = os.environ.get("SUDO_USER") or getpass.getuser()
             results = engine.promote(
