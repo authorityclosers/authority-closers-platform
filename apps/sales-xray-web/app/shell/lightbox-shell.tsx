@@ -1,8 +1,8 @@
 "use client";
 
 import {
+  Building2,
   ChevronDown,
-  ChevronsUpDown,
   CircleUserRound,
   FolderOpen,
   LayoutGrid,
@@ -49,12 +49,14 @@ import {
 } from "../dashboard/dashboard-data";
 import {
   getShellState,
+  OPEN_SWITCHER_EVENT,
   RECENTS_CHANGED_EVENT,
   recentCallsForContext,
   updateShellState,
   type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
+import { WorkspaceSwitcher, workspaceKind } from "./workspace-switcher";
 import { SettingsMenu, useUnseenNews } from "./settings-menu";
 import styles from "./lightbox-shell.module.css";
 
@@ -64,7 +66,7 @@ export type LightboxShellProps = {
   /** The session is still being confirmed: show placeholders, never guest labels. */
   loading?: boolean;
   homeHref?: string;
-  active?: "dashboard" | "analyse" | "calls" | "account";
+  active?: "dashboard" | "analyse" | "calls" | "account" | "organisation";
   compactBusy?: boolean;
   mobileFit?: boolean;
   welcome?: boolean;
@@ -109,18 +111,11 @@ function resolvePageTitle(
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "account") return "Account";
+  if (active === "organisation") return "Organisation";
   return null;
 }
 
 const subscribeNothing = () => () => {};
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return (name.slice(0, 2) || "CA").toUpperCase();
-}
 
 function LightboxShellFrame({
   children,
@@ -181,6 +176,11 @@ function LightboxShellFrame({
         ])
       : null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setSwitcherOpen(true);
+    window.addEventListener(OPEN_SWITCHER_EVENT, open);
+    return () => window.removeEventListener(OPEN_SWITCHER_EVENT, open);
+  }, []);
   // The gear opens the account card; the card opens settings sections.
   const [accountCardOpen, setAccountCardOpen] = useState(false);
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
@@ -326,7 +326,7 @@ function LightboxShellFrame({
   // The minutes pill reads the account's own allowance when the page has none.
   const [shellAllowance, setShellAllowance] = useState<{
     key: string | null;
-    value: Allowance;
+    value: Allowance | null;
   } | null>(() =>
     cached.allowance
       ? { key: cached.allowanceContextKey, value: cached.allowance }
@@ -351,7 +351,11 @@ function LightboxShellFrame({
           allowanceContextKey: recentContextKey,
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        // No minutes in this workspace: settle, so the pill never shimmers on.
+        if (!controller.signal.aborted)
+          setShellAllowance({ key: recentContextKey, value: null });
+      });
     return () => controller.abort();
   }, [authenticated, recentContextKey, hasPageAllowance, recentsNudge]);
 
@@ -465,9 +469,8 @@ function LightboxShellFrame({
           recentCallsContextKey: null,
           recentFetchedAt: null,
         });
-        const data = await readCallSummary();
-        setCounts(data);
-        updateShellState({ counts: data });
+        // Every list on the page belongs to the workspace: reload into it.
+        window.location.reload();
       }
     } catch {}
   }
@@ -485,18 +488,12 @@ function LightboxShellFrame({
     }
   }
 
-  const currentWorkspace =
-    workspaces.find((w) => w.tenant_id === effectiveTenantId) ||
-    workspaces[0] ||
-    null;
-  const currentWorkspaceName =
-    profileName ||
-    (currentWorkspace?.name &&
-    !currentWorkspace.name.toLowerCase().includes("closers academy")
-      ? currentWorkspace.name
-      : null) ||
-    displayName ||
-    "Workspace";
+  // Organisation tools appear only while an organisation is selected.
+  const inOrganisation = workspaces.some(
+    (workspace) =>
+      workspace.tenant_id === effectiveTenantId &&
+      workspaceKind(workspace.name) === "organisation",
+  );
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
   const chromePending =
@@ -516,10 +513,12 @@ function LightboxShellFrame({
     (shellAllowance && shellAllowance.key === recentContextKey
       ? shellAllowance.value
       : null);
+  const allowanceSettled =
+    hasPageAllowance || shellAllowance?.key === recentContextKey;
   const allowancePending =
     process.env.NODE_ENV !== "test" &&
     !shownAllowance &&
-    (sessionPending || authenticated);
+    (sessionPending || (authenticated && !allowanceSettled));
   const visibleRecentCalls =
     recentCallsContextKey === recentContextKey &&
     getShellState().recentCallsContextKey === recentContextKey
@@ -628,6 +627,17 @@ function LightboxShellFrame({
               <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.tooltip}>Calls</span>
             </Link>
+            {inOrganisation || active === "organisation" ? (
+              <Link
+                className={`${styles.stripBtn}${active === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/organisation"
+                aria-label="Organisation"
+                aria-current={active === "organisation" ? "page" : undefined}
+              >
+                <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.tooltip}>Organisation</span>
+              </Link>
+            ) : null}
           </div>
           <div className={styles.stripBottom}>
             <Link
@@ -654,68 +664,16 @@ function LightboxShellFrame({
           inert={collapsed}
         >
           <div className={styles.panelHeader}>
-            <div
-              className={styles.workspaceSwitcherContainer}
-              ref={switcherRef}
-            >
-              <button
-                type="button"
-                className={styles.workspaceTrigger}
-                onClick={() => {
-                  if (workspaces.length > 1) {
-                    setSwitcherOpen((v) => !v);
-                  }
-                }}
-                aria-expanded={workspaces.length > 1 ? switcherOpen : undefined}
-                aria-disabled={workspaces.length <= 1 ? true : undefined}
-                aria-label={`Current workspace: ${currentWorkspaceName}`}
-                title={currentWorkspaceName}
-              >
-                <div className={styles.workspaceTile} aria-hidden="true">
-                  {getInitials(currentWorkspaceName)}
-                </div>
-                <div className={styles.workspaceCopy}>
-                  <div
-                    className={styles.workspaceName}
-                    title={currentWorkspaceName}
-                  >
-                    {currentWorkspaceName}
-                  </div>
-                  <div className={styles.workspaceSub}>Private workspace</div>
-                </div>
-                <ChevronsUpDown
-                  size={14}
-                  className={styles.workspaceChevron}
-                  aria-hidden="true"
-                />
-              </button>
-
-              {switcherOpen && workspaces.length > 1 && (
-                <div className={styles.workspacePopover} role="menu">
-                  {workspaces.map((w) => {
-                    const isSelected = w.tenant_id === effectiveTenantId;
-                    return (
-                      <button
-                        key={w.tenant_id}
-                        type="button"
-                        className={styles.workspaceItem}
-                        role="menuitem"
-                        onClick={() => void handleSelectWorkspace(w.tenant_id)}
-                      >
-                        <span
-                          className={`${styles.radioDot}${isSelected ? ` ${styles.radioDotActive}` : ""}`}
-                        >
-                          {isSelected ? "●" : "○"}
-                        </span>
-                        <span className={styles.workspaceItemName}>
-                          {w.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              currentId={effectiveTenantId}
+              personName={profileName}
+              pending={chromePending}
+              open={switcherOpen}
+              setOpen={setSwitcherOpen}
+              containerRef={switcherRef}
+              onSelect={(tenantId) => void handleSelectWorkspace(tenantId)}
+            />
             <button
               type="button"
               ref={collapseButtonRef}
@@ -798,6 +756,11 @@ function LightboxShellFrame({
                       </div>
                     ))
                   : null}
+                {!recentsPending &&
+                recentsReady &&
+                visibleRecentCalls.length === 0 ? (
+                  <p className={styles.recentsEmpty}>No calls here yet</p>
+                ) : null}
                 {visibleRecentCalls.map((call, index) => (
                   <RecentCallItem
                     key={call.id}

@@ -95,3 +95,6 @@ export function recentCallsForContext(
 
 /** Sent when a call is created, renamed away or finishes: Recents refetch. */
 export const RECENTS_CHANGED_EVENT = "sales-xray:recents-changed";
+
+/** Pages dispatch this to open the sidebar's account switcher. */
+export const OPEN_SWITCHER_EVENT = "sales-xray:open-switcher";

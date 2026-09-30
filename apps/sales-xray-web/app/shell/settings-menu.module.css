@@ -445,3 +445,87 @@
     animation: none;
   }
 }
+
+/* ---------- Compact, cleaner card (30 Sep, second pass) ---------- */
+.card {
+  width: 268px;
+  padding: 6px;
+  border-radius: 14px;
+}
+.view {
+  gap: 4px;
+}
+.who {
+  gap: 9px;
+  padding: 4px 6px 2px;
+}
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 11.5px;
+}
+.whoText b {
+  font-size: 13px;
+}
+.whoText small {
+  font-size: 11px;
+}
+.usage {
+  gap: 6px;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border-color: transparent;
+  border-radius: 10px;
+}
+.usageTop b {
+  font-size: 12px;
+}
+.meter {
+  height: 4px;
+}
+.row {
+  min-height: 32px;
+  gap: 9px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.rowIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--lx-muted);
+}
+.rowIcon svg {
+  width: 15px;
+  height: 15px;
+}
+.row:hover .rowIcon {
+  background: transparent;
+  color: var(--lx-teal);
+  transform: none;
+}
+.rowValue {
+  font-size: 11.5px;
+}
+.divider {
+  margin: 3px 8px;
+}
+.back {
+  padding: 5px 8px 5px 4px;
+  font-size: 13px;
+}
+.current {
+  padding: 10px 12px;
+}
+.current b {
+  font-size: 16px;
+}
+.plan {
+  padding: 8px 10px;
+}
+.news > li {
+  padding: 8px 10px;
+}

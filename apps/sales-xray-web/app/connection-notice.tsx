@@ -19,7 +19,9 @@ export function ConnectionNotice({
   message,
   failures,
   onRetry,
+  title = "Can't reach Sales Xray",
 }: {
+  title?: string;
   message: string;
   failures: number;
   onRetry: () => void;
@@ -36,7 +38,7 @@ export function ConnectionNotice({
         <CloudOff size={17} />
       </span>
       <div className={styles.copy}>
-        <b>Can&apos;t reach Sales Xray</b>
+        <b>{title}</b>
         <p role="alert">{message}</p>
         <small>Trying again by itself in {seconds} s.</small>
       </div>

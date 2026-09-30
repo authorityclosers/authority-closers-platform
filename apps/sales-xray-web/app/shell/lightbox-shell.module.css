@@ -1545,3 +1545,9 @@
     animation: none;
   }
 }
+
+.recentsEmpty {
+  margin: 4px 10px;
+  color: var(--lx-muted);
+  font-size: 12px;
+}

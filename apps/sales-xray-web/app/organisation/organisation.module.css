@@ -1,0 +1,480 @@
+/* Organisation area: company, members, teams, usage and shared credits. */
+.page {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  width: 100%;
+  max-width: 1100px;
+  animation: page-in 260ms ease both;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.orgTile {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--lx-ink);
+  color: var(--lx-surface);
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.headerCopy {
+  flex: 1;
+  min-width: 0;
+}
+
+.headerCopy h1 {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.headerCopy p {
+  margin: 2px 0 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+.role {
+  padding: 1px 8px;
+  border-radius: 99px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.invite,
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-surface);
+  color: var(--lx-ink-3);
+  font: 600 13px/1 var(--lx-font-ui, inherit);
+}
+
+.soon {
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* ---------- Tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--lx-sunken);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lx-ink-3);
+  font: 600 13px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.tab:hover {
+  color: var(--lx-ink);
+}
+
+.tab[aria-pressed="true"] {
+  background: var(--lx-surface);
+  color: var(--lx-teal);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.panel {
+  animation: panel-in 240ms var(--lx-ease-move, ease) both;
+}
+
+/* ---------- Overview ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.stat > span {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.stat b {
+  color: var(--lx-ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat small {
+  color: var(--lx-muted);
+  font-size: 11px;
+}
+
+.stat[data-pending] b {
+  color: var(--lx-muted-2, var(--lx-muted));
+}
+
+.bar {
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--lx-line);
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+  transform-origin: left;
+  animation: fill 700ms var(--lx-ease-move, ease) both;
+}
+
+/* ---------- Members ---------- */
+.table {
+  overflow: hidden;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.thead,
+.tr {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) 1fr 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.thead {
+  border-bottom: 1px solid var(--lx-line);
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.tr {
+  color: var(--lx-ink);
+  font-size: 13px;
+  transition: background-color 120ms ease;
+}
+
+.tr:hover {
+  background: var(--lx-sunken);
+}
+
+.person {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.person i {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-gradient-primary, var(--lx-teal));
+  color: var(--lx-on-teal);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.person span {
+  display: grid;
+  min-width: 0;
+}
+
+.person b {
+  font-size: 13px;
+}
+
+.person small {
+  overflow: hidden;
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lx-teal);
+  font-weight: 600;
+}
+
+.active i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tableNote {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px dashed var(--lx-line);
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+/* ---------- Pending feature cards ---------- */
+.pending {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 18px;
+  border: 1px dashed var(--lx-line-strong, var(--lx-line));
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.pendingIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.pending b {
+  color: var(--lx-ink);
+  font-size: 15px;
+}
+
+.pending p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pending small {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+}
+
+.usage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* ---------- Company ---------- */
+.form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 18px;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.form label {
+  display: grid;
+  gap: 5px;
+}
+
+.form label span {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form input {
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--lx-line);
+  border-radius: 9px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+  font: 500 13px/1 var(--lx-font-ui, inherit);
+}
+
+.form .note {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Personal account ---------- */
+.personal {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 520px;
+  margin: 8vh auto 0;
+  padding: 32px;
+  border: 1px solid var(--lx-line);
+  border-radius: 20px;
+  background: var(--lx-surface);
+  text-align: center;
+  animation: page-in 320ms var(--lx-ease-pop, ease) both;
+}
+
+.bigTile {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.personal h1 {
+  margin: 6px 0 0;
+  color: var(--lx-ink);
+  font-size: 20px;
+}
+
+.personal p {
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.note {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+/* ---------- Loading ---------- */
+.skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.skeleton span {
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-line) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.skeleton span:nth-child(2) {
+  width: 420px;
+  height: 36px;
+}
+
+.skeleton span:nth-child(3) {
+  height: 110px;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .grid,
+  .usage,
+  .form {
+    grid-template-columns: 1fr;
+  }
+  .tabs {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .panel,
+  .personal,
+  .bar i,
+  .skeleton span {
+    animation: none;
+  }
+}

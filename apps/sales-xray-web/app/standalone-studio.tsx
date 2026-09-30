@@ -203,8 +203,9 @@ function StandaloneStudioView({
   const pathname = usePathname();
   const activeFor = (
     path: string,
-  ): "dashboard" | "analyse" | "calls" | "account" => {
+  ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
     if (path === "/dashboard") return "dashboard";
+    if (path === "/organisation") return "organisation";
     if (
       path === "/calls" ||
       path === "/analysis" ||

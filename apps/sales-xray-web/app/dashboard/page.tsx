@@ -4,8 +4,15 @@ import { AlertCircle, ArrowRight, Clock, FolderOpen, Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { type Allowance, type LibrarySubmission } from "../acquisition-client";
+import {
+  AcquisitionError,
+  type Allowance,
+  type LibrarySubmission,
+} from "../acquisition-client";
+import { ConnectionNotice } from "../connection-notice";
 import { LightboxShell } from "../shell/lightbox-shell";
+import { getShellState } from "../shell/shell-store";
+import { WorkspaceNoAccess } from "../workspace-no-access";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   analysedTrend,
@@ -36,7 +43,10 @@ import styles from "./dashboard.module.css";
 type ReadState<T> =
   | { status: "loading" }
   | { status: "ready"; value: T }
-  | { status: "error" };
+  | { status: "error"; forbidden: boolean };
+
+const isForbidden = (error: unknown) =>
+  error instanceof AcquisitionError && error.status === 403;
 
 export default function DashboardPage() {
   const access = useWorkspaceAccess();
@@ -78,6 +88,7 @@ function DashboardDetails() {
   const access = useWorkspaceAccess();
 
   const [hiddenRecent, setHiddenRecent] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
   const [summaryState, setSummaryState] = useState<
     ReadState<CallSummary | null>
   >({ status: "loading" });
@@ -94,25 +105,33 @@ function DashboardDetails() {
   const loadSummary = useCallback((signal?: AbortSignal) => {
     readCallSummary(signal)
       .then((value) => setSummaryState({ status: "ready", value }))
-      .catch(() => setSummaryState({ status: "error" }));
+      .catch((error) =>
+        setSummaryState({ status: "error", forbidden: isForbidden(error) }),
+      );
   }, []);
 
   const loadActivity = useCallback((signal?: AbortSignal) => {
     readCallActivity(signal)
       .then((value) => setActivityState({ status: "ready", value }))
-      .catch(() => setActivityState({ status: "error" }));
+      .catch((error) =>
+        setActivityState({ status: "error", forbidden: isForbidden(error) }),
+      );
   }, []);
 
   const loadAllowance = useCallback((signal?: AbortSignal) => {
     readAllowance(signal)
       .then((value) => setAllowanceState({ status: "ready", value }))
-      .catch(() => setAllowanceState({ status: "error" }));
+      .catch((error) =>
+        setAllowanceState({ status: "error", forbidden: isForbidden(error) }),
+      );
   }, []);
 
   const loadRecent = useCallback((signal?: AbortSignal) => {
     readRecentCalls(signal)
       .then((value) => setRecentState({ status: "ready", value }))
-      .catch(() => setRecentState({ status: "error" }));
+      .catch((error) =>
+        setRecentState({ status: "error", forbidden: isForbidden(error) }),
+      );
   }, []);
 
   useEffect(() => {
@@ -135,6 +154,49 @@ function DashboardDetails() {
     activity !== null && activity.days.every((d) => d.analysed === 0);
 
   const trend = activity ? analysedTrend(activity) : null;
+
+  // 403: this workspace has no Sales Xray access. Say so once, clearly.
+  const states = [summaryState, activityState, allowanceState, recentState];
+  const forbidden = states.some(
+    (state) => state.status === "error" && state.forbidden,
+  );
+  const failing = states.some(
+    (state) => state.status === "error" && !state.forbidden,
+  );
+  const retryFailed = () => {
+    if (summaryState.status === "error") {
+      setSummaryState({ status: "loading" });
+      loadSummary();
+    }
+    if (activityState.status === "error") {
+      setActivityState({ status: "loading" });
+      loadActivity();
+    }
+    if (allowanceState.status === "error") {
+      setAllowanceState({ status: "loading" });
+      loadAllowance();
+    }
+    if (recentState.status === "error") {
+      setRecentState({ status: "loading" });
+      loadRecent();
+    }
+  };
+  if (forbidden) {
+    const shell = getShellState();
+    const workspace =
+      shell.workspaces.find(
+        (item) => item.tenant_id === access?.context?.tenantId,
+      )?.name ?? null;
+    return (
+      <LightboxShell
+        active="dashboard"
+        authenticated={access?.authenticated === true}
+        homeHref="/dashboard"
+      >
+        <WorkspaceNoAccess workspace={workspace} />
+      </LightboxShell>
+    );
+  }
 
   return (
     <LightboxShell
@@ -165,7 +227,7 @@ function DashboardDetails() {
               {activityState.status === "loading" ? (
                 <span className={styles.valueSkeleton} aria-label="Loading" />
               ) : activityState.status === "error" ? (
-                "—"
+                <span className={styles.valueSkeleton} aria-hidden="true" />
               ) : activity === null ? (
                 "—"
               ) : (
@@ -174,24 +236,13 @@ function DashboardDetails() {
             </div>
             <div className={styles.kpiLabel}>Calls analysed</div>
             <div className={styles.kpiSubtext}>
-              {activityState.status === "loading" ? (
-                " "
-              ) : activityState.status === "error" ? (
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setActivityState({ status: "loading" });
-                    loadActivity();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              ) : activity === null ? (
-                "Not available yet"
-              ) : (
-                " "
-              )}
+              {activityState.status === "loading"
+                ? " "
+                : activityState.status === "error"
+                  ? " "
+                  : activity === null
+                    ? "Not available yet"
+                    : " "}
             </div>
             {trend && (
               <div className={styles.kpiAside}>
@@ -211,7 +262,7 @@ function DashboardDetails() {
               {summaryState.status === "loading" ? (
                 <span className={styles.valueSkeleton} aria-label="Loading" />
               ) : summaryState.status === "error" ? (
-                "—"
+                <span className={styles.valueSkeleton} aria-hidden="true" />
               ) : summary === null ? (
                 "—"
               ) : (
@@ -220,24 +271,13 @@ function DashboardDetails() {
             </div>
             <div className={styles.kpiLabel}>Reports ready</div>
             <div className={styles.kpiSubtext}>
-              {summaryState.status === "loading" ? (
-                " "
-              ) : summaryState.status === "error" ? (
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setSummaryState({ status: "loading" });
-                    loadSummary();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              ) : summary === null ? (
-                "Not available yet"
-              ) : (
-                `of ${summary.total} saved calls`
-              )}
+              {summaryState.status === "loading"
+                ? " "
+                : summaryState.status === "error"
+                  ? " "
+                  : summary === null
+                    ? "Not available yet"
+                    : `of ${summary.total} saved calls`}
             </div>
             {summary && summary.total > 0 && (
               <div className={styles.kpiAside}>
@@ -262,29 +302,18 @@ function DashboardDetails() {
               {allowanceState.status === "loading" ? (
                 <span className={styles.valueSkeleton} aria-label="Loading" />
               ) : allowanceState.status === "error" ? (
-                "—"
+                <span className={styles.valueSkeleton} aria-hidden="true" />
               ) : (
                 minutesLeft(allowanceState.value).value
               )}
             </div>
             <div className={styles.kpiLabel}>Minutes left</div>
             <div className={styles.kpiSubtext}>
-              {allowanceState.status === "loading" ? (
-                " "
-              ) : allowanceState.status === "error" ? (
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setAllowanceState({ status: "loading" });
-                    loadAllowance();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              ) : (
-                minutesLeft(allowanceState.value).subtext
-              )}
+              {allowanceState.status === "loading"
+                ? " "
+                : allowanceState.status === "error"
+                  ? " "
+                  : minutesLeft(allowanceState.value).subtext}
             </div>
             {allowanceState.status === "ready" && (
               <div className={styles.kpiAside}>
@@ -304,7 +333,7 @@ function DashboardDetails() {
               {summaryState.status === "loading" ? (
                 <span className={styles.valueSkeleton} aria-label="Loading" />
               ) : summaryState.status === "error" ? (
-                "—"
+                <span className={styles.valueSkeleton} aria-hidden="true" />
               ) : summary === null ? (
                 "—"
               ) : (
@@ -313,24 +342,13 @@ function DashboardDetails() {
             </div>
             <div className={styles.kpiLabel}>Needs attention</div>
             <div className={styles.kpiSubtext}>
-              {summaryState.status === "loading" ? (
-                " "
-              ) : summaryState.status === "error" ? (
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setSummaryState({ status: "loading" });
-                    loadSummary();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              ) : summary === null ? (
-                "Not available yet"
-              ) : (
-                "Calls to check"
-              )}
+              {summaryState.status === "loading"
+                ? " "
+                : summaryState.status === "error"
+                  ? " "
+                  : summary === null
+                    ? "Not available yet"
+                    : "Calls to check"}
             </div>
             {summary && (
               <div className={styles.kpiAside}>
@@ -356,18 +374,7 @@ function DashboardDetails() {
             {activityState.status === "loading" ? (
               <MonthWaveSkeleton />
             ) : activityState.status === "error" ? (
-              <div className={styles.chartEmptyWrap}>
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setActivityState({ status: "loading" });
-                    loadActivity();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              </div>
+              <MonthWaveSkeleton />
             ) : activity === null ? (
               <div className={styles.chartEmptyWrap}>
                 <span className={styles.chartEmptyText}>
@@ -399,18 +406,7 @@ function DashboardDetails() {
             {summaryState.status === "loading" ? (
               <StatusRingSkeleton />
             ) : summaryState.status === "error" ? (
-              <div className={styles.chartEmptyWrap}>
-                <button
-                  type="button"
-                  className={styles.retryAction}
-                  onClick={() => {
-                    setSummaryState({ status: "loading" });
-                    loadSummary();
-                  }}
-                >
-                  Couldn&apos;t load · Retry
-                </button>
-              </div>
+              <StatusRingSkeleton />
             ) : summary === null ? (
               <div className={styles.chartEmptyWrap}>
                 <span className={styles.chartEmptyText}>
@@ -452,18 +448,7 @@ function DashboardDetails() {
           {recentState.status === "loading" ? (
             <RecentCallsSkeleton />
           ) : recentState.status === "error" ? (
-            <div className={styles.chartEmptyWrap}>
-              <button
-                type="button"
-                className={styles.retryAction}
-                onClick={() => {
-                  setRecentState({ status: "loading" });
-                  loadRecent();
-                }}
-              >
-                Couldn&apos;t load · Retry
-              </button>
-            </div>
+            <RecentCallsSkeleton />
           ) : recent === null || recent.length === 0 ? (
             <div className={styles.emptyCard}>
               <div className={styles.emptyIcon}>
@@ -487,6 +472,17 @@ function DashboardDetails() {
           )}
         </div>
       </div>
+      {failing ? (
+        <ConnectionNotice
+          title="Some numbers did not load"
+          message="Some dashboard numbers could not load. The rest of the page still works."
+          failures={retryCount + 1}
+          onRetry={() => {
+            setRetryCount((count) => count + 1);
+            retryFailed();
+          }}
+        />
+      ) : null}
     </LightboxShell>
   );
 }
