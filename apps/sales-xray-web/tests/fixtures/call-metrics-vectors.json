@@ -320,6 +320,72 @@
         "quiet": { "a": null, "b": null },
         "overrun": null
       }
+    },
+    {
+      "name": "an early dip recovers, then a collapse never recovers: the collapse is reported",
+      "duration_ms": 720000,
+      "segments": [
+        ["s1", "seller", 0, 30000, "Here is the next screen."],
+        ["s2", "prospect", 30000, 60000, "Okay."],
+        ["s3", "seller", 60000, 90000, "Here is the next screen."],
+        ["s4", "prospect", 90000, 120000, "Okay."],
+        ["s5", "seller", 120000, 177000, "Here is the next screen."],
+        ["s6", "prospect", 177000, 180000, "Okay."],
+        ["s7", "seller", 180000, 237000, "Here is the next screen."],
+        ["s8", "prospect", 237000, 240000, "Okay."],
+        ["s9", "seller", 240000, 297000, "Here is the next screen."],
+        ["s10", "prospect", 297000, 300000, "Okay."],
+        ["s11", "seller", 300000, 330000, "Here is the next screen."],
+        ["s12", "prospect", 330000, 360000, "Where does the data go?"],
+        ["s13", "seller", 360000, 390000, "Here is the next screen."],
+        ["s14", "prospect", 390000, 420000, "Okay."],
+        ["s15", "seller", 420000, 477000, "Here is the next screen."],
+        ["s16", "prospect", 477000, 480000, "Okay."],
+        ["s17", "seller", 480000, 537000, "Here is the next screen."],
+        ["s18", "prospect", 537000, 540000, "Okay."],
+        ["s19", "seller", 540000, 597000, "Here is the next screen."],
+        ["s20", "prospect", 597000, 600000, "Okay."],
+        ["s21", "seller", 600000, 657000, "Here is the next screen."],
+        ["s22", "prospect", 657000, 660000, "Okay."],
+        ["s23", "seller", 660000, 717000, "Here is the next screen."],
+        ["s24", "prospect", 717000, 720000, "Okay."]
+      ],
+      "time_promise": null,
+      "expected": {
+        "metrics": {
+          "time_used_ms": 720000,
+          "speakers": {
+            "seller": { "talk_ms": 576000, "talk_share": 0.8, "questions": 0 },
+            "prospect": { "talk_ms": 144000, "talk_share": 0.2, "questions": 1 }
+          },
+          "curve": {
+            "start_ms": [
+              0, 60000, 120000, 180000, 240000, 300000, 360000, 420000, 480000,
+              540000, 600000, 660000
+            ],
+            "shares": {
+              "seller": [
+                0.5, 0.5, 0.95, 0.95, 0.95, 0.5, 0.5, 0.95, 0.95, 0.95, 0.95,
+                0.95
+              ],
+              "prospect": [
+                0.5, 0.5, 0.05, 0.05, 0.05, 0.5, 0.5, 0.05, 0.05, 0.05, 0.05,
+                0.05
+              ]
+            }
+          },
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 120000, "end_ms": 177000 },
+            { "speaker_id": "seller", "start_ms": 180000, "end_ms": 237000 },
+            { "speaker_id": "seller", "start_ms": 240000, "end_ms": 297000 }
+          ]
+        },
+        "quiet": {
+          "seller": null,
+          "prospect": { "start_ms": 420000, "recovered": false }
+        },
+        "overrun": null
+      }
     }
   ]
 }

@@ -170,6 +170,9 @@ export function quietFrom(
   speakerId: string,
 ): QuietRun | null {
   if (!(speakerId in metrics.speakers)) return null;
+  // The first run that never recovers wins (plan rev 3); when every run
+  // recovers, the first run is reported.
+  let firstRecovered: QuietRun | null = null;
   let runStart = -1;
   let runLength = 0;
   for (const [index, bin] of metrics.curve.entries()) {
@@ -179,15 +182,19 @@ export function quietFrom(
     runLength = low ? runLength + 1 : 0;
     if (runLength === 1) runStart = index;
     if (runLength === QUIET_RULES.min_bins) {
-      const recovered = metrics.curve
-        .slice(index + 1)
-        .some(
-          (later) => (later.shares[speakerId] ?? -1) >= QUIET_RULES.recover,
-        );
-      return { start_ms: metrics.curve[runStart].start_ms, recovered };
+      const run = {
+        start_ms: metrics.curve[runStart].start_ms,
+        recovered: metrics.curve
+          .slice(index + 1)
+          .some(
+            (later) => (later.shares[speakerId] ?? -1) >= QUIET_RULES.recover,
+          ),
+      };
+      if (!run.recovered) return run;
+      firstRecovered ??= run;
     }
   }
-  return null;
+  return firstRecovered;
 }
 
 export function timePromiseOverrun(
