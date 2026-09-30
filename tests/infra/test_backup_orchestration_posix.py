@@ -304,11 +304,11 @@ exec 9>>"$synthetic_lock"
                 process_state = Path(f"/proc/{child_pid}/stat")
                 try:
                     state = process_state.read_text().split()[2]
-                except FileNotFoundError:
-                    # The descendant may be reaped between the process-group
-                    # cleanup and this observation. Its disappearance is an
-                    # equally valid cleanup result; if proc still exposes it,
-                    # it must be a zombie rather than a live upload process.
+                except (FileNotFoundError, ProcessLookupError):
+                    # Either error means the descendant is gone; it may be
+                    # reaped between process-group cleanup and this observation.
+                    # If proc still exposes it, it must be a zombie rather than
+                    # a live upload process.
                     state = None
                 if state is not None:
                     self.assertEqual(state, "Z")
