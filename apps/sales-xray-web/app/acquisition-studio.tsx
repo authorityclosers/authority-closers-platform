@@ -44,6 +44,7 @@ import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
+import { CallSignals } from "./call-signals";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
@@ -3458,6 +3459,17 @@ export function AcquisitionStudio({
                         <ReportMoments
                           report={report}
                           onSelectEvidence={seek}
+                        />
+                      ),
+                    },
+                    {
+                      id: "signals",
+                      label: "Call signals",
+                      content: (
+                        <CallSignals
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
+                          onSeek={playFrom}
                         />
                       ),
                     },

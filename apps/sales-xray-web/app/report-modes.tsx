@@ -2,6 +2,7 @@
 
 import { callIdFromPath } from "./analysis-routes";
 import {
+  Radar,
   AudioLines,
   BookOpen,
   ChartNoAxesColumnIncreasing,
@@ -47,6 +48,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   overview: FileText,
   prospect: UserRound,
   moments: AudioLines,
+  signals: Radar,
   skills: ChartNoAxesColumnIncreasing,
   "next-call-plan": Lightbulb,
   transcript: BookOpen,

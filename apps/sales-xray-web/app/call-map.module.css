@@ -992,3 +992,21 @@
     animation: none;
   }
 }
+
+/* Call stages lens: a quiet band until the analysis marks the stages. */
+.stagesEmpty {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 18px;
+  border: 1px dashed var(--lx-line-strong, var(--lx-line));
+  border-radius: 6px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 12px,
+    var(--lx-sunken) 12px 24px
+  );
+  opacity: 0.7;
+  pointer-events: none;
+}
