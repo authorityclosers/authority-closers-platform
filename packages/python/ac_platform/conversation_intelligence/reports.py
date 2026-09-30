@@ -2094,6 +2094,8 @@ def parse_fact_packet(
         ) = compact_fact_limits(max_completion_tokens)
         if not isinstance(overview, str):
             raise ReportError("fact_compact_overview_exceeded")
+        if not overview.strip():
+            raise ReportError("fact_overview_invalid")
         if not isinstance(uncertainties, list):
             raise ReportError("fact_compact_uncertainties_exceeded")
 
@@ -2104,10 +2106,13 @@ def parse_fact_packet(
             uncertainties = uncertainties[: len(uncertainties) - clamps["uncertainties_dropped"]]
         else:
             uncertainties = list(uncertainties)
-        uncertainty_cuts_remaining = clamps["uncertainties_cut"]
-        for index, item in enumerate(uncertainties):
+        for item in uncertainties:
             if not isinstance(item, str):
                 raise ReportError("fact_compact_uncertainty_exceeded")
+            if not item.strip():
+                raise ReportError("fact_uncertainties_invalid")
+        uncertainty_cuts_remaining = clamps["uncertainties_cut"]
+        for index, item in enumerate(uncertainties):
             if len(item) > max_uncertainty_chars and uncertainty_cuts_remaining:
                 uncertainties[index] = _cut_compact_fact_text(item, max_uncertainty_chars)
                 uncertainty_cuts_remaining -= 1

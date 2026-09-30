@@ -211,7 +211,9 @@ def test_compact_fact_values_at_limits_stay_untouched() -> None:
     [
         ({"overview": None}, "fact_compact_overview_exceeded"),
         ({"overview": ""}, "fact_overview_invalid"),
+        ({"overview": " " * 201}, "fact_overview_invalid"),
         ({"uncertainties": None}, "fact_compact_uncertainties_exceeded"),
+        ({"uncertainties": [" " * 101]}, "fact_uncertainties_invalid"),
         ({"uncertainties": [1]}, "fact_compact_uncertainty_exceeded"),
         ({"observations": [None]}, "fact_observation_invalid"),
         ({"observations": [{"fact": None, "segment_id": "s1"}]}, "fact_compact_statement_exceeded"),
@@ -473,7 +475,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-360 changes evidence admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "fc0d243cb24f35c1d68adaf091b609df990f1cd75f2d8392c0a6f02c6b5d3aff"
+        "84130a28753301b9794cb98dc2f6701976eacb6ed2be269bf24722008c586dda"
     )
 
 
