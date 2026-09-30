@@ -12,7 +12,20 @@ export type IndexedBrand = Readonly<{
   hex: string;
 }>;
 
+/** A colour logo (or a one-colour CC0 mark) as SVG markup from our own files. */
+export type ColorLogo = Readonly<{
+  w: number;
+  h: number;
+  body: string;
+  /** Black logo drawn in the text colour. */
+  ink?: boolean;
+  /** One-colour mark drawn in the brand colour. */
+  mono?: boolean;
+}>;
+
 const paths = new Map<string, string>();
+let colors: Record<string, ColorLogo> | null = null;
+let colorsLoading: Promise<void> | null = null;
 const loading = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
 let index: Map<string, IndexedBrand> | null = null;
@@ -68,6 +81,33 @@ function loadIndex() {
     notify();
   });
   return indexLoading;
+}
+
+function loadColors() {
+  colorsLoading ??= readJson<{ icons?: Record<string, ColorLogo> }>(
+    "/brands/color.json",
+    {},
+  ).then((found) => {
+    colors = found.icons ?? {};
+    notify();
+  });
+  return colorsLoading;
+}
+
+/**
+ * The colour logo for a curated brand key; undefined while it loads, null when
+ * there is none.
+ */
+export function useColorLogo(key: string | null): ColorLogo | null | undefined {
+  const logo = useSyncExternalStore(
+    subscribe,
+    () => (!key ? null : colors ? (colors[key] ?? null) : undefined),
+    () => undefined,
+  );
+  useEffect(() => {
+    if (key && !colors) void loadColors();
+  }, [key]);
+  return logo;
 }
 
 /** The icon path for a brand's Simple Icons slug; null until (or unless) it loads. */
