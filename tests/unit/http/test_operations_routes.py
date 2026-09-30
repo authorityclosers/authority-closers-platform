@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 import ac_platform.http.operations as operations_module
 from ac_platform.application.settings import Settings
-from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.auth import ROLE_PERMISSIONS, AuthenticatedTransaction, _with_role_permissions
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
@@ -346,6 +346,47 @@ def test_operations_routes_require_admin_host_before_actor_resolution(
     assert response.status_code == 403
     assert response.json()["code"] == "admin_surface_required"
     assert cast(Any, client.app).state.actor_calls == []
+
+
+@pytest.mark.parametrize("role", ["owner", "admin"])
+def test_organisation_owner_and_admin_cannot_use_admin_console_routes(
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+) -> None:
+    organisation_actor = _with_role_permissions(
+        ResolvedActorContext(
+            actor=ActorContext(uuid4(), uuid4(), uuid4()),
+            membership_role=role,
+            person_revision=0,
+            session_revision=0,
+            tenant_revision=0,
+            membership_revision=0,
+        ),
+        is_organisation=True,
+    )
+    assert organisation_actor.actor.permissions == frozenset({"organisation_manage"})
+    operations_owner = _with_role_permissions(
+        ResolvedActorContext(
+            actor=ActorContext(uuid4(), uuid4(), uuid4()),
+            membership_role="owner",
+            person_revision=0,
+            session_revision=0,
+        )
+    )
+    assert operations_owner.actor.permissions == ROLE_PERMISSIONS["owner"]
+
+    repository = _JobRepository()
+    client = _client(
+        monkeypatch, actor=organisation_actor.actor, membership_role=role, job_repository=repository
+    )
+    response = client.post(
+        f"/v1/admin/jobs/{uuid4()}/retry",
+        json={"reason": "reviewed retry"},
+        headers=_admin_headers(f"org-{role}"),
+    )
+
+    assert response.status_code == 403
+    assert repository.calls == []
 
 
 def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
