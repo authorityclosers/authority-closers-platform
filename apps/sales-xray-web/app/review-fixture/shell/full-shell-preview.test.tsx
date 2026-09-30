@@ -72,7 +72,7 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   expect(studioMain?.parentElement?.parentElement?.id).toBe("main-content");
   expect(studioMain?.querySelector("[data-report-nav]")).not.toBeNull();
   expect(report?.getAttribute("data-lx-surface")).toBe("light");
-  expect(report?.querySelector("h1")?.textContent).toBe("Sales call report");
+  expect(report?.querySelector("h1")?.textContent).toBe("Untitled call");
   expect(
     report?.querySelector('summary[aria-label="More report actions"]'),
   ).not.toBeNull();

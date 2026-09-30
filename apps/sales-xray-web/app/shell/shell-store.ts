@@ -3,6 +3,9 @@
  * Prevents shell flickering, state resets, and duplicate fetches during client transitions.
  */
 
+import type { Allowance } from "../acquisition-client";
+import type { CallTone } from "../call-status";
+
 export interface ShellSummaryCounts {
   total: number;
   processing: number;
@@ -21,6 +24,9 @@ export interface ShellRecentCall {
   date: string;
   /** Label revision, so a rename from the sidebar is never a stale write. */
   revision?: number;
+  /** Where the call is now, for the status dot. */
+  tone?: CallTone;
+  status?: string;
 }
 
 export interface ShellStoreState {
@@ -32,6 +38,9 @@ export interface ShellStoreState {
   recentCalls: ShellRecentCall[];
   recentCallsContextKey: string | null;
   recentFetchedAt: number | null;
+  /** The account's analysis minutes, for pages that do not pass their own. */
+  allowance: Allowance | null;
+  allowanceContextKey: string | null;
   profileName: string | null;
   recentsOpen: boolean;
   /** Timestamp (ms) of the last successful workspace/profile fetch, or null. */
@@ -47,6 +56,8 @@ let globalState: ShellStoreState = {
   recentCalls: [],
   recentCallsContextKey: null,
   recentFetchedAt: null,
+  allowance: null,
+  allowanceContextKey: null,
   profileName: null,
   recentsOpen: true,
   fetchedAt: null,
@@ -81,3 +92,9 @@ export function recentCallsForContext(
     ? state.recentCalls
     : [];
 }
+
+/** Sent when a call is created, renamed away or finishes: Recents refetch. */
+export const RECENTS_CHANGED_EVENT = "sales-xray:recents-changed";
+
+/** Pages dispatch this to open the sidebar's account switcher. */
+export const OPEN_SWITCHER_EVENT = "sales-xray:open-switcher";

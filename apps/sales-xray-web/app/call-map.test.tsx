@@ -10,7 +10,7 @@ import type {
   Transcript,
 } from "./report-contract";
 import { updateShellState } from "./shell/shell-store";
-import { readSpeakerProfiles } from "./speaker-profiles";
+import { readSpeakerProfiles, saveSpeakerProfiles } from "./speaker-profiles";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -27,19 +27,51 @@ let onSelectEvidence: ReturnType<
   typeof vi.fn<(evidence: ReportEvidence) => void>
 >;
 
-async function renderMap(source: Transcript = transcript) {
+async function renderMap(
+  source: Transcript = transcript,
+  sourceReport: SalesReport = report,
+) {
   await act(async () =>
     root.render(
       <CallMap
         callId={CALL_ID}
         transcript={source}
-        report={report}
+        report={sourceReport}
         durationMs={source.duration_ms}
         onSelectEvidence={onSelectEvidence}
         onSeek={onSeek}
       />,
     ),
   );
+}
+
+async function sayAndConfirm(text: string, sourceReport: SalesReport) {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text,
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    sourceReport,
+  );
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
 }
 
 beforeEach(async () => {
@@ -132,6 +164,12 @@ it("the waveform is a keyboard slider that seeks in five-second steps", async ()
     ),
   );
   expect(onSeek).toHaveBeenLastCalledWith(0);
+  await act(async () =>
+    track.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "End", bubbles: true }),
+    ),
+  );
+  expect(onSeek).toHaveBeenLastCalledWith(transcript.duration_ms - 1);
 });
 
 it("a moment dot plays its cited evidence", async () => {
@@ -189,7 +227,7 @@ it("names a speaker, gives them a role and an icon, and remembers it", async () 
     closer: { name: "Rahul Mehta", role: "prospect", icon: "carpentry" },
   });
   expect(host.querySelector("figcaption")?.textContent).toContain(
-    "Talk ratio · Speaker 1 : Rahul Mehta",
+    "Who talked more · Speaker 1 : Rahul Mehta",
   );
 });
 
@@ -228,6 +266,11 @@ it("keeps speaker edits available for retry when device storage rejects a save",
 
 it("suggests which voice is you from an introduction, confirmed in one tap", async () => {
   updateShellState({ profileName: "Suyash Rao" });
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      rep: { name: "Suyash Rao", role: null, icon: "person" },
+    }),
+  );
   await renderMap({
     ...transcript,
     segments: [
@@ -259,13 +302,251 @@ it("suggests which voice is you from an introduction, confirmed in one tap", asy
   expect(chips()[1].textContent).toContain("Prospect");
   const saved = readSpeakerProfiles(CALL_ID);
   expect(saved.rep.role).toBe("you");
+  expect(saved.rep.icon).toBe("person");
   expect(saved.buyer.role).toBe("prospect");
 });
 
 it("summarises talk ratio, monologue, switches and the report balance", () => {
   const text = host.querySelector("figcaption")?.textContent ?? "";
-  expect(text).toMatch(/Talk ratio\d+ : \d+/);
-  expect(text).toContain("Longest monologue");
-  expect(text).toContain("Speaker switches");
-  expect(text).toMatch(/1 win · \d+ to work on/);
+  expect(text).toMatch(/Who talked more\d+ : \d+/);
+  expect(text).toContain("Longest non-stop talk");
+  expect(text).toMatch(/Questions asked · Speaker 1 : Speaker 2\d+ : \d+/);
+  expect(text).toMatch(/1 done well · \d+ to work on/);
+});
+
+it("names another salesperson and the prospect from the opening, in one tap", async () => {
+  updateShellState({ profileName: "Suyash Rao" });
+  await renderMap({
+    ...transcript,
+    segments: [
+      {
+        id: "o1",
+        speaker_id: "caller",
+        start_ms: 0,
+        end_ms: 4000,
+        text: "नंदलाल जी नमस्ते मेरा नाम मानस है। मैं team से बोल रहा हूं।",
+      },
+      {
+        id: "o2",
+        speaker_id: "owner",
+        start_ms: 4200,
+        end_ms: 5000,
+        text: "हां बोलो।",
+      },
+    ],
+  });
+  expect(host.textContent).toContain("is the salesperson");
+  expect(host.textContent).not.toContain("looks like you");
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
+  expect(chips()[0].getAttribute("aria-label")).toBe("Edit मानस");
+  expect(chips()[0].textContent).toContain("Salesperson");
+  expect(chips()[1].getAttribute("aria-label")).toBe("Edit नंदलाल जी");
+  expect(chips()[1].textContent).toContain("Prospect");
+});
+
+it("does not infer salesperson from a buyer name alone", async () => {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: "My name is Rahul.",
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    { ...report, strengths: [], improvements: [] },
+  );
+
+  expect(host.textContent).not.toContain("is the salesperson");
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Yes",
+    ),
+  ).toBe(false);
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+});
+
+it("confirms a hello-here self introduction on the speaking voice", async () => {
+  updateShellState({ profileName: "Rahul" });
+  await sayAndConfirm("Hello Rahul here", {
+    ...report,
+    strengths: [],
+    improvements: [],
+  });
+
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({
+    a: { name: "Rahul", role: "you", icon: null },
+    b: { name: "", role: "prospect", icon: expect.any(String) },
+  });
+});
+
+it("does not save just as a name after confirming a generic opening", async () => {
+  updateShellState({ profileName: "Suyash Rao" });
+  const cited = {
+    segment_id: "a1",
+    quote: "I am just calling about your enquiry.",
+    start_ms: 0,
+    end_ms: 1200,
+  };
+  const coachingReport: SalesReport = {
+    ...report,
+    strengths: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+    improvements: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+  };
+  await sayAndConfirm("I am just calling about your enquiry.", coachingReport);
+
+  expect(readSpeakerProfiles(CALL_ID).a).toMatchObject({
+    name: "",
+    role: "salesperson",
+  });
+  expect(readSpeakerProfiles(CALL_ID).a.name).not.toBe("just");
+});
+
+it("does not save a generic greeting as the prospect name after seller confirmation", async () => {
+  const cited = {
+    segment_id: "a1",
+    quote: "We should review your current process.",
+    start_ms: 0,
+    end_ms: 1200,
+  };
+  const coachingReport: SalesReport = {
+    ...report,
+    strengths: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+    improvements: [{ title: "Fictional", explanation: "", evidence: [cited] }],
+  };
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: cited.quote,
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello there.",
+        },
+      ],
+    },
+    coachingReport,
+  );
+
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
+
+  expect(readSpeakerProfiles(CALL_ID).a).toMatchObject({
+    name: "",
+    role: "salesperson",
+  });
+  expect(readSpeakerProfiles(CALL_ID).b).toMatchObject({
+    name: "",
+    role: "prospect",
+  });
+});
+
+it("does not offer a name confirmation for an ordinary here phrase", async () => {
+  await renderMap(
+    {
+      ...transcript,
+      segments: [
+        {
+          id: "a1",
+          speaker_id: "a",
+          start_ms: 0,
+          end_ms: 1200,
+          text: "Thanks for being here.",
+        },
+        {
+          id: "b1",
+          speaker_id: "b",
+          start_ms: 1300,
+          end_ms: 2000,
+          text: "Hello.",
+        },
+      ],
+    },
+    { ...report, strengths: [], improvements: [] },
+  );
+
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Yes",
+    ),
+  ).toBe(false);
+  expect(readSpeakerProfiles(CALL_ID)).toEqual({});
+});
+
+it("keeps all three lenses and asks for a role before showing talk share", async () => {
+  // Owner decision (30 Sep): Who talked, Call stages and Talk share always show.
+  await act(async () => root.unmount());
+  localStorage.setItem("ac.xray.map-lens", "stages");
+  root = createRoot(host);
+  await renderMap();
+  const controls = host.querySelector('[aria-label="What the map shows"]')!;
+  const lens = (name: string) =>
+    Array.from(controls.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === name,
+    )!;
+  expect(
+    Array.from(controls.querySelectorAll("button")).map((b) => b.textContent),
+  ).toEqual(["Who talked", "Call stages", "Talk share by minute"]);
+  expect(lens("Call stages").getAttribute("aria-pressed")).toBe("true");
+  expect(host.textContent).toContain("once the analysis marks them");
+
+  await act(async () => lens("Talk share by minute").click());
+  expect(host.textContent).toContain(
+    "Assign a speaker role to view talk share.",
+  );
+});
+
+it("shows factual talk share only after the call has a confirmed role", async () => {
+  const voices = [
+    ...new Set(transcript.segments.map((segment) => segment.speaker_id)),
+  ];
+  const seller = voices[0]!;
+  const buyer = voices[1]!;
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      [seller]: { name: "Fictional Seller", role: "you", icon: null },
+      [buyer]: { name: "Fictional Buyer", role: "prospect", icon: null },
+    }),
+  );
+  await renderMap();
+
+  const lens = (name: string) =>
+    Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="What the map shows"] button',
+      ),
+    ).find((button) => button.textContent === name)!;
+  expect(lens("Who talked").getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(2);
+
+  await act(async () => lens("Talk share by minute").click());
+  expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(0);
+  expect(host.textContent).toContain("talk share in each minute");
+  expect(host.textContent).not.toContain("went quiet");
+  expect(localStorage.getItem("ac.xray.map-lens")).toBe("talk-share");
 });

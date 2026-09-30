@@ -1,15 +1,15 @@
 .section {
   margin: 12px 0 26px;
   padding: clamp(18px, 3vw, 28px);
-  border: 1px solid #d6e2e4;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 18px;
-  background: linear-gradient(135deg, #f8fcfb, #fff 72%);
+  background: linear-gradient(135deg, var(--lx-paper-2), var(--lx-surface) 72%);
   box-shadow: 0 10px 24px rgb(23 43 58 / 4%);
 }
 
 .section h2 {
   margin: 0;
-  color: #172b3a;
+  color: var(--lx-ink);
   font-size: clamp(20px, 2.6vw, 27px);
   letter-spacing: -0.035em;
   line-height: 1.2;
@@ -18,7 +18,7 @@
 .note {
   max-width: 680px;
   margin: 8px 0 0;
-  color: #5d7080;
+  color: var(--lx-ink-3);
   font-size: 14px;
   line-height: 1.65;
 }
@@ -37,9 +37,9 @@
   min-height: 112px;
   margin: 0;
   padding: 15px;
-  border: 1px solid #d6e2e4;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 14px;
-  background: #fff;
+  background: var(--lx-surface);
   box-shadow: 0 5px 14px rgb(23 43 58 / 3%);
   transition:
     background-color 150ms ease,
@@ -48,15 +48,15 @@
 }
 
 .factor:hover {
-  border-color: #9bc6bb;
-  background: #fbfffd;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-surface);
   transform: translateY(-1px);
 }
 
 .factor[open] {
   grid-column: span 2;
-  border-color: #9bc6bb;
-  background: #f3fbf8;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-paper-2);
 }
 
 .factor summary {
@@ -65,7 +65,7 @@
   min-height: 44px;
   align-items: center;
   gap: 8px;
-  color: #172b3a;
+  color: var(--lx-ink);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.45;
@@ -74,7 +74,7 @@
 
 .factor summary::after {
   margin-left: auto;
-  color: #3f4f9c;
+  color: var(--lx-ink-3);
   content: "+";
   font-size: 19px;
   line-height: 1;
@@ -87,10 +87,10 @@
 .factor summary small {
   display: block;
   padding: 4px 8px;
-  border: 1px solid #d7e3e5;
+  border: 1px solid var(--lx-teal-edge);
   border-radius: 999px;
-  background: #f4f8f8;
-  color: #5d7080;
+  background: var(--lx-paper-2);
+  color: var(--lx-ink-3);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.25;
@@ -99,14 +99,14 @@
 .factor p {
   max-width: 630px;
   margin: 14px 0 0;
-  color: #334d5c;
+  color: var(--lx-ink-2);
   font-size: 14px;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
 
 .factor summary:focus-visible {
-  outline: 3px solid #3f4f9c;
+  outline: 3px solid var(--lx-ink-3);
   outline-offset: 5px;
 }
 
@@ -145,7 +145,7 @@
     padding: 0;
     border: 0;
     box-shadow: none;
-    background: #fff;
+    background: var(--lx-surface);
   }
 
   .grid {
@@ -156,7 +156,7 @@
   .factor[open] {
     grid-column: span 1;
     box-shadow: none;
-    background: #fff;
+    background: var(--lx-surface);
     break-inside: avoid;
   }
 }

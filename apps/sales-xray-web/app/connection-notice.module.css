@@ -1,0 +1,127 @@
+/* Corner card while the server cannot be reached; the page frame stays. */
+.card {
+  position: fixed;
+  z-index: 400;
+  right: 20px;
+  bottom: 20px;
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 4px 12px;
+  overflow: hidden;
+  padding: 14px 14px 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: 16px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  animation: notice-in 320ms var(--lx-ease-pop, ease) both;
+}
+
+.icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+  animation: icon-breathe 2.4s ease-in-out infinite;
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.copy b {
+  color: var(--lx-ink);
+  font-size: 14px;
+}
+
+.copy p {
+  margin: 0;
+  color: var(--lx-ink-3);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.copy small {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+}
+
+.retry {
+  display: inline-flex;
+  grid-column: 2;
+  justify-self: start;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 99px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: 600 12.5px/1 var(--lx-font-ui, inherit);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
+}
+
+.retry:hover {
+  border-color: var(--lx-teal);
+  color: var(--lx-teal);
+}
+
+.retry:hover svg {
+  transform: rotate(-90deg);
+}
+
+.retry svg {
+  transition: transform 300ms var(--lx-ease-pop, ease);
+}
+
+.retry:active {
+  transform: scale(0.97);
+}
+
+/* The bar empties until the next automatic try. */
+.timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--lx-teal);
+  transform-origin: left;
+  animation: timer var(--seconds) linear both;
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+@keyframes icon-breathe {
+  50% {
+    transform: scale(0.92);
+  }
+}
+
+@keyframes timer {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .icon,
+  .timer {
+    animation: none;
+  }
+}

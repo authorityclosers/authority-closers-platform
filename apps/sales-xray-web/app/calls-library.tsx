@@ -2,6 +2,7 @@
 
 import { CALLS_PATH } from "./analysis-routes";
 import { callHref } from "./acquisition-client";
+import { callTone, submissionState, type CallTone } from "./call-status";
 import {
   ArrowRight,
   AudioLines,
@@ -52,6 +53,9 @@ function formatDuration(durationSeconds: number) {
   return `About ${formatClock(durationSeconds * 1000)}`;
 }
 
+export { callTone, submissionState };
+export type { CallTone };
+
 function formatCreatedDate(createdAt: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
     new Date(createdAt),
@@ -62,22 +66,6 @@ function formatCreatedTime(createdAt: string) {
   return new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(
     new Date(createdAt),
   );
-}
-
-/** Status families from the saved state only; no inferred outcome. */
-export type CallTone = "ready" | "active" | "attention" | "idle";
-
-export function callTone(submission: LibrarySubmission): CallTone {
-  if (submission.hasReport) return "ready";
-  if (
-    ["uploading", "queued", "processing", "running", "active"].includes(
-      submission.state,
-    )
-  )
-    return "active";
-  if (["held", "uncertain", "failed", "blocked"].includes(submission.state))
-    return "attention";
-  return "idle";
 }
 
 const FILTERS: { id: "all" | CallTone; label: string }[] = [
@@ -94,28 +82,6 @@ function openLabel(submission: LibrarySubmission) {
     : tone === "active"
       ? "View progress"
       : "Open call";
-}
-
-const STATE_COPY: Record<string, string> = {
-  awaiting_upload: "Ready to analyse",
-  ready: "Ready to analyse",
-  uploading: "Preparing call",
-  queued: "Queued for analysis",
-  processing: "Analysis in progress",
-  running: "Analysis in progress",
-  active: "Analysis in progress",
-  completed: "Analysis complete",
-  held: "Analysis paused",
-  uncertain: "Needs attention",
-  failed: "Needs attention",
-  blocked: "Needs attention",
-  cancelled: "Cancelled",
-};
-
-export function submissionState(submission: LibrarySubmission) {
-  return submission.hasReport
-    ? "Report ready"
-    : (STATE_COPY[submission.state] ?? "Saved call");
 }
 
 function isProcessing(submission: LibrarySubmission) {

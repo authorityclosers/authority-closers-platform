@@ -2,6 +2,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { RecentCallItem } from "./recent-call-item";
+import { readCallFacts, saveCallFact } from "../call-facts";
+import { readSpeakerProfiles, saveSpeakerProfiles } from "../speaker-profiles";
 
 vi.mock("next/link", () => ({
   default: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -24,6 +26,7 @@ const onChange = vi.fn();
 let navigate: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
+  localStorage.clear();
   window.history.replaceState(null, "", href);
   navigate = vi.spyOn(window.location, "replace").mockImplementation(() => {});
   onChange.mockClear();
@@ -58,9 +61,25 @@ async function confirmDelete() {
   await click("Delete");
 }
 
+function seedCallFacts() {
+  saveCallFact(call.id, {
+    kind: "value",
+    id: "industry",
+    value: "Carpentry",
+  });
+  saveSpeakerProfiles(call.id, {
+    buyer: { name: "Fictional Buyer", role: "prospect", icon: null },
+  });
+  localStorage.setItem(
+    `ac.xray.promises-done.v1:${call.id}`,
+    '["s1:I will send the fictional brochure."]',
+  );
+}
+
 it.each(["deleting", "deleted"])(
   "leaves the active report only after the server confirms %s",
   async (state) => {
+    seedCallFacts();
     const fetcher = vi.fn(async () => Response.json({ state }));
     vi.stubGlobal("fetch", fetcher);
     await confirmDelete();
@@ -70,12 +89,22 @@ it.each(["deleting", "deleted"])(
     );
     expect(onChange).toHaveBeenCalledExactlyOnceWith(null);
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/analysis/calls");
+    expect(readCallFacts(call.id)).toEqual({
+      confirmed: {},
+      values: {},
+      numberLabels: {},
+    });
+    expect(readSpeakerProfiles(call.id)).toEqual({});
+    expect(
+      localStorage.getItem(`ac.xray.promises-done.v1:${call.id}`),
+    ).toBeNull();
   },
 );
 
 it.each([403, 500, 200])(
   "keeps an unconfirmed deletion on screen (%s)",
   async (status) => {
+    seedCallFacts();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json({ state: "ready" }, { status })),
@@ -86,6 +115,11 @@ it.each([403, 500, 200])(
     expect(host.querySelector('[role="status"]')?.textContent).toContain(
       "Couldn’t delete this call. Try again.",
     );
+    expect(readCallFacts(call.id).values.industry).toBe("Carpentry");
+    expect(readSpeakerProfiles(call.id).buyer.name).toBe("Fictional Buyer");
+    expect(
+      localStorage.getItem(`ac.xray.promises-done.v1:${call.id}`),
+    ).toContain("fictional brochure");
   },
 );
 

@@ -1,0 +1,311 @@
+/* Call signals tab: salesperson signals measured from the transcript. */
+.root {
+  display: grid;
+  gap: 12px;
+}
+
+.lead {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  animation: card-in 300ms var(--lx-ease-move, ease) both;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
+
+.card header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.card h3 {
+  flex: 1;
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 14px;
+}
+
+.icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.note {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.empty {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+.list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line,
+.promise {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 9px;
+  transition: background-color 120ms ease;
+}
+
+.promise {
+  grid-template-columns: auto auto minmax(0, 1fr);
+}
+
+.line:hover,
+.promise:hover {
+  background: var(--lx-sunken);
+}
+
+.play {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 99px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font: 600 11.5px/1.4 var(--lx-font-ui, inherit);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform 140ms var(--lx-ease-pop, ease);
+}
+
+.play:hover {
+  transform: scale(1.05);
+}
+
+.words {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.words q,
+q.words {
+  quotes: "“" "”";
+}
+
+.chip,
+.warn {
+  justify-self: start;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.warn {
+  margin-left: 6px;
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.cut,
+.reply {
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
+.reply b {
+  color: var(--lx-ink-3);
+}
+
+.tick {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lx-muted);
+  cursor: pointer;
+}
+
+.promise[data-done] .tick {
+  color: var(--lx-teal);
+}
+
+.promise[data-done] q {
+  color: var(--lx-muted);
+  text-decoration: line-through;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.stats > div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.stats dt {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+}
+
+.stats dd {
+  margin: 2px 0 0;
+  color: var(--lx-ink);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lx-teal);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Who is who, when the call map has no confirmed roles yet. */
+.ask {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px dashed var(--lx-line-strong, var(--lx-line));
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.ask b {
+  color: var(--lx-ink);
+  font-size: 15px;
+}
+
+.ask p {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choices button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  max-width: 280px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  font: 600 13px/1.3 var(--lx-font-ui, inherit);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
+}
+
+.choices button:hover {
+  border-color: var(--voice);
+  transform: translateY(-1px);
+}
+
+.choices i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--voice);
+}
+
+.choices small {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}

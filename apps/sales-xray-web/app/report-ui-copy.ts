@@ -15,6 +15,7 @@ export type ReportUiCopy = {
   allSpeakers: string;
   unlabelledSpeaker: string;
   speakerNote: string;
+  speakerNamesNote: string;
   matchingSegments: string;
   showing: string;
   noMatches: string;
@@ -44,6 +45,8 @@ const EN_COPY: ReportUiCopy = {
   unlabelledSpeaker: "Unlabelled speaker",
   speakerNote:
     "Speaker labels come from the source and are unverified. Filter labels may be IDs rather than names.",
+  speakerNamesNote:
+    "Names come from the call map at the top. Click a name there to change it.",
   matchingSegments: "matching segments",
   showing: "showing",
   noMatches: "No transcript segments match.",
@@ -73,6 +76,8 @@ const HI_COPY: ReportUiCopy = {
   unlabelledSpeaker: "बिना लेबल का वक्ता",
   speakerNote:
     "वक्ता लेबल स्रोत से आते हैं और अप्रमाणित हैं। फ़िल्टर लेबल नामों की जगह ID हो सकते हैं।",
+  speakerNamesNote:
+    "नाम ऊपर कॉल मैप से आते हैं। बदलने के लिए वहाँ नाम पर क्लिक करें।",
   matchingSegments: "मिलते हुए खंड",
   showing: "दिख रहे हैं",
   noMatches: "कोई ट्रांसक्रिप्ट खंड मेल नहीं खाता।",
@@ -102,6 +107,8 @@ const MR_COPY: ReportUiCopy = {
   unlabelledSpeaker: "लेबल नसलेला वक्ता",
   speakerNote:
     "वक्त्यांची लेबले स्रोतामधून आली आहेत आणि पडताळलेली नाहीत. फिल्टर लेबले नावांऐवजी ID असू शकतात.",
+  speakerNamesNote:
+    "नावे वरच्या कॉल मॅपमधून येतात. बदलण्यासाठी तिथे नावावर क्लिक करा.",
   matchingSegments: "जुळणारे खंड",
   showing: "दाखवत आहे",
   noMatches: "कोणतेही ट्रान्सक्रिप्ट खंड जुळले नाहीत.",
@@ -133,6 +140,8 @@ const MIXED_COPY: ReportUiCopy = {
   unlabelledSpeaker: "Unlabelled speaker · बिना लेबल का वक्ता",
   speakerNote:
     "Speaker labels come from the source and are unverified · वक्ता लेबल स्रोत से आते हैं और अप्रमाणित हैं। Filter labels may be IDs rather than names · फ़िल्टर लेबल नामों की जगह ID हो सकते हैं।",
+  speakerNamesNote:
+    "Names come from the call map at the top · नाम ऊपर कॉल मैप से आते हैं। Click a name there to change it · बदलने के लिए वहाँ नाम पर क्लिक करें।",
   matchingSegments: "matching segments · मिलते हुए खंड",
   showing: "showing · दिख रहे हैं",
   noMatches:
