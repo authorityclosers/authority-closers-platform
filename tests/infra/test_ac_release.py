@@ -75,6 +75,8 @@ class FakeGitHub:
         if path.endswith("/artifacts"):
             run_id = int(path.split("/runs/")[1].split("/")[0])
             return {"artifacts": self.artifacts.get(run_id, [])}
+        if path.endswith("/commits/main"):
+            return {"sha": HEAD}
         raise AssertionError(path)
 
 
@@ -104,6 +106,8 @@ class FakeRunner:
         elif "merge-base" in argv:
             older, newer = argv[-2], argv[-1]
             code = 0 if older == newer or (older, newer) in self.ancestors else 1
+        elif argv[:2] == ["systemctl", "show"]:
+            code = 1
         elif argv[:2] == ["docker", "inspect"]:
             out, code = (self.web_image, 0) if self.web_image else ("", 1)
         elif argv[:2] == ["docker", "run"]:

@@ -8,6 +8,10 @@ release_archive="${AC_RELEASE_ARCHIVE:-}"
 release_archive_sha256="${AC_RELEASE_ARCHIVE_SHA256:-}"
 image_bundle_dir="${AC_IMAGE_BUNDLE_DIR:-}"
 secret_path="${AC_INFISICAL_PATH:-/application}"
+[[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 0 || "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]] || {
+  printf 'AC_CORE_ROLLBACK_ONLY must be 0 or 1.\n' >&2
+  exit 2
+}
 
 [[ "$(id -u)" -eq 0 ]] || { printf 'Run as root.\n' >&2; exit 1; }
 [[ "$target_environment" == staging || "$target_environment" == production ]] || {
@@ -36,6 +40,42 @@ secret_path="${AC_INFISICAL_PATH:-/application}"
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+running_installer="${BASH_SOURCE[0]}"
+
+verify_application_archive() {
+  local archive_verifier="$script_dir/verify-release-archive.py"
+  if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+    # The engine pins this controller from its installed revision, independently
+    # of the older target archive. Never rewrite the target's immutable files.
+    [[ "${AC_ROLLBACK_CONTROLLER_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] &&
+      [[ "$(sha256sum "$running_installer" | cut -d ' ' -f 1)" == "$AC_ROLLBACK_CONTROLLER_SHA256" ]] || {
+        printf 'Rollback controller digest is missing or does not match.\n' >&2
+        return 1
+      }
+    archive_verifier="$input_stage/rollback-target-verifier.py"
+    # Extract only trusted code from the digest-pinned archive into the private
+    # input stage. Its verifier then checks commit, paths and its own identity.
+    python3 - "$release_archive" "$release_archive_sha256" "$archive_verifier" <<'PY_VERIFY'
+import hashlib
+import sys
+import tarfile
+from pathlib import Path
+
+archive, expected, output = sys.argv[1:]
+with Path(archive).open("rb") as handle:
+    if hashlib.file_digest(handle, "sha256").hexdigest() != expected:
+        raise SystemExit("Rollback target archive digest does not match")
+with tarfile.open(archive, mode="r:") as handle:
+    member = handle.getmember("infra/application/scripts/verify-release-archive.py")
+    if not member.isfile():
+        raise SystemExit("Rollback target verifier must be a regular file")
+    with handle.extractfile(member) as source, Path(output).open("xb") as target:
+        target.write(source.read())
+PY_VERIFY
+  fi
+  python3 "$archive_verifier" "$release_archive" "$release_archive_sha256" "$release_id"
+}
+
 getent group acops >/dev/null || { printf 'Required operator group acops is absent.\n' >&2; exit 1; }
 application_root=/srv/authority-closers/application
 releases_root="$application_root/releases"
@@ -125,8 +165,12 @@ python3 "$script_dir/prepare-release-inputs.py" stage \
 release_archive="$input_stage/release-archive.tar"
 image_bundle_dir="$input_stage/image-bundle"
 
-python3 "$script_dir/verify-release-archive.py" \
-  "$release_archive" "$release_archive_sha256" "$release_id"
+if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+  verify_application_archive
+else
+  python3 "$script_dir/verify-release-archive.py" \
+    "$release_archive" "$release_archive_sha256" "$release_id"
+fi
 
 manifest_values_file="$input_stage/release-image-values"
 umask 077
@@ -215,10 +259,12 @@ if [[ -e "$release_dir" || -L "$release_dir" ]]; then
 else
   stage_dir="$(mktemp -d "$releases_root/.stage-${release_id}.XXXXXX")"
   tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2
-  cmp --silent "$stage_dir/scripts/install-application-release.sh" "${BASH_SOURCE[0]}" || {
-    printf 'Running installer differs from the verified archive.\n' >&2
-    exit 1
-  }
+  if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" != 1 ]]; then
+    cmp --silent "$stage_dir/scripts/install-application-release.sh" "$running_installer" || {
+      printf 'Running installer differs from the verified archive.\n' >&2
+      exit 1
+    }
+  fi
   cp -- "$release_images_file" "$stage_dir/release-images.env"
   printf '%s\n' "$release_id" > "$stage_dir/RELEASE-COMMIT"
   (
@@ -1506,6 +1552,75 @@ record_forward_recovery_required() {
   printf 'FORWARD RECOVERY  Writes may have been accepted; the pre-migration backup will not be restored. Reapply exact release %s.\n' \
     "$release_id" >&2
 }
+
+# AC_CORE_ROLLBACK_ONLY is used only by the release engine after selecting the
+# immediately previous successful release. Recheck identity/schema under the
+# application lock and never enter the database migration/restore path below.
+core_rollback_exit() {
+  local status=$?
+  trap '' HUP INT TERM
+  trap - EXIT
+  if [[ "$status" -ne 0 ]]; then
+    # Contain failed application recovery without fencing or restoring the DB.
+    activate_edge_route "$edge_hold_source" || true
+    stop_application_services_with_hosted_drain "$release_dir" true || true
+    printf 'AC_STATUS=CORE_ROLLBACK_FAILED\n' >&2
+  fi
+  cleanup_stages || status=1
+  exit "$status"
+}
+
+rollback_application_only() {
+  local expected_from="${AC_ROLLBACK_FROM:-}" current_head rollback_link
+  [[ "$expected_from" =~ ^[0-9a-f]{40}$ && "${previous_release##*/}" == "$expected_from" ]] || {
+    printf 'Core rollback current release changed.\n' >&2
+    return 1
+  }
+  current_head="$(sed -n 's/^AC_MIGRATION_HEAD=//p' "$previous_release/release-images.env")"
+  [[ "$current_head" =~ ^[0-9]{8}_[0-9]{4}$ && "$current_head" == "$AC_MIGRATION_HEAD" ]] || {
+    printf 'Core rollback migration head changed.\n' >&2
+    return 1
+  }
+  trap core_rollback_exit EXIT
+  activate_edge_route "$edge_hold_source"
+  check_route "$api_host" /health/ready 503 "release-hold-$target_environment"
+  stop_application_services_with_hosted_drain "$previous_release" false
+  # --no-deps excludes PostgreSQL and the release migration profile entirely.
+  compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 \
+    api learner-web admin-web coach-web
+  rollback_link="$application_root/.core-rollback-${target_environment}-${release_id}.$$"
+  ln -s "$release_dir" "$rollback_link"
+  mv --no-target-directory --force "$rollback_link" "$current_link"
+  rollback_link=''
+  activate_edge_route "$edge_route_source"
+  check_route "$api_host" /health/ready 200 "api-$target_environment"
+  local -a rollback_workers=(worker)
+  if sales_xray_hosted_enabled "$release_dir"; then
+    rollback_workers+=(sales-xray-worker)
+  else
+    [[ "$?" -eq 1 ]] || return 1
+  fi
+  compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 "${rollback_workers[@]}"
+  local record_root="$application_root/deployments/$target_environment" record_tmp
+  install -d -m 0750 -o root -g acops "$record_root"
+  record_tmp="$(mktemp "$record_root/.core-rollback-${release_id}.XXXXXX")"
+  {
+    printf 'AC_STATUS=COMMITTED\nAC_ACTION=CORE_ROLLBACK\n'
+    printf 'AC_ENVIRONMENT=%s\nAC_RELEASE_ID=%s\n' "$target_environment" "$release_id"
+    printf 'AC_PREVIOUS_RELEASE=%s\nAC_MIGRATION_HEAD=%s\n' "$expected_from" "$AC_MIGRATION_HEAD"
+  } > "$record_tmp"
+  chmod 0640 "$record_tmp"
+  chown root:acops "$record_tmp"
+  mv --no-target-directory --no-clobber "$record_tmp" \
+    "$record_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-core-rollback-${record_tmp##*.}.env"
+  rm -- "$backup_file"  # unused empty reservation, never a recovery dump
+  printf 'AC_STATUS=COMMITTED\n'
+}
+
+if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+  rollback_application_only
+  exit 0
+fi
 
 finish() {
   local status=$?

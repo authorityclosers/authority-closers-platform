@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the AC release train every two hours
+
+[Timer]
+OnCalendar=*-*-* 00/2:15:00
+Persistent=false
+Unit=ac-release-train.service
+
+[Install]
+WantedBy=timers.target
