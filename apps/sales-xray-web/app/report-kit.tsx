@@ -210,6 +210,19 @@ export function Card({
   );
 }
 
+/**
+ * A card's words and its evidence. Side by side when the card is wide
+ * enough, stacked when it is not; the card decides, whatever the screen.
+ */
+export function Split({ main, aside }: { main: ReactNode; aside: ReactNode }) {
+  return (
+    <div className={styles.split}>
+      <div>{main}</div>
+      <div>{aside}</div>
+    </div>
+  );
+}
+
 /** A small label in a tone, with an optional line icon. */
 export function Tag({
   tone = "neutral",

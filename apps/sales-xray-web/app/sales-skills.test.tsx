@@ -41,13 +41,18 @@ async function render(
     ),
   );
 }
+const tabs = () => [
+  ...container.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+];
+const panel = () => container.querySelector<HTMLElement>('[role="tabpanel"]')!;
 
-it("shows all eight skills with a count of what the call showed, never a grade", async () => {
+it("lists every skill, shows one at a time, and counts what the call showed", async () => {
   await render(dimensions);
-  const titles = [...container.querySelectorAll("h3")].map(
-    (h) => h.textContent,
+  expect(tabs().map((tab) => tab.textContent)).toEqual(
+    dimensions.map((d) => d.label),
   );
-  expect(titles).toEqual(dimensions.map((d) => d.label));
+  expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+  expect(panel().querySelector("h3")?.textContent).toBe(dimensions[0].label);
   const text = container.textContent ?? "";
   expect(text).toContain(
     `0 of ${dimensions.length} skills were seen in this call`,
@@ -58,14 +63,13 @@ it("shows all eight skills with a count of what the call showed, never a grade",
   expect(container.querySelector('button[aria-label^="Play"]')).toBeNull();
 });
 
-it("leaves internal coaching references out of the reading view", async () => {
+it("leaves internal coaching references out", async () => {
   await render(dimensions, vi.fn());
-  // They stay in Raw data; a salesperson does not need them here.
   expect(container.textContent).not.toContain(dimensions[0].citations[0].doc);
   expect(container.textContent).not.toContain("Coaching sources");
 });
 
-it("plays the exact excerpt a skill cites and keeps statuses plain", async () => {
+it("moves between skills by click, arrow keys and next/previous, and plays exact clips", async () => {
   const onSelectEvidence = vi.fn();
   const items = dimensions.map((d, index) =>
     index === 1
@@ -80,24 +84,34 @@ it("plays the exact excerpt a skill cites and keeps statuses plain", async () =>
         : d,
   );
   await render(items, onSelectEvidence);
-  expect(container.textContent).toContain(excerpt.quote);
   expect(container.textContent).toContain(
     "1 of 8 skills were seen in this call",
   );
-  expect(container.textContent).toContain("Mixed signs");
-  const play = container.querySelector<HTMLButtonElement>(
+  await act(async () => tabs()[1].click());
+  expect(panel().querySelector("h3")?.textContent).toBe(items[1].label);
+  expect(panel().textContent).toContain(
+    "Seen in this call · 2 clips from the call",
+  );
+  expect(panel().textContent).toContain(excerpt.quote);
+  const play = panel().querySelector<HTMLButtonElement>(
     'button[aria-label^="Play source moment"]',
   )!;
   await act(async () => play.click());
   expect(onSelectEvidence).toHaveBeenCalledWith(excerpt);
-  // Further clips wait behind one small control.
-  const more = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === "1 more clip",
-  )!;
-  await act(async () => more.click());
-  expect(
-    container.querySelectorAll('button[aria-label^="Play source moment"]'),
-  ).toHaveLength(2);
+
+  await act(async () =>
+    tabs()[1].dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+    ),
+  );
+  expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
+  expect(panel().textContent).toContain("Mixed signs");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Previous skill"]')!
+      .click(),
+  );
+  expect(tabs()[1].getAttribute("aria-selected")).toBe("true");
 });
 
 it("says so when no skill was observed", async () => {

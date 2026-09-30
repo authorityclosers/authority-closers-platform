@@ -1,47 +1,47 @@
-/* Sales skills: one summary line, then a calm grid of the eight skills.
-   Colour marks the topic only; status is neutral (evidence, not a grade). */
+/* Sales skills, one at a time: a settings-style window with the skills on
+   the left and the chosen skill in full on the right. Colour marks the
+   topic; status is neutral (evidence, not a grade). */
 .skills {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
+/* ---- Summary ---- */
 .summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
   align-items: center;
   gap: 10px 24px;
-  padding: 14px 18px;
-  border: 1px solid var(--lx-line-soft, var(--lx-line));
-  border-radius: 16px;
-  background: var(--lx-surface);
 }
 
-.lead p {
+.summary p {
   margin: 0;
   color: var(--lx-ink);
   font: 600 16px/1.35 var(--lx-font-ui, inherit);
 }
 
-.lead b {
+.summary p b {
   font-size: 20px;
   font-variant-numeric: tabular-nums;
 }
 
-.lead small {
+.summary small {
+  display: block;
+  margin-top: 2px;
   color: var(--lx-muted);
-  font-size: 12.5px;
+  font: 500 12.5px/1.4 var(--lx-font-ui, inherit);
 }
 
 .meter {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .bar {
   display: flex;
   gap: 3px;
-  height: 8px;
+  height: 7px;
 }
 
 .bar span {
@@ -80,120 +80,295 @@
   color: var(--lx-ink);
 }
 
-/* Evidence states in neutral shades: how much the call showed, not how good. */
+/* Evidence states in calm shades: how much the call showed, not how good. */
 .bar span,
 .legend li,
-.status {
+.dot,
+.detailStatus {
   --status: var(--lx-line);
 }
 
 .bar span[data-status="observed"],
 .legend li[data-status="observed"],
-.status[data-status="observed"] {
+.dot[data-status="observed"],
+.detailStatus[data-status="observed"] {
   --status: var(--lx-teal);
 }
 
 .bar span[data-status="conflicted"],
 .legend li[data-status="conflicted"],
-.status[data-status="conflicted"] {
+.dot[data-status="conflicted"],
+.detailStatus[data-status="conflicted"] {
   --status: color-mix(in srgb, var(--lx-teal) 45%, var(--lx-surface));
 }
 
 .bar span[data-status="insufficient_evidence"],
 .legend li[data-status="insufficient_evidence"],
-.status[data-status="insufficient_evidence"] {
+.dot[data-status="insufficient_evidence"],
+.detailStatus[data-status="insufficient_evidence"] {
   --status: var(--lx-line-strong, var(--lx-line));
 }
 
-.grid {
+/* ---- The window ---- */
+.window {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  align-items: start;
-  gap: 12px;
-}
-
-.card {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-width: 0;
-  padding: 14px 16px;
+  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  min-height: 420px;
+  overflow: hidden;
   border: 1px solid var(--lx-line-soft, var(--lx-line));
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--lx-surface);
   box-shadow:
-    0 1px 2px color-mix(in srgb, var(--lx-ink) 5%, transparent),
-    0 10px 24px -20px color-mix(in srgb, var(--lx-ink) 35%, transparent);
-  animation: rise 340ms var(--lx-ease-move, ease) both;
-  animation-delay: calc(var(--i) * 40ms + 80ms);
+    0 1px 2px color-mix(in srgb, var(--lx-ink) 6%, transparent),
+    0 24px 48px -32px color-mix(in srgb, var(--lx-ink) 40%, transparent);
 }
 
-.cardHead {
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 2px;
+  max-height: 560px;
+  padding: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--lx-line-soft, var(--lx-line));
+  background: color-mix(in srgb, var(--lx-sunken) 55%, var(--lx-surface));
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 10px 6px 7px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-ink-2, var(--lx-ink));
+  font: 550 13.5px/1.3 var(--lx-font-ui, inherit);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.cardHead h3 {
+.item:hover {
+  background: color-mix(in srgb, var(--lx-ink) 5%, transparent);
+}
+
+.item[aria-selected="true"] {
+  background: var(--lx-surface);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--lx-ink) 8%, transparent),
+    0 0 0 1px var(--lx-line-soft, var(--lx-line));
+  color: var(--lx-ink);
+  font-weight: 650;
+}
+
+.item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lx-teal) 60%, transparent);
+  outline-offset: 1px;
+}
+
+.itemLabel {
   flex: 1;
   min-width: 0;
-  margin: 0;
-  color: var(--lx-ink);
-  font: 650 14.5px/1.3 var(--lx-font-ui, inherit);
-}
-
-.status {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  color: var(--lx-ink-3, var(--lx-muted));
-  font: 600 11.5px/1.3 var(--lx-font-ui, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status::before {
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status);
+}
+
+/* ---- The chosen skill ---- */
+.detail {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 22px 26px 18px;
+  animation: enter 280ms var(--lx-ease-move, ease) both;
+}
+
+.detailHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+}
+
+.detailTitle {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* Where this skill's clips sit in the call; tap one to hear it. */
+.where {
+  display: grid;
+  gap: 5px;
+  width: min(100%, 300px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lx-sunken) 60%, var(--lx-surface));
+}
+
+.where > span {
+  color: var(--lx-muted);
+  font: 650 11px/1.3 var(--lx-font-ui, inherit);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.whereBar {
+  position: relative;
+  height: 14px;
+  border-radius: 99px;
+  background: linear-gradient(
+      var(--lx-line-soft, var(--lx-line)),
+      var(--lx-line-soft, var(--lx-line))
+    )
+    center / 100% 4px no-repeat;
+}
+
+.whereBar button {
+  position: absolute;
+  top: 1px;
+  left: var(--x);
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid var(--lx-surface);
+  border-radius: 50%;
+  background: var(--lx-teal);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--lx-ink) 25%, transparent);
+  cursor: pointer;
+  transform: translateX(-50%);
+  transition: transform 160ms var(--lx-ease-pop, ease);
+}
+
+.whereBar button:hover {
+  transform: translateX(-50%) scale(1.3);
+}
+
+.where small {
+  display: flex;
+  justify-content: space-between;
+  color: var(--lx-muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailHead h3 {
+  margin: 0;
+  color: var(--lx-ink);
+  font: 650 clamp(18px, 1.6vw, 22px) / 1.25 var(--lx-font-ui, inherit);
+  letter-spacing: -0.015em;
+}
+
+.detailStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0;
+  color: var(--lx-ink-3, var(--lx-muted));
+  font: 550 12.5px/1.4 var(--lx-font-ui, inherit);
+}
+
+.detailStatus::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--status);
 }
 
 .observation {
+  max-width: 78ch;
   margin: 0;
-  color: var(--lx-ink-2, var(--lx-ink));
-  font-size: 13.5px;
-  line-height: 1.6;
+  color: var(--lx-ink);
+  font-size: 15.5px;
+  line-height: 1.7;
 }
 
-.observation[data-folded] {
-  display: -webkit-box;
-  overflow: hidden;
-  cursor: pointer;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+/* Clips fill the pane: two columns when there is room. */
+.clips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  align-items: start;
+  gap: 8px 10px;
+}
+
+.clipsLabel {
+  grid-column: 1 / -1;
+  color: var(--lx-muted);
+  font: 650 11.5px/1.4 var(--lx-font-ui, inherit);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .quote {
   margin: 0;
   padding: 8px 10px;
+  border: 0;
   border-radius: 10px;
   background: var(--lx-sunken);
   color: var(--lx-ink);
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: var(--lx-leading-devanagari, 1.6);
 }
 
-.moreButton {
-  justify-self: start;
-  padding: 0;
+.noSource {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--lx-line-soft, var(--lx-line));
+  color: var(--lx-muted);
+  font: 550 12.5px/1 var(--lx-font-ui, inherit);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
   border: 0;
-  background: none;
-  color: var(--lx-teal);
-  font: 650 12px/1.4 var(--lx-font-ui, inherit);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lx-ink-2, var(--lx-ink));
+  font: 600 12.5px/1 var(--lx-font-ui, inherit);
   cursor: pointer;
+}
+
+.pager button:hover {
+  background: var(--lx-sunken);
+}
+
+.print {
+  display: none;
 }
 
 .empty {
@@ -204,10 +379,10 @@
   color: var(--lx-muted);
 }
 
-@keyframes rise {
+@keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(5px);
+    transform: translateX(8px);
   }
 }
 
@@ -217,22 +392,59 @@
   }
 }
 
-@media (max-width: 760px) {
+/* Narrow screens: the list becomes a row you can swipe. */
+@media (max-width: 820px) {
   .summary {
     grid-template-columns: 1fr;
+  }
+
+  .window {
+    grid-template-columns: 1fr;
+  }
+
+  .list {
+    display: flex;
+    gap: 6px;
+    max-height: none;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--lx-line-soft, var(--lx-line));
+  }
+
+  .item {
+    flex: none;
+    width: auto;
+    max-width: 240px;
+  }
+
+  .detail {
+    padding: 18px 16px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card,
+  .detail,
   .bar span {
     animation: none;
   }
 }
 
 @media print {
-  .observation[data-folded] {
-    display: block;
-    -webkit-line-clamp: unset;
+  .window {
+    display: none;
+  }
+
+  .print {
+    display: grid;
+    gap: 12px;
+  }
+
+  .print h4 {
+    margin: 0;
+  }
+
+  .print p,
+  .print blockquote {
+    margin: 0;
   }
 }

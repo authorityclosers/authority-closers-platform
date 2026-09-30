@@ -1,19 +1,18 @@
 "use client";
 
-import { useMemo, useRef, useState, type CSSProperties } from "react";
-
 import {
+  ChevronDown,
   Eye,
   Flag,
-  Flame,
   Hand,
   Headphones,
   Lightbulb,
   Search,
-  Sparkles,
   ThumbsUp,
   type LucideIcon,
 } from "lucide-react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
+
 import { formatClipRange, formatClock } from "./lightbox/time";
 import type {
   Finding,
@@ -23,13 +22,12 @@ import type {
 } from "./report-contract";
 import { RichText } from "./report-entities";
 import {
-  Card,
   Clip,
   Empty,
   Locked,
   Note,
   Script,
-  Tag,
+  Split,
   useReportPeople,
   type Tone,
 } from "./report-kit";
@@ -37,6 +35,7 @@ import {
   buildContextualSourcePlayback,
   type ContextualSourcePlayback,
 } from "./source-playback-context";
+import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import styles from "./report-moments.module.css";
 
 type SourceKind =
@@ -282,6 +281,10 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
   );
 }
 
+// Row titles stay calm: brand logos only. The summary line adds money and places.
+const TITLE_KINDS = ["brand"] as const;
+const SUMMARY_KINDS = ["brand", "money", "place"] as const;
+
 export type ReportMomentsProps = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
@@ -319,7 +322,9 @@ export function ReportMoments({
   const people = useReportPeople(callId, transcript);
   const moments = useMemo(() => timelineMoments(report), [report]);
   const [filter, setFilter] = useState<Kind | "must" | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<string>>(
+    () => new Set(moments[0] ? [moments[0].id] : []),
+  );
   const list = useRef<HTMLOListElement>(null);
   const duration = Math.max(
     transcript.duration_ms,
@@ -351,6 +356,21 @@ export function ReportMoments({
       sum + (report.preview?.sections[section].hidden_count ?? 0),
     0,
   );
+  const segments: Array<{
+    key: Kind | "must" | null;
+    label: string;
+    count: number;
+  }> = [
+    { key: null, label: "All", count: moments.length },
+    ...(mustCount
+      ? [{ key: "must" as const, label: "Must listen", count: mustCount }]
+      : []),
+    ...kinds.map((kind) => ({
+      key: kind,
+      label: KINDS[kind].filter,
+      count: moments.filter((m) => m.kind === kind).length,
+    })),
+  ];
 
   // Only a saved rewatch clip on the same transcript gets surrounding lines.
   const contextFor = (evidence: ReportEvidence) => {
@@ -365,13 +385,18 @@ export function ReportMoments({
       : null;
   };
 
+  function toggle(id: string, force?: boolean) {
+    setOpen((current) => {
+      const next = new Set(current);
+      if (force ?? !next.has(id)) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   function jump(id: string) {
     setFilter(null);
-    setFlash(id);
-    window.setTimeout(
-      () => setFlash((value) => (value === id ? null : value)),
-      1600,
-    );
+    toggle(id, true);
     requestAnimationFrame(() =>
       list.current
         ?.querySelector<HTMLElement>(`[data-moment="${CSS.escape(id)}"]`)
@@ -418,122 +443,161 @@ export function ReportMoments({
         <span className={styles.mapEnd}>{formatClock(duration)}</span>
       </div>
 
-      <div className={styles.filters} role="group" aria-label="Show moments">
-        <button
-          type="button"
-          aria-pressed={filter === null}
-          onClick={() => setFilter(null)}
-        >
-          All <em>{moments.length}</em>
-        </button>
-        {mustCount ? (
+      <div className={styles.segmented} role="group" aria-label="Show moments">
+        {segments.map((segment) => (
           <button
+            key={segment.label}
             type="button"
-            data-tone="info"
-            aria-pressed={filter === "must"}
-            onClick={() => setFilter(filter === "must" ? null : "must")}
+            aria-pressed={filter === segment.key}
+            data-tone={
+              segment.key === "must"
+                ? "info"
+                : segment.key
+                  ? KINDS[segment.key].tone
+                  : undefined
+            }
+            onClick={() =>
+              setFilter(filter === segment.key ? null : segment.key)
+            }
           >
-            Must listen <em>{mustCount}</em>
-          </button>
-        ) : null}
-        {kinds.map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            data-tone={KINDS[kind].tone}
-            aria-pressed={filter === kind}
-            onClick={() => setFilter(filter === kind ? null : kind)}
-          >
-            {KINDS[kind].filter}{" "}
-            <em>{moments.filter((m) => m.kind === kind).length}</em>
+            {segment.label} <em>{segment.count}</em>
           </button>
         ))}
       </div>
 
-      <ol ref={list} className={styles.timeline}>
-        {shown.map((moment, index) => {
+      <ol ref={list} className={styles.group}>
+        {shown.map((moment) => {
           const kind = KINDS[moment.kind];
           const [first, ...more] = moment.evidence;
+          const expanded = open.has(moment.id);
+          const detailId = `moment-detail-${moment.id}`;
           return (
             <li
               key={moment.id}
               data-moment={moment.id}
               data-tone={kind.tone}
-              data-flash={flash === moment.id ? "" : undefined}
-              className={styles.item}
+              data-open={expanded ? "" : undefined}
+              className={styles.row}
             >
-              <span className={styles.when}>{formatClock(first.start_ms)}</span>
-              <span className={styles.node} aria-hidden="true" />
-              <Card tone={kind.tone} index={index} className={styles.card}>
-                <span className={styles.tags}>
-                  <Tag
-                    tone={kind.tone}
-                    icon={moment.golden ? Sparkles : kind.icon}
-                  >
-                    {moment.golden ? "Best moment" : kind.label}
-                  </Tag>
-                  {moment.listen && moment.kind !== "listen" ? (
-                    <Tag
-                      tone="info"
-                      icon={moment.listen === "must_watch" ? Flame : Headphones}
-                    >
-                      {LISTEN_LABEL[moment.listen]}
-                    </Tag>
-                  ) : null}
+              <div className={styles.rowHead}>
+                <span className={styles.time}>
+                  {formatClock(first.start_ms)}
                 </span>
-                <h4>
-                  <RichText text={moment.title} />
-                </h4>
-                {moment.explanation ? (
-                  <p>
-                    <RichText text={moment.explanation} />
-                  </p>
-                ) : null}
-                <Clip
-                  evidence={first}
-                  title={moment.title}
-                  onPlay={onSelectEvidence}
-                  person={people.speakerOf(first)}
-                  context={moment.listen ? contextFor(first) : null}
-                />
-                {moment.golden ? (
-                  <Note label="Why it worked:">
-                    <RichText text={moment.golden} />
-                  </Note>
-                ) : moment.why ? (
-                  <Note label="Why it matters:">
-                    <RichText text={moment.why} />
-                  </Note>
-                ) : null}
-                {moment.betterAnswer ? (
-                  <Script label="A better answer" text={moment.betterAnswer} />
-                ) : null}
-                {moment.impact ? (
-                  <Note label="What it may have cost:">
-                    <RichText text={moment.impact} />
-                  </Note>
-                ) : null}
-                {moment.tryThis ? (
-                  <Script label="Try this instead" text={moment.tryThis} />
-                ) : null}
-                {more.length ? (
-                  <details className={styles.more}>
-                    <summary>
-                      {more.length} more {more.length === 1 ? "clip" : "clips"}{" "}
-                      for this moment
-                    </summary>
-                    {more.map((item) => (
-                      <Clip
-                        key={`${item.segment_id}-${item.start_ms}`}
-                        evidence={item}
-                        title={moment.title}
-                        onPlay={onSelectEvidence}
-                        person={people.speakerOf(item)}
+                <button
+                  type="button"
+                  className={styles.rowToggle}
+                  aria-expanded={expanded}
+                  aria-controls={detailId}
+                  onClick={() => toggle(moment.id)}
+                >
+                  <span className={styles.kind}>
+                    <i aria-hidden="true" />
+                    {moment.golden ? "Best moment" : kind.label}
+                    {moment.listen && moment.kind !== "listen" ? (
+                      <b>
+                        {moment.listen === "repeat" && moment.kind !== "good"
+                          ? "Worth a listen"
+                          : LISTEN_LABEL[moment.listen]}
+                      </b>
+                    ) : null}
+                  </span>
+                  <h4>
+                    <RichText text={moment.title} kinds={TITLE_KINDS} />
+                  </h4>
+                  {moment.explanation && !expanded ? (
+                    <span className={styles.summary}>
+                      <RichText
+                        text={moment.explanation}
+                        kinds={SUMMARY_KINDS}
                       />
-                    ))}
-                  </details>
-                ) : null}
-              </Card>
+                    </span>
+                  ) : null}
+                </button>
+                <ClipPlayState startMs={first.start_ms} endMs={first.end_ms}>
+                  {(playing) => (
+                    <button
+                      type="button"
+                      className={styles.play}
+                      aria-pressed={playing}
+                      aria-label={`${playing ? "Pause" : "Play"} moment at ${formatClock(first.start_ms)}`}
+                      onClick={() => onSelectEvidence(first, moment.title)}
+                    >
+                      <ClipPlayIcon playing={playing} size={13} />
+                    </button>
+                  )}
+                </ClipPlayState>
+                <ChevronDown
+                  className={styles.chevron}
+                  size={16}
+                  aria-hidden="true"
+                />
+              </div>
+              <div
+                id={detailId}
+                className={styles.detail}
+                inert={!expanded}
+                aria-hidden={!expanded}
+              >
+                <div className={styles.detailInner}>
+                  <Split
+                    main={
+                      <>
+                        {moment.explanation ? (
+                          <p className={styles.text}>
+                            <RichText text={moment.explanation} />
+                          </p>
+                        ) : null}
+                        {moment.golden ? (
+                          <Note label="Why it worked:" muted>
+                            <RichText text={moment.golden} />
+                          </Note>
+                        ) : moment.why ? (
+                          <Note label="Why it matters:" muted>
+                            <RichText text={moment.why} />
+                          </Note>
+                        ) : null}
+                        {moment.impact ? (
+                          <Note label="What it may have cost:" muted>
+                            <RichText text={moment.impact} />
+                          </Note>
+                        ) : null}
+                      </>
+                    }
+                    aside={
+                      <>
+                        <Clip
+                          evidence={first}
+                          title={moment.title}
+                          onPlay={onSelectEvidence}
+                          person={people.speakerOf(first)}
+                          context={moment.listen ? contextFor(first) : null}
+                        />
+                        {moment.betterAnswer ? (
+                          <Script
+                            label="A better answer"
+                            text={moment.betterAnswer}
+                          />
+                        ) : null}
+                        {moment.tryThis ? (
+                          <Script
+                            label="Try this instead"
+                            text={moment.tryThis}
+                          />
+                        ) : null}
+                        {more.map((item) => (
+                          <Clip
+                            key={`${item.segment_id}-${item.start_ms}`}
+                            evidence={item}
+                            title={moment.title}
+                            onPlay={onSelectEvidence}
+                            person={people.speakerOf(item)}
+                          />
+                        ))}
+                      </>
+                    }
+                  />
+                </div>
+              </div>
             </li>
           );
         })}

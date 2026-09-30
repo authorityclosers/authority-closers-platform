@@ -31,6 +31,7 @@ import {
   Locked,
   Note,
   Script,
+  Split,
   Tag,
   useReportPeople,
 } from "./report-kit";
@@ -197,18 +198,24 @@ export function NextCallPlan({
           <div className={styles.grid}>
             {report.strengths.map((finding, index) => (
               <Card key={index} tone="strength" index={index}>
-                <h4>
-                  <RichText text={finding.title} />
-                </h4>
-                <p>
-                  <RichText text={finding.explanation} />
-                </p>
-                {whyKept(index) ? (
-                  <Note label="Why it works:" muted>
-                    <RichText text={whyKept(index) ?? ""} />
-                  </Note>
-                ) : null}
-                {clip(finding.evidence[0], finding.title)}
+                <Split
+                  main={
+                    <>
+                      <h4>
+                        <RichText text={finding.title} />
+                      </h4>
+                      <p className={styles.text}>
+                        <RichText text={finding.explanation} />
+                      </p>
+                      {whyKept(index) ? (
+                        <Note label="Why it works:" muted>
+                          <RichText text={whyKept(index) ?? ""} />
+                        </Note>
+                      ) : null}
+                    </>
+                  }
+                  aside={clip(finding.evidence[0], finding.title)}
+                />
               </Card>
             ))}
           </div>

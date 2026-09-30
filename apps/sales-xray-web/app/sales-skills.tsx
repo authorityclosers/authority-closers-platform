@@ -3,6 +3,8 @@
 import {
   AudioLines,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   Filter,
   Handshake,
   MessagesSquare,
@@ -11,19 +13,26 @@ import {
   Target,
   Users,
 } from "lucide-react";
-import { useState, type CSSProperties } from "react";
+import {
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 
 import type {
   ReportDimension,
   ReportEvidence,
   Transcript,
 } from "./report-contract";
+import { formatClock } from "./lightbox/time";
 import { RichText } from "./report-entities";
 import { Clip, IconBadge, useReportPeople, type Tone } from "./report-kit";
 import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
-// remain the server's eight dimensions.
+// remain the server's dimensions; any number of skills fits the list.
 const topics: Record<string, { icon: typeof Users; tone: Tone }> = {
   human_connection_trust: { icon: Users, tone: "info" },
   discovery_deep_understanding: { icon: MessagesSquare, tone: "teal" },
@@ -34,6 +43,8 @@ const topics: Record<string, { icon: typeof Users; tone: Tone }> = {
   closing_decision_management: { icon: Handshake, tone: "change" },
   communication_tonality: { icon: AudioLines, tone: "missed" },
 };
+const topicOf = (id: string) =>
+  topics[id] ?? { icon: BookOpen, tone: "info" as Tone };
 
 // Plain words for how much the call showed: evidence, never a grade.
 const STATUS: Record<string, string> = {
@@ -44,6 +55,7 @@ const STATUS: Record<string, string> = {
   unknown: "Not checked",
 };
 const STATUS_ORDER = Object.keys(STATUS);
+const statusOf = (status: string) => (STATUS[status] ? status : "unknown");
 
 type SkillDimension = ReportDimension & { evidence?: ReportEvidence[] };
 
@@ -55,36 +67,11 @@ const EMPTY_TRANSCRIPT: Transcript = {
   segments: [],
 };
 
-/** Text that folds to three lines; tap to read it all. */
-function Folded({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const long = text.length > 220;
-  return (
-    <p
-      className={styles.observation}
-      data-folded={long && !open ? "" : undefined}
-      role={long ? "button" : undefined}
-      tabIndex={long ? 0 : undefined}
-      aria-expanded={long ? open : undefined}
-      onClick={long ? () => setOpen((value) => !value) : undefined}
-      onKeyDown={
-        long
-          ? (event) => {
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.preventDefault();
-              setOpen((value) => !value);
-            }
-          : undefined
-      }
-    >
-      <RichText text={text} />
-    </p>
-  );
-}
-
 /**
- * The eight sales skills as one calm grid: how many the call showed (a
- * count, not a score), then each skill's note and one clip from the call.
+ * Sales skills, one at a time, like a settings window: the list of skills
+ * on the left (any number of them), the chosen skill in full on the right,
+ * with its note and every clip the call gave for it. A count of what the
+ * call showed sits on top; nothing here is a score.
  */
 export function SalesSkills({
   dimensions,
@@ -98,8 +85,9 @@ export function SalesSkills({
   transcript?: Transcript;
 }) {
   const people = useReportPeople(callId, transcript);
-  const [openMore, setOpenMore] = useState<Set<string>>(new Set());
-  const statusOf = (status: string) => (STATUS[status] ? status : "unknown");
+  const id = useId();
+  const list = useRef<HTMLDivElement>(null);
+  const [selected, setSelected] = useState(0);
   const counts = STATUS_ORDER.map((status) => ({
     status,
     count: dimensions.filter((d) => statusOf(d.status) === status).length,
@@ -113,17 +101,40 @@ export function SalesSkills({
       </p>
     );
 
+  const current = Math.min(selected, dimensions.length - 1);
+  const skill = dimensions[current];
+  const topic = topicOf(skill.dimension_id);
+  const clips = skill.evidence ?? [];
+
+  function choose(index: number, focus = false) {
+    const next = (index + dimensions.length) % dimensions.length;
+    setSelected(next);
+    if (focus)
+      list.current
+        ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+        [next]?.focus();
+  }
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const keys: Record<string, number> = {
+      ArrowDown: current + 1,
+      ArrowRight: current + 1,
+      ArrowUp: current - 1,
+      ArrowLeft: current - 1,
+      Home: 0,
+      End: dimensions.length - 1,
+    };
+    if (!(event.key in keys)) return;
+    event.preventDefault();
+    choose(keys[event.key], true);
+  }
+
   return (
     <div className={styles.skills} aria-label="Sales skills">
       <header className={styles.summary}>
-        <div className={styles.lead}>
-          <p>
-            <b>{seen}</b> of {dimensions.length} skills were seen in this call
-          </p>
-          <small>
-            Draft observations, not scores. Work on one skill at a time.
-          </small>
-        </div>
+        <p>
+          <b>{seen}</b> of {dimensions.length} skills were seen in this call
+          <small>Draft observations, not scores. Work on one at a time.</small>
+        </p>
         <div className={styles.meter}>
           <div
             className={styles.bar}
@@ -156,73 +167,164 @@ export function SalesSkills({
         </div>
       </header>
 
-      <div className={styles.grid}>
-        {dimensions.map((dimension, index) => {
-          const topic = topics[dimension.dimension_id] ?? {
-            icon: BookOpen,
-            tone: "info" as Tone,
-          };
-          const [first, ...more] = dimension.evidence ?? [];
-          const showMore = openMore.has(dimension.dimension_id);
-          const clip = (evidence: ReportEvidence) =>
-            onSelectEvidence ? (
-              <Clip
-                key={`${evidence.segment_id}-${evidence.start_ms}`}
-                evidence={evidence}
-                title={dimension.label}
-                onPlay={(item) => onSelectEvidence(item)}
-                person={people.speakerOf(evidence)}
-              />
-            ) : (
-              <blockquote
-                key={`${evidence.segment_id}-${evidence.start_ms}`}
-                className={styles.quote}
+      <div className={styles.window}>
+        <div
+          ref={list}
+          className={styles.list}
+          role="tablist"
+          aria-orientation="vertical"
+          aria-label="Skills"
+          onKeyDown={onKeyDown}
+        >
+          {dimensions.map((dimension, index) => {
+            const itemTopic = topicOf(dimension.dimension_id);
+            const active = index === current;
+            return (
+              <button
+                key={dimension.dimension_id}
+                type="button"
+                role="tab"
+                id={`${id}-tab-${index}`}
+                aria-selected={active}
+                aria-controls={`${id}-panel`}
+                tabIndex={active ? 0 : -1}
+                className={styles.item}
+                onClick={() => choose(index)}
               >
-                <RichText text={evidence.quote} />
-              </blockquote>
-            );
-          return (
-            <article
-              key={dimension.dimension_id}
-              className={styles.card}
-              style={{ "--i": index } as CSSProperties}
-            >
-              <header className={styles.cardHead}>
-                <IconBadge icon={topic.icon} tone={topic.tone} size={28} />
-                <h3>{dimension.label}</h3>
+                <IconBadge
+                  icon={itemTopic.icon}
+                  tone={itemTopic.tone}
+                  size={26}
+                />
+                <span className={styles.itemLabel}>{dimension.label}</span>
                 <span
-                  className={styles.status}
+                  className={styles.dot}
                   data-status={statusOf(dimension.status)}
-                >
-                  {STATUS[statusOf(dimension.status)]}
-                </span>
-              </header>
-              <Folded text={dimension.observation} />
-              {first ? clip(first) : null}
-              {showMore ? more.map(clip) : null}
-              {more.length ? (
-                <button
-                  type="button"
-                  className={styles.moreButton}
-                  aria-expanded={showMore}
-                  onClick={() =>
-                    setOpenMore((current) => {
-                      const next = new Set(current);
-                      if (next.has(dimension.dimension_id))
-                        next.delete(dimension.dimension_id);
-                      else next.add(dimension.dimension_id);
-                      return next;
-                    })
-                  }
-                >
-                  {showMore
-                    ? "Show fewer clips"
-                    : `${more.length} more ${more.length === 1 ? "clip" : "clips"}`}
-                </button>
-              ) : null}
-            </article>
-          );
-        })}
+                  title={STATUS[statusOf(dimension.status)]}
+                  aria-label={STATUS[statusOf(dimension.status)]}
+                />
+              </button>
+            );
+          })}
+        </div>
+
+        <section
+          key={skill.dimension_id}
+          id={`${id}-panel`}
+          role="tabpanel"
+          aria-labelledby={`${id}-tab-${current}`}
+          className={styles.detail}
+        >
+          <header className={styles.detailHead}>
+            <IconBadge icon={topic.icon} tone={topic.tone} size={46} />
+            <div className={styles.detailTitle}>
+              <h3>{skill.label}</h3>
+              <p
+                className={styles.detailStatus}
+                data-status={statusOf(skill.status)}
+              >
+                {STATUS[statusOf(skill.status)]}
+                {clips.length
+                  ? ` · ${clips.length} ${clips.length === 1 ? "clip" : "clips"} from the call`
+                  : ""}
+              </p>
+            </div>
+            {clips.length && transcript.duration_ms > 0 ? (
+              <div className={styles.where}>
+                <span>Where in the call</span>
+                <div className={styles.whereBar}>
+                  {clips.map((evidence) => (
+                    <button
+                      key={`${evidence.segment_id}-${evidence.start_ms}`}
+                      type="button"
+                      style={
+                        {
+                          "--x": `${(evidence.start_ms / transcript.duration_ms) * 100}%`,
+                        } as CSSProperties
+                      }
+                      title={formatClock(evidence.start_ms)}
+                      aria-label={`Play clip at ${formatClock(evidence.start_ms)}`}
+                      onClick={() => onSelectEvidence?.(evidence)}
+                      disabled={!onSelectEvidence}
+                    />
+                  ))}
+                </div>
+                <small>
+                  <span>00:00</span>
+                  <span>{formatClock(transcript.duration_ms)}</span>
+                </small>
+              </div>
+            ) : null}
+          </header>
+          <p className={styles.observation}>
+            <RichText text={skill.observation} />
+          </p>
+          {clips.length ? (
+            <div className={styles.clips}>
+              <span className={styles.clipsLabel}>From the call</span>
+              {clips.map((evidence) =>
+                onSelectEvidence ? (
+                  <Clip
+                    key={`${evidence.segment_id}-${evidence.start_ms}`}
+                    evidence={evidence}
+                    title={skill.label}
+                    onPlay={(item) => onSelectEvidence(item)}
+                    person={people.speakerOf(evidence)}
+                  />
+                ) : (
+                  <blockquote
+                    key={`${evidence.segment_id}-${evidence.start_ms}`}
+                    className={styles.quote}
+                  >
+                    <RichText text={evidence.quote} />
+                  </blockquote>
+                ),
+              )}
+            </div>
+          ) : (
+            <p className={styles.noSource}>
+              The call gave no clip for this skill.
+            </p>
+          )}
+          <footer className={styles.pager}>
+            <button
+              type="button"
+              onClick={() => choose(current - 1)}
+              aria-label="Previous skill"
+            >
+              <ChevronLeft size={15} aria-hidden="true" />
+              Previous
+            </button>
+            <span>
+              {current + 1} of {dimensions.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => choose(current + 1)}
+              aria-label="Next skill"
+            >
+              Next
+              <ChevronRight size={15} aria-hidden="true" />
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      {/* Print shows every skill in full. */}
+      <div className={styles.print} aria-hidden="true">
+        {dimensions.map((dimension) => (
+          <section key={dimension.dimension_id}>
+            <h4>
+              {dimension.label} · {STATUS[statusOf(dimension.status)]}
+            </h4>
+            <p>{dimension.observation}</p>
+            {(dimension.evidence ?? []).map((evidence) => (
+              <blockquote key={`${evidence.segment_id}-${evidence.start_ms}`}>
+                {evidence.quote}
+              </blockquote>
+            ))}
+          </section>
+        ))}
       </div>
     </div>
   );

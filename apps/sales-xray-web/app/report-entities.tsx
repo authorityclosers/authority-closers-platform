@@ -16,7 +16,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
-import type { CSSProperties } from "react";
+import { useId, useMemo, type CSSProperties } from "react";
 
 import {
   useBrandPath,
@@ -79,6 +79,17 @@ export function BrandMark({
 }) {
   const color = useColorLogo(brand.logo && brand.key ? brand.key : null);
   const path = useBrandPath(brand.logo ? null : brand.slug);
+  // Gradients inside a logo are found by id. The same logo often shows more
+  // than once (and inside hidden tabs), so each copy gets its own ids.
+  const scope = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const body = useMemo(
+    () =>
+      color?.body
+        .replace(/(\s)id="([^"]+)"/g, `$1id="${scope}-$2"`)
+        .replace(/url\(#([^)]+)\)/g, `url(#${scope}-$1)`)
+        .replace(/href="#([^"]+)"/g, `href="#${scope}-$1"`) ?? "",
+    [color, scope],
+  );
   const light = luminance(brand.hex);
   const style = {
     "--brand": `#${brand.hex}`,
@@ -96,7 +107,7 @@ export function BrandMark({
         data-mono={color.mono ? "" : undefined}
         style={style}
         // Static CC0 artwork from our own public/brands/color.json.
-        dangerouslySetInnerHTML={{ __html: color.body }}
+        dangerouslySetInnerHTML={{ __html: body }}
       />
     );
   return path ? (

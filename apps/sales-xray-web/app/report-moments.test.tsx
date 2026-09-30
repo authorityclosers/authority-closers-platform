@@ -186,11 +186,11 @@ it("shows each moment with its label, words and a play control for the exact cli
     excerpt(3),
     "Pause after explaining",
   );
-  // The second clip of a finding waits behind a disclosure.
-  expect(container.textContent).toContain("1 more clip for this moment");
+  // A finding's other clips sit in its detail, ready when the row opens.
+  expect(container.textContent).toContain("Exact supplied phrase 9");
 });
 
-it("filters by kind and jumps from the call map", async () => {
+it("filters by kind, and the call map opens the moment it points to", async () => {
   await render(mixed());
   await act(async () => pressed("To change").click());
   expect(cards()).toEqual(["Pause after explaining"]);
@@ -208,7 +208,7 @@ it("filters by kind and jumps from the call map", async () => {
   expect(
     container
       .querySelector('[data-moment="closing:0"]')
-      ?.hasAttribute("data-flash"),
+      ?.hasAttribute("data-open"),
   ).toBe(true);
   expect(scroll).toHaveBeenCalled();
 });

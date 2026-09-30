@@ -124,13 +124,17 @@ it("does not infer industry from report prose and saves a user choice", async ()
 });
 
 it("lets the person say what a heard number means", async () => {
-  const select = host.querySelector<HTMLSelectElement>(
-    'select[aria-label^="What is"]',
-  )!;
-  await act(async () => {
-    select.value = "Yearly sales";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  // A chip opens a small panel of choices instead of a dropdown.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label^="What is"]')!
+      .click(),
+  );
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
+      .find((button) => button.textContent === "Yearly sales")!
+      .click(),
+  );
   expect(readCallFacts(CALL).numberLabels["a3:0"]).toBe("Yearly sales");
 });
 

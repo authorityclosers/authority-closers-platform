@@ -230,3 +230,10 @@
     animation: none;
   }
 }
+
+.text {
+  margin: 0;
+  color: var(--lx-ink-2, var(--lx-ink));
+  font-size: 13.5px;
+  line-height: 1.6;
+}
