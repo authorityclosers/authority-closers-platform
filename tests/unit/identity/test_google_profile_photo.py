@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import io
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
 from PIL import Image
 
+import ac_platform.identity.google_profile_photo as photo_module
 from ac_platform.identity.google_profile_photo import (
     fetch_google_profile_photo,
     photo_request_url,
@@ -207,3 +210,53 @@ async def test_total_timeout_is_enforced_for_a_slow_mock_transport() -> None:
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(slow_handler)) as client:
         assert await fetch_google_profile_photo(PICTURE_URL, http_client=client) is None
+
+
+@pytest.mark.asyncio
+async def test_busy_image_gate_skips_before_using_a_shared_executor_worker(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    loop = asyncio.get_running_loop()
+    previous_executor = loop._default_executor
+    executor = ThreadPoolExecutor(max_workers=2)
+    loop.set_default_executor(executor)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_make_jpeg(_body: bytes, _content_type: str) -> bytes:
+        started.set()
+        if not release.wait(timeout=5):
+            raise TimeoutError("fictional decoder wait timed out")
+        return b"fictional-sanitized-jpeg"
+
+    monkeypatch.setattr(photo_module, "_make_jpeg", slow_make_jpeg)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "image/png"},
+            content=b"fictional-png",
+            request=request,
+        )
+
+    first: asyncio.Task[bytes | None] | None = None
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            first = asyncio.create_task(fetch_google_profile_photo(PICTURE_URL, http_client=client))
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait, 1), timeout=2)
+
+            assert await fetch_google_profile_photo(PICTURE_URL, http_client=client) is None
+            assert "google_photo_skipped:decode_busy" in caplog.text
+
+            unrelated = await asyncio.wait_for(asyncio.to_thread(lambda: "available"), timeout=1)
+            assert unrelated == "available"
+    finally:
+        release.set()
+        if first is not None:
+            await asyncio.gather(first, return_exceptions=True)
+        if previous_executor is None:
+            loop.set_default_executor(ThreadPoolExecutor())
+        else:
+            loop.set_default_executor(previous_executor)
+        executor.shutdown(wait=True)

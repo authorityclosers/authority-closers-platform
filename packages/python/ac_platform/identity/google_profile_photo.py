@@ -24,6 +24,10 @@ _MAX_JPEG_BYTES = 65_536
 _ACCEPT = "image/jpeg, image/png, image/webp"
 
 
+class _ImageGateBusy(Exception):
+    """The single image worker is busy; skip this best-effort copy."""
+
+
 def photo_request_url(picture_url: str) -> str | None:
     """Validate a Google-hosted photo URL and request its 256 px variant."""
 
@@ -66,7 +70,6 @@ def _log_skipped(reason: str) -> None:
 
 def _make_jpeg(body: bytes, content_type: str) -> bytes:
     with (
-        _IMAGE_GATE,
         decode_avatar(body, content_type) as decoded,
         ImageOps.fit(
             decoded,
@@ -92,6 +95,47 @@ def _make_jpeg(body: bytes, content_type: str) -> bytes:
     return jpeg
 
 
+async def _make_jpeg_off_loop(body: bytes, content_type: str) -> bytes:
+    """Reserve image capacity before dispatching work to the shared executor."""
+
+    if not _IMAGE_GATE.acquire(blocking=False):
+        raise _ImageGateBusy
+
+    started = threading.Event()
+    release_lock = threading.Lock()
+    released = False
+
+    def release_once() -> None:
+        nonlocal released
+        with release_lock:
+            if released:
+                return
+            released = True
+        _IMAGE_GATE.release()
+
+    def make_and_release() -> bytes:
+        started.set()
+        try:
+            return _make_jpeg(body, content_type)
+        finally:
+            release_once()
+
+    try:
+        worker = asyncio.create_task(asyncio.to_thread(make_and_release))
+    except BaseException:
+        release_once()
+        raise
+
+    def release_if_not_started(task: asyncio.Task[bytes]) -> None:
+        if not started.is_set():
+            release_once()
+        if not task.cancelled():
+            task.exception()
+
+    worker.add_done_callback(release_if_not_started)
+    return await asyncio.shield(worker)
+
+
 async def _fetch_with_client(client: httpx.AsyncClient, request_url: str) -> bytes | None:
     async with client.stream("GET", request_url, headers={"Accept": _ACCEPT}) as response:
         if response.status_code != 200:
@@ -110,7 +154,10 @@ async def _fetch_with_client(client: httpx.AsyncClient, request_url: str) -> byt
                 return None
             chunks.append(chunk)
         try:
-            return await asyncio.to_thread(_make_jpeg, b"".join(chunks), content_type)
+            return await _make_jpeg_off_loop(b"".join(chunks), content_type)
+        except _ImageGateBusy:
+            _log_skipped("decode_busy")
+            return None
         except ValueError as error:
             _log_skipped("jpeg_too_large" if str(error) == "jpeg_too_large" else "decode")
             return None

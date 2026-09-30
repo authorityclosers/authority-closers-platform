@@ -2265,7 +2265,13 @@ def install_identity_http(
             return None
         source_sha256 = hashlib.sha256(picture_url.encode("utf-8")).hexdigest()
         try:
-            if await google_profile_photo_needs_fetch(database, person_id, source_sha256):
+            async with database.begin_nested():
+                should_fetch = await google_profile_photo_needs_fetch(
+                    database,
+                    person_id,
+                    source_sha256,
+                )
+            if should_fetch:
                 return person_id, picture_url, source_sha256
         except Exception:
             _LOGGER.warning("google_profile_photo_check_failed")

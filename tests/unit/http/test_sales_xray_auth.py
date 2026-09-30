@@ -27,6 +27,7 @@ from ac_platform.identity.services import (
 )
 from ac_platform.kernel.authz import ActorContext
 from tests.unit.application.test_settings import _deployment_values
+from tests.unit.http import test_auth_routes as auth_routes_test_module
 from tests.unit.http.test_auth_routes import (
     DEPLOYMENT_OAUTH_COOKIE,
     DEPLOYMENT_SESSION_COOKIE,
@@ -458,6 +459,80 @@ def test_absent_google_photo_clears_and_failed_fetch_does_not_block_sign_in(
     assert failed_fetch.status_code == 303
     assert "auth_result=success" in failed_fetch.headers["location"]
     assert saved == []
+
+
+def test_google_photo_source_check_error_uses_a_savepoint_and_does_not_block_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+
+    class SavepointTrackingDatabase:
+        def __init__(self) -> None:
+            self.nested_count = 0
+            self.active_nested = 0
+
+        async def __aenter__(self) -> SavepointTrackingDatabase:
+            return self
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+        def begin(self) -> SavepointTrackingDatabase:
+            return self
+
+        def begin_nested(self) -> SavepointTrackingDatabase.NestedContext:
+            self.nested_count += 1
+            return self.NestedContext(self)
+
+        class NestedContext:
+            def __init__(self, database: SavepointTrackingDatabase) -> None:
+                self.database = database
+
+            async def __aenter__(self) -> SavepointTrackingDatabase:
+                self.database.active_nested += 1
+                return self.database
+
+            async def __aexit__(self, *_args: Any) -> None:
+                self.database.active_nested -= 1
+
+        async def scalar(self, _statement: object) -> object | None:
+            return None
+
+        def add(self, _instance: object) -> None:
+            return None
+
+        async def flush(self) -> None:
+            return None
+
+    database = SavepointTrackingDatabase()
+    monkeypatch.setattr(auth_routes_test_module, "_sessions", lambda: database)
+
+    async def record_claims(_database: Any, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    active_nested_at_query: list[int] = []
+
+    async def query_fails(_database: Any, _person_id: UUID, _source_sha256: str) -> bool:
+        active_nested_at_query.append(database.active_nested)
+        raise RuntimeError("fictional photo source query failure")
+
+    monkeypatch.setattr(auth_module, "record_google_profile_claims", record_claims)
+    monkeypatch.setattr(auth_module, "google_profile_photo_needs_fetch", query_fails)
+    client = _client(
+        settings=_sales_staging_settings(),
+        provider=_PhotoProvider("https://lh3.googleusercontent.com/a/query-failure=s96-c"),
+    )
+    started, transaction = _sales_start(client)
+
+    callback = _complete_google_callback(
+        client,
+        transaction,
+        started.cookies[DEPLOYMENT_OAUTH_COOKIE],
+    )
+
+    assert callback.status_code == 303
+    assert "auth_result=success" in callback.headers["location"]
+    assert active_nested_at_query == [1]
 
 
 @pytest.mark.parametrize("consent", [None, "false"])
