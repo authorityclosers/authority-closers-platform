@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -99,6 +100,11 @@ class FakeCommands:
 
 @pytest.fixture
 def tree(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        refresh.pwd,
+        "getpwnam",
+        lambda _: SimpleNamespace(pw_uid=os.geteuid(), pw_gid=os.getegid()),
+    )
     app = tmp_path / "application"
     releases = app / "releases"
     releases.mkdir(parents=True)
