@@ -9,10 +9,8 @@ import {
   useCallFacts,
 } from "./call-facts";
 import { numbersHeard, priceTalk, timePromise, voicesOf } from "./call-data";
-import { prospectBusiness } from "./call-context";
 import { formatClock } from "./lightbox/time";
 import type { SalesReport, Transcript } from "./report-contract";
-import { confirmedRoles } from "./sales-signals";
 import { getShellState } from "./shell/shell-store";
 import { SPEAKER_ICONS } from "./speaker-icons";
 import {
@@ -190,16 +188,6 @@ export function KeyFacts({
         : name;
     });
   const industry = facts.values.industry?.trim() || null;
-  const roles = confirmedRoles(
-    voices,
-    Object.fromEntries(voices.map((id) => [id, profiles[id]?.role])),
-  );
-  const heardIndustry = useMemo(
-    () => prospectBusiness(transcript.segments, roles),
-    // roles comes from saved profiles; its two ids are the real inputs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [transcript, roles?.seller, roles?.prospect],
-  );
   const priceHasAmount = price.some((segment) =>
     numbers.some((number) => number.segment.id === segment.id),
   );
@@ -323,11 +311,6 @@ export function KeyFacts({
             </select>
           ) : industry ? (
             industry
-          ) : heardIndustry ? (
-            <>
-              {heardIndustry.label}
-              <span className={styles.muted}>heard in the call</span>
-            </>
           ) : (
             <span className={styles.muted}>Not found</span>
           )
@@ -337,14 +320,6 @@ export function KeyFacts({
             <Confirmed />
           ) : industry ? (
             ask("industry")
-          ) : heardIndustry ? (
-            ask("industry", () =>
-              save({
-                kind: "value",
-                id: "industry",
-                value: heardIndustry.label,
-              }),
-            )
           ) : (
             add("industry")
           )
