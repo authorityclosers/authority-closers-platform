@@ -1,0 +1,21 @@
+[Unit]
+Description=Refresh the development Sales Xray backend from staging
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /srv/authority-closers/application/current-staging/scripts/refresh-dev-sales-xray-backend.py
+MemoryMax=512M
+CPUQuota=50%
+TasksMax=64
+Nice=10
+IOSchedulingClass=idle
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
