@@ -24,7 +24,8 @@ grant and separate immutable revocation rows; neither email nor a client claim
 is authority. A later regrant is a new command, not an edit of old history.
 
 Platform scope accepts only `platform_access_manage`, `platform_tenants_read`,
-`platform_catalog_read`, `platform_catalog_write`, `platform_catalog_publish`.
+`platform_catalog_read`, `platform_catalog_write`, `platform_catalog_publish`,
+`platform_organisations_manage`, `platform_release_manage`.
 Tenant/program scope accepts the individually assigned existing Studio action
 names `catalog_read`, `catalog_write`, `catalog_publish`, `learner_diagnose`,
 `learning_review`. No assignment implies another action. In particular,

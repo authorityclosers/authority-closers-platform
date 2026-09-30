@@ -58,6 +58,7 @@ SOURCE_OBJECTS = "20260928_0051"
 CANARY = "20260929_0052"
 GOOGLE_PROFILES = "20260930_0053"
 ORGANISATIONS = "20260930_0054"
+PLATFORM_RELEASE_MANAGE = "20260930_0060"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -96,6 +97,7 @@ HEADS = (
     CANARY,
     GOOGLE_PROFILES,
     ORGANISATIONS,
+    PLATFORM_RELEASE_MANAGE,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -106,6 +108,7 @@ TABLELESS_VERSIONED_HEADS = (
     COACHING_DEPTH,
     EMAIL_ACKNOWLEDGEMENT,
     COACHING_V6_SELECTION,
+    PLATFORM_RELEASE_MANAGE,
 )
 NEW_TABLES = {
     PRACTICE: (
@@ -252,6 +255,11 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             "ac-postgres-parity-v34",
             module.GOOGLE_PROFILES_PARITY_TABLES
             + ("organisations", "organisation_domain_settings", "organisation_invites"),
+        )
+        assert module.PLATFORM_RELEASE_MANAGE_PARITY_MIGRATION_HEAD == PLATFORM_RELEASE_MANAGE
+        assert module.VERSIONED_PARITY_CONTRACTS[PLATFORM_RELEASE_MANAGE] == (
+            module.ORGANISATIONS_PARITY_CONTRACT,
+            module.ORGANISATIONS_PARITY_TABLES,
         )
 
 
@@ -631,6 +639,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         104,
         105,
         108,
+        108,
     )
     expected_contracts = (
         None,
@@ -669,6 +678,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v31",
         "ac-postgres-parity-v32",
         "ac-postgres-parity-v33",
+        "ac-postgres-parity-v34",
         "ac-postgres-parity-v34",
     )
     for module in (backup, proof, drill):

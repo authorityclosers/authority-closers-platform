@@ -2,7 +2,7 @@
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, cast, get_args
 from uuid import uuid4
 
 import httpx
@@ -12,9 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ac_platform.authorization.application import CapabilityApplication
+from ac_platform.authorization.models import PLATFORM_CAPABILITIES
 from ac_platform.authorization.policy import CapabilityScope
 from ac_platform.http.auth import install_identity_http
-from ac_platform.http.platform import install_platform_http
+from ac_platform.http.platform import PlatformPermission, install_platform_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
 from ac_platform.identity.application import AsyncIdentityApplication
@@ -81,16 +82,23 @@ async def read(state, path="/v1/me/platform-access", *, token=TOKEN, host="admin
         )
 
 
-async def test_platform_grant_needs_no_selected_academy_or_operations_membership(platform_state):
+def test_platform_permission_literal_matches_capability_registry():
+    assert set(get_args(PlatformPermission)) == PLATFORM_CAPABILITIES
+
+
+@pytest.mark.parametrize("permission", sorted(PLATFORM_CAPABILITIES))
+async def test_platform_grant_needs_no_selected_academy_or_operations_membership(
+    platform_state, permission
+):
     state = platform_state
-    await grant(state)
+    await grant(state, permission)
     response = await read(state)
     assert response.status_code == 200
     assert response.json() == {
         "person_id": str(state.person),
         "session_id": str(state.session),
         "selected_tenant_id": None,
-        "platform_permissions": ["platform_tenants_read"],
+        "platform_permissions": [permission],
     }
     assert response.headers["cache-control"] == "private, no-store"
     assert "set-cookie" not in response.headers

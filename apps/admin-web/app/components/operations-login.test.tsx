@@ -131,24 +131,34 @@ it("recovers OAuth-returned memberships with reads only and requires an explicit
   expect(navigate).toHaveBeenCalledWith("/");
 });
 
-it("offers explicit Platform Admin navigation without inventing an academy assignment", async () => {
-  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
-    ...choices,
-    workspaces: [],
-  });
-  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
-  await mount();
-  expect(navigate).not.toHaveBeenCalled();
-  expect(container.querySelector("select")).toBeNull();
-  expect(container.textContent).toContain("Your account has platform access");
-  const platformButton = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent === "Open Platform Admin",
-  )!;
-  await act(async () => platformButton.click());
-  expect(navigate).toHaveBeenCalledWith("/platform");
-  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
-  expect(api.loadAdminSession).not.toHaveBeenCalled();
-});
+it.each([
+  "platform_tenants_read",
+  "platform_organisations_manage",
+  "platform_release_manage",
+] as const)(
+  "offers Platform Admin navigation for %s without an academy assignment",
+  async (permission) => {
+    vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+      ...choices,
+      workspaces: [],
+    });
+    vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+      ...platformAdmin,
+      permissions: [permission],
+    });
+    await mount();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(container.querySelector("select")).toBeNull();
+    expect(container.textContent).toContain("Your account has platform access");
+    const platformButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Open Platform Admin",
+    )!;
+    await act(async () => platformButton.click());
+    expect(navigate).toHaveBeenCalledWith("/platform");
+    expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+    expect(api.loadAdminSession).not.toHaveBeenCalled();
+  },
+);
 
 it.each([null, tenant])(
   "lets a returning platform admin choose an academy even with selected context %s",

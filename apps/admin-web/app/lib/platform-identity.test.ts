@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import {
   loadPlatformIdentity,
+  platformPermissionSchema,
   readPlatformJson,
   verifyPlatformIdentity,
 } from "@ac/operations-web/platform-identity";
@@ -47,6 +48,24 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("separate Platform Admin admission", () => {
+  it("accepts all seven platform capabilities together", () => {
+    const permissions = [
+      "platform_access_manage",
+      "platform_tenants_read",
+      "platform_catalog_read",
+      "platform_catalog_write",
+      "platform_catalog_publish",
+      "platform_organisations_manage",
+      "platform_release_manage",
+    ];
+    expect(platformPermissionSchema.options).toEqual(permissions);
+    expect(
+      verifyPlatformIdentity(me, context, {
+        ...access,
+        platform_permissions: permissions,
+      })?.permissions,
+    ).toEqual(permissions);
+  });
   it("accepts a verified exact grant without changing membership or requiring selected tenant", () => {
     expect(identity).toMatchObject({
       personId: person,
@@ -67,6 +86,7 @@ describe("separate Platform Admin admission", () => {
     { selected_tenant_id: person },
     { platform_permissions: ["admin_surface"] },
     { platform_permissions: ["catalog_read"] },
+    { platform_permissions: ["platform_unknown_manage"] },
     {
       platform_permissions: ["platform_tenants_read", "platform_tenants_read"],
     },

@@ -75,6 +75,21 @@ it("does not request cross-tenant data for an access-manager-only identity", asy
     "does not include the academy directory",
   );
 });
+it.each([
+  ["platform_organisations_manage", "Manage organisations"],
+  ["platform_release_manage", "Manage releases"],
+] as const)(
+  "labels %s without requesting the directory",
+  async (permission, label) => {
+    vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+      ...identity,
+      permissions: [permission],
+    });
+    await mount();
+    expect(container.textContent).toContain(label);
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
 it("rejects response from another session", async () => {
   vi.mocked(fetch).mockResolvedValue(
     Response.json({ ...inventory, session_id: person }),
