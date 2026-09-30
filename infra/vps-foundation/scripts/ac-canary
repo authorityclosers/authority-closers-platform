@@ -25,6 +25,8 @@ fi
 
 docker_pid=""
 canary_timed_out=0
+# Invoked indirectly by the TERM/INT trap.
+# shellcheck disable=SC2329
 handle_timeout() {
   trap '' TERM INT
   canary_timed_out=1
