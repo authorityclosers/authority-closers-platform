@@ -1,124 +1,175 @@
+"use client";
+
 import {
   CalendarDays,
+  Clock3,
+  DollarSign,
   FileText,
+  Globe,
   GraduationCap,
   IndianRupee,
+  Mail,
+  MapPin,
+  Percent,
   UserRound,
+  Users,
   Video,
+  type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties } from "react";
 
+import { useBrandPath, useIndexedBrand } from "./brands/brand-icons";
+import { findEntities, type Entity, type EntityKind } from "./entity-engine";
 import styles from "./report-entities.module.css";
 
-// Things the AI's report text mentions (WhatsApp, a program, money, a
-// document, a video, a date, a person) shown as small icon chips. Pure text
-// matching on the saved report: no AI call, nothing invented.
+export { findEntities, mentions, brandNamed } from "./entity-engine";
+export type { Entity, EntityKind, TextPart } from "./entity-engine";
 
-export type EntityKind =
-  | "whatsapp"
-  | "program"
-  | "money"
-  | "document"
-  | "video"
-  | "date"
-  | "person";
+const KIND_ICONS: Record<Exclude<EntityKind, "brand">, LucideIcon> = {
+  program: GraduationCap,
+  money: IndianRupee,
+  percent: Percent,
+  document: FileText,
+  video: Video,
+  date: CalendarDays,
+  time: Clock3,
+  person: UserRound,
+  team: Users,
+  place: MapPin,
+  email: Mail,
+  website: Globe,
+};
 
-const PATTERNS: Array<[EntityKind, string]> = [
-  ["whatsapp", String.raw`[Ww]hats\s?[Aa]pp|WHATSAPP|व्हाट्सएप|व्हॉट्सऍप`],
-  [
-    "program",
-    String.raw`\b\d+[- ][Dd]ay\s+(?:\p{Lu}[\w-]*\s+){0,4}(?:[Pp]rogram(?:me)?|[Cc]ourse|[Ww]orkshop|[Tt]raining|[Bb]ootcamp|[Ee]vent)\b|\b(?:\p{Lu}[\w-]*\s+){1,4}(?:Program(?:me)?|Course|Workshop|Bootcamp)\b`,
-  ],
-  [
-    "money",
-    String.raw`₹\s?[\d,.]+(?:\s?(?:lakh|crore|k))?|\b[\d,.]+(?:\s?(?:to|-)\s?[\d,.]+)?\s?(?:(?:lakh|crore|Lakh|Crore)(?:\s+rupees)?|rupees)\b|\b(?:[Uu]npaid\s+)?[Rr]eceivables?\b|\b[Rr]evenue\b|\b[Tt]urnover\b`,
-  ],
-  [
-    "document",
-    String.raw`\b[Ss]yllabus\b|\b[Ww]orkbooks?\b|\b[Bb]rochures?\b|\b[Pp]roposals?\b|\bPDFs?\b|\b[Qq]uotations?\b`,
-  ],
-  ["video", String.raw`\b[Vv]ideos?\b|\b[Rr]ecordings?\b`],
-  [
-    "date",
-    String.raw`\b[Nn]ext day\b|\b[Tt]omorrow\b|\b[Nn]ext week\b|\b[Nn]ext month\b|\b\d{1,2}(?::\d{2})?\s?(?:am|pm|AM|PM)\b`,
-  ],
-  [
-    "person",
-    String.raw`\b[Ss]enior manager\b|\b[Dd]ecision[- ]maker\b|\b[Bb]usiness partner\b|\b[Cc]o-?founder\b`,
-  ],
-];
+/** Relative luminance of a hex colour, 0 (black) to 1 (white). */
+function luminance(hex: string) {
+  const [r, g, b] = [0, 2, 4].map((at) => {
+    const channel = parseInt(hex.slice(at, at + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
 
-// Case matters on purpose: only capitalised names read as a program.
-const MATCHER = new RegExp(
-  PATTERNS.map(([kind, pattern]) => `(?<${kind}>${pattern})`).join("|"),
-  "gu",
-);
+type BrandLike = Readonly<{ name: string; slug: string | null; hex: string }>;
 
-function WhatsAppMark({ size = 14 }: { size?: number }) {
-  return (
+/**
+ * A brand's logo in its own colour; black logos follow the text colour so
+ * they stay visible in dark mode. Until the logo loads, or for a brand with
+ * no logo, a monogram in the brand's colour holds the same space.
+ */
+export function BrandMark({
+  brand,
+  size = 14,
+}: {
+  brand: BrandLike;
+  size?: number;
+}) {
+  const path = useBrandPath(brand.slug);
+  const light = luminance(brand.hex);
+  const style = {
+    "--brand": `#${brand.hex}`,
+    "--size": `${size}px`,
+  } as CSSProperties;
+  return path ? (
     <svg
+      className={styles.brandSvg}
       width={size}
       height={size}
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className={styles.wa}
+      data-ink={light < 0.04 ? "" : undefined}
+      style={style}
     >
-      <path
-        className={styles.waBubble}
-        d="M12 2.2a9.8 9.8 0 0 0-8.4 14.8L2.2 21.8l4.9-1.3A9.8 9.8 0 1 0 12 2.2z"
-      />
-      <path
-        className={styles.waPhone}
-        d="M8.6 7.3c.2-.4.4-.4.7-.4h.5c.2 0 .4 0 .6.5l.8 1.9c.1.2.1.4 0 .6l-.4.6c-.1.2-.2.3 0 .6.4.7 1 1.4 1.7 1.9.3.2.7.4 1 .6.3.1.4.1.6-.1l.6-.7c.2-.2.4-.2.6-.1l1.8.9c.2.1.4.2.4.4 0 .5-.1 1.1-.5 1.5-.5.5-1.3.8-2 .7-1.3-.2-2.6-.8-3.7-1.7-1.2-1-2.1-2.2-2.7-3.6-.3-.8-.4-1.7 0-2.5z"
-      />
+      <path d={path} />
     </svg>
+  ) : (
+    <span
+      className={styles.monogram}
+      aria-hidden="true"
+      data-light={light > 0.55 ? "" : undefined}
+      style={style}
+    >
+      {brand.name.charAt(0)}
+    </span>
   );
 }
 
-const ICONS: Record<EntityKind, ReactNode> = {
-  whatsapp: <WhatsAppMark />,
-  program: <GraduationCap size={13} aria-hidden="true" />,
-  money: <IndianRupee size={12} aria-hidden="true" />,
-  document: <FileText size={12} aria-hidden="true" />,
-  video: <Video size={13} aria-hidden="true" />,
-  date: <CalendarDays size={12} aria-hidden="true" />,
-  person: <UserRound size={12} aria-hidden="true" />,
-};
-
-/** Splits report text into plain runs and entity matches. */
-export function findEntities(
-  text: string,
-): Array<string | { kind: EntityKind; text: string }> {
-  const parts: Array<string | { kind: EntityKind; text: string }> = [];
-  let last = 0;
-  for (const match of text.matchAll(MATCHER)) {
-    const index = match.index ?? 0;
-    const kind = (Object.entries(match.groups ?? {}).find(
-      ([, value]) => value !== undefined,
-    )?.[0] ?? null) as EntityKind | null;
-    if (!kind) continue;
-    if (index > last) parts.push(text.slice(last, index));
-    parts.push({ kind, text: match[0] });
-    last = index + match[0].length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
+/**
+ * The logo for any brand name from our 3,200-brand library, or a neutral
+ * monogram when the name is not a known brand.
+ */
+export function BrandByName({
+  name,
+  size = 14,
+}: {
+  name: string;
+  size?: number;
+}) {
+  const found = useIndexedBrand(name);
+  return (
+    <BrandMark
+      brand={found ?? { name, slug: null, hex: "8A94A6" }}
+      size={size}
+    />
+  );
 }
 
-/** Report text with its mentions shown as icon chips. */
-export function EntityText({ text }: { text: string }) {
+/** One mention as an icon chip. */
+export function EntityChip({ entity }: { entity: Entity }) {
+  if (entity.kind === "brand" && entity.brand) {
+    return (
+      <span
+        className={styles.chip}
+        data-kind="brand"
+        title={entity.brand.name}
+        style={{ "--brand": `#${entity.brand.hex}` } as CSSProperties}
+      >
+        <BrandMark brand={entity.brand} />
+        {entity.text}
+      </span>
+    );
+  }
+  if (entity.kind === "brand") return <>{entity.text}</>;
+  const Icon =
+    entity.kind === "money" && entity.text.includes("$")
+      ? DollarSign
+      : KIND_ICONS[entity.kind];
+  return (
+    <span className={styles.chip} data-kind={entity.kind}>
+      <Icon size={12} aria-hidden="true" />
+      {entity.text}
+    </span>
+  );
+}
+
+/**
+ * Text with its mentions shown as icon chips: brands with their logos,
+ * programs, money, documents, places, dates and more, in English, Hindi and
+ * Marathi. Use it anywhere report or app text is shown. `kinds` limits which
+ * mentions become chips.
+ */
+export function RichText({
+  text,
+  kinds,
+}: {
+  text: string;
+  kinds?: readonly EntityKind[];
+}) {
   return (
     <>
       {findEntities(text).map((part, index) =>
         typeof part === "string" ? (
           part
+        ) : kinds && !kinds.includes(part.kind) ? (
+          part.text
         ) : (
-          <span key={index} className={styles.chip} data-kind={part.kind}>
-            {ICONS[part.kind]}
-            {part.text}
-          </span>
+          <EntityChip key={index} entity={part} />
         ),
       )}
     </>
   );
 }
+
+/** The earlier name for RichText. */
+export const EntityText = RichText;

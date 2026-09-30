@@ -37,6 +37,7 @@ import {
   voiceStyle,
 } from "./speaker-profiles";
 import styles from "./call-signals.module.css";
+import { RichText } from "./report-entities";
 
 const DONE_EVENT = "sales-xray:promises-done";
 const doneKey = (callId: string) => `ac.xray.promises-done.v1:${callId}`;
@@ -119,7 +120,9 @@ function PlayLine({
         {formatClock(item.start_ms)}
       </button>
       <span className={styles.words}>
-        <q>{item.text}</q>
+        <q>
+          <RichText text={item.text} />
+        </q>
         {children}
       </span>
     </li>
@@ -349,7 +352,10 @@ export function CallSignals({
                         <b>Silence {seconds(item.silence_ms)}</b>
                         {item.reply ? (
                           <>
-                            , then: <q>{item.reply.text}</q>
+                            , then:{" "}
+                            <q>
+                              <RichText text={item.reply.text} />
+                            </q>
                           </>
                         ) : null}
                       </>
@@ -407,7 +413,9 @@ export function CallSignals({
                       <Play size={11} aria-hidden="true" />
                       {formatClock(item.start_ms)}
                     </button>
-                    <q className={styles.words}>{item.text}</q>
+                    <q className={styles.words}>
+                      <RichText text={item.text} />
+                    </q>
                   </li>
                 );
               })}

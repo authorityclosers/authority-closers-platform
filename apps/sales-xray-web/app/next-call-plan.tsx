@@ -15,6 +15,7 @@ import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import { formatClipRange, spokenClipRange } from "./lightbox/time";
 import { useReportInline } from "./report-reading-context";
 import styles from "./next-call-plan.module.css";
+import { RichText } from "./report-entities";
 
 export function NextCallPlan({
   report,
@@ -134,7 +135,9 @@ export function NextCallPlan({
         <aside className={styles.outcome} aria-label="Call outcome">
           <div>
             <h3>What happened in this call</h3>
-            <p>{outcome.text}</p>
+            <p>
+              <RichText text={outcome.text} />
+            </p>
           </div>
           <div
             className={styles.outcomeSources}
@@ -195,10 +198,13 @@ export function NextCallPlan({
               </h3>
               <div className={styles.preview}>
                 {section.title && <h4>{section.title}</h4>}
-                <p>{section.text}</p>
+                <p>
+                  <RichText text={section.text} />
+                </p>
                 {section.extra && (
                   <p className={styles.target}>
-                    <strong>{section.extra.label}:</strong> {section.extra.text}
+                    <strong>{section.extra.label}:</strong>{" "}
+                    <RichText text={section.extra.text} />
                   </p>
                 )}
               </div>
@@ -213,7 +219,9 @@ export function NextCallPlan({
                       section.title ?? section.label,
                       evidenceIndex,
                     )}
-                    <blockquote>“{item.quote}”</blockquote>
+                    <blockquote>
+                      “<RichText text={item.quote} />”
+                    </blockquote>
                   </div>
                 ))}
               <button
@@ -268,10 +276,13 @@ export function NextCallPlan({
         >
           <div className={styles.fullNotes}>
             {selected.title && <h3>{selected.title}</h3>}
-            <p>{selected.text}</p>
+            <p>
+              <RichText text={selected.text} />
+            </p>
             {selected.extra && (
               <p>
-                <strong>{selected.extra.label}:</strong> {selected.extra.text}
+                <strong>{selected.extra.label}:</strong>{" "}
+                <RichText text={selected.extra.text} />
               </p>
             )}
             {selected.evidence.map((item, index) => (
@@ -280,7 +291,9 @@ export function NextCallPlan({
                 className={styles.fullSource}
               >
                 {evidenceButton(item, selected.title ?? selected.label, index)}
-                <blockquote>“{item.quote}”</blockquote>
+                <blockquote>
+                  “<RichText text={item.quote} />”
+                </blockquote>
               </div>
             ))}
           </div>

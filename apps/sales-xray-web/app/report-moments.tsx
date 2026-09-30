@@ -25,6 +25,7 @@ import {
   useReportReading,
 } from "./report-reading-context";
 import styles from "./report-moments.module.css";
+import { RichText } from "./report-entities";
 
 const PAGE_SIZE = 4;
 const sources = {
@@ -251,7 +252,8 @@ function Linked({ items }: { items: LinkedFinding[] }) {
             <span className={styles.linkedTitle}>{item.title}</span>
             {item.note && (
               <span className={styles.linkedNote}>
-                <strong>{item.note.label}:</strong> {item.note.text}
+                <strong>{item.note.label}:</strong>{" "}
+                <RichText text={item.note.text} />
               </span>
             )}
           </li>
@@ -547,13 +549,15 @@ function MomentsBrowser({
               </div>
               <blockquote className={styles.quote}>
                 <p {...sourceTextAttributes(moment.evidence.quote)}>
-                  {moment.evidence.quote}
+                  <RichText text={moment.evidence.quote} />
                 </p>
               </blockquote>
               {moment.explanation && (
                 <div className={styles.observation}>
                   <h4>Report observation</h4>
-                  <p>{moment.explanation}</p>
+                  <p>
+                    <RichText text={moment.explanation} />
+                  </p>
                 </div>
               )}
               <Linked items={linkedFindings(report, moment.evidence)} />
@@ -615,12 +619,14 @@ function MomentsBrowser({
             <h3 tabIndex={-1}>{moment.title}</h3>
             <p className={styles.time}>{formatClipTime(moment.evidence)}</p>
             <blockquote {...sourceTextAttributes(moment.evidence.quote)}>
-              {moment.evidence.quote}
+              <RichText text={moment.evidence.quote} />
             </blockquote>
             {moment.explanation && (
               <>
                 <h4>Report observation</h4>
-                <p>{moment.explanation}</p>
+                <p>
+                  <RichText text={moment.explanation} />
+                </p>
               </>
             )}
             <Linked items={linkedFindings(report, moment.evidence)} />

@@ -4,10 +4,7 @@ import {
   ArrowRight,
   ArrowRightLeft,
   AudioLines,
-  Frown,
-  Meh,
   MessagesSquare,
-  Smile,
   Ban,
   BookOpen,
   CalendarCheck,
@@ -39,7 +36,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { talkShareSeries, voicesOf } from "./call-data";
+import { questionsAsked, talkShareSeries, voicesOf } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type {
   ReportEvidence,
@@ -311,6 +308,8 @@ function TalkChart({
         <button
           type="button"
           className={styles.outcomeMark}
+          aria-label={`Play the outcome · ${formatClock(outcomeMs)}`}
+          title={`Play the outcome · ${formatClock(outcomeMs)}`}
           style={{ left: at(outcomeMs) }}
           onClick={() => onSeek(outcomeMs)}
         >
@@ -514,39 +513,24 @@ export function OverviewHook({
     },
   ];
 
-  // Each phase gets a plain headline and a mood from what was measured: the
-  // prospect's share of the talk before and after the switch.
-  const beforeFeel =
-    before === null
-      ? { mood: "neutral", title: "How it started", Face: MessagesSquare }
-      : before >= 0.25
-        ? { mood: "good", title: "A real two-way talk", Face: Smile }
-        : before >= 0.1
-          ? { mood: "ok", title: "Mostly you talking", Face: Meh }
-          : {
-              mood: "bad",
-              title: "You did almost all the talking",
-              Face: Frown,
-            };
-  const afterFeel =
-    after === null
-      ? { mood: "neutral", title: "What happened next", Face: MessagesSquare }
-      : mood === "drop" && after < 0.1
-        ? { mood: "bad", title: "They went quiet", Face: Frown }
-        : mood === "drop"
-          ? { mood: "ok", title: "They talked less", Face: Meh }
-          : mood === "rise"
-            ? { mood: "good", title: "They opened up", Face: Smile }
-            : { mood: "ok", title: "About the same", Face: Meh };
-  // Questions the seller asked in each part, counted from the transcript.
+  const beforePhase = {
+    mood: "neutral",
+    title: before === null ? "How it started" : "Before the switch",
+    Face: MessagesSquare,
+  };
+  const afterPhase = {
+    mood: "neutral",
+    title: after === null ? "What happened next" : "After the switch",
+    Face: MessagesSquare,
+  };
+  // Count each seller question, even when one segment contains several.
   const asked = (from: number, to: number) =>
     roles
-      ? transcript.segments.filter(
-          (segment) =>
-            segment.speaker_id === roles.seller &&
-            segment.start_ms >= from &&
-            segment.start_ms < to &&
-            /[?？]/.test(segment.text),
+      ? questionsAsked(transcript).filter(
+          (row) =>
+            row.segment.speaker_id === roles.seller &&
+            row.segment.start_ms >= from &&
+            row.segment.start_ms < to,
         ).length
       : null;
   const minutes = (ms: number) => `${Math.max(1, Math.round(ms / 60000))} min`;
@@ -577,7 +561,7 @@ export function OverviewHook({
         {
           key: "before",
           label: turnMs !== null ? `At first · ${minutes(turnMs)}` : "At first",
-          ...beforeFeel,
+          ...beforePhase,
           note: change.before,
           stats: stats(before, askedBefore),
           cta: "Hear how it started",
@@ -616,13 +600,10 @@ export function OverviewHook({
             turnMs !== null
               ? `After that · ${minutes(durationMs - turnMs)}`
               : "After that",
-          ...afterFeel,
+          ...afterPhase,
           note: change.after,
           stats: stats(after, askedAfter),
-          cta:
-            afterFeel.title === "They went quiet"
-              ? "Hear where they went quiet"
-              : "Hear what happened next",
+          cta: "Hear what happened next",
         },
       ]
     : [];
@@ -710,7 +691,7 @@ export function OverviewHook({
                 <li
                   key={phase.key}
                   data-phase={phase.key}
-                  data-feel={phase.mood}
+                  data-feel={phase.key === "switch" ? "pivot" : undefined}
                   style={{ "--i": index } as CSSProperties}
                 >
                   <div className={styles.phaseHead}>
@@ -752,7 +733,7 @@ export function OverviewHook({
               ))}
             </ol>
             {change.possible_effect ? (
-              <p className={styles.effectRow} data-feel={afterFeel.mood}>
+              <p className={styles.effectRow}>
                 <CornerDownRight size={15} aria-hidden="true" />
                 <span>
                   <b>What it may have caused</b>{" "}
@@ -969,7 +950,7 @@ export function OverviewHook({
                       ? "<1 s"
                       : `${Math.round(signals.silence / 1000)} s`}
                 </b>{" "}
-                silence after the price
+                silence after a price or budget mention
               </button>
               <button type="button" onClick={() => go("signals")}>
                 <b>

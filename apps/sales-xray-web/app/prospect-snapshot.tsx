@@ -6,6 +6,7 @@ import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import { formatClipRange, spokenClipRange } from "./lightbox/time";
 import { useReportInline } from "./report-reading-context";
 import styles from "./prospect-snapshot.module.css";
+import { RichText } from "./report-entities";
 
 export type ProspectSnapshotProps = {
   report: SalesReport;
@@ -105,7 +106,9 @@ export function ProspectSnapshot({
                   data-prospect-part="source"
                 >
                   <p className={styles.sectionLabel}>Report observation</p>
-                  <p className={styles.observation}>{item.source.text}</p>
+                  <p className={styles.observation}>
+                    <RichText text={item.source.text} />
+                  </p>
                   <div
                     className={styles.verbatim}
                     data-prospect-part="verbatim"
@@ -118,7 +121,9 @@ export function ProspectSnapshot({
                       >
                         <blockquote>
                           <Quote size={18} aria-hidden="true" />
-                          <span>{evidence.quote}</span>
+                          <span>
+                            <RichText text={evidence.quote} />
+                          </span>
                         </blockquote>
                         <figcaption>
                           {sourceAction(evidence, index, onSelectEvidence)}

@@ -24,6 +24,7 @@ import { ReviewDialog } from "./review-dialog";
 import { useReportInline } from "./report-reading-context";
 import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
 import styles from "./sales-skills.module.css";
+import { RichText } from "./report-entities";
 
 // Colour identifies a topic, never its performance. Labels and observations
 // remain the server's eight dimensions; citations are not timed audio evidence.
@@ -221,7 +222,9 @@ function SkillSources({
                 <span className={styles.sourceTime}>
                   {formatClipRange(evidence.start_ms, evidence.end_ms)}
                 </span>
-                <blockquote>{evidence.quote}</blockquote>
+                <blockquote>
+                  <RichText text={evidence.quote} />
+                </blockquote>
                 {onSelectEvidence && (
                   <ClipPlayState
                     startMs={evidence.start_ms}

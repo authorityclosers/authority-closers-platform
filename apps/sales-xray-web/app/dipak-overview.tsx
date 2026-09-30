@@ -51,6 +51,7 @@ import {
 import { CallRecordView } from "./call-record";
 import type { CallRecord } from "./call-record-contract";
 import styles from "./dipak-overview.module.css";
+import { RichText } from "./report-entities";
 
 type Props = {
   report: SalesReport;
@@ -513,7 +514,7 @@ export function DipakOverview({
                 className={styles.evidenceQuote}
                 {...sourceTextAttributes(item.quote)}
               >
-                {item.quote}
+                <RichText text={item.quote} />
               </span>
               <span className={styles.evidenceControls}>
                 <ClipListenButton
@@ -544,7 +545,9 @@ export function DipakOverview({
     return (
       <article className={styles.finding} key={`${finding.title}-${index}`}>
         <h4>{finding.title}</h4>
-        <p>{finding.explanation}</p>
+        <p>
+          <RichText text={finding.explanation} />
+        </p>
         {evidence(finding)}
       </article>
     );
@@ -557,7 +560,9 @@ export function DipakOverview({
     return (
       <div className={styles.sourceNote}>
         <p className={styles.label}>{label}</p>
-        <p>{note.text}</p>
+        <p>
+          <RichText text={note.text} />
+        </p>
         {evidence({
           title: label,
           explanation: note.text,
@@ -617,7 +622,9 @@ export function DipakOverview({
             <span className={styles.status}>Draft report</span>
           </div>
           <Title className={styles.verdictLine}>{report.verdict}</Title>
-          <p className={styles.lede}>{report.summary}</p>
+          <p className={styles.lede}>
+            <RichText text={report.summary} />
+          </p>
           <div className={styles.rowActions}>
             {reviewLink("14", "Read the final verdict")}
           </div>
@@ -982,7 +989,9 @@ export function DipakOverview({
                                 <p className={styles.label}>
                                   What to do differently
                                 </p>
-                                <p>{finding.explanation}</p>
+                                <p>
+                                  <RichText text={finding.explanation} />
+                                </p>
                                 {evidence(finding)}
                                 <BusinessImpact missing="Lead volume, conversion history and time or revenue data are needed to calculate this." />
                               </>
@@ -1037,7 +1046,11 @@ export function DipakOverview({
                             <Gem size={17} aria-hidden="true" />
                             <div>
                               <h4>{finding.title}</h4>
-                              {detail && <p>{finding.explanation}</p>}
+                              {detail && (
+                                <p>
+                                  <RichText text={finding.explanation} />
+                                </p>
+                              )}
                               {evidence(finding)}
                             </div>
                           </div>
@@ -1231,7 +1244,7 @@ export function DipakOverview({
                                               item.quote,
                                             )}
                                           >
-                                            {item.quote}
+                                            <RichText text={item.quote} />
                                           </span>
                                         </blockquote>
                                         {contextualPlayback.context_after && (

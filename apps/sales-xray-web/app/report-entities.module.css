@@ -1,11 +1,12 @@
-/* Entity chips inside report text: WhatsApp, programs, money, documents. */
+/* Mentions inside text as small icon chips. Each kind has one colour. */
 .chip {
+  --tone: var(--lx-ink-3, var(--lx-muted));
   display: inline-flex;
   align-items: center;
   gap: 3px;
   padding: 0 5px 0 4px;
   border-radius: 6px;
-  background: var(--lx-sunken);
+  background: color-mix(in srgb, var(--tone) 11%, var(--lx-surface));
   color: var(--lx-ink);
   font-weight: 600;
   line-height: 1.35;
@@ -13,50 +14,73 @@
   white-space: nowrap;
 }
 
-.chip svg {
+.chip > svg {
   flex: none;
   align-self: center;
+  color: var(--tone);
 }
 
-.chip[data-kind="whatsapp"] {
-  background: color-mix(in srgb, #25d366 14%, var(--lx-surface));
+.chip[data-kind="brand"] {
+  --tone: var(--brand);
 }
 
 .chip[data-kind="program"] {
-  background: color-mix(in srgb, var(--lx-missed) 12%, var(--lx-surface));
-  color: var(--lx-ink);
+  --tone: var(--lx-missed);
 }
 
-.chip[data-kind="program"] svg {
-  color: var(--lx-missed);
+.chip[data-kind="money"],
+.chip[data-kind="percent"] {
+  --tone: var(--lx-warning);
 }
 
-.chip[data-kind="money"] {
-  background: color-mix(in srgb, var(--lx-warning) 14%, var(--lx-surface));
+.chip[data-kind="document"],
+.chip[data-kind="video"],
+.chip[data-kind="email"],
+.chip[data-kind="website"] {
+  --tone: var(--lx-info);
 }
 
-.chip[data-kind="money"] svg {
-  color: var(--lx-warning);
+.chip[data-kind="date"],
+.chip[data-kind="time"],
+.chip[data-kind="person"],
+.chip[data-kind="team"] {
+  --tone: var(--lx-teal);
 }
 
-.chip[data-kind="document"] svg,
-.chip[data-kind="video"] svg {
-  color: var(--lx-info);
+.chip[data-kind="place"] {
+  --tone: var(--lx-objection);
 }
 
-.chip[data-kind="date"] svg,
-.chip[data-kind="person"] svg {
-  color: var(--lx-teal);
-}
-
-.wa {
+/* A brand's logo in its own colour; near-black logos take the text colour. */
+.brandSvg {
   display: block;
+  flex: none;
+  fill: var(--brand);
 }
 
-.waBubble {
-  fill: #25d366;
+.brandSvg[data-ink] {
+  fill: var(--lx-ink);
 }
 
-.waPhone {
-  fill: #ffffff;
+.chip > .brandSvg {
+  color: inherit;
+}
+
+.monogram {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 30%;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: calc(var(--size) * 0.62);
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.monogram[data-light] {
+  color: #1a1a1a;
 }

@@ -13,6 +13,18 @@ import {
   useSpeakerProfiles,
   voiceStyle,
 } from "./speaker-profiles";
+import { RichText } from "./report-entities";
+
+// Spoken lines show only the mentions worth a glance, so they stay calm.
+const TRANSCRIPT_KINDS = [
+  "brand",
+  "program",
+  "money",
+  "place",
+  "document",
+  "video",
+  "team",
+] as const;
 
 const PAGE_SIZE = 50;
 const ALL_SPEAKERS = "all";
@@ -190,7 +202,9 @@ export function ReportTranscript({
                   >
                     {labelOf(segment.speaker_id)}
                   </span>
-                  <span className={styles.text}>{segment.text}</span>
+                  <span className={styles.text}>
+                    <RichText text={segment.text} kinds={TRANSCRIPT_KINDS} />
+                  </span>
                 </button>
               );
             })}

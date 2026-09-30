@@ -951,18 +951,6 @@
   );
 }
 
-.phases li[data-feel="good"] {
-  --feel: var(--lx-teal);
-}
-
-.phases li[data-feel="ok"] {
-  --feel: var(--lx-warning);
-}
-
-.phases li[data-feel="bad"] {
-  --feel: var(--lx-objection);
-}
-
 .phases li[data-feel="pivot"] {
   --feel: var(--lx-missed);
 }
@@ -1035,10 +1023,6 @@
   transform: translateY(-1px);
 }
 
-.phases li[data-feel="neutral"] .phaseCta {
-  background: var(--lx-teal);
-}
-
 @keyframes pop {
   0% {
     transform: scale(0.4);
@@ -1067,7 +1051,7 @@
 }
 
 /* Cards stretch to one height; play buttons line up along the bottom. */
-.phases li[data-feel] {
+.phases li {
   display: flex;
   flex-direction: column;
 }
@@ -1135,18 +1119,6 @@
   color: var(--lx-ink-2, var(--lx-ink));
   font-size: 13.5px;
   line-height: 1.55;
-}
-
-.effectRow[data-feel="bad"] {
-  --feel: var(--lx-objection);
-}
-
-.effectRow[data-feel="ok"] {
-  --feel: var(--lx-warning);
-}
-
-.effectRow[data-feel="good"] {
-  --feel: var(--lx-teal);
 }
 
 .effectRow svg {
