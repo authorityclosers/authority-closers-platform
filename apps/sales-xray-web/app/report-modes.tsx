@@ -330,6 +330,14 @@ function updateReportLayerOffsets(
   const scrollportPadding = scrollport
     ? Number.parseFloat(window.getComputedStyle(scrollport).paddingTop) || 0
     : 0;
+  // The pinned report title row (data-report-sticky) covers the top too.
+  const stickyBar = scrollport?.querySelector<HTMLElement>(
+    "[data-report-sticky]",
+  );
+  const stickyHeight =
+    stickyBar && window.getComputedStyle(stickyBar).position === "sticky"
+      ? stickyBar.getBoundingClientRect().height
+      : 0;
   // A row hosted in the shell's top bar sits outside the report scrollport.
   const navCovers = workspace.contains(navRow);
   const measuredNavHeight = navCovers
@@ -337,12 +345,12 @@ function updateReportLayerOffsets(
     : 0;
   const targetOffset = Math.max(
     navCovers ? 64 : 16,
-    mobileBarOverlap + scrollportPadding + measuredNavHeight + 8,
+    mobileBarOverlap + scrollportPadding + stickyHeight + measuredNavHeight + 8,
   );
 
   workspace.style.setProperty(
     "--report-nav-sticky-top",
-    `${mobileBarOverlap}px`,
+    `${mobileBarOverlap + stickyHeight}px`,
   );
   workspace.style.setProperty(
     "--report-scroll-target-offset",
@@ -378,9 +386,12 @@ export function ReportModes({
   label = "Report sections",
   panels,
   boundCallId,
+  lightSurface = true,
 }: {
   label?: string;
   panels: ReportPanel[];
+  /** Keeps the report on the light surface; false follows a dark app theme. */
+  lightSurface?: boolean;
   /** Enables view and section bookmarks for this already-bound report. */
   boundCallId?: string;
 }) {
@@ -443,6 +454,10 @@ export function ReportModes({
     if (mobileBar) observer?.observe(mobileBar);
     if (scrollport) observer?.observe(scrollport);
     if (dock) observer?.observe(dock);
+    const stickyBar = scrollport?.querySelector<HTMLElement>(
+      "[data-report-sticky]",
+    );
+    if (stickyBar) observer?.observe(stickyBar);
     window.addEventListener("resize", update);
     return () => {
       observer?.disconnect();
@@ -831,7 +846,7 @@ export function ReportModes({
       ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
-      data-lx-surface="light"
+      data-lx-surface={lightSurface ? "light" : undefined}
       data-view={view}
       data-report-section={currentSection}
     >

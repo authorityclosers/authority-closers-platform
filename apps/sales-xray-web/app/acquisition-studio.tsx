@@ -83,7 +83,7 @@ import {
 import { XrayWave } from "./xray-wave";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
-import { CallMap } from "./call-map";
+import { CallMap, CallMapMini } from "./call-map";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
 import { latestStage, projectProcessing } from "./processing-state";
@@ -2208,7 +2208,7 @@ export function AcquisitionStudio({
         className={`xray-app simple-app ${styles.app}`}
         // Upload, uploading and processing follow the app theme; the report
         // keeps its light surface until its own theme pass.
-        data-theme={studioStage === "report" ? "light" : resolvedTheme}
+        data-theme={resolvedTheme}
         data-variant={variant}
         data-stage={studioStage}
         data-selected={displayFileSelected ? "true" : "false"}
@@ -3314,7 +3314,7 @@ export function AcquisitionStudio({
               <section
                 className={`studio-report panel ${styles.report}`}
                 aria-label="Sales call report"
-                data-lx-surface="light"
+                data-lx-surface={resolvedTheme === "dark" ? undefined : "light"}
               >
                 <ReportHeader
                   key={submission?.id ?? "unbound"}
@@ -3359,6 +3359,13 @@ export function AcquisitionStudio({
                       onSeek={playFrom}
                     />
                   }
+                  compactVisual={
+                    <CallMapMini
+                      report={report}
+                      durationMs={result.transcript.duration_ms}
+                      onSeek={playFrom}
+                    />
+                  }
                   onDownload={() => void downloadReport()}
                   onRequestDeletion={() => setDeleteConfirm(true)}
                 />
@@ -3390,6 +3397,7 @@ export function AcquisitionStudio({
                 )}
                 <ReportModes
                   label="Explore your sales report"
+                  lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
                   panels={[
                     {
@@ -3404,6 +3412,7 @@ export function AcquisitionStudio({
                           onSelectContextualPlayback={seekWithContext}
                           onUnlock={() => router.push("/login")}
                           durationMs={result.transcript.duration_ms}
+                          callRecord={result.callRecord}
                         />
                       ),
                     },

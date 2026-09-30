@@ -5,6 +5,8 @@ import { DipakOverview } from "./dipak-overview";
 import { ReportReadingProvider } from "./report-reading-context";
 import { ReportModes } from "./report-modes";
 import fixture from "../tests/fixtures/dipak-overview.json";
+import callRecordFixture from "../tests/fixtures/call-record.json";
+import { parseCallRecord } from "./call-record-contract";
 import { parseJobResponse } from "./report-contract";
 import type {
   Finding,
@@ -1280,3 +1282,34 @@ it("renders retained objection and closing findings with their actual source con
     "Agree a next step",
   );
 });
+
+it("mounts CallRecordView under the summary when callRecord is provided", async () => {
+  const callRecord = parseCallRecord(callRecordFixture);
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={report()}
+        onSelectEvidence={select}
+        callRecord={callRecord}
+      />,
+    ),
+  );
+  expect(container.querySelector('[aria-label="Call Record"]')).not.toBeNull();
+  expect(container.textContent).toContain("Call numbers");
+  expect(container.textContent).toContain("Current billing system lacks automated reconciliation.");
+});
+
+it("renders the unavailable note when callRecord is null", async () => {
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={report()}
+        onSelectEvidence={select}
+        callRecord={null}
+      />,
+    ),
+  );
+  expect(container.querySelector('[data-testid="call-details-unavailable"]')).not.toBeNull();
+  expect(container.textContent).toContain("Call details unavailable");
+});
+

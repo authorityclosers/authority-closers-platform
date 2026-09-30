@@ -759,3 +759,143 @@
     transition: none;
   }
 }
+
+/* ---------- Compact map, folded into the pinned report row ---------- */
+.mini {
+  position: relative;
+  display: flex;
+  height: 40px;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  overflow: hidden;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+.miniTrack {
+  position: relative;
+  height: 26px;
+  min-width: 0;
+  flex: 1;
+}
+.miniWave {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.miniWave line {
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: stroke var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.miniDot {
+  position: absolute;
+  top: -3px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 1.5px var(--lx-surface);
+  pointer-events: none;
+}
+.miniDot[data-tone="strength"] {
+  --tone: var(--lx-strength);
+}
+.miniDot[data-tone="objection"] {
+  --tone: var(--lx-objection);
+}
+.miniDot[data-tone="missed"] {
+  --tone: var(--lx-missed);
+}
+.miniDot[data-tone="closing"] {
+  --tone: var(--lx-closing);
+}
+.miniDot[data-tone="improve"] {
+  --tone: var(--lx-warning);
+}
+.miniHead,
+.miniCursor {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.miniHead {
+  z-index: 1;
+  background: var(--lx-teal);
+  transition: left 250ms linear;
+}
+.miniHead[data-playing] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lx-teal) 20%, transparent);
+}
+.miniCursor {
+  z-index: 1;
+  width: 1.5px;
+  background: var(--lx-ink);
+}
+.miniTime,
+.miniTotal {
+  min-width: 38px;
+  color: var(--lx-muted-2);
+  font: 650 11.5px/1 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.miniTime[data-live] {
+  color: var(--lx-teal);
+}
+.miniTotal {
+  text-align: right;
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniHead {
+    transition: none;
+  }
+}
+
+/* ---------- Compact map: frame and layer for the pixel-exact fold ----------
+   The frame (background, border, times, dots, playhead) fades in at the end
+   of the fold; the layer holds the waveform, drawn exactly like the full one,
+   and is what travels. */
+.mini {
+  isolation: isolate;
+  overflow: visible;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.miniChrome {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 14px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+  pointer-events: none;
+}
+.miniLayer {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+.miniWave line {
+  stroke-width: 2.2;
+}
+.miniChrome,
+.miniTime,
+.miniTotal,
+.miniLayer,
+.miniDot,
+.miniHead {
+  opacity: 0;
+}

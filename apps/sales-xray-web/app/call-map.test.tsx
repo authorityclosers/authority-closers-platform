@@ -269,3 +269,36 @@ it("summarises talk ratio, monologue, switches and the report balance", () => {
   expect(text).toContain("Speaker switches");
   expect(text).toMatch(/1 win · \d+ to work on/);
 });
+
+it("names another salesperson and the prospect from the opening, in one tap", async () => {
+  updateShellState({ profileName: "Suyash Rao" });
+  await renderMap({
+    ...transcript,
+    segments: [
+      {
+        id: "o1",
+        speaker_id: "caller",
+        start_ms: 0,
+        end_ms: 4000,
+        text: "नंदलाल जी नमस्ते मेरा नाम मानस है। मैं team से बोल रहा हूं।",
+      },
+      {
+        id: "o2",
+        speaker_id: "owner",
+        start_ms: 4200,
+        end_ms: 5000,
+        text: "हां बोलो।",
+      },
+    ],
+  });
+  expect(host.textContent).toContain("is the salesperson");
+  expect(host.textContent).not.toContain("looks like you");
+  const yes = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Yes",
+  )!;
+  await act(async () => yes.click());
+  expect(chips()[0].getAttribute("aria-label")).toBe("Edit मानस");
+  expect(chips()[0].textContent).toContain("Salesperson");
+  expect(chips()[1].getAttribute("aria-label")).toBe("Edit नंदलाल जी");
+  expect(chips()[1].textContent).toContain("Prospect");
+});

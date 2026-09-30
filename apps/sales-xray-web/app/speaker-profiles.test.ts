@@ -4,7 +4,9 @@ import fixture from "../tests/fixtures/dipak-overview.json";
 import type { SalesReport, Transcript } from "./report-contract";
 import { searchSpeakerIcons, suggestProspectIcon } from "./speaker-icons";
 import {
+  detectSpokenNames,
   initials,
+  isAccountName,
   readSpeakerProfiles,
   saveSpeakerProfiles,
   suggestYou,
@@ -131,4 +133,26 @@ it("picks a prospect icon from the report's own words", () => {
   );
   expect(initials("Suyash Rao")).toBe("SR");
   expect(initials("")).toBe("?");
+});
+
+it("reads spoken names from a Hindi opening, spelled as spoken", () => {
+  const transcript = call([
+    ["s0", "लोहर जी से हो रही है अहमदाबाद से।"],
+    ["s1", "हां।"],
+    ["s0", "नंदलाल जी नमस्ते मेरा नाम मानस है। मैं team से बोल रहा हूं।"],
+  ]);
+  expect(detectSpokenNames(transcript)).toEqual({
+    names: { s0: "मानस", s1: "नंदलाल जी" },
+    introducers: ["s0"],
+  });
+  expect(isAccountName("मानस", "Suyash Rao")).toBe(false);
+  expect(isAccountName("Suyash", "Suyash Rao")).toBe(true);
+});
+
+it("never takes filler words for names", () => {
+  const transcript = call([
+    ["s0", "Hello sir, this is regarding your enquiry. नमस्ते मेरा नाम है"],
+    ["s1", "हां बोलो"],
+  ]);
+  expect(detectSpokenNames(transcript).names).toEqual({});
 });

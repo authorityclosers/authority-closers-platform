@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleUser, Search, Target, Users } from "lucide-react";
+import { CircleUser, Headset, Search, Target, Users } from "lucide-react";
 import {
   useEffect,
   useId,
@@ -22,6 +22,7 @@ import styles from "./speaker.module.css";
 
 const ROLES = [
   { key: "you", label: "You", Icon: CircleUser },
+  { key: "salesperson", label: "Salesperson", Icon: Headset },
   { key: "prospect", label: "Prospect", Icon: Target },
   { key: "other", label: "Other", Icon: Users },
 ] as const;
@@ -30,8 +31,8 @@ const GAP = 8;
 const EDGE = 12;
 
 /**
- * Names one speaker: a name, who they are (you, the prospect or someone
- * else) and an icon from the library. Enter saves, Escape or a click outside
+ * Names one speaker: a name, who they are (you, another salesperson, the
+ * prospect or someone else) and an icon from the library. Enter saves, Escape or a click outside
  * cancels. It opens in the browser's top layer, pinned to its chip, so no
  * report text, sticky bar or audio player can cover it; it flips above the
  * chip or scrolls inside itself when the screen is short.

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -31,7 +32,9 @@ import { SpeakerAvatar } from "./speaker-avatar";
 import { SpeakerEditor } from "./speaker-editor";
 import { suggestProspectIcon } from "./speaker-icons";
 import {
+  detectSpokenNames,
   firstName,
+  isAccountName,
   suggestYou,
   useSpeakerProfiles,
   voiceStyle,
@@ -39,7 +42,12 @@ import {
 } from "./speaker-profiles";
 import styles from "./call-map.module.css";
 
-const ROLE_LABELS = { you: "You", prospect: "Prospect", other: "Other" };
+const ROLE_LABELS = {
+  you: "You",
+  salesperson: "Salesperson",
+  prospect: "Prospect",
+  other: "Other",
+};
 
 const BIN_COUNT = 180;
 // A switch within this gap still counts as the same person holding the floor.
@@ -184,6 +192,53 @@ function binOwners(lanes: Lane[], total: number) {
   });
 }
 
+function reportMarkers(report: SalesReport, total: number): Marker[] {
+  return KINDS.flatMap((kind) =>
+    ((report[kind.key] as Finding[] | undefined) ?? []).flatMap(
+      (finding, index) => {
+        const evidence = finding.evidence[0];
+        if (!evidence) return [];
+        return [
+          {
+            key: `${kind.key}-${index}`,
+            tone: kind.tone,
+            kind: kind.label,
+            title: finding.title,
+            evidence,
+            x: Math.min(100, Math.max(0, (evidence.start_ms / total) * 100)),
+          },
+        ];
+      },
+    ),
+  );
+}
+
+/** Where a key press on a call slider moves playback, or null. */
+function keyTarget(key: string, currentMs: number, total: number) {
+  const at = (ms: number) => Math.min(total - 1, Math.max(0, ms));
+  switch (key) {
+    case "ArrowRight":
+    case "ArrowUp":
+      return at(currentMs + STEP_MS);
+    case "ArrowLeft":
+    case "ArrowDown":
+      return at(currentMs - STEP_MS);
+    case "PageUp":
+      return at(currentMs + PAGE_MS);
+    case "PageDown":
+      return at(currentMs - PAGE_MS);
+    case "Home":
+      return 0;
+    case "End":
+      return at(total - STEP_MS);
+    case "Enter":
+    case " ":
+      return at(currentMs);
+    default:
+      return null;
+  }
+}
+
 /** The transcript segment being spoken at `ms`, if any. */
 function segmentAt(
   segments: TranscriptSegment[],
@@ -253,11 +308,23 @@ export function CallMap({
     () => suggestYou(transcript, report, accountName),
     [transcript, report, accountName],
   );
+  const spoken = useMemo(() => detectSpokenNames(transcript), [transcript]);
   const prospectIcon = useMemo(
     () => suggestProspectIcon(`${report.summary} ${report.verdict}`),
     [report],
   );
   const closeEditor = useCallback(() => setEditing(null), []);
+  // Scrolling clears the hover peek, so the waveform folds away clean.
+  useEffect(() => {
+    if (hover === null) return;
+    const clear = () => setHover(null);
+    document.addEventListener("scroll", clear, {
+      capture: true,
+      passive: true,
+    });
+    return () =>
+      document.removeEventListener("scroll", clear, { capture: true });
+  }, [hover]);
   const levels = envelope
     ? waveformBins(envelope, 0, envelope.duration_ms, BIN_COUNT)
     : null;
@@ -281,28 +348,41 @@ export function CallMap({
     (lane) => lane.speakerId !== null && profiles[lane.speakerId],
   );
 
-  // One-tap confirmation of who "you" are, suggested from what was said.
-  const hasYou = Object.values(profiles).some(
-    (profile) => profile.role === "you",
+  // One tap confirms who sold on this call, suggested from what was said:
+  // "you" only when the seller says (or is greeted with) your own name,
+  // otherwise the salesperson, named as they introduced themselves.
+  const hasSeller = Object.values(profiles).some(
+    (profile) => profile.role === "you" || profile.role === "salesperson",
   );
+  const seller =
+    suggestion?.speakerId ??
+    (spoken.introducers.length === 1 ? spoken.introducers[0] : null);
   // "No" on a two-person call asks about the other voice instead.
   const askId: string | null =
-    canSave && !hasYou && suggestion && lanes.length > 1
-      ? !declined.includes(suggestion.speakerId)
-        ? suggestion.speakerId
+    canSave && !hasSeller && seller && lanes.length > 1
+      ? !declined.includes(seller)
+        ? seller
         : facts.voices.length === 2
           ? (facts.voices.find(
-              (id) => id !== suggestion.speakerId && !declined.includes(id),
+              (id) => id !== seller && !declined.includes(id),
             ) ?? null)
           : null
       : null;
   const askVoice = askId === null ? -1 : facts.voices.indexOf(askId);
+  const askIsYou =
+    askId !== null &&
+    ((suggestion?.reason === "introduction" &&
+      suggestion.speakerId === askId) ||
+      isAccountName(spoken.names[askId], accountName));
 
-  function confirmYou(speakerId: string) {
+  function confirmSeller(speakerId: string, asYou: boolean) {
     const changes: Record<string, SpeakerProfile> = {
       [speakerId]: {
-        name: profiles[speakerId]?.name || accountName || "",
-        role: "you",
+        name:
+          profiles[speakerId]?.name ||
+          (asYou ? accountName : spoken.names[speakerId]) ||
+          "",
+        role: asYou ? "you" : "salesperson",
         icon: null,
       },
     };
@@ -312,7 +392,7 @@ export function CallMap({
       const current = other ? profiles[other] : undefined;
       if (other && !current?.role)
         changes[other] = {
-          name: current?.name ?? "",
+          name: current?.name || spoken.names[other] || "",
           role: "prospect",
           icon: current?.icon ?? prospectIcon,
         };
@@ -323,24 +403,7 @@ export function CallMap({
   const editingLane = editingVoice === null ? null : lanes[editingVoice];
   const editingId = editingLane?.speakerId ?? null;
 
-  const markers: Marker[] = KINDS.flatMap((kind) =>
-    ((report[kind.key] as Finding[] | undefined) ?? []).flatMap(
-      (finding, index) => {
-        const evidence = finding.evidence[0];
-        if (!evidence) return [];
-        return [
-          {
-            key: `${kind.key}-${index}`,
-            tone: kind.tone,
-            kind: kind.label,
-            title: finding.title,
-            evidence,
-            x: Math.min(100, Math.max(0, (evidence.start_ms / total) * 100)),
-          },
-        ];
-      },
-    ),
-  );
+  const markers = reportMarkers(report, total);
   const present = KINDS.filter((kind) =>
     markers.some((marker) => marker.tone === kind.tone),
   );
@@ -365,23 +428,7 @@ export function CallMap({
   }
 
   function seekBy(event: KeyboardEvent<HTMLElement>) {
-    const at = (ms: number) => Math.min(total - 1, Math.max(0, ms));
-    const target =
-      event.key === "ArrowRight" || event.key === "ArrowUp"
-        ? at(currentTimeMs + STEP_MS)
-        : event.key === "ArrowLeft" || event.key === "ArrowDown"
-          ? at(currentTimeMs - STEP_MS)
-          : event.key === "PageUp"
-            ? at(currentTimeMs + PAGE_MS)
-            : event.key === "PageDown"
-              ? at(currentTimeMs - PAGE_MS)
-              : event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? at(total - STEP_MS)
-                  : event.key === "Enter" || event.key === " "
-                    ? at(currentTimeMs)
-                    : null;
+    const target = keyTarget(event.key, currentTimeMs, total);
     if (target === null) return;
     event.preventDefault();
     onSeek(target);
@@ -475,9 +522,16 @@ export function CallMap({
                 <span className={styles.ask} role="status">
                   <Sparkles size={13} aria-hidden="true" />
                   <span>
-                    <b>{nameOf(askVoice)}</b> looks like you
+                    <b>{nameOf(askVoice)}</b>
+                    {spoken.names[askId] && !askIsYou
+                      ? ` · ${spoken.names[askId]}`
+                      : ""}{" "}
+                    {askIsYou ? "looks like you" : "is the salesperson"}
                   </span>
-                  <button type="button" onClick={() => confirmYou(askId)}>
+                  <button
+                    type="button"
+                    onClick={() => confirmSeller(askId, askIsYou)}
+                  >
                     Yes
                   </button>
                   <button
@@ -520,10 +574,11 @@ export function CallMap({
               }}
             />
           ) : null}
-          <div className={styles.track}>
+          <div className={styles.track} data-morph-source>
             {levels ? (
               <svg
                 className={styles.wave}
+                data-morph-wave
                 data-voice={focusVoice ?? undefined}
                 style={focusVoice !== null ? voiceStyle(focusVoice) : undefined}
                 viewBox={`0 0 ${BIN_COUNT * 4} 56`}
@@ -562,7 +617,11 @@ export function CallMap({
                 })}
               </svg>
             ) : (
-              <div className={styles.noWave} aria-hidden="true" />
+              <div
+                className={styles.noWave}
+                data-morph-wave
+                aria-hidden="true"
+              />
             )}
             {markers.map((marker) => (
               <button
@@ -789,5 +848,156 @@ export function CallMap({
         </div>
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * The call map folded into the pinned report row. Its waveform is drawn with
+ * exactly the same bars and proportions as the full one, so the report header
+ * can fold one into the other pixel for pixel. Hover shows a time, click or
+ * drag plays from there, arrow keys step through the call.
+ */
+export function CallMapMini({
+  report,
+  durationMs,
+  onSeek,
+}: {
+  report: SalesReport;
+  durationMs: number;
+  onSeek: (ms: number) => void;
+}) {
+  const { envelope, currentTimeMs, playing } = useSourceWaveform();
+  const [hover, setHover] = useState<number | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
+  const total = Math.max(1, durationMs);
+  const levels = envelope
+    ? waveformBins(envelope, 0, envelope.duration_ms, BIN_COUNT)
+    : null;
+  const progress = Math.min(1, Math.max(0, currentTimeMs / total));
+  const markers = reportMarkers(report, total);
+
+  function ratioAt(event: PointerEvent<HTMLElement>) {
+    const box = event.currentTarget.getBoundingClientRect();
+    if (box.width <= 0) return 0;
+    return Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+  }
+
+  return (
+    <div className={styles.mini} data-call-map-mini>
+      <span
+        className={styles.miniChrome}
+        data-morph-chrome
+        aria-hidden="true"
+      />
+      <span
+        className={styles.miniTime}
+        data-morph-chrome
+        data-live={hover !== null || progress > 0 ? "true" : undefined}
+      >
+        {formatClock(hover !== null ? hover * total : currentTimeMs)}
+      </span>
+      <div className={styles.miniTrack} data-morph-slot>
+        <div className={styles.miniLayer} data-morph-layer>
+          {levels ? (
+            <svg
+              className={styles.miniWave}
+              viewBox={`0 0 ${BIN_COUNT * 4} 56`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {levels.map((level, index) => {
+                // Same geometry as the full waveform, bar for bar.
+                const height = Math.max(1.5, Math.pow(level ?? 0, 0.55) * 25);
+                const center = (index + 0.5) / BIN_COUNT;
+                const tone =
+                  progress > 0 && center <= progress
+                    ? styles.played
+                    : hover !== null && center <= hover
+                      ? styles.ahead
+                      : styles.pending;
+                return (
+                  <line
+                    key={index}
+                    x1={index * 4 + 2}
+                    x2={index * 4 + 2}
+                    y1={28 - height}
+                    y2={28 + height}
+                    className={tone}
+                  />
+                );
+              })}
+            </svg>
+          ) : (
+            <div className={styles.noWave} aria-hidden="true" />
+          )}
+          {markers.map((marker) => (
+            <span
+              key={marker.key}
+              className={styles.miniDot}
+              data-morph-chrome
+              data-tone={marker.tone}
+              style={{ left: `${marker.x}%` }}
+              aria-hidden="true"
+            />
+          ))}
+          {progress > 0 ? (
+            <span
+              className={styles.miniHead}
+              data-morph-chrome
+              data-playing={playing ? "true" : undefined}
+              style={{ left: `${progress * 100}%` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          {hover !== null ? (
+            <span
+              className={styles.miniCursor}
+              style={{ left: `${hover * 100}%` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <div
+            className={styles.scrub}
+            role="slider"
+            tabIndex={0}
+            aria-label="Play the call from a point in time"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(total / 1000)}
+            aria-valuenow={Math.round(currentTimeMs / 1000)}
+            aria-valuetext={`${formatClock(currentTimeMs)} of ${formatClock(total)}`}
+            onPointerMove={(event) => setHover(ratioAt(event))}
+            onPointerLeave={() => {
+              if (!scrubbing) setHover(null);
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              setScrubbing(true);
+              setHover(ratioAt(event));
+            }}
+            onPointerUp={(event) => {
+              if (!scrubbing) return;
+              setScrubbing(false);
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+              onSeek(ratioAt(event) * total);
+              if (event.pointerType !== "mouse") setHover(null);
+            }}
+            onPointerCancel={() => {
+              setScrubbing(false);
+              setHover(null);
+            }}
+            onKeyDown={(event) => {
+              const target = keyTarget(event.key, currentTimeMs, total);
+              if (target === null) return;
+              event.preventDefault();
+              onSeek(target);
+            }}
+          />
+        </div>
+      </div>
+      <span className={styles.miniTotal} data-morph-chrome>
+        {formatClock(total)}
+      </span>
+    </div>
   );
 }
