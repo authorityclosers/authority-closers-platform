@@ -57,6 +57,8 @@ SUBMISSION_LABELS = "20260925_0050"
 SOURCE_OBJECTS = "20260928_0051"
 CANARY = "20260929_0052"
 GOOGLE_PROFILES = "20260930_0053"
+ORGANISATIONS = "20260930_0054"
+PLATFORM_RELEASE_MANAGE = "20260930_0060"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -94,6 +96,8 @@ HEADS = (
     SOURCE_OBJECTS,
     CANARY,
     GOOGLE_PROFILES,
+    ORGANISATIONS,
+    PLATFORM_RELEASE_MANAGE,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -104,6 +108,7 @@ TABLELESS_VERSIONED_HEADS = (
     COACHING_DEPTH,
     EMAIL_ACKNOWLEDGEMENT,
     COACHING_V6_SELECTION,
+    PLATFORM_RELEASE_MANAGE,
 )
 NEW_TABLES = {
     PRACTICE: (
@@ -186,6 +191,7 @@ NEW_TABLES = {
     SOURCE_OBJECTS: ("conversation_source_objects", "conversation_source_references"),
     CANARY: ("conversation_canary_submissions",),
     GOOGLE_PROFILES: ("person_google_profiles",),
+    ORGANISATIONS: ("organisations", "organisation_domain_settings", "organisation_invites"),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -245,6 +251,16 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
         assert len(module.parity_tables_for_head(CAPABILITIES)) == 41
         for head in module.LEGACY_PARITY_MIGRATION_HEADS:
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
+        assert module.VERSIONED_PARITY_CONTRACTS[ORGANISATIONS] == (
+            "ac-postgres-parity-v34",
+            module.GOOGLE_PROFILES_PARITY_TABLES
+            + ("organisations", "organisation_domain_settings", "organisation_invites"),
+        )
+        assert module.PLATFORM_RELEASE_MANAGE_PARITY_MIGRATION_HEAD == PLATFORM_RELEASE_MANAGE
+        assert module.VERSIONED_PARITY_CONTRACTS[PLATFORM_RELEASE_MANAGE] == (
+            module.ORGANISATIONS_PARITY_CONTRACT,
+            module.ORGANISATIONS_PARITY_TABLES,
+        )
 
 
 @pytest.mark.parametrize("head", ["", "20000101_0001", "20260907_0019;bad"])
@@ -622,6 +638,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         103,
         104,
         105,
+        108,
+        108,
     )
     expected_contracts = (
         None,
@@ -660,6 +678,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v31",
         "ac-postgres-parity-v32",
         "ac-postgres-parity-v33",
+        "ac-postgres-parity-v34",
+        "ac-postgres-parity-v34",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

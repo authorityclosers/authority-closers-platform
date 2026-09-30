@@ -24,6 +24,8 @@ Expected host paths:
   rebound read-only; the helper accepts uid/gid 10001.
 - `/usr/local/bin/infisical`: reviewed root-owned executable, bound read-only at
   `/opt/infisical` in the worker; no CLI install or provider activation here.
+- `/usr/local/bin/uv`: root-owned executable, version 0.12.19, used by the
+  backend refresh from its fixed system `PATH`.
 
 All source files below live under root-owned, mode 0700
 `/etc/authority-closers/development/`. No agent can traverse it. Ordinary source
@@ -35,11 +37,13 @@ In the table, `C` means `/run/credentials/<unit-name>` (systemd `%d`).
 | Source relative to development/ | Unit / delivery | In-process path |
 | --- | --- | --- |
 | `api.env` | API / EnvironmentFile | process environment only |
+| `migrator.env` | refresh only (root) | none |
 | `challenge-secret` | API / LoadCredential | `C/challenge-secret` |
 | `qa-password` | API / LoadCredential | `C/qa-password` |
 | `approval.json` | both / LoadCredential | each unit's `C/approval.json` |
 | `database-url` | worker / LoadCredential | `C/database-url` |
 | `service.json` | worker / LoadCredential | `C/service.json` |
+| `service.operator-template.json` | root-only input for the refresh renderer | none |
 | `identities/elevenlabs/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/elevenlabs/token` |
 | `identities/gemini/token` | worker / read-only directory bind | `/run/ac-sales-xray/identities/gemini/token` |
 
@@ -51,9 +55,13 @@ is delivered for the specified QA contract; current API code has no QA-password
 file setting, so this unit does not invent a consumer or enable a QA login.
 
 `api.env` supplies development settings, the dev DB URL and approval digest.
-It must omit `AC_SALES_XRAY_APPROVAL_PATH` and
-`AC_SALES_XRAY_CHALLENGE_SECRET_FILE`, already set by the unit
-(environment-file values would override them). The worker manifest
+It must omit `AC_SALES_XRAY_APPROVAL_PATH`,
+`AC_SALES_XRAY_CHALLENGE_SECRET_FILE`, `AC_DATABASE_MIGRATOR_URL`, and
+`AC_RELEASE_ID`; the units set the first two, and the API drop-in sets the
+release id. Environment-file values would override those settings. The
+root-only `migrator.env` contains `AC_ENVIRONMENT=development` and
+`AC_DATABASE_MIGRATOR_URL`; it is mode 0600 and is loaded by no service unit.
+The worker manifest
 uses literal `C` expansions for its own unit, `/opt/infisical`, the provider
 paths above and the canonical dev storage/socket paths. It must use a dev-only
 DB endpoint compatible with `load_database_url`; localhost aliases are rejected.
@@ -65,3 +73,35 @@ systemd expands this into argv before `env -i` strips the service environment;
 the digest does not enter the worker environment. Missing/wrong digests fail closed.
 The refresh must restart after replacing credentials or manifest; credentials
 are snapshots. Tests verify parsing and sandbox contracts without starting units.
+
+## Backend refresh
+
+`ac-dev-sales-xray-refresh.timer` runs every ten minutes. Its root oneshot
+service runs the script from
+`/srv/authority-closers/application/current-staging/scripts/refresh-dev-sales-xray-backend.py`
+and checks out the selected staging core commit from the local
+`/var/lib/ac-release/mirror.git`. Git checkout does not use GitHub credentials.
+A valid `staging_pick.core` with a stored
+core build takes precedence over `current-staging`; otherwise the symlink is the
+target.
+
+Before it changes the backend, the script checks for `uv` on its fixed system
+`PATH`, then compares native inputs against the development native unit
+descriptor. It requires `AC_ENVIRONMENT=development` and
+`AC_DATABASE_MIGRATOR_URL` in the root-only
+`/etc/authority-closers/development/migrator.env`. It refuses if the API
+environment file contains either the migrator URL or `AC_RELEASE_ID`.
+It syncs the frozen production dependencies, runs Alembic as uid/gid 10001,
+renders `service.json` from the root-owned development template, writes the
+release marker and API/worker drop-ins, restarts both development units, then
+polls `/health/ready` for up to 60 seconds. The refresh passes only when the API
+reports the target release and its database is ready. Failures during this
+refresh restore the previous checkout, marker, manifest and drop-ins before
+restart.
+
+After backend health passes, the service runs the acdev-owned studio sync and
+merges `origin/main` under `/run/ac-studio-sync/ac-studio-sync.lock`. A studio
+merge failure raises an alert but leaves the refreshed backend in place. If the
+target contains `scripts/ops/ac_smoke.py`, the script runs the development smoke
+against that core and the merged UI checkout; otherwise it reports `skipped`.
+Smoke failures are reported without rolling back the backend.

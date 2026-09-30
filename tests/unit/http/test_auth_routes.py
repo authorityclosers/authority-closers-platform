@@ -25,6 +25,7 @@ from ac_platform.http.identity_provider import (
     IdentityProviderUnavailable,
 )
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.services import (
     ConflictingProviderIdentityError,
     IdentityResolutionError,
@@ -34,6 +35,7 @@ from ac_platform.identity.services import (
     VerifiedProviderAssertion,
     build_provider_authorization,
 )
+from ac_platform.kernel.authz import ActorContext
 
 TEST_TRANSACTION_KEY = "test-route-transaction-signing-key-long-enough"  # noqa: S105
 VALID_SESSION_TOKEN = "s" * 43  # noqa: S105
@@ -452,6 +454,51 @@ def _client(
         else (_RecordingProvider() if configured else None),
     )
     return TestClient(application)
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "member"])
+def test_context_route_uses_the_registered_organisation_permission_map(
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+) -> None:
+    tenant_id = UUID("55555555-5555-4555-8555-555555555555")
+    person_id = UUID("11111111-1111-4111-8111-111111111111")
+    session_id = UUID("44444444-4444-4444-8444-444444444444")
+
+    class OrganisationDatabase(_AsyncContext):
+        async def scalar(self, _statement: object) -> object:
+            return tenant_id
+
+    class OrganisationIdentity:
+        def __init__(self, _database: object, *, token_pepper: str) -> None:
+            del token_pepper
+
+        async def resolve_actor(self, token: str) -> ResolvedActorContext:
+            assert token == VALID_SESSION_TOKEN
+            return ResolvedActorContext(
+                actor=ActorContext(person_id, session_id, tenant_id),
+                membership_role=role,
+                person_revision=0,
+                session_revision=0,
+                tenant_revision=0,
+                membership_revision=0,
+            )
+
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", OrganisationIdentity)
+    monkeypatch.setitem(globals(), "_sessions", lambda: OrganisationDatabase())
+    response = _client().get(
+        "/v1/context",
+        cookies={"ac_session": VALID_SESSION_TOKEN},
+    )
+
+    assert response.status_code == 200
+    context = response.json()
+    assert context["membership_role"] == role
+    if role in {"owner", "admin"}:
+        assert context["permissions"] == ["organisation_manage"]
+    else:
+        assert context["permissions"] == []
+    assert all(not permission.startswith("platform_") for permission in context["permissions"])
 
 
 def _request_with_raw_cookie_headers(*cookie_headers: str) -> Request:

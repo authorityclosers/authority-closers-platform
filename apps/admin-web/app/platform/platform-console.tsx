@@ -49,6 +49,8 @@ const permissionNames: Record<PlatformIdentity["permissions"][number], string> =
     platform_catalog_read: "View platform catalog",
     platform_catalog_write: "Edit platform catalog",
     platform_catalog_publish: "Publish platform catalog",
+    platform_organisations_manage: "Manage organisations",
+    platform_release_manage: "Manage releases",
   };
 
 export function PlatformConsole() {

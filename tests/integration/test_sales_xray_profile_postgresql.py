@@ -201,6 +201,15 @@ def test_postgres_serializes_duplicate_phone_flags_and_preserves_audit(
                     )
                 )
                 await database.flush()
+                google_profile = await database.scalar(
+                    select(PersonGoogleProfile).where(PersonGoogleProfile.person_id == first_id)
+                )
+                assert google_profile is not None
+                google_profile.photo_jpeg = b"fictional-private-photo-copy"
+                google_profile.photo_sha256 = "a" * 64
+                google_profile.photo_source_sha256 = "b" * 64
+                google_profile.photo_fetched_at = NOW
+                await database.flush()
                 assert await erase_sales_xray_profile(database, person_id=first_id) is True
                 assert await erase_sales_xray_profile(database, person_id=second_id) is True
                 assert (

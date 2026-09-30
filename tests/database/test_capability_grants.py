@@ -176,6 +176,7 @@ def test_supported_studio_scopes_persist(
         {"permission": "finance_refund"},
         {"permission": "instructor"},
         {"permission": "platform_catalog_write"},
+        {"permission": "platform_release_manage"},
         {
             "permission": "catalog_write",
             "scope_kind": "platform",
@@ -315,3 +316,53 @@ def test_migration_is_linked_forward_only_and_installs_database_guards() -> None
     source = MIGRATION.read_text(encoding="utf-8")
     assert "BEFORE UPDATE OR DELETE" in source
     assert "ac_guard_capability_history_mutation" in source
+
+
+def test_platform_release_migration_is_linked_and_forward_only() -> None:
+    migration = runpy.run_path(str(MIGRATION.with_name("20260930_0060_platform_release_manage.py")))
+    assert migration["revision"] == "20260930_0060"
+    assert migration["down_revision"] == "20260930_0054"
+    with pytest.raises(RuntimeError, match="forward-only"):
+        migration["downgrade"]()
+
+
+def test_postgresql_current_migration_accepts_all_platform_capabilities() -> None:
+    from tests.database.test_capability_grants_postgresql import _postgres_schema
+
+    with _postgres_schema(current_application=True) as engine, Session(engine) as database:
+        scope = seed_scope(database)
+        for permission in sorted(PLATFORM_CAPABILITIES):
+            database.add(
+                grant(
+                    database,
+                    scope,
+                    permission=permission,
+                    scope_kind="platform",
+                    tenant_id=None,
+                    program_id=None,
+                )
+            )
+        database.commit()
+        assert (
+            set(
+                database.scalars(
+                    select(CapabilityGrant.permission).where(
+                        CapabilityGrant.subject_person_id == scope.subject
+                    )
+                )
+            )
+            == PLATFORM_CAPABILITIES
+        )
+        for scope_kind in ("tenant", "program"):
+            database.add(
+                grant(
+                    database,
+                    scope,
+                    permission="platform_release_manage",
+                    scope_kind=scope_kind,
+                    program_id=scope.program if scope_kind == "program" else None,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                database.flush()
+            database.rollback()

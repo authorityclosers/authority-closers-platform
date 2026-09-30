@@ -275,7 +275,7 @@ def test_compact_fact_prompt_is_versioned_and_legacy_payload_reconstructs() -> N
     assert type(compact).from_dict(compact.as_dict(), payload=compact.payload) == compact
 
 
-def test_compact_fact_result_rejects_unbounded_observation_count() -> None:
+def test_compact_fact_result_clamps_observation_count_and_keeps_chunk_binding() -> None:
     transcript = _transcript(count=1)
     prepared = prepare_fact_inputs(transcript, prompt_revision=FACT_PROMPT_COMPACT)[0]
     result = _result(
@@ -289,8 +289,12 @@ def test_compact_fact_result_rejects_unbounded_observation_count() -> None:
         input_sha256=prepared.input_sha256,
     )
 
-    with pytest.raises(InferenceTaskError, match="fact_compact_observations_exceeded"):
-        validate_fact_result(result, prepared, transcript)
+    normalized = validate_fact_result(result, prepared, transcript).data()
+
+    assert [item["statement"] for item in normalized["observations"]] == [
+        f"Fact {index}" for index in range(8)
+    ]
+    assert normalized["covered_segment_ids"] == list(prepared.covered_segment_ids)
 
 
 @pytest.mark.parametrize(

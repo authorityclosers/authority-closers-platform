@@ -94,6 +94,182 @@ def _evidence(transcript: dict[str, Any], index: int = 0) -> dict[str, Any]:
     }
 
 
+def _compact_observation(statement: str, *, quote: str | None = None) -> dict[str, Any]:
+    observation: dict[str, Any] = {"fact": statement, "segment_id": "s1"}
+    if quote is not None:
+        observation["quote"] = quote
+    return observation
+
+
+def test_compact_fact_clamps_overview_at_word_boundary() -> None:
+    transcript = _transcript(count=1)
+    packet = parse_fact_packet(
+        {"overview": "buyer asks about timing " * 12, "observations": [], "uncertainties": []},
+        transcript,
+        compact=True,
+    )
+
+    assert len(packet.overview) <= 200
+    assert packet.overview.endswith("…")
+    assert (
+        reports_module.compact_fact_clamps({"overview": "buyer asks about timing " * 12}, 1_400)[
+            "overview_cut"
+        ]
+        == 1
+    )
+
+
+@pytest.mark.parametrize("statement", ["x" * 180, "buyer asks about timing " * 12])
+def test_compact_fact_clamps_statement_with_ellipsis(statement: str) -> None:
+    response = {
+        "overview": "A source-bound overview.",
+        "observations": [_compact_observation(statement)],
+        "uncertainties": [],
+    }
+    packet = parse_fact_packet(
+        response,
+        _transcript(count=1),
+        compact=True,
+    )
+
+    assert len(packet.observations[0].statement) <= 160
+    assert packet.observations[0].statement.endswith("…")
+    assert reports_module.compact_fact_clamps(response, 1_400)["statements_cut"] == 1
+
+
+def test_compact_fact_clamps_and_drops_uncertainties_in_order() -> None:
+    response = {
+        "overview": "A source-bound overview.",
+        "observations": [],
+        "uncertainties": ["x" * 140, "Second uncertainty.", "Drop this uncertainty."],
+    }
+    original = deepcopy(response)
+    counts = reports_module.compact_fact_clamps(response, 1_400)
+    packet = parse_fact_packet(response, _transcript(count=1), compact=True)
+
+    assert response == original
+    assert all(type(value) is int for value in counts.values())
+    assert counts["uncertainties_cut"] == 1
+    assert counts["uncertainties_dropped"] == 1
+    assert len(packet.uncertainties) == 2
+    assert len(packet.uncertainties[0]) <= 100
+    assert packet.uncertainties[0].endswith("…")
+    assert packet.uncertainties[1] == "Second uncertainty."
+
+
+def test_compact_fact_drops_extra_observations_and_keeps_first_eight() -> None:
+    response = {
+        "overview": "A source-bound overview.",
+        "observations": [_compact_observation(f"Fact {index}") for index in range(9)],
+        "uncertainties": [],
+    }
+    packet = parse_fact_packet(response, _transcript(count=1), compact=True)
+
+    assert [observation.statement for observation in packet.observations] == [
+        f"Fact {index}" for index in range(8)
+    ]
+    assert reports_module.compact_fact_clamps(response, 1_400)["observations_dropped"] == 1
+
+
+def test_compact_fact_drops_long_quote_and_keeps_bound_observation() -> None:
+    response = {
+        "overview": "A source-bound overview.",
+        "observations": [_compact_observation("A source-bound fact.", quote="x" * 321)],
+        "uncertainties": [],
+    }
+    transcript = _transcript(count=1)
+    packet = parse_fact_packet(response, transcript, compact=True)
+
+    assert len(packet.observations) == 1
+    assert packet.observations[0].evidence[0].quote == transcript["segments"][0]["text"]
+    assert reports_module.compact_fact_clamps(response, 1_400)["quotes_dropped"] == 1
+
+
+def test_compact_fact_values_at_limits_stay_untouched() -> None:
+    overview = "o" * 200
+    statement = "s" * 160
+    uncertainty = "u" * 100
+    packet = parse_fact_packet(
+        {
+            "overview": overview,
+            "observations": [_compact_observation(statement)],
+            "uncertainties": [uncertainty],
+        },
+        _transcript(count=1),
+        compact=True,
+    )
+
+    assert (packet.overview, packet.observations[0].statement, packet.uncertainties) == (
+        overview,
+        statement,
+        [uncertainty],
+    )
+
+
+@pytest.mark.parametrize(
+    ("updates", "code"),
+    [
+        ({"overview": None}, "fact_compact_overview_exceeded"),
+        ({"overview": ""}, "fact_overview_invalid"),
+        ({"overview": " " * 201}, "fact_overview_invalid"),
+        ({"uncertainties": None}, "fact_compact_uncertainties_exceeded"),
+        ({"uncertainties": [" " * 101]}, "fact_uncertainties_invalid"),
+        ({"uncertainties": [1]}, "fact_compact_uncertainty_exceeded"),
+        ({"observations": [None]}, "fact_observation_invalid"),
+        ({"observations": [{"fact": None, "segment_id": "s1"}]}, "fact_compact_statement_exceeded"),
+        (
+            {"observations": [{"fact": "A fact.", "segment_id": "s1", "quote": 3}]},
+            "fact_compact_quote_exceeded",
+        ),
+    ],
+)
+def test_compact_fact_type_errors_keep_their_codes(updates: dict[str, Any], code: str) -> None:
+    response = {
+        "overview": "A source-bound overview.",
+        "observations": [],
+        "uncertainties": [],
+        **updates,
+    }
+    with pytest.raises(ReportError, match=code):
+        parse_fact_packet(response, _transcript(count=1), compact=True)
+
+
+@pytest.mark.parametrize(
+    ("updates", "count_key"),
+    [
+        (
+            {
+                "overview": "x" * 230,
+                "observations": [_compact_observation(f"Fact {index}") for index in range(8)],
+                "uncertainties": [],
+            },
+            "overview_cut",
+        ),
+        (
+            {
+                "overview": "A source-bound overview.",
+                "observations": [],
+                "uncertainties": ["x" * 140],
+            },
+            "uncertainties_cut",
+        ),
+    ],
+)
+def test_compact_fact_clamps_replayed_aut493_overruns(
+    updates: dict[str, Any], count_key: str
+) -> None:
+    counts = reports_module.compact_fact_clamps(updates, 1_400)
+    packet = parse_fact_packet(updates, _transcript(count=1), compact=True)
+
+    assert counts[count_key] == 1
+    if count_key == "overview_cut":
+        assert len(packet.overview) <= 200
+        assert packet.overview.endswith("…")
+    else:
+        assert len(packet.uncertainties[0]) <= 100
+        assert packet.uncertainties[0].endswith("…")
+
+
 def _payload(transcript: dict[str, Any]) -> dict[str, Any]:
     evidence = [_evidence(transcript)]
     finding = {
@@ -299,7 +475,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-360 changes evidence admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "0a71edccde293b36c60ed5d262c454407e7b8aa0e06c83f299a2df2eef1b6bbe"
+        "84130a28753301b9794cb98dc2f6701976eacb6ed2be269bf24722008c586dda"
     )
 
 
