@@ -1,8 +1,8 @@
 [Unit]
-Description=Run the Authority Closers canary every six hours (%i)
+Description=Run the Authority Closers canary once a day (%i)
 
 [Timer]
-OnCalendar=*-*-* 00,06,12,18:00:00 UTC
+OnCalendar=*-*-* 06:00:00 UTC
 RandomizedDelaySec=10min
 Persistent=false
 Unit=ac-canary@%i.service
