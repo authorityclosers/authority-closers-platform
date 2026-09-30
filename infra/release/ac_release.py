@@ -999,7 +999,7 @@ class Engine:
             "--spool",
             str(self.paths.state / "notify"),
             "--key",
-            f"train:{text}",
+            f"train:{kind}:{text}:{fields.get('pair', '')}",
             "--text",
             text,
         ]
@@ -1013,6 +1013,7 @@ class Engine:
         *,
         result: str,
         alert: bool = False,
+        critical: bool = False,
         pair: tuple[str, str] | None = None,
         **details: Any,
     ) -> dict[str, Any]:
@@ -1030,7 +1031,7 @@ class Engine:
             self.train_event(
                 "alert",
                 reason,
-                severity="critical" if result == "rolled_back" else "error",
+                severity="critical" if critical or result == "rolled_back" else "error",
                 pair="-".join(pair) if pair else "none",
                 **details,
             )
@@ -1049,6 +1050,7 @@ class Engine:
                 line,
                 result=result,
                 reason=reason,
+                pair="-".join(pair) if pair else "none",
                 unknown=",".join(
                     k
                     for k, v in (("dev", dev), ("staging", staging), ("prod", production))
@@ -1113,7 +1115,11 @@ class Engine:
                 timeout=1560,
             )
             record = read_record(1800)
-            if result.returncode == 0 and record and path.stat().st_mtime >= started:
+            if (
+                record
+                and path.stat().st_mtime >= started
+                and (result.returncode == 0 or record["result"] != "pass")
+            ):
                 return record
         except (OSError, ValueError, ReleaseError, subprocess.SubprocessError):
             pass
@@ -1318,7 +1324,11 @@ class Engine:
                         )
                     raise ReleaseError("train_interrupted")
                 pair = self.staging_pair(refresh=not dry_run)
-                if pair == (self.current_core("production"), self.current_web("production")[0]):
+                production_pair = (
+                    self.current_core("production"),
+                    self.current_web("production")[0],
+                )
+                if pair == production_pair:
                     return {"result": "nothing_to_ship"}
                 failed = f"train-failed/{'-'.join(pair)}.json"
                 if (self.paths.state / failed).exists():
@@ -1378,12 +1388,18 @@ class Engine:
                     # Validate the pair before arming interruption containment.
                     if self.staging_pair() != pair:
                         raise ReleaseError("staging_moved")
+                    if production_pair != (
+                        self.current_core("production"),
+                        self.current_web("production")[0],
+                    ):
+                        raise ReleaseError("production_moved")
                     self.train_state("train-inflight.json", {"pair": list(pair), "at": _now()})
                     smoke = {"staging": staging["digest"], "production": None}
                     attempts = self.promote(
                         "patch",
                         self.next_version("patch"),
                         pair=pair,
+                        expected_sha=production_pair[0],
                         requested_by="standing-approval:AUT-72@2026-09-29T19:05Z",
                         trigger="train",
                         smoke=smoke,
@@ -1420,6 +1436,10 @@ class Engine:
                         ("web", self.rollback_web),
                         ("core", self.rollback_core),
                     ):
+                        # A core-only promote must not undo an earlier unrelated web release.
+                        if component == "web" and production_pair[1] == pair[1]:
+                            rollback[component] = "unchanged"
+                            continue
                         try:
                             operation(
                                 "production",
@@ -1455,7 +1475,13 @@ class Engine:
                     self.set_paused(
                         "production", True, "train interrupted or failed; Root recovery required"
                     )
-                return self.train_result(safe, result="failed", alert=True, pair=pair)
+                return self.train_result(
+                    safe,
+                    result="failed",
+                    alert=True,
+                    pair=pair,
+                    critical=(self.paths.state / "train-inflight.json").exists(),
+                )
             finally:
                 self._read_only = False
 
@@ -2798,15 +2824,18 @@ class Engine:
         # The next staging core target is the latest ready main build, falling
         # back to the current release when its build is not yet available.
         pick = {"core": self.current_core("staging"), "web": self.current_web("staging")[0]}
-        if self.github is not None:
-            head = self.github.get_json(f"/repos/{REPOSITORY}/commits/main").get("sha", "")
-            if SHA_RE.fullmatch(head):
-                candidate = core_candidate(self.github, head)
-                if candidate.state == "ready":
-                    pick["core"] = head
-                web = self.web_target("staging", head)
-                if web is not None:
-                    pick["web"] = web.sha
+        if self.github is not None and not self.is_paused("staging"):
+            try:
+                head = self.github.get_json(f"/repos/{REPOSITORY}/commits/main").get("sha", "")
+                if SHA_RE.fullmatch(head):
+                    candidate = core_candidate(self.github, head)
+                    if candidate.state == "ready" and self.failed_sha("staging", "core") != head:
+                        pick["core"] = head
+                    web = self.web_target("staging", head)
+                    if web is not None and self.failed_sha("staging", "web") != web.sha:
+                        pick["web"] = web.sha
+            except (ReleaseError, OSError, ValueError, subprocess.SubprocessError):
+                report["staging_pick_error"] = "discovery_unavailable"
         report["staging_pick"] = pick
         return report
 

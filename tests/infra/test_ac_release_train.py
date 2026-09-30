@@ -468,7 +468,7 @@ def test_application_only_rollback_never_reaches_database_commands(tmp_path, fai
         / "infra/application/scripts/install-application-release.sh"
     ).read_text()
     functions = installer[
-        installer.index("core_rollback_finish() {") : installer.index(
+        installer.index("core_rollback_exit() {") : installer.index(
             'if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then'
         )
     ]
@@ -534,3 +534,100 @@ compose_for() {
         assert (app / "current-staging").is_symlink()
         evidence = list((app / "deployments/staging").glob("*.env"))
         assert len(evidence) == 1 and "AC_ACTION=CORE_ROLLBACK" in evidence[0].read_text()
+
+
+def test_core_only_train_keeps_unchanged_web_on_smoke_failure(train):
+    engine, runner, core, web = train
+    web["production"] = HEAD
+    engine.paths.releases.unlink()
+    engine.append_release(release_event("v0.2.0", OLD, HEAD))
+    runner.smoke_result["production"] = "fail"
+    engine.rollback_web = lambda _: pytest.fail("must not undo an unrelated prior web release")
+    result = engine.train()
+    assert result["web"] == "unchanged" and core["production"] == OLD
+    assert web["production"] == HEAD
+
+
+def test_prod_smoke_failure_records_the_actual_failed_smoke_digest(train):
+    engine, runner, _, _ = train
+    runner.smoke_result["production"] = "fail"
+    engine.train()
+    smoke = engine.paths.state / "smoke/production" / ("-".join(PAIR) + ".json")
+    failed_digest = json.loads(smoke.read_text())["digest"]
+    assert engine.release_records()[-1]["smoke"]["production"] == "sha256:" + failed_digest
+
+
+def test_production_move_after_migration_check_prevents_promotion(train):
+    engine, _, core, web = train
+    original = engine.train_dump
+
+    def dump_and_move_production():
+        path = original()
+        web["production"] = OLD
+        return path
+
+    engine.train_dump = dump_and_move_production
+    assert engine.train()["reason"] == "production_moved"
+    assert core["production"] == OLD and len(engine.release_records()) == 1
+
+
+def test_status_preserves_local_state_when_github_is_unavailable(train):
+    engine, _, _, _ = train
+
+    class Unavailable:
+        def get_json(self, *_args, **_kwargs):
+            raise MODULE.ReleaseError("unavailable")
+
+    engine.github = Unavailable()
+    result = engine.status()
+    assert result["staging_pick_error"] == "discovery_unavailable"
+    assert result["environments"]["production"]["core"] == OLD
+
+
+def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train, monkeypatch):
+    import io
+    import tarfile
+
+    engine, _, core, _ = train
+    # Use the real deploy implementation with fake artifacts and installer process.
+    monkeypatch.delattr(engine, "deploy_core")
+    engine.installed_engine = lambda: HEAD
+    bundle = engine.paths.store / OLD / "core"
+    bundle.mkdir()
+    for name in MODULE.CORE_FILES:
+        (bundle / name).write_text("fake")
+    engine.store_bundle = lambda *_: bundle
+    engine.require_backup_support = lambda _: None
+    engine.keep_native_build = lambda _: None
+    engine.prepare_activation = lambda *_a, **_k: {}
+    engine.check_core = lambda *_: None
+    selected = []
+
+    def archive(sha, stage, prefix):
+        selected.append(sha)
+        path = stage / (sha + ".tar")
+        with tarfile.open(path, "w") as tar:
+            data = b"# AC_CORE_ROLLBACK_ONLY\n" if sha == HEAD else b"# old controller\n"
+            entry = tarfile.TarInfo("infra/application/scripts/install-application-release.sh")
+            entry.size = len(data)
+            tar.addfile(entry, io.BytesIO(data))
+        return path, "d" * 64
+
+    engine.source_archive = archive
+    installer_calls = []
+
+    def run(argv, **kwargs):
+        if argv[0] == "bash":
+            installer_calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0, "AC_STATUS=COMMITTED\n", "")
+
+    engine.run = run
+    build = engine.stored_build(OLD, "core")
+    assert build is not None
+    engine.deploy_core("production", build, rollback_only=True)
+    assert selected == [OLD, HEAD]
+    argv, kwargs = installer_calls[0]
+    assert "/controller/" in argv[1]
+    assert kwargs["env"]["AC_RELEASE_ID"] == OLD
+    assert kwargs["env"]["AC_CORE_ROLLBACK_ONLY"] == "1"
+    assert kwargs["env"]["AC_ROLLBACK_FROM"] == core["production"]

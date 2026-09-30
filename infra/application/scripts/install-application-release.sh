@@ -1514,7 +1514,7 @@ record_forward_recovery_required() {
 # AC_CORE_ROLLBACK_ONLY is used only by the release engine after selecting the
 # immediately previous successful release. Recheck identity/schema under the
 # application lock and never enter the database migration/restore path below.
-core_rollback_finish() {
+core_rollback_exit() {
   local status=$?
   trap '' HUP INT TERM
   trap - EXIT
@@ -1529,7 +1529,7 @@ core_rollback_finish() {
 }
 
 rollback_application_only() {
-  local expected_from="${AC_ROLLBACK_FROM:-}" current_head
+  local expected_from="${AC_ROLLBACK_FROM:-}" current_head rollback_link
   [[ "$expected_from" =~ ^[0-9a-f]{40}$ && "${previous_release##*/}" == "$expected_from" ]] || {
     printf 'Core rollback current release changed.\n' >&2
     return 1
@@ -1539,17 +1539,17 @@ rollback_application_only() {
     printf 'Core rollback migration head changed.\n' >&2
     return 1
   }
-  trap core_rollback_finish EXIT
+  trap core_rollback_exit EXIT
   activate_edge_route "$edge_hold_source"
   check_route "$api_host" /health/ready 503 "release-hold-$target_environment"
   stop_application_services_with_hosted_drain "$previous_release" false
   # --no-deps excludes PostgreSQL and the release migration profile entirely.
   compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 \
     api learner-web admin-web coach-web
-  current_tmp="$application_root/.core-rollback-${target_environment}-${release_id}.$$"
-  ln -s "$release_dir" "$current_tmp"
-  mv --no-target-directory --force "$current_tmp" "$current_link"
-  current_tmp=''
+  rollback_link="$application_root/.core-rollback-${target_environment}-${release_id}.$$"
+  ln -s "$release_dir" "$rollback_link"
+  mv --no-target-directory --force "$rollback_link" "$current_link"
+  rollback_link=''
   activate_edge_route "$edge_route_source"
   check_route "$api_host" /health/ready 200 "api-$target_environment"
   local -a rollback_workers=(worker)
