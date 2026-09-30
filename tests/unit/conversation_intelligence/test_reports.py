@@ -299,7 +299,7 @@ def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantic
     # AUT-360 changes evidence admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "c46db6d0ba49a3619fd8a226ae7a526256e575c78040c6d6d2138f84242a2d76"
+        "0a71edccde293b36c60ed5d262c454407e7b8aa0e06c83f299a2df2eef1b6bbe"
     )
 
 

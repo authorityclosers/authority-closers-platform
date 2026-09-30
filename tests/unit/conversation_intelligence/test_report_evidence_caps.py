@@ -137,6 +137,29 @@ def test_overview_model_caps(field: str, children: tuple[str, ...], limit: int) 
     }
 
 
+@pytest.mark.parametrize("tail", [4, 5], ids=["ordered", "overlapping"])
+def test_conversation_change_checks_chronology_before_truncation(tail: int) -> None:
+    transcript, payload = _case()
+    payload["overview"]["conversation_change"] = {
+        "before": {**_note(), "evidence": [*_refs(1, 4), {"segment_id": f"s{tail}"}]},
+        "change": {**_note(5), "evidence": _refs(5, 6)},
+        "after": {**_note(9), "evidence": _refs(9, 10)},
+        "possible_effect": "The timing may be clearer.",
+        "interpretation_kind": "inference",
+    }
+    report = parse_report_draft(payload, transcript)
+    assert report.overview is not None
+    change = report.overview.conversation_change
+    if tail == 4:
+        assert change is not None
+        assert [span.segment_id for span in change.before.evidence] == ["s1", "s2", "s3"]
+    else:
+        assert change is None
+    assert report.provider_extras["compatibility"]["overview_drops"]["conversation_change"] == {
+        "evidence_truncated" if tail == 4 else "chronology_invalid": 1
+    }
+
+
 @pytest.mark.parametrize(
     "bad",
     [

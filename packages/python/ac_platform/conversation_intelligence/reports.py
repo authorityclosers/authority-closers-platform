@@ -1720,6 +1720,13 @@ def _sanitize_provider_overview(
                     and isinstance(error["input"], list)
                     for error in errors
                 ):
+                    if field == "conversation_change" and any(
+                        max(span["end_ms"] for span in raw[left]["evidence"])
+                        > min(span["start_ms"] for span in raw[right]["evidence"])
+                        for left, right in (("before", "change"), ("change", "after"))
+                    ):
+                        drop(field, "chronology_invalid")
+                        continue
                     for error in errors:
                         target = raw
                         for key in error["loc"][:-1]:
