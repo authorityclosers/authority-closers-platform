@@ -276,13 +276,27 @@ def test_full_quotes_remain_exact_and_are_not_counted_as_salvaged() -> None:
         parse_report_draft(payload, transcript)
 
 
-@pytest.mark.parametrize("length,expected_length", [(2000, 2000), (2001, 900)])
-def test_timestamp_repair_obeys_whole_segment_size_limit(length: int, expected_length: int) -> None:
+def test_valid_offsets_matching_timestamps_preserve_literal_slice() -> None:
+    transcript, payload = _case()
+    text = transcript["segments"][0]["text"].ljust(1000, "x")
+    transcript["segments"][0]["text"] = text
+    payload["strengths"][0]["evidence"] = [{"segment_id": "s1", "quote_start": 0, "quote_end": 900}]
+    report = parse_report_draft(payload, transcript)
+    assert report.strengths[0].evidence[0].quote == text[:900]
+    assert "evidence_salvaged" not in report.provider_extras.get("compatibility", {})
+
+
+@pytest.mark.parametrize("length", [2000, 2001])
+def test_timestamp_repair_obeys_whole_segment_size_limit(length: int) -> None:
     transcript = _transcript(count=1)
-    transcript["segments"][0]["text"] = "x" * length
+    transcript["segments"][0].update(text="x" * length, start_ms=3000, end_ms=3900)
+    reference = {"segment_id": "s1", "quote_start": 3000, "quote_end": 3900}
     salvaged: dict[str, int] = {}
-    result = _normalise_c5_evidence(
-        {"segment_id": "s1", "quote_start": 0, "quote_end": 900}, transcript, salvaged
-    )
-    assert len(result["quote"]) == expected_length
-    assert salvaged == ({"offset_timestamp_copy": 1} if length == 2000 else {})
+    if length > 2000:
+        with pytest.raises(ReportError, match="report_evidence_invalid"):
+            _normalise_c5_evidence(reference, transcript, salvaged)
+        assert salvaged == {}
+    else:
+        result = _normalise_c5_evidence(reference, transcript, salvaged)
+        assert result["quote"] == "x" * length
+        assert salvaged == {"offset_timestamp_copy": 1}

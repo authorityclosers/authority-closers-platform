@@ -1444,9 +1444,15 @@ def _normalise_c5_evidence(
     elif keys == _C5_OFFSET_EVIDENCE_KEYS:
         quote_start = value.get("quote_start")
         quote_end = value.get("quote_end")
+        # Timestamp equality does not make a valid codepoint slice a slip.
         if (
             type(quote_start) is int
             and type(quote_end) is int
+            and not (
+                0 <= quote_start < quote_end <= len(text)
+                and quote_end - quote_start <= _MAX_EVIDENCE_QUOTE_CHARS
+                and text[quote_start:quote_end].strip()
+            )
             and text.strip()
             and len(text) <= _MAX_EVIDENCE_QUOTE_CHARS
         ):
