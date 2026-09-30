@@ -799,7 +799,7 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                         page.get_by_role(
                             "navigation", name="Explore your sales report", exact=True
                         ).get_by_role("link")
-                    ).to_have_count(7)
+                    ).to_have_count(8)
                     await expect(
                         page.get_by_role(
                             "navigation", name="Explore your sales report", exact=True

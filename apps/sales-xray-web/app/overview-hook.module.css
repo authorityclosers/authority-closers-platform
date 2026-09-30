@@ -17,7 +17,11 @@
   border-radius: 18px;
   background:
     radial-gradient(120% 140% at 0% 0%, var(--lx-teal-soft), transparent 55%),
-    radial-gradient(120% 140% at 100% 100%, color-mix(in srgb, var(--lx-missed) 12%, transparent), transparent 60%),
+    radial-gradient(
+      120% 140% at 100% 100%,
+      color-mix(in srgb, var(--lx-missed) 12%, transparent),
+      transparent 60%
+    ),
     var(--lx-surface);
   animation: rise 420ms var(--lx-ease-move, ease) both;
 }
@@ -124,7 +128,11 @@
   left: 5px;
   width: 2px;
   border-radius: 2px;
-  background: linear-gradient(var(--lx-muted-2, var(--lx-line)), var(--lx-missed), var(--lx-teal));
+  background: linear-gradient(
+    var(--lx-muted-2, var(--lx-line)),
+    var(--lx-missed),
+    var(--lx-teal)
+  );
   content: "";
   transform-origin: top;
   animation: draw 900ms var(--lx-ease-move, ease) 200ms both;
