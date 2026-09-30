@@ -448,7 +448,7 @@ def test_cli_respects_shared_flock_and_refusal_spool(repo, monkeypatch):
     repo.branch("task/admin/123-other")
     with lockfile.open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        assert SYNC.main(args) == 0
+        assert SYNC.main(args) == 75
         assert not repo.events()
     assert SYNC.main(args) == 1
     event = repo.events("alert")[0]
@@ -514,3 +514,69 @@ def test_stale_approval_does_not_freeze_new_head(repo):
     repo.write(APP + "page.tsx", "new")
     repo.tick()
     assert repo.remote_head() == repo.git("rev-parse", "HEAD")
+
+
+def test_refresh_inherited_lock_commits_and_remains_locked_for_merge(repo, monkeypatch):
+    import fcntl
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(SYNC.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(SYNC.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="acdev"))
+    repo.branch()
+    repo.write(APP + "page.tsx", "save before refresh merge")
+    lockfile = repo.repo.parent / "refresh.lock"
+    with lockfile.open("a") as owner:
+        fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        args = [
+            "--repo",
+            str(repo.repo),
+            "--state",
+            str(repo.state),
+            "--spool",
+            str(repo.spool),
+            "--lock",
+            str(lockfile),
+            "--lock-fd",
+            str(owner.fileno()),
+            "--commit-only",
+        ]
+        assert SYNC.main(args) == 0
+        assert repo.git("show", "HEAD:" + APP + "page.tsx") == "save before refresh merge"
+        with lockfile.open("a") as competitor, pytest.raises(BlockingIOError):
+            fcntl.flock(competitor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_inherited_lock_must_match_lock_path(repo, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(SYNC.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(SYNC.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="acdev"))
+    lockfile = repo.repo.parent / "real.lock"
+    lockfile.touch()
+    with (repo.repo.parent / "wrong.lock").open("a") as other, pytest.raises(SystemExit) as error:
+        SYNC.main(["--lock", str(lockfile), "--lock-fd", str(other.fileno())])
+    assert error.value.code == 2
+
+
+def test_commit_only_reports_quiet_window_deferral_to_refresh(repo, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(SYNC.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(SYNC.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="acdev"))
+    file = repo.write(APP + "page.tsx", "actively editing")
+    os.utime(file, None)
+    result = SYNC.main(
+        [
+            "--repo",
+            str(repo.repo),
+            "--state",
+            str(repo.state),
+            "--spool",
+            str(repo.spool),
+            "--lock",
+            str(repo.repo.parent / "quiet.lock"),
+            "--commit-only",
+        ]
+    )
+    assert result == 75
+    assert repo.git("rev-parse", "HEAD") == repo.base

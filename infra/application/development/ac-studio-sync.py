@@ -4,8 +4,9 @@
 Approval transport: GitHub PR conversation comments (the PR's issue), or
 state.json approvals["<PR number>"] = "<approved SHA>" supplied by the watchdog.
 An approval freezes the published head even while further local commits accrue.
-All invocations, including --commit-only, acquire the same flock internally;
-callers must not acquire that lock a second time around this process.
+All invocations acquire the same flock. A refresh holding it across the helper
+and its subsequent merge must pass the inherited descriptor with --lock-fd.
+Watchdog state writers must hold this same lock.
 """
 
 from __future__ import annotations
@@ -78,6 +79,7 @@ class Sync:
         self.repo, self.state_path, self.spool = Path(repo), Path(state), Path(spool)
         self.runner, self.now = runner, time.time() if now is None else now
         self.notification_failed = False
+        self.deferred = False
         self.state = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
 
     def run(self, *args, env=None, input_data=None):
@@ -397,6 +399,7 @@ class Sync:
             raise SyncError("Unsupported branch or unfinished Git operation; no Git writes")
         paths = self.paths()
         if branch == "main" and any(self.now - self.modified_at(p) < 120 for p in paths):
+            self.deferred = True
             return
         pending = self.state.get("pending")
         if pending and (
@@ -434,16 +437,25 @@ def main(argv=None):
     parser.add_argument(
         "--lock", type=Path, default=Path(f"/run/user/{os.getuid()}/ac-studio-sync.lock")
     )
+    parser.add_argument("--lock-fd", type=int, help="Inherited descriptor for the same lock file")
     parser.add_argument("--commit-only", action="store_true")
     args = parser.parse_args(argv)
     if os.geteuid() == 0 or pwd.getpwuid(os.geteuid()).pw_name != "acdev":
         parser.error("ac-studio-sync must run as acdev, never root")
     args.lock.parent.mkdir(parents=True, exist_ok=True)
-    with args.lock.open("a") as lock:
+    if args.lock_fd is None:
+        lock_stream = args.lock.open("a")
+    else:
+        inherited, expected = os.fstat(args.lock_fd), args.lock.stat()
+        if (inherited.st_dev, inherited.st_ino) != (expected.st_dev, expected.st_ino):
+            parser.error("--lock-fd must refer to --lock")
+        lock_stream = os.fdopen(os.dup(args.lock_fd), "r")
+    with lock_stream as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            return 0
+            # A refresh must not interpret a skipped checkpoint as success.
+            return 75 if args.commit_only else 0
         sync = Sync(args.repo, args.state, args.spool)
         try:
             sync.tick(args.commit_only)
@@ -455,7 +467,7 @@ def main(argv=None):
             )
             sync.event("alert", "sync-error", text)
             return 1
-        return int(sync.notification_failed)
+        return 75 if args.commit_only and sync.deferred else int(sync.notification_failed)
 
 
 if __name__ == "__main__":
