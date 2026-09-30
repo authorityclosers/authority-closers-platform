@@ -120,3 +120,125 @@
   background: var(--lx-paper-2);
   color: var(--lx-ink);
 }
+
+/* ---------- Inline, title-sized rename: one line, quiet controls ---------- */
+.editor {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 6px;
+  max-width: 760px;
+  animation: editor-in var(--lx-dur-move) var(--lx-ease-move) both;
+}
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.row {
+  grid-column: 1 / -1;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.input {
+  flex: 1 1 auto;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--lx-teal);
+  border-radius: 12px;
+  background: var(--lx-surface);
+  box-shadow: 0 0 0 4px var(--lx-teal-soft);
+  font: 800 clamp(20px, 1.9vw, 26px) / 1.1 var(--lx-font-display);
+  letter-spacing: -0.02em;
+  outline: none;
+}
+.input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--lx-teal-soft);
+}
+.primary,
+.secondary {
+  flex: none;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--lx-radius-pill);
+  font-size: 13.5px;
+}
+.primary {
+  background: var(--lx-gradient-primary);
+  box-shadow: var(--lx-shadow-cta);
+  color: var(--lx-on-teal);
+}
+.primary:disabled {
+  background: var(--lx-sunken);
+  box-shadow: none;
+  color: var(--lx-muted-2);
+  opacity: 1;
+}
+.secondary {
+  border-color: var(--lx-line);
+  background: transparent;
+  color: var(--lx-ink-3);
+}
+.secondary:hover:not(:disabled) {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+}
+.help {
+  grid-column: 1;
+  color: var(--lx-muted-2);
+  font-size: 12px;
+}
+.editor > .link {
+  grid-column: 2;
+  justify-self: end;
+  color: var(--lx-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.editor > .link:hover:not(:disabled) {
+  color: var(--lx-danger);
+}
+.problem {
+  grid-column: 1 / -1;
+}
+.trigger {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  opacity: 0.7;
+  transition:
+    opacity var(--lx-dur-quick) var(--lx-ease-quick),
+    background-color var(--lx-dur-quick) var(--lx-ease-quick);
+}
+.trigger:hover {
+  opacity: 1;
+}
+@keyframes editor-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (max-width: 620px) {
+  .row {
+    flex-wrap: wrap;
+  }
+  .input {
+    flex-basis: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor {
+    animation: none;
+  }
+}
+
+.editor .primary,
+.editor .secondary,
+.editor > .link {
+  font-family: var(--lx-font-ui);
+}

@@ -18,14 +18,38 @@ command -v jq >/dev/null
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/.." && pwd)"
 repo_policy="$repo_root/config/r2/free-tier-policy.conf"
-installed_policy='/srv/authority-closers/current/config/r2/free-tier-policy.conf'
+installed_root='/srv/authority-closers'
+scope_record='/var/lib/authority-closers/foundation-scopes/backup.release'
+
+resolve_installed_policy() {
+  local foundation_root="$1" record_path="$2" scope_release_id
+  if [[ -e "$record_path" || -L "$record_path" ]]; then
+    [[ -f "$record_path" && ! -L "$record_path" && -r "$record_path" ]] || {
+      printf 'Backup foundation scope record is unsafe.\n' >&2
+      return 1
+    }
+    IFS= read -r scope_release_id < "$record_path" || {
+      printf 'Backup foundation scope record is empty.\n' >&2
+      return 1
+    }
+    [[ "$scope_release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
+      printf 'Backup foundation scope record has an invalid release ID.\n' >&2
+      return 1
+    }
+    printf '%s/releases/%s/config/r2/free-tier-policy.conf' "$foundation_root" "$scope_release_id"
+  else
+    printf '%s/current/config/r2/free-tier-policy.conf' "$foundation_root"
+  fi
+}
 
 if [[ -n "${R2_POLICY_FILE:-}" ]]; then
   policy_file="$R2_POLICY_FILE"
+elif [[ -e "$scope_record" || -L "$scope_record" ]]; then
+  policy_file="$(resolve_installed_policy "$installed_root" "$scope_record")"
 elif [[ -r "$repo_policy" ]]; then
   policy_file="$repo_policy"
 else
-  policy_file="$installed_policy"
+  policy_file="$(resolve_installed_policy "$installed_root" "$scope_record")"
 fi
 
 [[ -r "$policy_file" ]] || {

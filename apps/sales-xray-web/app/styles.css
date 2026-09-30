@@ -3297,3 +3297,9 @@ html:not([data-theme="dark"]) .calls-library-app.calls-library-app {
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
+
+/* Next's dev-only issue badge and overlay never cover the product.
+   Problems surface as the app's own corner card (NoticeCenter). */
+nextjs-portal {
+  display: none !important;
+}

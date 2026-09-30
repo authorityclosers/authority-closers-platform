@@ -4,6 +4,7 @@ import errno
 import hashlib
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -154,6 +155,114 @@ def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
     unsafe["R2_MAX_STANDARD_BYTES"] = projection - 1
     with pytest.raises(backup.BackupError):
         backup.projected_logical_bytes(unsafe)
+
+
+def test_postgres_policy_follows_backup_scope_record(tmp_path: Path) -> None:
+    source_policy = (FOUNDATION / "config" / "r2" / "free-tier-policy.conf").read_text()
+    current_policy = tmp_path / "srv/authority-closers/current/config/r2/free-tier-policy.conf"
+    scoped_policy = tmp_path / (
+        "srv/authority-closers/releases/foundation-" + "a" * 40 + "/config/r2/free-tier-policy.conf"
+    )
+    current_policy.parent.mkdir(parents=True)
+    scoped_policy.parent.mkdir(parents=True)
+    current_policy.write_text(
+        source_policy.replace("R2_MAX_STANDARD_BYTES=8589934592", "R2_MAX_STANDARD_BYTES=111")
+    )
+    scoped_policy.write_text(
+        source_policy.replace("R2_MAX_STANDARD_BYTES=8589934592", "R2_MAX_STANDARD_BYTES=222")
+    )
+    current_values = backup.read_policy(backup.foundation_policy_path(tmp_path))
+    assert current_values["R2_MAX_STANDARD_BYTES"] == 111
+
+    record = tmp_path / "var/lib/authority-closers/foundation-scopes/backup.release"
+    record.parent.mkdir(parents=True)
+    record.write_text("foundation-" + "a" * 40 + "\n")
+    scoped_values = backup.read_policy(backup.foundation_policy_path(tmp_path))
+    assert scoped_values["R2_MAX_STANDARD_BYTES"] == 222
+
+
+def test_restored_managed_files_use_scoped_release_only_for_listed_targets(tmp_path: Path) -> None:
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text()
+    start = source.index("compare_restored_managed_files() {")
+    end = source.index("\n}\n", start) + 3
+    function = source[start:end]
+    current_id = "foundation-" + "1" * 40
+    scope_id = "foundation-" + "2" * 40
+    restored = tmp_path / "restored"
+    current = restored / "srv/authority-closers/releases" / current_id
+    scoped = restored / "srv/authority-closers/releases" / scope_id
+    trusted = tmp_path / "trusted"
+    trusted_scope = trusted / scope_id
+    for release in (current, scoped):
+        (release / "config/release").mkdir(parents=True)
+        (release / "scripts").mkdir()
+    current_manifest = (
+        "executable\tscripts/backup\t/usr/local/sbin/ac-backup\t0755\troot\troot\n"
+        "executable\tscripts/health\t/usr/local/sbin/ac-health\t0755\troot\troot\n"
+    )
+    (current / "config/release/install-manifest.tsv").write_text(current_manifest)
+    (current / "scripts/backup").write_text("current backup\n")
+    (current / "scripts/health").write_text("current health\n")
+    (scoped / "config/release/install-manifest.tsv").write_text(
+        "executable\tscripts/backup\t/usr/local/sbin/ac-backup\t0755\troot\troot\n"
+    )
+    (scoped / "config/release/install-scope-backup.txt").write_text("/usr/local/sbin/ac-backup\n")
+    (scoped / "scripts/backup").write_text("scoped backup\n")
+    (scoped / "RELEASE-ID").write_text(scope_id + "\n")
+    (scoped / "RELEASE-COMMIT").write_text(scope_id.removeprefix("foundation-") + "\n")
+    trusted_scope.mkdir(parents=True)
+    shutil.copytree(scoped, trusted_scope, dirs_exist_ok=True)
+    for release in (current, scoped):
+        manifest = release / "RELEASE-FILES.sha256"
+        files = sorted(path for path in release.rglob("*") if path.is_file() and path != manifest)
+        manifest.write_text(
+            "".join(
+                f"{hashlib.sha256(path.read_bytes()).hexdigest()}  "
+                f"./{path.relative_to(release).as_posix()}\n"
+                for path in files
+            )
+        )
+    # The installed trust anchor must carry the same scope release checksums.
+    shutil.copy2(scoped / "RELEASE-FILES.sha256", trusted_scope / "RELEASE-FILES.sha256")
+    restored_targets = restored / "usr/local/sbin"
+    restored_targets.mkdir(parents=True)
+    (restored_targets / "ac-backup").write_text("scoped backup\n")
+    (restored_targets / "ac-health").write_text("current health\n")
+    for target in restored_targets.iterdir():
+        target.chmod(0o755)
+    record = restored / "var/lib/authority-closers/foundation-scopes/backup.release"
+    record.parent.mkdir(parents=True)
+    record.write_text(scope_id + "\n")
+    script = (
+        "set -euo pipefail\n" + function + '\ncompare_restored_managed_files "$1" "$2" "$3" 0\n'
+    )
+    bash = Path("/usr/bin/bash")
+    if not bash.is_file():
+        pytest.skip("Bash is unavailable for the synthetic restore comparison")
+
+    def compare() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603 - extracted trusted function uses synthetic paths only
+            [str(bash), "-c", script, "restore-proof", str(restored), str(current), str(trusted)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    result = compare()
+    assert result.returncode == 0, result.stderr
+    record.unlink()
+    (restored_targets / "ac-backup").write_text("current backup\n")
+    result = compare()
+    assert result.returncode == 0, result.stderr
+    record.write_text("")
+    result = compare()
+    assert result.returncode != 0
+    assert "scope record is empty" in result.stderr
+    record.write_text(scope_id + "\n")
+    (restored_targets / "ac-backup").write_text("tampered scoped backup\n")
+    result = compare()
+    assert result.returncode != 0
+    assert "/usr/local/sbin/ac-backup" in result.stderr
 
 
 def test_lock_files_are_hardened_through_the_open_descriptor() -> None:

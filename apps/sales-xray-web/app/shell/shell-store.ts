@@ -19,6 +19,8 @@ export interface ShellRecentCall {
   id: string;
   name: string;
   date: string;
+  /** Label revision, so a rename from the sidebar is never a stale write. */
+  revision?: number;
 }
 
 export interface ShellStoreState {
