@@ -10,7 +10,7 @@ import type {
   Transcript,
 } from "./report-contract";
 import { updateShellState } from "./shell/shell-store";
-import { readSpeakerProfiles } from "./speaker-profiles";
+import { readSpeakerProfiles, saveSpeakerProfiles } from "./speaker-profiles";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -164,6 +164,12 @@ it("the waveform is a keyboard slider that seeks in five-second steps", async ()
     ),
   );
   expect(onSeek).toHaveBeenLastCalledWith(0);
+  await act(async () =>
+    track.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "End", bubbles: true }),
+    ),
+  );
+  expect(onSeek).toHaveBeenLastCalledWith(transcript.duration_ms - 1);
 });
 
 it("a moment dot plays its cited evidence", async () => {
@@ -260,6 +266,11 @@ it("keeps speaker edits available for retry when device storage rejects a save",
 
 it("suggests which voice is you from an introduction, confirmed in one tap", async () => {
   updateShellState({ profileName: "Suyash Rao" });
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      rep: { name: "Suyash Rao", role: null, icon: "person" },
+    }),
+  );
   await renderMap({
     ...transcript,
     segments: [
@@ -291,6 +302,7 @@ it("suggests which voice is you from an introduction, confirmed in one tap", asy
   expect(chips()[1].textContent).toContain("Prospect");
   const saved = readSpeakerProfiles(CALL_ID);
   expect(saved.rep.role).toBe("you");
+  expect(saved.rep.icon).toBe("person");
   expect(saved.buyer.role).toBe("prospect");
 });
 
@@ -486,7 +498,35 @@ it("does not offer a name confirmation for an ordinary here phrase", async () =>
   expect(readSpeakerProfiles(CALL_ID)).toEqual({});
 });
 
-it("switches the band under the waveform: who talked, stages, interest", async () => {
+it("hides role-specific talk share until a speaker role is saved", async () => {
+  await act(async () => root.unmount());
+  localStorage.setItem("ac.xray.map-lens", "stages");
+  root = createRoot(host);
+  await renderMap();
+  const controls = host.querySelector('[aria-label="What the map shows"]')!;
+  expect(controls.textContent).not.toContain("Call stages");
+  expect(controls.textContent).not.toContain("Talk share by minute");
+  expect(
+    Array.from(controls.querySelectorAll("button"))
+      .find((button) => button.textContent === "Who talked")
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+});
+
+it("shows factual talk share only after the call has a confirmed role", async () => {
+  const voices = [
+    ...new Set(transcript.segments.map((segment) => segment.speaker_id)),
+  ];
+  const seller = voices[0]!;
+  const buyer = voices[1]!;
+  await act(async () =>
+    saveSpeakerProfiles(CALL_ID, {
+      [seller]: { name: "Fictional Seller", role: "you", icon: null },
+      [buyer]: { name: "Fictional Buyer", role: "prospect", icon: null },
+    }),
+  );
+  await renderMap();
+
   const lens = (name: string) =>
     Array.from(
       host.querySelectorAll<HTMLButtonElement>(
@@ -496,11 +536,10 @@ it("switches the band under the waveform: who talked, stages, interest", async (
   expect(lens("Who talked").getAttribute("aria-pressed")).toBe("true");
   expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(2);
 
-  await act(async () => lens("Prospect's interest").click());
+  await act(async () => lens("Talk share by minute").click());
   expect(host.querySelectorAll("svg[data-voice]")).toHaveLength(0);
-  expect(host.textContent).toContain("talked each minute");
-  expect(localStorage.getItem("ac.xray.map-lens")).toBe("interest");
-
-  await act(async () => lens("Call stages").click());
-  expect(host.textContent).toContain("once the analysis marks them");
+  expect(host.textContent).toContain("talk share in each minute");
+  expect(host.textContent).not.toContain("went quiet");
+  expect(localStorage.getItem("ac.xray.map-lens")).toBe("talk-share");
+  expect(host.textContent).not.toContain("Call stages");
 });

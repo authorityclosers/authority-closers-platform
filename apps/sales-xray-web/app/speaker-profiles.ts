@@ -90,6 +90,17 @@ export function readSpeakerProfiles(callId: string | null): SpeakerProfiles {
   return parse(readRaw(callId));
 }
 
+/** Removes this call's local speaker names and roles after deletion succeeds. */
+export function clearSpeakerProfiles(callId: string): boolean {
+  try {
+    localStorage.removeItem(storageKey(callId));
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new CustomEvent(SPEAKERS_EVENT, { detail: { callId } }));
+  return true;
+}
+
 /**
  * Merges changes into a call's speaker profiles. Only one speaker can be
  * "you": naming someone you clears that role from everyone else.

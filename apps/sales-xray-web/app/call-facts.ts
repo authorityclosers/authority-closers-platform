@@ -63,6 +63,17 @@ export function readCallFacts(callId: string | null): CallFacts {
   return parse(readRaw(callId));
 }
 
+/** Removes this call's locally confirmed facts after server deletion succeeds. */
+export function clearCallFacts(callId: string): boolean {
+  try {
+    localStorage.removeItem(key(callId));
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new CustomEvent(FACTS_EVENT, { detail: { callId } }));
+  return true;
+}
+
 type Change =
   | { kind: "confirm"; id: string; value: boolean }
   | { kind: "value"; id: string; value: string | null }

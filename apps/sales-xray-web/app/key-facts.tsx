@@ -12,11 +12,7 @@ import { numbersHeard, priceTalk, timePromise, voicesOf } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type { SalesReport, Transcript } from "./report-contract";
 import { getShellState } from "./shell/shell-store";
-import {
-  SPEAKER_ICONS,
-  speakerIcon,
-  suggestProspectIcon,
-} from "./speaker-icons";
+import { SPEAKER_ICONS } from "./speaker-icons";
 import {
   ROLE_WORDS,
   speakerName,
@@ -102,20 +98,18 @@ export function KeyFacts({
       ),
     [transcript],
   );
-  const guessedIndustry = useMemo(() => {
-    const key = suggestProspectIcon(`${report.summary} ${report.verdict}`);
-    const icon = speakerIcon(key);
-    return icon && !icon.generic ? icon.label : null;
-  }, [report]);
-
   const nameOf = (id: string) =>
     speakerName(voices.indexOf(id), profiles[id], accountName);
   const people = voices
-    .filter((id) => profiles[id]?.role)
-    .map(
-      (id) => `${nameOf(id)} (${ROLE_WORDS[profiles[id].role!].toLowerCase()})`,
-    );
-  const industry = facts.values.industry ?? guessedIndustry;
+    .filter((id) => profiles[id]?.name.trim() || profiles[id]?.role)
+    .map((id) => {
+      const profile = profiles[id]!;
+      const name = profile.name.trim() || nameOf(id);
+      return profile.role
+        ? `${name} (${ROLE_WORDS[profile.role].toLowerCase()})`
+        : name;
+    });
+  const industry = facts.values.industry?.trim() || null;
   const priceHasAmount = price.some((segment) =>
     numbers.some((number) => number.segment.id === segment.id),
   );
@@ -360,7 +354,7 @@ export function KeyFacts({
         </h3>
         {numbers.length === 0 ? (
           <p className={styles.muted}>
-            No amounts with ₹, lakh, crore or % were said.
+            No currency amount or percentage was said.
           </p>
         ) : (
           numbers.slice(0, 10).map((number) => (

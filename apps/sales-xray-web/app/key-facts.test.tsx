@@ -40,7 +40,7 @@ const transcript: Transcript = {
       speaker_id: "buyer",
       start_ms: 240_000,
       end_ms: 250_000,
-      text: "हां 1 CR होता है yearly.",
+      text: "हां turnover ₹1 CR होता है yearly.",
     },
     {
       id: "a4",
@@ -95,24 +95,37 @@ it("shows only what the call really said, with a play button for each", async ()
   expect(row("Time asked for").textContent).toContain("Up to 15 min");
   expect(row("Time asked for").textContent).toContain("call took 24 min");
   expect(row("Price or budget").textContent).toContain("no amount said");
-  expect(row("Industry").textContent).toContain("Carpentry");
+  expect(row("Industry").textContent).toContain("Not found");
   const play = row("Time asked for").querySelector("button")!;
   await act(async () => play.click());
   expect(onSeek).toHaveBeenCalledWith(0);
 });
 
-it("confirms a guessed fact in one tap", async () => {
-  const yes = Array.from(row("Industry").querySelectorAll("button")).find(
-    (button) => button.textContent === "Yes",
+it("does not infer industry from report prose and saves a user choice", async () => {
+  expect(row("Industry").textContent).toContain("Not found");
+  expect(
+    Array.from(row("Industry").querySelectorAll("button")).some(
+      (button) => button.textContent === "Yes",
+    ),
+  ).toBe(false);
+  await act(async () =>
+    Array.from(row("Industry").querySelectorAll("button"))[0].click(),
+  );
+  const select = row("Industry").querySelector<HTMLSelectElement>(
+    'select[aria-label="Industry"]',
   )!;
-  await act(async () => yes.click());
+  await act(async () => {
+    select.value = "Carpentry & building";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(readCallFacts(CALL).values.industry).toBe("Carpentry & building");
   expect(readCallFacts(CALL).confirmed.industry).toBe(true);
   expect(row("Industry").textContent).toContain("Confirmed");
 });
 
 it("lets the person say what a heard number means", async () => {
   const select = host.querySelector<HTMLSelectElement>(
-    'select[aria-label="What is 1 CR?"]',
+    'select[aria-label^="What is"]',
   )!;
   await act(async () => {
     select.value = "Yearly sales";
@@ -132,4 +145,14 @@ it("names the people once the call map has them", async () => {
   expect(row("Who is on the call").textContent).toContain(
     "Manas (salesperson) · Nandlal ji (prospect)",
   );
+});
+
+it("shows saved speaker names before a role is selected", async () => {
+  await act(async () => {
+    saveSpeakerProfiles(CALL, {
+      buyer: { name: "Fictional Buyer", role: null, icon: null },
+    });
+  });
+  expect(row("Who is on the call").textContent).toContain("Fictional Buyer");
+  expect(row("Who is on the call").textContent).not.toContain("prospect");
 });

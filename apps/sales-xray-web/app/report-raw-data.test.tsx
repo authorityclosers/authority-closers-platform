@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import fixture from "../tests/fixtures/dipak-overview.json";
-import { ReportRawData } from "./report-raw-data";
+import { csvCell, ReportRawData } from "./report-raw-data";
 import type { SalesReport, Transcript } from "./report-contract";
 
 (
@@ -133,4 +133,12 @@ it("exports the data as JSON and CSV files", async () => {
   expect(json.source.run_id).toBe("9f8e7d6c-0000-4000-8000-000000000000");
   expect(await read(created[1])).toContain("question,00:00");
   click.mockRestore();
+});
+
+it("prevents spreadsheet formulas in exported CSV cells", () => {
+  expect(csvCell("=1+1")).toBe("'=1+1");
+  expect(csvCell("+SUM(A1:A2)")).toBe("'+SUM(A1:A2)");
+  expect(csvCell("-10")).toBe("'-10");
+  expect(csvCell("@cmd,now")).toBe('"\'@cmd,now"');
+  expect(csvCell("ordinary text")).toBe("ordinary text");
 });

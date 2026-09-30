@@ -184,7 +184,7 @@ function LightboxShellFrame({
   // The gear opens the account card; the card opens settings sections.
   const [accountCardOpen, setAccountCardOpen] = useState(false);
   const closeAccountCard = useCallback(() => setAccountCardOpen(false), []);
-  const gearRef = useRef<HTMLAnchorElement>(null);
+  const accountAnchorRef = useRef<HTMLElement | null>(null);
   const unseenNews = useUnseenNews();
   const profile = useShellProfile(
     authenticated,
@@ -484,6 +484,7 @@ function LightboxShellFrame({
     // The account card floats over the current screen instead of leaving it.
     if (authenticated && active !== "account" && opensInPlace(event)) {
       event.preventDefault();
+      accountAnchorRef.current = event.currentTarget;
       setAccountCardOpen((open) => !open);
     }
   }
@@ -631,6 +632,7 @@ function LightboxShellFrame({
               <Link
                 className={`${styles.stripBtn}${active === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
+                prefetch={false}
                 aria-label="Organisation"
                 aria-current={active === "organisation" ? "page" : undefined}
               >
@@ -644,7 +646,6 @@ function LightboxShellFrame({
               className={`${styles.stripBtn}${active === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
-              ref={gearRef}
               aria-label={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
@@ -881,7 +882,7 @@ function LightboxShellFrame({
       {accountCardOpen && authenticated ? (
         <SettingsMenu
           open
-          anchorRef={gearRef}
+          anchorRef={accountAnchorRef}
           onClose={closeAccountCard}
           name={profileName}
           email={profile?.email ?? null}

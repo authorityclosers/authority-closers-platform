@@ -1,13 +1,11 @@
 import { expect, it } from "vitest";
 
 import {
-  interestSeries,
   numbersHeard,
   priceTalk,
   questionsAsked,
-  quietPoint,
   scriptMix,
-  talkAfter,
+  talkShareSeries,
   timePromise,
   voiceStats,
 } from "./call-data";
@@ -57,9 +55,9 @@ const opening = call([
     "buyer",
     70_500,
     80_000,
-    "हां 1 CR होता है। पांच जैसा 5 CR का काम होता है yearly.",
+    "हां turnover ₹1 CR है। ₹5 CR yearly sales होती है.",
   ],
-  ["buyer", 80_500, 90_000, "15 20 लाख का माल फंसा है, margin 30% रखते हैं।"],
+  ["buyer", 80_500, 90_000, "₹20 लाख का माल फंसा है, margin 30% रखते हैं।"],
   [
     "rep",
     200_000,
@@ -87,19 +85,38 @@ it("lists each question sentence separately", () => {
 
 it("hears numbers only when they come with a unit", () => {
   const heard = numbersHeard(opening).map((row) => [row.spoken, row.kind]);
-  expect(heard).toContainEqual(["1 CR", "money"]);
-  expect(heard).toContainEqual(["5 CR", "money"]);
-  expect(heard).toContainEqual(["20 लाख", "money"]);
+  expect(heard).toContainEqual(["₹1 CR", "money"]);
+  expect(heard).toContainEqual(["₹5 CR", "money"]);
+  expect(heard).toContainEqual(["₹20 लाख", "money"]);
   expect(heard).toContainEqual(["30%", "percent"]);
   expect(heard).toContainEqual(["15 बरस", "time"]);
   // A bare "15" or "10" without a unit is never read as money.
   expect(heard.some(([spoken]) => spoken === "15")).toBe(false);
 });
 
+it("keeps ambiguous magnitudes as quantities without currency evidence", () => {
+  const rows = numbersHeard(
+    call([["a", 0, 1000, "Sales 10K customers, 10 L tank and 10 thousand users."]]),
+  );
+  expect(rows.map(({ spoken, kind }) => [spoken, kind])).toEqual([
+    ["10K", "quantity"],
+    ["10 L", "quantity"],
+    ["10 thousand", "quantity"],
+  ]);
+});
+
 it("finds the time asked for in the opening minutes", () => {
   const promise = timePromise(opening)!;
   expect(promise.upToMinutes).toBe(15);
   expect(promise.segments.map((segment) => segment.id)).toEqual(["s3", "s4"]);
+});
+
+it("does not treat unrelated minutes as a time agreement", () => {
+  const unrelated = call([
+    ["a", 0, 1000, "The meeting starts in 30 minutes."],
+    ["b", 2000, 3000, "I waited 10 minutes."],
+  ]);
+  expect(timePromise(unrelated)).toBeNull();
 });
 
 it("finds price talk and reads the script mix", () => {
@@ -109,19 +126,11 @@ it("finds price talk and reads the script mix", () => {
   expect(mix.devanagari + mix.latin).toBeCloseTo(1, 5);
 });
 
-it("shows when the prospect went quiet and how little they said after", () => {
-  const series = interestSeries(opening, "buyer");
+it("reports each voice's talk share in each active minute", () => {
+  const series = talkShareSeries(opening, "buyer");
   expect(series).toHaveLength(10);
   expect(series[1]).toBeGreaterThan(0.4);
   // Nobody spoke from 2:00 to 3:00; after that only the seller talks.
   expect(series[2]).toBeNull();
   expect(series[5]).toBe(0);
-  const quiet = quietPoint(series);
-  expect(quiet).toBe(2);
-  expect(talkAfter(opening, "buyer", quiet! * 60_000)).toBe(0);
-});
-
-it("does not call a voice quiet that never talked", () => {
-  expect(quietPoint([0, 0, 0, 0])).toBeNull();
-  expect(quietPoint([0.5, 0.4, 0.3])).toBeNull();
 });

@@ -18,12 +18,7 @@ import {
   type PointerEvent,
 } from "react";
 
-import {
-  interestSeries,
-  questionsAsked,
-  quietPoint,
-  talkAfter,
-} from "./call-data";
+import { talkShareSeries, questionsAsked } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type {
   Finding,
@@ -75,11 +70,10 @@ const KINDS = [
 type Tone = (typeof KINDS)[number]["tone"];
 
 /** What the band under the waveform shows: one view at a time. */
-type Lens = "who" | "stages" | "interest";
+type Lens = "who" | "talk-share";
 const LENSES: Array<{ key: Lens; label: string }> = [
   { key: "who", label: "Who talked" },
-  { key: "stages", label: "Call stages" },
-  { key: "interest", label: "Prospect's interest" },
+  { key: "talk-share", label: "Talk share by minute" },
 ];
 const LENS_KEY = "ac.xray.map-lens";
 
@@ -87,7 +81,9 @@ function readLens(): Lens {
   try {
     const saved =
       typeof window === "undefined" ? null : localStorage.getItem(LENS_KEY);
-    return saved === "stages" || saved === "interest" ? saved : "who";
+    if (saved === "talk-share" || saved === "interest") return "talk-share";
+    // The old stages view had no stage data. Do not reopen it from storage.
+    return "who";
   } catch {
     return "who";
   }
@@ -255,7 +251,7 @@ function keyTarget(key: string, currentMs: number, total: number) {
     case "Home":
       return 0;
     case "End":
-      return at(total - STEP_MS);
+      return at(total);
     case "Enter":
     case " ":
       return at(currentMs);
@@ -383,8 +379,7 @@ export function CallMap({
     }
   }
 
-  // The prospect: named as such, else the voice that is not the seller on a
-  // two-person call, else the quieter of the first two voices.
+  // A role-specific talk-share view needs a confirmed prospect or seller role.
   const prospectVoice = (() => {
     const named = facts.voices.find((id) => profiles[id]?.role === "prospect");
     if (named) return named;
@@ -394,24 +389,16 @@ export function CallMap({
     );
     if (seller && facts.voices.length === 2)
       return facts.voices.find((id) => id !== seller) ?? null;
-    if (facts.voices.length < 2) return null;
-    return (facts.shares[1] ?? 0) <= (facts.shares[0] ?? 0)
-      ? facts.voices[1]
-      : facts.voices[0];
+    return null;
   })();
-  const interest = useMemo(
-    () => (prospectVoice ? interestSeries(transcript, prospectVoice) : []),
+  const activeLens = lens === "talk-share" && !prospectVoice ? "who" : lens;
+  const talkShare = useMemo(
+    () => (prospectVoice ? talkShareSeries(transcript, prospectVoice) : []),
     [transcript, prospectVoice],
   );
-  const quiet = useMemo(() => quietPoint(interest), [interest]);
-  const quietMs = quiet === null ? null : quiet * 60_000;
-  const quietTalkMs =
-    quietMs === null || !prospectVoice
-      ? 0
-      : talkAfter(transcript, prospectVoice, quietMs);
-  const interestPath = (() => {
-    if (!interest.length) return null;
-    const points = interest.map((share, bin) => [
+  const talkSharePath = (() => {
+    if (!talkShare.length) return null;
+    const points = talkShare.map((share, bin) => [
       Math.min(total, (bin + 0.5) * 60_000),
       1 - (share ?? 0) * 0.92,
     ]);
@@ -473,7 +460,7 @@ export function CallMap({
           (asYou ? accountName : spoken.names[speakerId]) ||
           "",
         role: asYou ? "you" : "salesperson",
-        icon: null,
+        icon: profiles[speakerId]?.icon ?? null,
       },
     };
     // On a two-person call the other voice is the prospect.
@@ -532,11 +519,11 @@ export function CallMap({
       style={
         {
           "--lanes":
-            lens === "who"
+            activeLens === "who"
               ? lanes.length > 1
                 ? lanes.length
                 : 0
-              : lens === "interest"
+              : activeLens === "talk-share"
                 ? 4
                 : 2,
         } as CSSProperties
@@ -549,11 +536,13 @@ export function CallMap({
             role="group"
             aria-label="What the map shows"
           >
-            {LENSES.map((option) => (
+            {LENSES.filter(
+              (option) => option.key !== "talk-share" || prospectVoice,
+            ).map((option) => (
               <button
                 key={option.key}
                 type="button"
-                aria-pressed={lens === option.key}
+                aria-pressed={activeLens === option.key}
                 onClick={() => chooseLens(option.key)}
               >
                 {option.label}
@@ -575,7 +564,7 @@ export function CallMap({
           </span>
         </div>
         <div className={styles.subhead}>
-          {lens === "who" ? (
+          {activeLens === "who" ? (
             lanes.length > 1 ? (
               <div className={styles.who}>
                 <div
@@ -679,26 +668,14 @@ export function CallMap({
             ) : (
               <span className={styles.note}>One voice on this call.</span>
             )
-          ) : lens === "stages" ? (
-            <span className={styles.note}>
-              Stages (hello, questions, pitch, wrap-up) show here once the
-              analysis marks them.
-            </span>
           ) : prospectVoice ? (
             <span className={styles.note}>
-              How much <b>{nameOf(facts.voices.indexOf(prospectVoice))}</b>{" "}
-              talked each minute
-              {quietMs !== null ? (
-                <>
-                  {" "}
-                  · went quiet at <b>{formatClock(quietMs)}</b> and talked{" "}
-                  {Math.round(quietTalkMs / 1000)} s after that
-                </>
-              ) : null}
+              <b>{nameOf(facts.voices.indexOf(prospectVoice))}</b> talk share in
+              each minute of the call.
             </span>
           ) : (
             <span className={styles.note}>
-              Needs two voices to show interest.
+              Assign a speaker role to view talk share.
             </span>
           )}
         </div>
@@ -720,10 +697,10 @@ export function CallMap({
                 className={styles.wave}
                 data-morph-wave
                 data-voice={
-                  lens === "who" ? (focusVoice ?? undefined) : undefined
+                  activeLens === "who" ? (focusVoice ?? undefined) : undefined
                 }
                 style={
-                  lens === "who" && focusVoice !== null
+                  activeLens === "who" && focusVoice !== null
                     ? voiceStyle(focusVoice)
                     : undefined
                 }
@@ -742,7 +719,7 @@ export function CallMap({
                         : styles.pending;
                   const hot = hoverBin >= 0 && Math.abs(index - hoverBin) <= 1;
                   const dim =
-                    lens === "who" &&
+                    activeLens === "who" &&
                     focusVoice !== null &&
                     owners[index] !== focusVoice;
                   return (
@@ -799,7 +776,7 @@ export function CallMap({
               </button>
             ))}
           </div>
-          {lens === "who" && lanes.length > 1 ? (
+          {activeLens === "who" && lanes.length > 1 ? (
             <div className={styles.lanes} aria-hidden="true">
               {lanes.map((lane) => (
                 <svg
@@ -828,26 +805,17 @@ export function CallMap({
               ))}
             </div>
           ) : null}
-          {lens === "interest" && interestPath ? (
+          {activeLens === "talk-share" && talkSharePath ? (
             <div className={styles.interest} aria-hidden="true">
               <svg viewBox={`0 0 ${total} 1`} preserveAspectRatio="none">
-                <path className={styles.interestArea} d={interestPath.area} />
+                <path className={styles.interestArea} d={talkSharePath.area} />
                 <path
                   className={styles.interestLine}
-                  d={interestPath.line}
+                  d={talkSharePath.line}
                   vectorEffect="non-scaling-stroke"
                 />
               </svg>
-              {quietMs !== null ? (
-                <span
-                  className={styles.quiet}
-                  style={{ left: `${(quietMs / total) * 100}%` }}
-                />
-              ) : null}
             </div>
-          ) : null}
-          {lens === "stages" ? (
-            <div className={styles.stagesEmpty} aria-hidden="true" />
           ) : null}
           {progress > 0 ? (
             <span

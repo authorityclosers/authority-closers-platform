@@ -162,9 +162,45 @@ export function SettingsMenu({
     if (!open) return;
     const measure = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const mobile = window.innerWidth < 900;
+      const width = Math.min(300, window.innerWidth - 16);
+      const anchorVisible = Boolean(
+        rect &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.right > 0 &&
+          rect.left < window.innerWidth &&
+          rect.bottom > 0 &&
+          rect.top < window.innerHeight,
+      );
+      if (!rect || !anchorVisible) {
+        setPlace({
+          left: Math.max(8, Math.round((window.innerWidth - width) / 2)),
+          bottom: 16,
+        });
+        return;
+      }
+      if (mobile) {
+        const height =
+          card.current?.getBoundingClientRect().height ??
+          Math.min(620, window.innerHeight - 32);
+        const maxBottom = Math.max(8, window.innerHeight - height - 8);
+        setPlace({
+          left: Math.max(8, Math.round((window.innerWidth - width) / 2)),
+          bottom: Math.min(
+            Math.max(8, Math.round(window.innerHeight - rect.top + 8)),
+            maxBottom,
+          ),
+        });
+        return;
+      }
+      const right = rect.right + 10;
+      const left =
+        right + width <= window.innerWidth - 8
+          ? right
+          : Math.max(8, rect.left - width - 10);
       setPlace({
-        left: Math.round(rect.right + 10),
+        left: Math.round(left),
         bottom: Math.max(8, Math.round(window.innerHeight - rect.bottom)),
       });
     };

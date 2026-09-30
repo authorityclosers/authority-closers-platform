@@ -30,7 +30,12 @@ const DIMENSION_WORDS: Record<string, string> = {
   conflicted: "Mixed signals",
 };
 
-const KIND_WORDS = { money: "Money", percent: "Percent", time: "Time" };
+const KIND_WORDS = {
+  money: "Money",
+  percent: "Percent",
+  time: "Time",
+  quantity: "Quantity",
+};
 
 function Time({ ms, onSeek }: { ms: number; onSeek: (ms: number) => void }) {
   return (
@@ -75,8 +80,9 @@ function download(name: string, type: string, text: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function csvCell(value: string | number) {
-  const text = String(value);
+export function csvCell(value: string | number) {
+  const raw = String(value);
+  const text = /^[\s\u0000-\u001f]*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

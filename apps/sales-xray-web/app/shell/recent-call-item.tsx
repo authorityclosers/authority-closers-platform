@@ -13,6 +13,8 @@ import {
 
 import { acquisition, record, submissionPath } from "../acquisition-client";
 import { renameCall } from "../call-label-client";
+import { clearCallFacts } from "../call-facts";
+import { clearSpeakerProfiles } from "../speaker-profiles";
 import type { ShellRecentCall } from "./shell-store";
 import styles from "./recent-call-item.module.css";
 
@@ -156,6 +158,8 @@ export function RecentCallItem({
       );
       if (!["deleting", "deleted"].includes(String(deleted.state)))
         throw new Error("delete_unconfirmed");
+      clearCallFacts(call.id);
+      clearSpeakerProfiles(call.id);
       setMenuOpen(false);
       // A full navigation discards the deleted report and its playback state.
       if (

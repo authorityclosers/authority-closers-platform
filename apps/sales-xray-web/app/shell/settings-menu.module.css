@@ -4,7 +4,7 @@
   z-index: 300;
   left: 74px;
   bottom: 16px;
-  width: 300px;
+  width: min(300px, calc(100vw - 16px));
   max-height: min(620px, calc(100dvh - 32px));
   overflow: hidden auto;
   padding: 8px;

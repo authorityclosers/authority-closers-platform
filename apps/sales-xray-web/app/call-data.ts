@@ -102,7 +102,7 @@ export function voiceStats(transcript: Transcript): VoiceStats[] {
  * One voice's share of all talking in each window of the call (0–1), or null
  * where nobody spoke in that window.
  */
-export function interestSeries(
+export function talkShareSeries(
   transcript: Transcript,
   voice: string,
   binMs = 60_000,
@@ -126,61 +126,19 @@ export function interestSeries(
   return all.map((ms, bin) => (ms > 0 ? mine[bin] / ms : null));
 }
 
-/**
- * The window where a voice that had been talking goes quiet and stays quiet:
- * at least `run` windows in a row under `threshold`, after it had spoken at
- * least `before` of the talk in some earlier window.
- */
-export function quietPoint(
-  series: Array<number | null>,
-  threshold = 0.05,
-  run = 3,
-  before = 0.2,
-): number | null {
-  let wasTalking = false;
-  for (let start = 0; start < series.length; start += 1) {
-    const value = series[start];
-    if (value !== null && value >= before) wasTalking = true;
-    if (!wasTalking) continue;
-    let quiet = 0;
-    for (let bin = start; bin < series.length; bin += 1) {
-      const share = series[bin];
-      if (share === null || share < threshold) quiet += 1;
-      else break;
-    }
-    if (quiet >= run && (series[start] ?? 0) < threshold) return start;
-  }
-  return null;
-}
-
-/** How long a voice spoke from a moment to the end of the call. */
-export function talkAfter(
-  transcript: Transcript,
-  voice: string,
-  fromMs: number,
-): number {
-  return transcript.segments
-    .filter((segment) => voiceOf(segment) === voice)
-    .reduce(
-      (sum, segment) =>
-        sum + Math.max(0, segment.end_ms - Math.max(segment.start_ms, fromMs)),
-      0,
-    );
-}
-
 export type HeardNumber = {
   id: string;
   segment: TranscriptSegment;
   voice: string;
   /** As spoken, e.g. "₹15-20 लाख" or "1 CR". */
   spoken: string;
-  kind: "money" | "percent" | "time";
+  kind: "money" | "percent" | "time" | "quantity";
 };
 
 const UNIT_KIND: Array<[RegExp, HeardNumber["kind"]]> = [
   [
     /^(cr|crore|crores|करोड़|करोड|lakh|lakhs|lac|लाख|l|k|thousand|हज़ार|हजार)$/iu,
-    "money",
+    "quantity",
   ],
   [/^(%|percent|प्रतिशत|टक्के|टक्का)$/iu, "percent"],
   [
@@ -192,8 +150,8 @@ const NUMBER =
   /(?<![\p{L}\d])(₹\s?)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/gu;
 
 /**
- * Numbers said with a unit (money, percent or time), as spoken. Bare numbers
- * are left out: without a unit a number cannot be read honestly.
+ * Numbers said with a unit, as spoken. Magnitudes stay quantities unless
+ * nearby wording or an explicit currency symbol identifies money.
  */
 export function numbersHeard(transcript: Transcript): HeardNumber[] {
   const rows: HeardNumber[] = [];
@@ -204,10 +162,41 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
     while ((match = NUMBER.exec(segment.text))) {
       const [spokenRaw, rupee, , , unit] = match;
       if (!rupee && !unit) continue;
+      const unitKind = UNIT_KIND.find(([pattern]) =>
+        pattern.test(unit ?? ""),
+      )?.[1];
+      const before = segment.text.slice(
+        Math.max(0, match.index - 40),
+        match.index,
+      );
+      const after = segment.text.slice(
+        match.index + spokenRaw.length,
+        match.index + spokenRaw.length + 32,
+      );
+      const objectCount =
+        /^\s*(?:customers?|users?|people|members?|clients?|staff|employees?|units?|items?|orders?|products?|families|visits|tanks?|lit(?:er|re)s?)\b/iu.test(
+          after,
+        );
+      const currencyEvidence =
+        rupee ||
+        (!objectCount &&
+          (/\b(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
+            before,
+          ) ||
+            /^\s*(?:rupees?|inr|रुप(?:ये|ए))\b/iu.test(after) ||
+            /\b(?:price|cost|budget|fee|salary|revenue|sales|turnover|profit|amount|money)\s+(?:of\s+)?$/iu.test(
+              before,
+            ) ||
+            /^\s*(?:worth|in\s+(?:revenue|sales|turnover|profit))\b/iu.test(
+              after,
+            )));
       const kind = rupee
         ? "money"
-        : (UNIT_KIND.find(([pattern]) => pattern.test(unit ?? ""))?.[1] ??
-          null);
+        : unitKind === "quantity"
+          ? currencyEvidence
+            ? "money"
+            : "quantity"
+          : unitKind;
       if (!kind) continue;
       rows.push({
         id: `${segment.id}:${index}`,
@@ -239,6 +228,21 @@ export function scriptMix(transcript: Transcript) {
 const MINUTES =
   /(?<![\p{L}\d])(\d+)(?:\s*(?:-|–|to|से|,)?\s*(\d+))?\s*(?:minutes?|मिनट|min(?![\p{L}]))/giu;
 
+function hasTimeRequestContext(text: string, start: number, end: number) {
+  const before = text.slice(Math.max(0, start - 60), start);
+  const after = text.slice(end, end + 36);
+  return (
+    /\b(?:need|require|take|allow|give|reserve|block|spend)(?:\s+[\p{L}\d]+){0,3}\s*$/iu.test(
+      before,
+    ) ||
+    /\b(?:will|would|can|could)\s+(?:take|need|require|allow|give|reserve|block|spend)(?:\s+[\p{L}\d]+){0,3}\s*$/iu.test(
+      before,
+    ) ||
+    /(?:मुझे|हमें)(?:\s+[\p{L}\d]+){0,5}\s*$/u.test(before) ||
+    /^\s*(?:तक|के लिए)\s*(?:चलेगा|चलेगी|लगेगा|लगेगी|चाहिए)/u.test(after)
+  );
+}
+
 /** Minutes of call time asked for or agreed in the opening three minutes. */
 export function timePromise(transcript: Transcript) {
   const minutes: number[] = [];
@@ -249,6 +253,8 @@ export function timePromise(transcript: Transcript) {
     let match: RegExpExecArray | null;
     let found = false;
     while ((match = MINUTES.exec(segment.text))) {
+      if (!hasTimeRequestContext(segment.text, match.index, MINUTES.lastIndex))
+        continue;
       for (const value of [match[1], match[2]])
         if (value) {
           const number = Number(value);
