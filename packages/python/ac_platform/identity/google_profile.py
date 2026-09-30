@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.identity.google_profile_models import PersonGoogleProfile
@@ -129,9 +130,14 @@ async def record_google_profile_claims(
 async def read_google_profile(session: AsyncSession, person_id: UUID) -> GoogleProfileClaims:
     """Read claim columns only; the deferred photo bytes are never loaded."""
 
-    profile = await session.scalar(
-        select(PersonGoogleProfile).where(PersonGoogleProfile.person_id == person_id)
-    )
+    try:
+        profile = await session.scalar(
+            select(PersonGoogleProfile).where(PersonGoogleProfile.person_id == person_id)
+        )
+    except OperationalError as error:
+        if "no such table: person_google_profiles" not in str(error.orig).casefold():
+            raise
+        profile = None
     return GoogleProfileClaims(
         given_name=None if profile is None else profile.given_name,
         family_name=None if profile is None else profile.family_name,

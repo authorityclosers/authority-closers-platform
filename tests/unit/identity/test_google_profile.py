@@ -188,3 +188,19 @@ async def test_record_refresh_read_without_photo_load_and_erase(database: Any) -
     assert "picture_url" not in PersonGoogleProfile.__table__.columns
     assert await erase_google_profile(async_database, PERSON_ID) is True
     assert await erase_google_profile(async_database, PERSON_ID) is False
+
+
+@pytest.mark.asyncio
+async def test_read_returns_empty_claims_when_optional_sqlite_table_is_absent() -> None:
+    engine = create_engine("sqlite://", poolclass=StaticPool)
+    Person.__table__.create(engine)
+    session = Session(engine)
+    try:
+        assert (
+            await read_google_profile(_AsyncSessionAdapter(session), PERSON_ID)
+            == GoogleProfileClaims()
+        )
+    finally:
+        session.close()
+        Person.__table__.drop(engine)
+        engine.dispose()
