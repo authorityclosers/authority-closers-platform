@@ -173,7 +173,7 @@ def test_core_lag_over_thirty_minutes_emits_sha_key(tmp_path: Path) -> None:
     assert events[0]["lag_seconds"] == 31 * 60
 
 
-def test_web_lag_uses_newest_validated_web_build(tmp_path: Path) -> None:
+def test_web_lag_clock_starts_when_application_validation_finishes(tmp_path: Path) -> None:
     github = FakeGitHub()
     github.add_run(ENGINE.CORE_WORKFLOW, WEB_SHA, 9, NOW - dt.timedelta(minutes=10))
     github.add_run(ENGINE.CORE_WORKFLOW, CORE_SHA, 10, NOW - dt.timedelta(minutes=5))
@@ -183,8 +183,25 @@ def test_web_lag_uses_newest_validated_web_build(tmp_path: Path) -> None:
 
     alerts = WATCH.evaluate(status(web=OLD_SHA), github, now=NOW, notify=notify, spool=tmp_path)
 
+    assert alerts == []
+    assert events == []
+
+
+def test_web_lag_alerts_when_both_build_and_validation_are_over_thirty_minutes_old(
+    tmp_path: Path,
+) -> None:
+    github = FakeGitHub()
+    github.add_run(ENGINE.CORE_WORKFLOW, WEB_SHA, 9, NOW - dt.timedelta(minutes=31))
+    github.add_run(ENGINE.CORE_WORKFLOW, CORE_SHA, 10, NOW - dt.timedelta(minutes=5))
+    github.add_run(ENGINE.WEB_WORKFLOW, WEB_SHA, 11, NOW - dt.timedelta(minutes=33), web=True)
+    github.head_sha = CORE_SHA
+    events, notify = collect_events()
+
+    alerts = WATCH.evaluate(status(web=OLD_SHA), github, now=NOW, notify=notify, spool=tmp_path)
+
     assert [item["key"] for item in alerts] == [f"lag:staging:web:{WEB_SHA}"]
     assert events[0]["component"] == "web"
+    assert events[0]["lag_seconds"] == 31 * 60
 
 
 def test_state_alerts_cover_paused_and_failed_flags(tmp_path: Path) -> None:
@@ -230,7 +247,7 @@ def test_no_alert_when_staging_matches_recent_validated_builds(tmp_path: Path) -
 def test_web_candidate_skips_newer_unvalidated_build(tmp_path: Path) -> None:
     github = FakeGitHub()
     newer_web_sha = "f" * 40
-    github.add_run(ENGINE.CORE_WORKFLOW, WEB_SHA, 9, NOW - dt.timedelta(minutes=10))
+    github.add_run(ENGINE.CORE_WORKFLOW, WEB_SHA, 9, NOW - dt.timedelta(minutes=31))
     github.add_run(ENGINE.CORE_WORKFLOW, CORE_SHA, 10, NOW - dt.timedelta(minutes=5))
     github.add_run(ENGINE.WEB_WORKFLOW, newer_web_sha, 12, NOW - dt.timedelta(minutes=31), web=True)
     github.add_run(ENGINE.WEB_WORKFLOW, WEB_SHA, 11, NOW - dt.timedelta(minutes=31), web=True)

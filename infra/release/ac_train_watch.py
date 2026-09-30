@@ -85,9 +85,11 @@ def _newest_validated_web(github: Any) -> tuple[str, dt.datetime] | None:
         run = ac_release.find_push_run(github, ac_release.WEB_WORKFLOW, sha)
         if run is None:
             continue
-        completed = _run_completion(run)
-        if completed is not None:
-            return sha, completed
+        web_completed = _run_completion(run)
+        application_run = ac_release.find_push_run(github, ac_release.CORE_WORKFLOW, sha)
+        application_completed = _run_completion(application_run or {})
+        if web_completed is not None and application_completed is not None:
+            return sha, max(web_completed, application_completed)
     return None
 
 
