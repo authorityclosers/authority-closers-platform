@@ -532,7 +532,7 @@ function MembersPanel({
           <Mail size={15} aria-hidden="true" />
           <input
             type="email"
-            placeholder="name@authorityclosers.com"
+            placeholder="name@company.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             disabled={!canManage || busy}
@@ -882,7 +882,7 @@ function CompanyPanel({
           <label className={styles.emailField}>
             <Globe size={15} aria-hidden="true" />
             <input
-              placeholder="authorityclosers.com"
+              placeholder="company.com"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {

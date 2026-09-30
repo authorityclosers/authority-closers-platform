@@ -28,7 +28,12 @@ from ac_platform.identity.models import (
     Session as IdentitySession,
 )
 from ac_platform.identity.password_auth import EMAIL_MAX_LENGTH, normalize_email, utc_now
-from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipRole,
+    MembershipStatus,
+    Organisation,
+)
 
 EMAIL_LOGIN_CODE_LENGTH = 6
 EMAIL_LOGIN_CODE_TTL = timedelta(minutes=10)
@@ -152,7 +157,7 @@ class EmailLoginCodeService:
         self.audit_tenant_id = audit_tenant_id
 
     async def _has_privileged_membership(self, person_id: UUID) -> bool:
-        """Never let learner email OTP authenticate an admin identity."""
+        """Reject platform staff while allowing organisation administrators."""
 
         privileged_person_id = await self.session.scalar(
             select(Membership.person_id)
@@ -166,6 +171,7 @@ class EmailLoginCodeService:
                         MembershipRole.OWNER.value,
                     )
                 ),
+                Membership.tenant_id.not_in(select(Organisation.tenant_id)),
             )
             .limit(1)
         )

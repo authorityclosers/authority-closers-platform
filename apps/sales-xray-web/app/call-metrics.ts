@@ -11,6 +11,11 @@ export const QUIET_RULES = {
   recover: 0.25,
 } as const;
 
+export const CALL_METRICS_RULES = "call-metrics/2";
+export const CUT_IN_RULES = { overlap_ms: 250, latch_ms: 100 } as const;
+export const PRICE_WORDS =
+  /(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)/iu;
+
 export const MONOLOGUE_GAP_MS = 2000;
 
 const MONOLOGUE_LIMIT = 3;
@@ -19,6 +24,9 @@ export type SpeakerMetrics = {
   talk_ms: number;
   talk_share: number | null;
   questions: number;
+  questions_per_minute: number | null;
+  cut_ins: number;
+  longest_monologue_ms: number;
 };
 
 export type CurveBin = {
@@ -32,11 +40,39 @@ export type Monologue = {
   end_ms: number;
 };
 
+export type CutIn = {
+  speaker_id: string;
+  over_speaker_id: string;
+  segment_id: string;
+  over_segment_id: string;
+  at_ms: number;
+  overlap_ms: number;
+};
+
+export type PriceMoment = {
+  segment_id: string;
+  speaker_id: string;
+  at_ms: number;
+  silence_ms: number | null;
+  next_speaker_id: string | null;
+  next_segment_id: string | null;
+};
+
+export type LongestReplyAfterQuestion = {
+  speaker_id: string;
+  question_segment_id: string;
+  start_ms: number;
+  end_ms: number;
+};
+
 export type CallMetrics = {
   time_used_ms: number;
   speakers: Record<string, SpeakerMetrics>;
   curve: CurveBin[];
   monologues: Monologue[];
+  cut_ins: CutIn[];
+  price_moments: PriceMoment[];
+  longest_reply_after_question: LongestReplyAfterQuestion | null;
 };
 
 export type TimePromise = {
@@ -116,6 +152,12 @@ export function computeCallMetrics(
       talk_ms: ms,
       talk_share: totalMs > 0 ? round2(ms / totalMs) : null,
       questions: questions.get(id) ?? 0,
+      questions_per_minute:
+        timeUsed > 0
+          ? round2((questions.get(id) ?? 0) / (timeUsed / 60000))
+          : null,
+      cut_ins: 0,
+      longest_monologue_ms: 0,
     };
 
   const curve: CurveBin[] = [];
@@ -154,6 +196,98 @@ export function computeCallMetrics(
         end_ms: segment.end_ms,
       });
   }
+  for (const run of runs)
+    speakers[run.speaker_id].longest_monologue_ms = Math.max(
+      speakers[run.speaker_id].longest_monologue_ms,
+      run.end_ms - run.start_ms,
+    );
+
+  const cutIns: CutIn[] = [];
+  for (const [index, segment] of timed.entries()) {
+    let overSegment: (typeof timed)[number] | undefined;
+    for (const prior of timed.slice(0, index))
+      if (
+        prior.speaker_id !== segment.speaker_id &&
+        (!overSegment || prior.end_ms >= overSegment.end_ms)
+      )
+        overSegment = prior;
+    if (!overSegment) continue;
+
+    const overlap = overSegment.end_ms - segment.start_ms;
+    const gap = segment.start_ms - overSegment.end_ms;
+    const isCutIn =
+      overlap >= CUT_IN_RULES.overlap_ms ||
+      (gap >= 0 &&
+        gap <= CUT_IN_RULES.latch_ms &&
+        !/[.?!।？！…]$/.test(overSegment.text.trim()));
+    if (!isCutIn) continue;
+
+    cutIns.push({
+      speaker_id: segment.speaker_id,
+      over_speaker_id: overSegment.speaker_id,
+      segment_id: segment.id,
+      over_segment_id: overSegment.id,
+      at_ms: segment.start_ms,
+      overlap_ms: Math.max(0, overlap),
+    });
+    speakers[segment.speaker_id].cut_ins += 1;
+  }
+
+  const priceMoments: PriceMoment[] = [];
+  for (const [index, segment] of timed.entries()) {
+    if (!PRICE_WORDS.test(segment.text)) continue;
+    const next = timed
+      .slice(index + 1)
+      .find((candidate) => candidate.speaker_id !== segment.speaker_id);
+    priceMoments.push({
+      segment_id: segment.id,
+      speaker_id: segment.speaker_id,
+      at_ms: segment.start_ms,
+      silence_ms: next ? Math.max(0, next.start_ms - segment.end_ms) : null,
+      next_speaker_id: next?.speaker_id ?? null,
+      next_segment_id: next?.id ?? null,
+    });
+    if (priceMoments.length === 20) break;
+  }
+
+  let longestReplyAfterQuestion: LongestReplyAfterQuestion | null = null;
+  for (const [index, question] of timed.entries()) {
+    if (countQuestions(question.text) === 0) continue;
+    const replyIndex = timed.findIndex(
+      (candidate, candidateIndex) =>
+        candidateIndex > index && candidate.speaker_id !== question.speaker_id,
+    );
+    if (replyIndex < 0) continue;
+
+    const reply = timed[replyIndex];
+    let endMs = reply.end_ms;
+    for (
+      let nextIndex = replyIndex + 1;
+      nextIndex < timed.length;
+      nextIndex += 1
+    ) {
+      const next = timed[nextIndex];
+      if (
+        next.speaker_id !== reply.speaker_id ||
+        next.start_ms - endMs > MONOLOGUE_GAP_MS
+      )
+        break;
+      endMs = Math.max(endMs, next.end_ms);
+    }
+    const candidate = {
+      speaker_id: reply.speaker_id,
+      question_segment_id: question.id,
+      start_ms: reply.start_ms,
+      end_ms: endMs,
+    };
+    if (
+      !longestReplyAfterQuestion ||
+      candidate.end_ms - candidate.start_ms >
+        longestReplyAfterQuestion.end_ms - longestReplyAfterQuestion.start_ms
+    )
+      longestReplyAfterQuestion = candidate;
+  }
+
   const monologues = runs
     .sort(
       (a, b) =>
@@ -162,7 +296,15 @@ export function computeCallMetrics(
     )
     .slice(0, MONOLOGUE_LIMIT);
 
-  return { time_used_ms: timeUsed, speakers, curve, monologues };
+  return {
+    time_used_ms: timeUsed,
+    speakers,
+    curve,
+    monologues,
+    cut_ins: cutIns,
+    price_moments: priceMoments,
+    longest_reply_after_question: longestReplyAfterQuestion,
+  };
 }
 
 export function quietFrom(

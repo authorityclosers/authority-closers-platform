@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import vectorFile from "../tests/fixtures/call-metrics-vectors.json";
 import {
+  CALL_METRICS_RULES,
   computeCallMetrics,
+  CUT_IN_RULES,
   MONOLOGUE_GAP_MS,
+  PRICE_WORDS,
   QUIET_RULES,
   quietFrom,
   timePromiseOverrun,
@@ -82,6 +85,14 @@ describe("call metrics shared vectors (AUT-341 §3.1)", () => {
 });
 
 describe("call metrics rules", () => {
+  it("pins the call-metrics/2 timing constants", () => {
+    expect(CALL_METRICS_RULES).toBe("call-metrics/2");
+    expect(CUT_IN_RULES).toEqual({ overlap_ms: 250, latch_ms: 100 });
+    expect(PRICE_WORDS.source).toBe(
+      "(budget|बजट|price|प्राइस|कीमत|fees?|फीस|charges|कितने का है|कितने का पड़ेगा)",
+    );
+  });
+
   it("joins a speaker's segments at the gap limit and splits just past it", () => {
     const end = 10000;
     const joined = computeCallMetrics(
@@ -155,6 +166,9 @@ describe("call metrics rules", () => {
       speakers: {},
       curve: [],
       monologues: [],
+      cut_ins: [],
+      price_moments: [],
+      longest_reply_after_question: null,
     });
   });
 });

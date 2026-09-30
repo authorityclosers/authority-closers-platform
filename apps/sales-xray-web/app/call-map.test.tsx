@@ -498,19 +498,27 @@ it("does not offer a name confirmation for an ordinary here phrase", async () =>
   expect(readSpeakerProfiles(CALL_ID)).toEqual({});
 });
 
-it("hides role-specific talk share until a speaker role is saved", async () => {
+it("keeps all three lenses and asks for a role before showing talk share", async () => {
+  // Owner decision (30 Sep): Who talked, Call stages and Talk share always show.
   await act(async () => root.unmount());
   localStorage.setItem("ac.xray.map-lens", "stages");
   root = createRoot(host);
   await renderMap();
   const controls = host.querySelector('[aria-label="What the map shows"]')!;
-  expect(controls.textContent).not.toContain("Call stages");
-  expect(controls.textContent).not.toContain("Talk share by minute");
+  const lens = (name: string) =>
+    Array.from(controls.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === name,
+    )!;
   expect(
-    Array.from(controls.querySelectorAll("button"))
-      .find((button) => button.textContent === "Who talked")
-      ?.getAttribute("aria-pressed"),
-  ).toBe("true");
+    Array.from(controls.querySelectorAll("button")).map((b) => b.textContent),
+  ).toEqual(["Who talked", "Call stages", "Talk share by minute"]);
+  expect(lens("Call stages").getAttribute("aria-pressed")).toBe("true");
+  expect(host.textContent).toContain("once the analysis marks them");
+
+  await act(async () => lens("Talk share by minute").click());
+  expect(host.textContent).toContain(
+    "Assign a speaker role to view talk share.",
+  );
 });
 
 it("shows factual talk share only after the call has a confirmed role", async () => {
@@ -541,5 +549,4 @@ it("shows factual talk share only after the call has a confirmed role", async ()
   expect(host.textContent).toContain("talk share in each minute");
   expect(host.textContent).not.toContain("went quiet");
   expect(localStorage.getItem("ac.xray.map-lens")).toBe("talk-share");
-  expect(host.textContent).not.toContain("Call stages");
 });

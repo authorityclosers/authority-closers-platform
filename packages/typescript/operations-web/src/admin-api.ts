@@ -27,7 +27,7 @@ export type AdminSession = Readonly<{
   emailVerifiedAt: string;
   sessionId: string;
   tenantId: string;
-  membershipRole: "owner" | "admin" | "support" | "learner";
+  membershipRole: "owner" | "admin" | "support" | "learner" | "member";
   permissions: readonly string[];
   studioCapabilities: readonly StudioCapability[];
 }>;
@@ -644,6 +644,7 @@ export type AdminLearnerDiagnosis = z.infer<typeof adminLearnerDiagnosisSchema>;
 const directoryRoleSchema = z.enum([
   "all",
   "learner",
+  "member",
   "support",
   "admin",
   "owner",
@@ -670,7 +671,7 @@ const directoryMemberSchema = z
     display_name: z.string().min(1).max(240),
     username: z.string().min(3).max(30).nullable(),
     masked_email: z.string().min(1).max(320),
-    membership_role: z.enum(["learner", "support", "admin", "owner"]),
+    membership_role: z.enum(["learner", "member", "support", "admin", "owner"]),
     membership_status: z.enum(["active", "inactive"]),
     account_status: z.enum(["active", "suspended"]),
     email_verified: z.boolean(),
