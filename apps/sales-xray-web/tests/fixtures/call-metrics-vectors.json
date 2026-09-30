@@ -1,5 +1,5 @@
 {
-  "about": "Fictional call-metrics vectors (AUT-343, plan AUT-341 §3.1). Segment rows are [id, speaker_id, start_ms, end_ms, text]; the expected curve lists bin starts and one share array per speaker. Shares round half up to 2 decimals.",
+  "about": "Fictional call-metrics/2 vectors (AUT-343, plan AUT-341 §3.1). Segment rows are [id, speaker_id, start_ms, end_ms, text]; the expected curve lists bin starts and one share array per speaker. Shares round half up to 2 decimals.",
   "vectors": [
     {
       "name": "25-minute call, prospect quiet from minute 16, no recovery, promise overrun",
@@ -82,12 +82,30 @@
         "metrics": {
           "time_used_ms": 1500000,
           "speakers": {
-            "seller": { "talk_ms": 993000, "talk_share": 0.66, "questions": 4 },
+            "seller": {
+              "talk_ms": 993000,
+              "talk_share": 0.66,
+              "questions": 4,
+              "questions_per_minute": 0.16,
+              "cut_ins": 0,
+              "longest_monologue_ms": 57000
+            },
             "prospect": {
               "talk_ms": 507000,
               "talk_share": 0.34,
-              "questions": 0
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 30000
             }
+          },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": {
+            "speaker_id": "prospect",
+            "question_segment_id": "s1",
+            "start_ms": 30000,
+            "end_ms": 60000
           },
           "monologues": [
             { "speaker_id": "seller", "start_ms": 960000, "end_ms": 1017000 },
@@ -151,9 +169,26 @@
         "metrics": {
           "time_used_ms": 480000,
           "speakers": {
-            "seller": { "talk_ms": 385000, "talk_share": 0.8, "questions": 0 },
-            "prospect": { "talk_ms": 95000, "talk_share": 0.2, "questions": 1 }
+            "seller": {
+              "talk_ms": 385000,
+              "talk_share": 0.8,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 57000
+            },
+            "prospect": {
+              "talk_ms": 95000,
+              "talk_share": 0.2,
+              "questions": 1,
+              "questions_per_minute": 0.13,
+              "cut_ins": 0,
+              "longest_monologue_ms": 30000
+            }
           },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": null,
           "monologues": [
             { "speaker_id": "seller", "start_ms": 60000, "end_ms": 117000 },
             { "speaker_id": "seller", "start_ms": 120000, "end_ms": 177000 },
@@ -189,9 +224,35 @@
         "metrics": {
           "time_used_ms": 20000,
           "speakers": {
-            "a": { "talk_ms": 15000, "talk_share": 0.65, "questions": 0 },
-            "b": { "talk_ms": 8000, "talk_share": 0.35, "questions": 0 }
+            "a": {
+              "talk_ms": 15000,
+              "talk_share": 0.65,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 15000
+            },
+            "b": {
+              "talk_ms": 8000,
+              "talk_share": 0.35,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 1,
+              "longest_monologue_ms": 8000
+            }
           },
+          "cut_ins": [
+            {
+              "speaker_id": "b",
+              "over_speaker_id": "a",
+              "segment_id": "b1",
+              "over_segment_id": "a2",
+              "at_ms": 12000,
+              "overlap_ms": 3000
+            }
+          ],
+          "price_moments": [],
+          "longest_reply_after_question": null,
           "monologues": [
             { "speaker_id": "a", "start_ms": 0, "end_ms": 15000 },
             { "speaker_id": "b", "start_ms": 12000, "end_ms": 20000 }
@@ -214,8 +275,18 @@
         "metrics": {
           "time_used_ms": 70000,
           "speakers": {
-            "a": { "talk_ms": 69000, "talk_share": 1.0, "questions": 1 }
+            "a": {
+              "talk_ms": 69000,
+              "talk_share": 1.0,
+              "questions": 1,
+              "questions_per_minute": 0.86,
+              "cut_ins": 0,
+              "longest_monologue_ms": 70000
+            }
           },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": null,
           "monologues": [{ "speaker_id": "a", "start_ms": 0, "end_ms": 70000 }],
           "curve": { "start_ms": [0, 60000], "shares": { "a": [1.0, 1.0] } }
         },
@@ -239,9 +310,26 @@
         "metrics": {
           "time_used_ms": 90000,
           "speakers": {
-            "b": { "talk_ms": 39000, "talk_share": 0.44, "questions": 1 },
-            "a": { "talk_ms": 49500, "talk_share": 0.56, "questions": 0 }
+            "b": {
+              "talk_ms": 39000,
+              "talk_share": 0.44,
+              "questions": 1,
+              "questions_per_minute": 0.67,
+              "cut_ins": 0,
+              "longest_monologue_ms": 20000
+            },
+            "a": {
+              "talk_ms": 49500,
+              "talk_share": 0.56,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 40000
+            }
           },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": null,
           "monologues": [
             { "speaker_id": "a", "start_ms": 0, "end_ms": 40000 },
             { "speaker_id": "b", "start_ms": 70000, "end_ms": 90000 },
@@ -274,9 +362,26 @@
         "metrics": {
           "time_used_ms": 300000,
           "speakers": {
-            "a": { "talk_ms": 228000, "talk_share": 0.95, "questions": 0 },
-            "b": { "talk_ms": 12000, "talk_share": 0.05, "questions": 0 }
+            "a": {
+              "talk_ms": 228000,
+              "talk_share": 0.95,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 57000
+            },
+            "b": {
+              "talk_ms": 12000,
+              "talk_share": 0.05,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 3000
+            }
           },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": null,
           "monologues": [
             { "speaker_id": "a", "start_ms": 0, "end_ms": 57000 },
             { "speaker_id": "a", "start_ms": 120000, "end_ms": 177000 },
@@ -307,8 +412,39 @@
         "metrics": {
           "time_used_ms": 60000,
           "speakers": {
-            "a": { "talk_ms": 40000, "talk_share": 0.67, "questions": 3 },
-            "b": { "talk_ms": 20000, "talk_share": 0.33, "questions": 1 }
+            "a": {
+              "talk_ms": 40000,
+              "talk_share": 0.67,
+              "questions": 3,
+              "questions_per_minute": 3,
+              "cut_ins": 1,
+              "longest_monologue_ms": 20000
+            },
+            "b": {
+              "talk_ms": 20000,
+              "talk_share": 0.33,
+              "questions": 1,
+              "questions_per_minute": 1,
+              "cut_ins": 0,
+              "longest_monologue_ms": 20000
+            }
+          },
+          "cut_ins": [
+            {
+              "speaker_id": "a",
+              "over_speaker_id": "b",
+              "segment_id": "a2",
+              "over_segment_id": "b1",
+              "at_ms": 40000,
+              "overlap_ms": 0
+            }
+          ],
+          "price_moments": [],
+          "longest_reply_after_question": {
+            "speaker_id": "b",
+            "question_segment_id": "a1",
+            "start_ms": 20000,
+            "end_ms": 40000
           },
           "monologues": [
             { "speaker_id": "a", "start_ms": 0, "end_ms": 20000 },
@@ -355,8 +491,22 @@
         "metrics": {
           "time_used_ms": 720000,
           "speakers": {
-            "seller": { "talk_ms": 576000, "talk_share": 0.8, "questions": 0 },
-            "prospect": { "talk_ms": 144000, "talk_share": 0.2, "questions": 1 }
+            "seller": {
+              "talk_ms": 576000,
+              "talk_share": 0.8,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 57000
+            },
+            "prospect": {
+              "talk_ms": 144000,
+              "talk_share": 0.2,
+              "questions": 1,
+              "questions_per_minute": 0.08,
+              "cut_ins": 0,
+              "longest_monologue_ms": 30000
+            }
           },
           "curve": {
             "start_ms": [
@@ -374,6 +524,14 @@
               ]
             }
           },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": {
+            "speaker_id": "seller",
+            "question_segment_id": "s12",
+            "start_ms": 360000,
+            "end_ms": 390000
+          },
           "monologues": [
             { "speaker_id": "seller", "start_ms": 120000, "end_ms": 177000 },
             { "speaker_id": "seller", "start_ms": 180000, "end_ms": 237000 },
@@ -384,6 +542,418 @@
           "seller": null,
           "prospect": { "start_ms": 420000, "recovered": false }
         },
+        "overrun": null
+      }
+    },
+    {
+      "name": "an overlapping reply is recorded as a cut-in",
+      "duration_ms": 1500,
+      "time_promise": null,
+      "segments": [
+        ["a1", "seller", 0, 1000, "We can pause"],
+        ["b1", "prospect", 750, 1300, "I have a question?"]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 1500,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 0.65,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            },
+            "prospect": {
+              "talk_ms": 550,
+              "talk_share": 0.35,
+              "questions": 1,
+              "questions_per_minute": 40,
+              "cut_ins": 1,
+              "longest_monologue_ms": 550
+            }
+          },
+          "cut_ins": [
+            {
+              "speaker_id": "prospect",
+              "over_speaker_id": "seller",
+              "segment_id": "b1",
+              "over_segment_id": "a1",
+              "at_ms": 750,
+              "overlap_ms": 250
+            }
+          ],
+          "price_moments": [],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 },
+            { "speaker_id": "prospect", "start_ms": 750, "end_ms": 1300 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.65], "prospect": [0.35] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "a forty millisecond latch starts a cut-in",
+      "duration_ms": 2000,
+      "time_promise": null,
+      "segments": [
+        ["a1", "seller", 0, 1000, "We can cover"],
+        ["b1", "prospect", 1040, 1800, "Let us review."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 2000,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 0.57,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            },
+            "prospect": {
+              "talk_ms": 760,
+              "talk_share": 0.43,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 1,
+              "longest_monologue_ms": 760
+            }
+          },
+          "cut_ins": [
+            {
+              "speaker_id": "prospect",
+              "over_speaker_id": "seller",
+              "segment_id": "b1",
+              "over_segment_id": "a1",
+              "at_ms": 1040,
+              "overlap_ms": 0
+            }
+          ],
+          "price_moments": [],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 },
+            { "speaker_id": "prospect", "start_ms": 1040, "end_ms": 1800 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.57], "prospect": [0.43] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "a forty millisecond gap after a sentence is not a cut-in",
+      "duration_ms": 2000,
+      "time_promise": null,
+      "segments": [
+        ["a1", "seller", 0, 1000, "We can cover."],
+        ["b1", "prospect", 1040, 1800, "Let us review."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 2000,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 0.57,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            },
+            "prospect": {
+              "talk_ms": 760,
+              "talk_share": 0.43,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 760
+            }
+          },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 },
+            { "speaker_id": "prospect", "start_ms": 1040, "end_ms": 1800 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.57], "prospect": [0.43] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "Hindi price word has four seconds of silence before a reply",
+      "duration_ms": 6000,
+      "time_promise": null,
+      "segments": [
+        ["p1", "seller", 0, 1000, "कीमत पर बात करें"],
+        ["r1", "prospect", 5000, 6000, "Let me check."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 6000,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 0.5,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            },
+            "prospect": {
+              "talk_ms": 1000,
+              "talk_share": 0.5,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            }
+          },
+          "cut_ins": [],
+          "price_moments": [
+            {
+              "segment_id": "p1",
+              "speaker_id": "seller",
+              "at_ms": 0,
+              "silence_ms": 4000,
+              "next_speaker_id": "prospect",
+              "next_segment_id": "r1"
+            }
+          ],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 },
+            { "speaker_id": "prospect", "start_ms": 5000, "end_ms": 6000 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.5], "prospect": [0.5] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "price followed by an overlapping reply has zero silence",
+      "duration_ms": 1200,
+      "time_promise": null,
+      "segments": [
+        ["p1", "seller", 0, 1000, "Price?"],
+        ["r1", "prospect", 800, 1200, "We can discuss."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 1200,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 0.71,
+              "questions": 1,
+              "questions_per_minute": 50,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            },
+            "prospect": {
+              "talk_ms": 400,
+              "talk_share": 0.29,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 400
+            }
+          },
+          "cut_ins": [],
+          "price_moments": [
+            {
+              "segment_id": "p1",
+              "speaker_id": "seller",
+              "at_ms": 0,
+              "silence_ms": 0,
+              "next_speaker_id": "prospect",
+              "next_segment_id": "r1"
+            }
+          ],
+          "longest_reply_after_question": {
+            "speaker_id": "prospect",
+            "question_segment_id": "p1",
+            "start_ms": 800,
+            "end_ms": 1200
+          },
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 },
+            { "speaker_id": "prospect", "start_ms": 800, "end_ms": 1200 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.71], "prospect": [0.29] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "price with no later speaker has null silence and reply fields",
+      "duration_ms": 1000,
+      "time_promise": null,
+      "segments": [["p1", "seller", 0, 1000, "Fees are listed."]],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 1000,
+          "speakers": {
+            "seller": {
+              "talk_ms": 1000,
+              "talk_share": 1,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1000
+            }
+          },
+          "cut_ins": [],
+          "price_moments": [
+            {
+              "segment_id": "p1",
+              "speaker_id": "seller",
+              "at_ms": 0,
+              "silence_ms": null,
+              "next_speaker_id": null,
+              "next_segment_id": null
+            }
+          ],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 1000 }
+          ],
+          "curve": { "start_ms": [0], "shares": { "seller": [1] } }
+        },
+        "quiet": { "seller": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "question reply joins two adjacent segments from one speaker",
+      "duration_ms": 2500,
+      "time_promise": null,
+      "segments": [
+        ["q1", "seller", 0, 500, "What matters?"],
+        ["r1", "prospect", 800, 1300, "The timing"],
+        ["r2", "prospect", 2000, 2500, "for review."]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 2500,
+          "speakers": {
+            "seller": {
+              "talk_ms": 500,
+              "talk_share": 0.33,
+              "questions": 1,
+              "questions_per_minute": 24,
+              "cut_ins": 0,
+              "longest_monologue_ms": 500
+            },
+            "prospect": {
+              "talk_ms": 1000,
+              "talk_share": 0.67,
+              "questions": 0,
+              "questions_per_minute": 0,
+              "cut_ins": 0,
+              "longest_monologue_ms": 1700
+            }
+          },
+          "cut_ins": [],
+          "price_moments": [],
+          "longest_reply_after_question": {
+            "speaker_id": "prospect",
+            "question_segment_id": "q1",
+            "start_ms": 800,
+            "end_ms": 2500
+          },
+          "monologues": [
+            { "speaker_id": "prospect", "start_ms": 800, "end_ms": 2500 },
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 500 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.33], "prospect": [0.67] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
+        "overrun": null
+      }
+    },
+    {
+      "name": "unlabelled and zero-length segments are ignored by timing rules",
+      "duration_ms": 900,
+      "time_promise": null,
+      "segments": [
+        ["a1", "seller", 0, 500, "We have room"],
+        ["x1", null, 400, 900, "price?"],
+        ["b1", "prospect", 540, 800, "Could you repeat?"],
+        ["z1", "seller", 700, 700, "budget?"]
+      ],
+      "expected": {
+        "metrics": {
+          "time_used_ms": 900,
+          "speakers": {
+            "seller": {
+              "talk_ms": 500,
+              "talk_share": 0.66,
+              "questions": 1,
+              "questions_per_minute": 66.67,
+              "cut_ins": 0,
+              "longest_monologue_ms": 500
+            },
+            "prospect": {
+              "talk_ms": 260,
+              "talk_share": 0.34,
+              "questions": 1,
+              "questions_per_minute": 66.67,
+              "cut_ins": 1,
+              "longest_monologue_ms": 260
+            }
+          },
+          "cut_ins": [
+            {
+              "speaker_id": "prospect",
+              "over_speaker_id": "seller",
+              "segment_id": "b1",
+              "over_segment_id": "a1",
+              "at_ms": 540,
+              "overlap_ms": 0
+            }
+          ],
+          "price_moments": [],
+          "longest_reply_after_question": null,
+          "monologues": [
+            { "speaker_id": "seller", "start_ms": 0, "end_ms": 500 },
+            { "speaker_id": "prospect", "start_ms": 540, "end_ms": 800 }
+          ],
+          "curve": {
+            "start_ms": [0],
+            "shares": { "seller": [0.66], "prospect": [0.34] }
+          }
+        },
+        "quiet": { "seller": null, "prospect": null },
         "overrun": null
       }
     }
