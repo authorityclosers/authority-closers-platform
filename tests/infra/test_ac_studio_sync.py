@@ -24,6 +24,8 @@ FAKE_TOKENS = [
     "sk-" + "F" * 24,
     "AKIA" + "F" * 16,
     "-----BEGIN" + " RSA PRIVATE KEY-----",
+    "cfat_" + "F" * 24,
+    "re_" + "F" * 24,
 ]
 
 
@@ -594,7 +596,7 @@ def test_css_token_substrings_are_committed(repo, on_main):
     if not on_main:
         repo.branch()
     css = ".task-card { mask-image: none; animation: ask-in 1s; } @keyframes ask-in {}"
-    css += ".risk-" + "x" * 24 + " {}"
+    css += ".risk-" + "x" * 24 + " {} .are_you_sure_dialog_button_x {}"
     repo.write(APP + "screen.module.css", css)
     repo.tick()
     assert repo.git("show", "HEAD:" + APP + "screen.module.css") == css
@@ -714,7 +716,9 @@ def test_carry_over_still_refuses_merge_from_another_branch(repo):
     assert not repo.git("tag")
 
 
-@pytest.mark.parametrize("token", FAKE_TOKENS, ids=["github", "github-pat", "sk", "aws", "pem"])
+@pytest.mark.parametrize(
+    "token", FAKE_TOKENS, ids=["github", "github-pat", "sk", "aws", "pem", "cloudflare", "resend"]
+)
 def test_carry_over_rescans_shaped_tokens_before_archive(repo, token):
     # Deliberately synthetic history bypasses snapshot(), to exercise the second scan.
     repo.write(APP + "fixture.txt", token)

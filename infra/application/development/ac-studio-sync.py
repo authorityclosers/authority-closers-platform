@@ -32,7 +32,7 @@ STUDIO = "task/ui/296-studio-"
 TOKENS = re.compile(
     rb"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|"
     rb"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|"
-    rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    rb"-----BEGIN [A-Z ]*PRIVATE KEY-----|(?<![A-Za-z0-9_])(?:cfat|re)_[A-Za-z0-9_-]{20,}"
 )
 LIMIT = 1024 * 1024
 IDENTITY = {
