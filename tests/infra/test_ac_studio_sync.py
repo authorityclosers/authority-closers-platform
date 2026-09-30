@@ -810,3 +810,186 @@ def test_main_with_only_refused_files_does_not_claim_lane(repo):
     assert not repo.git("ls-remote", "origin", "refs/heads/task/ui/*", "refs/tags/*")
     assert "pending" not in json.loads(repo.state.read_text())
     assert [e["key"] for e in repo.events("alert")] == ["refused-file"]
+
+
+@pytest.mark.parametrize("field", ["message", "author", "committer"])
+def test_carry_over_scans_commit_metadata_before_any_archive(repo, field):
+    token = FAKE_TOKENS[0]
+    repo.write(APP + "page.tsx", "safe content")
+    repo.git("add", APP + "page.tsx")
+    env = {f"GIT_{field.upper()}_NAME": token} if field != "message" else {}
+    SYNC.command(
+        ["git", "commit", "-m", token if field == "message" else "safe message"],
+        cwd=repo.repo,
+        env=env,
+    )
+    # Even metadata in an earlier commit must be scanned.
+    repo.write(APP + "page.tsx", "next safe content")
+    with pytest.raises(SYNC.SyncError, match="Carry-over contains refused content"):
+        repo.tick()
+    assert not repo.git("tag")
+    assert not repo.git("ls-remote", "--tags", "origin")
+    assert not any("start" in c for c in repo.calls)
+
+
+@pytest.mark.parametrize("claimed", [False, True])
+def test_partial_gate_start_retries_from_target_without_losing_checkpoint(repo, claimed):
+    repo.write(APP + "page.tsx", "saved before partial start")
+    original = repo.runner
+
+    def partial_start(argv, **kwargs):
+        if argv[:3] == [sys.executable, "scripts/ac_task.py", "start"]:
+            if claimed:
+                original(argv, **kwargs)
+            else:
+                repo.git("switch", "-c", "task/ui/" + argv[-1], "origin/main")
+            raise SYNC.SyncError("start interrupted after switching")
+        return original(argv, **kwargs)
+
+    repo.runner = partial_start
+    repo.tick()
+    pending = json.loads(repo.state.read_text())["pending"]
+    assert repo.git("branch", "--show-current") == pending["target"]
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "original"
+    assert (
+        repo.git("show", pending["archive"] + ":" + APP + "page.tsx")
+        == "saved before partial start"
+    )
+    repo.runner = original
+    repo.tick()
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "saved before partial start"
+    assert repo.remote_head(pending["target"]) == repo.git("rev-parse", "HEAD")
+    assert repo.git("rev-parse", "main") == repo.base
+    assert "pending" not in json.loads(repo.state.read_text())
+    assert not repo.git("status", "--porcelain")
+    assert not repo.events("alert")
+    assert any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+
+
+@pytest.mark.parametrize("on_main", [False, True])
+@pytest.mark.parametrize("advance_main", [False, True])
+def test_net_zero_carry_over_does_not_archive_or_claim_lane(repo, on_main, advance_main):
+    if not on_main:
+        pr = approve_fixture(repo)
+        original = "approved screen"
+    else:
+        original = "original\n"
+    repo.write(APP + "page.tsx", "temporary edit")
+    repo.tick(True)
+    repo.write(APP + "page.tsx", original)
+    repo.tick(True)
+    if not on_main:
+        merge_fixture_pr(repo, pr)
+        repo.git("push", "origin", "--delete", BRANCH)
+    if advance_main:
+        repo.git("switch", "-c", "other-task", "origin/main")
+        repo.write("README.md", "new main content")
+        repo.git("add", "README.md")
+        repo.git("commit", "-m", "advance main")
+        repo.git("push", "origin", "HEAD:main")
+        repo.git("switch", "main" if on_main else BRANCH)
+    repo.calls.clear()
+    repo.tick()
+    assert repo.git("branch", "--show-current") == "main"
+    assert repo.git("rev-parse", "HEAD") == repo.remote_head("main")
+    assert not repo.git("tag")
+    assert not repo.git("ls-remote", "origin", "refs/heads/task/ui/*", "refs/tags/*")
+    assert not any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+    assert not any(c[:3] == [sys.executable, "scripts/ac_task.py", "start"] for c in repo.calls)
+    assert "pending" not in json.loads(repo.state.read_text())
+    assert not repo.events("alert")
+
+
+def test_malformed_state_cli_moves_aside_alerts_once_and_completes(repo, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(SYNC.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(SYNC.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="acdev"))
+    repo.branch()
+    broken = '{"pending":'
+    repo.state.write_text(broken)
+    repo.write(APP + "page.tsx", "save despite broken state")
+    args = [
+        "--repo",
+        str(repo.repo),
+        "--state",
+        str(repo.state),
+        "--spool",
+        str(repo.spool),
+        "--lock",
+        str(repo.repo.parent / "state.lock"),
+        "--commit-only",
+    ]
+    assert SYNC.main(args) == 0
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "save despite broken state"
+    backups = list(repo.state.parent.glob("state.json.bad-*"))
+    assert len(backups) == 1 and backups[0].read_text() == broken
+    assert json.loads(repo.state.read_text()) == {}
+    assert [e["key"] for e in repo.events("alert")] == ["bad-state"]
+    first_alert = repo.events("alert")[0]
+    assert SYNC.main(args) == 0
+    assert repo.events("alert") == [first_alert]
+
+
+def test_service_runtime_lock_environment_and_sandbox():
+    service = configparser.ConfigParser(interpolation=None)
+    service.read(SCRIPT.with_suffix(".service"))
+    values = service["Service"]
+    assert values["User"] == "acdev"
+    assert values["RuntimeDirectory"] == "ac-studio-sync"
+    assert values["RuntimeDirectoryPreserve"] == "yes"
+    assert SYNC.LOCK.parent == Path("/run") / values["RuntimeDirectory"]
+    assert str(SYNC.LOCK.parent) in values["ReadWritePaths"].split()
+    assert "/run/user" not in SCRIPT.with_suffix(".service").read_text()
+    assert set(values["Environment"].split()) == {
+        "PATH=/home/acdev/.local/bin:/usr/local/bin:/usr/bin:/bin",
+        "GH_NO_UPDATE_NOTIFIER=1",
+        "GH_PROMPT_DISABLED=1",
+    }
+    assert values["TasksMax"] == "32"
+    assert values["NoNewPrivileges"] == values["PrivateTmp"] == "true"
+    assert values["ProtectSystem"] == "strict"
+    assert values["ProtectHome"] == "read-only"
+
+
+def test_fictional_json_fixtures_allowed_in_commit_and_carry_over(repo):
+    path = "apps/sales-xray-web/tests/fixtures/fictional-call.json"
+    repo.write(path, '{"fictional": true}')
+    repo.tick()
+    assert repo.git("show", "HEAD:" + path) == '{"fictional": true}'
+    assert repo.git("branch", "--show-current").startswith(SYNC.STUDIO)
+    assert not repo.events("alert")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "apps/sales-xray-web/tests/fixtures/nested/call.json",
+        "apps/sales-xray-web/tests/fixtures/call.ts",
+        "apps/sales-xray-web/tests/fixtures-other/call.json",
+        "apps/sales-xray-web/tests/call.json",
+    ],
+)
+def test_fixture_allowlist_does_not_include_adjacent_paths(repo, path):
+    repo.branch()
+    repo.write(path, "unrelated")
+    repo.tick(True)
+    assert path not in repo.git("ls-tree", "-r", "--name-only", "HEAD")
+    assert [e["key"] for e in repo.events("alert")] == ["outside-allowlist"]
+
+
+def test_parked_carry_over_is_not_mistaken_for_net_zero_on_retry(repo):
+    pr = approve_fixture(repo)
+    repo.write(APP + "page.tsx", "unpublished after approval")
+    repo.tick(True)
+    merge_fixture_pr(repo, pr)
+    repo.git("push", "origin", "--delete", BRANCH)
+    repo.busy = True
+    repo.tick()
+    assert repo.git("branch", "--show-current") == "main"
+    repo.tick()
+    assert json.loads(repo.state.read_text())["pending"]["commits"]
+    repo.busy = False
+    repo.tick()
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "unpublished after approval"
+    assert not repo.events("alert")
