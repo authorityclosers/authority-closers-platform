@@ -48,6 +48,7 @@ async function render(
   language: ReportDisplayLanguage = "en",
   reading = false,
   inline = reading,
+  callId: string | null = null,
 ) {
   await act(async () =>
     root.render(
@@ -57,6 +58,7 @@ async function render(
           transcript={transcript}
           onSelect={onSelect}
           language={language}
+          callId={callId}
         />
       </ReportReadingProvider>,
     ),
@@ -313,4 +315,28 @@ it("shows the names and colours set on the call map", async () => {
     ),
   ).toEqual(["All speakers", "Speaker 1", "Nandlal ji"]);
   localStorage.clear();
+});
+
+it("shows brand logos only for a confirmed prospect mention", async () => {
+  localStorage.clear();
+  const callId = "fictional-brand-attribution-test";
+  saveSpeakerProfiles(callId, {
+    "speaker-1": { name: "Seller", role: "salesperson", icon: null },
+    "speaker-2": { name: "Prospect", role: "prospect", icon: null },
+  });
+  const source = transcriptWithSegments(2);
+  source.segments[0].text = "We use WhatsApp.";
+  source.segments[1].text = "I use WhatsApp.";
+  await render(source, undefined, "en", true, true, callId);
+  const segments = [
+    ...container.querySelectorAll<HTMLElement>("[data-segment-id]"),
+  ];
+  expect(segments[0].querySelector('[data-kind="brand"]')).toBeNull();
+  expect(segments[1].querySelector('[data-kind="brand"]')).not.toBeNull();
+
+  await act(async () => root.render(null));
+  localStorage.clear();
+  await render(source, undefined, "en", true, true, null);
+  expect(container.querySelector('[data-kind="brand"]')).toBeNull();
+  localStorage.removeItem(`ac.xray.speakers.v1:${callId}`);
 });

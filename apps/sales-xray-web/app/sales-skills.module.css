@@ -10,7 +10,7 @@
 /* ---- Summary ---- */
 .summary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px 24px;
 }
@@ -31,25 +31,6 @@
   margin-top: 2px;
   color: var(--lx-muted);
   font: 500 12.5px/1.4 var(--lx-font-ui, inherit);
-}
-
-.meter {
-  display: grid;
-  gap: 7px;
-}
-
-.bar {
-  display: flex;
-  gap: 3px;
-  height: 7px;
-}
-
-.bar span {
-  flex: var(--share) 1 0;
-  border-radius: 99px;
-  background: var(--status);
-  transform-origin: left;
-  animation: grow 700ms var(--lx-ease-move, ease) 200ms both;
 }
 
 .legend {
@@ -81,28 +62,24 @@
 }
 
 /* Evidence states in calm shades: how much the call showed, not how good. */
-.bar span,
 .legend li,
 .dot,
 .detailStatus {
   --status: var(--lx-line);
 }
 
-.bar span[data-status="observed"],
 .legend li[data-status="observed"],
 .dot[data-status="observed"],
 .detailStatus[data-status="observed"] {
   --status: var(--lx-teal);
 }
 
-.bar span[data-status="conflicted"],
 .legend li[data-status="conflicted"],
 .dot[data-status="conflicted"],
 .detailStatus[data-status="conflicted"] {
   --status: color-mix(in srgb, var(--lx-teal) 45%, var(--lx-surface));
 }
 
-.bar span[data-status="insufficient_evidence"],
 .legend li[data-status="insufficient_evidence"],
 .dot[data-status="insufficient_evidence"],
 .detailStatus[data-status="insufficient_evidence"] {
@@ -112,7 +89,7 @@
 /* ---- The window ---- */
 .window {
   display: grid;
-  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   min-height: 420px;
   overflow: hidden;
   border: 1px solid var(--lx-line-soft, var(--lx-line));
@@ -180,11 +157,12 @@
 }
 
 .itemLabel {
+  display: -webkit-box;
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .dot {
@@ -419,13 +397,6 @@
 
   .detail {
     padding: 18px 16px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail,
-  .bar span {
-    animation: none;
   }
 }
 

@@ -119,6 +119,3 @@ writeFileSync(
 
 console.log(`colour logos: ${found.length} (${found.join(" ")})`);
 console.log(`no colour logo: ${missing.join(" ")}`);
-console.log(
-  `emotes: ${Object.keys(emotes).length}; not found: ${noEmote.join(" ") || "none"}`,
-);

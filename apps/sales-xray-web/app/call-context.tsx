@@ -4,8 +4,8 @@ import {
   Briefcase,
   CalendarCheck,
   CheckSquare,
+  Coins,
   GraduationCap,
-  IndianRupee,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -68,24 +68,37 @@ export function firstEntity(texts: string[], kind: string, test?: RegExp) {
   return null;
 }
 
+/** A mention alone does not establish that the seller offered the program. */
+export function programMentionLabel(): string {
+  return "Mentioned";
+}
+
+export function nextStepValue(
+  saved: string | null | undefined,
+  outcomeKind: string | undefined,
+  date: string | null,
+): string | null {
+  return (
+    saved?.trim() ||
+    (outcomeKind === "follow_up" && date ? `Follow-up ${date}` : null)
+  );
+}
+
 const BUSINESS_NAMED =
   /([\p{L}-]+)\s+(?:(?:का|की|के|ka|ki|ke)\s+)?(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|company|कंपनी|shop|दुकान|firm)/giu;
 
-// Second-person words just before a business name: the seller asking about
-// the prospect's own business ("आपका carpentry का business", "your salon").
-const ADDRESSED =
-  /(?:आपका|आपकी|आपके|आपने|तुमचा|तुमची|तुमचं|तुमच्या|your|you run|you have)[^.?!।]{0,40}$/iu;
+// First-person ownership or operation must be explicit. The caller already
+// checks that this text belongs to the confirmed prospect.
+const FIRST_PERSON_BUSINESS =
+  /(?:\b(?:i|we)\s+(?:run|own|operate|have|started|work in)\b|\b(?:my|our)\s+(?:(?!\b(?:brother|sister|father|mother|friend|partner|husband|wife|son|daughter)\b)[\p{L}-]+\s+){0,3}[\p{L}-]+\s+(?:business|company|shop|firm)\b|(?:मेरा|मेरी|मेरे|हमारा|हमारी|हमारे)[^।?!]{0,40}(?:business|बिज़नेस|बिजनेस|व्यवसाय|व्यापार|धंधा|कंपनी|दुकान|firm))/iu;
 
 /**
- * The industry named outright in some text, e.g. "carpentry का business".
- * With `addressed`, only a business named to the listener ("your ...").
+ * The industry in a first-person statement, e.g. "I run a carpentry
+ * business" or "मेरा carpentry का business".
  */
-export function businessNamed(
-  text: string,
-  addressed = false,
-): SpeakerIcon | null {
+export function businessNamed(text: string): SpeakerIcon | null {
+  if (/[?？]/u.test(text) || !FIRST_PERSON_BUSINESS.test(text)) return null;
   for (const match of text.matchAll(BUSINESS_NAMED)) {
-    if (addressed && !ADDRESSED.test(text.slice(0, match.index ?? 0))) continue;
     const word = match[1].toLocaleLowerCase();
     const found = SPEAKER_ICONS.find(
       (item) => !item.generic && item.keywords.includes(word),
@@ -97,8 +110,8 @@ export function businessNamed(
 
 /**
  * The prospect's business, from evidence about the prospect only: their own
- * words, or the seller naming it to them. Another speaker's business never
- * counts. Nothing without confirmed roles.
+ * first-person words. Another speaker's business and seller questions never
+ * count. Nothing without confirmed roles.
  */
 export function prospectBusiness(
   segments: ReadonlyArray<{ speaker_id: string | null; text: string }>,
@@ -109,9 +122,7 @@ export function prospectBusiness(
     const found =
       segment.speaker_id === roles.prospect
         ? businessNamed(segment.text)
-        : segment.speaker_id === roles.seller
-          ? businessNamed(segment.text, true)
-          : null;
+        : null;
     if (found) return found;
   }
   return null;
@@ -172,11 +183,11 @@ export function CallContext({
   const when = outcomeText ? firstEntity([outcomeText], "date") : null;
   // Only an explicit next step: a saved one, or a dated follow-up. An
   // outcome such as "No sale" is not a next step.
-  const next =
-    facts.values.next?.trim() ||
-    (report.overview?.outcome?.kind === "follow_up" && when
-      ? `Follow-up ${when}`
-      : null);
+  const next = nextStepValue(
+    facts.values.next,
+    report.overview?.outcome?.kind,
+    when,
+  );
   const ticked = promised.filter((item) => done.has(promiseId(item))).length;
 
   const tiles: Tile[] = [
@@ -220,7 +231,7 @@ export function CallContext({
     },
     {
       key: "selling",
-      label: "Selling",
+      label: programMentionLabel(),
       value: selling,
       icon: icon(GraduationCap),
       tone: "violet",
@@ -232,7 +243,7 @@ export function CallContext({
       label: facts.values.budget ? "Budget" : "Money talked about",
       value: money,
       heard: !facts.values.budget,
-      icon: icon(IndianRupee),
+      icon: icon(Coins),
       tone: "amber",
       go: "prospect",
       empty: "None heard",

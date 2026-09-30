@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { brandNamed, mentions } from "./report-entities";
+import { brandNamed, currencyMark, mentions } from "./report-entities";
 
 const found = (text: string) =>
   mentions(text).map((part) =>
@@ -23,14 +23,29 @@ it("finds what the report mentions, with the words it used", () => {
   ]);
   expect(
     found(
-      "It uncovered 15 to 20 lakh of unpaid receivables and the syllabus and workbook.",
+      "It uncovered Rs 15 to 20 lakh of unpaid receivables and the syllabus and workbook.",
     ),
   ).toEqual([
-    ["money", "15 to 20 lakh"],
+    ["money", "Rs 15 to 20 lakh"],
     ["money", "unpaid receivables"],
     ["document", "syllabus"],
     ["document", "workbook"],
   ]);
+});
+
+it("does not classify quantities as money without currency evidence", () => {
+  expect(found("5 thousand users; 10 lakh customers; 10K.")).toEqual([]);
+  expect(found("USD 20, $30, and 40 dollars.")).toEqual([
+    ["money", "USD 20"],
+    ["money", "$30"],
+    ["money", "40 dollars"],
+  ]);
+});
+
+it("keeps a currency-unspecified money mention free of INR or USD marks", () => {
+  expect(currencyMark("revenue")).toBe("unspecified");
+  expect(currencyMark("USD 20")).toBe("usd");
+  expect(currencyMark("₹20")).toBe("inr");
 });
 
 it("spots brands in Hindi and Marathi script and in any letter case", () => {
@@ -66,11 +81,11 @@ it("does not mistake ordinary words for brands", () => {
 it("finds money, places, time and team size in Hindi too", () => {
   expect(
     found(
-      "अहमदाबाद में 5 करोड़ का टर्नओवर है, 15 लोग काम करते हैं, 90 मिनट की रिकॉर्डिंग",
+      "अहमदाबाद में ₹5 करोड़ का टर्नओवर है, 15 लोग काम करते हैं, 90 मिनट की रिकॉर्डिंग",
     ),
   ).toEqual([
     ["place", "अहमदाबाद"],
-    ["money", "5 करोड़"],
+    ["money", "₹5 करोड़"],
     ["money", "टर्नओवर"],
     ["team", "15 लोग"],
     ["time", "90 मिनट"],

@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { OverviewHook } from "./overview-hook";
+import { OverviewHook, shareChartSegments } from "./overview-hook";
+import { talkShareSeries } from "./call-data";
 import type { SalesReport, Transcript } from "./report-contract";
 import { ReportReadingProvider } from "./report-reading-context";
 import { saveSpeakerProfiles } from "./speaker-profiles";
@@ -136,14 +137,17 @@ afterEach(async () => {
   localStorage.removeItem(`ac.xray.speakers.v1:${callId}`);
 });
 
-async function renderOverview() {
+async function renderOverview(
+  call = transcript,
+  callKey: string | null = callId,
+) {
   await act(async () =>
     root.render(
       <ReportReadingProvider reading={false}>
         <OverviewHook
           report={report}
-          transcript={transcript}
-          callId={callId}
+          transcript={call}
+          callId={callKey}
           onSeek={() => undefined}
         />
       </ReportReadingProvider>,
@@ -152,6 +156,88 @@ async function renderOverview() {
 }
 
 describe("OverviewHook phase cards", () => {
+  it("shows unavailable call signals until roles are assigned", async () => {
+    await renderOverview(transcript, null);
+    expect(host.textContent).toContain("assign roles to measure");
+    expect(host.textContent).not.toContain("0 signals");
+  });
+
+  it("keeps zero signals for a confirmed call with no matches", async () => {
+    const noMatches: Transcript = {
+      ...transcript,
+      segments: [
+        {
+          id: "a",
+          speaker_id: "sam",
+          start_ms: 0,
+          end_ms: 5_000,
+          text: "Hello.",
+        },
+        {
+          id: "b",
+          speaker_id: "alex",
+          start_ms: 6_000,
+          end_ms: 11_000,
+          text: "Thank you.",
+        },
+      ],
+    };
+    await renderOverview(noMatches);
+    expect(host.textContent).toContain("0 signals");
+  });
+
+  it("keeps silent minutes as gaps in the chart", () => {
+    const silentMinute: Transcript = {
+      ...transcript,
+      duration_ms: 180_000,
+      segments: [
+        {
+          id: "a",
+          speaker_id: "sam",
+          start_ms: 0,
+          end_ms: 10_000,
+          text: "One.",
+        },
+        {
+          id: "b",
+          speaker_id: "alex",
+          start_ms: 120_000,
+          end_ms: 130_000,
+          text: "Two.",
+        },
+      ],
+    };
+    const series = talkShareSeries(silentMinute, "sam");
+    expect(series).toEqual([1, null, 0]);
+    expect(shareChartSegments(series)).toEqual([[[10, 6]], [[50, 56]]]);
+  });
+
+  it("shows the confirmed role on a one-minute call without a role prompt", async () => {
+    const oneMinute: Transcript = {
+      ...transcript,
+      duration_ms: 60_000,
+      segments: [
+        {
+          id: "a",
+          speaker_id: "sam",
+          start_ms: 0,
+          end_ms: 10_000,
+          text: "Hello.",
+        },
+        {
+          id: "b",
+          speaker_id: "alex",
+          start_ms: 20_000,
+          end_ms: 30_000,
+          text: "Thanks.",
+        },
+      ],
+    };
+    await renderOverview(oneMinute);
+    expect(host.querySelector('svg[viewBox="0 0 20 60"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Mark who the prospect is");
+  });
+
   it("uses neutral phase titles and counts each seller question", async () => {
     await renderOverview();
     const before = host.querySelector('ol li[data-phase="before"]')!;

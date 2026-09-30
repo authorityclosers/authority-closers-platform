@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   Clock3,
+  Coins,
   DollarSign,
   FileText,
   Globe,
@@ -43,6 +44,12 @@ const KIND_ICONS: Record<Exclude<EntityKind, "brand">, LucideIcon> = {
   email: Mail,
   website: Globe,
 };
+
+export function currencyMark(text: string): "usd" | "inr" | "unspecified" {
+  if (/\$|\b(?:USD|dollars?)\b/iu.test(text)) return "usd";
+  if (/₹|\b(?:INR|Rs\.?|rupees?|रुपये|रुपए|रुपया)\b/iu.test(text)) return "inr";
+  return "unspecified";
+}
 
 /** Relative luminance of a hex colour, 0 (black) to 1 (white). */
 function luminance(hex: string) {
@@ -170,10 +177,15 @@ export function EntityChip({ entity }: { entity: Entity }) {
     );
   }
   if (entity.kind === "brand") return <>{entity.text}</>;
+  const currency = entity.kind === "money" ? currencyMark(entity.text) : null;
   const Icon =
-    entity.kind === "money" && entity.text.includes("$")
+    currency === "usd"
       ? DollarSign
-      : KIND_ICONS[entity.kind];
+      : currency === "inr"
+        ? IndianRupee
+        : currency === "unspecified"
+          ? Coins
+          : KIND_ICONS[entity.kind];
   return (
     <span className={styles.chip} data-kind={entity.kind}>
       <Icon size={12} aria-hidden="true" />
@@ -191,9 +203,12 @@ export function EntityChip({ entity }: { entity: Entity }) {
 export function RichText({
   text,
   kinds,
+  brandMarks = false,
 }: {
   text: string;
   kinds?: readonly EntityKind[];
+  /** Logos are shown only when prospect attribution is confirmed. */
+  brandMarks?: boolean;
 }) {
   return (
     <>
@@ -201,6 +216,8 @@ export function RichText({
         typeof part === "string" ? (
           part
         ) : kinds && !kinds.includes(part.kind) ? (
+          part.text
+        ) : part.kind === "brand" && !brandMarks ? (
           part.text
         ) : (
           <EntityChip key={index} entity={part} />

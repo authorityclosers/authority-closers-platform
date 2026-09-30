@@ -254,6 +254,20 @@ function smooth(points: Array<[number, number]>) {
   return path;
 }
 
+/** Null bins split the plotted series so silence stays visibly unmeasured. */
+export function shareChartSegments(series: Array<number | null>) {
+  const segments: Array<Array<[number, number]>> = [];
+  series.forEach((share, index) => {
+    if (share === null) return;
+    const point: [number, number] = [index * 20 + 10, 56 - share * 50];
+    const current = segments.at(-1);
+    if (index === 0 || series[index - 1] === null || !current)
+      segments.push([point]);
+    else current.push(point);
+  });
+  return segments;
+}
+
 function TalkChart({
   series,
   durationMs,
@@ -274,12 +288,7 @@ function TalkChart({
   const gradient = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [hover, setHover] = useState<number | null>(null);
   const width = series.length * 20;
-  const points: Array<[number, number]> = series.map((share, index) => [
-    index * 20 + 10,
-    56 - (share ?? 0) * 50,
-  ]);
-  const line = smooth(points);
-  const area = `${line} L${points.at(-1)![0]},56 L${points[0][0]},56 Z`;
+  const segments = shareChartSegments(series);
   const at = (ms: number) =>
     `${Math.min(100, (ms / Math.max(1, durationMs)) * 100)}%`;
   const ticks = [] as number[];
@@ -323,12 +332,30 @@ function TalkChart({
             <stop offset="100%" className={styles.stopBottom} />
           </linearGradient>
         </defs>
-        <path d={area} fill={`url(#${gradient})`} />
-        <path
-          className={styles.chartLine}
-          d={line}
-          vectorEffect="non-scaling-stroke"
-        />
+        {segments.map((points, index) => {
+          const line = smooth(points);
+          if (!line)
+            return (
+              <circle
+                key={index}
+                className={styles.chartLine}
+                cx={points[0][0]}
+                cy={points[0][1]}
+                r="2"
+              />
+            );
+          const area = `${line} L${points.at(-1)![0]},56 L${points[0][0]},56 Z`;
+          return (
+            <g key={index}>
+              <path d={area} fill={`url(#${gradient})`} />
+              <path
+                className={styles.chartLine}
+                d={line}
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          );
+        })}
       </svg>
       {turnMs !== null ? (
         <button
@@ -535,8 +562,8 @@ export function OverviewHook({
       Icon: Radar,
       count: signals
         ? signals.unanswered + signals.overs + signals.promised
-        : 0,
-      unit: "signals",
+        : null,
+      unit: signals ? "signals" : "assign roles to measure",
     },
     {
       id: "transcript",
@@ -706,7 +733,7 @@ export function OverviewHook({
                 </span>
               ) : null}
             </div>
-            {series.length > 1 && prospect ? (
+            {series.length > 0 && prospect ? (
               <TalkChart
                 series={series}
                 durationMs={durationMs}
@@ -716,7 +743,7 @@ export function OverviewHook({
                 name={prospect.name}
                 onSeek={onSeek}
               />
-            ) : (
+            ) : voices.length > 1 ? (
               <button
                 type="button"
                 className={styles.askRoles}
@@ -726,7 +753,7 @@ export function OverviewHook({
                 call
                 <ArrowRight size={13} aria-hidden="true" />
               </button>
-            )}
+            ) : null}
             <ol className={styles.phases}>
               {phases.map((phase, index) => (
                 <li
@@ -1106,7 +1133,13 @@ export function OverviewHook({
               <b>{label}</b>
               {unit ? (
                 <small>
-                  <Count value={count} /> {unit}
+                  {count === null ? (
+                    unit
+                  ) : (
+                    <>
+                      <Count value={count} /> {unit}
+                    </>
+                  )}
                 </small>
               ) : (
                 <small>Every number, list and source</small>

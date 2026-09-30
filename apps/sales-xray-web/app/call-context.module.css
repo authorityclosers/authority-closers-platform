@@ -10,7 +10,7 @@
   max-width: 660px;
   min-width: 0;
   /* Follows the scroll frame by frame; no timed fade, so it never lags. */
-  opacity: clamp(0, calc(1 - var(--fold, 0) * 4), 1);
+  opacity: clamp(0, calc(1 - var(--fold, 0)), 1);
 }
 
 [data-report-sticky][data-compact] .context {

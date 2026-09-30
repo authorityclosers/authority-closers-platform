@@ -1,6 +1,15 @@
 import { expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { businessNamed, firstEntity, prospectBusiness } from "./call-context";
+import {
+  businessNamed,
+  firstEntity,
+  nextStepValue,
+  programMentionLabel,
+  prospectBusiness,
+} from "./call-context";
 
 const texts = [
   "You pivoted from asking operational questions to pitching the 3-day Leadership Funnel Program.",
@@ -9,7 +18,13 @@ const texts = [
 
 it("names what was sold and the money talked about, from the report's words", () => {
   expect(firstEntity(texts, "program")).toBe("3-day Leadership Funnel Program");
-  expect(firstEntity(texts, "money", /\d/)).toBe("15 to 20 lakh");
+  expect(firstEntity(texts, "money", /\d/)).toBeNull();
+});
+
+it("labels a prospect's already-attended webinar as a neutral mention", () => {
+  const text = "The prospect says they already attend a webinar.";
+  expect(firstEntity([text], "program")).toBe("webinar");
+  expect(programMentionLabel()).toBe("Mentioned");
 });
 
 it("says nothing when the report never mentioned it", () => {
@@ -22,16 +37,41 @@ it("names the business only when the call says it outright", () => {
     businessNamed(
       "अच्छा ठीक है, आपका यहां पे शायद carpentry का business है right?",
     )?.key,
-  ).toBe("carpentry");
+  ).toBeUndefined();
   expect(businessNamed("We run a furniture business in Pune.")?.key).toBe(
     "carpentry",
   );
+  expect(businessNamed("I run a carpentry business.")?.key).toBe("carpentry");
   expect(businessNamed("They talked about the event and coaching.")).toBeNull();
+  expect(businessNamed("My brother runs a carpentry business.")).toBeNull();
+  expect(
+    businessNamed("Is your carpentry business still operating?"),
+  ).toBeNull();
+});
+
+it("does not put a sale outcome under Next step", () => {
+  expect(nextStepValue(null, "no_sale", null)).toBeNull();
+  expect(nextStepValue(null, "disqualified", null)).toBeNull();
+  expect(nextStepValue(null, "follow_up", "Friday")).toBe("Follow-up Friday");
+  expect(nextStepValue("Call again Friday", "no_sale", null)).toBe(
+    "Call again Friday",
+  );
+});
+
+it("keeps glance controls visible until the compact row hides them", () => {
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "call-context.module.css"),
+    "utf8",
+  );
+  expect(css).toContain("opacity: clamp(0, calc(1 - var(--fold, 0)), 1);");
+  expect(css).toMatch(
+    /\[data-report-sticky\]\[data-compact\] \.context\s*\{[^}]*visibility:\s*hidden;[^}]*pointer-events:\s*none;/s,
+  );
 });
 
 it("takes the business only from evidence about the prospect", () => {
   const roles = { seller: "s", prospect: "p" };
-  // The seller naming the prospect's business to them counts.
+  // A seller question does not establish the prospect's business.
   expect(
     prospectBusiness(
       [
@@ -41,8 +81,8 @@ it("takes the business only from evidence about the prospect", () => {
         },
       ],
       roles,
-    )?.key,
-  ).toBe("carpentry");
+    ),
+  ).toBeNull();
   // The prospect's own words count.
   expect(
     prospectBusiness(
@@ -54,6 +94,12 @@ it("takes the business only from evidence about the prospect", () => {
   expect(
     prospectBusiness(
       [{ speaker_id: "s", text: "I also run a furniture business." }],
+      roles,
+    ),
+  ).toBeNull();
+  expect(
+    prospectBusiness(
+      [{ speaker_id: "p", text: "My brother runs a carpentry business." }],
       roles,
     ),
   ).toBeNull();

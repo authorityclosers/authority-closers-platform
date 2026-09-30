@@ -28,6 +28,7 @@ import type {
 } from "./report-contract";
 import { formatClock } from "./lightbox/time";
 import { RichText } from "./report-entities";
+import { getReportUiCopy } from "./report-ui-copy";
 import { Clip, IconBadge, useReportPeople, type Tone } from "./report-kit";
 import styles from "./sales-skills.module.css";
 
@@ -46,16 +47,10 @@ const topics: Record<string, { icon: typeof Users; tone: Tone }> = {
 const topicOf = (id: string) =>
   topics[id] ?? { icon: BookOpen, tone: "info" as Tone };
 
-// Plain words for how much the call showed: evidence, never a grade.
-const STATUS: Record<string, string> = {
-  observed: "Seen in this call",
-  conflicted: "Mixed signs",
-  insufficient_evidence: "Not enough to tell",
-  not_applicable: "Doesn’t apply here",
-  unknown: "Not checked",
-};
-const STATUS_ORDER = Object.keys(STATUS);
-const statusOf = (status: string) => (STATUS[status] ? status : "unknown");
+const factorStatus = getReportUiCopy().factorStatus;
+const STATUS_ORDER = Object.keys(factorStatus);
+const statusOf = (status: string) =>
+  factorStatus[status] ? status : "unknown";
 
 type SkillDimension = ReportDimension & { evidence?: ReportEvidence[] };
 
@@ -92,7 +87,6 @@ export function SalesSkills({
     status,
     count: dimensions.filter((d) => statusOf(d.status) === status).length,
   })).filter((item) => item.count);
-  const seen = dimensions.filter((d) => d.status === "observed").length;
 
   if (!dimensions.length)
     return (
@@ -132,39 +126,16 @@ export function SalesSkills({
     <div className={styles.skills} aria-label="Sales skills">
       <header className={styles.summary}>
         <p>
-          <b>{seen}</b> of {dimensions.length} skills were seen in this call
           <small>Draft observations, not scores. Work on one at a time.</small>
         </p>
-        <div className={styles.meter}>
-          <div
-            className={styles.bar}
-            role="img"
-            aria-label={counts
-              .map(
-                ({ status, count }) =>
-                  `${count} ${STATUS[status].toLowerCase()}`,
-              )
-              .join(", ")}
-          >
-            {counts.map(({ status, count }) => (
-              <span
-                key={status}
-                data-status={status}
-                style={
-                  { "--share": count / dimensions.length } as CSSProperties
-                }
-              />
-            ))}
-          </div>
-          <ul className={styles.legend}>
-            {counts.map(({ status, count }) => (
-              <li key={status} data-status={status}>
-                <i aria-hidden="true" />
-                {STATUS[status]} <b>{count}</b>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className={styles.legend}>
+          {counts.map(({ status, count }) => (
+            <li key={status} data-status={status}>
+              <i aria-hidden="true" />
+              {factorStatus[status]} <b>{count}</b>
+            </li>
+          ))}
+        </ul>
       </header>
 
       <div className={styles.window}>
@@ -200,8 +171,8 @@ export function SalesSkills({
                 <span
                   className={styles.dot}
                   data-status={statusOf(dimension.status)}
-                  title={STATUS[statusOf(dimension.status)]}
-                  aria-label={STATUS[statusOf(dimension.status)]}
+                  title={factorStatus[statusOf(dimension.status)]}
+                  aria-label={factorStatus[statusOf(dimension.status)]}
                 />
               </button>
             );
@@ -223,7 +194,7 @@ export function SalesSkills({
                 className={styles.detailStatus}
                 data-status={statusOf(skill.status)}
               >
-                {STATUS[statusOf(skill.status)]}
+                {factorStatus[statusOf(skill.status)]}
                 {clips.length
                   ? ` · ${clips.length} ${clips.length === 1 ? "clip" : "clips"} from the call`
                   : ""}
@@ -315,7 +286,7 @@ export function SalesSkills({
         {dimensions.map((dimension) => (
           <section key={dimension.dimension_id}>
             <h4>
-              {dimension.label} · {STATUS[statusOf(dimension.status)]}
+              {dimension.label} · {factorStatus[statusOf(dimension.status)]}
             </h4>
             <p>{dimension.observation}</p>
             {(dimension.evidence ?? []).map((evidence) => (

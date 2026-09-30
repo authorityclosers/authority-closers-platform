@@ -168,6 +168,43 @@ it("marks rewatch picks on the finding that cites the same clip, never inventing
   expect(moments.every((moment) => titles.has(moment.title))).toBe(true);
 });
 
+it("anchors a golden label and its initial playback to evidence_index", () => {
+  const report = suppliedReport();
+  report.strengths = [
+    {
+      title: "A selected golden finding",
+      explanation: "Fictional evidence.",
+      evidence: [excerpt(8), excerpt(2)],
+    },
+  ];
+  report.overview!.golden_moments = [
+    { strength_index: 0, evidence_index: 1, why_effective: "Selected clip." },
+  ];
+  const moment = timelineMoments(report).find((item) => item.golden);
+  expect(moment?.evidence[0]).toEqual(excerpt(2));
+});
+
+it("keeps the selected rewatch clip first when it matches later finding evidence", () => {
+  const report = suppliedReport();
+  const selected = excerpt(2);
+  report.strengths = [
+    {
+      title: "A rewatch finding",
+      explanation: "Fictional evidence.",
+      evidence: [excerpt(8), selected],
+    },
+  ];
+  report.overview!.rewatch = [
+    {
+      purpose: "must_watch",
+      text: "Rewatch the selected clip.",
+      evidence: [selected],
+    },
+  ];
+  const moment = timelineMoments(report).find((item) => item.listen);
+  expect(moment?.evidence[0]).toEqual(selected);
+});
+
 it("shows each moment with its label, words and a play control for the exact clip", async () => {
   const onSelectEvidence = await render(mixed());
   expect(cards()).toEqual([

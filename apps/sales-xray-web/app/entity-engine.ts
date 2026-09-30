@@ -93,7 +93,8 @@ const PLACES = [
   "Australia|ऑस्ट्रेलिया",
 ].join("|");
 
-const NUMBER = String.raw`\d[\d,.]*`;
+const NUMBER = String.raw`\d+(?:[,.]\d+)*`;
+const AMOUNT = `${NUMBER}(?:\\s?(?:to|-|–|से)\\s?${NUMBER})?`;
 
 // Case matters on purpose: only capitalised names read as a program, and
 // only "Zoom" (not "zoom in") reads as a brand.
@@ -111,10 +112,10 @@ const PATTERNS: Array<[EntityKind, string]> = [
   [
     "money",
     [
-      String.raw`₹\s?${NUMBER}(?:\s?(?:lakhs?|lacs?|crores?|cr|k|K|लाख|करोड़|करोड))?`,
-      String.raw`\$\s?${NUMBER}(?:\s?(?:k|K|m|M|million|billion))?`,
-      String.raw`\b(?:Rs\.?|INR)\s?${NUMBER}(?:\s?(?:lakhs?|crores?|cr|k))?`,
-      `${START}${NUMBER}(?:\\s?(?:to|-|–|से)\\s?${NUMBER})?\\s?(?:lakhs?|lacs?|crores?|Lakhs?|Crores?|cr|Cr|CR|thousand|rupees|लाख|करोड़|करोड|कोटी|हज़ार|हजार|रुपये|रुपए|रुपया)(?:\\s+(?:rupees|रुपये|रुपए))?${END}`,
+      String.raw`₹\s?${AMOUNT}(?:\s?(?:lakhs?|lacs?|crores?|cr|k|K|लाख|करोड़|करोड))?`,
+      String.raw`\$\s?${AMOUNT}(?:\s?(?:k|K|m|M|million|billion))?`,
+      String.raw`\b(?:Rs\.?|INR|USD|dollars?)\s?${AMOUNT}(?:\s?(?:lakhs?|lacs?|crores?|cr|k|K|m|M|million|billion))?`,
+      `${START}${AMOUNT}\\s?(?:rupees|रुपये|रुपए|रुपया|dollars?|USD)(?:\\s+(?:rupees|रुपये|रुपए))?${END}`,
       String.raw`\b(?:[Uu]npaid\s+)?[Rr]eceivables?\b|\b[Rr]evenue\b|\b[Tt]urnover\b|\b[Pp]rofit margins?\b`,
       word("टर्नओवर|रेवेन्यू|प्रॉफिट"),
     ].join("|"),

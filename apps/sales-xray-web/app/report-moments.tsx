@@ -234,8 +234,18 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
     const golden = detail?.golden_moments.find(
       (g) => g.strength_index === index,
     );
+    const selected =
+      golden && report.strengths[index].evidence[golden.evidence_index];
     return {
       golden: golden?.why_effective,
+      evidence: selected
+        ? [
+            selected,
+            ...report.strengths[index].evidence.filter(
+              (item) => item !== selected,
+            ),
+          ]
+        : report.strengths[index].evidence,
       why: detail?.strength_details.find((d) => d.finding_index === index)
         ?.why_it_matters,
     };
@@ -264,8 +274,13 @@ export function timelineMoments(report: SalesReport): TimelineMoment[] {
     const owner = moments.find((moment) =>
       moment.evidence.some((item) => sameClip(item, clip)),
     );
-    if (owner) owner.listen ??= note.purpose;
-    else
+    if (owner) {
+      owner.listen ??= note.purpose;
+      owner.evidence = [
+        clip,
+        ...owner.evidence.filter((item) => !sameClip(item, clip)),
+      ];
+    } else
       moments.push({
         id: `rewatch:${index}`,
         kind: "listen",
