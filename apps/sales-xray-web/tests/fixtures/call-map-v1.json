@@ -1,0 +1,274 @@
+{
+  "about": "Fictional call-map/1 fixture (AUT-344, plan AUT-341 §3.2) built from the canary dialogue in packages/python/ac_platform/conversation_intelligence/canary_fixture/PROVENANCE.md. speaker_0 is the seller (Sela), speaker_1 the prospect (Daro). Segment times are illustrative; segment 1 adds 'for ten minutes' so the fixture carries a time promise.",
+  "duration_ms": 43570,
+  "segments": [
+    {
+      "id": "s1",
+      "speaker_id": "speaker_0",
+      "start_ms": 0,
+      "end_ms": 5200,
+      "text": "Hello, Daro. Sela from Qivra Works. Is now a good time to discuss LumaBoard for ten minutes?"
+    },
+    {
+      "id": "s2",
+      "speaker_id": "speaker_1",
+      "start_ms": 5400,
+      "end_ms": 10300,
+      "text": "Yes. Our handoffs sit in separate sheets, so owners and next steps are often missed."
+    },
+    {
+      "id": "s3",
+      "speaker_id": "speaker_0",
+      "start_ms": 10500,
+      "end_ms": 15000,
+      "text": "How often does that delay follow-up, and what would make the process easier?"
+    },
+    {
+      "id": "s4",
+      "speaker_id": "speaker_1",
+      "start_ms": 15200,
+      "end_ms": 20000,
+      "text": "Several times a week. One shared view with clear owners and due dates would help."
+    },
+    {
+      "id": "s5",
+      "speaker_id": "speaker_0",
+      "start_ms": 20200,
+      "end_ms": 26000,
+      "text": "LumaBoard tracks each handoff. For eight seats, it costs one hundred eighty credits monthly."
+    },
+    {
+      "id": "s6",
+      "speaker_id": "speaker_1",
+      "start_ms": 26200,
+      "end_ms": 31000,
+      "text": "That is above our one hundred twenty budget. Can our current sheets move across?"
+    },
+    {
+      "id": "s7",
+      "speaker_id": "speaker_0",
+      "start_ms": 31200,
+      "end_ms": 35800,
+      "text": "We can map your columns in a sample first. I can send the layout today."
+    },
+    {
+      "id": "s8",
+      "speaker_id": "speaker_1",
+      "start_ms": 36000,
+      "end_ms": 40100,
+      "text": "Good. Send it, and let's review the mapping next Tuesday with my colleague."
+    },
+    {
+      "id": "s9",
+      "speaker_id": "speaker_0",
+      "start_ms": 40300,
+      "end_ms": 43570,
+      "text": "Agreed. I'll send a sample and a short calendar hold today. Thanks, Daro."
+    }
+  ],
+  "call_map": {
+    "version": "call-map/1",
+    "verdict_line": "Clear pain and a dated review; the price sits above budget.",
+    "speakers": [
+      { "speaker_id": "speaker_0", "role": "seller" },
+      { "speaker_id": "speaker_1", "role": "prospect" }
+    ],
+    "phases": [
+      { "name": "opening", "start_ms": 0 },
+      { "name": "discovery", "start_ms": 5400 },
+      { "name": "pitch", "start_ms": 20200 },
+      { "name": "objection", "start_ms": 26200 },
+      { "name": "close", "start_ms": 36000 }
+    ],
+    "time_promise": {
+      "promised_ms": 600000,
+      "evidence": [
+        {
+          "segment_id": "s1",
+          "quote": "a good time to discuss LumaBoard for ten minutes?"
+        }
+      ]
+    },
+    "outcome": {
+      "kind": "follow_up",
+      "next_step_rung": "dated_call",
+      "evidence": [
+        {
+          "segment_id": "s8",
+          "quote": "let's review the mapping next Tuesday with my colleague."
+        }
+      ]
+    },
+    "signals": [
+      {
+        "polarity": "forward",
+        "kind": "pain_confirmed",
+        "text": "Owners and next steps get missed",
+        "evidence": [
+          {
+            "segment_id": "s2",
+            "quote": "owners and next steps are often missed."
+          },
+          { "segment_id": "s4", "quote": "Several times a week." }
+        ]
+      },
+      {
+        "polarity": "forward",
+        "kind": "next_step_agreed",
+        "text": "Mapping review set for next Tuesday",
+        "evidence": [
+          {
+            "segment_id": "s8",
+            "quote": "let's review the mapping next Tuesday"
+          }
+        ]
+      },
+      {
+        "polarity": "risk",
+        "kind": "price_concern",
+        "text": "Price is above the stated budget",
+        "evidence": [
+          {
+            "segment_id": "s6",
+            "quote": "That is above our one hundred twenty budget."
+          }
+        ]
+      },
+      {
+        "polarity": "risk",
+        "kind": "decision_maker_absent",
+        "text": "A colleague joins the next review",
+        "evidence": [{ "segment_id": "s8", "quote": "with my colleague." }]
+      }
+    ],
+    "pitch_items": [
+      {
+        "id": "pi1",
+        "text": "LumaBoard tracks each handoff in one place",
+        "start_ms": 20200,
+        "end_ms": 26000,
+        "evidence": [
+          { "segment_id": "s5", "quote": "LumaBoard tracks each handoff." }
+        ]
+      },
+      {
+        "id": "pi2",
+        "text": "Map the current sheet columns in a sample first",
+        "start_ms": 31200,
+        "end_ms": 35800,
+        "evidence": [
+          {
+            "segment_id": "s7",
+            "quote": "We can map your columns in a sample first."
+          }
+        ]
+      }
+    ],
+    "pains": [
+      {
+        "id": "pn1",
+        "text": "Handoffs in separate sheets lose owners and next steps",
+        "raised_by": "speaker_1",
+        "times": 2,
+        "prospect_intensity": "high",
+        "addressed_by": "pi1",
+        "evidence": [
+          {
+            "segment_id": "s2",
+            "quote": "Our handoffs sit in separate sheets,"
+          },
+          { "segment_id": "s4", "quote": "Several times a week." }
+        ]
+      },
+      {
+        "id": "pn2",
+        "text": "Existing sheets must move across",
+        "raised_by": "speaker_1",
+        "times": 1,
+        "prospect_intensity": "med",
+        "addressed_by": "pi2",
+        "evidence": [
+          { "segment_id": "s6", "quote": "Can our current sheets move across?" }
+        ]
+      }
+    ],
+    "money": [
+      {
+        "label": "Price for eight seats",
+        "value_min": 180,
+        "value_max": 180,
+        "unit": "credits",
+        "period": "month",
+        "evidence": [
+          {
+            "segment_id": "s5",
+            "quote": "For eight seats, it costs one hundred eighty credits monthly."
+          }
+        ]
+      },
+      {
+        "label": "Prospect budget",
+        "value_min": 120,
+        "value_max": 120,
+        "unit": "credits",
+        "period": null,
+        "evidence": [
+          { "segment_id": "s6", "quote": "our one hundred twenty budget." }
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "id": "cl1",
+        "text": "LumaBoard tracks each handoff",
+        "verifiable": "yes",
+        "seller_error": null,
+        "evidence": [
+          { "segment_id": "s5", "quote": "LumaBoard tracks each handoff." }
+        ]
+      },
+      {
+        "id": "cl2",
+        "text": "Columns can be mapped in a sample first",
+        "verifiable": "unclear",
+        "seller_error": null,
+        "evidence": [
+          {
+            "segment_id": "s7",
+            "quote": "We can map your columns in a sample first."
+          }
+        ]
+      }
+    ],
+    "qualification_gaps": ["timeline", "decision_maker", "authority"],
+    "qualification_confirmed": [
+      {
+        "item": "budget",
+        "evidence": [
+          { "segment_id": "s6", "quote": "our one hundred twenty budget." }
+        ]
+      },
+      {
+        "item": "need",
+        "evidence": [
+          {
+            "segment_id": "s4",
+            "quote": "One shared view with clear owners and due dates would help."
+          }
+        ]
+      }
+    ],
+    "prospect_tasks": [
+      {
+        "text": "Review the column mapping with a colleague",
+        "effort_ms": null,
+        "evidence": [
+          {
+            "segment_id": "s8",
+            "quote": "let's review the mapping next Tuesday with my colleague."
+          }
+        ]
+      }
+    ]
+  }
+}
