@@ -36,7 +36,7 @@ class Harness:
         self.state, self.spool = path / "state.json", path / "spool"
         self.now = int(time.time()) + 1000
         self.prs, self.comments, self.calls = [], [], []
-        self.busy = False
+        self.busy = self.done_busy = False
         self.git("init", "--initial-branch=main")
         self.git("config", "user.name", "Fixture")
         self.git("config", "user.email", "fixture@example.invalid")
@@ -88,6 +88,8 @@ class Harness:
             pytest.fail(str(argv))
         if argv[0] == sys.executable and argv[1] == "scripts/ac_task.py":
             if argv[2] == "done":
+                if self.done_busy:
+                    raise SYNC.SyncError("gate done BUSY")
                 assert not self.git("status", "--porcelain")
                 self.git("switch", "main")
                 self.git("fetch", "origin")
@@ -729,3 +731,82 @@ def test_carry_over_rescans_shaped_tokens_before_archive(repo, token):
         repo.tick()
     assert not repo.git("ls-remote", "--tags", "origin")
     assert repo.git("show", "HEAD:" + APP + "page.tsx") == "safe screen edit"
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_carry_over_refuses_hand_edited_refresh_merge_before_archive(repo, conflict):
+    pr = approve_fixture(repo)
+    if conflict:
+        repo.write(PUBLIC + "old.svg", "local conflict")
+        repo.git("add", PUBLIC + "old.svg")
+        repo.git("commit", "-m", "local conflict")
+    advance_fixture_main(repo)
+    if conflict:
+        repo.git("switch", "main")
+        repo.write(PUBLIC + "old.svg", "main conflict")
+        repo.git("add", PUBLIC + "old.svg")
+        repo.git("commit", "-m", "main conflict")
+        repo.git("push", "origin", "main")
+        repo.git("switch", BRANCH)
+        with pytest.raises(SYNC.SyncError):
+            repo.git("merge", "--no-commit", "origin/main")
+        repo.write(PUBLIC + "old.svg", "manually resolved")
+        repo.git("add", PUBLIC + "old.svg")
+    else:
+        repo.git("merge", "--no-commit", "origin/main")
+    repo.write(APP + "evil.txt", "re_" + "F" * 24)
+    repo.git("add", APP + "evil.txt")
+    repo.git("commit", "-m", "synthetic doctored refresh")
+    repo.write(APP + "page.tsx", "after refresh")
+    repo.tick()
+    merge_fixture_pr(repo, pr)
+    with pytest.raises(SYNC.SyncError, match="Carry-over contains a merge"):
+        repo.tick()
+    assert not repo.git("ls-remote", "--tags", "origin")
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_merged_pr_without_carry_over_releases_lane(repo, refresh):
+    pr = approve_fixture(repo)
+    if refresh:
+        advance_fixture_main(repo)
+        repo.git("merge", "--no-edit", "origin/main")
+    merge_fixture_pr(repo, pr)
+    repo.git("push", "origin", "--delete", BRANCH)
+    repo.calls.clear()
+    repo.tick()
+    assert repo.git("branch", "--show-current") == "main"
+    assert repo.git("rev-parse", "HEAD") == repo.remote_head("main")
+    assert not repo.git("ls-remote", "origin", "refs/heads/task/ui/*", "refs/tags/*")
+    assert not any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+    assert not any(c[:3] == [sys.executable, "scripts/ac_task.py", "start"] for c in repo.calls)
+    assert "pending" not in json.loads(repo.state.read_text())
+    assert not repo.events("alert")
+
+
+def test_empty_carry_over_retries_done_without_claiming_lane(repo):
+    pr = approve_fixture(repo)
+    merge_fixture_pr(repo, pr)
+    repo.git("push", "origin", "--delete", BRANCH)
+    repo.done_busy = True
+    repo.tick()
+    assert repo.git("branch", "--show-current") == BRANCH
+    assert not repo.events("alert")
+    repo.now += 7200
+    repo.tick()
+    assert [e["key"] for e in repo.events("alert")] == ["gate-busy"]
+    repo.done_busy = False
+    repo.tick()
+    assert repo.git("branch", "--show-current") == "main"
+    assert not repo.git("ls-remote", "origin", "refs/heads/task/ui/*", "refs/tags/*")
+    assert "pending" not in json.loads(repo.state.read_text())
+
+
+def test_main_with_only_refused_files_does_not_claim_lane(repo):
+    repo.write(APP + "fixture.txt", "re_" + "F" * 24)
+    repo.tick()
+    assert repo.git("branch", "--show-current") == "main"
+    assert repo.git("rev-parse", "HEAD") == repo.base
+    assert not repo.git("ls-remote", "origin", "refs/heads/task/ui/*", "refs/tags/*")
+    assert "pending" not in json.loads(repo.state.read_text())
+    assert [e["key"] for e in repo.events("alert")] == ["refused-file"]

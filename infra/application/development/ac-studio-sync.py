@@ -269,8 +269,13 @@ class Sync:
         # A refresh merge only brings main into this slice; the new slice has main.
         for commit in candidates:
             parents = self.git("rev-list", "--parents", "-n", "1", commit).split()[1:]
-            if len(parents) > 1 and all(self.is_ancestor(p, main_head) for p in parents[1:]):
-                continue
+            if len(parents) == 2 and self.is_ancestor(parents[1], main_head):
+                try:
+                    automatic = self.git("merge-tree", "--write-tree", *parents).strip()
+                except SyncError:
+                    automatic = None
+                if automatic == self.git("rev-parse", f"{commit}^{{tree}}").strip():
+                    continue
             if len(parents) != 1:
                 raise SyncError("Carry-over contains a merge; local history preserved for review")
             commits.append(commit)
@@ -292,7 +297,7 @@ class Sync:
                             "Carry-over contains refused content; local history preserved"
                         )
         tag = pending.get("archive")
-        if not tag or self.git("rev-parse", f"refs/tags/{tag}").strip() != head:
+        if commits and (not tag or self.git("rev-parse", f"refs/tags/{tag}").strip() != head):
             tag = f"archive/studio-{int(self.now)}-{head[:12]}"
             if not self.git("tag", "--list", tag).strip():
                 self.git("tag", tag, head)
@@ -306,6 +311,11 @@ class Sync:
                 self.run(sys.executable, "scripts/ac_task.py", "done")
                 pending.update(parked=True, main_base=self.head())
                 self.save()
+            if not commits:
+                self.git("merge", "--ff-only", "origin/main")
+                del self.state["pending"]
+                self.save()
+                return True
             self.run(
                 sys.executable,
                 "scripts/ac_task.py",
@@ -319,7 +329,7 @@ class Sync:
                 self.event(
                     "alert",
                     "gate-busy",
-                    "Studio gate blocked for at least two hours; checkpoint archived.",
+                    "Studio gate blocked for at least two hours; local history preserved.",
                 )
                 pending["alerted"] = True
             self.save()
