@@ -52,6 +52,7 @@ class SalesXrayProfileSnapshot:
     family_name: str | None = None
     locale: str | None = None
     hosted_domain: str | None = None
+    photo_url: str | None = None
 
 
 def normalize_profile_name(value: str) -> str:
@@ -99,6 +100,7 @@ def _snapshot(
         family_name=google_profile.family_name,
         locale=google_profile.locale,
         hosted_domain=google_profile.hosted_domain,
+        photo_url=google_profile.photo_url,
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -12,8 +13,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import undefer
 
 from ac_platform.identity.google_profile_models import PersonGoogleProfile
+from ac_platform.identity.models import Person, PersonStatus
 
 _LOCALE = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,4}\Z")
 _DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
@@ -26,6 +29,7 @@ class GoogleProfileClaims:
     locale: str | None = None
     hosted_domain: str | None = None
     picture_url: str | None = None
+    photo_url: str | None = None
 
 
 def _assertion_value(assertion: object, field: str) -> object:
@@ -143,7 +147,92 @@ async def read_google_profile(session: AsyncSession, person_id: UUID) -> GoogleP
         family_name=None if profile is None else profile.family_name,
         locale=None if profile is None else profile.locale,
         hosted_domain=None if profile is None else profile.hosted_domain,
+        photo_url=(
+            "/v1/me/sales-xray-profile/photo"
+            if profile is not None and profile.photo_sha256 is not None
+            else None
+        ),
     )
+
+
+async def google_profile_photo_needs_fetch(
+    session: AsyncSession,
+    person_id: UUID,
+    source_sha256: str,
+) -> bool:
+    """Return whether an existing Google profile row needs this photo source."""
+
+    profile = await session.scalar(
+        select(PersonGoogleProfile).where(PersonGoogleProfile.person_id == person_id)
+    )
+    return profile is not None and profile.photo_source_sha256 != source_sha256
+
+
+async def read_google_profile_photo(
+    session: AsyncSession,
+    person_id: UUID,
+) -> tuple[bytes, str] | None:
+    """Read the private photo bytes only for the authenticated route."""
+
+    profile = await session.scalar(
+        select(PersonGoogleProfile)
+        .options(undefer(PersonGoogleProfile.photo_jpeg))
+        .where(PersonGoogleProfile.person_id == person_id)
+    )
+    if profile is None or profile.photo_jpeg is None or profile.photo_sha256 is None:
+        return None
+    return profile.photo_jpeg, profile.photo_sha256
+
+
+async def save_google_profile_photo(
+    session: AsyncSession,
+    person_id: UUID,
+    *,
+    source_sha256: str,
+    jpeg: bytes,
+    now: datetime,
+) -> bool:
+    """Save a sanitized photo only for an active person with an existing row."""
+
+    if not isinstance(jpeg, bytes) or not 0 < len(jpeg) <= 65_536:
+        return False
+    person_status = await session.scalar(
+        select(Person.status).where(Person.id == person_id).with_for_update()
+    )
+    if person_status != PersonStatus.ACTIVE.value:
+        return False
+    profile = await session.scalar(
+        select(PersonGoogleProfile)
+        .where(PersonGoogleProfile.person_id == person_id)
+        .with_for_update()
+    )
+    if profile is None:
+        return False
+    profile.photo_jpeg = jpeg
+    profile.photo_sha256 = hashlib.sha256(jpeg).hexdigest()
+    profile.photo_source_sha256 = source_sha256
+    profile.photo_fetched_at = now
+    profile.updated_at = now
+    await session.flush()
+    return True
+
+
+async def clear_google_profile_photo(session: AsyncSession, person_id: UUID) -> bool:
+    """Clear the copied image and source metadata without changing claims."""
+
+    profile = await session.scalar(
+        select(PersonGoogleProfile)
+        .where(PersonGoogleProfile.person_id == person_id)
+        .with_for_update()
+    )
+    if profile is None:
+        return False
+    profile.photo_jpeg = None
+    profile.photo_sha256 = None
+    profile.photo_source_sha256 = None
+    profile.photo_fetched_at = None
+    await session.flush()
+    return True
 
 
 async def erase_google_profile(session: AsyncSession, person_id: UUID) -> bool:
