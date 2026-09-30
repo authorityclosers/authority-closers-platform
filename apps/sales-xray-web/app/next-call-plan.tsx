@@ -1,304 +1,409 @@
 "use client";
 
-import { useId, useState } from "react";
-import {
-  ArrowRight,
-  CalendarDays,
-  ChartNoAxesColumnIncreasing,
-  Lightbulb,
-  Trophy,
-} from "lucide-react";
-import type { ReportEvidence, SalesReport } from "./report-contract";
-import { formatTranscriptTime } from "./report-transcript";
-import { ReviewDialog } from "./review-dialog";
-import { ClipPlayIcon, ClipPlayState } from "./source-waveform";
-import { formatClipRange, spokenClipRange } from "./lightbox/time";
-import { useReportInline } from "./report-reading-context";
-import styles from "./next-call-plan.module.css";
-import { RichText } from "./report-entities";
+import { CheckSquare, Square } from "lucide-react";
+import { useMemo } from "react";
 
+import { promiseId, togglePromiseDone, usePromisesDone } from "./call-signals";
+import { Emote } from "./emote";
+import { formatClock } from "./lightbox/time";
+import { OUTCOME } from "./overview-hook";
+import type {
+  Finding,
+  ReportEvidence,
+  SalesReport,
+  Transcript,
+} from "./report-contract";
+import { RichText } from "./report-entities";
+import {
+  Card,
+  Clip,
+  Empty,
+  KitSection,
+  Locked,
+  Note,
+  Script,
+  Tag,
+  useReportPeople,
+} from "./report-kit";
+import { promises } from "./sales-signals";
+import styles from "./next-call-plan.module.css";
+
+const EMPTY_TRANSCRIPT: Transcript = {
+  source_sha256: "",
+  revision: "",
+  timebase_id: "1ms",
+  duration_ms: 0,
+  segments: [],
+};
+
+/**
+ * The next-call plan, in the order people act on feedback: one clear move
+ * for the next call, what to keep, what to change first (with words to try),
+ * how the call closed, the promises made, and what to handle with care.
+ * Everything shown comes from this report; missing parts say so plainly.
+ */
 export function NextCallPlan({
   report,
   onSelectEvidence,
   onUnlock,
+  callId = null,
+  transcript = EMPTY_TRANSCRIPT,
 }: {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
   onUnlock?: () => void;
+  callId?: string | null;
+  transcript?: Transcript;
 }) {
-  const reading = useReportInline();
-  const prefix = useId();
-  const [active, setActive] = useState(0);
-  const [opened, setOpened] = useState<number | null>(null);
-  const [previousReading, setPreviousReading] = useState(reading);
-  if (previousReading !== reading) {
-    setPreviousReading(reading);
-    setOpened(null);
-  }
-  const focus = report.overview?.next_call_focus;
-  const practice = report.overview?.practice;
-  const outcome = report.overview?.outcome;
-  const first = report.improvements[0];
-  const strength = report.strengths[0];
-  const sections = [
-    {
-      label: "Keep doing this",
-      short: "Keep",
-      icon: Trophy,
-      tone: "mint",
-      title: strength?.title,
-      text:
-        strength?.explanation ??
-        "No supported strength was supplied for this call.",
-      extra: undefined,
-      evidence: strength?.evidence ?? [],
-    },
-    {
-      label: "Change first",
-      short: "Change",
-      icon: Lightbulb,
-      tone: "orange",
-      title: first?.title,
-      text:
-        focus?.behavior ??
-        first?.explanation ??
-        "No supported improvement was supplied for this call.",
-      extra: focus ? { label: "Your target", text: focus.target } : undefined,
-      evidence: first?.evidence ?? [],
-    },
-    {
-      label: "Practise this",
-      short: "Practise",
-      icon: ChartNoAxesColumnIncreasing,
-      tone: "violet",
-      title: undefined,
-      text:
-        practice?.instructions ??
-        "No practice instructions were supplied for this call.",
-      extra: practice
-        ? { label: "You’ve done it when", text: practice.success_condition }
-        : undefined,
-      evidence: [] as ReportEvidence[],
-    },
-  ];
-  function evidenceButton(item: ReportEvidence, title: string, index: number) {
-    const spoken = spokenClipRange(item.start_ms, item.end_ms);
-    return (
-      <ClipPlayState
-        key={`${item.segment_id}-${index}`}
-        startMs={item.start_ms}
-        endMs={item.end_ms}
-      >
-        {(playing) => (
-          <button
-            type="button"
-            className={styles.evidence}
-            onClick={() => onSelectEvidence(item, title)}
-            aria-label={`${playing ? "Pause" : "Play"} source moment, ${spoken}`}
-            aria-pressed={playing}
-          >
-            <span className={styles.play}>
-              <ClipPlayIcon playing={playing} size={17} />
-            </span>
-            <span>
-              <strong>
-                {playing
-                  ? "Pause the source moment"
-                  : "Listen to the source moment"}
-              </strong>
-              <small>{formatClipRange(item.start_ms, item.end_ms)}</small>
-            </span>
-            <ArrowRight size={17} aria-hidden="true" />
-          </button>
-        )}
-      </ClipPlayState>
-    );
-  }
-  const selected = opened === null ? null : sections[opened];
+  const overview = report.overview;
+  const focus = overview?.next_call_focus ?? null;
+  const outcome = overview?.outcome ?? null;
+  const practice = overview?.practice ?? null;
+  const people = useReportPeople(callId, transcript);
+  const done = usePromisesDone(callId);
+  const promised = useMemo(
+    () => (people.roles ? promises(transcript, people.roles) : []),
+    // roles comes from saved profiles; its two ids are the real inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transcript, people.roles?.seller, people.roles?.prospect],
+  );
+  const hidden = (
+    section: keyof NonNullable<SalesReport["preview"]>["sections"],
+  ) => report.preview?.sections[section].hidden_count ?? 0;
+
+  // The focus improvement leads; the rest follow in report order.
+  const first = focus ? focus.improvement_index : 0;
+  const changes = report.improvements
+    .map((finding, index) => ({ finding, index }))
+    .sort((a, b) => Number(b.index === first) - Number(a.index === first));
+  const detailOf = (index: number) =>
+    overview?.improvement_details.find((d) => d.finding_index === index);
+  const whyKept = (index: number) =>
+    overview?.strength_details.find((d) => d.finding_index === index)
+      ?.why_it_matters;
+
+  const clips = (evidence: ReportEvidence[], title: string, max = 1) =>
+    evidence
+      .slice(0, max)
+      .map((item) => (
+        <Clip
+          key={`${item.segment_id}-${item.start_ms}`}
+          evidence={item}
+          title={title}
+          onPlay={onSelectEvidence}
+          person={people.speakerOf(item)}
+        />
+      ));
+
+  const findingCard = (
+    finding: Finding,
+    index: number,
+    tone: "closing",
+    emote: "chequered-flag",
+    label: string,
+  ) => (
+    <Card key={index} tone={tone} index={index}>
+      <Tag tone={tone} emote={emote}>
+        {label}
+      </Tag>
+      <h4>
+        <RichText text={finding.title} />
+      </h4>
+      <p>
+        <RichText text={finding.explanation} />
+      </p>
+      {clips(finding.evidence, finding.title)}
+    </Card>
+  );
+
   return (
-    <section
-      className={styles.plan}
-      aria-label="Next-call plan"
-      data-reading={reading}
-    >
-      <header className={styles.header}>
-        <span className={styles.headerIcon}>
-          <CalendarDays aria-hidden="true" />
-        </span>
-        <div>
-          <h2>Your next-call plan</h2>
-          <p>Turn insights into a stronger next conversation.</p>
-        </div>
-        <small>Based on this call</small>
-      </header>
-      {outcome && (
+    <div className={styles.plan} aria-label="Next-call plan">
+      {outcome ? (
         <aside className={styles.outcome} aria-label="Call outcome">
-          <div>
-            <h3>What happened in this call</h3>
+          <Emote name={OUTCOME[outcome.kind].emote} size={22} />
+          <span className={styles.outcomeText}>
+            <small>Where the call ended · {OUTCOME[outcome.kind].label}</small>
+            <RichText text={outcome.text} />
+          </span>
+          {outcome.evidence[0] ? (
+            <button
+              type="button"
+              className={styles.outcomePlay}
+              aria-label={`Listen to call outcome at ${formatClock(outcome.evidence[0].start_ms)}`}
+              onClick={() =>
+                onSelectEvidence(outcome.evidence[0], "Call outcome")
+              }
+            >
+              ▶ {formatClock(outcome.evidence[0].start_ms)}
+            </button>
+          ) : null}
+        </aside>
+      ) : null}
+      <section
+        className={styles.move}
+        aria-label="Your one move for the next call"
+      >
+        <span className={styles.moveEmote}>
+          <Emote name="bullseye" size={30} />
+        </span>
+        <div className={styles.moveBody}>
+          <small>Your one move for the next call</small>
+          {focus ? (
+            <>
+              <p className={styles.moveText}>
+                <RichText text={focus.behavior} />
+              </p>
+              <p className={styles.target}>
+                <b>You’ll know it worked when</b>{" "}
+                <RichText text={focus.target} />
+              </p>
+            </>
+          ) : changes[0] ? (
+            <p className={styles.moveText}>
+              <RichText text={changes[0].finding.title} />
+            </p>
+          ) : (
+            <p className={styles.moveText}>
+              This report did not set a next-call focus.
+            </p>
+          )}
+        </div>
+        {practice ? (
+          <div className={styles.practice}>
+            <span className={styles.practiceHead}>
+              <Emote name="flexed-biceps" size={18} />
+              Practise it once before the call
+            </span>
             <p>
-              <RichText text={outcome.text} />
+              <RichText text={practice.instructions} />
+            </p>
+            <p className={styles.doneWhen}>
+              <b>Done when</b> <RichText text={practice.success_condition} />
             </p>
           </div>
-          <div
-            className={styles.outcomeSources}
-            aria-label="Call outcome sources"
-          >
-            {outcome.evidence.map((item, index) => (
-              <ClipPlayState
-                key={`${item.segment_id}-${index}`}
-                startMs={item.start_ms}
-                endMs={item.end_ms}
-              >
-                {(playing) => (
+        ) : null}
+      </section>
+
+      <KitSection
+        emote="clapping-hands"
+        tone="strength"
+        title="Keep doing"
+        hint="What worked on this call. Do it again."
+        count={report.strengths.length}
+        index={1}
+      >
+        {report.strengths.length ? (
+          <div className={styles.grid}>
+            {report.strengths.map((finding, index) => (
+              <Card key={index} tone="strength" index={index}>
+                <h4>
+                  <RichText text={finding.title} />
+                </h4>
+                <p>
+                  <RichText text={finding.explanation} />
+                </p>
+                {whyKept(index) ? (
+                  <Note label="Why it works:">
+                    <RichText text={whyKept(index) ?? ""} />
+                  </Note>
+                ) : null}
+                {clips(finding.evidence, finding.title)}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Empty>No strength was recorded for this call.</Empty>
+        )}
+        <Locked
+          count={hidden("strengths")}
+          noun="strengths"
+          onUnlock={onUnlock}
+        />
+      </KitSection>
+
+      <KitSection
+        emote="light-bulb"
+        tone="change"
+        title="Change first"
+        hint="One change at a time. Start with the first."
+        count={report.improvements.length}
+        index={2}
+      >
+        {changes.length ? (
+          <div className={styles.changes}>
+            {changes.map(({ finding, index }, order) => {
+              const detail = detailOf(index);
+              const said = detail?.what_happened.evidence.length
+                ? detail.what_happened.evidence
+                : finding.evidence;
+              return (
+                <Card
+                  key={index}
+                  tone="change"
+                  index={order}
+                  className={styles.change}
+                >
+                  <Tag tone="change" emote={order ? "pushpin" : "light-bulb"}>
+                    {order ? "Also worth changing" : "Change first"}
+                  </Tag>
+                  <h4>
+                    <RichText text={finding.title} />
+                  </h4>
+                  <div className={styles.changeBody}>
+                    <div className={styles.changeSide}>
+                      <Note label="What happened:">
+                        <RichText
+                          text={
+                            detail?.what_happened.text ?? finding.explanation
+                          }
+                        />
+                      </Note>
+                      {clips(said, finding.title)}
+                    </div>
+                    <div className={styles.changeSide}>
+                      {detail?.why_it_matters ? (
+                        <Note label="Why it matters:">
+                          <RichText text={detail.why_it_matters} />
+                        </Note>
+                      ) : null}
+                      {detail?.replacement_behavior ? (
+                        <Script
+                          label="Try this instead"
+                          text={detail.replacement_behavior}
+                        />
+                      ) : null}
+                      {detail?.business_impact.status === "insufficient_data" &&
+                      detail.business_impact.missing_inputs.length ? (
+                        <p className={styles.impact}>
+                          To size what this cost, the report needs:{" "}
+                          {detail.business_impact.missing_inputs.join(", ")}.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Empty emote="sparkles">No change was suggested for this call.</Empty>
+        )}
+        <Locked
+          count={hidden("improvements")}
+          noun="changes"
+          onUnlock={onUnlock}
+        />
+      </KitSection>
+
+      {report.closing_analysis.length || hidden("closing_analysis") ? (
+        <KitSection
+          emote="chequered-flag"
+          tone="closing"
+          title="How the call closed"
+          hint="The ask, the commitment and the next step."
+          count={report.closing_analysis.length}
+          index={3}
+        >
+          <div className={styles.grid}>
+            {report.closing_analysis.map((finding, index) =>
+              findingCard(
+                finding,
+                index,
+                "closing",
+                "chequered-flag",
+                "Closing",
+              ),
+            )}
+          </div>
+          <Locked
+            count={hidden("closing_analysis")}
+            noun="closing notes"
+            onUnlock={onUnlock}
+          />
+        </KitSection>
+      ) : null}
+
+      <KitSection
+        emote="handshake"
+        tone="info"
+        title="Promises you made"
+        hint="Keep them before the next call. Found by words, so listen to check."
+        count={people.roles ? promised.length : undefined}
+        index={4}
+      >
+        {!people.roles ? (
+          <Empty emote="busts-in-silhouette">
+            Mark who is the salesperson on the call map to list the promises.
+          </Empty>
+        ) : promised.length ? (
+          <ul className={styles.promises}>
+            {promised.map((item) => {
+              const id = promiseId(item);
+              const ticked = done.has(id);
+              return (
+                <li key={id} data-done={ticked ? "" : undefined}>
                   <button
                     type="button"
-                    onClick={() => onSelectEvidence(item, "Call outcome")}
-                    aria-label={`${playing ? "Pause" : "Listen to"} call outcome at ${formatTranscriptTime(item.start_ms)}`}
-                    aria-pressed={playing}
+                    className={styles.tick}
+                    aria-pressed={ticked}
+                    disabled={!callId}
+                    onClick={() => callId && togglePromiseDone(callId, id)}
+                    aria-label={ticked ? "Mark as not done" : "Mark as done"}
                   >
-                    <ClipPlayIcon playing={playing} size={13} />
-                    {formatTranscriptTime(item.start_ms)}
+                    {ticked ? <CheckSquare size={17} /> : <Square size={17} />}
                   </button>
-                )}
-              </ClipPlayState>
-            ))}
-          </div>
-        </aside>
-      )}
-      <nav className={styles.mobileTabs} aria-label="Plan sections">
-        {sections.map((section, index) => (
-          <button
-            key={section.tone}
-            type="button"
-            aria-pressed={active === index}
-            aria-controls={`${prefix}-${section.tone}`}
-            data-tone={section.tone}
-            onClick={() => setActive(index)}
-          >
-            {section.short}
-          </button>
-        ))}
-      </nav>
-      <div className={styles.grid}>
-        {sections.map((section, index) => {
-          const Icon = section.icon;
-          return (
-            <article
-              key={section.tone}
-              id={`${prefix}-${section.tone}`}
-              className={styles.card}
-              data-tone={section.tone}
-              data-active={active === index}
-            >
-              <h3>
-                <span className={styles.icon}>
-                  <Icon aria-hidden="true" />
-                </span>
-                {section.label}
-              </h3>
-              <div className={styles.preview}>
-                {section.title && <h4>{section.title}</h4>}
+                  <Clip
+                    evidence={{
+                      segment_id: item.segment.id,
+                      quote: item.text,
+                      start_ms: item.segment.start_ms,
+                      end_ms: item.segment.end_ms,
+                    }}
+                    title="Promise"
+                    onPlay={onSelectEvidence}
+                    person={people.speakerOf({
+                      segment_id: item.segment.id,
+                      quote: item.text,
+                      start_ms: item.segment.start_ms,
+                      end_ms: item.segment.end_ms,
+                    })}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <Empty emote="memo">
+            No promise was found in the salesperson’s words.
+          </Empty>
+        )}
+      </KitSection>
+
+      {overview?.ethics_notes.length || hidden("ethics_notes") ? (
+        <KitSection
+          emote="raised-hand"
+          tone="hypothesis"
+          title="Handle with care"
+          hint="Points to keep the conversation fair and honest."
+          index={5}
+        >
+          <div className={styles.grid}>
+            {overview?.ethics_notes.map((note, index) => (
+              <Card key={index} tone="hypothesis" index={index}>
                 <p>
-                  <RichText text={section.text} />
+                  <RichText text={note.text} />
                 </p>
-                {section.extra && (
-                  <p className={styles.target}>
-                    <strong>{section.extra.label}:</strong>{" "}
-                    <RichText text={section.extra.text} />
-                  </p>
-                )}
-              </div>
-              {reading &&
-                section.evidence.map((item, evidenceIndex) => (
-                  <div
-                    key={`${item.segment_id}-${evidenceIndex}`}
-                    className={styles.fullSource}
-                  >
-                    {evidenceButton(
-                      item,
-                      section.title ?? section.label,
-                      evidenceIndex,
-                    )}
-                    <blockquote>
-                      “<RichText text={item.quote} />”
-                    </blockquote>
-                  </div>
-                ))}
-              <button
-                hidden={reading}
-                className={styles.open}
-                type="button"
-                onClick={() => setOpened(index)}
-              >
-                Read full notes <ArrowRight size={16} aria-hidden="true" />
-                <span className={styles.srOnly}>: {section.label}</span>
-              </button>
-            </article>
-          );
-        })}
-      </div>
-      {first?.evidence[0] ? (
-        <aside
-          className={styles.source}
-          aria-label="Key evidence from this call"
-        >
-          <div>
-            <h3>Key evidence from this call</h3>
-            <blockquote>“{first.evidence[0].quote}”</blockquote>
-          </div>
-          {evidenceButton(first.evidence[0], first.title, 0)}
-        </aside>
-      ) : (
-        <p className={styles.empty}>
-          No timed source moment was supplied for this plan.
-        </p>
-      )}
-      {report.preview?.sections.improvements.hidden_count && onUnlock ? (
-        <button type="button" className={styles.unlock} onClick={onUnlock}>
-          Sign in to see the rest of your plan{" "}
-          <ArrowRight size={15} aria-hidden="true" />
-        </button>
-      ) : null}
-      {!reading && selected && opened !== null && (
-        <ReviewDialog
-          open
-          title={selected.label}
-          position={`Plan ${opened + 1} of ${sections.length}`}
-          eyebrow="Based on this call · draft coaching"
-          onClose={() => setOpened(null)}
-          onPrevious={() => setOpened(opened - 1)}
-          onNext={() => setOpened(opened + 1)}
-          previousDisabled={opened === 0}
-          nextDisabled={opened === sections.length - 1}
-          previousLabel="Previous"
-          nextLabel="Next"
-          closeLabel="Close plan notes"
-        >
-          <div className={styles.fullNotes}>
-            {selected.title && <h3>{selected.title}</h3>}
-            <p>
-              <RichText text={selected.text} />
-            </p>
-            {selected.extra && (
-              <p>
-                <strong>{selected.extra.label}:</strong>{" "}
-                <RichText text={selected.extra.text} />
-              </p>
-            )}
-            {selected.evidence.map((item, index) => (
-              <div
-                key={`${item.segment_id}-${index}`}
-                className={styles.fullSource}
-              >
-                {evidenceButton(item, selected.title ?? selected.label, index)}
-                <blockquote>
-                  “<RichText text={item.quote} />”
-                </blockquote>
-              </div>
+                {clips(note.evidence, "Handle with care")}
+              </Card>
             ))}
           </div>
-        </ReviewDialog>
-      )}
-    </section>
+          <Locked
+            count={hidden("ethics_notes")}
+            noun="notes"
+            onUnlock={onUnlock}
+          />
+        </KitSection>
+      ) : null}
+    </div>
   );
 }

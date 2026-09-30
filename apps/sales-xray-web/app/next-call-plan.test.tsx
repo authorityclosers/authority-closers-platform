@@ -1,19 +1,25 @@
+// @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 import fixture from "../tests/fixtures/dipak-overview.json";
-import { formatClock } from "./lightbox/time";
 import { NextCallPlan } from "./next-call-plan";
-import { ReportReadingProvider } from "./report-reading-context";
-import type { SalesReport } from "./report-contract";
+import type { SalesReport, Transcript } from "./report-contract";
+import { saveSpeakerProfiles } from "./speaker-profiles";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let container: HTMLDivElement;
 const report = fixture.report as SalesReport;
+const overview = report.overview!;
+
 beforeEach(() => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("{}")));
+  localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -21,145 +27,164 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
-function button(text: string) {
-  const found = [
-    ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find(
-    (item) =>
-      item.getAttribute("aria-label") === text ||
-      item.textContent?.replace(/\s+/g, " ").trim() === text,
-  );
-  if (!found) throw new Error(`Missing ${text}`);
-  return found;
-}
-it("shows source-backed keep, change and practice without fake progress or a practice recorder", async () => {
+
+const text = () => container.textContent?.replace(/\s+/g, " ") ?? "";
+
+it("leads with one move, then keep, change with words to try, and care notes", async () => {
   await act(async () =>
     root.render(<NextCallPlan report={report} onSelectEvidence={vi.fn()} />),
   );
-  expect(container.textContent).toContain(report.strengths[0].explanation);
-  expect(container.textContent).toContain(
-    report.overview!.next_call_focus!.behavior,
-  );
-  expect(container.textContent).toContain(
-    report.overview!.practice!.instructions,
-  );
+  const all = text();
+  const order = [
+    overview.next_call_focus!.behavior,
+    overview.next_call_focus!.target,
+    overview.practice!.instructions,
+    report.strengths[0].explanation,
+    overview.strength_details[0].why_it_matters,
+    overview.improvement_details[0].why_it_matters,
+    overview.improvement_details[0].replacement_behavior,
+    overview.ethics_notes[0].text,
+  ].map((value) => all.indexOf(value.replace(/\s+/g, " ")));
+  expect(order.every((at) => at >= 0)).toBe(true);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+  // The report's missing inputs are named; no impact figure is invented.
+  expect(all).toContain("Comparable conversion history, Lead volume");
+  // No fake progress and no practice recorder.
+  expect(all).not.toMatch(/progress|streak|score/i);
   expect(
-    container.querySelector('[aria-label="Call outcome"]')?.textContent,
-  ).toContain(report.overview!.outcome!.text);
-  expect(container.querySelector('input[type="checkbox"]')).toBeNull();
-  expect(container.textContent).not.toContain("Start practice");
-  await act(async () => button("Change").click());
-  expect(
-    container.querySelector('article[data-active="true"]')?.textContent,
-  ).toContain("Change first");
-});
-it("plays exact supplied evidence and exposes all full notes in a bounded reader", async () => {
-  const select = vi.fn();
-  await act(async () =>
-    root.render(<NextCallPlan report={report} onSelectEvidence={select} />),
-  );
-  const evidence = report.improvements[0].evidence[0];
-  const outcomeEvidence = report.overview!.outcome!.evidence[0];
-  await act(async () => button(`Listen to call outcome at 00:03`).click());
-  expect(select).toHaveBeenCalledWith(outcomeEvidence, "Call outcome");
-  select.mockClear();
-  // The accessible name reads mm:ss, never raw milliseconds.
-  await act(async () =>
-    button(
-      `Play source moment, ${formatClock(evidence.start_ms)} to ${formatClock(evidence.end_ms)}`,
-    ).click(),
-  );
-  expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);
-  const opener = button("Read full notes : Change first");
-  opener.focus();
-  await act(async () => opener.click());
-  const dialog = container.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).toContain(
-    report.overview!.next_call_focus!.target,
-  );
-  expect(dialog.textContent).toContain(evidence.quote);
-  await act(async () => button("Next").click());
-  expect(dialog.textContent).toContain(
-    report.overview!.practice!.success_condition,
-  );
-  expect(button("Next").disabled).toBe(true);
-  await act(async () => button("Close plan notes").click());
-  expect(document.activeElement).toBe(opener);
-});
-it("does not invent coaching or playback when source fields are absent", async () => {
-  const empty = {
-    ...report,
-    strengths: [],
-    improvements: [],
-    overview: undefined,
-    preview: undefined,
-  };
-  await act(async () =>
-    root.render(<NextCallPlan report={empty} onSelectEvidence={vi.fn()} />),
-  );
-  expect(container.textContent).toContain("No supported strength was supplied");
-  expect(container.textContent).toContain(
-    "No supported improvement was supplied",
-  );
-  expect(container.textContent).toContain(
-    "No practice instructions were supplied",
-  );
-  expect(container.textContent).toContain(
-    "No timed source moment was supplied",
-  );
-  expect(container.querySelector('[aria-label="Call outcome"]')).toBeNull();
-  expect(
-    container.querySelector('[aria-label^="Play source moment"]'),
+    container.querySelector("input, textarea, [data-recorder]"),
   ).toBeNull();
 });
 
-it("does not reopen an old plan dialog after switching through reading mode", async () => {
-  const renderMode = async (reading: boolean) => {
-    await act(async () =>
-      root.render(
-        <ReportReadingProvider reading={reading}>
-          <NextCallPlan report={report} onSelectEvidence={vi.fn()} />
-        </ReportReadingProvider>,
-      ),
-    );
-  };
-  await renderMode(false);
-  await act(async () => button("Read full notes : Change first").click());
-  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-  await renderMode(true);
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-  await renderMode(false);
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-});
-
-it("renders every plan section and source in reading mode while retaining evidence seeking", async () => {
-  const select = vi.fn();
+it("plays the exact supplied evidence", async () => {
+  const onSelectEvidence = vi.fn();
   await act(async () =>
     root.render(
-      <ReportReadingProvider reading>
-        <NextCallPlan report={report} onSelectEvidence={select} />
-      </ReportReadingProvider>,
+      <NextCallPlan report={report} onSelectEvidence={onSelectEvidence} />,
     ),
   );
-  expect(container.querySelectorAll("article")).toHaveLength(3);
-  expect(
-    container.querySelectorAll('article[data-active="true"]'),
-  ).toHaveLength(1);
-  expect(container.textContent).toContain(
-    report.overview!.next_call_focus!.target,
+  const evidence = report.strengths[0].evidence[0];
+  const play = [...container.querySelectorAll("button")].find((button) =>
+    button.getAttribute("aria-label")?.startsWith("Play"),
+  )!;
+  await act(async () => play.click());
+  expect(onSelectEvidence).toHaveBeenCalledWith(
+    evidence,
+    report.strengths[0].title,
   );
-  expect(container.textContent).toContain(
-    report.overview!.practice!.success_condition,
-  );
-  expect(container.querySelectorAll("button[hidden]")).toHaveLength(3);
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-  const evidence = report.improvements[0].evidence[0];
-  expect(container.textContent).toContain(evidence.quote);
+  expect(text()).toContain(evidence.quote.replace(/\s+/g, " "));
+});
+
+it("says what is missing instead of inventing coaching or playback", async () => {
+  const bare: SalesReport = {
+    ...report,
+    overview: undefined,
+    strengths: [],
+    improvements: [],
+    closing_analysis: [],
+  };
   await act(async () =>
-    button(
-      `Play source moment, ${formatClock(evidence.start_ms)} to ${formatClock(evidence.end_ms)}`,
-    ).click(),
+    root.render(<NextCallPlan report={bare} onSelectEvidence={vi.fn()} />),
   );
-  expect(select).toHaveBeenCalledWith(evidence, report.improvements[0].title);
+  expect(text()).toContain("This report did not set a next-call focus.");
+  expect(text()).toContain("No strength was recorded for this call.");
+  expect(text()).toContain("No change was suggested for this call.");
+  expect(text()).not.toContain("Handle with care");
+  expect(
+    [...container.querySelectorAll("button")].some((button) =>
+      button.getAttribute("aria-label")?.startsWith("Play"),
+    ),
+  ).toBe(false);
+});
+
+it("shows only counts for findings a guest has not unlocked", async () => {
+  const counts = (hidden: number) => ({
+    visible_count: 0,
+    total_count: hidden,
+    hidden_count: hidden,
+  });
+  const guest: SalesReport = {
+    ...report,
+    improvements: [],
+    preview: {
+      version: "guest-findings-v1",
+      sections: {
+        strengths: counts(0),
+        improvements: counts(2),
+        missed_opportunities: counts(0),
+        objection_analysis: counts(0),
+        closing_analysis: counts(0),
+        golden_moments: counts(0),
+        prospect_interpretations: counts(0),
+        rewatch: counts(0),
+        ethics_notes: counts(0),
+      },
+    },
+  };
+  const onUnlock = vi.fn();
+  await act(async () =>
+    root.render(
+      <NextCallPlan
+        report={guest}
+        onSelectEvidence={vi.fn()}
+        onUnlock={onUnlock}
+      />,
+    ),
+  );
+  expect(text()).toContain("2 more changes are saved for your account.");
+  expect(text()).not.toContain(report.improvements[0].title);
+  const unlock = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Sign in to see them",
+  )!;
+  await act(async () => unlock.click());
+  expect(onUnlock).toHaveBeenCalled();
+});
+
+it("lists the salesperson's promises once roles are known, with a tick", async () => {
+  const transcript: Transcript = {
+    source_sha256: "0".repeat(64),
+    revision: "fictional-r1",
+    timebase_id: "1ms",
+    duration_ms: 60_000,
+    segments: [
+      {
+        id: "a",
+        speaker_id: "alex",
+        start_ms: 0,
+        end_ms: 5_000,
+        text: "I'll send the brochure today.",
+      },
+      {
+        id: "b",
+        speaker_id: "sam",
+        start_ms: 5_000,
+        end_ms: 9_000,
+        text: "Okay, thanks.",
+      },
+    ],
+  };
+  saveSpeakerProfiles("fictional-plan", {
+    alex: { name: "Alex", role: "salesperson", icon: null },
+    sam: { name: "Sam", role: "prospect", icon: null },
+  });
+  await act(async () =>
+    root.render(
+      <NextCallPlan
+        report={report}
+        onSelectEvidence={vi.fn()}
+        callId="fictional-plan"
+        transcript={transcript}
+      />,
+    ),
+  );
+  expect(text()).toContain("I'll send the brochure today.");
+  const tick = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Mark as done"]',
+  )!;
+  await act(async () => tick.click());
+  expect(
+    container.querySelector('button[aria-label="Mark as not done"]'),
+  ).not.toBeNull();
 });

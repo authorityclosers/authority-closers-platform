@@ -42,7 +42,6 @@ import {
 } from "./acquisition-dashboard-panels";
 import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
-import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
 import { CallContext } from "./call-context";
 import { CallSignals, clearPromisesDone } from "./call-signals";
@@ -3436,18 +3435,23 @@ export function AcquisitionStudio({
                             transcript={result.transcript}
                             callId={submission?.id ?? null}
                             onSeek={playFrom}
-                          />
-                          <DipakOverview
-                            showHeading={false}
-                            report={report}
-                            onSelectEvidence={seek}
-                            transcript={result.transcript}
-                            onSelectContextualPlayback={seekWithContext}
                             onUnlock={() => router.push("/login")}
-                            durationMs={result.transcript.duration_ms}
-                            callRecord={result.callRecord}
                           />
                         </>
+                      ),
+                    },
+                    {
+                      id: "moments",
+                      label: "Moments",
+                      content: (
+                        <ReportMoments
+                          report={report}
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
+                          onSelectEvidence={seek}
+                          onSelectContextualPlayback={seekWithContext}
+                          onUnlock={() => router.push("/login")}
+                        />
                       ),
                     },
                     {
@@ -3471,23 +3475,16 @@ export function AcquisitionStudio({
                       ),
                     },
                     {
-                      id: "moments",
-                      label: "Moments",
+                      id: "next-call-plan",
+                      label: "Next-call plan",
+                      compactLabel: "Next-call",
                       content: (
-                        <ReportMoments
+                        <NextCallPlan
                           report={report}
-                          onSelectEvidence={seek}
-                        />
-                      ),
-                    },
-                    {
-                      id: "signals",
-                      label: "Call signals",
-                      content: (
-                        <CallSignals
                           callId={submission?.id ?? null}
                           transcript={result.transcript}
-                          onSeek={playFrom}
+                          onSelectEvidence={seek}
+                          onUnlock={() => router.push("/login")}
                         />
                       ),
                     },
@@ -3503,14 +3500,13 @@ export function AcquisitionStudio({
                       ),
                     },
                     {
-                      id: "next-call-plan",
-                      label: "Next-call plan",
-                      compactLabel: "Next-call",
+                      id: "signals",
+                      label: "Call signals",
                       content: (
-                        <NextCallPlan
-                          report={report}
-                          onSelectEvidence={seek}
-                          onUnlock={() => router.push("/login")}
+                        <CallSignals
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
+                          onSeek={playFrom}
                         />
                       ),
                     },

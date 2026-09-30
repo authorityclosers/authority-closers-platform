@@ -60,7 +60,8 @@ function subscribeDone(notify: () => void) {
   };
 }
 
-function toggleDone(callId: string, id: string) {
+/** Ticks a promise off (or back on) for this call. */
+export function togglePromiseDone(callId: string, id: string) {
   const done = new Set<string>(JSON.parse(readDone(callId)) as string[]);
   if (done.has(id)) done.delete(id);
   else done.add(id);
@@ -395,7 +396,7 @@ export function CallSignals({
                       className={styles.tick}
                       aria-pressed={ticked}
                       disabled={!callId}
-                      onClick={() => callId && toggleDone(callId, id)}
+                      onClick={() => callId && togglePromiseDone(callId, id)}
                       aria-label={ticked ? "Mark as not done" : "Mark as done"}
                     >
                       {ticked ? (

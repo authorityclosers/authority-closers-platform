@@ -1,66 +1,48 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  FileText,
-  Flag,
-  Maximize2,
-  Search,
-  X,
-} from "lucide-react";
-import {
-  ClipListenButton,
-  ClipPlayIcon,
-  ClipPlayState,
-} from "./source-waveform";
-import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
-import { Glyph, type GlyphName } from "./lightbox/glyph";
-import { sourceTextAttributes } from "./lightbox/script";
-import { formatClipRange, formatClock } from "./lightbox/time";
-import {
-  useReportInline,
-  useReportNavigation,
-  useReportReading,
-} from "./report-reading-context";
-import styles from "./report-moments.module.css";
-import { RichText } from "./report-entities";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 
-const PAGE_SIZE = 4;
-const sources = {
-  rewatch: { label: "Rewatch", glyph: "seek-moment", tone: "rewatch" },
-  strengths: { label: "Strength", glyph: "strength", tone: "strength" },
-  improvements: { label: "Improvement", glyph: "focus", tone: "focus" },
-  missed_opportunities: {
-    label: "Missed opportunity",
-    glyph: "missed",
-    tone: "missed",
-  },
-  objection_analysis: {
-    label: "Objection analysis",
-    glyph: "objection",
-    tone: "objection",
-  },
-  // The glyph set has no closing mark; the flag keeps a distinct shape.
-  closing_analysis: { label: "Closing analysis", glyph: null, tone: "closing" },
-} as const satisfies Record<
-  string,
-  { label: string; glyph: GlyphName | null; tone: string }
->;
-type SourceKind = keyof typeof sources;
-type Moment = {
+import type { EmoteName } from "./emote";
+import { formatClipRange, formatClock } from "./lightbox/time";
+import type {
+  Finding,
+  ReportEvidence,
+  SalesReport,
+  Transcript,
+} from "./report-contract";
+import { RichText } from "./report-entities";
+import {
+  Card,
+  Clip,
+  Empty,
+  Locked,
+  Note,
+  Script,
+  Tag,
+  useReportPeople,
+  type Tone,
+} from "./report-kit";
+import {
+  buildContextualSourcePlayback,
+  type ContextualSourcePlayback,
+} from "./source-playback-context";
+import styles from "./report-moments.module.css";
+
+type SourceKind =
+  | "rewatch"
+  | "strengths"
+  | "improvements"
+  | "missed_opportunities"
+  | "objection_analysis"
+  | "closing_analysis";
+
+type SuppliedMoment = {
   id: string;
   kind: SourceKind;
   title: string;
   explanation?: string;
   purpose?: "must_watch" | "watch" | "repeat";
   evidence: ReportEvidence;
-};
-type LinkedFinding = {
-  label: string;
-  title: string;
-  note?: { label: string; text: string };
 };
 
 /** Plain-language labels for the supplied rewatch purpose. */
@@ -82,7 +64,7 @@ export function formatClipTime({
 }
 
 /** Preserve report order and each finding's provenance, including shared clips. */
-function suppliedMoments(report: SalesReport): Moment[] {
+function suppliedMoments(report: SalesReport): SuppliedMoment[] {
   if (report.overview) {
     return report.overview.rewatch.flatMap((note, index) =>
       note.evidence.map((evidence, excerpt) => ({
@@ -118,8 +100,8 @@ function suppliedMoments(report: SalesReport): Moment[] {
 export type ReplayClip = { evidence: ReportEvidence; titles: string[] };
 
 /**
- * The same supplied dataset as the moments browser, grouped by identical
- * interval and ordered by time. The count, replay strip and list share it.
+ * The rewatch dataset (or, for older reports, every cited finding), grouped
+ * by identical interval and ordered by time. The replay strip shares it.
  */
 export function reportReplayClips(report: SalesReport): ReplayClip[] {
   const clips = new Map<string, ReplayClip>();
@@ -136,7 +118,7 @@ export function reportReplayClips(report: SalesReport): ReplayClip[] {
   );
 }
 
-/** Same supplied dataset as the browser; repeated citations retain their contexts. */
+/** Same dataset as the replay strip; repeated citations keep their contexts. */
 export function countReportMoments(report: SalesReport): number {
   return reportReplayClips(report).length;
 }
@@ -146,567 +128,408 @@ const sameClip = (a: ReportEvidence, b: ReportEvidence) =>
   a.start_ms === b.start_ms &&
   a.end_ms === b.end_ms;
 
-/**
- * Detailed findings that cite this exact clip. A join on the saved source span,
- * never an inference; historical moments already carry their own finding.
- */
-function linkedFindings(
-  report: SalesReport,
-  evidence: ReportEvidence,
-): LinkedFinding[] {
-  const detail = report.overview;
-  if (!detail) return [];
-  const cites = (finding: Finding) =>
-    finding.evidence.some((item) => sameClip(item, evidence));
-  return [
-    ...report.strengths.flatMap((finding, index) => {
-      if (!cites(finding)) return [];
-      const golden = detail.golden_moments.find((moment) => {
-        const cited = finding.evidence[moment.evidence_index];
-        return (
-          moment.strength_index === index &&
-          cited !== undefined &&
-          sameClip(cited, evidence)
-        );
-      });
-      return [
-        golden
-          ? {
-              label: "Golden moment",
-              title: finding.title,
-              note: { label: "Why it worked", text: golden.why_effective },
-            }
-          : { label: "Strength", title: finding.title },
-      ];
-    }),
-    ...report.improvements.flatMap((finding, index) => {
-      if (!cites(finding)) return [];
-      const fix = detail.improvement_details.find(
-        (item) => item.finding_index === index,
-      );
-      return [
-        {
-          label: index === 0 ? "Change first" : "Priority fix",
-          title: finding.title,
-          ...(fix && {
-            note: { label: "Try this", text: fix.replacement_behavior },
-          }),
-        },
-      ];
-    }),
-    ...report.missed_opportunities.flatMap((finding, index) => {
-      if (!cites(finding)) return [];
-      const missed = detail.missed_details.find(
-        (item) => item.finding_index === index,
-      );
-      return [
-        {
-          label: "Missed opportunity",
-          title: finding.title,
-          ...(missed && {
-            note: { label: "Explore next", text: missed.follow_up },
-          }),
-        },
-      ];
-    }),
-    ...report.objection_analysis
-      .filter(cites)
-      .map((finding) => ({ label: "Objection", title: finding.title })),
-    ...report.closing_analysis
-      .filter(cites)
-      .map((finding) => ({ label: "Closing", title: finding.title })),
-  ];
-}
+// ------------------------------------------------------------------ timeline
 
-function MomentIcon({ kind }: { kind: SourceKind }) {
-  const { glyph, tone } = sources[kind];
-  return (
-    <span className={styles.icon} data-tone={tone} aria-hidden="true">
-      {glyph ? (
-        <Glyph name={glyph} size={20} />
-      ) : (
-        <Flag size={20} strokeWidth={1.75} />
-      )}
-    </span>
-  );
-}
+type Kind = "good" | "change" | "missed" | "objection" | "closing" | "listen";
 
-function KindLabel({ moment }: { moment: Moment }) {
-  return (
-    <span className={styles.kind} data-tone={sources[moment.kind].tone}>
-      {sources[moment.kind].label}
-      {moment.purpose ? ` · ${rewatchPurposeLabels[moment.purpose]}` : ""}
-    </span>
-  );
-}
+const KINDS: Record<
+  Kind,
+  { label: string; filter: string; tone: Tone; emote: EmoteName }
+> = {
+  good: {
+    label: "Did well",
+    filter: "Did well",
+    tone: "strength",
+    emote: "clapping-hands",
+  },
+  change: {
+    label: "To change",
+    filter: "To change",
+    tone: "change",
+    emote: "light-bulb",
+  },
+  missed: {
+    label: "Missed chance",
+    filter: "Missed",
+    tone: "missed",
+    emote: "eyes",
+  },
+  objection: {
+    label: "Objection",
+    filter: "Objections",
+    tone: "objection",
+    emote: "raised-hand",
+  },
+  closing: {
+    label: "Closing",
+    filter: "Closing",
+    tone: "closing",
+    emote: "chequered-flag",
+  },
+  listen: {
+    label: "Worth a listen",
+    filter: "Listen",
+    tone: "info",
+    emote: "headphone",
+  },
+};
 
-function Linked({ items }: { items: LinkedFinding[] }) {
-  if (!items.length) return null;
-  return (
-    <div className={styles.linked}>
-      <p className={styles.linkedHeading}>Also noted in this report</p>
-      <ul>
-        {items.map((item, index) => (
-          <li key={`${item.label}:${index}`}>
-            <span className={styles.linkedLabel}>{item.label}</span>
-            <span className={styles.linkedTitle}>{item.title}</span>
-            {item.note && (
-              <span className={styles.linkedNote}>
-                <strong>{item.note.label}:</strong>{" "}
-                <RichText text={item.note.text} />
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+const LISTEN_LABEL = {
+  must_watch: "Must listen",
+  watch: "Worth a listen",
+  repeat: "Do this again",
+} as const;
 
-/** Native modality keeps search inputs, background inertness and focus together. */
-function MomentsSheet({
-  open,
-  title,
-  onClose,
-  children,
-  footer,
-  contentKey,
-}: {
-  open: boolean;
+export type TimelineMoment = {
+  id: string;
+  kind: Kind;
   title: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-  contentKey?: string;
-}) {
-  const id = useId();
-  const dialog = useRef<HTMLDialogElement>(null);
-  const close = useRef<HTMLButtonElement>(null);
-  const body = useRef<HTMLDivElement>(null);
-  const lastContent = useRef(contentKey);
-  useEffect(() => {
-    if (!open || !dialog.current) return;
-    const element = dialog.current;
-    const previous = document.activeElement;
-    element.showModal();
-    close.current?.focus();
-    return () => {
-      element.close();
-      if (previous instanceof HTMLElement && previous.isConnected)
-        previous.focus();
-    };
-  }, [open]);
-  useEffect(() => {
-    if (open && contentKey !== lastContent.current && body.current) {
-      body.current.scrollTop = 0;
-      body.current.querySelector<HTMLElement>("h3")?.focus();
-    }
-    lastContent.current = contentKey;
-  }, [open, contentKey]);
+  explanation?: string;
+  evidence: ReportEvidence[];
+  listen?: keyof typeof LISTEN_LABEL;
+  golden?: string;
+  why?: string;
+  tryThis?: string;
+  betterAnswer?: string;
+  impact?: string;
+};
 
-  return (
-    <dialog
-      ref={dialog}
-      className={styles.sheet}
-      aria-labelledby={id}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <div className={styles.sheetLayout}>
-        <header className={styles.sheetHeader}>
-          <h2 id={id}>{title}</h2>
-          <button
-            ref={close}
-            type="button"
-            className={styles.iconButton}
-            aria-label={`Close ${title.toLowerCase()}`}
-            onClick={onClose}
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
-        </header>
-        <div ref={body} className={styles.sheetBody}>
-          {children}
-        </div>
-        {footer && <footer className={styles.sheetFooter}>{footer}</footer>}
-      </div>
-    </dialog>
+/**
+ * Every moment the report points to, one per finding (at its first cited
+ * clip), in call order. Rewatch picks join the finding that cites the same
+ * clip as a "Must listen" mark; a pick no finding cites stands on its own.
+ * Nothing is added that the report did not say.
+ */
+export function timelineMoments(report: SalesReport): TimelineMoment[] {
+  const detail = report.overview;
+  const moments: TimelineMoment[] = [];
+  const from = (
+    kind: Kind,
+    findings: Finding[],
+    prefix: string,
+    extra: (index: number) => Partial<TimelineMoment> = () => ({}),
+  ) =>
+    findings.forEach((finding, index) => {
+      if (!finding.evidence.length) return;
+      moments.push({
+        id: `${prefix}:${index}`,
+        kind,
+        title: finding.title,
+        explanation: finding.explanation,
+        evidence: finding.evidence,
+        ...extra(index),
+      });
+    });
+  from("good", report.strengths, "strength", (index) => {
+    const golden = detail?.golden_moments.find(
+      (g) => g.strength_index === index,
+    );
+    return {
+      golden: golden?.why_effective,
+      why: detail?.strength_details.find((d) => d.finding_index === index)
+        ?.why_it_matters,
+    };
+  });
+  from("change", report.improvements, "improvement", (index) => {
+    const fix = detail?.improvement_details.find(
+      (d) => d.finding_index === index,
+    );
+    return { why: fix?.why_it_matters, tryThis: fix?.replacement_behavior };
+  });
+  from("missed", report.missed_opportunities, "missed", (index) => {
+    const missed = detail?.missed_details.find(
+      (d) => d.finding_index === index,
+    );
+    return {
+      betterAnswer: missed?.follow_up,
+      impact: missed?.potential_impact,
+    };
+  });
+  from("objection", report.objection_analysis, "objection");
+  from("closing", report.closing_analysis, "closing");
+
+  for (const [index, note] of (detail?.rewatch ?? []).entries()) {
+    const clip = note.evidence[0];
+    if (!clip) continue;
+    const owner = moments.find((moment) =>
+      moment.evidence.some((item) => sameClip(item, clip)),
+    );
+    if (owner) owner.listen ??= note.purpose;
+    else
+      moments.push({
+        id: `rewatch:${index}`,
+        kind: "listen",
+        title: note.text,
+        evidence: note.evidence,
+        listen: note.purpose,
+      });
+  }
+  return moments.sort(
+    (a, b) =>
+      a.evidence[0].start_ms - b.evidence[0].start_ms ||
+      a.id.localeCompare(b.id),
   );
 }
 
 export type ReportMomentsProps = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
-  /** Mount the existing ReportTranscript here to retain exact-source search. */
-  transcriptSlot?: ReactNode;
+  onUnlock?: () => void;
+  /** Plays a rewatch clip with the lines around it. */
+  onSelectContextualPlayback?: (
+    playback: ContextualSourcePlayback,
+    title: string,
+  ) => void;
+  callId?: string | null;
+  transcript?: Transcript;
 };
 
-export function ReportMoments(props: ReportMomentsProps) {
-  return (
-    <MomentsBrowser
-      key={JSON.stringify([
-        props.report.source_sha256,
-        props.report.transcript_revision,
-      ])}
-      {...props}
-    />
-  );
-}
+const EMPTY_TRANSCRIPT: Transcript = {
+  source_sha256: "",
+  revision: "",
+  timebase_id: "1ms",
+  duration_ms: 0,
+  segments: [],
+};
 
-function MomentsBrowser({
+/**
+ * The call's key moments as one timeline: a map of the whole call to jump
+ * from, filters by kind, and a card per moment with who said it, a play
+ * control, and what to do about it.
+ */
+export function ReportMoments({
   report,
   onSelectEvidence,
-  transcriptSlot,
+  onUnlock,
+  onSelectContextualPlayback,
+  callId = null,
+  transcript = EMPTY_TRANSCRIPT,
 }: ReportMomentsProps) {
-  const reading = useReportReading();
-  const inline = useReportInline();
-  const navigateToReport = useReportNavigation();
-  const id = useId();
-  const moments = suppliedMoments(report);
-  const [filter, setFilter] = useState<SourceKind | "all">("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [transcriptOpen, setTranscriptOpen] = useState(false);
-  const kinds = [...new Set(moments.map((moment) => moment.kind))];
-  const activeFilter =
-    filter === "all" || kinds.includes(filter) ? filter : "all";
-  const filtered = moments.filter(
-    (moment) => activeFilter === "all" || moment.kind === activeFilter,
+  const people = useReportPeople(callId, transcript);
+  const moments = useMemo(() => timelineMoments(report), [report]);
+  const [filter, setFilter] = useState<Kind | "must" | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const list = useRef<HTMLOListElement>(null);
+  const duration = Math.max(
+    transcript.duration_ms,
+    ...moments.flatMap((moment) => moment.evidence.map((e) => e.end_ms)),
+    1,
   );
-  const index = Math.max(
+  const kinds = (Object.keys(KINDS) as Kind[]).filter((kind) =>
+    moments.some((moment) => moment.kind === kind),
+  );
+  const mustCount = moments.filter((m) => m.listen === "must_watch").length;
+  const shown = moments.filter((moment) =>
+    filter === null
+      ? true
+      : filter === "must"
+        ? moment.listen === "must_watch"
+        : moment.kind === filter,
+  );
+  const hidden = (
+    [
+      "strengths",
+      "improvements",
+      "missed_opportunities",
+      "objection_analysis",
+      "closing_analysis",
+      "rewatch",
+    ] as const
+  ).reduce(
+    (sum, section) =>
+      sum + (report.preview?.sections[section].hidden_count ?? 0),
     0,
-    filtered.findIndex((moment) => moment.id === selectedId),
   );
-  const moment = filtered[index];
-  const page = Math.floor(index / PAGE_SIZE);
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-  const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const hasTranscript =
-    Boolean(navigateToReport) ||
-    (transcriptSlot !== undefined && transcriptSlot !== null);
 
-  function select(next: number) {
-    const target = filtered[next];
-    if (target) setSelectedId(target.id);
+  // Only a saved rewatch clip on the same transcript gets surrounding lines.
+  const contextFor = (evidence: ReportEvidence) => {
+    if (!onSelectContextualPlayback || !transcript.segments.length) return null;
+    const playback = buildContextualSourcePlayback(
+      report,
+      transcript,
+      evidence,
+    );
+    return playback && (playback.context_before || playback.context_after)
+      ? { playback, onPlay: onSelectContextualPlayback }
+      : null;
+  };
+
+  function jump(id: string) {
+    setFilter(null);
+    setFlash(id);
+    window.setTimeout(
+      () => setFlash((value) => (value === id ? null : value)),
+      1600,
+    );
+    requestAnimationFrame(() =>
+      list.current
+        ?.querySelector<HTMLElement>(`[data-moment="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    );
   }
-  function listen() {
-    if (!moment) return;
-    setReviewOpen(false);
-    onSelectEvidence(moment.evidence, moment.title);
-  }
-  const navigation = (inSheet = false) => (
-    <div
-      className={styles.navigation}
-      aria-label={inSheet ? "Review navigation" : "Moment navigation"}
-    >
-      <span role="status" aria-live="polite" aria-atomic="true">
-        Moment {index + 1} of {filtered.length}
-      </span>
-      <div>
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label="Previous moment"
-          disabled={index === 0}
-          onClick={() => select(index - 1)}
-        >
-          <ArrowLeft size={19} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label="Next moment"
-          disabled={index === filtered.length - 1}
-          onClick={() => select(index + 1)}
-        >
-          <ArrowRight size={19} aria-hidden="true" />
-        </button>
+
+  if (!moments.length)
+    return (
+      <div className={styles.moments}>
+        <Empty emote="magnifying-glass-tilted-left">
+          This report did not point to any moment in the call.
+        </Empty>
+        <Locked count={hidden} noun="moments" onUnlock={onUnlock} />
       </div>
-    </div>
-  );
+    );
 
   return (
-    <section
-      className={styles.root}
-      aria-label="Source moments"
-      data-report-moments
-      data-reading={reading || undefined}
-      data-inline={inline || undefined}
-    >
-      <div className={styles.screen}>
-        <header className={styles.toolbar}>
-          <div className={styles.toolbarTitle}>
-            <p className={styles.toolbarHeading}>
-              Key moments <span>({moments.length})</span>
-            </p>
-            {kinds.length > 1 && (
-              <label className={styles.filter}>
-                <span className={styles.visuallyHidden}>Moment source</span>
-                <select
-                  aria-label="Moment source"
-                  value={activeFilter}
-                  onChange={(event) => {
-                    setFilter(event.target.value as SourceKind | "all");
-                    setSelectedId(null);
-                  }}
-                >
-                  <option value="all">All sources</option>
-                  {kinds.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {sources[kind].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-          {hasTranscript && (
-            <button
-              type="button"
-              className={styles.transcriptButton}
-              onClick={() => {
-                if (navigateToReport) navigateToReport("transcript");
-                else setTranscriptOpen(true);
-              }}
-              aria-label="Search full transcript"
+    <div className={styles.moments} aria-label="Key moments">
+      <div
+        className={styles.map}
+        aria-label="Where the moments are in the call"
+      >
+        <span className={styles.track} aria-hidden="true" />
+        {moments.map((moment, index) => (
+          <button
+            key={moment.id}
+            type="button"
+            className={styles.pin}
+            data-tone={KINDS[moment.kind].tone}
+            data-must={moment.listen === "must_watch" ? "" : undefined}
+            style={
+              {
+                "--x": `${(moment.evidence[0].start_ms / duration) * 100}%`,
+                "--i": index,
+              } as CSSProperties
+            }
+            onClick={() => jump(moment.id)}
+            aria-label={`${KINDS[moment.kind].label} at ${formatClock(moment.evidence[0].start_ms)}: ${moment.title}`}
+            title={`${formatClock(moment.evidence[0].start_ms)} · ${moment.title}`}
+          />
+        ))}
+        <span className={styles.mapStart}>00:00</span>
+        <span className={styles.mapEnd}>{formatClock(duration)}</span>
+      </div>
+
+      <div className={styles.filters} role="group" aria-label="Show moments">
+        <button
+          type="button"
+          aria-pressed={filter === null}
+          onClick={() => setFilter(null)}
+        >
+          All <em>{moments.length}</em>
+        </button>
+        {mustCount ? (
+          <button
+            type="button"
+            data-tone="info"
+            aria-pressed={filter === "must"}
+            onClick={() => setFilter(filter === "must" ? null : "must")}
+          >
+            Must listen <em>{mustCount}</em>
+          </button>
+        ) : null}
+        {kinds.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            data-tone={KINDS[kind].tone}
+            aria-pressed={filter === kind}
+            onClick={() => setFilter(filter === kind ? null : kind)}
+          >
+            {KINDS[kind].filter}{" "}
+            <em>{moments.filter((m) => m.kind === kind).length}</em>
+          </button>
+        ))}
+      </div>
+
+      <ol ref={list} className={styles.timeline}>
+        {shown.map((moment, index) => {
+          const kind = KINDS[moment.kind];
+          const [first, ...more] = moment.evidence;
+          return (
+            <li
+              key={moment.id}
+              data-moment={moment.id}
+              data-tone={kind.tone}
+              data-flash={flash === moment.id ? "" : undefined}
+              className={styles.item}
             >
-              <Search size={17} aria-hidden="true" /> Transcript
-            </button>
-          )}
-        </header>
-        {moment ? (
-          <div className={styles.workspace}>
-            <aside className={styles.listPanel} aria-label="Moment list">
-              <div className={styles.listHeading}>
-                <span>Source moments</span>
-                <span>Report order</span>
-              </div>
-              <ol className={styles.list} start={page * PAGE_SIZE + 1}>
-                {visible.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className={styles.row}
-                      data-moment-id={item.id}
-                      aria-current={item.id === moment.id ? "true" : undefined}
-                      aria-controls={`${id}-detail`}
-                      onClick={() => setSelectedId(item.id)}
+              <span className={styles.when}>{formatClock(first.start_ms)}</span>
+              <span className={styles.node} aria-hidden="true" />
+              <Card tone={kind.tone} index={index} className={styles.card}>
+                <span className={styles.tags}>
+                  <Tag
+                    tone={kind.tone}
+                    emote={moment.golden ? "sparkles" : kind.emote}
+                  >
+                    {moment.golden ? "Golden moment" : kind.label}
+                  </Tag>
+                  {moment.listen && moment.kind !== "listen" ? (
+                    <Tag
+                      tone="info"
+                      emote={
+                        moment.listen === "must_watch" ? "fire" : "headphone"
+                      }
                     >
-                      <MomentIcon kind={item.kind} />
-                      <span className={styles.rowCopy}>
-                        <strong>{item.title}</strong>
-                        <span>
-                          {sources[item.kind].label} ·{" "}
-                          {formatClock(item.evidence.start_ms)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              <nav className={styles.pagination} aria-label="Moment pages">
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  aria-label="Previous moment page"
-                  disabled={page === 0}
-                  onClick={() => select((page - 1) * PAGE_SIZE)}
-                >
-                  <ArrowLeft size={18} aria-hidden="true" />
-                </button>
-                <span>
-                  Page {page + 1} of {pageCount}
+                      {LISTEN_LABEL[moment.listen]}
+                    </Tag>
+                  ) : null}
                 </span>
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  aria-label="Next moment page"
-                  disabled={page + 1 === pageCount}
-                  onClick={() => select((page + 1) * PAGE_SIZE)}
-                >
-                  <ArrowRight size={18} aria-hidden="true" />
-                </button>
-              </nav>
-            </aside>
-            <article
-              className={styles.detail}
-              id={`${id}-detail`}
-              aria-labelledby={`${id}-title`}
-              data-focused-moment={moment.id}
-            >
-              {navigation()}
-              <div className={styles.momentHeading}>
-                <MomentIcon kind={moment.kind} />
-                <div>
-                  <KindLabel moment={moment} />
-                  <h3 id={`${id}-title`}>{moment.title}</h3>
-                  <span className={styles.time}>
-                    {formatClipTime(moment.evidence)}
-                  </span>
-                </div>
-              </div>
-              <blockquote className={styles.quote}>
-                <p {...sourceTextAttributes(moment.evidence.quote)}>
-                  <RichText text={moment.evidence.quote} />
-                </p>
-              </blockquote>
-              {moment.explanation && (
-                <div className={styles.observation}>
-                  <h4>Report observation</h4>
+                <h4>
+                  <RichText text={moment.title} />
+                </h4>
+                {moment.explanation ? (
                   <p>
                     <RichText text={moment.explanation} />
                   </p>
-                </div>
-              )}
-              <Linked items={linkedFindings(report, moment.evidence)} />
-              <div className={styles.actions}>
-                <ClipPlayState
-                  startMs={moment.evidence.start_ms}
-                  endMs={moment.evidence.end_ms}
-                >
-                  {(playing) => (
-                    <button
-                      type="button"
-                      className={styles.listen}
-                      onClick={listen}
-                      aria-pressed={playing}
-                    >
-                      <ClipPlayIcon playing={playing} size={17} />{" "}
-                      {playing ? "Pause" : "Listen"}
-                    </button>
-                  )}
-                </ClipPlayState>
-                {!inline && (
-                  <button
-                    type="button"
-                    className={styles.review}
-                    onClick={() => setReviewOpen(true)}
-                  >
-                    <Maximize2 size={17} aria-hidden="true" /> Open review
-                  </button>
-                )}
-              </div>
-            </article>
-          </div>
-        ) : (
-          <div className={styles.empty}>
-            <FileText size={28} aria-hidden="true" />
-            <h3>No source moments supplied</h3>
-            <p>
-              {report.overview
-                ? "No rewatch moments were selected for this report."
-                : "No linked source excerpts were supplied for the report findings."}
-              {hasTranscript
-                ? " You can still search the full transcript."
-                : " A transcript has not been provided in this view."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {moment && !inline && (
-        <MomentsSheet
-          open={reviewOpen}
-          contentKey={moment.id}
-          title="Review moment"
-          onClose={() => setReviewOpen(false)}
-          footer={navigation(true)}
-        >
-          <div className={styles.fullMoment} data-full-moment={moment.id}>
-            <KindLabel moment={moment} />
-            <h3 tabIndex={-1}>{moment.title}</h3>
-            <p className={styles.time}>{formatClipTime(moment.evidence)}</p>
-            <blockquote {...sourceTextAttributes(moment.evidence.quote)}>
-              <RichText text={moment.evidence.quote} />
-            </blockquote>
-            {moment.explanation && (
-              <>
-                <h4>Report observation</h4>
-                <p>
-                  <RichText text={moment.explanation} />
-                </p>
-              </>
-            )}
-            <Linked items={linkedFindings(report, moment.evidence)} />
-            <p className={styles.provenance}>From this call</p>
-            <ClipPlayState
-              startMs={moment.evidence.start_ms}
-              endMs={moment.evidence.end_ms}
-            >
-              {(playing) => (
-                <button
-                  type="button"
-                  className={styles.listen}
-                  onClick={listen}
-                  aria-pressed={playing}
-                >
-                  <ClipPlayIcon playing={playing} size={17} />{" "}
-                  {playing ? "Pause this excerpt" : "Listen to this excerpt"}
-                </button>
-              )}
-            </ClipPlayState>
-          </div>
-        </MomentsSheet>
-      )}
-      {hasTranscript && !navigateToReport && (
-        <MomentsSheet
-          open={transcriptOpen}
-          title="Full transcript"
-          onClose={() => setTranscriptOpen(false)}
-        >
-          {transcriptSlot}
-        </MomentsSheet>
-      )}
-
-      {/* The reading flow and print: every supplied item, independent of filters and pages. */}
-      <div className={styles.print} data-moments-print>
-        {moments.length ? (
-          <p className={styles.printIntro}>
-            Quotes are exactly as spoken in this call. Listen plays that excerpt
-            in the call player.
-          </p>
-        ) : (
-          <p>No source moments supplied.</p>
-        )}
-        <ol className={styles.timeline}>
-          {moments.map((item) => {
-            const clip = formatClipTime(item.evidence);
-            return (
-              <li key={item.id} data-tone={sources[item.kind].tone}>
-                <article className={styles.card}>
-                  <p className={styles.cardMeta}>
-                    <MomentIcon kind={item.kind} />
-                    <KindLabel moment={item} />
-                  </p>
-                  <h3>{item.title}</h3>
-                  <blockquote className={styles.cardQuote}>
-                    <p {...sourceTextAttributes(item.evidence.quote)}>
-                      {item.evidence.quote}
-                    </p>
-                  </blockquote>
-                  {item.explanation && (
-                    <p className={styles.cardNote}>{item.explanation}</p>
-                  )}
-                  <Linked items={linkedFindings(report, item.evidence)} />
-                  <ClipListenButton
-                    className={styles.readingListen}
-                    startMs={item.evidence.start_ms}
-                    endMs={item.evidence.end_ms}
-                    iconSize={15}
-                    onClick={() => onSelectEvidence(item.evidence, item.title)}
-                    label={`${clip}: ${item.title}`}
-                  >
-                    {" "}
-                    <span className={styles.clock}>{clip}</span>
-                  </ClipListenButton>
-                </article>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-    </section>
+                ) : null}
+                <Clip
+                  evidence={first}
+                  title={moment.title}
+                  onPlay={onSelectEvidence}
+                  person={people.speakerOf(first)}
+                  context={moment.listen ? contextFor(first) : null}
+                />
+                {moment.golden ? (
+                  <Note label="Why it worked:">
+                    <RichText text={moment.golden} />
+                  </Note>
+                ) : moment.why ? (
+                  <Note label="Why it matters:">
+                    <RichText text={moment.why} />
+                  </Note>
+                ) : null}
+                {moment.betterAnswer ? (
+                  <Script label="A better answer" text={moment.betterAnswer} />
+                ) : null}
+                {moment.impact ? (
+                  <Note label="What it may have cost:">
+                    <RichText text={moment.impact} />
+                  </Note>
+                ) : null}
+                {moment.tryThis ? (
+                  <Script label="Try this instead" text={moment.tryThis} />
+                ) : null}
+                {more.length ? (
+                  <details className={styles.more}>
+                    <summary>
+                      {more.length} more {more.length === 1 ? "clip" : "clips"}{" "}
+                      for this moment
+                    </summary>
+                    {more.map((item) => (
+                      <Clip
+                        key={`${item.segment_id}-${item.start_ms}`}
+                        evidence={item}
+                        title={moment.title}
+                        onPlay={onSelectEvidence}
+                        person={people.speakerOf(item)}
+                      />
+                    ))}
+                  </details>
+                ) : null}
+              </Card>
+            </li>
+          );
+        })}
+      </ol>
+      <Locked count={hidden} noun="moments" onUnlock={onUnlock} />
+    </div>
   );
 }

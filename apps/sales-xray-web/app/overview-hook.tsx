@@ -44,6 +44,8 @@ import type {
   Transcript,
 } from "./report-contract";
 import { Emote, type EmoteName } from "./emote";
+import { Locked } from "./report-kit";
+import { timelineMoments } from "./report-moments";
 import { EntityText } from "./report-entities";
 import { useReportNavigation } from "./report-reading-context";
 import {
@@ -62,12 +64,42 @@ export const OUTCOME: Record<
   string,
   { label: string; tone: string; Icon: LucideIcon; emote: EmoteName }
 > = {
-  closed: { label: "Deal closed", tone: "good", Icon: Handshake, emote: "handshake" },
-  follow_up: { label: "Next step agreed", tone: "good", Icon: CalendarCheck, emote: "spiral-calendar" },
-  future_date: { label: "Call back later", tone: "warn", Icon: CalendarClock, emote: "alarm-clock" },
-  no_sale: { label: "No sale", tone: "bad", Icon: CircleX, emote: "cross-mark" },
-  disqualified: { label: "Not a fit", tone: "bad", Icon: Ban, emote: "no-entry" },
-  unclear: { label: "No clear next step", tone: "warn", Icon: CircleHelp, emote: "red-question-mark" },
+  closed: {
+    label: "Deal closed",
+    tone: "good",
+    Icon: Handshake,
+    emote: "handshake",
+  },
+  follow_up: {
+    label: "Next step agreed",
+    tone: "good",
+    Icon: CalendarCheck,
+    emote: "spiral-calendar",
+  },
+  future_date: {
+    label: "Call back later",
+    tone: "warn",
+    Icon: CalendarClock,
+    emote: "alarm-clock",
+  },
+  no_sale: {
+    label: "No sale",
+    tone: "bad",
+    Icon: CircleX,
+    emote: "cross-mark",
+  },
+  disqualified: {
+    label: "Not a fit",
+    tone: "bad",
+    Icon: Ban,
+    emote: "no-entry",
+  },
+  unclear: {
+    label: "No clear next step",
+    tone: "warn",
+    Icon: CircleHelp,
+    emote: "red-question-mark",
+  },
 };
 
 const LISTEN: Record<
@@ -356,11 +388,13 @@ export function OverviewHook({
   transcript,
   callId,
   onSeek,
+  onUnlock,
 }: {
   report: SalesReport;
   transcript: Transcript;
   callId: string | null;
   onSeek: (ms: number) => void;
+  onUnlock?: () => void;
 }) {
   const navigate = useReportNavigation();
   const go = (section: string) => navigate?.(section);
@@ -463,19 +497,22 @@ export function OverviewHook({
   const observed = report.dimensions.filter(
     (item) => item.status === "observed",
   ).length;
-  const findings =
-    report.strengths.length +
-    report.missed_opportunities.length +
-    report.improvements.length +
-    report.objection_analysis.length +
-    report.closing_analysis.length;
+  const momentCount = useMemo(() => timelineMoments(report).length, [report]);
+  const hiddenFindings = report.preview
+    ? Object.values(report.preview.sections).reduce(
+        (sum, section) => sum + section.hidden_count,
+        0,
+      )
+    : 0;
+  const verdict = overview?.final_assessment ?? null;
+  // Doors in reading order: what happened, who they are, what to do, detail.
   const doors = [
     {
       id: "moments",
       label: "Moments",
       Icon: AudioLines,
-      count: findings,
-      unit: "findings",
+      count: momentCount,
+      unit: momentCount === 1 ? "moment" : "moments",
     },
     {
       id: "prospect",
@@ -485,6 +522,20 @@ export function OverviewHook({
       unit: "reads",
     },
     {
+      id: "next-call-plan",
+      label: "Next-call plan",
+      Icon: Lightbulb,
+      count: report.improvements.length,
+      unit: report.improvements.length === 1 ? "change" : "changes",
+    },
+    {
+      id: "skills",
+      label: "Sales skills",
+      Icon: ChartNoAxesColumnIncreasing,
+      count: observed,
+      unit: "seen",
+    },
+    {
       id: "signals",
       label: "Call signals",
       Icon: Radar,
@@ -492,20 +543,6 @@ export function OverviewHook({
         ? signals.unanswered + signals.overs + signals.promised
         : 0,
       unit: "signals",
-    },
-    {
-      id: "skills",
-      label: "Sales skills",
-      Icon: ChartNoAxesColumnIncreasing,
-      count: observed,
-      unit: "checked",
-    },
-    {
-      id: "next-call-plan",
-      label: "Next-call plan",
-      Icon: Lightbulb,
-      count: report.improvements.length,
-      unit: "steps",
     },
     {
       id: "transcript",
@@ -937,7 +974,11 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.unanswered ? "" : undefined}
               >
-                <Emote name="red-question-mark" size={18} className={styles.chipEmote} />
+                <Emote
+                  name="red-question-mark"
+                  size={18}
+                  className={styles.chipEmote}
+                />
                 <b>
                   <Count value={signals.unanswered} />
                 </b>{" "}
@@ -948,14 +989,22 @@ export function OverviewHook({
                 onClick={() => go("signals")}
                 data-hot={signals.overs ? "" : undefined}
               >
-                <Emote name="speaking-head" size={18} className={styles.chipEmote} />
+                <Emote
+                  name="speaking-head"
+                  size={18}
+                  className={styles.chipEmote}
+                />
                 <b>
                   <Count value={signals.overs} />
                 </b>{" "}
                 times you talked over them
               </button>
               <button type="button" onClick={() => go("signals")}>
-                <Emote name="hourglass-not-done" size={18} className={styles.chipEmote} />
+                <Emote
+                  name="hourglass-not-done"
+                  size={18}
+                  className={styles.chipEmote}
+                />
                 <b>
                   {signals.silence === null
                     ? "—"
@@ -966,7 +1015,11 @@ export function OverviewHook({
                 silence after a price or budget mention
               </button>
               <button type="button" onClick={() => go("signals")}>
-                <Emote name="handshake" size={18} className={styles.chipEmote} />
+                <Emote
+                  name="handshake"
+                  size={18}
+                  className={styles.chipEmote}
+                />
                 <b>
                   <Count value={signals.promised} />
                 </b>{" "}
@@ -1008,7 +1061,54 @@ export function OverviewHook({
         ) : null}
       </div>
 
-      <Section title="Explore the call" index={5}>
+      {verdict || report.verdict ? (
+        <Section
+          title="The coach’s verdict"
+          hint="The whole call in a few lines"
+          index={5}
+        >
+          <div className={styles.verdictCard}>
+            <span className={styles.verdictEmote}>
+              <Emote name="memo" size={26} />
+            </span>
+            <div className={styles.verdictBody}>
+              <p className={styles.verdictText}>
+                <EntityText text={verdict?.assessment ?? report.verdict} />
+              </p>
+              {verdict ? (
+                <div className={styles.verdictPair}>
+                  <span data-tone="good">
+                    <small>
+                      <Emote name="clapping-hands" size={15} />
+                      Keep
+                    </small>
+                    <EntityText text={verdict.repeat} />
+                  </span>
+                  <span data-tone="fix">
+                    <small>
+                      <Emote name="light-bulb" size={15} />
+                      Fix first
+                    </small>
+                    <EntityText text={verdict.fix_first} />
+                  </span>
+                </div>
+              ) : null}
+              {report.summary ? (
+                <details className={styles.inShort}>
+                  <summary>Read the full summary</summary>
+                  <p>
+                    <EntityText text={report.summary} />
+                  </p>
+                </details>
+              ) : null}
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      <Locked count={hiddenFindings} noun="findings" onUnlock={onUnlock} />
+
+      <Section title="Explore the call" index={6}>
         <div className={styles.doors}>
           {doors.map(({ id, label, Icon, count, unit }, index) => (
             <button
