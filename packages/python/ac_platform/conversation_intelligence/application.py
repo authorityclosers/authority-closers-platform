@@ -50,11 +50,16 @@ from ac_platform.conversation_intelligence.processing_actor import (
     ProcessingActor,
 )
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
-from ac_platform.conversation_intelligence.source_objects import resolve_source_key
+from ac_platform.conversation_intelligence.source_objects import (
+    lock_source_object,
+    reference_source_object,
+    resolve_source_key,
+)
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
     ObjectKind,
     RecordingObjectStorage,
+    SourceAudioKey,
     StorageError,
 )
 from ac_platform.conversation_intelligence.worker_account_gate import is_account_profile_hold
@@ -414,21 +419,26 @@ class ConversationApplication:
             if quoted is None or quoted.revoked_at is not None:
                 raise ConversationDenied("This recording's quote is unavailable.")
             await require_intake_acceptance(self, actor, quoted)
-        object_key = ObjectKey(
-            recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO
-        )
+        # HTTP/canary callers hold the storage-root fence until this transaction commits.
         source_key = await resolve_source_key(self.database, recording)
+        if recording.state == "awaiting_upload":
+            source_key = SourceAudioKey(recording.tenant_id, recording.source_sha256)
+        shared = (
+            await lock_source_object(self.database, recording, now)
+            if isinstance(source_key, SourceAudioKey)
+            else None
+        )
 
         def write() -> None:
             try:
                 storage.put(
-                    object_key,
+                    source_key,
                     chunks,
                     expected_sha256=recording.source_sha256,
                     expected_bytes=recording.source_bytes,
                 )
             except StorageError as error:
-                if str(error) != "storage_object_exists":
+                if str(error) != "storage_object_exists" or shared is not None:
                     raise
                 # A crash after publication but before commit is recoverable only
                 # when the preexisting immutable object has the exact source hash/size.
@@ -443,6 +453,8 @@ class ConversationApplication:
                     raise StorageError("storage_digest_mismatch") from None
 
         await join_thread(write)
+        if shared is not None:
+            await reference_source_object(self.database, recording, shared, now)
         recording.state = "ready"
         key = f"source:{recording.id}"
         payload = {"recording_id": str(recording.id), "source_sha256": recording.source_sha256}
@@ -974,6 +986,13 @@ class ConversationApplication:
             or recording.state not in {"deleting", "deleted"}
         ):
             raise ConversationConflict("Erasure was fenced.")
+        from ac_platform.conversation_intelligence.source_object_models import (
+            ConversationSourceReference,
+        )
+
+        reference = await self.database.get(ConversationSourceReference, recording.id)
+        if reference is not None and reference.released_at is None:
+            raise ConversationConflict("Source reference has not been released.")
         now = utc(self.clock())
         from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 

@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuoteAcceptance,
     ConversationRecording,
 )
+from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
@@ -473,10 +474,13 @@ def test_approval_then_bounded_source_storage_and_local_run(
                     "generation": 1,
                     "quote_id": str(quote_id),
                 }
-            objects = storage.list_recording(state.tenant_id, recording_id)
-            assert len(objects) == 1
+            async with AsyncSession(engine) as database:
+                recording = await database.get(ConversationRecording, recording_id)
+                assert recording is not None
+                source_key = await resolve_source_key(database, recording)
+            assert storage.list_recording(state.tenant_id, recording_id) == ()
             assert (
-                b"".join(storage.iter_bytes(objects[0], expected_sha256=intent.source_sha256))
+                b"".join(storage.iter_bytes(source_key, expected_sha256=intent.source_sha256))
                 == source
             )
         finally:
