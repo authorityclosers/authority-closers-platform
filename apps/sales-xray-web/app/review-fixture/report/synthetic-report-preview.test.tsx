@@ -51,6 +51,9 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   expect(container.textContent).not.toMatch(
     /performance score|conversion rate/i,
   );
+  const withoutCallNumbers = container.cloneNode(true) as HTMLDivElement;
+  withoutCallNumbers.querySelector('[aria-label="Call numbers"]')?.remove();
+  expect(withoutCallNumbers.textContent).not.toMatch(/\b\d+\s*%/);
 
   await act(async () => button("Tabbed view").click());
   await act(async () => button("Sales skills").click());
