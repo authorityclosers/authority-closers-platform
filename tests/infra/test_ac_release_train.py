@@ -491,10 +491,9 @@ def test_application_only_rollback_never_reaches_database_commands(tmp_path, fai
         Path(__file__).resolve().parents[2]
         / "infra/application/scripts/install-application-release.sh"
     ).read_text()
+    start = installer.index("core_rollback_exit() {")
     functions = installer[
-        installer.index("core_rollback_exit() {") : installer.index(
-            'if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then'
-        )
+        start : installer.index('if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then', start)
     ]
     old = tmp_path / OLD
     old.mkdir()
@@ -639,8 +638,11 @@ def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train,
 
     engine.source_archive = archive
     installer_calls = []
+    verified_archives = []
 
     def run(argv, **kwargs):
+        if argv[0] == "python3":
+            verified_archives.append(argv)
         if argv[0] == "bash":
             installer_calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, 0, "AC_STATUS=COMMITTED\n", "")
@@ -650,11 +652,16 @@ def test_deploy_core_rollback_uses_installed_controller_not_old_installer(train,
     assert build is not None
     engine.deploy_core("production", build, rollback_only=True)
     assert selected == [OLD, HEAD]
+    assert [call[-1] for call in verified_archives] == [OLD, HEAD]
     argv, kwargs = installer_calls[0]
     assert "/controller/" in argv[1]
     assert kwargs["env"]["AC_RELEASE_ID"] == OLD
     assert kwargs["env"]["AC_CORE_ROLLBACK_ONLY"] == "1"
     assert kwargs["env"]["AC_ROLLBACK_FROM"] == core["production"]
+    assert (
+        kwargs["env"]["AC_ROLLBACK_CONTROLLER_SHA256"]
+        == hashlib.sha256(b"# AC_CORE_ROLLBACK_ONLY\n").hexdigest()
+    )
 
 
 @pytest.mark.parametrize("field", ["core_sha", "web_sha", "environment"])
@@ -836,3 +843,126 @@ def test_malformed_train_evidence_is_rejected_before_deploy(train, path, value):
     assert engine.train()["reason"] == "train_evidence_invalid"
     assert core["production"] == OLD and len(engine.release_records()) == 1
     assert not (engine.paths.state / "train-inflight.json").exists()
+
+
+@pytest.mark.parametrize("disabled", ["train", "production", "both"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_interrupted_train_containment_precedes_disabled_gates(train, disabled, dry_run):
+    engine, runner, _, _ = train
+    engine.train_state("train-inflight.json", {"pair": list(PAIR)})
+    for flag in ("train", "production"):
+        if disabled in (flag, "both"):
+            (engine.paths.config / f"{flag}.enabled").unlink()
+    result = engine.train(dry_run=dry_run)
+    assert result["reason"] == "train_interrupted"
+    assert engine.is_paused("production") is (not dry_run)
+    assert (engine.paths.state / "train-inflight.json").exists()
+    assert not calls(runner, "ac_smoke.py") and not calls(runner, "ac-postgres-backup")
+    assert not calls(runner, "systemctl")
+    if dry_run:
+        assert not runner.events
+    else:
+        assert any("severity=critical" in event for event in runner.events)
+        engine.set_paused("production", False)
+        assert (engine.paths.state / "train-failed" / ("-".join(PAIR) + ".json")).exists()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "none",
+        "missing_controller",
+        "wrong_controller",
+        "archive_digest",
+        "commit",
+        "unsafe",
+        "normal_deploy",
+    ],
+)
+def test_rollback_controller_verifies_and_stages_older_archive(tmp_path, failure):
+    import shlex
+
+    from tests.infra.test_application_release_archive import (
+        INSTALLER,
+        VERIFIER,
+        _write_fixture_archive,
+    )
+
+    installer = INSTALLER.read_text()
+    verification = installer[
+        installer.index("verify_application_archive() {") : installer.index("\ngetent group acops")
+    ]
+    staging = installer[
+        installer.index('if [[ -e "$release_dir" || -L "$release_dir" ]]; then') : installer.index(
+            '\nsecret_environment="$target_environment"'
+        )
+    ]
+    archive = tmp_path / "old.tar"
+    # The old verifier is also different: both self-identity checks must survive.
+    verifier = VERIFIER.read_bytes() + (
+        b"\n# older exact-commit verifier\n" if failure != "normal_deploy" else b""
+    )
+    extra = [{"name": "infra/application/postgres/init/fixture.sql", "payload": b"-- fixture"}]
+    if failure == "unsafe":
+        extra.append({"name": "infra/application/../../escape", "payload": b"unsafe"})
+    _write_fixture_archive(archive, commit=OLD, embedded_verifier=verifier, extra_members=extra)
+    releases = tmp_path / "releases"
+    releases.mkdir()
+    inputs = tmp_path / "inputs"
+    inputs.mkdir(mode=0o700)
+    images = tmp_path / "release-images.env"
+    images.write_text("AC_MIGRATION_HEAD=20260929_0052\n")
+    variables = {
+        "script_dir": str(INSTALLER.parent),
+        "running_installer": str(INSTALLER),
+        "release_archive": str(archive),
+        "release_archive_sha256": "0" * 64
+        if failure == "archive_digest"
+        else hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "release_id": HEAD if failure == "commit" else OLD,
+        "release_dir": str(releases / OLD),
+        "releases_root": str(releases),
+        "release_images_file": str(images),
+        "input_stage": str(inputs),
+        "AC_CORE_ROLLBACK_ONLY": "0" if failure == "normal_deploy" else "1",
+        "AC_ROLLBACK_CONTROLLER_SHA256": ""
+        if failure == "missing_controller"
+        else (
+            "0" * 64
+            if failure == "wrong_controller"
+            else hashlib.sha256(INSTALLER.read_bytes()).hexdigest()
+        ),
+    }
+    harness = "set -euo pipefail\n" + "\n".join(
+        f"{key}={shlex.quote(value)}" for key, value in variables.items()
+    )
+    harness += "\nchown() { :; }\n" + verification + "\nverify_application_archive\n" + staging
+    completed = subprocess.run(
+        ["/bin/bash", "-s"], input=harness, text=True, capture_output=True, check=False
+    )
+    assert (completed.returncode == 0) == (failure == "none"), completed.stderr
+    target = releases / OLD
+    if failure == "none":
+        assert (target / "scripts/verify-release-archive.py").read_bytes() == verifier
+        assert (
+            target / "scripts/install-application-release.sh"
+        ).read_bytes() != INSTALLER.read_bytes()
+        assert (target / "RELEASE-COMMIT").read_text().strip() == OLD
+        checked = subprocess.run(
+            ["/usr/bin/sha256sum", "--check", "--strict", "RELEASE-FILES.sha256"],
+            cwd=target,
+            capture_output=True,
+            check=False,
+        )
+        assert checked.returncode == 0
+    else:
+        assert not target.exists()
+        message = {
+            "missing_controller": "Rollback controller digest",
+            "wrong_controller": "Rollback controller digest",
+            "archive_digest": "Rollback target archive digest",
+            "commit": "Git archive commit does not match",
+            "unsafe": "unsafe path",
+            "normal_deploy": "Running installer differs",
+        }[failure]
+        assert message in completed.stderr

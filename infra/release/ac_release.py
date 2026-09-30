@@ -1437,13 +1437,6 @@ class Engine:
             self._read_only = dry_run
             pair = None
             try:
-                reason, alert = self.train_gate()
-                if reason:
-                    return (
-                        {"result": "refused", "reason": reason}
-                        if dry_run
-                        else self.train_result(reason, result="refused", alert=alert)
-                    )
                 interrupted = self.paths.state / "train-inflight.json"
                 if interrupted.exists():
                     if not dry_run:
@@ -1451,6 +1444,13 @@ class Engine:
                             "production", True, "interrupted train requires Root recovery"
                         )
                     raise ReleaseError("train_interrupted")
+                reason, alert = self.train_gate()
+                if reason:
+                    return (
+                        {"result": "refused", "reason": reason}
+                        if dry_run
+                        else self.train_result(reason, result="refused", alert=alert)
+                    )
                 pair = self.staging_pair(refresh=not dry_run)
                 production_pair = (
                     self.current_core("production"),
@@ -1774,12 +1774,22 @@ class Engine:
                 controller_sha = self.installed_engine()
                 if controller_sha is None:
                     raise ReleaseError("rollback controller provenance is missing")
-                controller_archive, _ = self.source_archive(
+                controller_archive, controller_digest = self.source_archive(
                     controller_sha, stage, "infra/application"
                 )
                 controller = stage / "controller"
                 self.extract_source(controller_archive, controller, "infra/application")
                 installer = controller / "infra/application/scripts/install-application-release.sh"
+                self.run(
+                    [
+                        "python3",
+                        str(installer.with_name("verify-release-archive.py")),
+                        str(controller_archive),
+                        controller_digest,
+                        controller_sha,
+                    ],
+                    log=log,
+                )
                 if "AC_CORE_ROLLBACK_ONLY" not in installer.read_text(encoding="utf-8"):
                     raise ReleaseError(
                         "rollback controller does not support application-only rollback"
@@ -1791,7 +1801,11 @@ class Engine:
                 "AC_RELEASE_ARCHIVE_SHA256": archive_sha,
                 "AC_IMAGE_BUNDLE_DIR": str(bundle_dir),
                 **(
-                    {"AC_CORE_ROLLBACK_ONLY": "1", "AC_ROLLBACK_FROM": previous or ""}
+                    {
+                        "AC_CORE_ROLLBACK_ONLY": "1",
+                        "AC_ROLLBACK_FROM": previous or "",
+                        "AC_ROLLBACK_CONTROLLER_SHA256": _sha256_file(installer),
+                    }
                     if rollback_only
                     else {}
                 ),

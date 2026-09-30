@@ -40,6 +40,42 @@ secret_path="${AC_INFISICAL_PATH:-/application}"
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+running_installer="${BASH_SOURCE[0]}"
+
+verify_application_archive() {
+  local archive_verifier="$script_dir/verify-release-archive.py"
+  if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+    # The engine pins this controller from its installed revision, independently
+    # of the older target archive. Never rewrite the target's immutable files.
+    [[ "${AC_ROLLBACK_CONTROLLER_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] &&
+      [[ "$(sha256sum "$running_installer" | cut -d ' ' -f 1)" == "$AC_ROLLBACK_CONTROLLER_SHA256" ]] || {
+        printf 'Rollback controller digest is missing or does not match.\n' >&2
+        return 1
+      }
+    archive_verifier="$input_stage/rollback-target-verifier.py"
+    # Extract only trusted code from the digest-pinned archive into the private
+    # input stage. Its verifier then checks commit, paths and its own identity.
+    python3 - "$release_archive" "$release_archive_sha256" "$archive_verifier" <<'PY_VERIFY'
+import hashlib
+import sys
+import tarfile
+from pathlib import Path
+
+archive, expected, output = sys.argv[1:]
+with Path(archive).open("rb") as handle:
+    if hashlib.file_digest(handle, "sha256").hexdigest() != expected:
+        raise SystemExit("Rollback target archive digest does not match")
+with tarfile.open(archive, mode="r:") as handle:
+    member = handle.getmember("infra/application/scripts/verify-release-archive.py")
+    if not member.isfile():
+        raise SystemExit("Rollback target verifier must be a regular file")
+    with handle.extractfile(member) as source, Path(output).open("xb") as target:
+        target.write(source.read())
+PY_VERIFY
+  fi
+  python3 "$archive_verifier" "$release_archive" "$release_archive_sha256" "$release_id"
+}
+
 getent group acops >/dev/null || { printf 'Required operator group acops is absent.\n' >&2; exit 1; }
 application_root=/srv/authority-closers/application
 releases_root="$application_root/releases"
@@ -129,8 +165,12 @@ python3 "$script_dir/prepare-release-inputs.py" stage \
 release_archive="$input_stage/release-archive.tar"
 image_bundle_dir="$input_stage/image-bundle"
 
-python3 "$script_dir/verify-release-archive.py" \
-  "$release_archive" "$release_archive_sha256" "$release_id"
+if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" == 1 ]]; then
+  verify_application_archive
+else
+  python3 "$script_dir/verify-release-archive.py" \
+    "$release_archive" "$release_archive_sha256" "$release_id"
+fi
 
 manifest_values_file="$input_stage/release-image-values"
 umask 077
@@ -219,10 +259,12 @@ if [[ -e "$release_dir" || -L "$release_dir" ]]; then
 else
   stage_dir="$(mktemp -d "$releases_root/.stage-${release_id}.XXXXXX")"
   tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2
-  cmp --silent "$stage_dir/scripts/install-application-release.sh" "${BASH_SOURCE[0]}" || {
-    printf 'Running installer differs from the verified archive.\n' >&2
-    exit 1
-  }
+  if [[ "${AC_CORE_ROLLBACK_ONLY:-0}" != 1 ]]; then
+    cmp --silent "$stage_dir/scripts/install-application-release.sh" "$running_installer" || {
+      printf 'Running installer differs from the verified archive.\n' >&2
+      exit 1
+    }
+  fi
   cp -- "$release_images_file" "$stage_dir/release-images.env"
   printf '%s\n' "$release_id" > "$stage_dir/RELEASE-COMMIT"
   (
