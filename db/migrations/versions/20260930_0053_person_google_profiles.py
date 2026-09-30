@@ -31,11 +31,11 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "photo_jpeg IS NULL OR octet_length(photo_jpeg) <= 65536",
-            name="ck_person_google_profiles_photo_jpeg_max_bytes",
+            name=op.f("ck_person_google_profiles_photo_jpeg_max_bytes"),
         ),
         sa.CheckConstraint(
             "(photo_jpeg IS NULL) = (photo_sha256 IS NULL)",
-            name="ck_person_google_profiles_photo_sha256_matches_jpeg",
+            name=op.f("ck_person_google_profiles_photo_sha256_matches_jpeg"),
         ),
         sa.ForeignKeyConstraint(
             ["person_id"],

@@ -24,10 +24,6 @@ class PersonGoogleProfile(Base):
             "photo_jpeg IS NULL OR octet_length(photo_jpeg) <= 65536",
             name="photo_jpeg_max_bytes",
         ).ddl_if(dialect="postgresql"),
-        CheckConstraint(
-            "photo_jpeg IS NULL OR length(photo_jpeg) <= 65536",
-            name="photo_jpeg_max_bytes_sqlite",
-        ).ddl_if(dialect="sqlite"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
