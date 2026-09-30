@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.models import AuditEvent
@@ -125,7 +125,7 @@ class OrganisationService:
         if prior is not None:
             tenant = await self.session.get(Tenant, prior.tenant_id)
             owner = await self._creation_owner(prior.tenant_id, command_id)
-            audit = await self._command_audit(prior.tenant_id, command_id)
+            audit = await self._command_audit(prior.tenant_id, command_id, "organisation.created")
             expected = {
                 "name": name,
                 "owner_person_id": str(owner_person_id),
@@ -148,6 +148,8 @@ class OrganisationService:
                 owner.role,
                 replayed=True,
             )
+
+        await self._ensure_command_id_available(command_id, "organisation.created")
 
         owner_person = await self.session.get(Person, owner_person_id)
         if owner_person is None or owner_person.status != PersonStatus.ACTIVE.value:
@@ -221,7 +223,7 @@ class OrganisationService:
                 raise OrganisationCommandConflict(
                     "command ID already records a different member intent"
                 )
-            audit = await self._command_audit(tenant_id, command_id)
+            audit = await self._command_audit(tenant_id, command_id, "organisation.member_added")
             if audit is None or audit.payload.get("intent") != {
                 "person_id": str(person_id),
                 "role": role,
@@ -237,6 +239,8 @@ class OrganisationService:
             return MemberResult(
                 tenant_id, person_id, person.email, membership.role, membership.status, True
             )
+
+        await self._ensure_command_id_available(command_id, "organisation.member_added")
 
         owners = tuple(
             await self.session.scalars(
@@ -388,7 +392,18 @@ class OrganisationService:
                 raise OrganisationCommandConflict(
                     "command ID already records a different domain intent"
                 )
+            audit = await self._command_audit(tenant_id, command_id, "organisation.domains_set")
+            if audit is None or audit.payload.get("intent") != {
+                "verified_domains": list(normalized),
+                "auto_join": auto_join,
+                "operator_reference": operator_reference,
+            }:
+                raise OrganisationCommandConflict(
+                    "command ID already records a different domain intent"
+                )
             return _domain_result(prior, replayed=True)
+
+        await self._ensure_command_id_available(command_id, "organisation.domains_set")
 
         latest = await self._latest_domain_settings(tenant_id)
         before_domains = [] if latest is None else list(latest.verified_domains)
@@ -468,7 +483,7 @@ class OrganisationService:
         )
 
     async def _creation_owner(self, tenant_id: UUID, command_id: UUID) -> Membership | None:
-        audit = await self._command_audit(tenant_id, command_id)
+        audit = await self._command_audit(tenant_id, command_id, "organisation.created")
         if audit is None:
             return None
         owner_id = audit.payload.get("intent", {}).get("owner_person_id")
@@ -480,16 +495,36 @@ class OrganisationService:
             return None
         return await self.session.get(Membership, (tenant_id, person_id))
 
-    async def _command_audit(self, tenant_id: UUID, command_id: UUID) -> AuditEvent | None:
+    async def _command_audit(
+        self, tenant_id: UUID, command_id: UUID, action: str
+    ) -> AuditEvent | None:
+        conflicting_audit = await self.session.scalar(
+            select(AuditEvent).where(
+                AuditEvent.request_id == str(command_id),
+                or_(AuditEvent.tenant_id != tenant_id, AuditEvent.action != action),
+            )
+        )
+        if conflicting_audit is not None:
+            return None
         return cast(
             AuditEvent | None,
             await self.session.scalar(
                 select(AuditEvent).where(
                     AuditEvent.tenant_id == tenant_id,
                     AuditEvent.request_id == str(command_id),
+                    AuditEvent.action == action,
                 )
             ),
         )
+
+    async def _ensure_command_id_available(self, command_id: UUID, action: str) -> None:
+        prior = await self.session.scalar(
+            select(AuditEvent).where(AuditEvent.request_id == str(command_id)).limit(1)
+        )
+        if prior is not None:
+            raise OrganisationCommandConflict(
+                f"command ID already records a command and cannot be used for {action}"
+            )
 
     async def _audit(
         self,

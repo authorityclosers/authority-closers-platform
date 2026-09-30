@@ -283,6 +283,40 @@ async def test_domain_settings_are_versioned_audited_and_replay_exactly(
 
 
 @pytest.mark.asyncio
+async def test_command_id_cannot_be_reused_across_command_kinds(state: SimpleNamespace) -> None:
+    organisation = await create_org(state)
+
+    create_command_id = uuid4()
+    await state.service.create("Another Group", state.owner_id, create_command_id, "AUT-438")
+    with pytest.raises(OrganisationCommandConflict, match="already records a command"):
+        await state.service.add_member(
+            organisation.tenant_id, state.worker_id, "member", create_command_id
+        )
+
+    member_command_id = uuid4()
+    await state.service.add_member(
+        organisation.tenant_id, state.worker_id, "member", member_command_id
+    )
+    with pytest.raises(OrganisationCommandConflict, match="already records a command"):
+        await state.service.set_domains_attested(
+            organisation.tenant_id,
+            ["authority.example"],
+            True,
+            "AUT-438",
+            member_command_id,
+        )
+
+    assert (
+        state.session.scalar(
+            select(func.count(AuditEvent.id)).where(
+                AuditEvent.request_id.in_([str(create_command_id), str(member_command_id)])
+            )
+        )
+        == 2
+    )
+
+
+@pytest.mark.asyncio
 async def test_domains_cannot_be_claimed_by_another_organisation_and_protected_tenants_refuse(
     state: SimpleNamespace,
 ) -> None:

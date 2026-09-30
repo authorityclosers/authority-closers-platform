@@ -35,8 +35,18 @@ class _Engine:
 
 def test_cli_refuses_production_without_explicit_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AC_DATABASE_URL", "postgresql+psycopg://unused/unused")
+    monkeypatch.setenv("AC_ENVIRONMENT", "production")
     with pytest.raises(OrganisationCommandError, match="allow-production"):
         cli._environment(SimpleNamespace(environment="production", allow_production=False))
+
+
+def test_cli_refuses_environment_that_does_not_match_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AC_DATABASE_URL", "postgresql+psycopg://unused/unused")
+    monkeypatch.setenv("AC_ENVIRONMENT", "staging")
+    with pytest.raises(OrganisationCommandError, match="must match AC_ENVIRONMENT"):
+        cli._environment(SimpleNamespace(environment="production", allow_production=True))
 
 
 @pytest.mark.asyncio
