@@ -20,6 +20,7 @@ import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PageSkeleton } from "./shell/page-skeleton";
+import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -69,12 +70,13 @@ const shellStyle: CSSProperties = {
   background: "var(--canvas)",
 };
 const cardStyle: CSSProperties = {
-  width: "min(100%, 620px)",
-  padding: "34px",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  background: "var(--surface)",
-  boxShadow: "var(--shadow)",
+  width: "min(100%, 520px)",
+  padding: "28px 30px",
+  border: "1px solid var(--lx-line, var(--border))",
+  borderRadius: 20,
+  background: "var(--lx-surface, var(--surface))",
+  boxShadow: "var(--lx-shadow-2, var(--shadow))",
+  animation: "gate-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -201,8 +203,9 @@ function StandaloneStudioView({
   const pathname = usePathname();
   const activeFor = (
     path: string,
-  ): "dashboard" | "analyse" | "calls" | "account" => {
+  ): "dashboard" | "analyse" | "calls" | "account" | "organisation" => {
     if (path === "/dashboard") return "dashboard";
+    if (path === "/organisation") return "organisation";
     if (
       path === "/calls" ||
       path === "/analysis" ||
@@ -224,6 +227,8 @@ function StandaloneStudioView({
     return "studio";
   };
   const [attempt, setAttempt] = useState(0);
+  // Failed access checks in a row, for the corner notice's retry pace.
+  const [failures, setFailures] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [authRequested, setAuthRequested] = useState(false);
   const [dismissedAuthIntentId, setDismissedAuthIntentId] = useState<
@@ -256,6 +261,7 @@ function StandaloneStudioView({
           generation.current !== requestGeneration
         )
           return;
+        setFailures(0);
         if (choices === null) {
           observeAccount?.(null);
           setView({ kind: "unauthenticated" });
@@ -279,8 +285,10 @@ function StandaloneStudioView({
         if (
           !controller.signal.aborted &&
           generation.current === requestGeneration
-        )
+        ) {
+          setFailures((count) => count + 1);
           setView({ kind: "unavailable", message: GENERIC_LOAD_ERROR });
+        }
       });
     return () => {
       controller.abort();
@@ -556,7 +564,13 @@ function StandaloneStudioView({
         <AppFrame embedded={embedded}>{children}</AppFrame>
       </WorkspaceAccessProvider>
     );
-  if (view.kind === "loading" || (!embedded && view.kind === "unauthenticated"))
+  // A failed check keeps the app frame and skeleton; a corner card explains
+  // and tries again by itself.
+  if (
+    view.kind === "loading" ||
+    (!embedded && view.kind === "unauthenticated") ||
+    (!embedded && view.kind === "unavailable")
+  )
     return (
       <WorkspaceAccessProvider value={accessValue}>
         <AppFrame embedded={embedded}>
@@ -567,6 +581,13 @@ function StandaloneStudioView({
           >
             <PageSkeleton variant={skeletonVariant(pathname)} />
           </AcquisitionShell>
+          {view.kind === "unavailable" ? (
+            <ConnectionNotice
+              message={view.message}
+              failures={failures}
+              onRetry={retry}
+            />
+          ) : null}
         </AppFrame>
       </WorkspaceAccessProvider>
     );
@@ -626,7 +647,13 @@ function StandaloneStudioView({
           )}
           <h1
             id="sales-xray-workspace-heading"
-            style={{ margin: "0 0 10px", fontSize: 30, letterSpacing: -0.7 }}
+            style={{
+              margin: "0 0 8px",
+              fontFamily: "var(--lx-font-ui, inherit)",
+              fontSize: 24,
+              fontWeight: 700,
+              letterSpacing: -0.4,
+            }}
           >
             {heading}
           </h1>

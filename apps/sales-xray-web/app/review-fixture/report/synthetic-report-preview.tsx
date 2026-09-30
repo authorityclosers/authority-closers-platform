@@ -6,7 +6,8 @@ import { ReportModes } from "../../report-modes";
 import { formatTranscriptTime } from "../../report-transcript";
 import { SalesSkills } from "../../sales-skills";
 import { NextCallPlan } from "../../next-call-plan";
-import { syntheticReport } from "./synthetic-report";
+import { DipakOverview } from "../../dipak-overview";
+import { syntheticReport, syntheticCallRecord } from "./synthetic-report";
 import styles from "./synthetic-report-preview.module.css";
 
 type SelectedSource = { evidence: ReportEvidence; title: string };
@@ -41,6 +42,19 @@ export function SyntheticReportPreview() {
         <ReportModes
           label="Synthetic report sections"
           panels={[
+            {
+              id: "overview",
+              label: "Overview",
+              compactLabel: "Overview",
+              content: (
+                <DipakOverview
+                  showHeading={false}
+                  report={syntheticReport}
+                  onSelectEvidence={selectSource}
+                  callRecord={syntheticCallRecord}
+                />
+              ),
+            },
             {
               id: "skills",
               label: "Sales skills",
