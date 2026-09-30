@@ -295,11 +295,11 @@ def test_numeric_key_guard_still_rejects_score_bearing_identifier_tokens(key: st
 
 
 def test_report_validator_revision_pins_reviewed_source_and_numeric_key_semantics() -> None:
-    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/6"
-    # AUT-59 changes overview admission; retained recovery must use a new identity.
+    assert REPORT_VALIDATOR_REVISION == "ac.sales-xray.report-validator/7"
+    # AUT-360 changes evidence admission; retained recovery must use a new identity.
     source = Path(reports_module.__file__).read_text(encoding="utf-8")
     assert hashlib.sha256(source.encode("utf-8")).hexdigest() == (
-        "8d441ad920bd2a68dd6ce1e6e0112db686d823b9a146b6aa9fb42921672b637a"
+        "0a71edccde293b36c60ed5d262c454407e7b8aa0e06c83f299a2df2eef1b6bbe"
     )
 
 
@@ -357,7 +357,7 @@ def test_c5_offsets_are_python_codepoint_ranges_for_unicode_text() -> None:
         },
         {"segment_id": "s1", "quote_start": 0, "quote_end": 0},
         {"segment_id": "s1", "quote_start": -1, "quote_end": 4},
-        {"segment_id": "s1", "quote_start": 0, "quote_end": 10_000},
+        {"segment_id": "s1", "quote_start": 1, "quote_end": 10_000},
     ],
 )
 def test_c5_references_reject_mixed_fields_and_invalid_bounds(

@@ -107,7 +107,7 @@ def test_all_eleven_nested_paths_have_an_explicit_array_in_the_prompt() -> None:
         ("improvement_details", 0, "what_happened"),
     ],
 )
-def test_four_valid_source_spans_remain_rejected_at_source_note_bound(
+def test_four_valid_source_spans_are_capped_before_model_validation(
     path: tuple[str | int, ...],
 ) -> None:
     transcript, draft = full_overview_case(count=4)
@@ -121,8 +121,12 @@ def test_four_valid_source_spans_remain_rejected_at_source_note_bound(
     assert ((*path, "evidence"), "too_long") in {
         (tuple(error["loc"]), error["type"]) for error in exc.value.errors()
     }
-    with pytest.raises(reports.ReportError, match="report_evidence_invalid"):
-        reports.parse_report_draft(draft, transcript)
+    parsed = reports.parse_report_draft(draft, transcript)
+    assert parsed.overview is not None
+    note = parsed.overview.model_dump(mode="json")
+    for key in path:
+        note = note[key]
+    assert note["evidence"] == [_evidence(transcript, index) for index in range(3)]
 
 
 @pytest.mark.parametrize(
