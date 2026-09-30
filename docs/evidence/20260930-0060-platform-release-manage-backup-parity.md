@@ -33,12 +33,18 @@ identity remains mandatory; an older-head snapshot cannot prove the new head.
   capabilities, and rejects release management at tenant and program scopes.
   SQLite model creation and the existing parametrised persistence checks pass.
 - Existing PostgreSQL grant/replay/revocation/atomic-audit service test: 1 passed.
+- The existing organisation migration test upgraded its fixture to 0060 but
+  failed its old fixed 0054 head assertion. Under Unjam rule 1, the scope extends
+  only to that one assertion in
+  `tests/integration/test_organisations_migration_postgresql.py`; table, role and
+  index assertions are unchanged. The corrected test passes on PostgreSQL.
 - Three Admin web test files: 69 passed, including all seven permissions together,
   unknown-value rejection, both new labels, and explicit login navigation.
 - Direct contract-only assertions pass for helper equality, checked-in revision
   membership, and every versioned table inventory/count. These do not exercise
   root ownership checks.
-- Repository format, lint and type checks are recorded on the pull request.
+- Repository formatting, workspace frontend lint/types, Python lint/types, and
+  migration/recovery-script formatting/lint pass.
 
 The local account has no sudo access. The full root-owned backup/restore metadata
 suite runs in the existing Control-plane validation CI gate; local contract
