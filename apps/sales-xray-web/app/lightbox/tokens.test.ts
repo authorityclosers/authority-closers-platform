@@ -282,6 +282,20 @@ describe("Lightbox token derivative", () => {
     files.push(join(appDir, "profile-menu.module.css"));
     // The report navigation (tab strip, section list, return control).
     files.push(join(appDir, "report-modes.module.css"));
+    // Every report module follows the app theme, dark included.
+    for (const name of [
+      "call-map.module.css",
+      "speaker.module.css",
+      "dipak-overview.module.css",
+      "prospect-snapshot.module.css",
+      "report-moments.module.css",
+      "sales-skills.module.css",
+      "next-call-plan.module.css",
+      "report-transcript.module.css",
+      "report-factors.module.css",
+      "report-explorer.module.css",
+    ])
+      files.push(join(appDir, name));
     const offenders = files
       .filter((path) => !path.endsWith(join("lightbox", "tokens.css")))
       .filter((path) =>

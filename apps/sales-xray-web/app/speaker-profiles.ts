@@ -15,7 +15,7 @@ import type {
 } from "./report-contract";
 import { speakerIcon } from "./speaker-icons";
 
-export type SpeakerRole = "you" | "prospect" | "other";
+export type SpeakerRole = "you" | "salesperson" | "prospect" | "other";
 export type SpeakerProfile = Readonly<{
   name: string;
   role: SpeakerRole | null;
@@ -62,7 +62,10 @@ function parse(raw: string | null): SpeakerProfiles {
             ? name.trim().slice(0, MAX_SPEAKER_NAME)
             : "",
         role:
-          role === "you" || role === "prospect" || role === "other"
+          role === "you" ||
+          role === "salesperson" ||
+          role === "prospect" ||
+          role === "other"
             ? role
             : null,
         icon: typeof icon === "string" && speakerIcon(icon) ? icon : null,
@@ -248,4 +251,133 @@ export function suggestYou(
   if (coached && (coaching.get(coached) ?? 0) / total >= 0.6)
     return { speakerId: coached, reason: "coaching" };
   return null;
+}
+
+// Words that follow "my name is" / "this is" / greetings but are not names.
+const NOT_NAMES = new Set(
+  [
+    "है",
+    "हूं",
+    "हूँ",
+    "से",
+    "जी",
+    "आप",
+    "मैं",
+    "हम",
+    "हां",
+    "सर",
+    "मेरा",
+    "मेरी",
+    "sir",
+    "ji",
+    "madam",
+    "the",
+    "a",
+    "an",
+    "my",
+    "i",
+    "your",
+    "calling",
+    "speaking",
+    "here",
+    "regarding",
+    "about",
+    "from",
+    "for",
+    "with",
+    "dr",
+    "dr.",
+    "mr",
+    "mr.",
+    "mrs",
+    "ms",
+  ].map((word) => word.toLocaleLowerCase()),
+);
+const NAME = "([\\p{L}\\p{M}][\\p{L}\\p{M}'’-]*)";
+// Phrases must start a word: "Hi am I…" is not "I am …".
+const START = "(?<![\\p{L}\\p{M}])";
+const SELF_INTRODUCTIONS = [
+  new RegExp(
+    `${START}(?:मेरा नाम|my name is|myself|this is|i am|i'm)\\s+${NAME}`,
+    "iu",
+  ),
+  new RegExp(
+    `${START}(?:मैं|main)\\s+${NAME}\\s+(?:बोल रहा|बोल रही|bol raha|bol rahi)`,
+    "iu",
+  ),
+];
+const GREETINGS = [
+  new RegExp(`${START}${NAME}\\s+जी\\s*,?\\s*(?:नमस्ते|नमस्कार)`, "u"),
+  new RegExp(
+    `${START}(?:नमस्ते|नमस्कार|hello|hi|hey)\\s+${NAME}(\\s+जी)?`,
+    "iu",
+  ),
+];
+/** Introductions happen early: only the first minutes are read. */
+const NAME_WINDOW_MS = 150_000;
+
+function nameFrom(match: RegExpMatchArray | null): string | null {
+  const word = match?.[1]?.trim();
+  if (!word || Array.from(word).length < 2) return null;
+  if (NOT_NAMES.has(word.toLocaleLowerCase())) return null;
+  return word;
+}
+
+export type SpokenNames = Readonly<{
+  /** A spoken name per speaker label, spelled as spoken. */
+  names: Readonly<Record<string, string>>;
+  /** Speaker labels that introduced themselves, in order. */
+  introducers: readonly string[];
+}>;
+
+/**
+ * Names people say about themselves or call each other in the opening of the
+ * call: "मेरा नाम मानस है" names its own speaker; "नंदलाल जी नमस्ते" names the
+ * other person on a two-person call. Only a suggestion for the person to
+ * confirm; never read from how anyone sounds.
+ */
+export function detectSpokenNames(transcript: Transcript): SpokenNames {
+  const voices = [
+    ...new Set(
+      transcript.segments
+        .map((segment) => segment.speaker_id)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const names: Record<string, string> = {};
+  const introducers: string[] = [];
+  for (const segment of transcript.segments) {
+    if (segment.start_ms > NAME_WINDOW_MS) break;
+    const voice = segment.speaker_id;
+    if (voice === null) continue;
+    for (const pattern of SELF_INTRODUCTIONS) {
+      const name = nameFrom(segment.text.match(pattern));
+      if (!name) continue;
+      if (!names[voice]) names[voice] = name;
+      if (!introducers.includes(voice)) introducers.push(voice);
+    }
+    if (voices.length !== 2) continue;
+    const other = voices.find((id) => id !== voice);
+    for (const pattern of GREETINGS) {
+      const match = segment.text.match(pattern);
+      const name = nameFrom(match);
+      if (!name || !other || names[other]) continue;
+      const honorific =
+        Boolean(match?.[2]) ||
+        /जी\s*,?\s*(?:नमस्ते|नमस्कार)/u.test(match?.[0] ?? "");
+      names[other] = honorific ? `${name} जी` : name;
+    }
+  }
+  return { names, introducers };
+}
+
+/** Whether a spoken name is the account holder's own first name. */
+export function isAccountName(
+  spoken: string | undefined,
+  accountName: string | null,
+): boolean {
+  const first = firstName(accountName);
+  if (!spoken || !first) return false;
+  const bare = spoken.replace(/\s+जी$/u, "").toLocaleLowerCase();
+  return bare === first.toLocaleLowerCase();
 }

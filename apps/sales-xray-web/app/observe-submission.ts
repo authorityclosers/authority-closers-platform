@@ -1,11 +1,13 @@
 import {
   acquisition,
   parseProgress,
+  record,
   submissionPath,
   type Submission,
 } from "./acquisition-client";
 import { parseProcessingPlan } from "./call-studio";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
+import { parseCallRecord, type CallRecord } from "./call-record-contract";
 
 // Bound a status read, not provider execution. A timeout leaves the last saved
 // stage intact and allows the user to check again without starting work.
@@ -58,5 +60,13 @@ export async function observeSubmission(
     { submissionId: bound.id, recordingId: bound.recordingId },
     transcript,
   );
-  return { progress, result: { ...verified, transcript } };
+  let callRecord: CallRecord | null = null;
+  try {
+    callRecord = parseCallRecord(
+      record(await read(`${submissionPath(bound.id)}/call-record`, signal)),
+    );
+  } catch {
+    callRecord = null;
+  }
+  return { progress, result: { ...verified, transcript, callRecord } };
 }
