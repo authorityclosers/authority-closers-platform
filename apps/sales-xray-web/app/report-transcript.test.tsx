@@ -376,10 +376,14 @@ it("keeps prospect brand mentions eligible while excluding unconfirmed voices", 
 
   await act(async () => root.render(null));
   localStorage.clear();
+  saveSpeakerProfiles(callId, {
+    "speaker-1": { name: "Speaker 1", role: null, icon: null },
+    "speaker-2": { name: "Speaker 2", role: null, icon: null },
+  });
   const unknownRole = transcriptWithSegments(2);
   unknownRole.segments[0].text = "We can discuss the next step.";
   unknownRole.segments[1].text = "My brother uses WhatsApp.";
-  await render(unknownRole, undefined, "en", true, true, null);
+  await render(unknownRole, undefined, "en", true, true, callId);
   segments = [...container.querySelectorAll<HTMLElement>("[data-segment-id]")];
   expect(segments[1].textContent).toContain("My brother uses WhatsApp.");
   expect(segments[1].querySelector('[data-kind="brand"]')).toBeNull();
