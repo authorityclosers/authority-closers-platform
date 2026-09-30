@@ -28,8 +28,8 @@ from ac_platform.conversation_intelligence import (
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
+from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
-from ac_platform.identity import sales_xray_profile_models
 from ac_platform.knowledge import models as knowledge_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
@@ -42,6 +42,7 @@ from ac_platform.tenancy import models as tenancy_models
 
 MODEL_MODULES = (
     identity_models,
+    google_profile_models,
     sales_xray_profile_models,
     tenancy_models,
     app_update_models,
