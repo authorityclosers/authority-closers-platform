@@ -7,6 +7,7 @@ import {
   createStudioRevision,
   grantEnrollment,
   loadAdminSession,
+  loadMemberDirectory,
   loadStudioProgram,
   loadStudioPrograms,
   loadStudioReadiness,
@@ -886,6 +887,43 @@ describe("same-origin admin API composition", () => {
       membershipRole: "learner",
       permissions: [],
       studioCapabilities: [capability],
+    });
+  });
+  it("parses the organisation member role in the admin directory", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        tenant_id: tenantId,
+        tenant_name: "Authority Closers",
+        members: [
+          {
+            person_id: personId,
+            display_name: "Team Member",
+            username: null,
+            masked_email: "m***@authorityclosers.com",
+            membership_role: "member",
+            membership_status: "active",
+            account_status: "active",
+            email_verified: true,
+            joined_at: "2026-08-30T00:00:00Z",
+            active_enrollments: 0,
+          },
+        ],
+        summary: {
+          total: 1,
+          active_learners: 0,
+          team: 1,
+          unverified: 0,
+        },
+        matching_count: 1,
+        page: 1,
+        page_size: 25,
+      }),
+    );
+
+    await expect(
+      loadMemberDirectory({ tenantId, fetcher }),
+    ).resolves.toMatchObject({
+      members: [{ membership_role: "member" }],
     });
   });
   it("requires both canonical product identity and selected admin context", async () => {

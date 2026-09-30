@@ -3,13 +3,14 @@
 import {
   MessagesSquare,
   Play,
-  Repeat2,
+  MessageCircleQuestion,
   Sparkles,
   Target,
   Timer,
 } from "lucide-react";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -17,6 +18,7 @@ import {
   type PointerEvent,
 } from "react";
 
+import { talkShareSeries, questionsAsked } from "./call-data";
 import { formatClock } from "./lightbox/time";
 import type {
   Finding,
@@ -31,7 +33,9 @@ import { SpeakerAvatar } from "./speaker-avatar";
 import { SpeakerEditor } from "./speaker-editor";
 import { suggestProspectIcon } from "./speaker-icons";
 import {
+  detectSpokenNames,
   firstName,
+  isAccountName,
   suggestYou,
   useSpeakerProfiles,
   voiceStyle,
@@ -39,7 +43,12 @@ import {
 } from "./speaker-profiles";
 import styles from "./call-map.module.css";
 
-const ROLE_LABELS = { you: "You", prospect: "Prospect", other: "Other" };
+const ROLE_LABELS = {
+  you: "You",
+  salesperson: "Salesperson",
+  prospect: "Prospect",
+  other: "Other",
+};
 
 const BIN_COUNT = 180;
 // A switch within this gap still counts as the same person holding the floor.
@@ -51,14 +60,37 @@ const STEP_MS = 5000;
 const PAGE_MS = 30000;
 
 const KINDS = [
-  { key: "strengths", label: "Strength", tone: "strength" },
-  { key: "objection_analysis", label: "Objection", tone: "objection" },
-  { key: "missed_opportunities", label: "Missed", tone: "missed" },
+  { key: "strengths", label: "Done well", tone: "strength" },
+  { key: "objection_analysis", label: "Pushback", tone: "objection" },
+  { key: "missed_opportunities", label: "Missed chance", tone: "missed" },
   { key: "closing_analysis", label: "Closing", tone: "closing" },
   { key: "improvements", label: "To improve", tone: "improve" },
 ] as const;
 
 type Tone = (typeof KINDS)[number]["tone"];
+
+/** What the band under the waveform shows: one view at a time. */
+type Lens = "who" | "stages" | "talk-share";
+const LENSES: Array<{ key: Lens; label: string }> = [
+  { key: "who", label: "Who talked" },
+  { key: "stages", label: "Call stages" },
+  { key: "talk-share", label: "Talk share by minute" },
+];
+const LENS_KEY = "ac.xray.map-lens";
+
+function readLens(): Lens {
+  try {
+    const saved =
+      typeof window === "undefined" ? null : localStorage.getItem(LENS_KEY);
+    if (saved === "talk-share" || saved === "interest") return "talk-share";
+    // The owner keeps all three lenses (30 Sep); stages fill in once the
+    // analysis marks them (call-map contract, AUT-344).
+    if (saved === "stages") return "stages";
+    return "who";
+  } catch {
+    return "who";
+  }
+}
 type Marker = {
   key: string;
   tone: Tone;
@@ -184,6 +216,53 @@ function binOwners(lanes: Lane[], total: number) {
   });
 }
 
+function reportMarkers(report: SalesReport, total: number): Marker[] {
+  return KINDS.flatMap((kind) =>
+    ((report[kind.key] as Finding[] | undefined) ?? []).flatMap(
+      (finding, index) => {
+        const evidence = finding.evidence[0];
+        if (!evidence) return [];
+        return [
+          {
+            key: `${kind.key}-${index}`,
+            tone: kind.tone,
+            kind: kind.label,
+            title: finding.title,
+            evidence,
+            x: Math.min(100, Math.max(0, (evidence.start_ms / total) * 100)),
+          },
+        ];
+      },
+    ),
+  );
+}
+
+/** Where a key press on a call slider moves playback, or null. */
+function keyTarget(key: string, currentMs: number, total: number) {
+  const at = (ms: number) => Math.min(total - 1, Math.max(0, ms));
+  switch (key) {
+    case "ArrowRight":
+    case "ArrowUp":
+      return at(currentMs + STEP_MS);
+    case "ArrowLeft":
+    case "ArrowDown":
+      return at(currentMs - STEP_MS);
+    case "PageUp":
+      return at(currentMs + PAGE_MS);
+    case "PageDown":
+      return at(currentMs - PAGE_MS);
+    case "Home":
+      return 0;
+    case "End":
+      return at(total);
+    case "Enter":
+    case " ":
+      return at(currentMs);
+    default:
+      return null;
+  }
+}
+
 /** The transcript segment being spoken at `ms`, if any. */
 function segmentAt(
   segments: TranscriptSegment[],
@@ -230,6 +309,7 @@ export function CallMap({
     anchor: HTMLElement;
   } | null>(null);
   const [declined, setDeclined] = useState<string[]>([]);
+  const [lens, setLens] = useState<Lens>(readLens);
   const { profiles, save, canSave } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const total = Math.max(1, durationMs);
@@ -253,11 +333,23 @@ export function CallMap({
     () => suggestYou(transcript, report, accountName),
     [transcript, report, accountName],
   );
+  const spoken = useMemo(() => detectSpokenNames(transcript), [transcript]);
   const prospectIcon = useMemo(
     () => suggestProspectIcon(`${report.summary} ${report.verdict}`),
     [report],
   );
   const closeEditor = useCallback(() => setEditing(null), []);
+  // Scrolling clears the hover peek, so the waveform folds away clean.
+  useEffect(() => {
+    if (hover === null) return;
+    const clear = () => setHover(null);
+    document.addEventListener("scroll", clear, {
+      capture: true,
+      passive: true,
+    });
+    return () =>
+      document.removeEventListener("scroll", clear, { capture: true });
+  }, [hover]);
   const levels = envelope
     ? waveformBins(envelope, 0, envelope.duration_ms, BIN_COUNT)
     : null;
@@ -281,29 +373,97 @@ export function CallMap({
     (lane) => lane.speakerId !== null && profiles[lane.speakerId],
   );
 
-  // One-tap confirmation of who "you" are, suggested from what was said.
-  const hasYou = Object.values(profiles).some(
-    (profile) => profile.role === "you",
+  function chooseLens(next: Lens) {
+    setLens(next);
+    try {
+      localStorage.setItem(LENS_KEY, next);
+    } catch {
+      // A remembered view is a convenience only.
+    }
+  }
+
+  // A role-specific talk-share view needs a confirmed prospect or seller role.
+  const prospectVoice = (() => {
+    const named = facts.voices.find((id) => profiles[id]?.role === "prospect");
+    if (named) return named;
+    const seller = facts.voices.find(
+      (id) =>
+        profiles[id]?.role === "you" || profiles[id]?.role === "salesperson",
+    );
+    if (seller && facts.voices.length === 2)
+      return facts.voices.find((id) => id !== seller) ?? null;
+    return null;
+  })();
+  const activeLens = lens;
+  const talkShare = useMemo(
+    () => (prospectVoice ? talkShareSeries(transcript, prospectVoice) : []),
+    [transcript, prospectVoice],
   );
+  const talkSharePath = (() => {
+    if (!talkShare.length) return null;
+    const points = talkShare.map((share, bin) => [
+      Math.min(total, (bin + 0.5) * 60_000),
+      1 - (share ?? 0) * 0.92,
+    ]);
+    const line = points
+      .map(
+        ([x, y], index) =>
+          `${index ? "L" : "M"}${x.toFixed(0)} ${y.toFixed(3)}`,
+      )
+      .join(" ");
+    return {
+      line,
+      area: `${line} L${points[points.length - 1][0].toFixed(0)} 1 L${points[0][0].toFixed(0)} 1 Z`,
+    };
+  })();
+  const questionsPerLane = useMemo(() => {
+    const counts = new Array<number>(Math.max(1, lanes.length)).fill(0);
+    for (const row of questionsAsked(transcript)) {
+      const lane = laneOf[facts.voices.indexOf(row.voice)];
+      if (lane !== undefined) counts[lane] += 1;
+    }
+    return counts;
+  }, [transcript, laneOf, lanes.length, facts.voices]);
+
+  // One tap confirms who sold on this call, suggested from what was said:
+  // "you" only when the seller says (or is greeted with) your own name,
+  // otherwise the salesperson, named as they introduced themselves.
+  const hasSeller = Object.values(profiles).some(
+    (profile) => profile.role === "you" || profile.role === "salesperson",
+  );
+  const seller =
+    suggestion?.speakerId ??
+    (spoken.introducers.length === 1 &&
+    isAccountName(spoken.names[spoken.introducers[0]], accountName)
+      ? spoken.introducers[0]
+      : null);
   // "No" on a two-person call asks about the other voice instead.
   const askId: string | null =
-    canSave && !hasYou && suggestion && lanes.length > 1
-      ? !declined.includes(suggestion.speakerId)
-        ? suggestion.speakerId
+    canSave && !hasSeller && seller && lanes.length > 1
+      ? !declined.includes(seller)
+        ? seller
         : facts.voices.length === 2
           ? (facts.voices.find(
-              (id) => id !== suggestion.speakerId && !declined.includes(id),
+              (id) => id !== seller && !declined.includes(id),
             ) ?? null)
           : null
       : null;
   const askVoice = askId === null ? -1 : facts.voices.indexOf(askId);
+  const askIsYou =
+    askId !== null &&
+    ((suggestion?.reason === "introduction" &&
+      suggestion.speakerId === askId) ||
+      isAccountName(spoken.names[askId], accountName));
 
-  function confirmYou(speakerId: string) {
+  function confirmSeller(speakerId: string, asYou: boolean) {
     const changes: Record<string, SpeakerProfile> = {
       [speakerId]: {
-        name: profiles[speakerId]?.name || accountName || "",
-        role: "you",
-        icon: null,
+        name:
+          profiles[speakerId]?.name ||
+          (asYou ? accountName : spoken.names[speakerId]) ||
+          "",
+        role: asYou ? "you" : "salesperson",
+        icon: profiles[speakerId]?.icon ?? null,
       },
     };
     // On a two-person call the other voice is the prospect.
@@ -312,7 +472,7 @@ export function CallMap({
       const current = other ? profiles[other] : undefined;
       if (other && !current?.role)
         changes[other] = {
-          name: current?.name ?? "",
+          name: current?.name || spoken.names[other] || "",
           role: "prospect",
           icon: current?.icon ?? prospectIcon,
         };
@@ -323,24 +483,7 @@ export function CallMap({
   const editingLane = editingVoice === null ? null : lanes[editingVoice];
   const editingId = editingLane?.speakerId ?? null;
 
-  const markers: Marker[] = KINDS.flatMap((kind) =>
-    ((report[kind.key] as Finding[] | undefined) ?? []).flatMap(
-      (finding, index) => {
-        const evidence = finding.evidence[0];
-        if (!evidence) return [];
-        return [
-          {
-            key: `${kind.key}-${index}`,
-            tone: kind.tone,
-            kind: kind.label,
-            title: finding.title,
-            evidence,
-            x: Math.min(100, Math.max(0, (evidence.start_ms / total) * 100)),
-          },
-        ];
-      },
-    ),
-  );
+  const markers = reportMarkers(report, total);
   const present = KINDS.filter((kind) =>
     markers.some((marker) => marker.tone === kind.tone),
   );
@@ -365,23 +508,7 @@ export function CallMap({
   }
 
   function seekBy(event: KeyboardEvent<HTMLElement>) {
-    const at = (ms: number) => Math.min(total - 1, Math.max(0, ms));
-    const target =
-      event.key === "ArrowRight" || event.key === "ArrowUp"
-        ? at(currentTimeMs + STEP_MS)
-        : event.key === "ArrowLeft" || event.key === "ArrowDown"
-          ? at(currentTimeMs - STEP_MS)
-          : event.key === "PageUp"
-            ? at(currentTimeMs + PAGE_MS)
-            : event.key === "PageDown"
-              ? at(currentTimeMs - PAGE_MS)
-              : event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? at(total - STEP_MS)
-                  : event.key === "Enter" || event.key === " "
-                    ? at(currentTimeMs)
-                    : null;
+    const target = keyTarget(event.key, currentTimeMs, total);
     if (target === null) return;
     event.preventDefault();
     onSeek(target);
@@ -393,107 +520,36 @@ export function CallMap({
       aria-label="Call map"
       data-focus={focusTone ?? undefined}
       style={
-        { "--lanes": lanes.length > 1 ? lanes.length : 0 } as CSSProperties
+        {
+          "--lanes":
+            activeLens === "who"
+              ? lanes.length > 1
+                ? lanes.length
+                : 0
+              : activeLens === "talk-share"
+                ? 4
+                : 2,
+        } as CSSProperties
       }
     >
       <div className={styles.card}>
         <div className={styles.head}>
-          {lanes.length > 1 ? (
-            <div className={styles.who}>
-              <div
-                className={styles.speakers}
-                role="group"
-                aria-label="Speakers"
-                data-speaker-chips
+          <div
+            className={styles.lenses}
+            role="group"
+            aria-label="What the map shows"
+          >
+            {LENSES.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={activeLens === option.key}
+                onClick={() => chooseLens(option.key)}
               >
-                {lanes.map((lane) => {
-                  const profile = lane.speakerId
-                    ? profiles[lane.speakerId]
-                    : undefined;
-                  const editable = canSave && lane.speakerId !== null;
-                  const name = laneName(lane);
-                  return (
-                    <button
-                      key={lane.lane}
-                      type="button"
-                      className={styles.speaker}
-                      data-voice={lane.lane}
-                      style={voiceStyle(lane.lane)}
-                      aria-expanded={
-                        editable ? editingVoice === lane.lane : undefined
-                      }
-                      aria-label={editable ? `Edit ${name}` : name}
-                      onPointerEnter={() => setHoverVoice(lane.lane)}
-                      onPointerLeave={() => setHoverVoice(null)}
-                      onClick={(event) => {
-                        if (!editable) return;
-                        const anchor = event.currentTarget;
-                        setEditing((current) =>
-                          current?.voice === lane.lane
-                            ? null
-                            : { voice: lane.lane, anchor },
-                        );
-                      }}
-                    >
-                      {lane.speakerId !== null ? (
-                        <SpeakerAvatar
-                          voice={lane.lane}
-                          profile={profile}
-                          youName={accountName}
-                        />
-                      ) : (
-                        <i aria-hidden="true" />
-                      )}
-                      <span className={styles.speakerName}>{name}</span>
-                      {profile?.role ? (
-                        <small>{ROLE_LABELS[profile.role]}</small>
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {editing !== null && editingId !== null ? (
-                  <SpeakerEditor
-                    key={editingId}
-                    voice={editing.voice}
-                    anchor={editing.anchor}
-                    label={`Speaker ${editing.voice + 1}`}
-                    share={ratio[editing.voice] ?? 0}
-                    sample={samples.get(editingId) ?? null}
-                    profile={profiles[editingId]}
-                    youName={accountName}
-                    suggestedIcon={prospectIcon}
-                    onSave={(profile) => {
-                      if (!save({ [editingId]: profile })) return false;
-                      setEditing(null);
-                      return true;
-                    }}
-                    onClose={closeEditor}
-                  />
-                ) : null}
-              </div>
-              {askId !== null && askVoice >= 0 ? (
-                <span className={styles.ask} role="status">
-                  <Sparkles size={13} aria-hidden="true" />
-                  <span>
-                    <b>{nameOf(askVoice)}</b> looks like you
-                  </span>
-                  <button type="button" onClick={() => confirmYou(askId)}>
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDeclined((current) => [...current, askId])
-                    }
-                  >
-                    No
-                  </button>
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            <span />
-          )}
+                {option.label}
+              </button>
+            ))}
+          </div>
           <span className={styles.legend}>
             {present.map((kind) => (
               <span
@@ -508,6 +564,127 @@ export function CallMap({
             ))}
           </span>
         </div>
+        <div className={styles.subhead}>
+          {activeLens === "who" ? (
+            lanes.length > 1 ? (
+              <div className={styles.who}>
+                <div
+                  className={styles.speakers}
+                  role="group"
+                  aria-label="Speakers"
+                  data-speaker-chips
+                >
+                  {lanes.map((lane) => {
+                    const profile = lane.speakerId
+                      ? profiles[lane.speakerId]
+                      : undefined;
+                    const editable = canSave && lane.speakerId !== null;
+                    const name = laneName(lane);
+                    return (
+                      <button
+                        key={lane.lane}
+                        type="button"
+                        className={styles.speaker}
+                        data-voice={lane.lane}
+                        style={voiceStyle(lane.lane)}
+                        aria-expanded={
+                          editable ? editingVoice === lane.lane : undefined
+                        }
+                        aria-label={editable ? `Edit ${name}` : name}
+                        onPointerEnter={() => setHoverVoice(lane.lane)}
+                        onPointerLeave={() => setHoverVoice(null)}
+                        onClick={(event) => {
+                          if (!editable) return;
+                          const anchor = event.currentTarget;
+                          setEditing((current) =>
+                            current?.voice === lane.lane
+                              ? null
+                              : { voice: lane.lane, anchor },
+                          );
+                        }}
+                      >
+                        {lane.speakerId !== null ? (
+                          <SpeakerAvatar
+                            voice={lane.lane}
+                            profile={profile}
+                            youName={accountName}
+                          />
+                        ) : (
+                          <i aria-hidden="true" />
+                        )}
+                        <span className={styles.speakerName}>{name}</span>
+                        {profile?.role ? (
+                          <small>{ROLE_LABELS[profile.role]}</small>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {editing !== null && editingId !== null ? (
+                    <SpeakerEditor
+                      key={editingId}
+                      voice={editing.voice}
+                      anchor={editing.anchor}
+                      label={`Speaker ${editing.voice + 1}`}
+                      share={ratio[editing.voice] ?? 0}
+                      sample={samples.get(editingId) ?? null}
+                      profile={profiles[editingId]}
+                      youName={accountName}
+                      suggestedIcon={prospectIcon}
+                      onSave={(profile) => {
+                        if (!save({ [editingId]: profile })) return false;
+                        setEditing(null);
+                        return true;
+                      }}
+                      onClose={closeEditor}
+                    />
+                  ) : null}
+                </div>
+                {askId !== null && askVoice >= 0 ? (
+                  <span className={styles.ask} role="status">
+                    <Sparkles size={13} aria-hidden="true" />
+                    <span>
+                      <b>{nameOf(askVoice)}</b>
+                      {spoken.names[askId] && !askIsYou
+                        ? ` · ${spoken.names[askId]}`
+                        : ""}{" "}
+                      {askIsYou ? "looks like you" : "is the salesperson"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => confirmSeller(askId, askIsYou)}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDeclined((current) => [...current, askId])
+                      }
+                    >
+                      No
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <span className={styles.note}>One voice on this call.</span>
+            )
+          ) : activeLens === "stages" ? (
+            <span className={styles.note}>
+              Stages (hello, questions, pitch, wrap-up) show here once the
+              analysis marks them.
+            </span>
+          ) : prospectVoice ? (
+            <span className={styles.note}>
+              <b>{nameOf(facts.voices.indexOf(prospectVoice))}</b> talk share in
+              each minute of the call.
+            </span>
+          ) : (
+            <span className={styles.note}>
+              Assign a speaker role to view talk share.
+            </span>
+          )}
+        </div>
 
         <div className={styles.timeline}>
           {turn ? (
@@ -520,12 +697,19 @@ export function CallMap({
               }}
             />
           ) : null}
-          <div className={styles.track}>
+          <div className={styles.track} data-morph-source>
             {levels ? (
               <svg
                 className={styles.wave}
-                data-voice={focusVoice ?? undefined}
-                style={focusVoice !== null ? voiceStyle(focusVoice) : undefined}
+                data-morph-wave
+                data-voice={
+                  activeLens === "who" ? (focusVoice ?? undefined) : undefined
+                }
+                style={
+                  activeLens === "who" && focusVoice !== null
+                    ? voiceStyle(focusVoice)
+                    : undefined
+                }
                 viewBox={`0 0 ${BIN_COUNT * 4} 56`}
                 preserveAspectRatio="none"
                 aria-hidden="true"
@@ -541,7 +725,9 @@ export function CallMap({
                         : styles.pending;
                   const hot = hoverBin >= 0 && Math.abs(index - hoverBin) <= 1;
                   const dim =
-                    focusVoice !== null && owners[index] !== focusVoice;
+                    activeLens === "who" &&
+                    focusVoice !== null &&
+                    owners[index] !== focusVoice;
                   return (
                     <line
                       key={index}
@@ -562,7 +748,11 @@ export function CallMap({
                 })}
               </svg>
             ) : (
-              <div className={styles.noWave} aria-hidden="true" />
+              <div
+                className={styles.noWave}
+                data-morph-wave
+                aria-hidden="true"
+              />
             )}
             {markers.map((marker) => (
               <button
@@ -592,7 +782,7 @@ export function CallMap({
               </button>
             ))}
           </div>
-          {lanes.length > 1 ? (
+          {activeLens === "who" && lanes.length > 1 ? (
             <div className={styles.lanes} aria-hidden="true">
               {lanes.map((lane) => (
                 <svg
@@ -619,6 +809,21 @@ export function CallMap({
                   ))}
                 </svg>
               ))}
+            </div>
+          ) : null}
+          {activeLens === "stages" ? (
+            <div className={styles.stagesEmpty} aria-hidden="true" />
+          ) : null}
+          {activeLens === "talk-share" && talkSharePath ? (
+            <div className={styles.interest} aria-hidden="true">
+              <svg viewBox={`0 0 ${total} 1`} preserveAspectRatio="none">
+                <path className={styles.interestArea} d={talkSharePath.area} />
+                <path
+                  className={styles.interestLine}
+                  d={talkSharePath.line}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
             </div>
           ) : null}
           {progress > 0 ? (
@@ -720,7 +925,7 @@ export function CallMap({
           </span>
           <span className={styles.body}>
             <small>
-              Talk ratio
+              Who talked more
               {named ? ` · ${lanes.map(laneName).join(" : ")}` : ""}
             </small>
             <b>{lanes.length > 1 ? ratio.join(" : ") : "One voice"}</b>
@@ -746,7 +951,7 @@ export function CallMap({
           </span>
           <span className={styles.body}>
             <small>
-              Longest monologue
+              Longest non-stop talk
               {facts.longest.voice >= 0
                 ? ` · ${nameOf(facts.longest.voice)}`
                 : ""}
@@ -756,13 +961,15 @@ export function CallMap({
         </div>
         <div className={styles.stat} data-tone="blue">
           <span className={styles.icon} aria-hidden="true">
-            <Repeat2 size={15} />
+            <MessageCircleQuestion size={15} />
           </span>
           <span className={styles.body}>
-            <small>Speaker switches</small>
+            <small>
+              Questions asked
+              {lanes.length > 1 ? ` · ${lanes.map(laneName).join(" : ")}` : ""}
+            </small>
             <b>
-              {facts.switchesPerMinute.toFixed(1)}
-              <small> / min</small>
+              {questionsPerLane.slice(0, Math.max(1, lanes.length)).join(" : ")}
             </b>
           </span>
         </div>
@@ -771,10 +978,10 @@ export function CallMap({
             <Target size={15} />
           </span>
           <span className={styles.body}>
-            <small>From this report</small>
+            <small>What the report found</small>
             <b>
               {wins}
-              <small> {wins === 1 ? "win" : "wins"} · </small>
+              <small> done well · </small>
               {toWorkOn}
               <small> to work on</small>
             </b>
@@ -789,5 +996,156 @@ export function CallMap({
         </div>
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * The call map folded into the pinned report row. Its waveform is drawn with
+ * exactly the same bars and proportions as the full one, so the report header
+ * can fold one into the other pixel for pixel. Hover shows a time, click or
+ * drag plays from there, arrow keys step through the call.
+ */
+export function CallMapMini({
+  report,
+  durationMs,
+  onSeek,
+}: {
+  report: SalesReport;
+  durationMs: number;
+  onSeek: (ms: number) => void;
+}) {
+  const { envelope, currentTimeMs, playing } = useSourceWaveform();
+  const [hover, setHover] = useState<number | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
+  const total = Math.max(1, durationMs);
+  const levels = envelope
+    ? waveformBins(envelope, 0, envelope.duration_ms, BIN_COUNT)
+    : null;
+  const progress = Math.min(1, Math.max(0, currentTimeMs / total));
+  const markers = reportMarkers(report, total);
+
+  function ratioAt(event: PointerEvent<HTMLElement>) {
+    const box = event.currentTarget.getBoundingClientRect();
+    if (box.width <= 0) return 0;
+    return Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+  }
+
+  return (
+    <div className={styles.mini} data-call-map-mini>
+      <span
+        className={styles.miniChrome}
+        data-morph-chrome
+        aria-hidden="true"
+      />
+      <span
+        className={styles.miniTime}
+        data-morph-chrome
+        data-live={hover !== null || progress > 0 ? "true" : undefined}
+      >
+        {formatClock(hover !== null ? hover * total : currentTimeMs)}
+      </span>
+      <div className={styles.miniTrack} data-morph-slot>
+        <div className={styles.miniLayer} data-morph-layer>
+          {levels ? (
+            <svg
+              className={styles.miniWave}
+              viewBox={`0 0 ${BIN_COUNT * 4} 56`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {levels.map((level, index) => {
+                // Same geometry as the full waveform, bar for bar.
+                const height = Math.max(1.5, Math.pow(level ?? 0, 0.55) * 25);
+                const center = (index + 0.5) / BIN_COUNT;
+                const tone =
+                  progress > 0 && center <= progress
+                    ? styles.played
+                    : hover !== null && center <= hover
+                      ? styles.ahead
+                      : styles.pending;
+                return (
+                  <line
+                    key={index}
+                    x1={index * 4 + 2}
+                    x2={index * 4 + 2}
+                    y1={28 - height}
+                    y2={28 + height}
+                    className={tone}
+                  />
+                );
+              })}
+            </svg>
+          ) : (
+            <div className={styles.noWave} aria-hidden="true" />
+          )}
+          {markers.map((marker) => (
+            <span
+              key={marker.key}
+              className={styles.miniDot}
+              data-morph-chrome
+              data-tone={marker.tone}
+              style={{ left: `${marker.x}%` }}
+              aria-hidden="true"
+            />
+          ))}
+          {progress > 0 ? (
+            <span
+              className={styles.miniHead}
+              data-morph-chrome
+              data-playing={playing ? "true" : undefined}
+              style={{ left: `${progress * 100}%` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          {hover !== null ? (
+            <span
+              className={styles.miniCursor}
+              style={{ left: `${hover * 100}%` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <div
+            className={styles.scrub}
+            role="slider"
+            tabIndex={0}
+            aria-label="Play the call from a point in time"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(total / 1000)}
+            aria-valuenow={Math.round(currentTimeMs / 1000)}
+            aria-valuetext={`${formatClock(currentTimeMs)} of ${formatClock(total)}`}
+            onPointerMove={(event) => setHover(ratioAt(event))}
+            onPointerLeave={() => {
+              if (!scrubbing) setHover(null);
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.currentTarget.setPointerCapture?.(event.pointerId);
+              setScrubbing(true);
+              setHover(ratioAt(event));
+            }}
+            onPointerUp={(event) => {
+              if (!scrubbing) return;
+              setScrubbing(false);
+              event.currentTarget.releasePointerCapture?.(event.pointerId);
+              onSeek(ratioAt(event) * total);
+              if (event.pointerType !== "mouse") setHover(null);
+            }}
+            onPointerCancel={() => {
+              setScrubbing(false);
+              setHover(null);
+            }}
+            onKeyDown={(event) => {
+              const target = keyTarget(event.key, currentTimeMs, total);
+              if (target === null) return;
+              event.preventDefault();
+              onSeek(target);
+            }}
+          />
+        </div>
+      </div>
+      <span className={styles.miniTotal} data-morph-chrome>
+        {formatClock(total)}
+      </span>
+    </div>
   );
 }

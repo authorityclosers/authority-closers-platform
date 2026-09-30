@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
@@ -51,6 +52,10 @@ from ac_platform.identity.email_login import (
     EMAIL_LOGIN_REQUEST_EVENT,
     EMAIL_LOGIN_RESEND_AFTER,
     EmailLoginCodeService,
+)
+from ac_platform.identity.google_profile import (
+    normalize_google_claims,
+    record_google_profile_claims,
 )
 from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
@@ -103,7 +108,14 @@ from ac_platform.tenancy.learner_provisioning import (
     LearnerConsentUpdateRequiredError,
     LearnerProvisioningError,
 )
-from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipRole,
+    MembershipStatus,
+    Organisation,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
@@ -160,6 +172,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         }
     ),
     "learner": frozenset(),
+    "member": frozenset(),
 }
 
 
@@ -854,8 +867,19 @@ def _set_onboarding_response_headers(response: Response, snapshot: OnboardingSna
     response.headers["cache-control"] = "private, no-store"
 
 
-def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorContext:
-    permissions = ROLE_PERMISSIONS.get(resolved.membership_role or "", frozenset())
+def _with_role_permissions(
+    resolved: ResolvedActorContext,
+    *,
+    is_organisation: bool = False,
+) -> ResolvedActorContext:
+    if is_organisation:
+        permissions = (
+            frozenset({"organisation_manage"})
+            if resolved.membership_role in {MembershipRole.OWNER.value, MembershipRole.ADMIN.value}
+            else frozenset()
+        )
+    else:
+        permissions = ROLE_PERMISSIONS.get(resolved.membership_role or "", frozenset())
     return replace(
         resolved,
         actor=ActorContext(
@@ -865,6 +889,24 @@ def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorConte
             permissions=permissions,
         ),
     )
+
+
+async def _resolved_with_role_permissions(
+    database: AsyncSession,
+    resolved: ResolvedActorContext,
+) -> ResolvedActorContext:
+    """Apply the distinct organisation role map after resolving tenant identity."""
+
+    tenant_id = resolved.actor.tenant_id
+    is_organisation = False
+    if tenant_id is not None:
+        is_organisation = (
+            await database.scalar(
+                select(Organisation.tenant_id).where(Organisation.tenant_id == tenant_id)
+            )
+            is not None
+        )
+    return _with_role_permissions(resolved, is_organisation=is_organisation)
 
 
 def _context_response(resolved: ResolvedActorContext) -> ContextResponse:
@@ -1559,7 +1601,9 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            resolved = _with_role_permissions(await identity.resolve_actor(token))
+            resolved = await _resolved_with_role_permissions(
+                database, await identity.resolve_actor(token)
+            )
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
@@ -1581,7 +1625,9 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            resolved = _with_role_permissions(await identity.resolve_actor_read_only(token))
+            resolved = await _resolved_with_role_permissions(
+                database, await identity.resolve_actor_read_only(token)
+            )
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
@@ -2175,6 +2221,24 @@ def install_identity_http(
             now=consented_at,
         )
 
+    async def _record_google_profile_claims_best_effort(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        assertion: VerifiedProviderAssertion,
+    ) -> None:
+        claims = normalize_google_claims(assertion)
+        try:
+            async with database.begin_nested():
+                await record_google_profile_claims(
+                    database,
+                    person_id,
+                    claims,
+                    datetime.now(UTC),
+                )
+        except Exception:
+            _LOGGER.warning("google_profile_claims_not_saved")
+
     async def _prefill_sales_xray_profile_name(
         database: AsyncSession,
         *,
@@ -2735,6 +2799,11 @@ def install_identity_http(
                     )
                     session_token = registered.session.token
                     issued_session_id = registered.session.metadata.id
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=registered.person.id,
+                        assertion=assertion,
+                    )
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
@@ -2770,6 +2839,11 @@ def install_identity_http(
                     )
                     session_token = issued.token
                     issued_session_id = issued.metadata.id
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=issued.metadata.person_id,
+                        assertion=assertion,
+                    )
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
                     # unscoped session; the learner surface must select its
@@ -2804,11 +2878,16 @@ def install_identity_http(
                         raise AuthenticationRequired(
                             "A valid Authority Closers session is required."
                         )
-                    await identity.link_provider_for_session(
+                    linked = await identity.link_provider_for_session(
                         link_session_token,
                         transaction.transaction_id,
                         assertion,
                         pkce_verifier=transaction.pkce_verifier,
+                    )
+                    await _record_google_profile_claims_best_effort(
+                        database,
+                        person_id=linked.person_id,
+                        assertion=assertion,
                     )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface == "sales_xray":
@@ -3072,8 +3151,9 @@ def install_identity_http(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ContextResponse:
         require_safe_origin(request, settings)
-        selected = _with_role_permissions(
-            await auth.identity.select_tenant(auth.token, body.tenant_id)
+        selected = await _resolved_with_role_permissions(
+            auth.database,
+            await auth.identity.select_tenant(auth.token, body.tenant_id),
         )
         return _context_response(selected)
 

@@ -31,6 +31,10 @@ class SalesXrayProfileResponse(BaseModel):
     phone_verified: bool
     profile_complete: bool
     revision: int
+    given_name: str | None
+    family_name: str | None
+    locale: str | None
+    company_domain: str | None
 
 
 class SalesXrayProfileUpdate(BaseModel):
@@ -122,6 +126,10 @@ def install_sales_xray_profile_http(
             phone_verified=value.phone_verified,
             profile_complete=value.profile_complete,
             revision=value.revision,
+            given_name=value.given_name,
+            family_name=value.family_name,
+            locale=value.locale,
+            company_domain=value.hosted_domain,
         ).model_dump()
 
     @router.get("", response_model=SalesXrayProfileResponse)

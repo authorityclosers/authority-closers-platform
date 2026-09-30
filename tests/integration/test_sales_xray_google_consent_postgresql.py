@@ -23,6 +23,7 @@ from ac_platform.http.auth import install_identity_http
 from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
+from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.models import Person, ProviderAuthorizationTransaction, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
@@ -52,6 +53,11 @@ class _GoogleProvider:
         self.email = email
         self.subject = subject
         self.display_name = display_name
+        self.given_name: str | None = "Ada"
+        self.family_name: str | None = "Lovelace"
+        self.locale: str | None = "en-GB"
+        self.hosted_domain: str | None = "example.test"
+        self.picture_url: str | None = "https://lh3.googleusercontent.com/a/profile"
         self.transactions: list[AuthTransaction] = []
         self.exchange_calls = 0
 
@@ -82,6 +88,11 @@ class _GoogleProvider:
             email=self.email,
             email_verified=True,
             display_name=self.display_name,
+            given_name=self.given_name,
+            family_name=self.family_name,
+            locale=self.locale,
+            hosted_domain=self.hosted_domain,
+            picture_url=self.picture_url,
         )
 
 
@@ -237,6 +248,10 @@ def test_sales_xray_google_full_ack_supersession_is_audited_and_transactional(
                 assert profile.json()["name"] == "Verified Google Name"
                 assert profile.json()["phone_number_e164"] is None
                 assert profile.json()["profile_complete"] is False
+                assert profile.json()["given_name"] == "Ada"
+                assert profile.json()["family_name"] == "Lovelace"
+                assert profile.json()["locale"] == "en-GB"
+                assert profile.json()["company_domain"] == "example.test"
 
                 with Session(postgres_harness.engine) as database:
                     person = database.get(Person, person_id)
@@ -284,18 +299,44 @@ def test_sales_xray_google_full_ack_supersession_is_audited_and_transactional(
                     assert sales_xray_profile is not None
                     assert sales_xray_profile.phone_number_e164 is None
                     assert sales_xray_profile.phone_verified_at is None
+                    google_profile = database.scalar(
+                        select(PersonGoogleProfile).where(
+                            PersonGoogleProfile.person_id == person_id
+                        )
+                    )
+                    assert google_profile is not None
+                    assert google_profile.given_name == "Ada"
+                    assert google_profile.hosted_domain == "example.test"
+                    assert not hasattr(google_profile, "picture_url")
 
+                provider.given_name = "Augusta"
+                provider.family_name = None
+                provider.locale = "fr-FR"
+                provider.hosted_domain = None
                 second = await _start_and_callback(
                     client,
                     provider,
                     consent_version=current_version,
                 )
                 assert second.status_code == 303
+                refreshed_profile = await client.get("/v1/me/sales-xray-profile")
+                assert refreshed_profile.status_code == 200
+                assert refreshed_profile.json()["given_name"] == "Augusta"
+                assert refreshed_profile.json()["family_name"] is None
+                assert refreshed_profile.json()["locale"] == "fr-FR"
+                assert refreshed_profile.json()["company_domain"] is None
                 with Session(postgres_harness.engine) as database:
                     person = database.get(Person, person_id)
                     assert person is not None
                     assert person.consented_at == first_consent_at
                     assert person.display_name == "Verified Google Name"
+                    google_profile = database.scalar(
+                        select(PersonGoogleProfile).where(
+                            PersonGoogleProfile.person_id == person_id
+                        )
+                    )
+                    assert google_profile is not None
+                    assert google_profile.hosted_domain is None
                     assert (
                         database.scalar(
                             select(func.count())

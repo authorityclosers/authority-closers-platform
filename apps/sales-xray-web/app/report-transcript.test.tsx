@@ -13,6 +13,7 @@ import type {
   TranscriptSegment,
 } from "./report-contract";
 import type { ReportDisplayLanguage } from "./report-ui-copy";
+import { saveSpeakerProfiles } from "./speaker-profiles";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -280,4 +281,36 @@ describe("ReportTranscript", () => {
     );
     expect(css).toMatch(/@media print[\s\S]*\.root\s*\{[\s\S]*display:\s*none/);
   });
+});
+
+it("shows the names and colours set on the call map", async () => {
+  localStorage.clear();
+  const callId = "3d2c1b0a-9f8e-4d7c-8b6a-5f4e3d2c1b0a";
+  saveSpeakerProfiles(callId, {
+    "speaker-2": { name: "Nandlal ji", role: "prospect", icon: null },
+  });
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading inline>
+        <ReportTranscript
+          transcript={transcriptWithSegments(2)}
+          onSelect={vi.fn()}
+          callId={callId}
+        />
+      </ReportReadingProvider>,
+    ),
+  );
+  const names = [...container.querySelectorAll<HTMLElement>("[data-named]")];
+  expect(names.map((name) => name.textContent)).toEqual([
+    "Speaker 1",
+    "Nandlal ji",
+  ]);
+  expect(names[1].style.getPropertyValue("--voice")).not.toBe("");
+  expect(container.textContent).toContain("Names come from the call map");
+  expect(
+    [...container.querySelectorAll("option")].map(
+      (option) => option.textContent,
+    ),
+  ).toEqual(["All speakers", "Speaker 1", "Nandlal ji"]);
+  localStorage.clear();
 });

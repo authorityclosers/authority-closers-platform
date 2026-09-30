@@ -25,6 +25,7 @@ from ac_platform.http.identity_provider import (
     IdentityProviderUnavailable,
 )
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.services import (
     ConflictingProviderIdentityError,
     IdentityResolutionError,
@@ -34,6 +35,7 @@ from ac_platform.identity.services import (
     VerifiedProviderAssertion,
     build_provider_authorization,
 )
+from ac_platform.kernel.authz import ActorContext
 
 TEST_TRANSACTION_KEY = "test-route-transaction-signing-key-long-enough"  # noqa: S105
 VALID_SESSION_TOKEN = "s" * 43  # noqa: S105
@@ -52,7 +54,16 @@ class _AsyncContext:
     def begin(self) -> _AsyncContext:
         return _AsyncContext()
 
+    def begin_nested(self) -> _AsyncContext:
+        return _AsyncContext()
+
     async def scalar(self, _statement: object) -> object | None:
+        return None
+
+    def add(self, _instance: object) -> None:
+        return None
+
+    async def flush(self) -> None:
         return None
 
 
@@ -237,6 +248,13 @@ class _UnavailableProvider(_RecordingProvider):
 
 
 class _CallbackIdentityApplication(_IdentityApplication):
+    async def resolve_actor(self, _token: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            actor=SimpleNamespace(
+                person_id=UUID("11111111-1111-4111-8111-111111111111"),
+            )
+        )
+
     async def authenticate_provider(
         self,
         transaction_id: object,
@@ -253,6 +271,17 @@ class _CallbackIdentityApplication(_IdentityApplication):
                 id=UUID("22222222-2222-4222-8222-222222222222"),
             ),
         )
+
+    async def link_provider_for_session(
+        self,
+        token: str,
+        transaction_id: UUID,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+    ) -> SimpleNamespace:
+        del token, transaction_id, assertion, pkce_verifier
+        return SimpleNamespace(person_id=UUID("11111111-1111-4111-8111-111111111111"))
 
 
 class _UnknownProviderIdentityApplication(_IdentityApplication):
@@ -425,6 +454,51 @@ def _client(
         else (_RecordingProvider() if configured else None),
     )
     return TestClient(application)
+
+
+@pytest.mark.parametrize("role", ["owner", "admin", "member"])
+def test_context_route_uses_the_registered_organisation_permission_map(
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+) -> None:
+    tenant_id = UUID("55555555-5555-4555-8555-555555555555")
+    person_id = UUID("11111111-1111-4111-8111-111111111111")
+    session_id = UUID("44444444-4444-4444-8444-444444444444")
+
+    class OrganisationDatabase(_AsyncContext):
+        async def scalar(self, _statement: object) -> object:
+            return tenant_id
+
+    class OrganisationIdentity:
+        def __init__(self, _database: object, *, token_pepper: str) -> None:
+            del token_pepper
+
+        async def resolve_actor(self, token: str) -> ResolvedActorContext:
+            assert token == VALID_SESSION_TOKEN
+            return ResolvedActorContext(
+                actor=ActorContext(person_id, session_id, tenant_id),
+                membership_role=role,
+                person_revision=0,
+                session_revision=0,
+                tenant_revision=0,
+                membership_revision=0,
+            )
+
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", OrganisationIdentity)
+    monkeypatch.setitem(globals(), "_sessions", lambda: OrganisationDatabase())
+    response = _client().get(
+        "/v1/context",
+        cookies={"ac_session": VALID_SESSION_TOKEN},
+    )
+
+    assert response.status_code == 200
+    context = response.json()
+    assert context["membership_role"] == role
+    if role in {"owner", "admin"}:
+        assert context["permissions"] == ["organisation_manage"]
+    else:
+        assert context["permissions"] == []
+    assert all(not permission.startswith("platform_") for permission in context["permissions"])
 
 
 def _request_with_raw_cookie_headers(*cookie_headers: str) -> Request:
@@ -1055,6 +1129,8 @@ def test_google_login_selects_only_existing_public_learner_context(
 
     class ExistingMembershipDatabase(_AsyncContext):
         async def scalar(self, statement: object) -> object | None:
+            if "person_google_profiles" in str(statement):
+                return None
             queries.append(statement)
             return object() if has_existing_membership else None
 
@@ -1544,6 +1620,85 @@ def test_existing_google_authentication_does_not_require_registration_config(
     assert callback.headers["location"] == "https://app.authorityclosers.test/home"
     assert callback.cookies["ac_session"] == VALID_SESSION_TOKEN
     assert _IdentityApplication.registered_provider_calls == []
+
+
+def test_google_profile_claim_save_failure_does_not_block_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+
+    async def fail_claim_save(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("private-claim-value")
+
+    monkeypatch.setattr(auth_module, "record_google_profile_claims", fail_claim_save)
+    client = _client(
+        settings=_settings_without_registration_config(),
+        provider=_SuccessfulProvider(),
+    )
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner", "return_path": "/home"},
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+    assert callback.cookies["ac_session"] == VALID_SESSION_TOKEN
+    assert "google_profile_claims_not_saved" in caplog.text
+    assert "private-claim-value" not in caplog.text
+
+
+def test_google_link_records_claims_for_the_person_resolved_by_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    person_id = UUID("11111111-1111-4111-8111-111111111111")
+    recorded_person_ids: list[UUID] = []
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+
+    async def capture_profile(
+        _database: object, record_person_id: UUID, _claims: object, _now: object
+    ) -> None:
+        recorded_person_ids.append(record_person_id)
+
+    monkeypatch.setattr(auth_module, "record_google_profile_claims", capture_profile)
+    settings = _settings()
+    client = _client(settings=settings, provider=_SuccessfulProvider())
+    started = client.get(
+        "https://admin.authorityclosers.test/v1/auth/google/start",
+        params={"action": "link", "surface": "admin", "return_path": "/settings"},
+        headers={"cookie": f"{settings.session_cookie_name}={VALID_SESSION_TOKEN}"},
+        follow_redirects=False,
+    )
+    assert started.status_code == 303, started.text
+    encoded = started.cookies[settings.oauth_transaction_cookie_name]
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(encoded)
+
+    callback = client.get(
+        "https://admin.authorityclosers.test/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={
+            "cookie": (
+                f"{settings.oauth_transaction_cookie_name}={encoded}; "
+                f"{settings.session_cookie_name}={VALID_SESSION_TOKEN}"
+            )
+        },
+        follow_redirects=False,
+    )
+
+    assert started.status_code == 303
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "https://admin.authorityclosers.test/settings"
+    assert recorded_person_ids == [person_id]
 
 
 @pytest.mark.parametrize("callback_order", [(0, 1), (1, 0)])

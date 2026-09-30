@@ -44,6 +44,8 @@ import { AcquisitionFileStage } from "./acquisition-file-stage";
 import { usePendingAnalysis } from "./pending-analysis";
 import { DipakOverview } from "./dipak-overview";
 import { ReportModes } from "./report-modes";
+import { CallSignals, clearPromisesDone } from "./call-signals";
+import { OverviewHook } from "./overview-hook";
 import { SalesSkills } from "./sales-skills";
 import { ReportMoments } from "./report-moments";
 import { NextCallPlan } from "./next-call-plan";
@@ -83,9 +85,15 @@ import {
 import { XrayWave } from "./xray-wave";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { ReportScrollRail } from "./report-scroll-rail";
-import { CallMap } from "./call-map";
+import { CallMap, CallMapMini } from "./call-map";
+import { KeyFacts } from "./key-facts";
+import { ReportRawData } from "./report-raw-data";
+import { RECENTS_CHANGED_EVENT } from "./shell/shell-store";
+import type { CallRecord } from "./call-record-contract";
 import { AcquisitionProcessingPanel } from "./acquisition-processing-panel";
 import { useProcessingReview } from "./processing-review-port";
+import { clearCallFacts } from "./call-facts";
+import { clearSpeakerProfiles } from "./speaker-profiles";
 import { latestStage, projectProcessing } from "./processing-state";
 import { observeSubmission, readProcessingPlan } from "./observe-submission";
 import {
@@ -126,6 +134,7 @@ import styles from "./acquisition-studio.module.css";
 type Result = {
   report: SalesReport;
   transcript: Transcript;
+  callRecord: CallRecord | null;
   runId: string;
   claimed: boolean;
   /** Owner call name (C1), server-confirmed; null on older servers. */
@@ -304,6 +313,12 @@ export function AcquisitionStudio({
   const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  // A new call or a finished report shows up in Recents straight away.
+  const recentsCallId = submission?.id ?? null;
+  const recentsRunId = result?.runId ?? null;
+  useEffect(() => {
+    if (recentsCallId) window.dispatchEvent(new Event(RECENTS_CHANGED_EVENT));
+  }, [recentsCallId, recentsRunId]);
   const earlierReportDialog = useRef<HTMLDialogElement>(null);
   const earlierReportLink = useRef<HTMLAnchorElement>(null);
   const earlierReportChoice = useRef<
@@ -1698,6 +1713,9 @@ export function AcquisitionStudio({
         throw new Error("delete_unconfirmed");
       if (!signal.aborted) {
         inFlight.current = false;
+        clearCallFacts(deletionId);
+        clearSpeakerProfiles(deletionId);
+        clearPromisesDone(deletionId);
         reset();
         setDeleted(true);
       }
@@ -2208,7 +2226,7 @@ export function AcquisitionStudio({
         className={`xray-app simple-app ${styles.app}`}
         // Upload, uploading and processing follow the app theme; the report
         // keeps its light surface until its own theme pass.
-        data-theme={studioStage === "report" ? "light" : resolvedTheme}
+        data-theme={resolvedTheme}
         data-variant={variant}
         data-stage={studioStage}
         data-selected={displayFileSelected ? "true" : "false"}
@@ -3314,7 +3332,7 @@ export function AcquisitionStudio({
               <section
                 className={`studio-report panel ${styles.report}`}
                 aria-label="Sales call report"
-                data-lx-surface="light"
+                data-lx-surface={resolvedTheme === "dark" ? undefined : "light"}
               >
                 <ReportHeader
                   key={submission?.id ?? "unbound"}
@@ -3359,6 +3377,13 @@ export function AcquisitionStudio({
                       onSeek={playFrom}
                     />
                   }
+                  compactVisual={
+                    <CallMapMini
+                      report={report}
+                      durationMs={result.transcript.duration_ms}
+                      onSeek={playFrom}
+                    />
+                  }
                   onDownload={() => void downloadReport()}
                   onRequestDeletion={() => setDeleteConfirm(true)}
                 />
@@ -3390,32 +3415,51 @@ export function AcquisitionStudio({
                 )}
                 <ReportModes
                   label="Explore your sales report"
+                  lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
                   panels={[
                     {
                       id: "overview",
                       label: "Overview",
                       content: (
-                        <DipakOverview
-                          showHeading={false}
-                          report={report}
-                          onSelectEvidence={seek}
-                          transcript={result.transcript}
-                          onSelectContextualPlayback={seekWithContext}
-                          onUnlock={() => router.push("/login")}
-                          durationMs={result.transcript.duration_ms}
-                        />
+                        <>
+                          <OverviewHook
+                            report={report}
+                            transcript={result.transcript}
+                            callId={submission?.id ?? null}
+                            onSeek={playFrom}
+                          />
+                          <DipakOverview
+                            showHeading={false}
+                            report={report}
+                            onSelectEvidence={seek}
+                            transcript={result.transcript}
+                            onSelectContextualPlayback={seekWithContext}
+                            onUnlock={() => router.push("/login")}
+                            durationMs={result.transcript.duration_ms}
+                            callRecord={result.callRecord}
+                          />
+                        </>
                       ),
                     },
                     {
                       id: "prospect",
                       label: "Prospect",
                       content: (
-                        <ProspectSnapshot
-                          report={report}
-                          onSelectEvidence={seek}
-                          onUnlock={() => router.push("/login")}
-                        />
+                        <>
+                          <KeyFacts
+                            callId={submission?.id ?? null}
+                            transcript={result.transcript}
+                            report={report}
+                            durationMs={result.transcript.duration_ms}
+                            onSeek={playFrom}
+                          />
+                          <ProspectSnapshot
+                            report={report}
+                            onSelectEvidence={seek}
+                            onUnlock={() => router.push("/login")}
+                          />
+                        </>
                       ),
                     },
                     {
@@ -3425,6 +3469,17 @@ export function AcquisitionStudio({
                         <ReportMoments
                           report={report}
                           onSelectEvidence={seek}
+                        />
+                      ),
+                    },
+                    {
+                      id: "signals",
+                      label: "Call signals",
+                      content: (
+                        <CallSignals
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
+                          onSeek={playFrom}
                         />
                       ),
                     },
@@ -3457,6 +3512,7 @@ export function AcquisitionStudio({
                       content: (
                         <ReportTranscript
                           transcript={result.transcript}
+                          callId={submission?.id ?? null}
                           language="en"
                           onSelect={(segment) =>
                             seekTo({
@@ -3466,6 +3522,20 @@ export function AcquisitionStudio({
                               end_ms: segment.end_ms,
                             })
                           }
+                        />
+                      ),
+                    },
+                    {
+                      id: "raw-data",
+                      label: "Raw data",
+                      content: (
+                        <ReportRawData
+                          callId={submission?.id ?? null}
+                          transcript={result.transcript}
+                          report={report}
+                          durationMs={result.transcript.duration_ms}
+                          runId={result.runId}
+                          onSeek={playFrom}
                         />
                       ),
                     },

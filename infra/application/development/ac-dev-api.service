@@ -1,0 +1,43 @@
+[Unit]
+Description=Development Sales Xray API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=10001
+Group=10001
+WorkingDirectory=/srv/authority-closers/development/backend
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+TemporaryFileSystem=/tmp:size=64M,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev /var/tmp:ro
+TemporaryFileSystem=/srv/authority-closers:ro /run/ac-sales-xray:ro /etc/authority-closers:ro
+BindReadOnlyPaths=/srv/authority-closers/development/backend /run/ac-sales-xray/development
+BindPaths=/srv/authority-closers/sales-xray/development
+InaccessiblePaths=-/etc/ac-release -/var/lib/ac-release -/var/log/ac-release -/run/ac-release.lock
+InaccessiblePaths=-/run/docker.sock -/run/containerd -/var/lib/docker -/var/lib/containerd
+InaccessiblePaths=/proc
+SystemCallFilter=~@debug process_vm_readv process_vm_writev
+MemoryMax=768M
+CPUQuota=100%
+Nice=10
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=10s
+TasksMax=128
+EnvironmentFile=/etc/authority-closers/development/api.env
+LoadCredential=challenge-secret:/etc/authority-closers/development/challenge-secret
+LoadCredential=qa-password:/etc/authority-closers/development/qa-password
+LoadCredential=approval.json:/etc/authority-closers/development/approval.json
+Environment=AC_SALES_XRAY_CHALLENGE_SECRET_FILE=%d/challenge-secret
+Environment=AC_SALES_XRAY_APPROVAL_PATH=%d/approval.json
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ExecStart=/srv/authority-closers/development/backend/.venv/bin/python -m ac_platform.http --host 127.0.0.1 --port 8100
+
+[Install]
+WantedBy=multi-user.target

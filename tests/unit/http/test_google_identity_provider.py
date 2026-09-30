@@ -153,7 +153,7 @@ async def test_code_exchange_keeps_provider_tokens_server_side_and_returns_verif
 
 
 @pytest.mark.asyncio
-async def test_code_exchange_carries_only_the_optional_signed_profile_name_claim() -> None:
+async def test_code_exchange_carries_optional_signed_profile_claims() -> None:
     transaction = _transaction()
 
     async with httpx.AsyncClient(
@@ -168,6 +168,11 @@ async def test_code_exchange_carries_only_the_optional_signed_profile_name_claim
             token_verifier=lambda _token, _audience: _claims(
                 transaction,
                 name="Signed Google display name",
+                given_name="Ada",
+                family_name="Lovelace",
+                locale="en-GB",
+                hd="example.test",
+                picture="https://lh3.googleusercontent.com/a/profile",
             ),
         )
         assertion = await provider.exchange_code(
@@ -178,6 +183,47 @@ async def test_code_exchange_carries_only_the_optional_signed_profile_name_claim
         )
 
     assert assertion.display_name == "Signed Google display name"
+    assert assertion.given_name == "Ada"
+    assert assertion.family_name == "Lovelace"
+    assert assertion.locale == "en-GB"
+    assert assertion.hosted_domain == "example.test"
+    assert assertion.picture_url == "https://lh3.googleusercontent.com/a/profile"
+
+
+@pytest.mark.asyncio
+async def test_code_exchange_ignores_non_string_optional_profile_claims() -> None:
+    transaction = _transaction()
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, json={"id_token": "signed-google-id-token"})
+        )
+    ) as client:
+        provider = GoogleOIDCProvider(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            http_client=client,
+            token_verifier=lambda _token, _audience: _claims(
+                transaction,
+                given_name=123,
+                family_name=["Lovelace"],
+                locale=False,
+                hd={"domain": "example.test"},
+                picture=object(),
+            ),
+        )
+        assertion = await provider.exchange_code(
+            "authorization-code",
+            transaction,
+            callback_state=transaction.state,
+            redirect_uri=REDIRECT_URI,
+        )
+
+    assert assertion.given_name is None
+    assert assertion.family_name is None
+    assert assertion.locale is None
+    assert assertion.hosted_domain is None
+    assert assertion.picture_url is None
 
 
 @pytest.mark.asyncio

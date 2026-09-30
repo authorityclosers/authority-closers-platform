@@ -48,6 +48,8 @@ import {
   formatContextSpeakerLabel,
   type ContextualSourcePlayback,
 } from "./source-playback-context";
+import { CallRecordView } from "./call-record";
+import type { CallRecord } from "./call-record-contract";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
@@ -61,6 +63,7 @@ type Props = {
   onUnlock?: () => void;
   durationMs?: number;
   showHeading?: boolean;
+  callRecord?: CallRecord | null;
 };
 
 type ChapterId = "start" | "read" | "practice" | "close";
@@ -266,6 +269,7 @@ export function DipakOverview({
   onUnlock,
   durationMs,
   showHeading = true,
+  callRecord,
 }: Props) {
   const reading = useReportInline();
   const navigateToReport = useReportNavigation();
@@ -756,6 +760,13 @@ export function DipakOverview({
           />
         </div>
       </section>
+
+      {callRecord != null && (
+        <CallRecordView
+          callRecord={callRecord}
+          onSelectEvidence={onSelectEvidence}
+        />
+      )}
 
       <div className={styles.workspaceLayout} data-map={showMap || undefined}>
         {showMap && (

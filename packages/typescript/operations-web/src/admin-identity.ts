@@ -3,6 +3,7 @@ import { z } from "zod";
 export const membershipRoleSchema = z.enum([
   "owner",
   "admin",
+  "member",
   "support",
   "learner",
 ]);

@@ -58,5 +58,5 @@ export async function observeSubmission(
     { submissionId: bound.id, recordingId: bound.recordingId },
     transcript,
   );
-  return { progress, result: { ...verified, transcript } };
+  return { progress, result: { ...verified, transcript, callRecord: null } };
 }
