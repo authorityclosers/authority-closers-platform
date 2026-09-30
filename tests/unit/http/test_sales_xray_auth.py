@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -26,6 +27,7 @@ from ac_platform.identity.services import (
 )
 from ac_platform.kernel.authz import ActorContext
 from tests.unit.application.test_settings import _deployment_values
+from tests.unit.http import test_auth_routes as auth_routes_test_module
 from tests.unit.http.test_auth_routes import (
     DEPLOYMENT_OAUTH_COOKIE,
     DEPLOYMENT_SESSION_COOKIE,
@@ -130,6 +132,32 @@ def _sales_start(
 
 def _completion_flow_id(transaction: AuthTransaction) -> UUID:
     return UUID(parse_qs(urlsplit(transaction.return_path).query)["flow"][0])
+
+
+def _complete_google_callback(
+    client: TestClient,
+    transaction: AuthTransaction,
+    encoded: str,
+) -> Any:
+    return client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={
+            "host": SALES_STAGING_HOST,
+            "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}",
+        },
+        follow_redirects=False,
+    )
+
+
+class _PhotoProvider(_SuccessfulProvider):
+    def __init__(self, picture_url: str) -> None:
+        super().__init__()
+        self.picture_url = picture_url
+
+    async def exchange_code(self, *args: Any, **kwargs: Any) -> Any:
+        assertion = await super().exchange_code(*args, **kwargs)
+        return replace(assertion, picture_url=self.picture_url)
 
 
 @pytest.mark.parametrize(
@@ -324,6 +352,187 @@ def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
     assert _IdentityApplication.registered_provider_calls[0]["allow_consent_supersession"] is True
     assert callback.cookies[DEPLOYMENT_SESSION_COOKIE] == VALID_SESSION_TOKEN
     assert provider.redirect_uris == [SALES_STAGING_ORIGIN + "/v1/auth/google/callback"]
+
+
+def test_google_photo_is_fetched_after_sign_in_and_same_source_is_not_fetched_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+    picture_url = "https://lh3.googleusercontent.com/a/fictional=s96-c"
+    provider = _PhotoProvider(picture_url)
+    client = _client(settings=_sales_staging_settings(), provider=provider)
+    saved_sources: set[str] = set()
+    fetched: list[str] = []
+    callback_databases: list[Any] = []
+    save_databases: list[Any] = []
+
+    async def record_claims(database: Any, *_args: Any, **_kwargs: Any) -> None:
+        callback_databases.append(database)
+
+    async def needs_fetch(_database: Any, _person_id: UUID, source_sha256: str) -> bool:
+        return source_sha256 not in saved_sources
+
+    async def fetch(url: str) -> bytes:
+        fetched.append(url)
+        return b"fictional-sanitized-jpeg"
+
+    async def save_photo(
+        database: Any,
+        _person_id: UUID,
+        *,
+        source_sha256: str,
+        **_kwargs: Any,
+    ) -> bool:
+        save_databases.append(database)
+        saved_sources.add(source_sha256)
+        return True
+
+    monkeypatch.setattr(auth_module, "record_google_profile_claims", record_claims)
+    monkeypatch.setattr(auth_module, "google_profile_photo_needs_fetch", needs_fetch)
+    monkeypatch.setattr(auth_module, "fetch_google_profile_photo", fetch)
+    monkeypatch.setattr(auth_module, "save_google_profile_photo", save_photo)
+
+    for _ in range(2):
+        started, transaction = _sales_start(client)
+        callback = _complete_google_callback(
+            client,
+            transaction,
+            started.cookies[DEPLOYMENT_OAUTH_COOKIE],
+        )
+        assert callback.status_code == 303
+        assert "auth_result=success" in callback.headers["location"]
+
+    assert fetched == [picture_url]
+    assert len(callback_databases) == 2
+    assert len(save_databases) == 1
+    assert save_databases[0] is not callback_databases[0]
+
+
+def test_absent_google_photo_clears_and_failed_fetch_does_not_block_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+    clear_calls: list[tuple[Any, UUID]] = []
+
+    async def clear_photo(database: Any, person_id: UUID) -> bool:
+        clear_calls.append((database, person_id))
+        return True
+
+    monkeypatch.setattr(auth_module, "clear_google_profile_photo", clear_photo)
+    client = _client(settings=_sales_staging_settings(), provider=_SuccessfulProvider())
+    started, transaction = _sales_start(client)
+    absent_picture = _complete_google_callback(
+        client,
+        transaction,
+        started.cookies[DEPLOYMENT_OAUTH_COOKIE],
+    )
+    assert absent_picture.status_code == 303
+    assert "auth_result=success" in absent_picture.headers["location"]
+    assert len(clear_calls) == 1
+
+    failed_fetch_client = _client(
+        settings=_sales_staging_settings(),
+        provider=_PhotoProvider("https://lh3.googleusercontent.com/a/failed=s96-c"),
+    )
+
+    async def needs_fetch(_database: Any, _person_id: UUID, _source_sha256: str) -> bool:
+        return True
+
+    async def failed_fetch(_url: str) -> None:
+        return None
+
+    saved: list[UUID] = []
+
+    async def save_photo(_database: Any, person_id: UUID, **_kwargs: Any) -> bool:
+        saved.append(person_id)
+        return True
+
+    monkeypatch.setattr(auth_module, "google_profile_photo_needs_fetch", needs_fetch)
+    monkeypatch.setattr(auth_module, "fetch_google_profile_photo", failed_fetch)
+    monkeypatch.setattr(auth_module, "save_google_profile_photo", save_photo)
+    started, transaction = _sales_start(failed_fetch_client)
+    failed_fetch = _complete_google_callback(
+        failed_fetch_client,
+        transaction,
+        started.cookies[DEPLOYMENT_OAUTH_COOKIE],
+    )
+    assert failed_fetch.status_code == 303
+    assert "auth_result=success" in failed_fetch.headers["location"]
+    assert saved == []
+
+
+def test_google_photo_source_check_error_uses_a_savepoint_and_does_not_block_sign_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+
+    class SavepointTrackingDatabase:
+        def __init__(self) -> None:
+            self.nested_count = 0
+            self.active_nested = 0
+
+        async def __aenter__(self) -> SavepointTrackingDatabase:
+            return self
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+        def begin(self) -> SavepointTrackingDatabase:
+            return self
+
+        def begin_nested(self) -> SavepointTrackingDatabase.NestedContext:
+            self.nested_count += 1
+            return self.NestedContext(self)
+
+        class NestedContext:
+            def __init__(self, database: SavepointTrackingDatabase) -> None:
+                self.database = database
+
+            async def __aenter__(self) -> SavepointTrackingDatabase:
+                self.database.active_nested += 1
+                return self.database
+
+            async def __aexit__(self, *_args: Any) -> None:
+                self.database.active_nested -= 1
+
+        async def scalar(self, _statement: object) -> object | None:
+            return None
+
+        def add(self, _instance: object) -> None:
+            return None
+
+        async def flush(self) -> None:
+            return None
+
+    database = SavepointTrackingDatabase()
+    monkeypatch.setattr(auth_routes_test_module, "_sessions", lambda: database)
+
+    async def record_claims(_database: Any, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    active_nested_at_query: list[int] = []
+
+    async def query_fails(_database: Any, _person_id: UUID, _source_sha256: str) -> bool:
+        active_nested_at_query.append(database.active_nested)
+        raise RuntimeError("fictional photo source query failure")
+
+    monkeypatch.setattr(auth_module, "record_google_profile_claims", record_claims)
+    monkeypatch.setattr(auth_module, "google_profile_photo_needs_fetch", query_fails)
+    client = _client(
+        settings=_sales_staging_settings(),
+        provider=_PhotoProvider("https://lh3.googleusercontent.com/a/query-failure=s96-c"),
+    )
+    started, transaction = _sales_start(client)
+
+    callback = _complete_google_callback(
+        client,
+        transaction,
+        started.cookies[DEPLOYMENT_OAUTH_COOKIE],
+    )
+
+    assert callback.status_code == 303
+    assert "auth_result=success" in callback.headers["location"]
+    assert active_nested_at_query == [1]
 
 
 @pytest.mark.parametrize("consent", [None, "false"])

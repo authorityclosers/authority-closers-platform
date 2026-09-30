@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -13,10 +14,14 @@ from sqlalchemy.pool import StaticPool
 
 from ac_platform.identity.google_profile import (
     GoogleProfileClaims,
+    clear_google_profile_photo,
     erase_google_profile,
+    google_profile_photo_needs_fetch,
     normalize_google_claims,
     read_google_profile,
+    read_google_profile_photo,
     record_google_profile_claims,
+    save_google_profile_photo,
 )
 from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.models import Person
@@ -178,6 +183,7 @@ async def test_record_refresh_read_without_photo_load_and_erase(database: Any) -
         family_name=None,
         locale="fr-FR",
         hosted_domain=None,
+        photo_url="/v1/me/sales-xray-profile/photo",
     )
     assert not any(
         statement.lstrip().upper().startswith("SELECT") and "photo_jpeg" in statement
@@ -188,6 +194,58 @@ async def test_record_refresh_read_without_photo_load_and_erase(database: Any) -
     assert "picture_url" not in PersonGoogleProfile.__table__.columns
     assert await erase_google_profile(async_database, PERSON_ID) is True
     assert await erase_google_profile(async_database, PERSON_ID) is False
+
+
+@pytest.mark.asyncio
+async def test_photo_copy_is_source_deduplicated_person_scoped_and_clearable(database: Any) -> None:
+    async_database, sync_database = database
+    await record_google_profile_claims(async_database, PERSON_ID, GoogleProfileClaims(), NOW)
+    source_url = "https://lh3.googleusercontent.com/a/photo=s96-c"
+    source_sha256 = hashlib.sha256(source_url.encode("utf-8")).hexdigest()
+    jpeg = b"fictional-sanitized-jpeg"
+
+    assert await google_profile_photo_needs_fetch(async_database, PERSON_ID, source_sha256) is True
+    assert (
+        await save_google_profile_photo(
+            async_database,
+            PERSON_ID,
+            source_sha256=source_sha256,
+            jpeg=jpeg,
+            now=NOW,
+        )
+        is True
+    )
+    assert await google_profile_photo_needs_fetch(async_database, PERSON_ID, source_sha256) is False
+    assert await read_google_profile(async_database, PERSON_ID) == GoogleProfileClaims(
+        photo_url="/v1/me/sales-xray-profile/photo"
+    )
+    assert await read_google_profile_photo(async_database, PERSON_ID) == (
+        jpeg,
+        hashlib.sha256(jpeg).hexdigest(),
+    )
+
+    other_sha256 = hashlib.sha256(b"another source").hexdigest()
+    assert await google_profile_photo_needs_fetch(async_database, PERSON_ID, other_sha256) is True
+    sync_database.get(Person, PERSON_ID).status = "suspended"
+    assert (
+        await save_google_profile_photo(
+            async_database,
+            PERSON_ID,
+            source_sha256=other_sha256,
+            jpeg=b"replacement",
+            now=NOW,
+        )
+        is False
+    )
+    assert await read_google_profile_photo(async_database, PERSON_ID) == (
+        jpeg,
+        hashlib.sha256(jpeg).hexdigest(),
+    )
+
+    sync_database.get(Person, PERSON_ID).status = "active"
+    assert await clear_google_profile_photo(async_database, PERSON_ID) is True
+    assert await read_google_profile_photo(async_database, PERSON_ID) is None
+    assert await read_google_profile(async_database, PERSON_ID) == GoogleProfileClaims()
 
 
 @pytest.mark.asyncio
