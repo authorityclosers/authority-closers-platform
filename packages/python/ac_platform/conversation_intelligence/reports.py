@@ -1048,6 +1048,7 @@ def _legacy_finding(
     transcript: Mapping[str, Any],
     error_code: str = "report_legacy_finding_invalid",
     allow_missing_uncertainty: bool = False,
+    salvaged: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Bind the observed pre-wire-schema finding without dropping its qualifiers."""
 
@@ -1074,7 +1075,7 @@ def _legacy_finding(
     evidence = value.get("evidence")
     if not isinstance(evidence, list) or not evidence:
         raise ReportError(error_code)
-    normalized_evidence = [_normalise_c5_evidence(item, transcript) for item in evidence]
+    normalized_evidence = [_normalise_c5_evidence(item, transcript, salvaged) for item in evidence]
     explanation = f"Behavior: {behavior}\nWhy it matters: {why_it_matters}"
     if "uncertainty" in value:
         explanation += f"\nUncertainty: {uncertainty}"
@@ -1085,7 +1086,11 @@ def _legacy_finding(
 
 
 def _normalise_legacy_findings(
-    value: Any, *, transcript: Mapping[str, Any], allow_missing_uncertainty: bool = False
+    value: Any,
+    *,
+    transcript: Mapping[str, Any],
+    allow_missing_uncertainty: bool = False,
+    salvaged: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReportError("report_legacy_finding_invalid")
@@ -1094,6 +1099,7 @@ def _normalise_legacy_findings(
             item,
             transcript=transcript,
             allow_missing_uncertainty=allow_missing_uncertainty,
+            salvaged=salvaged,
         )
         for item in value
     ]
@@ -1103,6 +1109,7 @@ def _legacy_dimension_observation(
     item: Mapping[str, Any],
     *,
     transcript: Mapping[str, Any],
+    salvaged: dict[str, int] | None = None,
 ) -> str:
     groups = (
         ("Strengths", item["strengths"]),
@@ -1115,6 +1122,7 @@ def _legacy_dimension_observation(
             raw_findings,
             transcript=transcript,
             allow_missing_uncertainty=True,
+            salvaged=salvaged,
         )
         lines.append(f"{label}:")
         if not findings:
@@ -1141,6 +1149,7 @@ def _normalise_legacy_dimensions(
     *,
     profile: Mapping[str, Any],
     transcript: Mapping[str, Any],
+    salvaged: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
     by_id = {str(item["id"]): item for item in profile_dimensions}
@@ -1165,7 +1174,9 @@ def _normalise_legacy_dimensions(
             "dimension_id": dimension_id,
             "label": expected["label"],
             "status": status,
-            "observation": _legacy_dimension_observation(item, transcript=transcript),
+            "observation": _legacy_dimension_observation(
+                item, transcript=transcript, salvaged=salvaged
+            ),
             "citations": expected_citations,
         }
     output: list[dict[str, Any]] = []
@@ -1196,6 +1207,7 @@ def _normalise_dimensions(
     transcript: Mapping[str, Any],
     coaching_prompt_revision: CoachingPromptRevision = COACHING_PROMPT_V4,
     canonical_read: bool = False,
+    salvaged: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
     by_id = {str(item["id"]): item for item in profile_dimensions}
@@ -1216,7 +1228,9 @@ def _normalise_dimensions(
                 else "report_v5_dimensions_invalid"
             )
             raise ReportError(code)
-        return _normalise_legacy_dimensions(raw_items, profile=profile, transcript=transcript)
+        return _normalise_legacy_dimensions(
+            raw_items, profile=profile, transcript=transcript, salvaged=salvaged
+        )
     supplied: dict[str, dict[str, Any]] = {}
     evidence_required = coaching_prompt_revision in {COACHING_PROMPT_V5, COACHING_PROMPT_V6}
     for item in raw_items:
@@ -1252,9 +1266,12 @@ def _normalise_dimensions(
             raise ReportError("report_dimension_evidence_required")
         retain_evidence = evidence_required or canonical_read
         if retain_evidence and raw_evidence is not None:
-            if not isinstance(raw_evidence, list) or len(raw_evidence) > 8:
+            if not isinstance(raw_evidence, list):
                 raise ReportError("report_dimension_evidence_invalid")
-            evidence = [_normalise_c5_evidence(reference, transcript) for reference in raw_evidence]
+            evidence = [
+                _normalise_c5_evidence(reference, transcript, salvaged)
+                for reference in raw_evidence
+            ]
         elif evidence_required:
             raise ReportError("report_dimension_evidence_required")
         if status in {"observed", "conflicted"} and evidence_required and not evidence:
@@ -1393,7 +1410,9 @@ def _normalise_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[str, 
     return normalized
 
 
-def _normalise_c5_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[str, Any]:
+def _normalise_c5_evidence(
+    value: Any, transcript: Mapping[str, Any], salvaged: dict[str, int] | None = None
+) -> dict[str, Any]:
     """Resolve one strict C5 reference against the native transcript segment.
 
     C4 packets retain their copied-quote contract through ``_normalise_evidence``.
@@ -1425,6 +1444,21 @@ def _normalise_c5_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[st
     elif keys == _C5_OFFSET_EVIDENCE_KEYS:
         quote_start = value.get("quote_start")
         quote_end = value.get("quote_end")
+        if (
+            type(quote_start) is int
+            and type(quote_end) is int
+            and text.strip()
+            and len(text) <= _MAX_EVIDENCE_QUOTE_CHARS
+        ):
+            reason = None
+            if (quote_start, quote_end) == (segment["start_ms"], segment["end_ms"]):
+                reason = "offset_timestamp_copy"
+            elif quote_start == 0 and quote_end > len(text):
+                reason = "offset_end_past_segment"
+            if reason is not None:
+                if salvaged is not None:
+                    salvaged[reason] = salvaged.get(reason, 0) + 1
+                quote_start, quote_end = 0, len(text)
         if (
             type(quote_start) is not int
             or type(quote_end) is not int
@@ -1467,7 +1501,10 @@ def _normalise_c5_evidence(value: Any, transcript: Mapping[str, Any]) -> dict[st
 
 
 def _normalise_nested_missed_opportunity(
-    finding: Mapping[str, Any], *, transcript: Mapping[str, Any]
+    finding: Mapping[str, Any],
+    *,
+    transcript: Mapping[str, Any],
+    salvaged: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Adapt the source-bound missed-opportunity shape emitted by Gemini.
 
@@ -1521,13 +1558,11 @@ def _normalise_nested_missed_opportunity(
         if not isinstance(raw, list) or not raw:
             raise ReportError("report_finding_evidence_missing")
         for item in raw:
-            normalized = _normalise_c5_evidence(item, transcript)
+            normalized = _normalise_c5_evidence(item, transcript, salvaged)
             if normalized["segment_id"] in seen:
                 continue
             seen.add(normalized["segment_id"])
             evidence.append(normalized)
-            if len(evidence) > 8:
-                raise ReportError("report_evidence_invalid")
     title = f"Missed opportunity: {prospect['text'].strip()}"[:240]
     explanation = (
         f"Prospect signal: {prospect['text'].strip()}\n"
@@ -1541,14 +1576,18 @@ def _normalise_nested_missed_opportunity(
 
 
 def _normalise_findings(
-    value: Any, *, transcript: Mapping[str, Any], field_name: str | None = None
+    value: Any,
+    *,
+    transcript: Mapping[str, Any],
+    field_name: str | None = None,
+    salvaged: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise ReportError("report_findings_invalid")
     if any(
         isinstance(item, Mapping) and _LEGACY_FINDING_MARKERS.intersection(item) for item in value
     ):
-        return _normalise_legacy_findings(value, transcript=transcript)
+        return _normalise_legacy_findings(value, transcript=transcript, salvaged=salvaged)
     normalized: list[dict[str, Any]] = []
     for position, finding in enumerate(value):
         if not isinstance(finding, Mapping):
@@ -1558,7 +1597,11 @@ def _normalise_findings(
             # finding can receive the one explicitly approved repair.
             raise ReportError("report_findings_invalid")
         if field_name == "missed_opportunities" and "evidence" not in finding:
-            normalized.append(_normalise_nested_missed_opportunity(finding, transcript=transcript))
+            normalized.append(
+                _normalise_nested_missed_opportunity(
+                    finding, transcript=transcript, salvaged=salvaged
+                )
+            )
             continue
         evidence = finding.get("evidence")
         if not isinstance(evidence, list) or not evidence:
@@ -1568,23 +1611,44 @@ def _normalise_findings(
             if item["finding_index"] != position:
                 raise ReportError("report_findings_invalid")
             item.pop("finding_index")
-        item["evidence"] = [_normalise_c5_evidence(span, transcript) for span in evidence]
+        item["evidence"] = [_normalise_c5_evidence(span, transcript, salvaged) for span in evidence]
         normalized.append(item)
     return normalized
 
 
 # Bump when report admission/adaptation semantics change. Retained recovery
 # freezes this source-owned identity separately from the caller's command key.
-REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/6"
+REPORT_VALIDATOR_REVISION = "ac.sales-xray.report-validator/7"
+
+
+def _evidence_limit(model: type[BaseModel]) -> int:
+    return next(
+        int(rule.max_length)
+        for rule in model.model_fields["evidence"].metadata
+        if hasattr(rule, "max_length")
+    )
+
+
+def _truncate_evidence(
+    items: list[dict[str, Any]], model: type[BaseModel], field: str, counts: dict[str, int]
+) -> None:
+    limit = _evidence_limit(model)
+    for item in items:
+        evidence = item.get("evidence")
+        if isinstance(evidence, list) and len(evidence) > limit:
+            item["evidence"] = evidence[:limit]
+            counts[field] = counts.get(field, 0) + 1
 
 
 def _sanitize_provider_overview(
-    payload: Mapping[str, Any], transcript: Mapping[str, Any]
+    payload: Mapping[str, Any],
+    transcript: Mapping[str, Any],
+    salvaged: dict[str, int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     # Validate all citations before dropping anything, including malformed/duplicate items.
     overview = normalize_overview_evidence(
         payload.get("overview"),
-        normalize_evidence=lambda item: _normalise_c5_evidence(item, transcript),
+        normalize_evidence=lambda item: _normalise_c5_evidence(item, transcript, salvaged),
     )
     drops: dict[str, dict[str, int]] = {}
     if not isinstance(overview, dict):
@@ -1635,13 +1699,36 @@ def _sanitize_provider_overview(
         kept: list[dict[str, Any]] = []
         seen: set[Any] = set()
         for raw in overview[field] if many else [overview[field]]:
+            if field == "golden_moments" and isinstance(raw, Mapping):
+                index = raw.get("evidence_index")
+                if type(index) is int and index >= _evidence_limit(ReportFinding):
+                    drop(field, "reference_out_of_range")
+                    continue
             try:
                 item = adapter.validate_python(raw).model_dump(mode="json")
             except ValidationError as exc:
-                if any("evidence" in error["loc"] for error in exc.errors()):
+                errors = exc.errors()
+                if all(
+                    error["type"] == "too_long"
+                    and error["loc"][-1:] == ("evidence",)
+                    and isinstance(error["input"], list)
+                    for error in errors
+                ):
+                    for error in errors:
+                        target = raw
+                        for key in error["loc"][:-1]:
+                            target = target[key]
+                        target["evidence"] = target["evidence"][: error["ctx"]["max_length"]]
+                        drop(field, "evidence_truncated")
+                    try:
+                        item = adapter.validate_python(raw).model_dump(mode="json")
+                    except ValidationError:
+                        raise ReportError("report_evidence_invalid") from None
+                elif any("evidence" in error["loc"] for error in errors):
                     raise ReportError("report_evidence_invalid") from None
-                drop(field, "item_schema_invalid")
-                continue
+                else:
+                    drop(field, "item_schema_invalid")
+                    continue
             ref: Any = None
             if field in detail_fields:
                 ref = item["finding_index"]
@@ -2387,7 +2474,9 @@ def parse_report_draft(
         consumed_provider_keys.update(overview_keys)
     # Scalar adapters need the same canonical envelope regardless of where
     # the provider put overview fields. Normalize it before joining evidence.
-    payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript)
+    salvaged: dict[str, int] = {}
+    truncated: dict[str, int] = {}
+    payload, overview_drops = _sanitize_provider_overview(payload, validated_transcript, salvaged)
     payload, compatibility_extras = _adapt_unbound_provider_findings(payload)
     if overview_drops:
         compatibility_extras["overview_drops"] = overview_drops
@@ -2400,8 +2489,9 @@ def parse_report_draft(
         "closing_analysis",
     ):
         normalized[field] = _normalise_findings(
-            payload[field], transcript=validated_transcript, field_name=field
+            payload[field], transcript=validated_transcript, field_name=field, salvaged=salvaged
         )
+        _truncate_evidence(normalized[field], ReportFinding, field, truncated)
     overview_payload = payload.get("overview")
     if overview_payload is not None:
         try:
@@ -2438,7 +2528,13 @@ def parse_report_draft(
         transcript=validated_transcript,
         coaching_prompt_revision=coaching_prompt_revision,
         canonical_read=canonical_read,
+        salvaged=salvaged,
     )
+    _truncate_evidence(normalized["dimensions"], ReportDimension, "dimensions", truncated)
+    if truncated:
+        compatibility_extras["evidence_truncated"] = truncated
+    if salvaged:
+        compatibility_extras["evidence_salvaged"] = salvaged
     normalized["report_sections"] = _normalise_sections(
         payload.get("report_sections"), profile=resolved_profile
     )
