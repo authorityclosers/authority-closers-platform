@@ -18,6 +18,13 @@ SPEC.loader.exec_module(SYNC)
 APP = "apps/sales-xray-web/app/"
 PUBLIC = "apps/sales-xray-web/public/"
 BRANCH = "task/ui/296-studio-202609300000"
+FAKE_TOKENS = [
+    "ghp_" + "F" * 36,
+    "github_pat_" + "F" * 30,
+    "sk-" + "F" * 24,
+    "AKIA" + "F" * 16,
+    "-----BEGIN" + " RSA PRIVATE KEY-----",
+]
 
 
 class Harness:
@@ -25,7 +32,7 @@ class Harness:
         self.repo, self.remote = path / "repo", path / "remote.git"
         self.repo.mkdir()
         self.state, self.spool = path / "state.json", path / "spool"
-        self.now = time.time() + 1000
+        self.now = int(time.time()) + 1000
         self.prs, self.comments, self.calls = [], [], []
         self.busy = False
         self.git("init", "--initial-branch=main")
@@ -137,11 +144,7 @@ def test_allowlist_untracked_deletion_and_staged_stray(repo):
         ("secret.pem", "value"),
         ("secret.key", "value"),
         ("id_private", "value"),
-        ("token.txt", "ghp_" + "fake"),
-        ("token.txt", "github_pat_" + "fake"),
-        ("token.txt", "sk-" + "fake"),
-        ("token.txt", "AKIA" + "fake"),
-        ("token.txt", "-----BEGIN" + " FAKE"),
+        *[("token.txt", token) for token in FAKE_TOKENS],
         pytest.param("large.txt", "a" * (SYNC.LIMIT + 1), id="over-one-mib"),
     ],
 )
@@ -245,12 +248,16 @@ def test_approved_published_head_freezes_push_across_local_commits(repo, transpo
     assert not repo.events("review")
 
 
-def test_hand_started_slice_never_requests_review(repo):
+@pytest.mark.parametrize("existing_pr", [False, True])
+def test_hand_started_slice_never_requests_review(repo, existing_pr):
     repo.branch("task/ui/123-hand-started")
-    repo.make_pr(age=8000)
+    if existing_pr:
+        repo.make_pr(age=8000)
     repo.write(APP + "page.tsx", "edit")
     repo.tick()
     assert not repo.events("review")
+    assert not any(c[:3] == ["gh", "pr", "create"] for c in repo.calls)
+    assert repo.remote_head("task/ui/123-hand-started") == repo.git("rev-parse", "HEAD")
 
 
 @pytest.mark.parametrize(
@@ -384,7 +391,7 @@ def test_exact_index_blob_is_scanned_and_later_edits_remain_uncommitted(repo):
     def changing(argv, **kwargs):
         result = original(argv, **kwargs)
         if argv[:3] == ["git", "--literal-pathspecs", "hash-object"]:
-            repo.write(APP + "page.tsx", "sk-" + "fake-after-stage")
+            repo.write(APP + "page.tsx", "sk-" + "F" * 24)
         return result
 
     repo.runner = changing
@@ -486,7 +493,7 @@ def test_broken_alert_spool_does_not_block_screen_commit(repo):
 
 def test_refused_content_is_not_written_to_git_object_store(repo):
     repo.branch()
-    payload = b"github_pat_" + b"fictional-refused-fixture"
+    payload = b"github_pat_" + b"F" * 30
     repo.write(APP + "credential.txt", payload.decode())
     oid = SYNC.command(["git", "hash-object", "--stdin"], cwd=repo.repo, input_data=payload).strip()
     repo.write(APP + "page.tsx", "safe")
@@ -580,3 +587,141 @@ def test_commit_only_reports_quiet_window_deferral_to_refresh(repo, monkeypatch)
     )
     assert result == 75
     assert repo.git("rev-parse", "HEAD") == repo.base
+
+
+@pytest.mark.parametrize("on_main", [False, True])
+def test_css_token_substrings_are_committed(repo, on_main):
+    if not on_main:
+        repo.branch()
+    css = ".task-card { mask-image: none; animation: ask-in 1s; } @keyframes ask-in {}"
+    css += ".risk-" + "x" * 24 + " {}"
+    repo.write(APP + "screen.module.css", css)
+    repo.tick()
+    assert repo.git("show", "HEAD:" + APP + "screen.module.css") == css
+    assert repo.git("branch", "--show-current").startswith(SYNC.STUDIO)
+    assert not repo.git("status", "--porcelain")
+    assert not repo.events("alert")
+
+
+def advance_fixture_main(repo):
+    branch = repo.git("branch", "--show-current")
+    repo.git("switch", "main")
+    repo.write("README.md", "other task on main")
+    repo.git("add", "README.md")
+    repo.git("commit", "-m", "other task")
+    repo.git("push", "origin", "main")
+    repo.git("switch", branch)
+
+
+def approve_fixture(repo):
+    repo.branch()
+    repo.write(APP + "page.tsx", "approved screen")
+    repo.tick()
+    pr = repo.prs[0]
+    repo.comments = [{"body": f"Merge approved: PR #17 @ {pr['headRefOid']}"}]
+    return pr
+
+
+def merge_fixture_pr(repo, pr):
+    branch = repo.git("branch", "--show-current")
+    repo.git("switch", "main")
+    repo.git("merge", "--no-edit", pr["headRefOid"])
+    repo.git("push", "origin", "main", f"{pr['headRefOid']}:refs/pull/17/head")
+    repo.git("switch", branch)
+    pr["state"] = "MERGED"
+
+
+def test_carry_over_after_refresh_merges_main_during_approval_freeze(repo):
+    pr = approve_fixture(repo)
+    repo.write(PUBLIC + "before-refresh.svg", "local before refresh")
+    repo.tick()
+    advance_fixture_main(repo)
+    repo.git("merge", "--no-edit", "origin/main")
+    repo.write(APP + "page.tsx", "local after refresh")
+    repo.tick()
+    merge_fixture_pr(repo, pr)
+    repo.tick()
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "local after refresh"
+    assert repo.git("show", "HEAD:" + PUBLIC + "before-refresh.svg") == "local before refresh"
+    assert repo.git("show", "HEAD:README.md") == "other task on main"
+    assert repo.git("rev-list", "--count", "origin/main..HEAD") == "1"
+    assert not repo.events("alert")
+
+
+def test_watchdog_remote_update_defers_push_and_carries_local_commits(repo):
+    pr = approve_fixture(repo)
+    repo.write(PUBLIC + "waiting.svg", "unpublished")
+    repo.tick()
+    advance_fixture_main(repo)
+    repo.git("switch", "-c", "watchdog-update", pr["headRefOid"])
+    repo.git("merge", "--no-edit", "origin/main")
+    remote = repo.git("rev-parse", "HEAD")
+    repo.git("push", "origin", f"HEAD:refs/heads/{BRANCH}")
+    pr["headRefOid"] = remote
+    repo.git("switch", BRANCH)
+    repo.write(APP + "page.tsx", "local after watchdog")
+    repo.tick()
+    assert repo.remote_head() == remote
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "local after watchdog"
+    assert not repo.events("alert")
+    repo.now += 7199
+    repo.tick()
+    assert not repo.events("alert")
+    repo.now += 1
+    repo.tick()
+    assert len(repo.events("alert")) == 1
+    assert repo.events("alert")[0]["key"] == "remote-ahead"
+    first_alert = repo.events("alert")[0]["at"]
+    repo.now += 1800
+    repo.tick()
+    assert repo.events("alert")[0]["at"] == first_alert
+    merge_fixture_pr(repo, pr)
+    repo.tick()
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "local after watchdog"
+    assert repo.git("show", "HEAD:" + PUBLIC + "waiting.svg") == "unpublished"
+    assert repo.git("show", "HEAD:README.md") == "other task on main"
+
+
+def test_busy_reuses_archive_for_unchanged_head(repo):
+    repo.busy = True
+    repo.write(APP + "page.tsx", "checkpoint")
+    repo.tick()
+    first = repo.git("ls-remote", "--tags", "origin")
+    repo.now += 1800
+    repo.tick()
+    repo.now += 1800
+    repo.tick()
+    assert repo.git("ls-remote", "--tags", "origin") == first
+    repo.write(APP + "page.tsx", "new checkpoint")
+    repo.now += 1800
+    repo.tick()
+    assert len(repo.git("ls-remote", "--tags", "origin").splitlines()) == 2
+
+
+def test_carry_over_still_refuses_merge_from_another_branch(repo):
+    pr = approve_fixture(repo)
+    repo.git("switch", "-c", "unmerged-feature")
+    repo.write(PUBLIC + "unreviewed.svg", "other branch")
+    repo.git("add", PUBLIC + "unreviewed.svg")
+    repo.git("commit", "-m", "unreviewed feature")
+    repo.git("switch", BRANCH)
+    repo.write(APP + "page.tsx", "local")
+    repo.tick(True)
+    repo.git("merge", "--no-edit", "unmerged-feature")
+    merge_fixture_pr(repo, pr)
+    with pytest.raises(SYNC.SyncError, match="merge"):
+        repo.tick()
+    assert not repo.git("tag")
+
+
+@pytest.mark.parametrize("token", FAKE_TOKENS, ids=["github", "github-pat", "sk", "aws", "pem"])
+def test_carry_over_rescans_shaped_tokens_before_archive(repo, token):
+    # Deliberately synthetic history bypasses snapshot(), to exercise the second scan.
+    repo.write(APP + "fixture.txt", token)
+    repo.git("add", APP + "fixture.txt")
+    repo.git("commit", "-m", "synthetic refused history")
+    repo.write(APP + "page.tsx", "safe screen edit")
+    with pytest.raises(SYNC.SyncError, match="refused content"):
+        repo.tick()
+    assert not repo.git("ls-remote", "--tags", "origin")
+    assert repo.git("show", "HEAD:" + APP + "page.tsx") == "safe screen edit"

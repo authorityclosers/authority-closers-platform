@@ -29,7 +29,11 @@ from pathlib import Path
 
 PREFIXES = ("apps/sales-xray-web/app/", "apps/sales-xray-web/public/")
 STUDIO = "task/ui/296-studio-"
-TOKENS = (b"ghp_", b"github_pat_", b"sk-", b"AKIA", b"-----BEGIN")
+TOKENS = re.compile(
+    rb"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|"
+    rb"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|"
+    rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"
+)
 LIMIT = 1024 * 1024
 IDENTITY = {
     "GIT_AUTHOR_NAME": "UI Studio",
@@ -146,7 +150,7 @@ class Sync:
                 if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT:
                     raise SyncError("Non-regular or oversized file")
                 data = stream.read(LIMIT + 1)
-            if len(data) > LIMIT or any(token in data for token in TOKENS):
+            if len(data) > LIMIT or TOKENS.search(data):
                 raise SyncError("Refused content")
             return ("100755" if info.st_mode & stat.S_IXUSR else "100644"), data
         except FileNotFoundError:
@@ -244,22 +248,32 @@ class Sync:
         }
         self.save()
 
+    def is_ancestor(self, ancestor, head):
+        return self.git("merge-base", ancestor, head).strip() == ancestor
+
     def transfer(self):
         pending = self.state["pending"]
         if pending.get("replaying"):
             raise SyncError(
                 "Interrupted replay needs local recovery; archive and checkout are preserved"
             )
+        self.git("fetch", "origin", "refs/heads/main:refs/remotes/origin/main")
+        main_head = self.git("rev-parse", "origin/main").strip()
         head = self.head()
         base = pending.get("main_base", pending["base"])
-        commits = (
+        candidates = (
             pending.get("commits", [])
-            + self.git("rev-list", "--reverse", f"{base}..{head}").split()
+            + self.git("rev-list", "--reverse", "--first-parent", f"{base}..{head}").split()
         )
-        # Do not archive unsafe history introduced manually between ticks.
-        for commit in commits:
-            if len(self.git("rev-list", "--parents", "-n", "1", commit).split()) != 2:
+        commits = []
+        # A refresh merge only brings main into this slice; the new slice has main.
+        for commit in candidates:
+            parents = self.git("rev-list", "--parents", "-n", "1", commit).split()[1:]
+            if len(parents) > 1 and all(self.is_ancestor(p, main_head) for p in parents[1:]):
+                continue
+            if len(parents) != 1:
                 raise SyncError("Carry-over contains a merge; local history preserved for review")
+            commits.append(commit)
             paths = self.git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", commit)
             for path in filter(None, paths.split("\0")):
                 if not path.startswith(PREFIXES) or not self.safe_name(path):
@@ -273,16 +287,18 @@ class Sync:
                             "Carry-over contains refused content; local history preserved"
                         )
                     blob = self.git("cat-file", "blob", oid).encode("utf-8", "surrogateescape")
-                    if any(token in blob for token in TOKENS):
+                    if TOKENS.search(blob):
                         raise SyncError(
                             "Carry-over contains refused content; local history preserved"
                         )
-        tag = f"archive/studio-{int(self.now)}-{head[:12]}"
-        if not self.git("tag", "--list", tag).strip():
-            self.git("tag", tag, head)
-        elif self.git("rev-parse", tag).strip() != head:
-            raise SyncError("Archive tag collision; existing history preserved")
-        self.git("push", "origin", f"refs/tags/{tag}")
+        tag = pending.get("archive")
+        if not tag or self.git("rev-parse", f"refs/tags/{tag}").strip() != head:
+            tag = f"archive/studio-{int(self.now)}-{head[:12]}"
+            if not self.git("tag", "--list", tag).strip():
+                self.git("tag", tag, head)
+            elif self.git("rev-parse", tag).strip() != head:
+                raise SyncError("Archive tag collision; existing history preserved")
+            self.git("push", "origin", f"refs/tags/{tag}")
         pending.update(archive=tag, commits=commits, main_base=head)
         self.save()
         try:
@@ -331,7 +347,24 @@ class Sync:
         if pr and self.approved(pr):
             return
         head = self.head()
+        self.git("fetch", "origin", f"refs/heads/{branch}")
+        remote = self.git("rev-parse", "FETCH_HEAD").strip()
+        if not self.is_ancestor(remote, head):
+            waiting = self.state.get("push_wait", {})
+            if waiting.get("branch") != branch:
+                waiting = self.state["push_wait"] = {"branch": branch, "since": self.now}
+            if self.now - waiting["since"] >= 7200 and not waiting.get("alerted"):
+                self.event(
+                    "alert", "remote-ahead", "Remote slice head has blocked pushes for two hours."
+                )
+                waiting["alerted"] = True
+            self.save()
+            return
+        if self.state.pop("push_wait", None):
+            self.save()
         self.git("push", "--set-upstream", "origin", branch)
+        if not branch.startswith(STUDIO):
+            return
         if not pr:
             if not self.git("diff", "--name-only", "origin/main...HEAD").strip():
                 return
@@ -357,7 +390,7 @@ class Sync:
                 body,
             )
             pr = self.pr(branch)
-        if not pr or not branch.startswith(STUDIO):
+        if not pr:
             return
         key = str(pr["number"])
         pacing = self.state.setdefault("prs", {}).setdefault(key, {})
