@@ -218,6 +218,11 @@ class _ProviderExtras(BaseModel):
     findings: list[dict[str, int]] = []
 
 
+class _IntegerKeys(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    counts: dict[int, int]
+
+
 class _UnrelatedFixture(BaseModel):
     sentinel_9f3c_private_words: str = ""
 
@@ -232,6 +237,32 @@ def test_mapping_keys_are_redacted_even_when_another_model_declares_the_word(key
     assert detail["errors"] == [{"loc": "provider_extras.<key>", "type": "int_type"}]
     assert key == "provider_extras" or key not in canonical_failure_detail(detail).replace(
         "provider_extras", ""
+    )
+
+
+def test_integer_mapping_keys_are_redacted_in_str_keyed_mappings() -> None:
+    # CTO review of 5c447f3: an integer key is a mapping key, not an array index.
+    with pytest.raises(ValidationError) as caught:
+        _ProviderExtras.model_validate({"provider_extras": {123456789: "fictional noninteger"}})
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert {entry["loc"] for entry in detail["errors"]} <= {
+        "provider_extras.<key>",
+        "provider_extras.<key>.<key>",
+    }
+    assert "123456789" not in canonical_failure_detail(detail)
+
+
+def test_integer_mapping_keys_are_redacted_in_int_keyed_mappings() -> None:
+    with pytest.raises(ValidationError) as caught:
+        _IntegerKeys.model_validate({"counts": {123456789: "fictional noninteger"}})
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert detail["errors"] == [{"loc": "counts.<key>", "type": "int_type"}]
+    assert "123456789" not in canonical_failure_detail(detail)
+
+
+def test_list_indices_are_still_kept() -> None:
+    assert module._loc(("findings", 4, "summary"), "int_type", _ProviderExtras) == (
+        "findings.4.<key>"
     )
 
 

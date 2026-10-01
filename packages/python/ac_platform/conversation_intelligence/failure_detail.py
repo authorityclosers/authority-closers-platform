@@ -164,17 +164,18 @@ def _step(node: object, part: object) -> tuple[str, object]:
     """One location part under the schema ``node``: (kept text or ``<key>``, schema below it)."""
 
     candidates = _members(node)
+    mapping = next((c for c in candidates if _is_mapping(c)), None)
+    if mapping is not None:
+        # Any key of a mapping is provider data, whatever its type or word: a
+        # string, an integer, or a word some model declares elsewhere.
+        args = get_args(mapping)
+        return _REDACTED_KEY, args[1] if len(args) == 2 else None
     if isinstance(part, bool):
         return _REDACTED_KEY, None
     if isinstance(part, int):
         return str(part), _first(_item_type(c) for c in candidates)
     if not isinstance(part, str) or _KEY.fullmatch(part) is None:
         return _REDACTED_KEY, None
-    mapping = next((c for c in candidates if _is_mapping(c)), None)
-    if mapping is not None:
-        # Any key of a mapping is provider data, whatever word it happens to be.
-        args = get_args(mapping)
-        return _REDACTED_KEY, args[1] if len(args) == 2 else None
     for candidate in candidates:
         if _is_model(candidate):
             for name, field in candidate.model_fields.items():
