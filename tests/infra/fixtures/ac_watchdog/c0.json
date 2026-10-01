@@ -1,0 +1,24 @@
+{
+  "source": {
+    "issue": "AUT-585",
+    "exported_at": "2026-10-01T00:15:12Z",
+    "path": "/opt/ac-watchdog/ac_watchdog.py",
+    "original_sha256": "a0482b5970e1d0089d0841a422e3585e0e7f1d701913123688ee0d9652562988",
+    "sanitized_sha256": "a0482b5970e1d0089d0841a422e3585e0e7f1d701913123688ee0d9652562988",
+    "lines": 1210,
+    "redactions": [],
+    "config_injection": []
+  },
+  "studio": {
+    "number": 9001,
+    "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "lock": "/run/ac-studio-sync/ac-studio-sync.lock",
+    "old_lock": "/run/user/1002/ac-studio-sync.lock",
+    "initial_state": {
+      "approvals": {
+        "9000": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "fictional_marker": "keep-existing-state"
+    }
+  }
+}
