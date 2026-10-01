@@ -1,0 +1,253 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  ContractError,
+  onSale,
+  parseCheckout,
+  parseMePlan,
+  parseOfflinePayment,
+  parseOrder,
+  parsePlans,
+  parseProblem,
+  parseSubscriptions,
+  parseUsage,
+} from "./contract";
+import { FIXTURE_PLANS } from "../review-fixture/plans/fixture-billing";
+
+// Fictional shapes copied from contract C1 (AUT-560) and the AUT-418 read.
+const ORDER = {
+  order_id: "00000000-0000-4000-8000-0000000000aa",
+  kind: "subscription",
+  account: "personal",
+  status: "awaiting_payment",
+  mode: "test",
+  amount: { minor: 249900, currency: "INR", gst_inclusive: true },
+  plan_key: "personal",
+  plan_name: "Personal",
+  interval: "month",
+  seats: 1,
+  pack_key: null,
+  minutes: 800,
+  subscription_id: "00000000-0000-4000-8000-0000000000bb",
+  created_at: "2026-09-30T18:00:00Z",
+  paid_at: null,
+  refund: null,
+};
+
+const SUBSCRIPTION = {
+  subscription_id: "00000000-0000-4000-8000-0000000000bb",
+  account: "personal",
+  plan_key: "personal",
+  plan_name: "Personal",
+  interval: "month",
+  seats: 1,
+  amount: { minor: 249900, currency: "INR", gst_inclusive: true },
+  mode: "test",
+  status: "active",
+  current_period: {
+    start: "2026-09-30T18:00:00Z",
+    end: "2026-10-30T18:00:00Z",
+  },
+  renews_at: "2026-10-30T18:00:00Z",
+  cancel_at_period_end: false,
+  cancel_state: "none",
+  renewal_needs_customer_approval: false,
+  created_at: "2026-09-30T18:00:00Z",
+};
+
+describe("plans catalogue (GET /v1/plans)", () => {
+  it("parses the approved catalogue shape, sorted, and knows what is on sale", () => {
+    const plans = parsePlans(FIXTURE_PLANS);
+    expect(plans.map((plan) => plan.key)).toEqual([
+      "personal",
+      "organisation",
+      "enterprise",
+    ]);
+    expect(plans[0].prices?.monthlyPaise).toBe(249900);
+    expect(plans[0].topUpPacks[0]).toEqual({
+      key: "personal_100",
+      minutes: 100,
+      validityRule: "billing_year_end",
+      pricePaise: 29900,
+      priceCents: null,
+    });
+    expect(onSale(plans[0])).toBe(true);
+    expect(onSale(plans[2])).toBe(false);
+  });
+
+  it("treats a coming-soon plan with no prices as not on sale, and refuses unknown fields", () => {
+    const soon = parsePlans({
+      plans: [
+        {
+          ...FIXTURE_PLANS.plans[0],
+          status: "coming_soon",
+          prices: null,
+          top_up_packs: [
+            { key: "p", minutes: 100, validity_rule: "billing_year_end" },
+          ],
+        },
+      ],
+    })[0];
+    expect(onSale(soon)).toBe(false);
+    expect(soon.topUpPacks[0].pricePaise).toBeNull();
+    expect(() =>
+      parsePlans({ plans: [{ ...FIXTURE_PLANS.plans[0], surprise: 1 }] }),
+    ).toThrow(ContractError);
+    expect(() =>
+      parsePlans({
+        plans: [
+          {
+            ...FIXTURE_PLANS.plans[0],
+            top_up_packs: [{ key: "p", minutes: 100, validity_rule: "days" }],
+          },
+        ],
+      }),
+    ).toThrow(ContractError);
+  });
+});
+
+describe("plan in effect and usage (AUT-417)", () => {
+  it("parses /v1/me/plan and /v1/me/usage", () => {
+    const me = parseMePlan({
+      plan: { key: "trial", name: "Trial" },
+      allowance: {
+        allowance_seconds: 6000,
+        committed_seconds: 2280,
+        available_seconds: 3720,
+      },
+      longest_call_seconds: 6000,
+    });
+    expect(me.allowance).toEqual({
+      allowanceSeconds: 6000,
+      committedSeconds: 2280,
+      availableSeconds: 3720,
+      unlimited: false,
+    });
+    const usage = parseUsage({
+      allowance: {
+        allowance_seconds: 6000,
+        committed_seconds: 2280,
+        available_seconds: 3720,
+        unlimited: true,
+      },
+      calls: [
+        {
+          submission_id: "s1",
+          created_at: "2026-09-30T00:00:00Z",
+          display_name: "A call",
+          seconds: 1380,
+          state: "charged",
+        },
+      ],
+      earlier_seconds: 900,
+      truncated: false,
+    });
+    expect(usage.allowance.unlimited).toBe(true);
+    expect(usage.calls[0].state).toBe("charged");
+    expect(() =>
+      parseUsage({
+        allowance: {},
+        calls: [],
+        earlier_seconds: 0,
+        truncated: false,
+      }),
+    ).toThrow(ContractError);
+  });
+});
+
+describe("contract C1", () => {
+  it("parses a checkout response with its hosted step", () => {
+    const checkout = parseCheckout({
+      order: ORDER,
+      hosted: {
+        provider: "razorpay",
+        kind: "client_sdk",
+        url: null,
+        params: { key_id: "rzp_test_x", order_ref: "order_x" },
+        expires_at: "2026-09-30T18:15:00Z",
+      },
+    });
+    expect(checkout.order.status).toBe("awaiting_payment");
+    expect(checkout.hosted.params).toEqual({
+      key_id: "rzp_test_x",
+      order_ref: "order_x",
+    });
+    expect(() =>
+      parseCheckout({
+        order: ORDER,
+        hosted: {
+          provider: "x",
+          kind: "popup",
+          url: null,
+          params: {},
+          expires_at: "",
+        },
+      }),
+    ).toThrow(ContractError);
+  });
+
+  it("parses orders through every status, with a refund block when paid", () => {
+    for (const status of [
+      "awaiting_payment",
+      "confirming",
+      "paid",
+      "failed",
+      "expired",
+      "needs_review",
+    ])
+      expect(parseOrder({ ...ORDER, status }).status).toBe(status);
+    const paid = parseOrder({
+      ...ORDER,
+      status: "paid",
+      paid_at: "2026-09-30T18:05:00Z",
+      refund: {
+        payment_id: "pay_x",
+        refundable_until: "2026-10-07T18:05:00Z",
+        state: "available",
+        reason_code: null,
+      },
+    });
+    expect(paid.refund?.state).toBe("available");
+    expect(() => parseOrder({ ...ORDER, status: "settled" })).toThrow(
+      ContractError,
+    );
+    expect(() => parseOrder({ ...ORDER, price: 1 })).toThrow(ContractError);
+  });
+
+  it("parses subscriptions and the cancel-at-period-end state", () => {
+    const subs = parseSubscriptions({
+      current: {
+        ...SUBSCRIPTION,
+        cancel_at_period_end: true,
+        cancel_state: "confirmed",
+      },
+      past: [{ ...SUBSCRIPTION, status: "ended" }],
+    });
+    expect(subs.current?.cancelAtPeriodEnd).toBe(true);
+    expect(subs.past[0].status).toBe("ended");
+    expect(parseSubscriptions({ current: null, past: [] }).current).toBeNull();
+  });
+
+  it("parses offline payment details and problem bodies", () => {
+    const offline = parseOfflinePayment({
+      enabled: true,
+      payee_name: "Fictional Payee",
+      upi_id: "fixture@upi",
+      bank: null,
+      instructions: null,
+      revision: 2,
+    });
+    expect(offline.upiId).toBe("fixture@upi");
+    expect(
+      parseProblem({
+        type: "about:blank",
+        title: "Not on sale",
+        status: 409,
+        detail: "Not yet.",
+        code: "not_on_sale",
+      })?.code,
+    ).toBe("not_on_sale");
+    expect(parseProblem("<html>")).toBeNull();
+    expect(parseProblem({ message: "nope" })).toBeNull();
+  });
+});

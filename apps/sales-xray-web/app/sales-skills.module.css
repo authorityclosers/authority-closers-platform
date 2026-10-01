@@ -380,19 +380,26 @@
     grid-template-columns: 1fr;
   }
 
+  /* A sideways strip of skills that snaps card by card; the next card
+     peeks in from the edge so it reads as scrollable. */
   .list {
     display: flex;
     gap: 6px;
     max-height: none;
+    padding: 8px 10px;
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--lx-line-soft, var(--lx-line));
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 10px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .item {
     flex: none;
     width: auto;
-    max-width: 240px;
+    max-width: min(240px, 72vw);
+    scroll-snap-align: start;
   }
 
   .detail {
@@ -417,5 +424,19 @@
   .print p,
   .print blockquote {
     margin: 0;
+  }
+}
+
+/* Press feedback and touch-safe hover. */
+.item:active {
+  background: color-mix(in srgb, var(--lx-ink) 8%, transparent);
+}
+.pager button:active {
+  transform: scale(0.96);
+  transition-duration: 60ms;
+}
+@media (hover: none) {
+  .item:not([aria-selected="true"]):hover {
+    background: transparent;
   }
 }

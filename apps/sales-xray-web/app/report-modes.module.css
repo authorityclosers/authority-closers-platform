@@ -320,18 +320,48 @@
   border: 0;
 }
 
-/* Narrow: the view choice gets its own line above the scrolling sections. */
+/* Narrow: one row. The sections scroll sideways and the view choice shrinks
+   to two icon buttons at the end (their names stay for screen readers), so
+   the pinned bar costs one line, not two. */
 @media (max-width: 760px) {
   .navRow {
-    flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
   }
 
   .toolbar {
-    order: -1;
-    width: 100%;
-    justify-content: flex-end;
-    padding-top: 6px;
+    flex: none;
+    padding-left: 8px;
+    border-left: 1px solid var(--report-border);
+  }
+
+  .toolbar > button {
+    width: 40px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 10px;
+  }
+
+  .toolbar > button:last-child {
+    margin-left: 4px;
+  }
+
+  .toolbar > button:first-child {
+    border-radius: 10px;
+  }
+
+  .toolbarLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .toolbar svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -363,11 +393,6 @@
     margin-bottom: 14px;
     font-size: 21px;
     scroll-margin-block-start: var(--report-scroll-target-offset, 68px);
-  }
-
-  .toolbar > button {
-    min-height: 44px;
-    min-width: 94px;
   }
 }
 
@@ -410,7 +435,7 @@
   margin-inline: -16px;
   padding: 8px 16px 0;
   border-bottom-color: transparent;
-  background: color-mix(in srgb, var(--lx-paper) 82%, transparent);
+  background: color-mix(in srgb, var(--lx-paper) 90%, transparent);
   -webkit-backdrop-filter: saturate(1.6) blur(18px);
   backdrop-filter: saturate(1.6) blur(18px);
   box-shadow:
@@ -570,8 +595,10 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-/* A narrower top bar keeps labels only on the current section. */
-@container shell-toolbar (max-width: 660px) {
+/* A narrower top bar keeps labels only on the current section: eight
+   labelled sections need about 1000px, which a 1440px screen does not have
+   once the shell's own controls take their share. */
+@container shell-toolbar (max-width: 1080px) {
   .navRow[data-placement="toolbar"] .tabNavigation button,
   .navRow[data-placement="toolbar"] .contents a {
     padding: 0 9px;

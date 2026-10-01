@@ -78,9 +78,25 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   ).not.toBeNull();
   expect(report?.textContent).toContain("59:58");
   // Real report sections and the one call dock.
-  expect(container.querySelectorAll("[data-report-mode-section]")).toHaveLength(
-    6,
-  );
+  // The same eight sections as the live report, in the same order.
+  expect(
+    [...container.querySelectorAll("[data-report-mode-section]")].map((s) =>
+      s.getAttribute("data-report-mode-section"),
+    ),
+  ).toEqual([
+    "overview",
+    "moments",
+    "prospect",
+    "next-call-plan",
+    "skills",
+    "signals",
+    "transcript",
+    "raw-data",
+  ]);
+  // The header's glance strip and call map are mounted too.
+  expect(
+    report?.querySelector('[aria-label="This call at a glance"]'),
+  ).not.toBeNull();
   expect(
     container.querySelector('[aria-label="Call audio player"] audio'),
   ).not.toBeNull();

@@ -225,6 +225,23 @@
   }
 }
 
+/* Phones: the outcome's play chip drops under the text so the sentence keeps
+   a readable measure. */
+@media (max-width: 640px) {
+  .outcome {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+  .outcomeText {
+    flex-basis: calc(100% - 52px);
+  }
+  .outcomePlay {
+    min-height: 32px;
+    margin-left: 52px;
+    padding: 4px 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .move {
     animation: none;
