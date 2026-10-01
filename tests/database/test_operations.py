@@ -57,6 +57,10 @@ def _migration_path() -> Path:
     )
 
 
+# Added after 0006 by later migrations; 0006 itself must build every other column.
+LATER_OPERATIONS_COLUMNS = {"jobs": {"failure_detail"}}  # 20260930_0061
+
+
 def _migration_module() -> ModuleType:
     specification = importlib.util.spec_from_file_location(
         "operations_migration",
@@ -147,8 +151,10 @@ def test_operations_migration_builds_every_durable_table_with_model_parity() -> 
         assert expected_tables.issubset(inspector.get_table_names())
         models = _operations_metadata()
         for table_name in expected_tables:
-            assert {column["name"] for column in inspector.get_columns(table_name)} == set(
-                models[table_name].columns.keys()
+            # Columns that later forward-only migrations add to these tables.
+            later_columns = LATER_OPERATIONS_COLUMNS.get(table_name, set())
+            assert {column["name"] for column in inspector.get_columns(table_name)} == (
+                set(models[table_name].columns.keys()) - later_columns
             )
             migrated_checks = {
                 constraint["name"] for constraint in inspector.get_check_constraints(table_name)
