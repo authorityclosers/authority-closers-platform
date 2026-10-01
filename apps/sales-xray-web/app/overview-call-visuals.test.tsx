@@ -137,8 +137,12 @@ it("leaves silent minutes as chart gaps and keeps an unmeasured talk share unava
       <OverviewCallVisuals transcript={silent} onSeek={() => undefined} />,
     ),
   );
-  expect(host.querySelectorAll("svg path")).toHaveLength(0);
-  expect(host.querySelectorAll("svg circle")).toHaveLength(4);
+  expect(
+    host.querySelectorAll('svg[preserveAspectRatio="none"] path'),
+  ).toHaveLength(0);
+  expect(
+    host.querySelectorAll('svg[preserveAspectRatio="none"] circle'),
+  ).toHaveLength(4);
   expect(host.textContent).not.toContain("Quiet start:");
   await act(async () =>
     root.render(

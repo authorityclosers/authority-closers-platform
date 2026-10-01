@@ -34,7 +34,7 @@ export function CallMapPreview() {
     <div data-call-map-fixture>
       <p>
         Fictional call-map fixture · Qivra Works / LumaBoard. These cards and
-        sources use only this fixture's dialogue and timestamps. No audio
+        sources use only this fixture&apos;s dialogue and timestamps. No audio
         exists.
       </p>
       <OverviewCallVisuals

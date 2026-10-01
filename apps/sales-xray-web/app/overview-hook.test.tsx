@@ -161,7 +161,7 @@ describe("OverviewHook phase cards", () => {
     await act(async () =>
       root.render(
         <OverviewHook
-          report={{ ...report, overview: null }}
+          report={{ ...report, overview: undefined }}
           transcript={transcript}
           callId={null}
           onSeek={seek}
@@ -178,7 +178,7 @@ describe("OverviewHook phase cards", () => {
     expect(
       visuals.querySelector('[aria-label="Call map AI visual readings"]'),
     ).toBeNull();
-    expect(host.textContent).toContain("Call signals");
+    expect(host.textContent).toContain("Signals from the call");
     await act(async () =>
       visuals.querySelector<HTMLButtonElement>("button")!.click(),
     );
