@@ -973,3 +973,114 @@ it("browser Back cancels an unfinished reading-section jump without a return poi
     restoreRect();
   }
 });
+
+it("switches to Document view and preserves the reader's place", async () => {
+  window.history.replaceState(null, "", `/?call=${call}&section=moments`);
+  await render(call);
+
+  // Initial state in Reading view
+  expect(mode().dataset.view).toBe("reading");
+  expect(mode().dataset.reportSection).toBe("moments");
+
+  // Click Document view button
+  const docButton = container.querySelector<HTMLButtonElement>(
+    'button[title="Document view"]',
+  )!;
+  expect(docButton).not.toBeNull();
+  await act(async () => docButton.click());
+
+  // Mode and URL updated to Document view
+  expect(mode().dataset.view).toBe("document");
+  expect(window.location.search).toContain("view=document");
+  expect(window.location.search).toContain("section=moments");
+  expect(mode().dataset.reportSection).toBe("moments");
+
+  // Document view renders actions and pages
+  const pdfBtn = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Download PDF"),
+  );
+  expect(pdfBtn).not.toBeNull();
+  const wordBtn = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Download Word"),
+  );
+  expect(wordBtn).not.toBeNull();
+
+  // 7 pages rendered
+  const pages = container.querySelectorAll("[class*='documentPage']");
+  expect(pages).toHaveLength(7);
+
+  // Footers
+  expect(pages[0].textContent).toContain("Page 1 of 7");
+  expect(pages[6].textContent).toContain("Page 7 of 7");
+
+  // Cover page has no running header; page 2 has running header
+  expect(pages[0].querySelector("[class*='docRunningHeader']")).toBeNull();
+  expect(pages[1].querySelector("[class*='docRunningHeader']")).not.toBeNull();
+  expect(pages[1].textContent).toContain(
+    "Authority Closers — Sales Xray call report",
+  );
+
+  // Switch back to Tabbed view preserves place
+  const tabButton = container.querySelector<HTMLButtonElement>(
+    'button[title="Tabbed view"]',
+  )!;
+  await act(async () => tabButton.click());
+  expect(mode().dataset.view).toBe("tabs");
+  expect(mode().dataset.reportSection).toBe("moments");
+  expect(window.location.search).toContain("view=tabs");
+});
+
+it("controls text size with steps 100%, 112.5%, 125% and remembers choice", async () => {
+  localStorage.clear();
+  await render(call);
+
+  expect(mode().dataset.textSize).toBe("100");
+
+  const btn125 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 125%"]',
+  )!;
+  expect(btn125).not.toBeNull();
+  await act(async () => btn125.click());
+
+  expect(mode().dataset.textSize).toBe("125");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("125");
+
+  const btn112 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 112.5%"]',
+  )!;
+  await act(async () => btn112.click());
+  expect(mode().dataset.textSize).toBe("112.5");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("112.5");
+
+  const btn100 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 100%"]',
+  )!;
+  await act(async () => btn100.click());
+  expect(mode().dataset.textSize).toBe("100");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("100");
+});
+
+it("opens every top-level section as a chapter in Reading mode", async () => {
+  await render();
+  expect(mode().dataset.view).toBe("reading");
+
+  const openers = container.querySelectorAll("[class*='chapterOpener']");
+  expect(openers).toHaveLength(6);
+
+  const numbers = container.querySelectorAll("[class*='chapterNumber']");
+  expect(numbers[0].textContent).toBe("1.");
+  expect(numbers[1].textContent).toBe("2.");
+  expect(numbers[5].textContent).toBe("6.");
+
+  const titles = container.querySelectorAll("[class*='chapterTitle']");
+  expect(titles[0].textContent).toBe("Overview");
+  expect(titles[1].textContent).toBe("Prospect");
+
+  const rules = container.querySelectorAll("[class*='chapterRule']");
+  expect(rules).toHaveLength(6);
+
+  const summaries = container.querySelectorAll("[class*='chapterSummary']");
+  expect(summaries).toHaveLength(6);
+  expect(summaries[0].textContent).not.toBe("");
+});
+
