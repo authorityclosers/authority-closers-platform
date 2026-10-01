@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -147,30 +148,61 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
 
 
 def verify_manifests(
-    manifest_dir: Path, root: Path, shard_count: int, exclusion_file: Path
-) -> None:
+    manifest_dir: Path,
+    root: Path,
+    shard_count: int,
+    exclusion_file: Path,
+    *,
+    sha: str,
+    run_attempt: int,
+) -> dict[int, int]:
     """Prove that downloaded shard manifests cover every test exactly once."""
 
     discovered = discover_test_files(root)
     excluded = read_exclusions(exclusion_file, discovered)
     expected = set(discovered) - set(excluded)
-    paths = sorted(manifest_dir.rglob("manifest.json"))
-    if len(paths) != shard_count:
+    selected: dict[int, tuple[int, Path]] = {}
+    for directory in sorted(manifest_dir.iterdir()) if manifest_dir.is_dir() else ():
+        match = re.fullmatch(
+            r"python-test-shard-([0-9a-f]{40})-([1-9][0-9]*)-(0|[1-9][0-9]*)", directory.name
+        )
+        if match is None or not directory.is_dir():
+            raise ShardConfigurationError(f"invalid shard artifact directory: {directory.name}")
+        artifact_sha, attempt_text, index_text = match.groups()
+        attempt, index = int(attempt_text), int(index_text)
+        if artifact_sha != sha:
+            raise ShardConfigurationError(f"foreign shard SHA: {directory.name}")
+        if attempt > run_attempt:
+            raise ShardConfigurationError(
+                f"shard attempt exceeds current attempt: {directory.name}"
+            )
+        if index >= shard_count:
+            raise ShardConfigurationError(
+                f"shard artifact index is outside shard count: {directory.name}"
+            )
+        if index not in selected or attempt > selected[index][0]:
+            selected[index] = (attempt, directory)
+    if len(selected) != shard_count:
         raise ShardConfigurationError(
-            f"expected {shard_count} shard manifests, found {len(paths)} in {manifest_dir}"
+            f"expected {shard_count} shard manifests, found {len(selected)} in {manifest_dir}"
         )
 
     manifests: list[dict[str, Any]] = []
-    for path in paths:
+    for index, (_, directory) in sorted(selected.items()):
+        path = directory / "manifest.json"
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise ShardConfigurationError(f"invalid shard manifest {path}: {exc}") from exc
         if not isinstance(value, dict):
             raise ShardConfigurationError(f"shard manifest is not an object: {path}")
+        if type(value.get("shard_index")) is not int or value["shard_index"] != index:
+            raise ShardConfigurationError(
+                f"shard artifact/manifest index mismatch: {directory.name}"
+            )
         manifests.append(value)
 
-    indices = [manifest.get("shard_index") for manifest in manifests]
+    indices: list[Any] = [manifest.get("shard_index") for manifest in manifests]
     if sorted(indices) != list(range(shard_count)):
         raise ShardConfigurationError(f"shard indexes are not complete: {indices!r}")
 
@@ -204,6 +236,7 @@ def verify_manifests(
         missing = sorted(expected - set(assigned))
         extra = sorted(set(assigned) - expected)
         raise ShardConfigurationError(f"shard coverage mismatch; missing={missing}, extra={extra}")
+    return {index: attempt for index, (attempt, _) in sorted(selected.items())}
 
 
 def _parse_junit_skips(path: Path) -> tuple[str, ...]:
@@ -285,6 +318,8 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--shard-count", type=int, required=True)
     verify.add_argument("--exclude-file", type=Path, required=True)
     verify.add_argument("--manifest-dir", type=Path, required=True)
+    verify.add_argument("--sha", required=True)
+    verify.add_argument("--run-attempt", type=int, required=True)
     return parser
 
 
@@ -293,12 +328,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "run":
             return run_shard(args)
-        verify_manifests(
+        selected = verify_manifests(
             args.manifest_dir.resolve(),
             args.root.resolve(),
             args.shard_count,
             args.exclude_file.resolve(),
+            sha=args.sha,
+            run_attempt=args.run_attempt,
         )
+        for index, attempt in selected.items():
+            print(f"selected shard {index}: attempt {attempt}")
     except ShardConfigurationError as exc:
         print(f"python test shard configuration error: {exc}", file=sys.stderr)
         return 2
