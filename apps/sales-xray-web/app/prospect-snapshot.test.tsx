@@ -101,7 +101,7 @@ it("separates the report observation, exact source words, and hypothesis", async
     card.querySelector('[data-prospect-part="verbatim"]')?.textContent,
   ).toContain(interpretation.source.evidence[0].quote);
   const hypothesis = card.querySelector('[data-prospect-part="hypothesis"]')!;
-  expect(hypothesis.textContent).toContain("Hypothesis · not a fact");
+  expect(hypothesis.textContent).toContain("A guess, not a fact");
   expect(hypothesis.textContent).toContain(interpretation.possible_concern);
   expect(hypothesis.textContent).not.toContain(
     interpretation.source.evidence[0].quote,
@@ -130,13 +130,11 @@ it("keeps guest preview counts and never renders withheld interpretations", asyn
   expect(lock.dataset.visibleCount).toBe("1");
   expect(lock.dataset.totalCount).toBe("3");
   expect(lock.textContent).toContain("2 more prospect interpretations");
-  expect(lock.textContent).toContain(
-    "Unlock remaining interpretations with a free account",
-  );
+  expect(lock.textContent).toContain("Unlock with a free account");
   expect(container.textContent).not.toContain("Hidden interpretation content");
 
   const continueFree = [...container.querySelectorAll("button")].find(
-    (button) => button.textContent?.includes("Continue free"),
+    (button) => button.textContent?.includes("Unlock with a free account"),
   )!;
   await act(async () => continueFree.click());
   expect(unlock).toHaveBeenCalledOnce();
@@ -169,7 +167,5 @@ it.each(["legacy report without overview", "overview with no interpretations"])(
 it("keeps complete account reports free of guest locks", async () => {
   await render(parsedReport());
   expect(container.querySelector("[data-preview-section]")).toBeNull();
-  expect(container.textContent).not.toContain(
-    "Unlock remaining interpretations",
-  );
+  expect(container.textContent).not.toContain("Unlock with a free account");
 });

@@ -147,11 +147,11 @@ const UNIT_KIND: Array<[RegExp, HeardNumber["kind"]]> = [
   ],
 ];
 const NUMBER =
-  /(?<![\p{L}\d])((?:₹|Rs\.?|INR)\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|rupees?|रुपये|रुपए|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/giu;
+  /(?<![\p{L}\d])((?:₹|Rs\.?|INR|USD|\$|dollars?)\s*)?(\d+(?:[.,]\d+)?)(?:\s*(?:-|–|to|से|,)\s*(\d+(?:[.,]\d+)?))?\s*(CR|Cr|cr|crores?|करोड़|करोड|lakhs?|lac|लाख|L(?![\p{L}])|K(?![\p{L}])|thousand|हज़ार|हजार|rupees?|रुपये|रुपए|dollars?|USD|%|percent|प्रतिशत|टक्के|टक्का|days?|दिन|months?|महीने|महीना|years?|साल|बरस|minutes?|मिनट|min(?![\p{L}]))?/giu;
 
 /**
  * Numbers said with a unit, as spoken. Magnitudes stay quantities unless
- * nearby wording or an explicit currency symbol identifies money.
+ * explicit currency evidence identifies money.
  */
 export function numbersHeard(transcript: Transcript): HeardNumber[] {
   const rows: HeardNumber[] = [];
@@ -178,21 +178,13 @@ export function numbersHeard(transcript: Transcript): HeardNumber[] {
         );
       const explicitCurrencyEvidence =
         rupee ||
-        /^(?:rupees?|रुपये|रुपए)$/iu.test(unit ?? "") ||
+        /^(?:rupees?|रुपये|रुपए|dollars?|usd)$/iu.test(unit ?? "") ||
         (!objectCount &&
           (/\b(?:inr|rs\.?|rupees?|रुप(?:ये|ए)|कीमत|मूल्य|पैसे|बजट|टर्नओवर)\s*$/iu.test(
             before,
           ) ||
-            /^\s*(?:rupees?|inr|रुप(?:ये|ए))\b/iu.test(after)));
-      const moneyContext =
-        !objectCount &&
-        (/\b(?:price|cost|budget|fee|salary|revenue|sales|turnover|profit|amount|money)\s+(?:of\s+)?$/iu.test(
-          before,
-        ) ||
-          /^\s*(?:worth|in\s+(?:revenue|sales|turnover|profit))\b/iu.test(
-            after,
-          ));
-      const currencyEvidence = explicitCurrencyEvidence || moneyContext;
+            /^\s*(?:rupees?|inr|usd|dollars?|रुप(?:ये|ए))\b/iu.test(after)));
+      const currencyEvidence = Boolean(explicitCurrencyEvidence);
       if (!unit && !currencyEvidence) continue;
       const kind = explicitCurrencyEvidence
         ? "money"

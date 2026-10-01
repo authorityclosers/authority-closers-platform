@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, type ReactNode } from "react";
 
 const ReportReadingContext = createContext(false);
 const ReportInlineContext = createContext(false);
@@ -16,8 +16,31 @@ export function useReportInline(): boolean {
   return useContext(ReportInlineContext);
 }
 
+/** Asks the report to jump to a section, from outside its sections. */
+export const REPORT_GO_EVENT = "sales-xray:report-go";
+
+export function goToReportSection(section: string) {
+  window.dispatchEvent(
+    new CustomEvent<string>(REPORT_GO_EVENT, { detail: section }),
+  );
+}
+
 export function useReportNavigation(): NavigateToReport | null {
   return useContext(ReportNavigationContext);
+}
+
+/** Lets controls outside the sections (the header's glance tiles) jump. */
+function GoListener({ navigate }: { navigate?: NavigateToReport }) {
+  useEffect(() => {
+    if (!navigate) return;
+    const go = (event: Event) => {
+      const section = (event as CustomEvent<unknown>).detail;
+      if (typeof section === "string") navigate(section);
+    };
+    window.addEventListener(REPORT_GO_EVENT, go);
+    return () => window.removeEventListener(REPORT_GO_EVENT, go);
+  }, [navigate]);
+  return null;
 }
 
 export function ReportReadingProvider({
@@ -33,6 +56,7 @@ export function ReportReadingProvider({
 }) {
   return (
     <ReportNavigationContext.Provider value={navigate ?? null}>
+      <GoListener navigate={navigate} />
       <ReportReadingContext.Provider value={reading}>
         <ReportInlineContext.Provider value={inline}>
           {children}

@@ -89,7 +89,10 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
     "Development fixture · fictional data",
   );
   expect(container.querySelector("audio")?.getAttribute("src")).toBeNull();
-  const requested = fetchMock.mock.calls.map(([url]) => String(url));
+  // Our own static icon files (brand logos, emotes) are not data requests.
+  const requested = fetchMock.mock.calls
+    .map(([url]) => String(url))
+    .filter((url) => !/^\/(?:brands|emotes)\//.test(url));
   // Only the rail and mobile profile menus' read-only profile GETs.
   expect(requested.length).toBeGreaterThan(0);
   expect(new Set(requested)).toEqual(new Set(["/v1/me/sales-xray-profile"]));

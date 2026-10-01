@@ -137,6 +137,11 @@ q.words {
   quotes: "“" "”";
 }
 
+/* A quote with mention chips reads as one line of text, not a stack. */
+q.words {
+  display: block;
+}
+
 .chip,
 .warn {
   justify-self: start;
