@@ -132,6 +132,53 @@ def allowed_request(method: str, url: str) -> bool:
     } or target.path.startswith("/_next/static/")
 
 
+def validate_presale_catalogue(response) -> None:
+    """Observed C1 §5 evidence must prove this limited check is supported."""
+    problem_keys = {"type", "title", "status", "detail", "code"}
+    if response.status == 501:
+        return
+    if response.status == 404:
+        require(
+            response.headers.get("content-type", "").split(";")[0].strip().lower()
+            != "application/problem+json"
+        )
+        try:
+            body = response.json()
+        except ValueError:
+            return  # A missing route may serve HTML or an empty body.
+        require(not isinstance(body, dict) or not problem_keys.intersection(body))
+        return
+    body = response.json()
+    if response.status == 409:
+        require(isinstance(body, dict) and set(body) == problem_keys)
+        require(type(body["status"]) is int and body["status"] == 409)
+        require(all(isinstance(body[key], str) for key in problem_keys - {"status"}))
+        require(body["code"] == "not_on_sale")
+        return
+    require(response.status == 200)
+    # Check the C1 sale fields without inventing unrelated catalogue metadata.
+    if isinstance(body, dict):
+        require(set(body) == {"items"})
+        body = body["items"]
+    require(isinstance(body, list) and bool(body))
+    for plan in body:
+        require(isinstance(plan, dict) and {"status", "prices"}.issubset(plan))
+        require(plan["status"] in ("coming_soon", "active"))
+        prices = plan["prices"]
+        if prices is not None:
+            require(plan["status"] == "active" and isinstance(prices, dict))
+            require(
+                set(prices) == {"monthly_paise", "yearly_paise", "monthly_cents", "yearly_cents"}
+            )
+            require(
+                all(
+                    value is None or (type(value) is int and value >= 0)
+                    for value in prices.values()
+                )
+            )
+            raise InvalidConfig  # Buyable even if the UI and QA purchase pin are stale.
+
+
 def check_presale(page, offline_enabled: bool) -> None:
     for role in ("button", "link"):
         actions = page.get_by_role(role, name=BUY)
@@ -158,6 +205,7 @@ def browse(session: dict) -> None:
 
     refused = []
     identity_confirmed = []
+    catalogue_confirmed = []
     offline_enabled = [False]
 
     def refuse_socket(socket) -> None:
@@ -194,6 +242,9 @@ def browse(session: dict) -> None:
                 route.abort()
                 return
             identity_confirmed.append(True)
+        if path == "/v1/plans":
+            validate_presale_catalogue(response)
+            catalogue_confirmed.append(True)
         if path == "/v1/billing/offline-payment" and response.status == 200:
             enabled = response.json().get("enabled")
             check(type(enabled) is bool)
@@ -219,7 +270,7 @@ def browse(session: dict) -> None:
             context.route_web_socket("**/*", refuse_socket)
             page = context.new_page()
             response = page.goto(ORIGIN + "/plans", wait_until="networkidle", timeout=15000)
-            require(not refused and bool(identity_confirmed))
+            require(not refused and bool(identity_confirmed) and bool(catalogue_confirmed))
             check(response is not None and response.status == 200)
             check(offline_enabled[0] == session["offline_enabled"])
             check_presale(page, offline_enabled[0])

@@ -16,6 +16,15 @@ journey = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(journey)
 RELEASE = "a" * 40
 ARGS = ["--environment", "dev", "--release-id", RELEASE, "--execute"]
+PRESALE = {"status": "coming_soon", "prices": None}
+PRICES = {"monthly_paise": 100, "yearly_paise": 1000, "monthly_cents": None, "yearly_cents": None}
+PROBLEM = {
+    "type": "about:blank",
+    "title": "Not on sale",
+    "status": 409,
+    "detail": "Not on sale yet",
+    "code": "not_on_sale",
+}
 
 
 class Locator:
@@ -93,7 +102,17 @@ def browser(monkeypatch, runtime):
     from playwright import sync_api
 
     state = SimpleNamespace(
-        launches=0, requests=[], page=Page(), status=200, identity=True, closed=False, extra=[]
+        launches=0,
+        requests=[],
+        page=Page(),
+        status=200,
+        identity=True,
+        closed=False,
+        extra=[],
+        catalogue=True,
+        catalogue_status=200,
+        catalogue_body={"items": [PRESALE]},
+        catalogue_type="application/json",
     )
 
     class Route:
@@ -118,6 +137,18 @@ def browser(monkeypatch, runtime):
                 return SimpleNamespace(
                     status=200, json=lambda: {"enabled": runtime[0]["offline_enabled"]}
                 )
+            if url.endswith("/v1/plans"):
+
+                def body():
+                    if isinstance(state.catalogue_body, Exception):
+                        raise state.catalogue_body
+                    return state.catalogue_body
+
+                return SimpleNamespace(
+                    status=state.catalogue_status,
+                    headers={"content-type": state.catalogue_type},
+                    json=body,
+                )
             return SimpleNamespace(status=state.status)
 
         def fulfill(self, *, response):
@@ -133,6 +164,8 @@ def browser(monkeypatch, runtime):
         def new_page(self):
             def goto(url, **kwargs):
                 self.callback(Route("GET", url))
+                if state.catalogue:
+                    self.callback(Route("GET", journey.ORIGIN + "/v1/plans"))
                 self.callback(Route("GET", journey.ORIGIN + "/v1/billing/offline-payment"))
                 for method, extra_url in state.extra:
                     self.callback(Route(method, extra_url))
@@ -273,6 +306,97 @@ def test_presale_contract_and_exit_codes(capsys, runtime, browser, text, offline
     assert result["covered_steps"] == (
         ["fixture_manifest", "plans_pre_sale"] if code == 0 else ["fixture_manifest"]
     )
+
+
+@pytest.mark.parametrize("prefix", [[], [PRESALE]])
+def test_buyable_catalogue_refuses_stale_presale_page(capsys, browser, runtime, prefix):
+    # Local purchase pin and UI both say pre-sale, but observed C1 evidence wins.
+    assert runtime[0]["purchase_enabled"] is False
+    browser.catalogue_body = {"items": [*prefix, {"status": "active", "prices": PRICES}]}
+    result = invoke(capsys, ARGS, 2)
+    assert result["status"] == "invalid" and result["failing_step"] == "plans_pre_sale"
+    assert result["covered_steps"] == ["fixture_manifest"] and browser.closed
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"items": [PRESALE]},
+        [PRESALE],
+        {"items": [{"status": "active", "prices": None}]},
+    ],
+)
+def test_observed_nonbuyable_catalogue(capsys, browser, body):
+    browser.catalogue_body = body
+    assert invoke(capsys, ARGS, 0)["covered_steps"] == ["fixture_manifest", "plans_pre_sale"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        None,
+        {},
+        [],
+        {"items": []},
+        {"items": None},
+        {"items": "invalid"},
+        {"items": [None]},
+        {"items": [{}]},
+        {"items": [{"status": "coming_soon"}]},
+        {"items": [{"prices": None}]},
+        {"items": [{"status": True, "prices": None}]},
+        {"items": [{"status": "draft", "prices": None}]},
+        {"items": [{"status": "unknown", "prices": None}]},
+        {"items": [{"status": "coming_soon", "prices": PRICES}]},
+        {"items": [{"status": "active", "prices": {}}]},
+        {"items": [{"status": "active", "prices": "fictional-cookie-value"}]},
+        {"items": [{"status": "active", "prices": {**PRICES, "monthly_paise": True}}]},
+        {"items": [{"status": "active", "prices": {**PRICES, "monthly_paise": -1}}]},
+        {"items": [{"status": "active", "prices": {**PRICES, "monthly_paise": 1.5}}]},
+        {"items": [{"status": "active", "prices": {**PRICES, "extra": 0}}]},
+        {"items": [PRESALE, {}]},
+        {"items": [PRESALE], "extra": []},
+        ValueError("fictional-cookie-value"),
+    ],
+)
+def test_malformed_catalogue_never_passes(capsys, browser, body):
+    browser.catalogue_body = body
+    assert invoke(capsys, ARGS, 2)["covered_steps"] == ["fixture_manifest"]
+    assert browser.closed
+
+
+def test_missing_catalogue_never_passes(capsys, browser):
+    browser.catalogue = False
+    assert invoke(capsys, ARGS, 2)["failing_step"] == "plans_pre_sale"
+    assert browser.closed
+
+
+@pytest.mark.parametrize(
+    "status,body,content_type,code",
+    [
+        (404, ValueError("html route not found"), "text/html", 0),
+        (404, {"message": "route not found"}, "application/json", 0),
+        (501, None, "text/html", 0),
+        (409, PROBLEM, "application/problem+json", 0),
+        (404, {**PROBLEM, "status": 404}, "application/problem+json", 2),
+        (404, {**PROBLEM, "status": 404}, "application/json", 2),
+        (404, ValueError("fictional-cookie-value"), "application/problem+json", 2),
+        (409, {**PROBLEM, "code": "subscription_exists"}, "application/problem+json", 2),
+        (409, {"code": "not_on_sale"}, "application/problem+json", 2),
+        (409, ValueError("fictional-cookie-value"), "application/problem+json", 2),
+        (401, None, "application/problem+json", 2),
+        (403, None, "application/problem+json", 2),
+        (500, None, "text/html", 2),
+    ],
+)
+def test_catalogue_unavailable_states(capsys, browser, status, body, content_type, code):
+    browser.catalogue_status, browser.catalogue_body, browser.catalogue_type = (
+        status,
+        body,
+        content_type,
+    )
+    invoke(capsys, ARGS, code)
+    assert browser.closed
 
 
 @pytest.mark.parametrize(

@@ -30,7 +30,7 @@ secret redaction, exact pre-sale messages, offline enablement and exits 0/1/2.
 Existing Application validation includes these tests in its Python shards and
 format/lint checks; no workflow or dependency change is needed.
 
-Implementation verification on 2026-10-01: **45 tests passed**; targeted Ruff lint
+Initial verification on 2026-10-01 at `057f279`: **45 tests passed**; targeted Ruff lint
 and formatting passed; default CLI exited 0 with only the offline fixture check.
 The approximately 300-line target grew to 680 lines across the four allowed files:
 282 runner, 312 fake tests, 16 manifest and 70 evidence before this result note.
@@ -74,3 +74,36 @@ the gate base, and no fictional credential was read during implementation.
 QA runs the deployed check when its session and chooser are available. Full
 journeys, release verdicts, provisioning and release-train gates remain later
 T1b/K work. This runner never emits `Journey passed: <env> @ <release_id>`.
+
+## Review correction: observed catalogue evidence
+
+The [changes-requested review](/AUT/issues/AUT-655#comment-a2ab508f-23b8-43b6-97aa-0a0d5ff0e07d)
+identified a false pass when an active, priced catalogue disagreed with stale
+pre-sale copy and the local `purchase_enabled: false` pin. Two fake-browser
+regressions reproduced **0 instead of 2** on the submitted implementation,
+including a buyable plan after a nonbuyable plan; both now exit 2.
+
+Every observed `/v1/plans` response is checked before forwarding it to the page.
+A browser pass requires at least one valid catalogue response. C1 §5 permits
+404 without a problem body, 501, and a complete C1 409 `not_on_sale` problem;
+other errors and malformed problems refuse with 2. A 404 problem body is refused
+even if incorrectly labelled `application/json`.
+
+Reader format choice: the source pins per-plan sale fields but no envelope, so
+this bounded reader accepts a nonempty JSON list or a sole `items` list. Every
+item must have explicit `status` and `prices`; public status is `coming_soon` or
+`active`. `coming_soon` must hide prices. A non-null price object must have exactly
+the four AUT-418 minor-unit fields, each null or a nonnegative strict integer.
+Any `active` item with non-null prices refuses with 2, including all-null price
+values, regardless of UI controls or QA's pin. Unrelated plan metadata is unused.
+Empty, absent, non-JSON, malformed or unknown-shape catalogue evidence cannot
+produce `plans_pre_sale` in `covered_steps`. Response bodies stay runtime-only.
+
+Correction verification on 2026-10-01: **87 tests passed**; targeted Ruff lint and
+format checks passed; the default dry-run exited 0 for `fixture_manifest` only;
+`git diff --check` passed. Added tests cover API/UI disagreement, missing or
+malformed catalogue data, and permitted/refused unavailable responses. Changes
+remain in the four allowed files, with no dependency or environment change.
+No authenticated dev run, deployed release proof or full journey verdict is
+claimed. The existing CTO review and CEO approval still precede merge; QA then
+verifies the runner's availability on dev through the authorized fictional setup.
