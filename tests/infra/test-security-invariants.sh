@@ -158,3 +158,9 @@ if grep -Eq 'dist-upgrade|apt-get install -y docker-ce|apt-get install -y cloudf
 fi
 
 printf 'PASS  Foundation security invariants are represented in executable controls.\n'
+
+# Stale-lock cleanup must never remove live repository locks.
+if grep -q -- '--remove-all' "$foundation/scripts/ac-restic-backup-inner"; then
+  printf 'Restic unlock may remove live locks.\n' >&2
+  exit 1
+fi

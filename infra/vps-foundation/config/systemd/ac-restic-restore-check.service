@@ -4,6 +4,8 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+CacheDirectory=authority-closers-restic
+CacheDirectoryMode=0750
 Type=oneshot
 ExecStart=/usr/local/sbin/ac-restic-restore-check
 TimeoutStartSec=75min

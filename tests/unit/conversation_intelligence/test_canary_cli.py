@@ -5,7 +5,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -26,7 +26,9 @@ def test_disabled_never_opens_database(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cli, "load_pinned_approval", lambda _: None)
     monkeypatch.setattr(cli, "create_async_engine", lambda *a, **k: pytest.fail("database opened"))
     assert cli.main(["--environment", "development", "--json"]) == 0
-    assert '"stage_reached": "disabled"' in capsys.readouterr().out
+    result = json.loads(capsys.readouterr().out)
+    assert result["stage_reached"] == "disabled"
+    assert result["retention_ref"] is None
 
 
 @pytest.mark.parametrize(
@@ -95,7 +97,7 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "id": str(identifier),
         "plan_fingerprint": "a" * 64,
         "privacy_revision": "sales-xray-processing-plan-v1",
-        "max_cost_paise": 501 if scenario == "over_cap" else 500,
+        "max_cost_paise": 45_001 if scenario == "over_cap" else 45_000,
     }
     plans = SimpleNamespace(quote=AsyncMock(return_value=quote), accept=AsyncMock())
 
@@ -169,7 +171,9 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
         "total_seconds",
         "cost_paise",
         "report_present",
+        "retention_ref",
     }
+    assert result["retention_ref"] == "ref:retention:standard"
     assert result["ok"] == (scenario == "success")
     assert (result["stage_reached"], result["failure_code"]) == (stage, failure)
     assert result["report_present"] == (scenario in {"success", "invalid_report", "cleanup"})
@@ -179,3 +183,68 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
     assert plans.accept.await_count == (0 if scenario == "over_cap" else 1)
     if scenario != "over_cap":
         assert plans.accept.await_args.args[2].plan_fingerprint == quote["plan_fingerprint"]
+
+
+KEEP = "ref:retention/sales-xray-keep-for-training/v1"
+
+
+@pytest.mark.parametrize(
+    ("environment", "days", "ref", "allowed"),
+    [
+        ("development", 3650, KEEP, True),
+        ("staging", 3650, KEEP, True),
+        ("production", 3650, KEEP, False),
+        ("production", 7, KEEP, False),
+        ("production", 7, "ref:retention:standard", True),
+        ("development", 7, "ref:retention:standard", True),
+        ("staging", 7, "ref:retention:standard", True),
+        ("development", 30, "ref:retention:standard", False),
+        ("staging", 30, "ref:retention:standard", False),
+        ("production", 30, "ref:retention:standard", False),
+    ],
+)
+def test_retention_by_environment(monkeypatch, capsys, environment, days, ref, allowed) -> None:
+    """Keep-for-training runs only off production; refusals print JSON and exit non-zero."""
+    monkeypatch.setenv("AC_ENVIRONMENT", environment)
+    monkeypatch.setenv("AC_DATABASE_URL", "unused-sensitive-connection")
+    settings = SimpleNamespace(
+        sales_xray_enabled=True,
+        sales_xray_acquisition_enabled=True,
+        database_url="unused",
+        sales_xray_native_socket_path="unused",
+        sales_xray_native_image_ref="unused",
+        release_id="unused",
+    )
+    runtime = SimpleNamespace(
+        policy=SimpleNamespace(retention_days=days, retention_ref=ref),
+        scratch=SimpleNamespace(root=Path("unused")),
+    )
+
+    engine = Mock(side_effect=ValueError("pipeline reached"))
+    for name, replacement in {
+        "Settings": lambda **kw: settings,
+        "require_baked_release_id": lambda _: None,
+        "load_pinned_approval": lambda s: SimpleNamespace(acquisition_policy=object()),
+        "compose_hosted_intake": lambda s: runtime,
+        "SocketNativeRuntime": lambda *a, **kw: object(),
+        "create_async_engine": engine,
+    }.items():
+        monkeypatch.setattr(cli, name, replacement)
+    argv = ["--environment", environment, "--json"]
+    if environment == "production":
+        argv.append("--allow-production")
+    code = cli.main(argv)
+    output = capsys.readouterr()
+    if allowed:
+        engine.assert_called_once_with(settings.database_url, pool_pre_ping=True)
+        assert code == 2 and not output.out
+        return
+    engine.assert_not_called()
+    assert code == 1
+    result = json.loads(output.out)
+    assert result["ok"] is False
+    assert (result["stage_reached"], result["failure_code"]) == (
+        "refused",
+        "canary_refused_retention",
+    )
+    assert result["retention_ref"] == ref

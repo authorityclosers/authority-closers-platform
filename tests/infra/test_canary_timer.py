@@ -113,22 +113,35 @@ def test_success_appends_json_with_utc_time_and_modes(tmp_path: Path) -> None:
     assert notifications(notification_log) == []
 
 
-def test_failure_exit_and_alert_are_passed_once(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("stage", "failure"), [("C4", "stage_failed"), ("refused", "canary_refused_retention")]
+)
+def test_failure_exit_and_alert_are_passed_once(tmp_path: Path, stage: str, failure: str) -> None:
+    retention_ref = "ref:retention/sales-xray-keep-for-training/v1"
     result, history_dir, _, notification_log = invoke_canary(
         tmp_path,
-        stdout='{"ok":false,"environment":"staging","stage_reached":"C4","failure_code":"stage_failed"}',
+        stdout=json.dumps(
+            {
+                "ok": False,
+                "environment": "staging",
+                "stage_reached": stage,
+                "failure_code": failure,
+                "retention_ref": retention_ref,
+            }
+        ),
         docker_exit=1,
     )
 
     assert result.returncode == 1
     assert history_record(history_dir)["exit_code"] == 1
+    assert history_record(history_dir)["retention_ref"] == retention_ref
     assert notifications(notification_log) == [
         [
             "alert",
             "--key",
             "canary-staging",
             "--text",
-            "Canary failed on staging: stage_failed (stage C4)",
+            f"Canary failed on staging: {failure} (stage {stage})",
         ]
     ]
 
@@ -322,7 +335,7 @@ def test_units_and_manifest_cover_timer() -> None:
     assert "RestrictAddressFamilies=AF_UNIX" in service
     assert "ReadWritePaths=/var/lib/authority-closers/canary" in service
     assert "ReadWritePaths=" in service and "/var/lib/ac-release/notify" in service
-    assert "OnCalendar=*-*-* 00,06,12,18:00:00 UTC" in timer
+    assert "OnCalendar=*-*-* 06:00:00 UTC" in timer
     assert "RandomizedDelaySec=10min" in timer
     assert "Persistent=false" in timer
     assert "scripts/ac-canary\t/usr/local/sbin/ac-canary" in manifest
