@@ -1,5 +1,6 @@
 """Plan and usage reads keep the canonical read-only account boundary."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -30,6 +31,8 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
     signed_in = True
     database = _Database()
     service = _Service(database)
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    service.clock = lambda: now
 
     async def read_actor(request):
         if not signed_in:
@@ -90,5 +93,7 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
             signed_in = True
         assert all(service.allowance_lock_modes)
         assert all(value == actor for value in service.allowance_actors)
-        usage.assert_awaited_once_with(database, tenant_id=PUBLIC_TENANT, person_id=PERSON_ID)
+        usage.assert_awaited_once_with(
+            database, tenant_id=PUBLIC_TENANT, person_id=PERSON_ID, now=now
+        )
         assert (await client.get("https://admin.example.test/v1/me/plan")).status_code == 404

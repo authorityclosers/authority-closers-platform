@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, select, update
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
@@ -17,6 +17,10 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     MINUTE_GRANT_ACTION,
     MINUTE_GRANT_RESOURCE_TYPE,
     append_minute_grant,
+)
+from ac_platform.conversation_intelligence.models import (
+    ConversationPermission,
+    ConversationRecording,
 )
 from ac_platform.conversation_intelligence.submission_labels import update_submission_label
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -200,6 +204,22 @@ def test_me_http_ledger_invariant_grants_labels_and_owner_isolation(
                 assert all(
                     row["display_name"] is None for row in usage["calls"] if row is not labelled
                 )
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(ConversationPermission)
+                        .where(
+                            ConversationPermission.id
+                            == select(ConversationRecording.permission_id)
+                            .where(ConversationRecording.id == retained["recording_id"])
+                            .scalar_subquery()
+                        )
+                        .values(retention_until=setup.clock[0] + timedelta(seconds=1))
+                    )
+                setup.clock[0] += timedelta(seconds=2)
+                expired = await _read(client, [], setup.engine)
+                assert expired["allowance"] == usage["allowance"]
+                assert len(expired["calls"]) == 4
+                assert all(row["display_name"] is None for row in expired["calls"])
                 client.cookies.set(
                     setup.settings.session_cookie_name, await _session(setup, stranger)
                 )

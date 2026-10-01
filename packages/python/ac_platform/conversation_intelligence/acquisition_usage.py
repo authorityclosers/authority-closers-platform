@@ -7,6 +7,7 @@ cannot each spend the balance observed before the other commits.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -18,9 +19,15 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
-from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
+from ac_platform.conversation_intelligence.models import (
+    ConversationMinuteAccount,
+    ConversationPermission,
+    ConversationRecording,
+)
 from ac_platform.conversation_intelligence.submission_label_models import (
     ConversationSubmissionLabelRevision,
 )
@@ -73,14 +80,42 @@ async def acquisition_seconds(
 
 
 async def account_usage(
-    database: AsyncSession, *, tenant_id: UUID, person_id: UUID
+    database: AsyncSession, *, tenant_id: UUID, person_id: UUID, now: datetime
 ) -> dict[str, Any]:
     """Read immutable usage after account admission, with two queries at any row count."""
     usage, settlement = ConversationAcquisitionUsage, ConversationAcquisitionSettlement
     label = ConversationSubmissionLabelRevision
+    link, recording, permission = (
+        ConversationGuestSubmission,
+        ConversationRecording,
+        ConversationPermission,
+    )
+    # Receipts survive source deletion/expiry. Only an available library call
+    # may disclose its private title; hide the title without dropping usage.
     display_name = (
         select(label.display_name)
-        .where(label.tenant_id == usage.tenant_id, label.submission_id == usage.submission_id)
+        .join(
+            link,
+            (link.tenant_id == label.tenant_id) & (link.submission_id == label.submission_id),
+        )
+        .join(recording, recording.id == link.recording_id)
+        .join(permission, permission.id == recording.permission_id)
+        .where(
+            label.tenant_id == usage.tenant_id,
+            label.submission_id == usage.submission_id,
+            link.usage_id == usage.id,
+            recording.tenant_id == link.tenant_id,
+            recording.person_id == link.person_id,
+            recording.source_sha256 == link.source_sha256,
+            recording.source_sha256 == usage.source_sha256,
+            permission.tenant_id == recording.tenant_id,
+            permission.person_id == recording.person_id,
+            permission.source_sha256 == recording.source_sha256,
+            recording.state.in_(("awaiting_upload", "ready")),
+            permission.revoked_at.is_(None),
+            permission.retention_until > now,
+            ~recording_is_canary(),
+        )
         .order_by(label.revision.desc())
         .limit(1)
         .correlate(usage)

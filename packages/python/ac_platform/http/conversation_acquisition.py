@@ -287,7 +287,7 @@ def install_acquisition_http(
             app = service(auth.database)
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
             usage = await account_usage(
-                auth.database, tenant_id=app.tenant_id, person_id=actor.person_id
+                auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
             )
         return {"allowance": allowance, **usage}
 
