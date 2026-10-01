@@ -66,7 +66,7 @@ production queue and approved initial delivery scope before releasing the worker
 ambient and injected values before applying the release profiles. Production
 registration therefore requires the exact approved consent version in its
 reviewed profile contract; adding it only to Infisical is insufficient. This
-email activation retains `ac-learner-terms-privacy-2026-09-13-v1` from the separately
+email activation retains `ac-learner-terms-privacy-2026-09-30-v1` from the separately
 reviewed consent-profile release.
 
 `AC_PUBLIC_LEARNER_TENANT_ID` is not authority by itself. It points to the

@@ -99,7 +99,7 @@ def test_register_page_submits_explicit_google_consent(course: str | None) -> No
                 "action": ["register"],
                 "surface": ["learner"],
                 "consent": ["true"],
-                "consent_version": ["ac-learner-terms-privacy-2026-09-13-v1"],
+                "consent_version": ["ac-learner-terms-privacy-2026-09-30-v1"],
                 "return_path": ["/onboarding" + suffix],
             }
         finally:

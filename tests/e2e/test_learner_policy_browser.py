@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import Browser, Route, expect, sync_playwright  # noqa: E402
 
-POLICY_VERSION = "ac-learner-terms-privacy-2026-09-13-v1"
+POLICY_VERSION = "ac-learner-terms-privacy-2026-09-30-v1"
 
 
 @pytest.fixture(scope="module")
@@ -67,12 +67,19 @@ def test_published_policies_and_consent_reflow(
             expect(page.locator('label a[href="/privacy"]')).to_be_visible()
         else:
             expect(page.locator(".policy-hero__status")).to_contain_text(POLICY_VERSION)
-            expect(page.locator(".policy-hero__status")).to_contain_text("13 September 2026")
+            expect(page.locator(".policy-hero__status")).to_contain_text("30 September 2026")
             expect(page.locator('a[href="mailto:admin@authorityclosers.com"]')).to_be_visible()
             expect(page.locator(".policy-copy > section")).to_have_count(
                 8 if path == "terms" else 9
             )
             expect(page.locator("main")).not_to_contain_text("Staging test document")
+            if path == "privacy":
+                expect(page.locator(".policy-copy")).to_contain_text(
+                    "With Google sign-in we also keep your first and last name, language setting, "
+                    "your Google Workspace organization's email domain when there is one, "
+                    "and our own small copy of your Google profile photo; "
+                    "we refresh them each time you sign in with Google."
+                )
         page.evaluate("document.fonts.ready")
         geometry = page.evaluate(
             """() => ({
