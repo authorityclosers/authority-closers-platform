@@ -7,9 +7,11 @@ cannot each spend the balance observed before the other commits.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -17,14 +19,39 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
+from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
-from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
+from ac_platform.conversation_intelligence.models import (
+    ConversationMinuteAccount,
+    ConversationPermission,
+    ConversationRecording,
+)
+from ac_platform.conversation_intelligence.submission_label_models import (
+    ConversationSubmissionLabelRevision,
+)
 
 ALLOWANCE_SECONDS = 3600
+LONGEST_CALL_SECONDS = 6000
 TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
     "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
 )
+
+
+def _owner_filter(
+    *, tenant_id: UUID, visitor_id: UUID | None, person_id: UUID | None
+) -> ColumnElement[bool]:
+    if (visitor_id is None) == (person_id is None):
+        raise ValueError("Exactly one acquisition owner is required.")
+    usage = ConversationAcquisitionUsage
+    if person_id is None:
+        return usage.visitor_id == visitor_id
+    claimed = select(ConversationVisitorClaim.visitor_id).where(
+        ConversationVisitorClaim.tenant_id == tenant_id,
+        ConversationVisitorClaim.person_id == person_id,
+    )
+    return or_(usage.person_id == person_id, usage.visitor_id.in_(claimed))
 
 
 async def acquisition_seconds(
@@ -35,17 +62,8 @@ async def acquisition_seconds(
     person_id: UUID | None = None,
 ) -> int:
     """Acquisition reservations plus all immutable claims for the exact owner."""
-    if (visitor_id is None) == (person_id is None):
-        raise ValueError("Exactly one acquisition owner is required.")
     usage = ConversationAcquisitionUsage
-    if person_id is not None:
-        claimed = select(ConversationVisitorClaim.visitor_id).where(
-            ConversationVisitorClaim.tenant_id == tenant_id,
-            ConversationVisitorClaim.person_id == person_id,
-        )
-        owner = or_(usage.person_id == person_id, usage.visitor_id.in_(claimed))
-    else:
-        owner = usage.visitor_id == visitor_id
+    owner = _owner_filter(tenant_id=tenant_id, visitor_id=visitor_id, person_id=person_id)
     charged = func.coalesce(
         ConversationAcquisitionSettlement.charged_seconds, usage.reserved_seconds
     )
@@ -59,6 +77,86 @@ async def acquisition_seconds(
         .where(usage.tenant_id == tenant_id, owner)
     )
     return int(total or 0)
+
+
+async def account_usage(
+    database: AsyncSession, *, tenant_id: UUID, person_id: UUID, now: datetime
+) -> dict[str, Any]:
+    """Read immutable usage after account admission, with two queries at any row count."""
+    usage, settlement = ConversationAcquisitionUsage, ConversationAcquisitionSettlement
+    label = ConversationSubmissionLabelRevision
+    link, recording, permission = (
+        ConversationGuestSubmission,
+        ConversationRecording,
+        ConversationPermission,
+    )
+    # Receipts survive source deletion/expiry. Only an available library call
+    # may disclose its private title; hide the title without dropping usage.
+    display_name = (
+        select(label.display_name)
+        .join(
+            link,
+            (link.tenant_id == label.tenant_id) & (link.submission_id == label.submission_id),
+        )
+        .join(recording, recording.id == link.recording_id)
+        .join(permission, permission.id == recording.permission_id)
+        .where(
+            label.tenant_id == usage.tenant_id,
+            label.submission_id == usage.submission_id,
+            link.usage_id == usage.id,
+            recording.tenant_id == link.tenant_id,
+            recording.person_id == link.person_id,
+            recording.source_sha256 == link.source_sha256,
+            recording.source_sha256 == usage.source_sha256,
+            permission.tenant_id == recording.tenant_id,
+            permission.person_id == recording.person_id,
+            permission.source_sha256 == recording.source_sha256,
+            recording.state.in_(("awaiting_upload", "ready")),
+            permission.revoked_at.is_(None),
+            permission.retention_until > now,
+            ~recording_is_canary(),
+        )
+        .order_by(label.revision.desc())
+        .limit(1)
+        .correlate(usage)
+        .scalar_subquery()
+    )
+    rows = (
+        await database.execute(
+            select(
+                usage.submission_id,
+                usage.created_at,
+                display_name.label("display_name"),
+                func.coalesce(settlement.charged_seconds, usage.reserved_seconds).label("seconds"),
+                settlement.kind,
+            )
+            .outerjoin(settlement, settlement.usage_id == usage.id)
+            .where(
+                usage.tenant_id == tenant_id,
+                _owner_filter(tenant_id=tenant_id, visitor_id=None, person_id=person_id),
+            )
+            .order_by(usage.created_at.desc(), usage.submission_id.desc())
+            .limit(101)
+        )
+    ).all()
+    earlier_seconds, _ = await existing_account_usage(
+        database, tenant_id=tenant_id, person_id=person_id, operations_tenant_id=None
+    )
+    states = {None: "reserved", "completed": "charged", "no_work_performed": "not_charged"}
+    return {
+        "calls": [
+            {
+                "submission_id": str(row.submission_id),
+                "created_at": row.created_at.isoformat(),
+                "display_name": row.display_name,
+                "seconds": row.seconds,
+                "state": states[row.kind],
+            }
+            for row in rows[:100]
+        ],
+        "earlier_seconds": earlier_seconds,
+        "truncated": len(rows) > 100,
+    }
 
 
 async def existing_account_seconds(

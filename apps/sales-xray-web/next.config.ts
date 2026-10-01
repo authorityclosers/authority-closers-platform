@@ -74,6 +74,8 @@ const config: NextConfig = {
                 // the browser cannot choose an upstream or forward arbitrary APIs.
                 ...[
                   "/v1/me/workspaces",
+                  "/v1/me/plan",
+                  "/v1/me/usage",
                   "/v1/context",
                   "/v1/auth/password/login",
                   "/v1/auth/email-code/config",
