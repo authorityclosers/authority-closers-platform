@@ -3,6 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { SyntheticReportPreview } from "./synthetic-report-preview";
 import { syntheticEvidence } from "./synthetic-report";
+import fixture from "../../../tests/fixtures/call-map-v1.json";
+import { formatTranscriptTime } from "../../report-transcript";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -53,6 +55,7 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   );
   const withoutCallNumbers = container.cloneNode(true) as HTMLDivElement;
   withoutCallNumbers.querySelector('[aria-label="Call numbers"]')?.remove();
+  withoutCallNumbers.querySelector("[data-call-map-fixture]")?.remove();
   expect(withoutCallNumbers.textContent).not.toMatch(/\b\d+\s*%/);
 
   await act(async () => button("Tabbed view").click());
@@ -77,6 +80,83 @@ it("labels the synthetic report, exposes exact evidence through the real skill r
   expect(container.querySelector('[role="status"]')?.textContent).toContain(
     "No audio exists in this display fixture.",
   );
+});
+
+it("adds a parsed call-map fixture and resolves every source control to its own dialogue", async () => {
+  await act(async () => root.render(<SyntheticReportPreview />));
+  await act(async () => button("Tabbed view").click());
+  await act(async () => button("Call-map fixture").click());
+  const panel = container.querySelector(
+    '[data-report-mode-section="call-map-fixture"]',
+  )!;
+  expect(panel.hasAttribute("hidden")).toBe(false);
+  expect(panel.textContent).toContain("Fictional call-map fixture");
+  expect(panel.textContent).toContain(fixture.call_map.verdict_line);
+  for (const heading of [
+    "Timeline phases",
+    "Outcome & Next steps",
+    "Signals",
+    "Customer pains",
+    "Pitch items",
+    "Money mentions",
+    "Claims",
+    "Qualification",
+    "Time promise & Overrun",
+  ]) {
+    expect(panel.textContent).toContain(heading);
+  }
+  expect(panel.textContent).toContain("follow_up");
+  expect(panel.textContent).toContain("dated_call");
+  for (const items of [
+    fixture.call_map.signals,
+    fixture.call_map.pains,
+    fixture.call_map.pitch_items,
+    fixture.call_map.claims,
+  ]) {
+    for (const item of items) expect(panel.textContent).toContain(item.text);
+  }
+  expect(panel.textContent).toContain("180 credits per month");
+  expect(panel.textContent).toContain("120 credits");
+  for (const gap of fixture.call_map.qualification_gaps)
+    expect(panel.textContent).toContain(gap);
+  for (const confirmed of fixture.call_map.qualification_confirmed)
+    expect(panel.textContent).toContain(confirmed.item);
+  expect(panel.textContent).toContain("Time promised10:00");
+  expect(panel.textContent).toContain("Time used00:43");
+  expect(panel.textContent).toContain("No overrun");
+  const source = panel.querySelector('[aria-label="Call-map fixture source"]')!;
+  const visited = new Set<string>();
+  for (const control of panel.querySelectorAll<HTMLButtonElement>("button")) {
+    const timestamp = control
+      .getAttribute("aria-label")!
+      .match(/\d{2}:\d{2}/)![0];
+    const segment = fixture.segments.find(
+      (s) => formatTranscriptTime(s.start_ms) === timestamp,
+    )!;
+    expect(segment).toBeDefined();
+    await act(async () => control.click());
+    expect(source.textContent).toContain(segment.id);
+    expect(source.textContent).toContain(segment.text);
+    expect(source.textContent).toContain(`Selected ${timestamp}`);
+    visited.add(segment.id);
+  }
+  expect([...visited].sort()).toEqual([
+    "s1",
+    "s2",
+    "s4",
+    "s5",
+    "s6",
+    "s7",
+    "s8",
+  ]);
+  expect(source.textContent).not.toContain(syntheticEvidence.respect.quote);
+  expect(panel.querySelector("audio")).toBeNull();
+  await act(async () => button("Overview").click());
+  expect(
+    container
+      .querySelector('[data-report-mode-section="overview"]')
+      ?.hasAttribute("hidden"),
+  ).toBe(false);
 });
 
 it("keeps the no-next-action outcome explicit in the production next-call plan and selects its source", async () => {
