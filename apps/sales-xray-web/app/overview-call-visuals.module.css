@@ -1,0 +1,694 @@
+/* Overview call visuals: system measurements and call map visuals (AUT-345) */
+
+.visualsRoot {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.section {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--lx-line);
+  border-radius: 18px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sectionSubtitle {
+  color: var(--lx-muted);
+  font-size: 12.5px;
+}
+
+/* Time used and top metrics */
+.summaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.summaryPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 13px;
+}
+
+.summaryPill b {
+  color: var(--lx-ink);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Speaker cards grid */
+.speakerCardsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.speakerCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-line-soft, var(--lx-line));
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.speakerHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+
+.speakerLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.speakerMetricsGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.metricBadge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 12px;
+}
+
+.metricBadge strong {
+  color: var(--lx-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 60s Engagement curve chart */
+.chartContainer {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.chartMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chartMetaTitle {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.quietTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.quietTag[data-recovered="true"] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.chartScroll {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.chartSvg {
+  display: block;
+  min-width: 100%;
+  height: 64px;
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--lx-teal);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartDot {
+  fill: var(--lx-teal);
+}
+
+.quietMarkerLine {
+  stroke: var(--lx-warning);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.quietMarkerText {
+  fill: var(--lx-warning);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Monologues */
+.monologuesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.monologueCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-sunken);
+}
+
+.monologueInfo {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.monologueSpeaker {
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.monologueTimes {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Play button */
+.playButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  font: 650 11.5px/1.6 var(--lx-font-ui, inherit);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform 160ms ease,
+    background-color 140ms ease;
+}
+
+.playButton:hover {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  transform: scale(1.04);
+}
+
+.playButton:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 2px;
+}
+
+/* Call map styling */
+.callMapSection {
+  display: grid;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.verdictBanner {
+  display: grid;
+  gap: 6px;
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--lx-teal) 30%, var(--lx-line));
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    var(--lx-teal-soft),
+    var(--lx-surface) 75%
+  );
+}
+
+.verdictLabel {
+  color: var(--lx-teal);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.verdictText {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Detail Card */
+.detailCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--lx-line);
+  border-radius: 14px;
+  background: var(--lx-surface);
+}
+
+.detailTitle {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Phases row */
+.phasesRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.phaseCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.phaseName {
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Outcome card */
+.outcomeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+
+.keyVal {
+  display: grid;
+  gap: 2px;
+}
+
+.keyVal small {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.keyVal b {
+  color: var(--lx-ink);
+  font-size: 13.5px;
+  text-transform: capitalize;
+}
+
+/* Signals grid */
+.signalsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.signalCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.signalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.signalTag {
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.signalTag[data-polarity="forward"] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.signalTag[data-polarity="risk"] {
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+}
+
+.signalKind {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.signalText {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Pains */
+.painsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.painCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: 12px;
+  background: var(--lx-sunken);
+}
+
+.painTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.painRaised {
+  color: var(--lx-ink-3);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.painMeta {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.painText {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.addressedBox {
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--lx-surface);
+  border: 1px solid var(--lx-line-soft, var(--lx-line));
+}
+
+.addressedBox small {
+  color: var(--lx-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.addressedBox span {
+  color: var(--lx-ink-2, var(--lx-ink));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Pitch items */
+.pitchList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.pitchCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.pitchMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pitchId {
+  color: var(--lx-teal);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.pitchTime {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pitchText {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* Money */
+.moneyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.moneyCard {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.moneyLabel {
+  color: var(--lx-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.moneyValue {
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Claims */
+.claimsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.claimCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--lx-line);
+  border-radius: 10px;
+  background: var(--lx-sunken);
+}
+
+.claimText {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.claimAttributes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--lx-muted);
+  font-size: 11.5px;
+}
+
+.claimAttributes b {
+  color: var(--lx-ink);
+}
+
+/* Qualification */
+.qualSplit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.qualCol {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.qualSubtitle {
+  color: var(--lx-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tagGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gapTag {
+  padding: 4px 10px;
+  border: 1px dashed var(--lx-warning);
+  border-radius: 99px;
+  color: var(--lx-warning);
+  background: var(--lx-warning-soft);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.confirmedChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 10px;
+  border: 1px solid var(--lx-line);
+  border-radius: 99px;
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.emptyText {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Accessible hidden */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Responsiveness & accessibility */
+@media (max-width: 600px) {
+  .section {
+    padding: 14px 14px;
+  }
+  .speakerHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .speakerMetricsGroup {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playButton {
+    transition: none !important;
+  }
+}

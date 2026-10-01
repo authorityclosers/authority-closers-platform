@@ -43,6 +43,7 @@ import {
 
 import { questionsAsked, talkShareSeries, voicesOf } from "./call-data";
 import { formatClock } from "./lightbox/time";
+import { OverviewCallVisuals } from "./overview-call-visuals";
 import type {
   ReportEvidence,
   SalesReport,
@@ -812,6 +813,12 @@ export function OverviewHook({
           </div>
         ) : null}
       </div>
+
+      <OverviewCallVisuals
+        transcript={transcript}
+        callMap={null}
+        onSeek={onSeek}
+      />
 
       {listen.length ? (
         <Section

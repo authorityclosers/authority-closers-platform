@@ -7,6 +7,7 @@ import { formatTranscriptTime } from "../../report-transcript";
 import { SalesSkills } from "../../sales-skills";
 import { NextCallPlan } from "../../next-call-plan";
 import { DipakOverview } from "../../dipak-overview";
+import { CallMapPreview } from "./call-map-preview";
 import { syntheticReport, syntheticCallRecord } from "./synthetic-report";
 import styles from "./synthetic-report-preview.module.css";
 
@@ -78,6 +79,12 @@ export function SyntheticReportPreview() {
                   onSelectEvidence={selectSource}
                 />
               ),
+            },
+            {
+              id: "call-map-fixture",
+              label: "Call-map fixture",
+              compactLabel: "Call-map fixture",
+              content: <CallMapPreview />,
             },
           ]}
         />

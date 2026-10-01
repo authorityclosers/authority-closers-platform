@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OverviewHook, shareChartSegments } from "./overview-hook";
 import { talkShareSeries } from "./call-data";
@@ -156,6 +156,35 @@ async function renderOverview(
 }
 
 describe("OverviewHook phase cards", () => {
+  it("keeps measurements and source controls with no overview narrative or speaker roles", async () => {
+    const seek = vi.fn();
+    await act(async () =>
+      root.render(
+        <OverviewHook
+          report={{ ...report, overview: null }}
+          transcript={transcript}
+          callId={null}
+          onSeek={seek}
+        />,
+      ),
+    );
+    const visuals = host.querySelector("[data-overview-call-visuals]")!;
+    expect(visuals.previousElementSibling?.textContent).toContain(
+      report.summary,
+    );
+    expect(visuals.textContent).toContain("Time used02:00");
+    expect(visuals.textContent).toContain("alex");
+    expect(visuals.textContent).toContain("sam");
+    expect(
+      visuals.querySelector('[aria-label="Call map AI visual readings"]'),
+    ).toBeNull();
+    expect(host.textContent).toContain("Call signals");
+    await act(async () =>
+      visuals.querySelector<HTMLButtonElement>("button")!.click(),
+    );
+    expect(seek).toHaveBeenCalledExactlyOnceWith(10_000);
+  });
+
   it("shows unavailable call signals until roles are assigned", async () => {
     await renderOverview(transcript, null);
     expect(host.textContent).toContain("assign roles to measure");
