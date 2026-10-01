@@ -35,7 +35,7 @@ import traceback
 import types
 from collections.abc import Mapping, Sequence
 from pathlib import PurePath
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, TypeGuard, Union, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
@@ -203,7 +203,7 @@ def _first(values: Any) -> object:
     return next((value for value in values if value is not None), None)
 
 
-def _is_model(node: object) -> bool:
+def _is_model(node: object) -> TypeGuard[type[BaseModel]]:
     return isinstance(node, type) and issubclass(node, BaseModel)
 
 
@@ -214,7 +214,11 @@ def _is_mapping(node: object) -> bool:
 
 def _item_type(node: object) -> object:
     origin = get_origin(node) or node
-    if not isinstance(origin, type) or not issubclass(origin, Sequence) or issubclass(origin, str | bytes):
+    if (
+        not isinstance(origin, type)
+        or not issubclass(origin, Sequence)
+        or issubclass(origin, str | bytes)
+    ):
         return None
     args = get_args(node)
     return args[0] if args else None
