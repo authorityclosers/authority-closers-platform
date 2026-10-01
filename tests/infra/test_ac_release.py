@@ -131,6 +131,7 @@ def make_engine(tmp_path: Path, github: FakeGitHub | None = None, runner: FakeRu
         stage_root=tmp_path,
         lock=tmp_path / "lock",
         foundation=tmp_path / "foundation",
+        backup_tool=tmp_path / "libexec" / "ac-postgres-backup.py",
         sales_xray=tmp_path / "sales-xray",
     )
     for directory in (paths.state, paths.config, paths.application):
@@ -783,10 +784,9 @@ def test_store_keeps_running_and_recent_builds_only(tmp_path: Path) -> None:
 
 
 def foundation_backup_tool(engine, *heads: str) -> None:
-    scripts = engine.paths.foundation / "scripts"
-    scripts.mkdir(parents=True)
+    engine.paths.backup_tool.parent.mkdir(parents=True, exist_ok=True)
     lines = [f'HEAD_{i} = "{head}"' for i, head in enumerate(heads)]
-    (scripts / "ac-postgres-backup.py").write_text("".join(f"{line}\n" for line in lines))
+    engine.paths.backup_tool.write_text("".join(f"{line}\n" for line in lines))
 
 
 def bundle_with_head(tmp_path: Path, head: str) -> Path:
