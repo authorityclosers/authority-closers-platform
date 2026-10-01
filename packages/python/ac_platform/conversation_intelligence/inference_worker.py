@@ -39,6 +39,7 @@ from ac_platform.conversation_intelligence.execution_control import (
     lock_execution_control,
     require_execution_enabled,
 )
+from ac_platform.conversation_intelligence.failure_detail import build_failure_detail
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
     ConversationInference,
@@ -764,7 +765,11 @@ class ConversationInferenceWorker:
                 await JobRepository(db).complete(work.job_id, work.lease_token)
 
     async def _fail(
-        self, work: Work, *, failure_code: str = "conversation_provider_execution_unresolved"
+        self,
+        work: Work,
+        *,
+        failure_code: str = "conversation_provider_execution_unresolved",
+        error: BaseException | None = None,
     ) -> None:
         async with self.sessions() as db, db.begin():
             job = await self._locked_job(db, work)
@@ -784,7 +789,9 @@ class ConversationInferenceWorker:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
+            stage: str | None = None
             if task is not None:
+                stage = task.stage
                 run = await db.get(ConversationRun, task.run_id)
                 recording = await db.get(ConversationRecording, task.recording_id)
                 quoted = await db.get(ConversationQuote, task.quote_id)
@@ -818,12 +825,17 @@ class ConversationInferenceWorker:
                                 f"provider-not-dispatched:{task.run_id}",
                             )
                             save_accounts(minutes, budget, transition)
-            await JobRepository(db).fail(
+            failed = await JobRepository(db).fail(
                 job,
                 work.lease_token,
                 failure_code,
                 permanent=True,
                 ambiguous=ambiguous,
+            )
+            # Same transaction as the failure record: stage, inner code, rule
+            # site and field paths, never the call content (AUT-484).
+            failed.failure_detail = build_failure_detail(
+                error, stage=stage, failure_code=failure_code
             )
 
     async def run_once(self) -> bool:
@@ -871,6 +883,7 @@ class ConversationInferenceWorker:
                         self._fail(
                             work,
                             failure_code="conversation_account_profile_changed_after_dispatch",
+                            error=error,
                         )
                     )
                     await _drain(cleanup)
@@ -879,7 +892,7 @@ class ConversationInferenceWorker:
             # A failed cleanup may itself be fenced by restore/lease loss. The
             # dispatch marker still quarantines the job on the next claim.
             cleanup = asyncio.create_task(
-                self._fail(work, failure_code=provider_failure_code(error))
+                self._fail(work, failure_code=provider_failure_code(error), error=error)
             )
             await _drain(cleanup)
             if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):

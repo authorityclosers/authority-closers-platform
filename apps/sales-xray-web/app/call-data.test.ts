@@ -114,7 +114,7 @@ it("recognizes explicit Rs and rupee evidence without a magnitude", () => {
         "a",
         0,
         1000,
-        "Rs 500; INR 600; ₹700; 500 rupees; price 750; revenue 10K; and 10K customers.",
+        "Rs 500; INR 600; ₹700; 500 rupees; USD 800; $900; 1000 dollars; price 750; revenue 10K; 5 thousand users; 10 lakh customers; and 10K.",
       ],
     ]),
   );
@@ -123,8 +123,12 @@ it("recognizes explicit Rs and rupee evidence without a magnitude", () => {
     ["INR 600", "money"],
     ["₹700", "money"],
     ["500 rupees", "money"],
-    ["750", "money"],
-    ["10K", "money"],
+    ["USD 800", "money"],
+    ["$900", "money"],
+    ["1000 dollars", "money"],
+    ["10K", "quantity"],
+    ["5 thousand", "quantity"],
+    ["10 lakh", "quantity"],
     ["10K", "quantity"],
   ]);
 });

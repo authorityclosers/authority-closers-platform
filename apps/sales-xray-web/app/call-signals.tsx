@@ -4,7 +4,6 @@ import {
   CheckSquare,
   CircleDollarSign,
   HelpCircle,
-  MessageSquareQuote,
   Play,
   Square,
   Timer,
@@ -24,7 +23,6 @@ import {
   afterPrice,
   confirmedRoles,
   moreSignals,
-  ownWords,
   promises,
   talkOvers,
   unansweredQuestions,
@@ -37,6 +35,7 @@ import {
   voiceStyle,
 } from "./speaker-profiles";
 import styles from "./call-signals.module.css";
+import { RichText } from "./report-entities";
 
 const DONE_EVENT = "sales-xray:promises-done";
 const doneKey = (callId: string) => `ac.xray.promises-done.v1:${callId}`;
@@ -59,7 +58,8 @@ function subscribeDone(notify: () => void) {
   };
 }
 
-function toggleDone(callId: string, id: string) {
+/** Ticks a promise off (or back on) for this call. */
+export function togglePromiseDone(callId: string, id: string) {
   const done = new Set<string>(JSON.parse(readDone(callId)) as string[]);
   if (done.has(id)) done.delete(id);
   else done.add(id);
@@ -69,6 +69,19 @@ function toggleDone(callId: string, id: string) {
     return;
   }
   window.dispatchEvent(new Event(DONE_EVENT));
+}
+
+/** A promise's stable id: its line and exact words. */
+export const promiseId = (item: Moment) => `${item.segment.id}:${item.text}`;
+
+/** The promises ticked off for this call, live across the page. */
+export function usePromisesDone(callId: string | null): ReadonlySet<string> {
+  const raw = useSyncExternalStore(
+    subscribeDone,
+    () => readDone(callId),
+    () => "[]",
+  );
+  return useMemo(() => new Set<string>(JSON.parse(raw) as string[]), [raw]);
 }
 
 /** Removes this call's ticked promises after server deletion succeeds. */
@@ -106,7 +119,9 @@ function PlayLine({
         {formatClock(item.start_ms)}
       </button>
       <span className={styles.words}>
-        <q>{item.text}</q>
+        <q>
+          <RichText text={item.text} />
+        </q>
         {children}
       </span>
     </li>
@@ -168,17 +183,11 @@ export function CallSignals({
     voices,
     Object.fromEntries(voices.map((id) => [id, profiles[id]?.role])),
   );
-  const doneRaw = useSyncExternalStore(
-    subscribeDone,
-    () => readDone(callId),
-    () => "[]",
-  );
-  const done = new Set<string>(JSON.parse(doneRaw) as string[]);
+  const done = usePromisesDone(callId);
 
   const data = useMemo(
     () =>
       roles && {
-        own: ownWords(transcript, roles),
         unanswered: unansweredQuestions(transcript, roles),
         overs: talkOvers(transcript, roles),
         price: afterPrice(transcript, roles),
@@ -259,28 +268,6 @@ export function CallSignals({
       </p>
       <div className={styles.grid}>
         <Card
-          index={0}
-          icon={<MessageSquareQuote size={16} />}
-          title="Their own words"
-          note="Where the prospect talked about a problem. Open the next call with their words. Found by words: listen to check."
-          count={data.own.length}
-        >
-          {data.own.length ? (
-            <ul className={styles.list}>
-              {data.own.map((item) => (
-                <PlayLine
-                  key={`${item.segment.id}-${item.text}`}
-                  item={item}
-                  onSeek={onSeek}
-                />
-              ))}
-            </ul>
-          ) : (
-            <Empty text="The prospect did not describe a problem in words we recognise." />
-          )}
-        </Card>
-
-        <Card
           index={1}
           icon={<HelpCircle size={16} />}
           title="Questions that may not have been answered"
@@ -341,7 +328,10 @@ export function CallSignals({
                         <b>Silence {seconds(item.silence_ms)}</b>
                         {item.reply ? (
                           <>
-                            , then: <q>{item.reply.text}</q>
+                            , then:{" "}
+                            <q>
+                              <RichText text={item.reply.text} />
+                            </q>
                           </>
                         ) : null}
                       </>
@@ -368,7 +358,7 @@ export function CallSignals({
           {data.promised.length ? (
             <ul className={styles.list}>
               {data.promised.map((item) => {
-                const id = `${item.segment.id}:${item.text}`;
+                const id = promiseId(item);
                 const ticked = done.has(id);
                 return (
                   <li
@@ -381,7 +371,7 @@ export function CallSignals({
                       className={styles.tick}
                       aria-pressed={ticked}
                       disabled={!callId}
-                      onClick={() => callId && toggleDone(callId, id)}
+                      onClick={() => callId && togglePromiseDone(callId, id)}
                       aria-label={ticked ? "Mark as not done" : "Mark as done"}
                     >
                       {ticked ? (
@@ -399,7 +389,9 @@ export function CallSignals({
                       <Play size={11} aria-hidden="true" />
                       {formatClock(item.start_ms)}
                     </button>
-                    <q className={styles.words}>{item.text}</q>
+                    <q className={styles.words}>
+                      <RichText text={item.text} />
+                    </q>
                   </li>
                 );
               })}

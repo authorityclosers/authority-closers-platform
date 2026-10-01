@@ -183,6 +183,13 @@ async def poll(
         await asyncio.sleep(1)
 
 
+def retention_allowed(environment: str, retention_days: int, retention_ref: str) -> bool:
+    """Production needs standard retention; staging and development may keep for training."""
+    if retention_ref.startswith(KEEP_FOR_TRAINING_RETENTION_PREFIX):
+        return environment in {"staging", "development"}
+    return retention_days <= 7
+
+
 async def canary(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
     environment = validate_environment(args)
@@ -202,6 +209,7 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         total_seconds=0.0,
         cost_paise=0,
         report_present=False,
+        retention_ref=None,
     )
     try:
         bundle = load_pinned_approval(settings)
@@ -218,12 +226,16 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         )
         return result
     runtime = compose_hosted_intake(settings)
-    if (
-        runtime is None
-        or runtime.policy.retention_days > 7
-        or runtime.policy.retention_ref.startswith(KEEP_FOR_TRAINING_RETENTION_PREFIX)
-    ):
-        raise CommandError("Canary requires the approved standard retention policy.")
+    if runtime is None:
+        raise CommandError("Canary requires the approved hosted intake runtime.")
+    result["retention_ref"] = runtime.policy.retention_ref
+    if not retention_allowed(environment, runtime.policy.retention_days, result["retention_ref"]):
+        result.update(
+            stage_reached="refused",
+            failure_code="canary_refused_retention",
+            total_seconds=time.monotonic() - started,
+        )
+        return result
     native = SocketNativeRuntime(
         Path(settings.sales_xray_native_socket_path or ""),
         workspace_root=runtime.scratch.root,

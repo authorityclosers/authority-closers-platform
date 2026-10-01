@@ -13,6 +13,19 @@ import {
   useSpeakerProfiles,
   voiceStyle,
 } from "./speaker-profiles";
+import { confirmedRoles } from "./sales-signals";
+import { RichText } from "./report-entities";
+
+// Spoken lines show only the mentions worth a glance, so they stay calm.
+const TRANSCRIPT_KINDS = [
+  "brand",
+  "program",
+  "money",
+  "place",
+  "document",
+  "video",
+  "team",
+] as const;
 
 const PAGE_SIZE = 50;
 const ALL_SPEAKERS = "all";
@@ -53,6 +66,10 @@ export function ReportTranscript({
   const { profiles } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const voices = useMemo(() => voicesOf(transcript), [transcript]);
+  const roles = confirmedRoles(
+    voices,
+    Object.fromEntries(voices.map((id) => [id, profiles[id]?.role])),
+  );
   const named = callId !== null;
   const labelOf = useMemo(
     () => (speakerId: string | null) =>
@@ -190,7 +207,13 @@ export function ReportTranscript({
                   >
                     {labelOf(segment.speaker_id)}
                   </span>
-                  <span className={styles.text}>{segment.text}</span>
+                  <span className={styles.text}>
+                    <RichText
+                      text={segment.text}
+                      kinds={TRANSCRIPT_KINDS}
+                      brandMarks={roles?.prospect === segment.speaker_id}
+                    />
+                  </span>
                 </button>
               );
             })}

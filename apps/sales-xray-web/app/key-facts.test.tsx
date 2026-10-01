@@ -71,12 +71,12 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-async function render() {
+async function render(source: Transcript = transcript) {
   await act(async () =>
     root.render(
       <KeyFacts
         callId={CALL}
-        transcript={transcript}
+        transcript={source}
         report={report}
         durationMs={transcript.duration_ms}
         onSeek={onSeek}
@@ -123,14 +123,63 @@ it("does not infer industry from report prose and saves a user choice", async ()
   expect(row("Industry").textContent).toContain("Confirmed");
 });
 
-it("lets the person say what a heard number means", async () => {
-  const select = host.querySelector<HTMLSelectElement>(
-    'select[aria-label^="What is"]',
-  )!;
+it("does not infer or offer to confirm industry from prospect statements", async () => {
   await act(async () => {
-    select.value = "Yearly sales";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    saveSpeakerProfiles(CALL, {
+      rep: { name: "Fictional Rep", role: "salesperson", icon: null },
+      buyer: { name: "Fictional Buyer", role: "prospect", icon: null },
+    });
   });
+
+  const statements = [
+    "If I run a carpentry business, I will need new tools.",
+    "I have a carpentry business plan.",
+    "मेरा carpentry का business nahi hai.",
+  ];
+  for (const text of statements) {
+    await render({
+      ...transcript,
+      segments: [
+        {
+          id: "seller",
+          speaker_id: "rep",
+          start_ms: 0,
+          end_ms: 500,
+          text: "Hello.",
+        },
+        {
+          id: "prospect",
+          speaker_id: "buyer",
+          start_ms: 500,
+          end_ms: 1_000,
+          text,
+        },
+      ],
+    });
+    expect(row("Industry").textContent).toContain("Not found");
+    expect(row("Industry").textContent).not.toContain("Carpentry & building");
+    expect(
+      [...row("Industry").querySelectorAll("button")].some(
+        (button) => button.textContent === "Yes",
+      ),
+    ).toBe(false);
+    expect(readCallFacts(CALL).values.industry).toBeFalsy();
+    expect(readCallFacts(CALL).confirmed.industry).not.toBe(true);
+  }
+});
+
+it("lets the person say what a heard number means", async () => {
+  // A chip opens a small panel of choices instead of a dropdown.
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label^="What is"]')!
+      .click(),
+  );
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>('[role="group"] button')]
+      .find((button) => button.textContent === "Yearly sales")!
+      .click(),
+  );
   expect(readCallFacts(CALL).numberLabels["a3:0"]).toBe("Yearly sales");
 });
 

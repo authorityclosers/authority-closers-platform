@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Play } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Check, ChevronDown, Play } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   NEXT_STEP_FIRMNESS,
@@ -54,6 +54,81 @@ function Row({
   );
 }
 
+// Short names for the firmness steps; the saved value stays the full one.
+const FIRMNESS_SHORT: Record<string, string> = {
+  "No next step": "None",
+  "Loose: no time set": "Loose",
+  "A call with a set time": "Time set",
+  "Invite sent": "Invite sent",
+  "Committed or paid": "Committed",
+};
+
+/** A chip that opens a small panel of choices; tap one to pick it. */
+function ChipPicker({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string | undefined;
+  options: readonly string[];
+  disabled?: boolean;
+  onChange: (value: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className={styles.picker}>
+      <button
+        type="button"
+        className={styles.pickerChip}
+        data-set={value ? "" : undefined}
+        aria-label={label}
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {value ?? "What is it?"}
+        <ChevronDown size={13} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className={styles.pickerMenu} role="group" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={option === value}
+              onClick={() => {
+                onChange(option === value ? null : option);
+                setOpen(false);
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Confirmed({ children = "Confirmed" }: { children?: ReactNode }) {
   return (
     <span className={styles.ok}>
@@ -91,13 +166,16 @@ export function KeyFacts({
   const voices = useMemo(() => voicesOf(transcript), [transcript]);
   const promise = useMemo(() => timePromise(transcript), [transcript]);
   const price = useMemo(() => priceTalk(transcript), [transcript]);
-  const numbers = useMemo(
-    () =>
-      numbersHeard(transcript).filter(
-        (number) => number.kind === "money" || number.kind === "percent",
-      ),
-    [transcript],
-  );
+  const numbers = useMemo(() => {
+    // The same number in the same line counts once.
+    const seen = new Set<string>();
+    return numbersHeard(transcript).filter((number) => {
+      const key = `${number.segment.id}:${number.spoken}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return number.kind === "money" || number.kind === "percent";
+    });
+  }, [transcript]);
   const nameOf = (id: string) =>
     speakerName(voices.indexOf(id), profiles[id], accountName);
   const people = voices
@@ -177,7 +255,7 @@ export function KeyFacts({
     <section className={styles.facts} aria-label="Key facts">
       <header className={styles.head}>
         <div>
-          <h2>Key facts</h2>
+          <h3>Key facts</h3>
           <p>Checked before we trust them. Tap to confirm or fix.</p>
         </div>
         <small>Saved on this device for now</small>
@@ -231,8 +309,10 @@ export function KeyFacts({
                 </option>
               ))}
             </select>
+          ) : industry ? (
+            industry
           ) : (
-            (industry ?? <span className={styles.muted}>Not found</span>)
+            <span className={styles.muted}>Not found</span>
           )
         }
         status={
@@ -328,29 +408,38 @@ export function KeyFacts({
       <Row
         label="How firm is the next step"
         value={
-          <select
-            className={styles.select}
+          <div
+            className={styles.steps}
+            role="radiogroup"
             aria-label="How firm is the next step"
-            value={facts.values.firmness ?? ""}
-            disabled={!canSave}
-            onChange={(event) =>
-              save({ kind: "value", id: "firmness", value: event.target.value })
-            }
           >
-            <option value="">Pick one</option>
             {NEXT_STEP_FIRMNESS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={facts.values.firmness === option}
+                title={option}
+                disabled={!canSave}
+                onClick={() =>
+                  save({
+                    kind: "value",
+                    id: "firmness",
+                    value: facts.values.firmness === option ? null : option,
+                  })
+                }
+              >
+                {FIRMNESS_SHORT[option] ?? option}
+              </button>
             ))}
-          </select>
+          </div>
         }
         status={facts.values.firmness ? <Confirmed>Set</Confirmed> : null}
       />
 
       <div className={styles.numbers}>
         <h3>
-          Money numbers heard <span>{numbers.length}</span>
+          Money and percentages heard <span>{numbers.length}</span>
         </h3>
         {numbers.length === 0 ? (
           <p className={styles.muted}>
@@ -362,26 +451,15 @@ export function KeyFacts({
               <b>{number.spoken}</b>
               <Heard ms={number.segment.start_ms} onSeek={onSeek} />
               <span className={styles.who}>{nameOf(number.voice)}</span>
-              <select
-                className={styles.select}
-                aria-label={`What is ${number.spoken}?`}
-                value={facts.numberLabels[number.id] ?? ""}
+              <ChipPicker
+                label={`What is ${number.spoken}?`}
+                value={facts.numberLabels[number.id]}
+                options={NUMBER_MEANINGS}
                 disabled={!canSave}
-                onChange={(event) =>
-                  save({
-                    kind: "number",
-                    id: number.id,
-                    value: event.target.value,
-                  })
+                onChange={(value) =>
+                  save({ kind: "number", id: number.id, value })
                 }
-              >
-                <option value="">What is it?</option>
-                {NUMBER_MEANINGS.map((meaning) => (
-                  <option key={meaning} value={meaning}>
-                    {meaning}
-                  </option>
-                ))}
-              </select>
+              />
               <q className={styles.said}>{number.segment.text}</q>
             </div>
           ))

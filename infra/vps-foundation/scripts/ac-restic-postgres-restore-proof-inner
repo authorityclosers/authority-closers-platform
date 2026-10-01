@@ -12,6 +12,32 @@ export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
 export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
 
+# Refuse silent uncached operation before any repository request.
+cache_unavailable() {
+  printf 'AC_BACKUP_FAILURE=restic_cache_unavailable\n' >&2
+  [[ -z "${AC_RESTIC_CACHE_FAILURE_FILE:-}" ]] || : > "$AC_RESTIC_CACHE_FAILURE_FILE"
+  return 1
+}
+if [[ ! -d "$RESTIC_CACHE_DIR" || -L "$RESTIC_CACHE_DIR" ]] ||
+   [[ "$(stat --format='%u' -- "$RESTIC_CACHE_DIR")" != 0 ]] ||
+   ! cache_probe="$(mktemp "$RESTIC_CACHE_DIR/.probe.XXXXXX")"; then
+  cache_unavailable; exit 1
+fi
+rm -- "$cache_probe"
+AC_RESTIC_BINARY="$(command -v restic)"
+export AC_RESTIC_BINARY
+# shellcheck disable=SC2329  # Invoked by the inline wrapper generated with declare -f.
+restic() {
+  local diagnostics status=0
+  diagnostics="$("$AC_RESTIC_BINARY" "$@" 2>&1 1>&3)" || status=$?
+  if [[ "$diagnostics" == *'unable to open cache'* ]]; then
+    cache_unavailable; return 1
+  fi
+  [[ -z "$diagnostics" ]] || printf '%s\n' "$diagnostics" >&2
+  return "$status"
+} 3>&1
+# Cache admission complete.
+
 restic_lock_dir='/run/lock/authority-closers'
 restic_lock_file="$restic_lock_dir/ac-restic-repository.lock"
 ((EUID == 0)) || { printf 'Restic repository locking requires root.\n' >&2; exit 1; }
@@ -56,4 +82,15 @@ else
 fi
 # Repository lock acquired.
 
-exec /usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py "$@"
+# Python suppresses child stderr; an inline temporary wrapper preserves the
+# cache failure classification without changing the proof's restore logic.
+cache_wrapper="$(mktemp -d "$RESTIC_CACHE_DIR/.wrapper.XXXXXX")" || { cache_unavailable; exit 1; }
+trap 'rm -rf -- "$cache_wrapper"' EXIT
+export AC_RESTIC_CACHE_FAILURE_FILE="$cache_wrapper/failed"
+{ printf '#!/usr/bin/env bash\n'; declare -f cache_unavailable restic; printf 'restic "$@"\n'; } > "$cache_wrapper/restic"
+chmod 0700 "$cache_wrapper/restic"
+export PATH="$cache_wrapper:$PATH"
+proof_status=0
+/usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py "$@" || proof_status=$?
+[[ ! -e "$AC_RESTIC_CACHE_FAILURE_FILE" ]] || { cache_unavailable; exit 1; }
+exit "$proof_status"

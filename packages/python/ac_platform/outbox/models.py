@@ -278,6 +278,9 @@ class Job(Base):
     leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lease_token: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    # Content-free diagnosis (ac.job-failure-detail/1) written with the failure
+    # record; a later success leaves it in place for the operator.
+    failure_detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     provider_idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     dispatch_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

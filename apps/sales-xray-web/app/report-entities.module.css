@@ -1,0 +1,98 @@
+/* Mentions inside text as small icon chips. Each kind has one colour. */
+.chip {
+  --tone: var(--lx-ink-3, var(--lx-muted));
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px 0 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 11%, var(--lx-surface));
+  color: var(--lx-ink);
+  font-weight: 600;
+  line-height: 1.35;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.chip > svg {
+  flex: none;
+  align-self: center;
+  color: var(--tone);
+}
+
+.chip[data-kind="brand"] {
+  --tone: var(--brand);
+}
+
+.chip[data-kind="program"] {
+  --tone: var(--lx-missed);
+}
+
+.chip[data-kind="money"],
+.chip[data-kind="percent"] {
+  --tone: var(--lx-warning);
+}
+
+.chip[data-kind="document"],
+.chip[data-kind="video"],
+.chip[data-kind="email"],
+.chip[data-kind="website"] {
+  --tone: var(--lx-info);
+}
+
+.chip[data-kind="date"],
+.chip[data-kind="time"],
+.chip[data-kind="person"],
+.chip[data-kind="team"] {
+  --tone: var(--lx-teal);
+}
+
+.chip[data-kind="place"] {
+  --tone: var(--lx-objection);
+}
+
+/* A brand's logo in its own colour; near-black logos take the text colour. */
+.brandSvg {
+  display: block;
+  flex: none;
+  fill: var(--brand);
+}
+
+.brandSvg[data-ink] {
+  fill: var(--lx-ink);
+}
+
+.chip > .brandSvg {
+  color: inherit;
+}
+
+/* A full-colour logo keeps its own colours; one-colour marks take the brand
+   colour and black logos the text colour. */
+.logo {
+  display: block;
+  flex: none;
+  color: var(--brand);
+}
+
+.logo[data-ink] {
+  color: var(--lx-ink);
+}
+
+.monogram {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 30%;
+  background: var(--brand);
+  color: #ffffff;
+  font-size: calc(var(--size) * 0.62);
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.monogram[data-light] {
+  color: #1a1a1a;
+}

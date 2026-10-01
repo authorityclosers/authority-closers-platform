@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "environment": "dev",
+  "accounts": [
+    {"role": "personal", "email": "admin+qa-dev-personal@authorityclosers.com"},
+    {"role": "organisation_owner", "email": "admin+qa-dev-owner@authorityclosers.com"},
+    {"role": "organisation_member", "email": "admin+qa-dev-member@authorityclosers.com"},
+    {"role": "enterprise", "email": "admin+qa-dev-enterprise@authorityclosers.com"}
+  ],
+  "media": {
+    "synthetic": true,
+    "provenance": "/home/acdev/src/test-assets/sales-xray-calls/PROVENANCE.md",
+    "file": "/home/acdev/src/test-assets/sales-xray-calls/call-a-discovery.wav",
+    "sha256": "88bd67cceee0e65e57c42f851b192b28801d519455fcc873972cde3f4548aea6"
+  }
+}

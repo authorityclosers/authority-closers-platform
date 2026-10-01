@@ -1,6 +1,8 @@
-import { act, type ReactNode } from "react";
+// @vitest-environment happy-dom
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
 import {
   envelope,
   recordingId,
@@ -13,10 +15,11 @@ import {
   type ReportEvidence,
   type SalesReport,
 } from "./report-contract";
-import { countReportMoments, ReportMoments } from "./report-moments";
-import { ReportTranscript } from "./report-transcript";
-import { ReportReadingProvider } from "./report-reading-context";
-import { ReportModes } from "./report-modes";
+import {
+  countReportMoments,
+  ReportMoments,
+  timelineMoments,
+} from "./report-moments";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -32,14 +35,11 @@ function suppliedReport() {
     transcript,
   ).report;
 }
-function historicalReport(): SalesReport {
+function emptyReport(): SalesReport {
   const report = suppliedReport();
   delete report.overview;
-  return report;
-}
-function emptyReport(): SalesReport {
   return {
-    ...historicalReport(),
+    ...report,
     strengths: [],
     improvements: [],
     missed_opportunities: [],
@@ -55,288 +55,328 @@ function excerpt(index: number): ReportEvidence {
     end_ms: index * 1_000 + 987,
   };
 }
-function manyMoments(): SalesReport {
+function mixed(): SalesReport {
   return {
     ...emptyReport(),
     strengths: [
       {
-        title: "First supplied finding",
-        explanation: "First supplied explanation",
-        evidence: [8, 3, 7, 1, 6].map(excerpt),
-      },
-      {
-        title: "Second supplied finding",
-        explanation: "Second supplied explanation",
-        evidence: [4, 2, 5, 0].map(excerpt),
-      },
-    ],
-  };
-}
-async function render(
-  report: SalesReport,
-  onSelectEvidence = vi.fn<(evidence: ReportEvidence, title: string) => void>(),
-  transcriptSlot?: ReactNode,
-  reading = false,
-) {
-  await act(async () =>
-    root.render(
-      <ReportReadingProvider reading={reading}>
-        <ReportMoments
-          report={report}
-          onSelectEvidence={onSelectEvidence}
-          transcriptSlot={transcriptSlot}
-        />
-      </ReportReadingProvider>,
-    ),
-  );
-  return onSelectEvidence;
-}
-function screen() {
-  return container.querySelector("[data-report-moments] > div")!;
-}
-function focused() {
-  return screen().querySelector<HTMLElement>("[data-focused-moment]")!;
-}
-function button(label: string, scope: ParentNode = screen()) {
-  const found = [...scope.querySelectorAll<HTMLButtonElement>("button")].find(
-    (node) =>
-      (node.getAttribute("aria-label") ?? node.textContent?.trim()) === label,
-  );
-  expect(found, label).toBeDefined();
-  return found!;
-}
-async function click(label: string, scope: ParentNode = screen()) {
-  await act(async () => button(label, scope).click());
-}
-function dialog() {
-  return container.querySelector<HTMLDialogElement>("dialog[open]")!;
-}
-async function filter(kind: string) {
-  await act(async () => {
-    const select = screen().querySelector<HTMLSelectElement>(
-      'select[aria-label="Moment source"]',
-    )!;
-    select.value = kind;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
-beforeEach(() => {
-  window.history.replaceState(null, "", "/");
-  container = document.createElement("div");
-  document.body.append(container);
-  root = createRoot(container);
-});
-
-it("keeps filters, full quotes and playback in the Moments tab and routes transcript search inline", async () => {
-  const onSelect = vi.fn();
-  const report = {
-    ...manyMoments(),
-    improvements: [
-      {
-        title: "A complete improvement title",
-        explanation: "The complete explanation stays beside the source.",
-        evidence: [excerpt(12)],
-      },
-    ],
-  };
-  await act(async () =>
-    root.render(
-      <ReportModes
-        panels={[
-          {
-            id: "moments",
-            label: "Moments",
-            content: (
-              <ReportMoments report={report} onSelectEvidence={onSelect} />
-            ),
-          },
-          {
-            id: "transcript",
-            label: "Transcript",
-            content: (
-              <ReportTranscript transcript={transcript} onSelect={vi.fn()} />
-            ),
-          },
-        ]}
-      />,
-    ),
-  );
-  await click("Tabbed view", container);
-  expect(
-    container
-      .querySelector("[data-report-moments]")
-      ?.getAttribute("data-reading"),
-  ).toBeNull();
-  expect(
-    screen().querySelector('select[aria-label="Moment source"]'),
-  ).not.toBeNull();
-  expect(container.querySelector("dialog")).toBeNull();
-  expect(screen().textContent).not.toContain("Open review");
-  await filter("improvements");
-  expect(focused().querySelector("blockquote p")?.textContent).toBe(
-    excerpt(12).quote,
-  );
-  expect(focused().textContent).toContain(report.improvements[0].explanation);
-  await click("Listen");
-  expect(onSelect).toHaveBeenCalledExactlyOnceWith(
-    report.improvements[0].evidence[0],
-    report.improvements[0].title,
-  );
-  await click("Search full transcript");
-  expect(
-    container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
-  ).toBe("tabs");
-  const transcriptSection = container.querySelector(
-    '[data-report-mode-section="transcript"]',
-  )!;
-  expect(transcriptSection.hasAttribute("hidden")).toBe(false);
-  expect(
-    transcriptSection.querySelector<HTMLInputElement>('input[type="search"]'),
-  ).not.toBeNull();
-  expect(
-    transcriptSection.querySelector<HTMLDetailsElement>("details")?.open,
-  ).toBe(true);
-  expect(container.querySelector("dialog")).toBeNull();
-});
-
-it("renders every supplied source moment in reading mode", async () => {
-  const report = manyMoments();
-  const onSelect = await render(report, undefined, undefined, true);
-
-  const reading = container.querySelector<HTMLElement>(
-    '[data-report-moments][data-reading="true"]',
-  );
-  expect(
-    reading?.querySelectorAll("[data-moments-print] article"),
-  ).toHaveLength(countReportMoments(report));
-  await act(async () =>
-    reading
-      ?.querySelector<HTMLButtonElement>("[data-moments-print] article button")
-      ?.click(),
-  );
-  expect(onSelect).toHaveBeenCalledWith(excerpt(8), "First supplied finding");
-});
-afterEach(async () => {
-  await act(async () => root.unmount());
-  container.remove();
-});
-
-it("uses validated rewatch notes in report order with the exact quote, purpose and callback", async () => {
-  const report = suppliedReport();
-  const first = report.overview!.rewatch[0];
-  const second = report.overview!.rewatch[1];
-  const onSelect = await render(report);
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(
-    report.overview!.rewatch.length,
-  );
-  expect(focused().querySelector("h3")?.textContent).toBe(first.text);
-  expect(focused().querySelector("blockquote p")?.textContent).toBe(
-    first.evidence[0].quote,
-  );
-  expect(focused().textContent).toContain("Rewatch · Must watch");
-  expect(focused().textContent).toContain("00:01–00:02");
-  expect(focused().textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
-  expect(screen().textContent).not.toMatch(
-    /Discovery|What happened|Why it matters/,
-  );
-  await click("Listen");
-  expect(onSelect).toHaveBeenLastCalledWith(first.evidence[0], first.text);
-  expect(onSelect.mock.calls[0][0]).toBe(first.evidence[0]);
-  await click("Next moment");
-  expect(focused().querySelector("h3")?.textContent).toBe(second.text);
-  await click("Listen");
-  expect(onSelect).toHaveBeenLastCalledWith(second.evidence[0], second.text);
-});
-
-it("falls back to historical findings without sorting, merging or inventing topic assessments", async () => {
-  const report = {
-    ...emptyReport(),
-    strengths: [
-      {
-        title: "Supplied strength",
-        explanation: "Strength explanation",
-        evidence: [excerpt(9), excerpt(1)],
+        title: "Asked about numbers",
+        explanation: "Good discovery",
+        evidence: [excerpt(8), excerpt(9)],
       },
     ],
     improvements: [
       {
-        title: "Supplied improvement",
-        explanation: "Improvement explanation",
-        evidence: [excerpt(7)],
+        title: "Pause after explaining",
+        explanation: "Long monologue",
+        evidence: [excerpt(3)],
       },
     ],
     missed_opportunities: [
       {
-        title: "Supplied missed opportunity",
-        explanation: "Missed explanation",
-        evidence: [excerpt(2)],
+        title: "Missed the pain",
+        explanation: "Did not follow up",
+        evidence: [excerpt(5)],
       },
     ],
     objection_analysis: [
       {
-        title: "Supplied objection analysis",
-        explanation: "Objection explanation",
-        evidence: [excerpt(6)],
+        title: "Price worry",
+        explanation: "Handled briefly",
+        evidence: [excerpt(1)],
       },
     ],
     closing_analysis: [
       {
-        title: "Supplied closing analysis",
-        explanation: "Closing explanation",
-        evidence: [excerpt(3)],
+        title: "Next step set",
+        explanation: "Agreed a follow-up",
+        evidence: [excerpt(12)],
       },
     ],
   };
-  const onSelect = await render(report);
-  const expected = [
-    ...report.strengths,
-    ...report.improvements,
-    ...report.missed_opportunities,
-    ...report.objection_analysis,
-    ...report.closing_analysis,
-  ].flatMap((finding) =>
-    finding.evidence.map((evidence) => ({ finding, evidence })),
-  );
-  for (const [index, { finding, evidence }] of expected.entries()) {
-    expect(focused().querySelector("h3")?.textContent).toBe(finding.title);
-    expect(focused().textContent).toContain(finding.explanation);
-    expect(focused().querySelector("blockquote p")?.textContent).toBe(
-      evidence.quote,
-    );
-    await click("Listen");
-    expect(onSelect.mock.calls[index]).toEqual([evidence, finding.title]);
-    expect(onSelect.mock.calls[index][0]).toBe(evidence);
-    if (index < expected.length - 1) await click("Next moment");
-  }
-  expect(button("Next moment").disabled).toBe(true);
-  expect(screen().textContent).toContain("Moment 6 of 6");
-  expect(
-    [...screen().querySelectorAll("option")].map(
-      (option) => option.textContent,
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response("{}")));
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+async function render(report: SalesReport, onSelectEvidence = vi.fn()) {
+  await act(async () =>
+    root.render(
+      <ReportMoments report={report} onSelectEvidence={onSelectEvidence} />,
     ),
-  ).toEqual([
-    "All sources",
-    "Strength",
-    "Improvement",
-    "Missed opportunity",
-    "Objection analysis",
-    "Closing analysis",
-  ]);
-});
-
-it("preserves an intentional empty rewatch selection even when detailed findings have evidence", async () => {
-  const report = suppliedReport();
-  report.overview!.rewatch = [];
-  await render(report);
-  expect(screen().textContent).toContain(
-    "No rewatch moments were selected for this report",
   );
-  expect(screen().querySelector("[data-focused-moment]")).toBeNull();
-  expect(countReportMoments(report)).toBe(0);
+  return onSelectEvidence;
+}
+const cards = () =>
+  [...container.querySelectorAll<HTMLElement>("[data-moment]")].map(
+    (item) => item.querySelector("h4")?.textContent,
+  );
+const pressed = (label: string) =>
+  [
+    ...container.querySelectorAll<HTMLButtonElement>('[role="group"] button'),
+  ].find((button) => button.textContent?.startsWith(label))!;
+
+it("puts one moment per finding on a single timeline in call order", () => {
+  const moments = timelineMoments(mixed());
+  expect(moments.map((m) => [m.kind, m.title])).toEqual([
+    ["objection", "Price worry"],
+    ["change", "Pause after explaining"],
+    ["missed", "Missed the pain"],
+    ["good", "Asked about numbers"],
+    ["closing", "Next step set"],
+  ]);
+  // Both clips stay with their finding.
+  expect(moments[3].evidence).toHaveLength(2);
 });
 
-it("exports a pure count of the same supplied evidence dataset, excluding missing excerpts", () => {
+it("marks rewatch picks on the finding that cites the same clip, never inventing one", () => {
+  const report = suppliedReport();
+  const moments = timelineMoments(report);
+  for (const note of report.overview!.rewatch) {
+    const clip = note.evidence[0];
+    const holder = moments.find((moment) =>
+      moment.evidence.some(
+        (item) =>
+          item.segment_id === clip.segment_id &&
+          item.start_ms === clip.start_ms &&
+          item.end_ms === clip.end_ms,
+      ),
+    );
+    expect(holder?.listen).toBeDefined();
+  }
+  // Every moment comes from a finding or a rewatch note in the report.
+  const titles = new Set(
+    [
+      ...report.strengths,
+      ...report.improvements,
+      ...report.missed_opportunities,
+      ...report.objection_analysis,
+      ...report.closing_analysis,
+    ]
+      .map((f) => f.title)
+      .concat(report.overview!.rewatch.map((r) => r.text)),
+  );
+  expect(moments.every((moment) => titles.has(moment.title))).toBe(true);
+});
+
+it("anchors a golden label and its initial playback to evidence_index", () => {
+  const report = suppliedReport();
+  report.strengths = [
+    {
+      title: "A selected golden finding",
+      explanation: "Fictional evidence.",
+      evidence: [excerpt(8), excerpt(2)],
+    },
+  ];
+  report.overview!.golden_moments = [
+    { strength_index: 0, evidence_index: 1, why_effective: "Selected clip." },
+  ];
+  const moment = timelineMoments(report).find((item) => item.golden);
+  expect(moment?.evidence[0]).toEqual(excerpt(2));
+});
+
+it("keeps conflicting golden and rewatch clips in separate source-backed rows", async () => {
+  const report = suppliedReport();
+  const f1 = { ...excerpt(1), segment_id: "f1", start_ms: 1_000 };
+  const f2 = { ...excerpt(5), segment_id: "f2", start_ms: 5_000 };
+  report.strengths = [
+    {
+      title: "Asked about numbers",
+      explanation: "Good discovery",
+      evidence: [f1, f2],
+    },
+  ];
+  report.overview!.golden_moments = [
+    {
+      strength_index: 0,
+      evidence_index: 1,
+      why_effective: "Selected golden clip.",
+    },
+  ];
+  report.overview!.rewatch = [
+    { purpose: "must_watch", text: "Rewatch f1.", evidence: [f1] },
+  ];
+
+  const moments = timelineMoments(report);
+  const best = moments.find((moment) => moment.golden);
+  const rewatch = moments.find((moment) => moment.title === "Rewatch f1.");
+  expect(best?.evidence[0]).toEqual(f2);
+  expect(rewatch?.evidence[0]).toEqual(f1);
+  expect(rewatch?.listen).toBe("must_watch");
+
+  const onSelectEvidence = await render(report);
+  const bestRow = container.querySelector<HTMLElement>(
+    `[data-moment="strength:0"]`,
+  )!;
+  const rewatchRow = container.querySelector<HTMLElement>(
+    `[data-moment="rewatch:0"]`,
+  )!;
+  expect(bestRow.textContent).toContain("Best moment");
+  expect(rewatchRow.textContent).toContain("Rewatch f1.");
+  await act(async () =>
+    rewatchRow
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  expect(onSelectEvidence).toHaveBeenCalledWith(f1, "Rewatch f1.");
+});
+
+it("keeps two rewatch purposes bound to their own displayed and played clips", async () => {
+  const report = suppliedReport();
+  const f1 = { ...excerpt(1), segment_id: "f1", start_ms: 1_000 };
+  const f2 = { ...excerpt(5), segment_id: "f2", start_ms: 5_000 };
+  report.strengths = [
+    {
+      title: "Two cited clips",
+      explanation: "Fictional evidence.",
+      evidence: [f1, f2],
+    },
+  ];
+  report.overview!.golden_moments = [];
+  report.overview!.rewatch = [
+    { purpose: "must_watch", text: "Rewatch f1.", evidence: [f1] },
+    { purpose: "watch", text: "Rewatch f2.", evidence: [f2] },
+  ];
+
+  const moments = timelineMoments(report);
+  const f1Moment = moments.find((moment) => moment.id === "strength:0");
+  const f2Moment = moments.find((moment) => moment.id === "rewatch:1");
+  expect(f1Moment).toMatchObject({ listen: "must_watch", listenEvidence: f1 });
+  expect(f2Moment).toMatchObject({ listen: "watch", listenEvidence: f2 });
+  expect(f1Moment?.evidence[0]).toEqual(f1);
+  expect(f2Moment?.evidence[0]).toEqual(f2);
+
+  const onSelectEvidence = await render(report);
+  const f1Row = container.querySelector<HTMLElement>(
+    '[data-moment="strength:0"]',
+  )!;
+  const f2Row = container.querySelector<HTMLElement>(
+    '[data-moment="rewatch:1"]',
+  )!;
+  expect(f1Row.textContent).toContain("Must listen");
+  expect(f2Row.textContent).toContain("Worth a listen");
+  await act(async () =>
+    f1Row
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  await act(async () =>
+    f2Row
+      .querySelector<HTMLButtonElement>('button[aria-label^="Play"]')!
+      .click(),
+  );
+  expect(onSelectEvidence).toHaveBeenNthCalledWith(1, f1, "Two cited clips");
+  expect(onSelectEvidence).toHaveBeenNthCalledWith(2, f2, "Rewatch f2.");
+});
+
+it("keeps the selected rewatch clip first when it matches later finding evidence", () => {
+  const report = suppliedReport();
+  const selected = excerpt(2);
+  report.strengths = [
+    {
+      title: "A rewatch finding",
+      explanation: "Fictional evidence.",
+      evidence: [excerpt(8), selected],
+    },
+  ];
+  report.overview!.rewatch = [
+    {
+      purpose: "must_watch",
+      text: "Rewatch the selected clip.",
+      evidence: [selected],
+    },
+  ];
+  const moment = timelineMoments(report).find((item) => item.listen);
+  expect(moment?.evidence[0]).toEqual(selected);
+});
+
+it("shows each moment with its label, words and a play control for the exact clip", async () => {
+  const onSelectEvidence = await render(mixed());
+  expect(cards()).toEqual([
+    "Price worry",
+    "Pause after explaining",
+    "Missed the pain",
+    "Asked about numbers",
+    "Next step set",
+  ]);
+  expect(container.textContent).toContain("Exact supplied phrase 3");
+  const play = container.querySelector<HTMLButtonElement>(
+    '[data-moment="improvement:0"] button[aria-label^="Play"]',
+  )!;
+  await act(async () => play.click());
+  expect(onSelectEvidence).toHaveBeenCalledWith(
+    excerpt(3),
+    "Pause after explaining",
+  );
+  // A finding's other clips sit in its detail, ready when the row opens.
+  expect(container.textContent).toContain("Exact supplied phrase 9");
+});
+
+it("filters by kind, and the call map opens the moment it points to", async () => {
+  await render(mixed());
+  await act(async () => pressed("To change").click());
+  expect(cards()).toEqual(["Pause after explaining"]);
+  await act(async () => pressed("All").click());
+  expect(cards()).toHaveLength(5);
+  const scroll = vi.fn();
+  HTMLElement.prototype.scrollIntoView = scroll;
+  const pin = container.querySelector<HTMLButtonElement>(
+    'button[aria-label^="Closing at"]',
+  )!;
+  await act(async () => {
+    pin.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(
+    container
+      .querySelector('[data-moment="closing:0"]')
+      ?.hasAttribute("data-open"),
+  ).toBe(true);
+  expect(scroll).toHaveBeenCalled();
+});
+
+it("says so when the report points to no moment, and keeps guest counts", async () => {
+  const counts = (hidden: number) => ({
+    visible_count: 0,
+    total_count: hidden,
+    hidden_count: hidden,
+  });
+  await render({
+    ...emptyReport(),
+    preview: {
+      version: "guest-findings-v1",
+      sections: {
+        strengths: counts(1),
+        improvements: counts(2),
+        missed_opportunities: counts(0),
+        objection_analysis: counts(0),
+        closing_analysis: counts(0),
+        golden_moments: counts(0),
+        prospect_interpretations: counts(0),
+        rewatch: counts(0),
+        ethics_notes: counts(0),
+      },
+    },
+  });
+  expect(container.textContent).toContain(
+    "This report did not point to any moment in the call.",
+  );
+  expect(container.textContent).toContain(
+    "3 more moments are saved for your account.",
+  );
+  expect(container.querySelector('button[aria-label^="Play"]')).toBeNull();
+});
+
+it("exports a pure count of the replay dataset, excluding missing excerpts", () => {
   const detailed = suppliedReport();
   const uniqueRanges = new Set(
     detailed.overview!.rewatch.flatMap((moment) =>
@@ -348,7 +388,7 @@ it("exports a pure count of the same supplied evidence dataset, excluding missin
   );
   expect(countReportMoments(detailed)).toBe(uniqueRanges.size);
   const report = {
-    ...manyMoments(),
+    ...mixed(),
     improvements: [
       {
         title: "Unlinked finding",
@@ -358,7 +398,7 @@ it("exports a pure count of the same supplied evidence dataset, excluding missin
     ],
   };
   const before = JSON.stringify(report);
-  expect(countReportMoments(report)).toBe(9);
+  expect(countReportMoments(report)).toBe(5);
   expect(JSON.stringify(report)).toBe(before);
   expect(countReportMoments(emptyReport())).toBe(0);
 });
@@ -381,334 +421,4 @@ it("keeps distinct source segments and clock ranges separate when phrases repeat
     ],
   };
   expect(countReportMoments(report)).toBe(4);
-});
-
-it("keeps duplicate source ranges attached to each original finding and quote", async () => {
-  const shared = excerpt(1);
-  const otherQuote = {
-    ...shared,
-    quote: "Another exact supplied quote in the same range",
-  };
-  const report = {
-    ...emptyReport(),
-    strengths: [
-      {
-        title: "Strength context",
-        explanation: "First context",
-        evidence: [shared],
-      },
-    ],
-    improvements: [
-      {
-        title: "Improvement context",
-        explanation: "Second context",
-        evidence: [otherQuote, shared],
-      },
-    ],
-  };
-  const onSelect = await render(report);
-  expect(countReportMoments(report)).toBe(1);
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(3);
-  await click("Listen");
-  await click("Next moment");
-  await click("Listen");
-  await click("Next moment");
-  await click("Listen");
-  expect(onSelect.mock.calls).toEqual([
-    [shared, "Strength context"],
-    [otherQuote, "Improvement context"],
-    [shared, "Improvement context"],
-  ]);
-});
-
-it("explains empty and missing-evidence states without counting phantom moments or offering playback", async () => {
-  const onSelect = await render(emptyReport());
-  expect(screen().textContent).toContain("No source moments supplied");
-  expect(screen().textContent).toContain(
-    "A transcript has not been provided in this view",
-  );
-  expect(screen().querySelectorAll("button")).toHaveLength(0);
-  await render(
-    {
-      ...emptyReport(),
-      strengths: [
-        {
-          title: "Supplied item without excerpt",
-          explanation: "Available note only",
-          evidence: [],
-        },
-      ],
-    },
-    onSelect,
-  );
-  expect(screen().textContent).toContain(
-    "No linked source excerpts were supplied",
-  );
-  expect(screen().textContent).toContain("Key moments (0)");
-  expect(screen().textContent).not.toMatch(/\d\d:\d\d/);
-  expect(screen().querySelector("[data-focused-moment]")).toBeNull();
-  expect(screen().querySelectorAll("button")).toHaveLength(0);
-  expect(onSelect).not.toHaveBeenCalled();
-});
-
-it("bounds the desktop list to four rows while previous/next traverses every supplied excerpt", async () => {
-  const report = manyMoments();
-  await render(report);
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(4);
-  expect(button("Previous moment").disabled).toBe(true);
-  expect(button("Previous moment page").disabled).toBe(true);
-  await click("Next moment page");
-  expect(focused().dataset.focusedMoment).toBe("strengths:0:4");
-  expect(screen().textContent).toContain("Page 2 of 3");
-  await click("Next moment page");
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(1);
-  expect(focused().dataset.focusedMoment).toBe("strengths:1:3");
-  expect(button("Next moment page").disabled).toBe(true);
-  expect(button("Next moment").disabled).toBe(true);
-  await click("Previous moment");
-  expect(screen().textContent).toContain("Page 2 of 3");
-  await click("Previous moment page");
-  expect(focused().dataset.focusedMoment).toBe("strengths:0:0");
-  await act(async () =>
-    screen()
-      .querySelector<HTMLButtonElement>('[data-moment-id="strengths:0:2"]')!
-      .click(),
-  );
-  expect(focused().dataset.focusedMoment).toBe("strengths:0:2");
-});
-
-it("filters by supplied source kind and keeps the full print collection independent of pages and filters", async () => {
-  const report = {
-    ...manyMoments(),
-    improvements: [
-      {
-        title: "Supplied improvement",
-        explanation: "Complete note",
-        evidence: [excerpt(12)],
-      },
-    ],
-  };
-  await render(report);
-  await click("Next moment page");
-  await filter("improvements");
-  expect(screen().querySelectorAll("[data-moment-id]")).toHaveLength(1);
-  expect(focused().textContent).toContain("Supplied improvement");
-  expect(button("Previous moment").disabled).toBe(true);
-  const printed = container.querySelector("[data-moments-print]")!;
-  expect(printed.querySelectorAll("article")).toHaveLength(10);
-  expect(printed.querySelectorAll("blockquote")[8].textContent).toBe(
-    report.strengths[1].evidence[3].quote,
-  );
-  expect(printed.textContent).not.toContain(report.source_sha256);
-  await filter("all");
-  expect(focused().dataset.focusedMoment).toBe("strengths:0:0");
-});
-
-it("opens complete long text and provenance in a focused review, then restores the invoking control", async () => {
-  const evidence = {
-    ...excerpt(61),
-    quote: "Exact multilingual source शब्द ".repeat(60),
-  };
-  const title = "Long supplied title ".repeat(12);
-  const explanation = "Entire supplied observation. ".repeat(130);
-  const report = {
-    ...emptyReport(),
-    strengths: [{ title, explanation, evidence: [evidence] }],
-  };
-  const onSelect = await render(report);
-  const opener = button("Open review");
-  opener.focus();
-  await click("Open review");
-  expect(onSelect).not.toHaveBeenCalled();
-  expect(dialog()).not.toBeNull();
-  expect(document.activeElement).toBe(button("Close review moment", dialog()));
-  expect(dialog().querySelector("h3")?.textContent).toBe(title);
-  expect(dialog().querySelector("blockquote")?.textContent).toBe(
-    evidence.quote,
-  );
-  expect(dialog().textContent).toContain(explanation);
-  expect(dialog().textContent).toContain("at 01:01");
-  expect(dialog().textContent).not.toContain("01:01–01:01");
-  for (const value of [
-    report.source_label,
-    report.source_sha256,
-    report.transcript_revision,
-    evidence.segment_id,
-  ])
-    expect(dialog().textContent).not.toContain(value);
-  expect(dialog().textContent).toContain("From this call");
-  await act(async () =>
-    dialog().dispatchEvent(new Event("cancel", { cancelable: true })),
-  );
-  expect(dialog()).toBeNull();
-  expect(document.activeElement).toBe(opener);
-  await click("Open review");
-  await click("Listen to this excerpt", dialog());
-  expect(onSelect).toHaveBeenCalledExactlyOnceWith(evidence, title);
-  expect(onSelect.mock.calls[0][0]).toBe(evidence);
-  expect(dialog()).toBeNull();
-  expect(
-    container.querySelector("[data-moments-print]")?.textContent,
-  ).toContain(explanation);
-});
-
-it("navigates full reviews in place and returns to the start of the next moment's text", async () => {
-  await render(manyMoments());
-  await click("Open review");
-  const sheet = dialog();
-  const scrollBody = sheet.querySelector("[data-full-moment]")!.parentElement!;
-  scrollBody.scrollTop = 300;
-  await click("Next moment", sheet);
-  expect(dialog()).toBe(sheet);
-  expect(focused().dataset.focusedMoment).toBe("strengths:0:1");
-  expect(scrollBody.scrollTop).toBe(0);
-  expect(document.activeElement).toBe(sheet.querySelector("h3"));
-  expect(sheet.textContent).toContain("Exact supplied phrase 3");
-});
-
-it.each(["source", "revision"])(
-  "resets selection, filters and open review when the %s changes",
-  async (change) => {
-    const report = {
-      ...manyMoments(),
-      improvements: [
-        {
-          title: "Another finding",
-          explanation: "A note",
-          evidence: [excerpt(12)],
-        },
-      ],
-    };
-    const onSelect = await render(report);
-    await filter("improvements");
-    await click("Open review");
-    const changed = {
-      ...report,
-      source_sha256:
-        change === "source" ? "c".repeat(64) : report.source_sha256,
-      transcript_revision:
-        change === "revision" ? "new-revision" : report.transcript_revision,
-      strengths: [
-        {
-          title: "New report first moment",
-          explanation: "New report observation",
-          evidence: [excerpt(24)],
-        },
-      ],
-    };
-    await render(changed, onSelect);
-    expect(dialog()).toBeNull();
-    expect(screen().querySelector<HTMLSelectElement>("select")?.value).toBe(
-      "all",
-    );
-    expect(focused().querySelector("h3")?.textContent).toBe(
-      "New report first moment",
-    );
-    await click("Listen");
-    expect(onSelect).toHaveBeenLastCalledWith(
-      changed.strengths[0].evidence[0],
-      changed.strengths[0].title,
-    );
-  },
-);
-
-it("reads each moment in the normal flow with its full quote, finding, linked context and one-click Listen", async () => {
-  const report = suppliedReport();
-  const onSelect = await render(report, undefined, undefined, true);
-  const reading = container.querySelector<HTMLElement>("[data-moments-print]")!;
-  const cards = [...reading.querySelectorAll<HTMLElement>("article")];
-  expect(cards).toHaveLength(report.overview!.rewatch.length);
-  const [first, second] = report.overview!.rewatch;
-  expect(cards[0].querySelector("h3")?.textContent).toBe(first.text);
-  expect(cards[0].querySelector("blockquote")?.textContent).toBe(
-    first.evidence[0].quote,
-  );
-  expect(
-    cards[0].querySelector("blockquote p")?.getAttribute("data-script"),
-  ).toBe("deva");
-  expect(cards[0].textContent).toContain("Rewatch · Must watch");
-  // Findings citing the exact same span, joined on the saved source bounds.
-  expect(cards[0].textContent).toContain("Change first");
-  expect(cards[0].textContent).toContain(report.improvements[0].title);
-  expect(cards[0].textContent).toContain(
-    `Try this: ${report.overview!.improvement_details[0].replacement_behavior}`,
-  );
-  expect(cards[0].textContent).toContain(
-    `Explore next: ${report.overview!.missed_details[0].follow_up}`,
-  );
-  expect(cards[1].textContent).toContain(
-    `Why it worked: ${report.overview!.golden_moments[0].why_effective}`,
-  );
-  expect(cards[1].textContent).not.toContain(report.improvements[0].title);
-  const buttons = cards[1].querySelectorAll<HTMLButtonElement>("button");
-  expect(buttons).toHaveLength(1);
-  expect(buttons[0].textContent).toContain("Listen");
-  // 2.5–3.3 s is under one second, so it is one location, not "00:02–00:03".
-  expect(buttons[0].textContent).toContain("at 00:02");
-  await act(async () => buttons[0].click());
-  expect(onSelect).toHaveBeenCalledExactlyOnceWith(
-    second.evidence[0],
-    second.text,
-  );
-  expect(onSelect.mock.calls[0][0]).toBe(second.evidence[0]);
-  for (const value of [
-    report.source_label,
-    report.source_sha256,
-    report.transcript_revision,
-  ])
-    expect(container.textContent).not.toContain(value);
-  expect(container.textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
-});
-
-it("shows a sub-second clip as one location and never clamps a moment title", async () => {
-  const report = manyMoments();
-  const onSelect = await render(report, undefined, undefined, true);
-  const listen = container.querySelector<HTMLButtonElement>(
-    "[data-moments-print] article button",
-  )!;
-  expect(listen.textContent).toContain("at 00:08");
-  expect(listen.textContent).not.toContain("00:08–00:08");
-  await act(async () => listen.click());
-  expect(onSelect.mock.calls[0][0]).toEqual(excerpt(8));
-  expect(onSelect.mock.calls[0][0].end_ms).toBe(8_987);
-  await render(report);
-  expect(focused().textContent).toContain("at 00:08");
-  expect(
-    screen().querySelector<HTMLElement>("[data-moment-id] strong")?.textContent,
-  ).toBe(report.strengths[0].title);
-});
-
-it("retains existing transcript phrase search and exact-source selection in an independently scrollable sheet", async () => {
-  const onTranscriptSelect = vi.fn();
-  await render(
-    emptyReport(),
-    vi.fn(),
-    <ReportTranscript transcript={transcript} onSelect={onTranscriptSelect} />,
-  );
-  expect(screen().textContent).toContain(
-    "You can still search the full transcript",
-  );
-  await click("Search full transcript");
-  const sheet = dialog();
-  await act(async () => sheet.querySelector("summary")!.click());
-  const search = sheet.querySelector<HTMLInputElement>('input[type="search"]')!;
-  const target = transcript.segments[1];
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(search, target.text);
-    search.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  expect(sheet.querySelectorAll("[data-segment-id]")).toHaveLength(1);
-  await act(async () =>
-    sheet.querySelector<HTMLButtonElement>("[data-segment-id]")!.click(),
-  );
-  expect(onTranscriptSelect).toHaveBeenCalledExactlyOnceWith(target);
-  await click("Close full transcript", sheet);
-  await click("Search full transcript");
-  expect(
-    dialog().querySelector<HTMLInputElement>('input[type="search"]')!.value,
-  ).toBe(target.text);
-  expect(dialog().querySelector("details")!.open).toBe(true);
 });
