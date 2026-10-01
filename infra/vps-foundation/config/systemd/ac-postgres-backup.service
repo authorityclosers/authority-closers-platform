@@ -5,6 +5,8 @@ Wants=network-online.target
 Requires=docker.service
 
 [Service]
+CacheDirectory=authority-closers-restic
+CacheDirectoryMode=0750
 Type=oneshot
 ExecStart=/usr/local/sbin/ac-postgres-backup
 User=root

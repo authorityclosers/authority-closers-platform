@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -966,6 +967,8 @@ def test_every_restic_unit_can_write_the_shared_restic_cache() -> None:
         ]
         assert "ProtectSystem=strict" in text, unit
         assert cache in writable, unit
+        assert "CacheDirectory=authority-closers-restic" in text, unit
+        assert "CacheDirectoryMode=0750" in text, unit
 
 
 def test_r2_guard_retry_and_transient_unit_bounds_are_aligned() -> None:
@@ -1245,3 +1248,257 @@ def test_upload_timeout_and_termination_are_distinct_without_retry(
     with pytest.raises(backup.BackupError, match=f"reason={reason}, exit_status={exit_status}"):
         backup.upload_dump(tmp_path / "backup.dump", tmp_path / "metadata.json", "staging", 1)
     assert command_calls == [True]
+
+
+# AUT-163: copied entrypoints use synthetic credentials, commands and locks only.
+SCRIPTS = FOUNDATION / "scripts"
+RESTIC_ENTRYPOINTS = [
+    "ac-restic-backup-inner",
+    "ac-restic-postgres-backup-inner",
+    "ac-restic-restore-check-inner",
+    "ac-restic-postgres-restore-proof-inner",
+]
+
+
+def _run_cache_entrypoint(tmp_path, name=RESTIC_ENTRYPOINTS[0], cache_state="valid", **scenario):
+    cache = tmp_path / "cache"
+    if cache_state == "file":
+        cache.touch()
+    elif cache_state == "symlink":
+        target = tmp_path / "target"
+        target.mkdir()
+        cache.symlink_to(target)
+    elif cache_state != "missing":
+        cache.mkdir(mode=0o500 if cache_state == "unwritable" else 0o750)
+    calls = tmp_path / "calls"
+    fake = tmp_path / "restic"
+    fake.write_text(
+        "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "with open(os.environ['CALLS'], 'a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')\n"
+        "if os.environ.get('WARN'): sys.stderr.write('unable to open cache: fictional\\n')\n"
+        "if '--dry-run' in sys.argv: print(os.environ.get('SUMMARY', "
+        '\'{"message_type":"summary","data_added":123}\'))\n'
+        "elif 'snapshots' in sys.argv: print('[]')\n"
+        "sys.exit(int(os.environ.get('DRY_STATUS', '0')) if '--dry-run' in sys.argv else 0)\n"
+    )
+    fake.chmod(0o700)
+    guard = tmp_path / "guard"
+    guard.write_text(
+        "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "p=os.environ.get('R2_PROJECTED_ADDITIONAL_BYTES','unset')\n"
+        "with open(os.environ['CALLS'], 'a') as f: f.write(json.dumps(['guard',p])+'\\n')\n"
+        "sys.exit(1 if os.environ.get('GUARD_FAIL') or "
+        "(os.environ.get('REFUSE') and p!='0') else 0)\n"
+    )
+    guard.chmod(0o700)
+    proof = tmp_path / "proof"
+    proof.write_text(
+        "#!/usr/bin/env python3\nimport subprocess, sys\n"
+        "sys.exit(subprocess.call(['restic','snapshots'], stderr=subprocess.DEVNULL))\n"
+    )
+    proof.chmod(0o700)
+    source = (SCRIPTS / name).read_text()
+    # Substitute credentials, paths and ownership identity, never use real host locks.
+    source = "#!/usr/bin/env bash\nset -euo pipefail\n" + source[source.index(': "${R2_ENDPOINT') :]
+    source = source.replace("/var/cache/authority-closers-restic", str(cache))
+    owner = os.getuid() + (1 if cache_state == "wrong-owner" else 0)
+    source = source.replace('" != 0 ]]', f'" != {owner} ]]')
+    start = (
+        source.index("\nrestic_lock_dir=")
+        if name != RESTIC_ENTRYPOINTS[1]
+        else source.index('\nif [[ -n "${AC_RESTIC_LOCK_FD')
+    )
+    end = source.index("# Repository lock acquired.", start) + len("# Repository lock acquired.")
+    if name == RESTIC_ENTRYPOINTS[1]:
+        end = source.index("\nfi", end) + len("\nfi")
+    source = source[:start] + f'\nexec 9>>"{tmp_path}/lock"\nflock -x 9\n' + source[end:]
+    source = source.replace("/usr/local/libexec/authority-closers/r2-usage-guard", str(guard))
+    source = source.replace(
+        "/usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py", str(proof)
+    )
+    script = tmp_path / "entrypoint"
+    script.write_text(source)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "CALLS": str(calls)}
+    env.update(
+        {
+            k: "fictional"
+            for k in (
+                "R2_ENDPOINT",
+                "R2_ACCESS_KEY_ID",
+                "R2_SECRET_ACCESS_KEY",
+                "R2_BACKUP_BUCKET",
+                "RESTIC_PASSWORD",
+                "dump_file",
+                "metadata_file",
+                "environment",
+            )
+        }
+    )
+    env.update({k: str(v) for k, v in scenario.items()})
+    result = subprocess.run(  # noqa: S603 - trusted copied script and local fake commands
+        ["/usr/bin/bash", str(script)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    return result, [
+        json.loads(line) for line in calls.read_text().splitlines()
+    ] if calls.exists() else []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX shell and permissions")
+class TestResticCacheAndRetention:
+    @pytest.mark.parametrize("name", RESTIC_ENTRYPOINTS)
+    @pytest.mark.parametrize(
+        "cache_state", ["missing", "file", "symlink", "unwritable", "wrong-owner"]
+    )
+    def test_cache_refusal_precedes_all_repository_requests(self, tmp_path, name, cache_state):
+        result, calls = _run_cache_entrypoint(tmp_path, name, cache_state)
+        assert result.returncode != 0
+        assert "AC_BACKUP_FAILURE=restic_cache_unavailable" in result.stderr
+        assert calls == []
+
+    @pytest.mark.parametrize("name", RESTIC_ENTRYPOINTS)
+    def test_restic_cache_warning_fails_even_with_success_status(self, tmp_path, name):
+        result, calls = _run_cache_entrypoint(tmp_path, name, WARN=1)
+        assert result.returncode != 0
+        assert "AC_BACKUP_FAILURE=restic_cache_unavailable" in result.stderr
+        assert len([call for call in calls if call[0] != "guard"]) == 1
+
+    def test_retention_runs_before_refused_foundation_write(self, tmp_path):
+        result, calls = _run_cache_entrypoint(tmp_path, REFUSE=1)
+        assert result.returncode != 0
+        assert [call[0] for call in calls] == [
+            "guard",
+            "unlock",
+            "forget",
+            "forget",
+            "prune",
+            "backup",
+            "guard",
+        ]
+        assert calls[0] == ["guard", "0"] and calls[-1] == ["guard", "123"]
+        assert calls[1] == ["unlock"]
+        assert calls[2] == [
+            "forget",
+            "--tag",
+            "authority-closers-postgres-logical",
+            "--group-by",
+            "host,tags",
+            "--keep-within",
+            "27h",
+        ]
+        assert calls[3] == [
+            "forget",
+            "--tag",
+            "authority-closers-foundation",
+            "--keep-daily",
+            "7",
+            "--keep-weekly",
+            "4",
+            "--keep-monthly",
+            "6",
+        ]
+        assert "--dry-run" in calls[5]  # No actual snapshot write after refusal.
+
+    def test_initial_guard_failure_prevents_all_restic_calls(self, tmp_path):
+        result, calls = _run_cache_entrypoint(tmp_path, GUARD_FAIL=1)
+        assert result.returncode != 0 and calls == [["guard", "0"]]
+
+    @pytest.mark.parametrize(
+        "summary",
+        [
+            "",
+            "{}",
+            "broken",
+            '{"message_type":"summary"}',
+            '{"message_type":"summary","data_added":-1}',
+            '{"message_type":"summary","data_added":"123"}',
+            '{"message_type":"summary","data_added":true}',
+            '{"message_type":"summary","data_added":1.5}',
+            '{"message_type":"summary","data_added":0}\n{"message_type":"summary","data_added":0}',
+        ],
+    )
+    def test_invalid_projection_fails_closed(self, tmp_path, summary):
+        result, calls = _run_cache_entrypoint(tmp_path, SUMMARY=summary)
+        assert result.returncode != 0 and "foundation_projection_invalid" in result.stderr
+        assert [call[0] for call in calls].count("guard") == 1
+
+    def test_failed_dry_run_fails_closed(self, tmp_path):
+        result, calls = _run_cache_entrypoint(tmp_path, DRY_STATUS=3)
+        assert result.returncode != 0 and "foundation_projection_invalid" in result.stderr
+        assert [call[0] for call in calls].count("guard") == 1
+
+    def test_projection_and_write_share_arguments(self, tmp_path):
+        result, calls = _run_cache_entrypoint(tmp_path)
+        assert result.returncode == 0, result.stderr
+        dry, write = [call for call in calls if call[0] == "backup"]
+        assert [arg for arg in dry if arg not in ("--dry-run", "--json")] == write
+        assert ["guard", "123"] in calls
+        assert "--exclude=/srv/authority-closers/release-store/*" in write
+        assert "--exclude=!/srv/authority-closers/release-store/native" in write
+        for suffix in (
+            "media-safety/scanner-temp-v1.ext4",
+            "volumes/media-safety-tmp",
+            "volumes/media-safety-signatures",
+            "volumes/media-video/*/tmp",
+            "sales-xray/*/scratch",
+        ):
+            assert f"--exclude=/srv/authority-closers/{suffix}" in write
+        assert not any(
+            "operator-inputs" in arg or "video-objects" in arg or "/storage" in arg for arg in write
+        )
+
+    def test_real_restic_exclusions_keep_native_and_customer_objects(self, tmp_path):
+        binary = shutil.which("restic")
+        if binary is None:
+            pytest.skip(
+                "local restic is unavailable; fake command arguments are checked separately"
+            )
+        result, calls = _run_cache_entrypoint(tmp_path)
+        assert result.returncode == 0
+        write = [call for call in calls if call[0] == "backup"][-1]
+        source = tmp_path / "fictional-sources"
+        kept = [
+            "release-store/native/archive.zip",
+            "sales-xray/staging/storage/call.bin",
+            "volumes/media-video/staging/video-objects/video.bin",
+            "volumes/media-video/staging/avatar-objects/avatar.bin",
+            "application/operator-inputs/input.bin",
+        ]
+        excluded = [
+            "release-store/application/bundle.tar",
+            "media-safety/scanner-temp-v1.ext4",
+            "volumes/media-safety-tmp/temp.bin",
+            "volumes/media-safety-signatures/signature.bin",
+            "volumes/media-video/staging/tmp/scratch.bin",
+            "sales-xray/staging/scratch/scratch.bin",
+        ]
+        for relative in kept + excluded:
+            path = source / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fictional")
+        env = {
+            **os.environ,
+            "RESTIC_REPOSITORY": str(tmp_path / "local-repo"),
+            "RESTIC_PASSWORD": "fictional",
+            "RESTIC_CACHE_DIR": str(tmp_path / "local-cache"),
+        }
+        subprocess.run([binary, "init"], env=env, capture_output=True, check=True)  # noqa: S603
+        options = [
+            arg.replace("/srv/authority-closers", str(source))
+            for arg in write
+            if arg.startswith("--exclude=")
+        ]
+        dry = subprocess.run(  # noqa: S603 - local repository with fictional files only
+            [binary, "backup", "--dry-run", "--json", "-vv", *options, str(source)],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        items = {row.get("item") for row in map(json.loads, dry.stdout.splitlines())}
+        assert all(str(source / relative) in items for relative in kept)
+        assert all(str(source / relative) not in items for relative in excluded)
