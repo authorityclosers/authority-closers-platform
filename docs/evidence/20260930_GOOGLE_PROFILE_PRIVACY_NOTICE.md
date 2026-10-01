@@ -50,7 +50,7 @@ follow-up after access and merge; no provider call or account creation occurred.
 The two existing browser files use same-origin reads and intercepted Google
 start requests. CI owns its existing isolated registration browser gate.
 
-PR: pending creation. Final CI, merge SHA and post-merge dev proof remain
-pending and will be recorded on
+PR: [#173](https://github.com/authorityclosers/authority-closers-platform/pull/173).
+Final CI, merge SHA and post-merge dev proof remain pending and will be recorded on
 [AUT-638](/AUT/issues/AUT-638) for the existing [AUT-634](/AUT/issues/AUT-634)
 release-candidate check. No staging/production access or promotion occurred.
