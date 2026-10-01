@@ -308,6 +308,38 @@ def test_an_unresolved_union_branch_hides_everything_below_it() -> None:
     assert module._loc((1, "a"), "int_type", None) == "1.<key>"
 
 
+class _ReviewTuple(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: tuple[int, dict[int, _ReviewValue]]
+
+
+class _ReviewModelTuple(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: tuple[_ReviewValue, dict[str, _ReviewValue]]
+
+
+def test_fixed_tuple_items_use_the_schema_at_their_own_index() -> None:
+    # CTO review of 605fc1ea: ("findings", 1, 123456789, "quote") walked the first item's schema.
+    locs = _locs(_ReviewTuple, {"findings": (1, {123456789: {"quote": "fictional noninteger"}})})
+    assert "findings.1.<key>.quote" in locs
+
+
+def test_fixed_tuple_mapping_key_is_redacted_and_value_field_kept() -> None:
+    locs = _locs(
+        _ReviewModelTuple,
+        {"findings": ({"quote": 1}, {"quote": {"quote": "fictional noninteger"}})},
+    )
+    assert "findings.1.<key>.quote" in locs
+
+
+def test_variadic_tuples_and_out_of_range_indices() -> None:
+    variadic = tuple[_ReviewValue, ...]
+    assert module._step(variadic, 5) == ("5", _ReviewValue)
+    assert module._step(tuple[int, str], 2) == ("<key>", module._OPAQUE)
+    assert module._step(list[int], "word") == ("<key>", module._OPAQUE)
+    assert module._step(int, 0) == ("<key>", module._OPAQUE)
+
+
 def test_list_indices_are_still_kept() -> None:
     assert module._loc(("findings", 4, "summary"), "int_type", _ProviderExtras) == (
         "findings.4.<key>"
@@ -353,5 +385,6 @@ def test_extra_forbidden_never_keeps_the_extra_key(key: str) -> None:
 
 @pytest.mark.parametrize("key", [SENTINEL, "Ravi_Kumar", "cust_000123"])
 def test_unknown_keys_are_redacted_and_the_rest_of_the_path_fails_closed(key: str) -> None:
+    # An undeclared part inside a known schema hides everything after it.
     loc = module._loc(("strengths", key, 2, "quote"), "string_type", reports.ReportDraft)
-    assert loc == "strengths.<key>.2.<key>"
+    assert loc == "strengths.<key>.<key>.<key>"

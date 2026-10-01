@@ -14,7 +14,8 @@ small, content-free description of the exception chain on the job row:
 - ``errors``: up to ten pydantic ``{"loc", "type"}`` pairs found in the chain.
   Each location is walked through the model that raised the error: a part is
   kept only when that model's schema declares it at that position (a field name,
-  a list index, or a union member's model name). Pydantic's union branch label
+  a list or fixed-tuple index with that position's own schema, or a union
+  member's model name). Pydantic's union branch label
   is consumed as a label, never as a key. A mapping key of any type, an
   unexpected extra key, or any part under an unknown schema or an unresolved
   union branch becomes ``<key>``, because a provider chose it and it can carry a
@@ -173,23 +174,27 @@ def _step(node: object, part: object) -> tuple[str, object]:
     if len(candidates) > 1:
         # Pydantic names the union branch first; that label is not an input key.
         return _branch(candidates, part)
-    single = candidates[0] if candidates else None
-    if single is not None and _is_mapping(single):
+    if not candidates:
+        # No validating model was resolved at the root: keep indices only.
+        if isinstance(part, int) and not isinstance(part, bool):
+            return str(part), None
+        return _REDACTED_KEY, None
+    single = candidates[0]
+    if _is_mapping(single):
         # Any key of a mapping is provider data, whatever its type or word: a
         # string, an integer, or a word some model declares elsewhere.
         args = get_args(single)
         return _REDACTED_KEY, args[1] if len(args) == 2 else _OPAQUE
-    if isinstance(part, bool):
-        return _REDACTED_KEY, None
-    if isinstance(part, int):
-        return str(part), _item_type(single)
-    if not isinstance(part, str) or _KEY.fullmatch(part) is None:
-        return _REDACTED_KEY, None
-    if single is not None and _is_model(single):
+    if isinstance(part, int) and not isinstance(part, bool) and _is_sequence(single):
+        item = _item_schema(single, part)
+        if item is not _OPAQUE:
+            return str(part), item
+    if isinstance(part, str) and _KEY.fullmatch(part) is not None and _is_model(single):
         for name, field in single.model_fields.items():
             if part in (name, field.alias, field.validation_alias):
                 return part, field.annotation
-    return _REDACTED_KEY, None
+    # Inside a known schema, a part it does not declare at this position hides the rest.
+    return _REDACTED_KEY, _OPAQUE
 
 
 def _branch(candidates: list[object], label: object) -> tuple[str, object]:
@@ -249,16 +254,16 @@ _BRANCH_KINDS = {
 }
 
 
-def _item_type(node: object) -> object:
+def _item_schema(node: object, index: int) -> object:
+    """The item schema at ``index``: a fixed tuple by position, a sequence by its argument."""
+
     origin = get_origin(node) or node
-    if (
-        not isinstance(origin, type)
-        or not issubclass(origin, Sequence)
-        or issubclass(origin, str | bytes)
-    ):
-        return None
     args = get_args(node)
-    return args[0] if args else None
+    if isinstance(origin, type) and issubclass(origin, tuple):
+        if len(args) == 2 and args[1] is Ellipsis:
+            return args[0]
+        return args[index] if 0 <= index < len(args) else _OPAQUE
+    return args[0] if len(args) == 1 else _OPAQUE
 
 
 def _validating_model(error: ValidationError) -> type[BaseModel] | None:
