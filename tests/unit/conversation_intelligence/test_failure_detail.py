@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import pytest
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ac_platform.conversation_intelligence import failure_detail as module
 from ac_platform.conversation_intelligence import inference_tasks, reports
@@ -338,6 +338,50 @@ def test_variadic_tuples_and_out_of_range_indices() -> None:
     assert module._step(tuple[int, str], 2) == ("<key>", module._OPAQUE)
     assert module._step(list[int], "word") == ("<key>", module._OPAQUE)
     assert module._step(int, 0) == ("<key>", module._OPAQUE)
+
+
+class _ReviewMapBranch(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    kind: Literal["_ReviewListBranch"]
+    findings: dict[int, _ReviewValue]
+
+
+class _ReviewListBranch(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    kind: Literal["_ReviewMapBranch"]
+    findings: list[int]
+
+
+class _ReviewStrMapBranch(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    kind: Literal["_ReviewListBranch"]
+    findings: dict[str, _ReviewValue]
+
+
+class _ReviewTaggedUnion(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    result: Annotated[_ReviewMapBranch | _ReviewListBranch, Field(discriminator="kind")]
+
+
+class _ReviewStrTaggedUnion(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    result: Annotated[_ReviewStrMapBranch | _ReviewListBranch, Field(discriminator="kind")]
+
+
+def test_a_tagged_union_label_never_selects_a_member_by_class_name() -> None:
+    # CTO review of e0a7e2c8: the tag names the *other* member's class.
+    value = {
+        "kind": "_ReviewListBranch",
+        "findings": {123456789: {"quote": "fictional noninteger"}},
+    }
+    locs = _locs(_ReviewTaggedUnion, {"result": value})
+    assert locs and all(loc.startswith("result.<key>") for loc in locs)
+
+
+def test_a_tagged_union_hides_string_mapping_keys_that_collide_with_fields() -> None:
+    value = {"kind": "_ReviewListBranch", "findings": {SENTINEL: {"quote": "fictional noninteger"}}}
+    locs = _locs(_ReviewStrTaggedUnion, {"result": value})
+    assert locs and all("quote" not in loc and loc.startswith("result.<key>") for loc in locs)
 
 
 def test_list_indices_are_still_kept() -> None:

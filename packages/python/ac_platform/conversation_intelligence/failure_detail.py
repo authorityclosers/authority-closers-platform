@@ -15,8 +15,9 @@ small, content-free description of the exception chain on the job row:
   Each location is walked through the model that raised the error: a part is
   kept only when that model's schema declares it at that position (a field name,
   a list or fixed-tuple index with that position's own schema, or a union
-  member's model name). Pydantic's union branch label
-  is consumed as a label, never as a key. A mapping key of any type, an
+  member's container label). Pydantic's union branch label is consumed as a
+  label, never as a key, and a union with a model or TypedDict member (which
+  may be tagged by a discriminator) hides everything below its label. A mapping key of any type, an
   unexpected extra key, or any part under an unknown schema or an unresolved
   union branch becomes ``<key>``, because a provider chose it and it can carry a
   name or an id;
@@ -200,11 +201,10 @@ def _step(node: object, part: object) -> tuple[str, object]:
 def _branch(candidates: list[object], label: object) -> tuple[str, object]:
     """Resolve a union branch label to its member; an unresolved branch hides what follows."""
 
-    if not isinstance(label, str):
+    if not isinstance(label, str) or any(_may_be_tagged(c) for c in candidates):
+        # A tagged union labels its branch with the discriminator value, which
+        # can name any member (or none); such a branch is never resolved here.
         return _REDACTED_KEY, _OPAQUE
-    for candidate in candidates:
-        if _is_model(candidate) and candidate.__name__ == label:
-            return label, candidate
     kind = _BRANCH_KINDS.get(label.split("[", 1)[0])
     if kind is not None:
         matches = [candidate for candidate in candidates if kind(candidate)]
@@ -228,6 +228,14 @@ def _members(node: object) -> list[object]:
 
 def _is_model(node: object) -> TypeGuard[type[BaseModel]]:
     return isinstance(node, type) and issubclass(node, BaseModel)
+
+
+def _may_be_tagged(node: object) -> bool:
+    """Members a discriminated union can hold: models and TypedDicts."""
+
+    return _is_model(node) or (
+        isinstance(node, type) and issubclass(node, dict) and hasattr(node, "__required_keys__")
+    )
 
 
 def _is_mapping(node: object) -> bool:
