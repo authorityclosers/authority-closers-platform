@@ -27,6 +27,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "organisations",
         "organisation_domain_settings",
         "organisation_invites",
+        "billing_accounts",
+        "billing_ledger_entries",
         "academy_public_profiles",
         "community_public_profiles",
         "academy_leaderboard_preferences",
@@ -138,6 +140,15 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_analysis_settings",
         "conversation_retained_c5_versions",
         "conversation_submission_label_revisions",
+        "billing_provider_settings",
+        "billing_orders",
+        "billing_order_events",
+        "billing_payment_events",
+        "billing_command_idempotency",
+        "billing_subscriptions",
+        "billing_subscription_events",
+        "billing_periods",
+        "billing_refund_events",
     }
 
     assert set(model_metadata().tables) == expected
