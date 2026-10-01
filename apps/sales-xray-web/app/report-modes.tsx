@@ -14,10 +14,6 @@ import {
   UserRound,
   X,
   Printer,
-  FileDown,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -42,6 +38,7 @@ export type ReportPanel = {
 };
 
 export type DocumentReportData = {
+  title?: string;
   workspaceName?: string;
   repName?: string;
   prospectName?: string;
@@ -59,6 +56,25 @@ export type DocumentReportData = {
 type View = "reading" | "tabs" | "document";
 type TextSize = "100" | "112.5" | "125";
 const TEXT_SIZE_KEY = "ac:report-text-size";
+const TEXT_SIZE_CHANGE = "ac:report-text-size-change";
+function subscribeTextSize(notify: () => void) {
+  window.addEventListener("storage", notify);
+  window.addEventListener(TEXT_SIZE_CHANGE, notify);
+  return () => {
+    window.removeEventListener("storage", notify);
+    window.removeEventListener(TEXT_SIZE_CHANGE, notify);
+  };
+}
+function savedTextSizeSnapshot(): TextSize {
+  try {
+    const saved = localStorage.getItem(TEXT_SIZE_KEY);
+    if (saved === "112.5" || saved === "125") return saved;
+  } catch {}
+  return "100";
+}
+function serverTextSizeSnapshot(): TextSize {
+  return "100";
+}
 
 /** `view: null` means nobody chose yet: the viewport default applies. */
 type Address = { view: View | null; section: string };
@@ -414,10 +430,8 @@ function updateReportLayerOffsets(
 const defaultSummaries: Record<string, string> = {
   overview:
     "High-level diagnostic summary, key observations and critical conversation shift.",
-  scorecard:
-    "Core capability ratings, evaluation breakdown and overall competency level.",
-  skills:
-    "Capability dimensions, behavioral scoring and consultative competency assessment.",
+  scorecard: "Capability observations and supporting source evidence.",
+  skills: "Capability observations and supporting source evidence.",
   strengths:
     "Observed strengths demonstrated during the conversation with supporting evidence.",
   prospect:
@@ -442,822 +456,113 @@ function renderDocumentView(
   panels: ReportPanel[],
   docData?: DocumentReportData,
 ) {
-  const repName = docData?.repName ?? "Aarav Sharma";
-  const prospectName = docData?.prospectName ?? "Priya Patel — Nexa Retail";
-  const workspaceName =
-    docData?.workspaceName ?? "AUTHORITY CLOSERS · GROWTH WORKSPACE";
-  const callType = docData?.callType ?? "Enterprise Discovery & Demo";
-  const callDate = docData?.callDate ?? "2 October 2026";
-  const callLength = docData?.callLength ?? "34:12";
-  const analysedDate = docData?.analysedDate ?? "2 October 2026";
-
-  const totalPages = 7;
+  const title =
+    docData?.title ??
+    ([docData?.repName, docData?.prospectName].filter(Boolean).join(" — ") ||
+      "Sales Xray call") + " report";
+  const basis = docData?.analysisBasis;
 
   return (
     <div className={styles.documentContainer}>
       <div className={styles.documentActions}>
-        <div className={styles.documentActionsGroup}>
-          <button
-            type="button"
-            className={styles.docBtnPrimary}
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.print();
-              }
-            }}
-          >
-            <Printer aria-hidden="true" />
-            <span>Download PDF</span>
-          </button>
-          <button
-            type="button"
-            className={styles.docBtnSecondary}
-            title="Word export (editable format)"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.alert(
-                  "Word export (.docx) will download editable format when server pipeline completes.",
-                );
-              }
-            }}
-          >
-            <FileDown aria-hidden="true" />
-            <span>Download Word</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          className={styles.docBtnPrimary}
+          onClick={() => window.print()}
+        >
+          <Printer aria-hidden="true" />
+          <span>Print / Save PDF</span>
+        </button>
         <span className={styles.documentActionsNote}>
-          A4 Portrait (210×297 mm) · 7 Pages · Pixel-perfect export
+          A4 portrait · 210×297 mm
         </span>
       </div>
-
       <div className={styles.documentPages}>
-        {/* Page 1: Cover / Overall Assessment */}
-        <div className={styles.documentPage}>
-          <div className={styles.docKicker}>{workspaceName}</div>
-          <div className={styles.docSubtitle}>
-            {callType} · {callDate}
-          </div>
-          <h1 className={styles.docTitle}>
-            {repName} — {prospectName} call report
-          </h1>
-          <div className={styles.docMetaLine}>
-            Prepared: {callDate} · Call length {callLength} · Analysed{" "}
-            {analysedDate}
-          </div>
-
-          <div className={styles.docBasisCallout}>
-            <div className={styles.docBasisLabel}>ANALYSIS BASIS</div>
-            <p className={styles.docBasisText}>
-              Assessment based on full {callLength} dual-channel audio recording
-              and transcript.
-            </p>
-            <p className={styles.docBasisText}>
-              Evaluated against Sales Xray v0.2 competency framework for
-              commercial coaching.
-            </p>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="overview"
+        {panels.map((panel, index) => (
+          <article
+            className={styles.documentPage}
+            data-document-page
+            key={panel.id}
           >
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>1.</span>
-              <h2
-                id={`${id}-heading-overview`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Overall assessment
-              </h2>
-              <span className={`${styles.docBadge} ${styles.docBadgeNavy}`}>
-                LEVEL 3 — DEVELOPING CLOSER
-              </span>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <p>
-              Aarav establishes immediate conversational rapport and
-              demonstrates genuine active listening during the discovery phase.
-              However, when technical objections arose around migration, the
-              presentation shifted into defensive feature validation rather than
-              exploring commercial impact.
-            </p>
-            <ul className={styles.docBullets}>
-              <li>
-                <strong>Strong opening empathy:</strong> acknowledged prospect
-                pain points around manual reporting without interrupting.
-              </li>
-              <li>
-                <strong>Premature demo transition:</strong> launched screen
-                sharing before uncovering the procurement timeline or decision
-                criteria.
-              </li>
-              <li>
-                <strong>Weak commercial tension:</strong> conceded pricing
-                options too early when prospect raised hesitation.
-              </li>
-            </ul>
-            <div className={styles.docQuoteBlock}>
-              <div className={styles.docQuoteShift}>
-                <div className={styles.docQuoteOriginal}>
-                  <em>Rep quote:</em> &quot;We have several plans, maybe you
-                  want to start with the standard one?&quot;
-                </div>
-                <div className={styles.docQuoteBetter}>
-                  <em>Coaching shift:</em> &quot;Based on your team size and Q4
-                  goals, the Growth tier gives you the governance controls you
-                  mentioned earlier.&quot;
-                </div>
+            {index === 0 ? (
+              <>
+                {docData?.workspaceName && (
+                  <div className={styles.docKicker}>
+                    {docData.workspaceName}
+                  </div>
+                )}
+                {(docData?.callType || docData?.callDate) && (
+                  <div className={styles.docSubtitle}>
+                    {[docData.callType, docData.callDate]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
+                <h1 className={styles.docTitle}>{title}</h1>
+                {(docData?.callLength || docData?.analysedDate) && (
+                  <div className={styles.docMetaLine}>
+                    {[
+                      docData.callLength && `Call length ${docData.callLength}`,
+                      docData.analysedDate &&
+                        `Analysed ${docData.analysedDate}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
+                {basis && (
+                  <aside
+                    className={styles.docBasisCallout}
+                    aria-label="Analysis basis"
+                  >
+                    <div className={styles.docBasisLabel}>Analysis basis</div>
+                    {basis.recordingLength && (
+                      <p className={styles.docBasisText}>
+                        Recording length: {basis.recordingLength}
+                      </p>
+                    )}
+                    {basis.transcriptSource && (
+                      <p className={styles.docBasisText}>
+                        Transcript: {basis.transcriptSource}
+                      </p>
+                    )}
+                    {basis.analysisVersion && (
+                      <p className={styles.docBasisText}>
+                        Analysis version: {basis.analysisVersion}
+                      </p>
+                    )}
+                  </aside>
+                )}
+              </>
+            ) : (
+              <div className={styles.docRunningHeader}>
+                <span>Authority Closers — Sales Xray call report</span>
+                {docData?.repName && <span>{docData.repName}</span>}
               </div>
-            </div>
-          </div>
-
-          <div className={styles.docFooter}>Page 1 of {totalPages}</div>
-        </div>
-
-        {/* Page 2: Scorecard & Strengths */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div className={styles.docSection} data-report-mode-section="skills">
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>2.</span>
-              <h2
-                id={`${id}-heading-skills`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Scorecard
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <div className={styles.docTableWrapper}>
-              <table className={styles.docTable}>
-                <thead>
-                  <tr>
-                    <th>Capability</th>
-                    <th>Score</th>
-                    <th>Assessment</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Discovery &amp; Diagnosis</td>
-                    <td className={styles.docScoreGood}>4.2 / 5</td>
-                    <td>
-                      Thorough exploration of current operational bottlenecks
-                      and reporting pain.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Value Articulation</td>
-                    <td className={styles.docScoreGood}>4.0 / 5</td>
-                    <td>
-                      Effectively connects workflow automation to reduced sprint
-                      overhead.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Objection Handling</td>
-                    <td className={styles.docScoreWatch}>3.7 / 5</td>
-                    <td>
-                      Addresses security requirements well; concessions on
-                      pricing came too quickly.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Deal Qualification</td>
-                    <td className={styles.docScoreRisk}>3.4 / 5</td>
-                    <td>
-                      Did not identify final budget sign-off authority or
-                      procurement constraints.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Closing &amp; Next Steps</td>
-                    <td className={styles.docScoreRisk}>3.5 / 5</td>
-                    <td>
-                      Missed calendar lock for technical review; defaulted to
-                      email follow-up.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className={styles.docScorecardSummary}>
-              <span className={styles.docScoreOverall}>
-                Overall: 3.8 / 5.0 (~76%)
-              </span>
-              <span className={styles.docScoreLevel}>
-                Current level: Developing Closer
-              </span>
-            </div>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="prospect"
-          >
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>3.</span>
-              <h2
-                id={`${id}-heading-prospect`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                What the rep already does well
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <div className={styles.docSubSectionTitle}>
-              <span>A. Active Listening &amp; Rapport Building</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeGood}`}>
-                STRONG
-              </span>
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Validated the prospect&apos;s migration frustration at [04:15]
-                with genuine empathy.
-              </li>
-              <li>
-                Reflected prospect&apos;s exact terminology regarding
-                &quot;workflow fragmentation&quot;.
-              </li>
-            </ul>
-
-            <div className={styles.docSubSectionTitle}>
-              <span>B. Solution Framing &amp; Value Alignment</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeGood}`}>
-                STRONG
-              </span>
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Connected automated routing directly to prospect&apos;s stated
-                goal of cutting manual triage.
-              </li>
-              <li>
-                Maintained natural conversational cadence without sounding
-                scripted.
-              </li>
-            </ul>
-
-            <div className={styles.docSubSectionTitle}>
-              <span>C. Security &amp; Compliance Confidence</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeGood}`}>
-                STRONG
-              </span>
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Answered data residency questions accurately without hesitation
-                at [19:40].
-              </li>
-            </ul>
-          </div>
-
-          <div className={styles.docFooter}>Page 2 of {totalPages}</div>
-        </div>
-
-        {/* Page 3: Main Development Areas */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div className={styles.docSection} data-report-mode-section="signals">
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>4.</span>
-              <h2
-                id={`${id}-heading-signals`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Main development areas
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-
-            <div className={styles.docSubSectionTitleRed}>
-              <span>4.1 Qualification Depth</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeRisk}`}>
-                HIGH PRIORITY
-              </span>
-            </div>
-            <div className={styles.docQuoteBlock}>
-              &quot;Prospect: We might need IT signoff, not sure when they meet.
-              Rep: Okay, no problem, just let me know when they do.&quot;
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Never asked who owns final signature authority or what budget
-                was earmarked for Q4.
-              </li>
-              <li>
-                Left the timeline open-ended rather than proposing a structured
-                vendor assessment call with IT.
-              </li>
-            </ul>
-
-            <div className={styles.docSubSectionTitleRed}>
-              <span>4.2 Commercial Urgency &amp; Price Anchoring</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeRisk}`}>
-                HIGH PRIORITY
-              </span>
-            </div>
-            <div className={styles.docQuoteBlock}>
-              &quot;Prospect: Your enterprise tier seems steep compared to what
-              we pay now. Rep: Yeah, we can discount that if you need.&quot;
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Discounted immediately before re-anchoring on the cost of the
-                customer&apos;s daily lost productivity.
-              </li>
-              <li>
-                Conceded margins without securing reciprocal commitment on
-                contract duration.
-              </li>
-            </ul>
-
-            <div className={styles.docSubSectionTitleRed}>
-              <span>4.3 Controlled Closing Sequence</span>
-              <span className={`${styles.docBadge} ${styles.docBadgeWatch}`}>
-                MEDIUM
-              </span>
-            </div>
-            <div className={styles.docQuoteBlock}>
-              &quot;Rep: I&apos;ll send an email with some details and you can
-              review whenever you have time.&quot;
-            </div>
-            <ul className={styles.docBullets}>
-              <li>
-                Missed scheduling a hard calendar date before hanging up the
-                call.
-              </li>
-              <li>Put the burden of next action entirely on the prospect.</li>
-            </ul>
-          </div>
-
-          <div className={styles.docFooter}>Page 3 of {totalPages}</div>
-        </div>
-
-        {/* Page 4: Biggest Strength & Gap Cards */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="strength-gap"
-          >
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>5.</span>
-              <h2
-                id={`${id}-heading-strength-gap`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Biggest strength and biggest gap
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-
-            <div className={styles.docCardsRow}>
-              <div className={styles.docStrengthCard}>
-                <div className={styles.docCardHeader}>
-                  <CheckCircle2 size={16} aria-hidden="true" />
-                  <span>BIGGEST STRENGTH</span>
-                </div>
-                <p>
-                  Aarav excels at building trust and creating an open dialogue.
-                  The prospect felt heard and praised the clarity of the product
-                  demonstration. Maintaining this conversational warmth gives
-                  Aarav a strong foundation for enterprise sales.
-                </p>
-                <div className={styles.docArrowChain}>
-                  <span className={styles.docArrowItem}>Diagnose</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Prioritise</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Recommend</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Influence</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Close</span>
-                </div>
-              </div>
-
-              <div className={styles.docGapCard}>
-                <div className={styles.docCardHeader}>
-                  <AlertTriangle size={16} aria-hidden="true" />
-                  <span>BIGGEST GAP</span>
-                </div>
-                <p>
-                  Aarav avoids direct commercial tension when objections arise.
-                  Instead of reframing budget concerns around business ROI, he
-                  defaults to discounting and passive scheduling. Establishing
-                  deal mechanics early will prevent stalled proposals.
-                </p>
-                <div className={styles.docArrowChain}>
-                  <span className={styles.docArrowItem}>Uncover Risk</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Anchor Value</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Trade Terms</span>
-                  <ArrowRight size={12} aria-hidden="true" />
-                  <span className={styles.docArrowItem}>Lock Date</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.docFooter}>Page 4 of {totalPages}</div>
-        </div>
-
-        {/* Page 5: Moments & Next-Call Plan */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div className={styles.docSection} data-report-mode-section="moments">
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>6.</span>
-              <h2
-                id={`${id}-heading-moments`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Moment-by-moment snapshot
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <div className={styles.docTableWrapper}>
-              <table className={styles.docTable}>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Moment</th>
-                    <th>Score</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>1</td>
-                    <td>Discovery: Pain Point Identification</td>
-                    <td className={styles.docScoreGood}>4.2 / 5</td>
-                    <td>
-                      Uncovered core operational delay in multi-tier approvals.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>2</td>
-                    <td>Product Framing: Workflow Demo</td>
-                    <td className={styles.docScoreGood}>4.0 / 5</td>
-                    <td>Smooth walkthrough of automated task reassignment.</td>
-                  </tr>
-                  <tr>
-                    <td>3</td>
-                    <td>Security Inquiry: Compliance Check</td>
-                    <td className={styles.docScoreWatch}>3.8 / 5</td>
-                    <td>
-                      Satisfied GDPR query, missed SOC2 follow-up opportunity.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>4</td>
-                    <td>Budget Discussion: Enterprise Pricing</td>
-                    <td className={styles.docScoreRisk}>3.3 / 5</td>
-                    <td>
-                      Offered early price concession without value exchange.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>5</td>
-                    <td>Decision Process: Stakeholder Mapping</td>
-                    <td className={styles.docScoreRisk}>3.2 / 5</td>
-                    <td>
-                      Did not identify economic buyer or procurement timeline.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>6</td>
-                    <td>Call Wrap: Next Step Scheduling</td>
-                    <td className={styles.docScoreRisk}>3.4 / 5</td>
-                    <td>
-                      Allowed open-ended email follow-up instead of confirmed
-                      demo.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="next-call-plan"
-          >
-            <div className={styles.docSectionHeader}>
-              <span className={styles.docSectionNumber}>7.</span>
-              <h2
-                id={`${id}-heading-next-call-plan`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Next-call plan and coaching priority
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <ol className={styles.docNumberedList}>
-              <li>
-                <strong>Lead with multi-stakeholder qualification:</strong>{" "}
-                Inquire about IT compliance and procurement requirements before
-                resuming product details.
-              </li>
-              <li>
-                <strong>Value re-anchoring before quote revision:</strong> When
-                prospect brings up pricing, quantify their current lost
-                engineering hours before discussing tiers.
-              </li>
-              <li>
-                <strong>Calendar lock for technical demo:</strong> Insist on
-                booking a 20-minute slot with the technical lead before sending
-                materials.
-              </li>
-              <li>
-                <strong>Prepared talking track for IT objections:</strong> Have
-                data privacy architecture slide ready to share during the first
-                5 minutes.
-              </li>
-            </ol>
-            <div className={styles.docClosingBox}>
-              <div className={styles.docClosingLine}>
-                <span className={styles.docClosingLabel}>
-                  Current position:
-                </span>{" "}
-                Solid rapport builder with clear vocal authority; needs
-                structured objection reframing.
-              </div>
-              <div className={styles.docClosingLine}>
-                <span className={styles.docClosingLabel}>
-                  Primary coaching focus:
-                </span>{" "}
-                Shift from feature validation to discovery-driven commercial
-                urgency.
-              </div>
-              <div className={styles.docClosingLine}>
-                <span className={styles.docClosingLabel}>Potential:</span> High
-                conversion upside on enterprise tier deals with disciplined
-                discovery.
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.docFooter}>Page 5 of {totalPages}</div>
-        </div>
-
-        {/* Page 6: Appendix Transcript Part 1 */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="transcript"
-          >
-            <div className={styles.docSectionHeader}>
-              <h2
-                id={`${id}-heading-transcript`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Appendix: Transcript (00:00 – 16:30)
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <div className={styles.docAppendix}>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[00:04]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Hi Priya, thanks for joining today. How has your week been so
-                far?
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[00:18]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Good morning Aarav. Pretty busy! We are evaluating replacements
-                for our legacy workflow tools.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[00:35]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Glad to connect. What is creating the biggest bottleneck in your
-                current setup?
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[01:10]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Permissions take up to three days when cross-functional teams
-                spin up new projects.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[01:45]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                That is a significant delay across sprint cycles. Let us walk
-                through how our automated governance resolves that in seconds.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[04:15]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Our team was skeptical about migration overhead because last
-                year&apos;s transition took two months.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[04:40]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                I completely understand that caution. Nobody wants downtime
-                during active quarterly releases.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[08:42]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                This looks intuitive, but what about data isolation between
-                regional teams?
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[09:15]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Every workspace has full cryptographic tenant isolation and
-                regional residency options.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[15:20]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Your enterprise tier feels expensive compared to our current
-                provider.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[15:45]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                We can definitely adjust the pricing to fit within your current
-                allocation.
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.docFooter}>Page 6 of {totalPages}</div>
-        </div>
-
-        {/* Page 7: Appendix Transcript Part 2 */}
-        <div className={styles.documentPage}>
-          <div className={styles.docRunningHeader}>
-            <span>Authority Closers — Sales Xray call report</span>
-            <span>{repName}</span>
-          </div>
-
-          <div
-            className={styles.docSection}
-            data-report-mode-section="raw-data"
-          >
-            <div className={styles.docSectionHeader}>
-              <h2
-                id={`${id}-heading-raw-data`}
-                tabIndex={-1}
-                className={styles.docSectionTitle}
-              >
-                Appendix: Transcript continued (16:31 – 34:12)
-              </h2>
-            </div>
-            <div className={styles.docDivider} aria-hidden="true" />
-            <div className={styles.docAppendix}>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[18:10]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                If we roll this out, we need SSO and custom role delegation
-                enabled from day one.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[18:35]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Both are built into the admin console with Okta and Azure AD
-                SCIM provisioning.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[22:10]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                We will need our security lead to review the SOC2 report before
-                any commitment.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[22:30]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Absolutely. I will email the SOC2 package and you can circle
-                back when convenient.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[27:50]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Sounds good. Send that over and I will check with our IT
-                committee.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[28:15]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Perfect, I&apos;ll send an email with some details and you can
-                review whenever you have time.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[32:00]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  Priya Patel (Prospect):
-                </span>{" "}
-                Great, thanks for the walkthrough Aarav. Have a good rest of
-                your week.
-              </div>
-              <div className={styles.docTranscriptLine}>
-                <span className={styles.docTranscriptTime}>[32:15]</span>{" "}
-                <span className={styles.docTranscriptSpeaker}>
-                  {repName} (Rep):
-                </span>{" "}
-                Thanks Priya, talk soon!
-              </div>
-            </div>
-
-            {/* Hidden fallback anchors for any custom panels not listed above */}
-            {panels
-              .filter(
-                (p) =>
-                  ![
-                    "overview",
-                    "skills",
-                    "prospect",
-                    "signals",
-                    "moments",
-                    "next-call-plan",
-                    "transcript",
-                    "raw-data",
-                  ].includes(p.id),
-              )
-              .map((panel) => (
-                <div
-                  key={panel.id}
+            )}
+            <section
+              className={styles.docSection}
+              data-report-mode-section={panel.id}
+              aria-labelledby={`${id}-heading-${panel.id}`}
+            >
+              <div className={styles.docSectionHeader}>
+                <span className={styles.docSectionNumber}>{index + 1}.</span>
+                <h2
                   id={`${id}-heading-${panel.id}`}
-                  data-report-mode-section={panel.id}
-                  style={{ display: "none" }}
-                  aria-hidden="true"
-                />
-              ))}
-          </div>
-
-          <div className={styles.docFooter}>Page 7 of {totalPages}</div>
-        </div>
+                  tabIndex={-1}
+                  className={styles.docSectionTitle}
+                >
+                  {panel.label}
+                </h2>
+              </div>
+              <div className={styles.chapterRule} aria-hidden="true" />
+              <div className={styles.docContent}>{panel.content}</div>
+            </section>
+            <div className={styles.docFooter}>
+              Page {index + 1} of {panels.length}
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );
@@ -1294,38 +599,22 @@ export function ReportModes({
     section: panels[0]?.id ?? "",
   });
 
-  const [textSize, setTextSize] = useState<TextSize>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(TEXT_SIZE_KEY);
-        if (saved === "100" || saved === "112.5" || saved === "125") {
-          return saved;
-        }
-      } catch {}
-    }
-    return "100";
-  });
-
+  const savedTextSize = useSyncExternalStore(
+    subscribeTextSize,
+    savedTextSizeSnapshot,
+    serverTextSizeSnapshot,
+  );
+  const [localTextSize, setLocalTextSize] = useState<TextSize | null>(null);
+  const textSize = localTextSize ?? savedTextSize;
   const changeTextSize = (nextSize: TextSize) => {
-    setTextSize(nextSize);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(TEXT_SIZE_KEY, nextSize);
-      } catch {}
+    setLocalTextSize(nextSize);
+    try {
+      localStorage.setItem(TEXT_SIZE_KEY, nextSize);
+      window.dispatchEvent(new Event(TEXT_SIZE_CHANGE));
+    } catch {
+      // Private browsing can deny storage; sizing still works in this view.
     }
   };
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("view") === "document" && params.get("print") === "1") {
-        const timer = window.setTimeout(() => {
-          window.print();
-        }, 350);
-        return () => window.clearTimeout(timer);
-      }
-    }
-  }, []);
 
   // Server render and hydration read "reading"; a desktop viewport then
   // prefers Tabbed unless the URL or the reader already chose a view.
@@ -1637,9 +926,7 @@ export function ReportModes({
 
   function changeView(nextView: View) {
     const section =
-      (view === "reading" || view === "document") && nextView === "tabs"
-        ? currentSection
-        : (selected ?? panels[0]?.id);
+      view !== "tabs" ? currentSection : (selected ?? panels[0]?.id);
     if (section) navigate(section, nextView);
   }
 
@@ -1804,15 +1091,22 @@ export function ReportModes({
       ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
-      data-lx-surface={lightSurface ? "light" : undefined}
+      data-lx-surface={
+        lightSurface || view === "document" ? "light" : undefined
+      }
       data-view={view}
       data-report-section={currentSection}
       data-text-size={textSize}
+      data-report-print={
+        new URLSearchParams(search).get("print") === "1" || undefined
+      }
     >
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
         {view === "document" ? (
-          renderDocumentView(id, panels, documentData)
+          <ReportReadingProvider reading inline navigate={navigateToReport}>
+            {renderDocumentView(id, panels, documentData)}
+          </ReportReadingProvider>
         ) : (
           <ReportReadingProvider
             reading={view === "reading"}

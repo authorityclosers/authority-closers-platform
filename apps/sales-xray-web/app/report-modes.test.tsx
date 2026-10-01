@@ -1,5 +1,6 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportModes } from "./report-modes";
 import { useReportNavigation } from "./report-reading-context";
@@ -11,6 +12,7 @@ import { useReportNavigation } from "./report-reading-context";
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  localStorage.removeItem("ac:report-text-size");
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -20,6 +22,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const call = "c2793fdf-4948-47e4-a4bc-973f2b7720bc";
@@ -997,21 +1000,27 @@ it("switches to Document view and preserves the reader's place", async () => {
 
   // Document view renders actions and pages
   const pdfBtn = [...container.querySelectorAll("button")].find((b) =>
-    b.textContent?.includes("Download PDF"),
+    b.textContent?.includes("Print / Save PDF"),
   );
   expect(pdfBtn).not.toBeNull();
   const wordBtn = [...container.querySelectorAll("button")].find((b) =>
     b.textContent?.includes("Download Word"),
   );
-  expect(wordBtn).not.toBeNull();
+  expect(wordBtn).toBeUndefined();
 
-  // 7 pages rendered
-  const pages = container.querySelectorAll("[class*='documentPage']");
-  expect(pages).toHaveLength(7);
+  // Document renders the supplied panels, in the same order as other views.
+  const pages = container.querySelectorAll("[data-document-page]");
+  expect(pages).toHaveLength(6);
+  expect(
+    sections().map((section) => section.dataset.reportModeSection),
+  ).toEqual(panels().map((panel) => panel.id));
+  expect(container.textContent).toContain("Summary point");
+  expect(container.textContent).toContain("Conversation");
+  expect(container.textContent).not.toMatch(/Aarav|Priya|\d\.\d \/ 5/);
 
   // Footers
-  expect(pages[0].textContent).toContain("Page 1 of 7");
-  expect(pages[6].textContent).toContain("Page 7 of 7");
+  expect(pages[0].textContent).toContain("Page 1 of 6");
+  expect(pages[5].textContent).toContain("Page 6 of 6");
 
   // Cover page has no running header; page 2 has running header
   expect(pages[0].querySelector("[class*='docRunningHeader']")).toBeNull();
@@ -1082,4 +1091,81 @@ it("opens every top-level section as a chapter in Reading mode", async () => {
   const summaries = container.querySelectorAll("[class*='chapterSummary']");
   expect(summaries).toHaveLength(6);
   expect(summaries[0].textContent).not.toBe("");
+});
+
+it("hydrates a returning viewer's saved text size without retaining default attributes", async () => {
+  localStorage.setItem("ac:report-text-size", "125");
+  const element = <ReportModes panels={panels()} />;
+  const html = renderToString(element);
+  expect(html).toContain('data-text-size="100"');
+  await act(async () => root.unmount());
+  container.innerHTML = html;
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  await act(async () => {
+    root = hydrateRoot(container, element);
+  });
+  expect(mode().dataset.textSize).toBe("125");
+  expect(
+    container
+      .querySelector('[aria-label="Text size 125%"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(consoleError.mock.calls.flat().join(" ")).not.toMatch(
+    /hydrat|didn't match/i,
+  );
+});
+
+it("preserves the current Reading section when moving through Document and Sections", async () => {
+  await render(call);
+  const moments = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(moments, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  expect(mode().dataset.reportSection).toBe("moments");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Document view"]')!
+      .click(),
+  );
+  expect(window.location.search).toContain("section=moments");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Reading view"]')!
+      .click(),
+  );
+  expect(mode().dataset.reportSection).toBe("moments");
+});
+
+it("renders only supplied document metadata and prints without a fake Word action", async () => {
+  const print = vi.fn();
+  vi.stubGlobal("print", print);
+  window.history.replaceState(null, "", `/?call=${call}&view=document&print=1`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{
+          title: "Bound call",
+          repName: "Fictional seller",
+          analysisBasis: { transcriptSource: "fixture-r2" },
+        }}
+      />,
+    ),
+  );
+  expect(mode().dataset.view).toBe("document");
+  expect(mode().dataset.reportPrint).toBe("true");
+  expect(container.textContent).toContain("Bound call");
+  expect(container.textContent).toContain("fixture-r2");
+  expect(container.textContent).not.toMatch(/2 October|34:12|Download Word/);
+  expect(print).not.toHaveBeenCalled();
+  const button = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent?.includes("Print / Save PDF"))!;
+  await act(async () => button.click());
+  expect(print).toHaveBeenCalledOnce();
 });
