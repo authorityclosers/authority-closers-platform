@@ -2,16 +2,18 @@
 
 ## Enforced operating envelope
 
-Authority Closers treats Cloudflare's published free allowance as an outer boundary, not a target. The local deployment ceiling is:
+The owner approved paid Standard storage above the free 10 GB allowance on [AUT-10, 29 Sep 2026](/AUT/issues/AUT-10#comment-495303be-6aee-41ae-983f-d5520e8dc799). Operation ceilings remain below the free allowances. The local deployment envelope is:
 
 | Dimension          |   Local ceiling | Published free allowance |
 | ------------------ | --------------: | -----------------------: |
-| Standard storage   |           8 GiB |        10 GB-month/month |
+| Standard storage   | 100 GiB; warn at 75 GiB |   10 GB-month/month |
 | Class A operations |   700,000/month |          1,000,000/month |
 | Class B operations | 7,000,000/month |         10,000,000/month |
 | Infrequent Access  |         0 bytes |             No free tier |
 
-The 30% operation headroom and storage headroom absorb metric delay, unit differences, retries, probes, and administrative operations. R2 usage above Cloudflare's included amounts is billed; Cloudflare does not expose a hard free-tier usage stop.
+The 30% operation headroom absorbs metric delay, retries, probes, and administrative operations. R2 usage above the included amounts is billed; Cloudflare does not expose a hard free-tier usage stop. At $0.015/GB-month after 10 GB free, about 21 GB stored costs $0.165 (about $0.17/month), and 100 GiB = 107.3741824 GB costs about $1.46/month before billing-unit rounding (about $1.47 with rounding), assuming steady storage for a full month and no other account usage.
+
+The required warning line is 80,530,636,800 bytes (75 GiB), below the 107,374,182,400-byte (100 GiB) ceiling. It counts **stored** Standard bytes only. Only the 30-minute `ac-r2-usage-guard.service` sets `R2_WARN_IS_FAILURE=1`, making a warning visible in failed units; backup callers continue through warnings. Hard storage/projection limits and operation checks still fail closed. At the hard ceiling the shared projection guard stops **every off-host backup, including the database**; the unchanged 5.25 GiB logical reservation can refuse writes earlier.
 
 ## Current charge-safe state
 
@@ -24,7 +26,7 @@ The 30% operation headroom and storage headroom absorb metric delay, unit differ
 - Application database state, verified logical dumps, deployment evidence, and configuration remain in the encrypted backup source. Reproducible application release directories and compressed Docker transport bundles are excluded: those large artifacts remain in private GHCR and the local VPS rollback store, and can be reconstructed from the exact Git SHA plus registry digest. This prevents routine releases from consuming the R2 storage envelope with duplicate image data.
 - The logical PostgreSQL writer is implemented but remains disabled until the separate `activate postgres-backup` gate passes. It captures each healthy current application release using its exact release profile and compose project; a missing production current link is skipped, while an unhealthy present production link fails closed.
 
-This is a bounded active-writer state, not a zero-writer state. Every off-host write fails closed unless the usage guard can prove the remote envelope remains safe. The logical writer can retain a verified, bounded local capture during that failure and still returns nonzero. Foundation retention is 7 daily, 4 weekly, and 6 monthly snapshots. Logical application snapshots are tagged separately, retained for a 27-hour window, and pruned only by the daily foundation job.
+This is a bounded active-writer state, not a zero-writer state. Every off-host write fails closed unless the usage guard can prove the remote envelope remains safe. The logical writer can retain a verified, bounded local capture during that failure and still returns nonzero. Foundation retention is 7 daily, 4 weekly, and 6 monthly snapshots: deleted recordings and videos can remain in monthly snapshots for up to six months. Logical application snapshots are tagged separately, retained for a 27-hour window, and pruned only by the daily foundation job.
 
 ## Logical PostgreSQL storage and operation model
 
@@ -34,7 +36,7 @@ The committed initial model in `config/r2/free-tier-policy.conf` bounds each cus
 
 Local disk additionally permits one in-flight capture per environment, each bounded to 8 MiB plus its metadata. A failed post-capture retention pass can leave that one extra pair (337 per environment); a later run validates the ring before capture and refuses further accumulation. Cleanup can finish a previously renamed prune directory, but preflight never guesses which complete pair to discard from an overfull ring. This local exception adds at most 16 MiB of dump payload across two environments and does not increase the off-host projection, quota thresholds, cadence, or allowed request budget. The exact new pair is protected during post-capture retention even after a backward wall-clock adjustment.
 
-This is a conservative payload projection; Restic deduplication may use less storage, but it is not relied on. Before every logical off-host write, the R2 guard queries current Standard storage and rejects `current usage + 5.25 GiB` above the local 8 GiB ceiling. The guard does not hardcode the observed approximately 366,540 bytes; it queries the live metrics API. If a compressed database dump approaches 8 MiB, the job fails closed: migrate to a reviewed continuous-WAL/PITR system or explicitly revise the capacity plan instead of silently increasing the free-tier writer.
+This is a conservative payload projection; Restic deduplication may use less storage, but it is not relied on. Before every logical off-host write, the R2 guard queries current Standard storage and rejects when `current usage + 5.25 GiB` is above the local 100 GiB ceiling. The guard does not hardcode the observed approximately 366,540 bytes; it queries the live metrics API. If a compressed database dump approaches 8 MiB, the job fails closed: migrate to a reviewed continuous-WAL/PITR system or explicitly revise the capacity plan instead of silently increasing the bounded writer.
 
 At 5-minute cadence the theoretical maximum is 288 captures per day per active environment, or 17,280 captures per 30-day month for two environments. Exact Class A cost depends on Restic's object layout and retries, so the existing 700,000/month Class A guard remains authoritative and is run before each off-host write. No Cloudflare hard billing cap is implied. The five-minute cadence, 30-second jitter, four-minute dump timeout, and four-minute upload timeout leave a bounded healthy-run window inside the 15-minute objective; any failed or skipped run is an RPO incident, not a reason to claim the target still passed.
 
@@ -67,6 +69,21 @@ Expected requests with a warm cache and no retries (operation counts vary with o
 | One daily foundation run | Six restic calls: unlock, two forgets, prune, dry-run and backup. LISTs and maintenance locks plus PUTs for repacked packs/indexes and new foundation objects. Dry-run writes no objects or repository lock. | Config/key and lock reads per call; metadata cache misses; prune GETs for retained trees and packs selected for repacking. Cached snapshots/indexes are reused. |
 
 Prune is not request-free: it lists packs, scans retained trees, downloads partially used packs when repacking, uploads replacement packs/indexes, then deletes obsolete objects. DELETE operations are free under R2's published pricing. Refusal at the second guard omits the sixth call (real foundation backup), after maintenance and dry-run have completed. A cold cache can read the retained set once; it must not repeat that download on every five-minute run. Post-install R2 observations must establish the actual per-run counts; these expectations do not replace the existing operation ceilings.
+
+## Media capacity evidence (AUT-186)
+
+The first foundation snapshot is expected to add about 20 GB of media from the [AUT-10 measurements](/AUT/issues/AUT-10), plus other included sources and metadata. With restic 0.16.4's default 16 MiB target packs, `ceil(20,000,000,000 / 16,777,216) = 1,193` data-pack PUTs is an approximate Class A baseline, plus tree/index/snapshot/lock PUTs, LISTs, maintenance, retries and any multipart requests. No measured compression saving or pack-size override is assumed; the existing 700,000/month Class A cutoff stays authoritative.
+
+The [0.16.4 FAQ](https://restic.readthedocs.io/en/v0.16.4/faq.html#will-restic-resume-an-interrupted-backup) says reruns reuse indexed uploaded data and rescan files until a first snapshot exists. However, this job runs `prune` before every backup. Prune removes data unreferenced by retained snapshots, so a `TimeoutStartSec=90min` interruption can lose upload progress on the next scheduled run. Existing completed snapshots and source media survive; a completed new snapshot is not guaranteed. **CTO decision required before merge** on this first-upload retry risk; this task changes neither timeout nor maintenance order.
+
+Fictional retention-v2 sizing from [AUT-628](/AUT/issues/AUT-628#document-media-sizing): `10 calls/day × days × 1,800 seconds × bitrate × 1,000 / 8 / 2^30` GiB. Count identical live bytes across snapshots once; add 180 days of distinct deleted audio and illustrative 20 GB existing media, without compression credit:
+
+| Bitrate | 730-day live audio | Live + 180-day backup-only tail + 20 GB media |
+| --- | ---: | ---: |
+| 32 kbit/s | 48.95 GiB | 79.65 GiB |
+| 128 kbit/s | 195.80 GiB | 262.71 GiB |
+
+These totals exclude other stores and overhead. The lower forecast already exceeds the 75 GiB warning; the higher exceeds the 100 GiB hard limit and threatens database backups too. The six-month backup window and separate 32 GiB acquisition cap remain unchanged. Capacity beyond 100 GiB needs a separate owner-approved decision through the CEO.
 
 ## Deployment gate
 

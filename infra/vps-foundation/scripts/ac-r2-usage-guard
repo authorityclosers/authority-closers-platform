@@ -13,6 +13,7 @@ if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
   trap cancel_transient_unit EXIT INT TERM
   systemd-run --unit="$transient_unit" --quiet --wait --collect --pipe \
     --setenv=AC_IPV4_ONLY=1 \
+    --setenv=R2_WARN_IS_FAILURE="${R2_WARN_IS_FAILURE:-0}" \
     --setenv=R2_PROJECTED_ADDITIONAL_BYTES="${R2_PROJECTED_ADDITIONAL_BYTES:-0}" \
     -p "TimeoutStartSec=${R2_GUARD_UNIT_TIMEOUT_SECONDS}s" \
     -p "TimeoutStopSec=${R2_GUARD_STOP_TIMEOUT_SECONDS}s" \

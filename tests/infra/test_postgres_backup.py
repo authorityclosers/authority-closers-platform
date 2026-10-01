@@ -149,6 +149,8 @@ def test_path_resolution_rejects_a_stale_staging_provider_profile(
 
 def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
     policy = backup.read_policy(FOUNDATION / "config" / "r2" / "free-tier-policy.conf")
+    assert policy["R2_MAX_STANDARD_BYTES"] == 107_374_182_400
+    assert policy["R2_WARN_STANDARD_BYTES"] == 80_530_636_800
     projection = backup.projected_logical_bytes(policy)
     assert projection == 8_388_608 * 336 * 2
 
@@ -167,10 +169,10 @@ def test_postgres_policy_follows_backup_scope_record(tmp_path: Path) -> None:
     current_policy.parent.mkdir(parents=True)
     scoped_policy.parent.mkdir(parents=True)
     current_policy.write_text(
-        source_policy.replace("R2_MAX_STANDARD_BYTES=8589934592", "R2_MAX_STANDARD_BYTES=111")
+        source_policy.replace("R2_MAX_STANDARD_BYTES=107374182400", "R2_MAX_STANDARD_BYTES=111")
     )
     scoped_policy.write_text(
-        source_policy.replace("R2_MAX_STANDARD_BYTES=8589934592", "R2_MAX_STANDARD_BYTES=222")
+        source_policy.replace("R2_MAX_STANDARD_BYTES=107374182400", "R2_MAX_STANDARD_BYTES=222")
     )
     current_values = backup.read_policy(backup.foundation_policy_path(tmp_path))
     assert current_values["R2_MAX_STANDARD_BYTES"] == 111

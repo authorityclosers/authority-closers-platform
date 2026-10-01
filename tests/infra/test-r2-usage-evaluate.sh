@@ -103,20 +103,59 @@ expect_generated_fail() {
 expect_pass storage-valid.json operations-valid-zero.json
 usage_output="$($evaluator "$fixtures/storage-valid.json" "$fixtures/operations-valid-usage.json" "$policy")"
 grep -q 'standard_bytes=330 infrequent_bytes=0 class_a=7 class_b=11' <<<"$usage_output"
-R2_PROJECTED_ADDITIONAL_BYTES=8589934262 \
+R2_PROJECTED_ADDITIONAL_BYTES=107374182070 \
   "$evaluator" "$fixtures/storage-valid.json" "$fixtures/operations-valid-zero.json" "$policy" >/dev/null
-if R2_PROJECTED_ADDITIONAL_BYTES=8589934263 \
+if R2_PROJECTED_ADDITIONAL_BYTES=107374182071 \
   "$evaluator" "$fixtures/storage-valid.json" "$fixtures/operations-valid-zero.json" "$policy" >/dev/null 2>&1; then
   printf 'Expected projected R2 storage above the envelope to fail.\n' >&2
   exit 1
 fi
 
 # The storage bound is unchanged: equality is valid, one byte above is not.
-write_storage_fixture 8589934592
+write_storage_fixture 107374182400
 write_operations_fixture PutObject 0
 expect_generated_pass
-write_storage_fixture 8589934593
+write_storage_fixture 107374182401
 expect_generated_fail
+
+# Stored bytes alone drive the warning; backup callers keep exit 0 at the line.
+write_storage_fixture 80530636799
+usage_output="$("$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" 2>&1)"
+[[ "$usage_output" != *'WARN  '* && "$usage_output" == *'PASS  '* ]]
+write_storage_fixture 80530636800
+warning='WARN  Standard R2 bytes 80530636800 reach the warning line 80530636800 (ceiling 107374182400).'
+usage_output="$("$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" 2>&1)"
+[[ "$usage_output" == *"$warning"* && "$usage_output" == *'PASS  '* ]]
+if usage_output="$(R2_WARN_IS_FAILURE=1 "$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" 2>&1)"; then
+  printf 'Expected warning to fail the periodic usage check.\n' >&2; exit 1
+fi
+[[ "$usage_output" == *"$warning"* && "$usage_output" != *'PASS  '* ]]
+write_storage_fixture 107374182401
+for flag in 0 1; do
+  if R2_WARN_IS_FAILURE="$flag" "$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" >/dev/null 2>&1; then
+    printf 'Expected hard ceiling to fail regardless of warning mode.\n' >&2; exit 1
+  fi
+done
+write_storage_fixture 0
+usage_output="$(R2_WARN_IS_FAILURE=1 R2_PROJECTED_ADDITIONAL_BYTES=80530636800 \
+  "$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" 2>&1)"
+[[ "$usage_output" != *'WARN  '* && "$usage_output" == *'PASS  '* ]]
+if usage_output="$(R2_PROJECTED_ADDITIONAL_BYTES=107374182401 \
+  "$evaluator" "$tmp_dir/storage.json" "$tmp_dir/operations.json" "$policy" 2>&1)"; then
+  printf 'Expected large projection to fail admission.\n' >&2; exit 1
+fi
+[[ "$usage_output" != *'WARN  '* && "$usage_output" == *'FAIL  Projected'* ]]
+
+# Invalid warning policy must fail before malformed metrics can be evaluated.
+printf '{}\n' > "$tmp_dir/invalid-metrics.json"
+for warn in missing 0 107374182400 107374182401; do
+  sed '/^R2_WARN_STANDARD_BYTES=/d' "$policy" > "$tmp_dir/invalid-policy.conf"
+  [[ "$warn" == missing ]] || printf 'R2_WARN_STANDARD_BYTES=%s\n' "$warn" >> "$tmp_dir/invalid-policy.conf"
+  if usage_output="$("$evaluator" "$tmp_dir/invalid-metrics.json" "$tmp_dir/invalid-metrics.json" "$tmp_dir/invalid-policy.conf" 2>&1)"; then
+    printf 'Expected invalid warning policy to fail closed: %s\n' "$warn" >&2; exit 1
+  fi
+  [[ "$usage_output" == *R2_WARN_STANDARD_BYTES* && "$usage_output" != *metrics* ]]
+done
 
 write_storage_fixture 0
 write_operations_fixture PutObject 699999

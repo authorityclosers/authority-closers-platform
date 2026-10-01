@@ -124,6 +124,7 @@ for path in "$storage_file" "$operations_file" "$policy_file"; do
 done
 
 R2_MAX_STANDARD_BYTES=''
+R2_WARN_STANDARD_BYTES=''
 R2_MAX_CLASS_A_MONTH=''
 R2_MAX_CLASS_B_MONTH=''
 R2_FORBID_INFREQUENT_ACCESS=''
@@ -136,7 +137,7 @@ while IFS='=' read -r key value; do
   value="${value%$'\r'}"
   [[ -z "$key" || "$key" == \#* ]] && continue
   case "$key" in
-    R2_MAX_STANDARD_BYTES|R2_MAX_CLASS_A_MONTH|R2_MAX_CLASS_B_MONTH|R2_FORBID_INFREQUENT_ACCESS|R2_POSTGRES_LOGICAL_MAX_DUMP_BYTES|R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT|R2_POSTGRES_LOGICAL_MAX_ENVIRONMENTS)
+    R2_MAX_STANDARD_BYTES|R2_WARN_STANDARD_BYTES|R2_MAX_CLASS_A_MONTH|R2_MAX_CLASS_B_MONTH|R2_FORBID_INFREQUENT_ACCESS|R2_POSTGRES_LOGICAL_MAX_DUMP_BYTES|R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT|R2_POSTGRES_LOGICAL_MAX_ENVIRONMENTS)
       normalized_policy_value="$(decimal_normalize "$value" "$key")" || exit 1
       printf -v "$key" '%s' "$normalized_policy_value"
       ;;
@@ -161,6 +162,7 @@ done < "$policy_file"
 
 for key in \
   R2_MAX_STANDARD_BYTES \
+  R2_WARN_STANDARD_BYTES \
   R2_MAX_CLASS_A_MONTH \
   R2_MAX_CLASS_B_MONTH \
   R2_FORBID_INFREQUENT_ACCESS \
@@ -173,6 +175,11 @@ for key in \
     exit 1
   }
 done
+if [[ "$R2_WARN_STANDARD_BYTES" == 0 ]] ||
+  ! decimal_gt "$R2_MAX_STANDARD_BYTES" "$R2_WARN_STANDARD_BYTES"; then
+  printf 'R2_WARN_STANDARD_BYTES must be greater than 0 and below R2_MAX_STANDARD_BYTES.\n' >&2
+  exit 1
+fi
 [[ "$R2_FORBID_INFREQUENT_ACCESS" == 0 || "$R2_FORBID_INFREQUENT_ACCESS" == 1 ]] || {
   printf 'R2_FORBID_INFREQUENT_ACCESS must be 0 or 1.\n' >&2
   exit 1
@@ -277,6 +284,14 @@ done < <(jq --raw-output '
 ' "$operations_file")
 
 failures=0
+
+if ! decimal_gt "$R2_WARN_STANDARD_BYTES" "$standard_bytes"; then
+  printf 'WARN  Standard R2 bytes %s reach the warning line %s (ceiling %s).\n' \
+    "$standard_bytes" "$R2_WARN_STANDARD_BYTES" "$R2_MAX_STANDARD_BYTES" >&2
+  if [[ "${R2_WARN_IS_FAILURE:-0}" == 1 ]]; then
+    failures=$((failures + 1))
+  fi
+fi
 
 if decimal_gt "$standard_bytes" "$R2_MAX_STANDARD_BYTES"; then
   printf 'FAIL  Standard R2 bytes %s exceed policy ceiling %s.\n' \
