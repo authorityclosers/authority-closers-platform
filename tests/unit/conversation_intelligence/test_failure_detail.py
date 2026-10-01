@@ -209,8 +209,29 @@ def test_loc_keeps_schema_keys_and_indices_only() -> None:
 
 
 def test_unknown_schema_fails_closed_including_indices() -> None:
-    # CTO review of 8a8d114e: without a known schema an integer may be a mapping key.
+    # Without a supported schema an integer may be a mapping key as easily as an index.
     assert module._loc(("strengths", 0, "quote"), "string_type", None) == "<key>.<key>.<key>"
+    assert module._loc((1, "a"), "int_type", None) == "<key>.<key>"
+
+
+def test_the_report_models_are_the_supported_roots() -> None:
+    roots = module._supported_roots()
+    assert set(roots) == {
+        "FactPacket",
+        "AggregateFactPacket",
+        "ReportDraft",
+        "ReportCitation",
+        "DetailedOverview",
+    }
+
+
+# Fictional fixtures. They are not supported roots, so the stored detail for
+# their errors is fully redacted; the walker itself is checked with _loc.
+
+
+class _ReviewValue(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    quote: int
 
 
 class _ProviderExtras(BaseModel):
@@ -228,44 +249,6 @@ class _UnrelatedFixture(BaseModel):
     sentinel_9f3c_private_words: str = ""
 
 
-@pytest.mark.parametrize("key", ["summary", "quote", SENTINEL, "provider_extras"])
-def test_mapping_keys_are_redacted_even_when_another_model_declares_the_word(key: str) -> None:
-    # CTO review of c271390: a mapping key that collides with a field name elsewhere.
-    assert _UnrelatedFixture.model_fields  # the sentinel is a declared field name somewhere
-    with pytest.raises(ValidationError) as caught:
-        _ProviderExtras.model_validate({"provider_extras": {key: "fictional noninteger"}})
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    assert detail["errors"] == [{"loc": "provider_extras.<key>", "type": "int_type"}]
-    assert key == "provider_extras" or key not in canonical_failure_detail(detail).replace(
-        "provider_extras", ""
-    )
-
-
-def test_integer_mapping_keys_are_redacted_in_str_keyed_mappings() -> None:
-    # CTO review of 5c447f3: an integer key is a mapping key, not an array index.
-    with pytest.raises(ValidationError) as caught:
-        _ProviderExtras.model_validate({"provider_extras": {123456789: "fictional noninteger"}})
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    assert {entry["loc"] for entry in detail["errors"]} <= {
-        "provider_extras.<key>",
-        "provider_extras.<key>.<key>",
-    }
-    assert "123456789" not in canonical_failure_detail(detail)
-
-
-def test_integer_mapping_keys_are_redacted_in_int_keyed_mappings() -> None:
-    with pytest.raises(ValidationError) as caught:
-        _IntegerKeys.model_validate({"counts": {123456789: "fictional noninteger"}})
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    assert detail["errors"] == [{"loc": "counts.<key>", "type": "int_type"}]
-    assert "123456789" not in canonical_failure_detail(detail)
-
-
-class _ReviewValue(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
-    quote: int
-
-
 class _ReviewIntUnion(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     findings: dict[int, _ReviewValue] | list[int]
@@ -276,39 +259,6 @@ class _ReviewStrUnion(BaseModel):
     findings: dict[str, _ReviewValue] | list[int]
 
 
-def _locs(model: type[BaseModel], value: dict[str, Any]) -> list[str]:
-    with pytest.raises(ValidationError) as caught:
-        model.model_validate(value)
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    text = canonical_failure_detail(detail)
-    assert "123456789" not in text
-    assert SENTINEL not in text
-    return [entry["loc"] for entry in detail["errors"]]
-
-
-def test_union_branch_label_does_not_consume_an_integer_mapping_key() -> None:
-    # CTO review of f0501949: ("findings", "dict[int,ReviewValue]", 123456789, "quote").
-    locs = _locs(_ReviewIntUnion, {"findings": {123456789: {"quote": "fictional noninteger"}}})
-    assert "findings.<key>.<key>.quote" in locs
-
-
-def test_union_branch_label_does_not_consume_a_string_mapping_key() -> None:
-    # The provider's key "quote" is redacted; the value model's field "quote" is kept.
-    locs = _locs(_ReviewStrUnion, {"findings": {"quote": {"quote": "fictional noninteger"}}})
-    assert "findings.<key>.<key>.quote" in locs
-    sentinel_locs = _locs(_ReviewStrUnion, {"findings": {SENTINEL: {"quote": "x"}}})
-    assert "findings.<key>.<key>.quote" in sentinel_locs
-
-
-def test_an_unresolved_union_branch_hides_everything_below_it() -> None:
-    union = dict[str, int] | list[int]
-    assert module._loc(("findings", "function-after[x]", 7, "quote"), "int_type", None) == (
-        "<key>.<key>.<key>.<key>"
-    )
-    assert module._step(union, "custom-label")[1] is module._OPAQUE
-    assert module._loc((1, "a"), "int_type", None) == "<key>.<key>"
-
-
 class _ReviewTuple(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     findings: tuple[int, dict[int, _ReviewValue]]
@@ -317,28 +267,6 @@ class _ReviewTuple(BaseModel):
 class _ReviewModelTuple(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     findings: tuple[_ReviewValue, dict[str, _ReviewValue]]
-
-
-def test_fixed_tuple_items_use_the_schema_at_their_own_index() -> None:
-    # CTO review of 605fc1ea: ("findings", 1, 123456789, "quote") walked the first item's schema.
-    locs = _locs(_ReviewTuple, {"findings": (1, {123456789: {"quote": "fictional noninteger"}})})
-    assert "findings.1.<key>.quote" in locs
-
-
-def test_fixed_tuple_mapping_key_is_redacted_and_value_field_kept() -> None:
-    locs = _locs(
-        _ReviewModelTuple,
-        {"findings": ({"quote": 1}, {"quote": {"quote": "fictional noninteger"}})},
-    )
-    assert "findings.1.<key>.quote" in locs
-
-
-def test_variadic_tuples_and_out_of_range_indices() -> None:
-    variadic = tuple[_ReviewValue, ...]
-    assert module._step(variadic, 5) == ("5", _ReviewValue)
-    assert module._step(tuple[int, str], 2) == ("<key>", module._OPAQUE)
-    assert module._step(list[int], "word") == ("<key>", module._OPAQUE)
-    assert module._step(int, 0) == ("<key>", module._OPAQUE)
 
 
 class _ReviewMapBranch(BaseModel):
@@ -353,105 +281,167 @@ class _ReviewListBranch(BaseModel):
     findings: list[int]
 
 
-class _ReviewStrMapBranch(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
-    kind: Literal["_ReviewListBranch"]
-    findings: dict[str, _ReviewValue]
-
-
 class _ReviewTaggedUnion(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
     result: Annotated[_ReviewMapBranch | _ReviewListBranch, Field(discriminator="kind")]
 
 
-class _ReviewStrTaggedUnion(BaseModel):
+class _ReviewAliasCollision(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
-    result: Annotated[_ReviewStrMapBranch | _ReviewListBranch, Field(discriminator="kind")]
+    findings: list[int] = Field(alias="sequence", default=[])
+    provider_extras: dict[int, int] = Field(alias="findings")
+
+
+class _ReviewNestedMap(RootModel[dict[str, int]]):
+    model_config = ConfigDict(strict=True)
+
+
+class _ReviewNestedRoot(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: _ReviewNestedMap
+
+
+class _AdapterTitleCollision(BaseModel):
+    model_config = ConfigDict(title="dict[str,dict[int,int]]", strict=True)
+    findings: list[int] = []
+
+
+class _ShadowReportDraft:
+    """A stand-in class answering to ReportDraft's title. Not a pydantic model, so it is
+    never in the real loaded-model scan; one test injects it."""
+
+    model_config = {"title": "ReportDraft"}
+
+
+def _stored_and_walked(
+    error: ValidationError, model: type[BaseModel]
+) -> tuple[list[str], list[str]]:
+    detail = build_failure_detail(error, stage="C5", failure_code=CATCH_ALL)
+    text = canonical_failure_detail(detail)
+    assert "123456789" not in text
+    assert SENTINEL not in text
+    stored = [entry["loc"] for entry in detail["errors"]]
+    walked = [
+        module._loc(entry["loc"], entry["type"], model)
+        for entry in error.errors(include_url=False, include_context=False, include_input=False)
+    ]
+    for loc in walked:
+        assert "123456789" not in loc
+        assert SENTINEL not in loc
+    return stored, walked
+
+
+def _locs(model: type[BaseModel], value: Any) -> list[str]:
+    """Walked locations for a fixture; its stored detail must be fully redacted."""
+
+    with pytest.raises(ValidationError) as caught:
+        model.model_validate(value)
+    stored, walked = _stored_and_walked(caught.value, model)
+    assert stored and all(set(loc.split(".")) == {"<key>"} for loc in stored)
+    return walked
+
+
+@pytest.mark.parametrize("key", ["summary", "quote", SENTINEL, "provider_extras"])
+def test_mapping_keys_are_redacted_even_when_another_model_declares_the_word(key: str) -> None:
+    assert _UnrelatedFixture.model_fields  # the sentinel is a declared field name somewhere
+    locs = _locs(_ProviderExtras, {"provider_extras": {key: "fictional noninteger"}})
+    assert locs == ["provider_extras.<key>"]
+
+
+def test_integer_mapping_keys_are_redacted_in_str_keyed_mappings() -> None:
+    locs = _locs(_ProviderExtras, {"provider_extras": {123456789: "fictional noninteger"}})
+    assert set(locs) <= {"provider_extras.<key>", "provider_extras.<key>.<key>"}
+
+
+def test_integer_mapping_keys_are_redacted_in_int_keyed_mappings() -> None:
+    assert _locs(_IntegerKeys, {"counts": {123456789: "fictional noninteger"}}) == ["counts.<key>"]
+
+
+def test_nested_mapping_keys_under_a_list_are_redacted_and_indices_kept() -> None:
+    locs = _locs(
+        _ProviderExtras, {"provider_extras": {}, "findings": [{"summary": 1}, {SENTINEL: "x"}]}
+    )
+    assert locs == ["findings.1.<key>"]
+
+
+def test_union_branch_label_does_not_consume_a_mapping_key() -> None:
+    value = {"findings": {123456789: {"quote": "fictional noninteger"}}}
+    assert "findings.<key>.<key>.quote" in _locs(_ReviewIntUnion, value)
+    value = {"findings": {"quote": {"quote": "fictional noninteger"}}}
+    assert "findings.<key>.<key>.quote" in _locs(_ReviewStrUnion, value)
+    value = {"findings": {SENTINEL: {"quote": "x"}}}
+    assert "findings.<key>.<key>.quote" in _locs(_ReviewStrUnion, value)
+
+
+def test_an_unresolved_union_branch_hides_everything_below_it() -> None:
+    assert module._step(dict[str, int] | list[int], "custom-label")[1] is module._OPAQUE
+
+
+def test_fixed_tuple_items_use_the_schema_at_their_own_index() -> None:
+    value = {"findings": (1, {123456789: {"quote": "fictional noninteger"}})}
+    assert "findings.1.<key>.quote" in _locs(_ReviewTuple, value)
+    value = {"findings": ({"quote": 1}, {"quote": {"quote": "fictional noninteger"}})}
+    assert "findings.1.<key>.quote" in _locs(_ReviewModelTuple, value)
+
+
+def test_variadic_tuples_and_out_of_range_indices() -> None:
+    assert module._step(tuple[_ReviewValue, ...], 5) == ("5", _ReviewValue)
+    assert module._step(tuple[int, str], 2) == ("<key>", module._OPAQUE)
+    assert module._step(list[int], "word") == ("<key>", module._OPAQUE)
+    assert module._step(int, 0) == ("<key>", module._OPAQUE)
 
 
 def test_a_tagged_union_label_never_selects_a_member_by_class_name() -> None:
-    # CTO review of e0a7e2c8: the tag names the *other* member's class.
     value = {
         "kind": "_ReviewListBranch",
         "findings": {123456789: {"quote": "fictional noninteger"}},
     }
     locs = _locs(_ReviewTaggedUnion, {"result": value})
-    assert locs and all(loc.startswith("result.<key>") for loc in locs)
+    assert locs and all(loc.startswith("result.<key>") and "quote" not in loc for loc in locs)
 
 
-def test_a_tagged_union_hides_string_mapping_keys_that_collide_with_fields() -> None:
-    value = {"kind": "_ReviewListBranch", "findings": {SENTINEL: {"quote": "fictional noninteger"}}}
-    locs = _locs(_ReviewStrTaggedUnion, {"result": value})
-    assert locs and all("quote" not in loc and loc.startswith("result.<key>") for loc in locs)
+def test_a_field_name_that_is_another_fields_alias_is_ambiguous() -> None:
+    # CTO review of 8b48f8e0: ("findings", 123456789) matched the list field's name.
+    locs = _locs(
+        _ReviewAliasCollision, {"sequence": [1], "findings": {123456789: "fictional noninteger"}}
+    )
+    assert locs == ["<key>.<key>"]
 
 
-class _ReviewTitleList(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
-    findings: list[int]
-
-
-class _ReviewTitleMap(BaseModel):
-    model_config = ConfigDict(title="_ReviewTitleList", strict=True, extra="forbid")
-    findings: dict[int, _ReviewValue]
-
-
-class _ReviewTitleField(BaseModel):
-    model_config = ConfigDict(strict=True, extra="forbid")
-    findings: _ReviewValue
-
-
-class _ReviewTitleFieldMap(BaseModel):
-    model_config = ConfigDict(title="_ReviewTitleField", strict=True, extra="forbid")
-    findings: dict[str, _ReviewValue]
-
-
-class _UnknownTitleMap(BaseModel):
-    model_config = ConfigDict(title="NoLoadedModelHasThisTitle", strict=True, extra="forbid")
-    findings: dict[int, int]
-
-
-class _ReviewRootMap(RootModel[dict[str, int]]):
-    model_config = ConfigDict(strict=True)
-
-
-def test_a_configured_title_collision_fails_closed() -> None:
-    # CTO review of 8a8d114e: the title names a different loaded model.
-    value = {"findings": {123456789: {"quote": "fictional noninteger"}}}
-    assert all(set(loc.split(".")) == {"<key>"} for loc in _locs(_ReviewTitleMap, value))
-    value = {"findings": {"quote": {"quote": "fictional noninteger"}}}
-    assert all("quote" not in loc for loc in _locs(_ReviewTitleFieldMap, value))
-
-
-def test_unknown_titles_type_adapters_and_root_models_fail_closed() -> None:
-    # A unique configured title resolves to its own model; the numeric key is still redacted.
-    assert _locs(_UnknownTitleMap, {"findings": {123456789: "fictional noninteger"}}) == [
-        "findings.<key>"
-    ]
-    with pytest.raises(ValidationError) as caught:
-        TypeAdapter(dict[int, int]).validate_python(
-            {123456789: "fictional noninteger"}, strict=True
-        )
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    assert [entry["loc"] for entry in detail["errors"]] == ["<key>"]
-    assert "123456789" not in canonical_failure_detail(detail)
-    locs = _locs(_ReviewRootMap, {"root": "fictional noninteger"})
+def test_a_nested_root_model_is_opaque() -> None:
+    locs = _locs(_ReviewNestedRoot, {"findings": {"root": "fictional noninteger"}})
     assert locs and all("root" not in loc for loc in locs)
 
 
-def test_list_indices_are_still_kept() -> None:
-    assert module._loc(("findings", 4, "summary"), "int_type", _ProviderExtras) == (
-        "findings.4.<key>"
+def test_type_adapters_root_models_and_title_collisions_keep_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _AdapterTitleCollision.model_fields
+    with pytest.raises(ValidationError) as caught:
+        TypeAdapter(dict[str, dict[int, int]]).validate_python(
+            {"findings": {123456789: "fictional noninteger"}}, strict=True
+        )
+    # A loaded model shares the adapter's title; the adapter root still keeps nothing.
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert "123456789" not in canonical_failure_detail(detail)
+    assert detail["errors"] and all(
+        set(entry["loc"].split(".")) == {"<key>"} for entry in detail["errors"]
+    )
+
+    # A second class answering to a supported root's title makes that title ambiguous.
+    loaded = module._models()
+    monkeypatch.setattr(module, "_models", lambda: [*loaded, _ShadowReportDraft])
+    error = _task_error(lambda: _raise_report_draft_error())
+    detail = build_failure_detail(error, stage="C5", failure_code=CATCH_ALL)
+    assert detail["errors"] and all(
+        set(entry["loc"].split(".")) == {"<key>"} for entry in detail["errors"]
     )
 
 
-def test_nested_mapping_keys_under_a_list_are_redacted_and_indices_kept() -> None:
-    with pytest.raises(ValidationError) as caught:
-        _ProviderExtras.model_validate(
-            {"provider_extras": {}, "findings": [{"summary": 1}, {SENTINEL: "x"}]}
-        )
-    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
-    assert detail["errors"] == [{"loc": "findings.1.<key>", "type": "int_type"}]
-    assert SENTINEL not in canonical_failure_detail(detail)
+def _raise_report_draft_error() -> None:
+    payload: dict[str, Any] = {field: [] for field in reports._CONTENT_FIELDS}
+    payload["summary"] = [SENTINEL]
+    reports.parse_report_draft(payload, _transcript())
 
 
 def test_an_unknown_provider_key_is_redacted_even_when_it_looks_like_an_identifier() -> None:

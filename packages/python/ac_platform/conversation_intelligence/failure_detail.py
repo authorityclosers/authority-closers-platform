@@ -20,9 +20,10 @@ small, content-free description of the exception chain on the job row:
   may be tagged by a discriminator) hides everything below its label. A mapping key of any type, an
   unexpected extra key, or any part under an unknown schema or an unresolved
   union branch becomes ``<key>``, because a provider chose it and it can carry a
-  name or an id. When the validating model cannot be identified without doubt
-  (a title collision, a type adapter, a root model), nothing in the location is
-  kept;
+  name or an id. Only the report models the provider pipeline validates are
+  supported roots; any other root (a type adapter, a root model, a title another
+  class shares) keeps nothing in the location, and so does a field name that is
+  also another field's alias or a nested root model;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
 The chain follows ``__cause__`` and then ``__context__`` (also when the context
@@ -45,6 +46,8 @@ from typing import Annotated, Any, TypeGuard, Union, get_args, get_origin
 
 from pydantic import BaseModel, RootModel, ValidationError
 
+from ac_platform.conversation_intelligence import reports
+from ac_platform.conversation_intelligence.report_overview import DetailedOverview
 from ac_platform.conversation_intelligence.reports import REPORT_VALIDATOR_REVISION
 
 FAILURE_DETAIL_SCHEMA = "ac.job-failure-detail/1"
@@ -187,14 +190,20 @@ def _step(node: object, part: object) -> tuple[str, object]:
         # string, an integer, or a word some model declares elsewhere.
         args = get_args(single)
         return _REDACTED_KEY, args[1] if len(args) == 2 else _OPAQUE
+    if _is_model(single) and issubclass(single, RootModel):
+        return _REDACTED_KEY, _OPAQUE  # its "root" position is the provider's own data
     if isinstance(part, int) and not isinstance(part, bool) and _is_sequence(single):
         item = _item_schema(single, part)
         if item is not _OPAQUE:
             return str(part), item
     if isinstance(part, str) and _KEY.fullmatch(part) is not None and _is_model(single):
-        for name, field in single.model_fields.items():
-            if part in (name, field.alias, field.validation_alias):
-                return part, field.annotation
+        matches = [
+            field
+            for name, field in single.model_fields.items()
+            if part in (name, field.alias, field.validation_alias)
+        ]
+        if len(matches) == 1:  # a name that is also another field's alias is ambiguous
+            return part, matches[0].annotation
     # Inside a known schema, a part it does not declare at this position hides the rest.
     return _REDACTED_KEY, _OPAQUE
 
@@ -276,25 +285,31 @@ def _item_schema(node: object, index: int) -> object:
 
 
 def _validating_model(error: ValidationError) -> type[BaseModel] | None:
-    """The one loaded model the error's title can only mean, else None (every part is redacted).
+    """The source-owned report model that raised ``error``, else None (every part is redacted).
 
-    A title is a class name or a configured title, and another model can carry
-    the same word, so any collision fails closed. Root models and type adapters
-    are not supported roots.
+    Only the closed set of report models the provider pipeline validates is
+    supported. A title is just a word, so another loaded class answering to it
+    (by name or configured title) makes it ambiguous, and the location is hidden.
     """
 
-    title = error.title
-    matches = [
-        model
-        for model in _models()
-        if model.__name__ == title or model.model_config.get("title") == title
-    ]
-    if len(matches) != 1:
+    model = _supported_roots().get(error.title)
+    if model is None:
         return None
-    model = matches[0]
-    if issubclass(model, RootModel) or (model.model_config.get("title") or model.__name__) != title:
-        return None
+    for other in _models():
+        if other is not model and error.title in (other.__name__, other.model_config.get("title")):
+            return None
     return model
+
+
+def _supported_roots() -> dict[str, type[BaseModel]]:
+    roots = (
+        reports.FactPacket,
+        reports.AggregateFactPacket,
+        reports.ReportDraft,
+        reports.ReportCitation,
+        DetailedOverview,
+    )
+    return {root.__name__: root for root in roots if not root.model_config.get("title")}
 
 
 def _models() -> list[type[BaseModel]]:
