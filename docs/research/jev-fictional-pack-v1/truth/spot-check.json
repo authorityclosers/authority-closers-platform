@@ -1,0 +1,16 @@
+{
+  "call_ids": [
+    "call-01-en",
+    "call-05-hi-en",
+    "call-09-gu-en",
+    "call-12-en"
+  ],
+  "report_items": 80,
+  "mutated_items": 24,
+  "total_calls": 36,
+  "total_report_items": 720,
+  "total_mutated_items": 216,
+  "reviewer": "Call Quality Lead",
+  "status": "pending",
+  "purpose": "Read all report items and their cited fictional segments for these four calls, including naturalness, support, severity, fact alignment and multilingual phrasing. This sample covers all eight mutation codes."
+}
