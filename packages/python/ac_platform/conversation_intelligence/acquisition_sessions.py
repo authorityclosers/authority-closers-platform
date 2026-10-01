@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
+    LONGEST_CALL_SECONDS,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     acquisition_seconds,
     existing_account_usage,
@@ -69,7 +70,7 @@ class MeasuredSource:
             or type(self.duration_ms) is not int
             # Retain readability/replay of sources admitted under the former
             # 100-minute trial. New reservations use the current shared quota.
-            or not 1 <= self.duration_ms <= 6_000 * 1000
+            or not 1 <= self.duration_ms <= LONGEST_CALL_SECONDS * 1000
             or _DIGEST.fullmatch(self.source_sha256) is None
             or _DIGEST.fullmatch(self.duration_evidence_sha256) is None
         ):

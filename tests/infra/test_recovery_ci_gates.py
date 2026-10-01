@@ -106,9 +106,7 @@ def test_recovery_evidence_artifacts_are_scoped_to_the_current_attempt() -> None
     shard_download = next(
         step for step in validation["steps"] if step.get("name") == "Download Python shard evidence"
     )
-    assert shard_download["with"]["pattern"] == (
-        "python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-*"
-    )
+    assert shard_download["with"]["pattern"] == ("python-test-shard-${{ github.sha }}-*")
 
 
 def test_populated_migration_is_required_on_its_own_created_database() -> None:

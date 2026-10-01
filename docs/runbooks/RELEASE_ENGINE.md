@@ -55,12 +55,14 @@ Logs for each deploy are in `/var/log/ac-release/`.
   The installer takes a database dump before migrating. If the install fails,
   it restores that dump, the release link and the edge route by itself. The
   engine then waits for a person to decide.
-- **Foundation first for new migrations.** `ac-postgres-backup` checks the
-  migration head of every environment before it backs up any of them. A core
-  release whose `AC_MIGRATION_HEAD` the installed foundation backup tool does
-  not know would stop backups for staging **and production**. The engine
-  refuses such a deploy until the foundation release from `main` is installed
-  (`infra/vps-foundation/scripts/install-foundation-release.sh`).
+- **Automatic backup support for new migrations.** Before a core deploy, the
+  engine checks the backup tool installed under `/usr/local/libexec`. If the
+  tool does not recognise the bundle's migration head, the engine installs
+  only the backup-scoped foundation from that build's exact commit, after
+  checking that the candidate also supports every running environment's head.
+  It records `foundation-backup-install` and rechecks the installed tool before
+  continuing. Failure still pauses staging; dry runs only report the planned
+  step, and application-only rollbacks never install the foundation.
 - A failed **web** deploy automatically restores the previous web image.
 - Production deploys are refused unless `/etc/ac-release/production.enabled`
   exists **and** the same commit already passed staging. That file is created

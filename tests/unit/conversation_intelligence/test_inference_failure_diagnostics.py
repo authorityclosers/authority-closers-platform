@@ -90,16 +90,15 @@ async def test_validation_failure_is_reported_once_without_another_dispatch() ->
     worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
     work = object()
     worker.claim = AsyncMock(return_value=work)  # type: ignore[method-assign]
-    worker._dispatch = AsyncMock(  # type: ignore[method-assign]
-        side_effect=InferenceTaskError("report_evidence_quote_mismatch")
-    )
+    error = InferenceTaskError("report_evidence_quote_mismatch")
+    worker._dispatch = AsyncMock(side_effect=error)  # type: ignore[method-assign]
     worker._fail = AsyncMock()  # type: ignore[method-assign]
 
     assert await worker.run_once() is True
 
     worker._dispatch.assert_awaited_once_with(work)
     worker._fail.assert_awaited_once_with(
-        work, failure_code="conversation_report_evidence_quote_mismatch"
+        work, failure_code="conversation_report_evidence_quote_mismatch", error=error
     )
 
 
@@ -108,7 +107,8 @@ async def test_cancellation_still_drains_failure_acknowledgement_and_propagates(
     worker = ConversationInferenceWorker.__new__(ConversationInferenceWorker)
     work = object()
     worker.claim = AsyncMock(return_value=work)  # type: ignore[method-assign]
-    worker._dispatch = AsyncMock(side_effect=asyncio.CancelledError())  # type: ignore[method-assign]
+    cancelled = asyncio.CancelledError()
+    worker._dispatch = AsyncMock(side_effect=cancelled)  # type: ignore[method-assign]
     worker._fail = AsyncMock()  # type: ignore[method-assign]
 
     with pytest.raises(asyncio.CancelledError):
@@ -116,5 +116,5 @@ async def test_cancellation_still_drains_failure_acknowledgement_and_propagates(
 
     worker._dispatch.assert_awaited_once_with(work)
     worker._fail.assert_awaited_once_with(
-        work, failure_code="conversation_provider_execution_unresolved"
+        work, failure_code="conversation_provider_execution_unresolved", error=cancelled
     )

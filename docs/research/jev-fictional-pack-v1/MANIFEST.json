@@ -1,0 +1,20 @@
+{
+  "version": "jev-fictional-pack-v1.1",
+  "files": {
+    "README.md": "61c656abb635ed0371d6a431f9ee9e629d65e0ccac082c7096ae4fa9694bee72",
+    "inputs/base.json": "fc7db2ed02151e2b7a8ae071fceeec3ecadeecdf8db25128787fee74cca9f831",
+    "inputs/red-team.json": "6692efec038901dd6524a5c79276db3275d1bce6bfaf1f515d55385db95fcc97",
+    "questions/definitions.json": "3dd4237e9e3b56e4c81954896d9bb8fb4aff0a7810b5d2efa42b4a4e7b615223",
+    "questions/requests.json": "a6ebe62bf7e7ab16e96db15d771d6bf02a0d129c16c208fc482f4127400e0614",
+    "truth/base.json": "acffd9c43c82947095119f5eccbcd3005dcb8229e4c394e9814bcabd8c50f36e",
+    "truth/fictional-vocabulary.json": "696e7f8636dc3cfc44f43704d5b81d3b1a0320a1ff9581d2bebbc9aed50331f0",
+    "truth/red-team-key.json": "5f0d84e4cad823d5e94c4742b5ae449f1552fab8a8c260184466b969ad99ee71",
+    "truth/sources.json": "9f3bfecf18c7a5004d15e7f589703c41f9409f78998327610cc834f7289bea73",
+    "truth/spot-check.json": "16e35cd1a7f176042836f0595d43e49b9845f284251c3b45f1bc08f83fdb734c"
+  },
+  "checker_sha256": "3e64b0fc5aad1407c77efe93049b27747694a38eccef4b9d927a3c4f7282eedf",
+  "set_hashes": {
+    "inputs": "df234f29fedfd9dd2a215ecb962cd55f9032f7ba190c6e8771857cf3197d9615",
+    "truth": "d71c0c26a70de62f66799fdce74bb844d2dc0fc035ac1224783848a1829e4df4"
+  }
+}

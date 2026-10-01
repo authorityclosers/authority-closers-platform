@@ -238,6 +238,7 @@ class Paths:
     stage_root: Path = Path("/var/tmp")  # noqa: S108 - root-only mkdtemp stages (0700)
     lock: Path = Path("/run/ac-release.lock")
     foundation: Path = Path("/srv/authority-closers/current")
+    backup_tool: Path = Path("/usr/local/libexec/authority-closers/ac-postgres-backup.py")
     sales_xray: Path = Path("/etc/authority-closers/sales-xray")
     engine: Path = Path("/opt/ac-release")
     backups: Path = Path("/srv/authority-closers/backups/application/production")
@@ -1751,15 +1752,23 @@ class Engine:
         log = self.new_log(environment, "core", build.sha)
         bundle = self.store_bundle(build, "core", CORE_FILES)
         blockers: list[str] = []
-        try:
-            self.require_backup_support(bundle)
-        except ReleaseError as error:
-            if not dry_run:
-                raise
-            # A rehearsal reports every blocker instead of stopping at the first.
-            blockers.append(str(error))
+        planned: dict[str, str] = {}
         previous = self.current_core(environment)
         with self.stage(build.sha) as stage:
+            try:
+                try:
+                    self.require_backup_support(bundle)
+                except ReleaseError:
+                    if rollback_only:
+                        raise
+                    planned = self.install_backup_foundation(
+                        environment, build, bundle, stage, log, dry_run=dry_run
+                    )
+            except ReleaseError as error:
+                if not dry_run:
+                    raise
+                # A rehearsal reports every blocker instead of stopping at the first.
+                blockers.append(str(error))
             archive, archive_sha = self.source_archive(build.sha, stage, "infra/application")
             source = stage / "source"
             self.extract_source(archive, source, "infra/application")
@@ -1841,6 +1850,7 @@ class Engine:
                     "previous": previous,
                     "installer": str(installer),
                     "log": str(log),
+                    **planned,
                     **activation,
                 }
             completed = self.run(
@@ -1856,13 +1866,8 @@ class Engine:
         self.check_core(environment, build.sha, log)
         return {"previous": previous, "log": str(log), **activation}
 
-    def require_backup_support(self, bundle: Path) -> None:
-        """Refuse a schema the installed foundation backup tools cannot attest.
-
-        ac-postgres-backup checks every environment's migration head before it
-        backs up any of them, so one unknown head stops production backups too.
-        """
-
+    @staticmethod
+    def bundle_migration_head(bundle: Path) -> str:
         head = ""
         for line in (bundle / "release-images.env").read_text(encoding="utf-8").splitlines():
             key, _, value = line.partition("=")
@@ -1870,17 +1875,77 @@ class Engine:
                 head = value.strip()
         if not re.fullmatch(r"[0-9]{8}_[0-9]{4}", head):
             raise ReleaseError("release bundle has no valid AC_MIGRATION_HEAD")
-        backup_tool = self.paths.foundation / "scripts" / "ac-postgres-backup.py"
+        return head
+
+    @staticmethod
+    def backup_recognises(tool: Path, head: str) -> bool:
         try:
-            known = f'"{head}"' in backup_tool.read_text(encoding="utf-8")
+            return f'"{head}"' in tool.read_text(encoding="utf-8")
         except OSError:
-            known = False
-        if not known:
+            return False
+
+    def require_backup_support(self, bundle: Path) -> None:
+        """Check the installed tool the backup wrapper actually executes."""
+        head = self.bundle_migration_head(bundle)
+        if not self.backup_recognises(self.paths.backup_tool, head):
             raise ReleaseError(
                 f"the installed foundation backup tools do not recognise migration {head}; "
-                "install the foundation release from main first, or backups for every "
-                "environment would stop"
+                "backups for every environment would stop"
             )
+
+    def install_backup_foundation(
+        self, environment: str, build: Build, bundle: Path, stage: Path, log: Path, *, dry_run: bool
+    ) -> dict[str, str]:
+        head = self.bundle_migration_head(bundle)
+        entry: dict[str, Any] = {
+            "at": _now(),
+            "action": "foundation-backup-install",
+            "environment": environment,
+            "sha": build.sha,
+            "migration": head,
+            "log": str(log),
+        }
+        try:
+            prefix = "infra/vps-foundation"
+            archive, digest = self.source_archive(build.sha, stage, prefix)
+            source = stage / "foundation-source"
+            self.extract_source(archive, source, prefix)
+            scripts = source / prefix / "scripts"
+            heads = {head}
+            for running_environment in ENVIRONMENTS:
+                running = self.current_core(running_environment)
+                if running is not None:
+                    heads.add(self.migration_head(running))
+            for required in sorted(heads):
+                if not self.backup_recognises(scripts / "ac-postgres-backup.py", required):
+                    raise ReleaseError(
+                        f"candidate foundation backup tool does not recognise migration {required}"
+                    )
+            if dry_run:
+                return {"foundation_backup_install": head}
+            completed = self.run(
+                ["bash", str(scripts / "install-foundation-release.sh")],
+                env={
+                    "AC_RELEASE_ID": f"foundation-{build.sha}",
+                    "AC_RELEASE_ARCHIVE": str(archive),
+                    "AC_RELEASE_ARCHIVE_SHA256": digest,
+                    "AC_INSTALL_SCOPE": "backup",
+                },
+                timeout=900,
+                log=log,
+                check=False,
+            )
+            if completed.returncode != 0:
+                raise ReleaseError(
+                    f"foundation backup installer exited with {completed.returncode}; see {log}"
+                )
+            self.require_backup_support(bundle)
+        except (ReleaseError, OSError, subprocess.SubprocessError, ValueError) as error:
+            if not dry_run:
+                self.record({**entry, "result": "failed", "error": str(error)[:500]})
+            raise ReleaseError(str(error)) from error
+        self.record({**entry, "result": "success"})
+        return {}
 
     # -- Sales Xray activation ---------------------------------------------------
 

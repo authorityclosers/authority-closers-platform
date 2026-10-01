@@ -20,6 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.acquisition_usage import (
+    LONGEST_CALL_SECONDS,
+    account_usage,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationConflict,
     ConversationError,
@@ -55,6 +59,7 @@ def install_acquisition_http(
     ):
         raise ValueError("The public Academy and exact Sales Xray challenge host are required.")
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-acquisition"])
+    me_router = APIRouter(prefix="/v1/me", tags=["conversation-acquisition"])
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
 
     def service(database: AsyncSession) -> AcquisitionSessions:
@@ -259,4 +264,32 @@ def install_acquisition_http(
         )
         return {"state": "claimed", "visitor_id": str(identifier), "allowance": allowance}
 
+    @me_router.get("/plan")
+    async def read_plan(request: Request, response: Response) -> Any:
+        admit(request, response)
+        async with learner_read_account(request) as auth:
+            allowance = await result(
+                service(auth.database).allowance(
+                    actor=auth.resolved.actor, shared_identity_locks=True
+                )
+            )
+        return {
+            "plan": {"key": "trial", "name": "Trial"},
+            "allowance": allowance,
+            "longest_call_seconds": LONGEST_CALL_SECONDS,
+        }
+
+    @me_router.get("/usage")
+    async def read_usage(request: Request, response: Response) -> Any:
+        admit(request, response)
+        async with learner_read_account(request) as auth:
+            actor = auth.resolved.actor
+            app = service(auth.database)
+            allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
+            usage = await account_usage(
+                auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
+            )
+        return {"allowance": allowance, **usage}
+
     application.include_router(router)
+    application.include_router(me_router)

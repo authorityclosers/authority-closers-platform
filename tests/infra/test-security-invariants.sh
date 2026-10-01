@@ -4,6 +4,17 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 foundation="$repo_root/infra/vps-foundation"
 
+# Only the periodic check opts into failure on a storage warning.
+grep -Fxq 'Environment=R2_WARN_IS_FAILURE=1' "$foundation/config/systemd/ac-r2-usage-guard.service"
+if grep -Rl 'R2_WARN_IS_FAILURE' "$foundation/config/systemd" | grep -v '/ac-r2-usage-guard.service$'; then
+  printf 'Another unit enables R2 warning failure mode.\n' >&2; exit 1
+fi
+if grep -n 'R2_WARN_IS_FAILURE' "$foundation/scripts/ac-postgres-backup.py" "$foundation"/scripts/ac-restic-*; then
+  printf 'A backup caller sets R2 warning failure mode.\n' >&2; exit 1
+fi
+# shellcheck disable=SC2016  # Match the literal flag pass-through, never opt in here.
+grep -Fq -- '--setenv=R2_WARN_IS_FAILURE="${R2_WARN_IS_FAILURE:-0}"' "$foundation/scripts/ac-r2-usage-guard"
+
 if grep -REn -- '--token=|--client-secret=' \
   "$foundation/scripts/ac-infisical-run" \
   "$foundation/scripts/ac-infisical-run-backup"; then
