@@ -260,6 +260,54 @@ def test_integer_mapping_keys_are_redacted_in_int_keyed_mappings() -> None:
     assert "123456789" not in canonical_failure_detail(detail)
 
 
+class _ReviewValue(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    quote: int
+
+
+class _ReviewIntUnion(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: dict[int, _ReviewValue] | list[int]
+
+
+class _ReviewStrUnion(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: dict[str, _ReviewValue] | list[int]
+
+
+def _locs(model: type[BaseModel], value: dict[str, Any]) -> list[str]:
+    with pytest.raises(ValidationError) as caught:
+        model.model_validate(value)
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    text = canonical_failure_detail(detail)
+    assert "123456789" not in text
+    assert SENTINEL not in text
+    return [entry["loc"] for entry in detail["errors"]]
+
+
+def test_union_branch_label_does_not_consume_an_integer_mapping_key() -> None:
+    # CTO review of f0501949: ("findings", "dict[int,ReviewValue]", 123456789, "quote").
+    locs = _locs(_ReviewIntUnion, {"findings": {123456789: {"quote": "fictional noninteger"}}})
+    assert "findings.<key>.<key>.quote" in locs
+
+
+def test_union_branch_label_does_not_consume_a_string_mapping_key() -> None:
+    # The provider's key "quote" is redacted; the value model's field "quote" is kept.
+    locs = _locs(_ReviewStrUnion, {"findings": {"quote": {"quote": "fictional noninteger"}}})
+    assert "findings.<key>.<key>.quote" in locs
+    sentinel_locs = _locs(_ReviewStrUnion, {"findings": {SENTINEL: {"quote": "x"}}})
+    assert "findings.<key>.<key>.quote" in sentinel_locs
+
+
+def test_an_unresolved_union_branch_hides_everything_below_it() -> None:
+    union = dict[str, int] | list[int]
+    assert module._loc(("findings", "function-after[x]", 7, "quote"), "int_type", None) == (
+        "<key>.<key>.7.<key>"
+    )
+    assert module._step(union, "custom-label")[1] is module._OPAQUE
+    assert module._loc((1, "a"), "int_type", None) == "1.<key>"
+
+
 def test_list_indices_are_still_kept() -> None:
     assert module._loc(("findings", 4, "summary"), "int_type", _ProviderExtras) == (
         "findings.4.<key>"

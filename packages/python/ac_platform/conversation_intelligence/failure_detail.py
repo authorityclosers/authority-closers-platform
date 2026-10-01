@@ -14,9 +14,11 @@ small, content-free description of the exception chain on the job row:
 - ``errors``: up to ten pydantic ``{"loc", "type"}`` pairs found in the chain.
   Each location is walked through the model that raised the error: a part is
   kept only when that model's schema declares it at that position (a field name,
-  a list index, or a union member's model name). A mapping key, an unexpected
-  extra key, or any part under an unknown schema becomes ``<key>``, because a
-  provider chose it and it can carry a name or an id;
+  a list index, or a union member's model name). Pydantic's union branch label
+  is consumed as a label, never as a key. A mapping key of any type, an
+  unexpected extra key, or any part under an unknown schema or an unresolved
+  union branch becomes ``<key>``, because a provider chose it and it can carry a
+  name or an id;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
 The chain follows ``__cause__`` and then ``__context__`` (also when the context
@@ -33,7 +35,7 @@ import json
 import re
 import traceback
 import types
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from pathlib import PurePath
 from typing import Annotated, Any, TypeGuard, Union, get_args, get_origin
 
@@ -45,6 +47,8 @@ FAILURE_DETAIL_SCHEMA = "ac.job-failure-detail/1"
 FAILURE_DETAIL_MAX_BYTES = 2048
 REDACTED = "<redacted>"
 _REDACTED_KEY = "<key>"
+# Below a union branch that cannot be resolved safely, nothing more is kept.
+_OPAQUE = object()
 _MAX_ERRORS = 10
 _MAX_CHAIN = 8
 _CODE = re.compile(r"[a-z0-9_]{1,60}")
@@ -163,28 +167,45 @@ def _loc(parts: object, kind: str | None = None, model: object = None) -> str:
 def _step(node: object, part: object) -> tuple[str, object]:
     """One location part under the schema ``node``: (kept text or ``<key>``, schema below it)."""
 
+    if node is _OPAQUE:
+        return _REDACTED_KEY, _OPAQUE
     candidates = _members(node)
-    mapping = next((c for c in candidates if _is_mapping(c)), None)
-    if mapping is not None:
+    if len(candidates) > 1:
+        # Pydantic names the union branch first; that label is not an input key.
+        return _branch(candidates, part)
+    single = candidates[0] if candidates else None
+    if single is not None and _is_mapping(single):
         # Any key of a mapping is provider data, whatever its type or word: a
         # string, an integer, or a word some model declares elsewhere.
-        args = get_args(mapping)
-        return _REDACTED_KEY, args[1] if len(args) == 2 else None
+        args = get_args(single)
+        return _REDACTED_KEY, args[1] if len(args) == 2 else _OPAQUE
     if isinstance(part, bool):
         return _REDACTED_KEY, None
     if isinstance(part, int):
-        return str(part), _first(_item_type(c) for c in candidates)
+        return str(part), _item_type(single)
     if not isinstance(part, str) or _KEY.fullmatch(part) is None:
         return _REDACTED_KEY, None
-    for candidate in candidates:
-        if _is_model(candidate):
-            for name, field in candidate.model_fields.items():
-                if part in (name, field.alias, field.validation_alias):
-                    return part, field.annotation
-    for candidate in candidates:
-        if _is_model(candidate) and candidate.__name__ == part:
-            return part, candidate  # a union member tag names the member model
+    if single is not None and _is_model(single):
+        for name, field in single.model_fields.items():
+            if part in (name, field.alias, field.validation_alias):
+                return part, field.annotation
     return _REDACTED_KEY, None
+
+
+def _branch(candidates: list[object], label: object) -> tuple[str, object]:
+    """Resolve a union branch label to its member; an unresolved branch hides what follows."""
+
+    if not isinstance(label, str):
+        return _REDACTED_KEY, _OPAQUE
+    for candidate in candidates:
+        if _is_model(candidate) and candidate.__name__ == label:
+            return label, candidate
+    kind = _BRANCH_KINDS.get(label.split("[", 1)[0])
+    if kind is not None:
+        matches = [candidate for candidate in candidates if kind(candidate)]
+        if len(matches) == 1:
+            return _REDACTED_KEY, matches[0]
+    return _REDACTED_KEY, _OPAQUE
 
 
 def _members(node: object) -> list[object]:
@@ -200,10 +221,6 @@ def _members(node: object) -> list[object]:
     return [node]
 
 
-def _first(values: Any) -> object:
-    return next((value for value in values if value is not None), None)
-
-
 def _is_model(node: object) -> TypeGuard[type[BaseModel]]:
     return isinstance(node, type) and issubclass(node, BaseModel)
 
@@ -211,6 +228,25 @@ def _is_model(node: object) -> TypeGuard[type[BaseModel]]:
 def _is_mapping(node: object) -> bool:
     origin = get_origin(node) or node
     return isinstance(origin, type) and issubclass(origin, Mapping)
+
+
+def _is_sequence(node: object) -> bool:
+    origin = get_origin(node) or node
+    return (
+        isinstance(origin, type)
+        and issubclass(origin, Sequence | Set)
+        and not issubclass(origin, str | bytes)
+    )
+
+
+_BRANCH_KINDS = {
+    "dict": _is_mapping,
+    "Mapping": _is_mapping,
+    "list": _is_sequence,
+    "tuple": _is_sequence,
+    "set": _is_sequence,
+    "frozenset": _is_sequence,
+}
 
 
 def _item_type(node: object) -> object:
