@@ -575,7 +575,7 @@ export function PlansView({
         id: "billing",
         tone: "success",
         title: "Renewal is off",
-        message: `You keep ${current.planName} until ${day(current.currentPeriod?.end ?? current.renewsAt)}.`,
+        message: `The recorded subscription period ends ${day(current.currentPeriod?.end ?? current.renewsAt)}. Check your current plan and available minutes before analysing a call.`,
         timeout: 6000,
       });
     } catch (error) {
@@ -595,7 +595,7 @@ export function PlansView({
       <div>
         <h2>Choose your plan</h2>
         <p className={styles.hint}>
-          Pick, pay, and your minutes are ready. Cancel any time.
+          Choose a plan and review its details before paying.
         </p>
       </div>
       {authenticated ? <TrialStrip me={mePlan} allowance={allowance} /> : null}

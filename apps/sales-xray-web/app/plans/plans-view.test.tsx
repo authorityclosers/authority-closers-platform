@@ -13,10 +13,12 @@ import {
   resetFixtureBilling,
 } from "../review-fixture/plans/fixture-billing";
 import { WorkspaceAccessContext } from "../workspace-access";
+import { notify } from "../notice-center";
 import { OrderReturn } from "./order-return";
 import { PlansView } from "./plans-view";
 
 const push = vi.fn();
+vi.mock("../notice-center", () => ({ notify: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push,
@@ -52,6 +54,7 @@ beforeEach(() => {
   root = createRoot(host);
   resetFixtureBilling();
   push.mockClear();
+  vi.mocked(notify).mockClear();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -202,6 +205,11 @@ it("shows the plan you are on, with cancel at period end, once the provider conf
   await settle();
   await settle();
   expect(text()).toContain("Renewal is off");
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      message: expect.stringContaining("recorded subscription period ends"),
+    }),
+  );
   expect(
     (await fixtureBilling.readSubscriptions("personal")).current
       ?.cancelAtPeriodEnd,
