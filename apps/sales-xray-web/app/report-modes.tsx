@@ -461,9 +461,14 @@ function renderDocumentView(
     ([docData?.repName, docData?.prospectName].filter(Boolean).join(" — ") ||
       "Sales Xray call") + " report";
   const basis = docData?.analysisBasis;
+  const printRep = JSON.stringify((docData?.repName ?? "").replace(/\s/g, " "))
+    .replaceAll("<", "\\3c ")
+    .replaceAll(">", "\\3e ");
 
   return (
     <div className={styles.documentContainer}>
+      <style>{`@page { @top-right { content: ${printRep}; font: 8pt sans-serif; } }
+        @page :first { @top-right { content: none; } }`}</style>
       <div className={styles.documentActions}>
         <button
           type="button"

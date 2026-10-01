@@ -1169,3 +1169,21 @@ it("renders only supplied document metadata and prints without a fake Word actio
   await act(async () => button.click());
   expect(print).toHaveBeenCalledOnce();
 });
+
+it("keeps print header text inside a quoted CSS string", async () => {
+  window.history.replaceState(null, "", `/?call=${call}&view=document`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ repName: 'Seller "</style><script>example</script>' }}
+      />,
+    ),
+  );
+  const css = container.querySelector("style")!.textContent!;
+  expect(css).toContain("@top-right");
+  expect(css).toContain("\\3c ");
+  expect(css).not.toContain("</style>");
+  expect(container.querySelector("script")).toBeNull();
+});
