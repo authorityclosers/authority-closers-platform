@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 import pytest
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from ac_platform.conversation_intelligence import failure_detail as module
 from ac_platform.conversation_intelligence import inference_tasks, reports
@@ -199,9 +200,49 @@ def test_site_names_the_rule_not_the_raise_helper() -> None:
 
 
 def test_loc_keeps_schema_keys_and_indices_only() -> None:
-    assert module._loc(("strengths", 0, "evidence", 3, "quote")) == "strengths.0.evidence.3.quote"
-    assert module._loc(("bad key!", True, "x" * 41)) == "<key>.<key>.<key>"
-    assert module._loc("not-a-tuple") == "<key>"
+    draft = reports.ReportDraft
+    assert module._loc(("strengths", 0, "evidence", 3, "quote"), "string_type", draft) == (
+        "strengths.0.evidence.3.quote"
+    )
+    assert module._loc(("bad key!", True, "x" * 41), "string_type", draft) == "<key>.<key>.<key>"
+    assert module._loc("not-a-tuple", "string_type", draft) == "<key>"
+
+
+def test_unknown_schema_fails_closed_but_keeps_indices() -> None:
+    assert module._loc(("strengths", 0, "quote"), "string_type", None) == "<key>.0.<key>"
+
+
+class _ProviderExtras(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    provider_extras: dict[str, int]
+    findings: list[dict[str, int]] = []
+
+
+class _UnrelatedFixture(BaseModel):
+    sentinel_9f3c_private_words: str = ""
+
+
+@pytest.mark.parametrize("key", ["summary", "quote", SENTINEL, "provider_extras"])
+def test_mapping_keys_are_redacted_even_when_another_model_declares_the_word(key: str) -> None:
+    # CTO review of c271390: a mapping key that collides with a field name elsewhere.
+    assert _UnrelatedFixture.model_fields  # the sentinel is a declared field name somewhere
+    with pytest.raises(ValidationError) as caught:
+        _ProviderExtras.model_validate({"provider_extras": {key: "fictional noninteger"}})
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert detail["errors"] == [{"loc": "provider_extras.<key>", "type": "int_type"}]
+    assert key == "provider_extras" or key not in canonical_failure_detail(detail).replace(
+        "provider_extras", ""
+    )
+
+
+def test_nested_mapping_keys_under_a_list_are_redacted_and_indices_kept() -> None:
+    with pytest.raises(ValidationError) as caught:
+        _ProviderExtras.model_validate(
+            {"provider_extras": {}, "findings": [{"summary": 1}, {SENTINEL: "x"}]}
+        )
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert detail["errors"] == [{"loc": "findings.1.<key>", "type": "int_type"}]
+    assert SENTINEL not in canonical_failure_detail(detail)
 
 
 def test_an_unknown_provider_key_is_redacted_even_when_it_looks_like_an_identifier() -> None:
@@ -227,9 +268,11 @@ def test_an_unknown_provider_key_is_redacted_even_when_it_looks_like_an_identifi
 @pytest.mark.parametrize("key", [SENTINEL, "Ravi_Kumar", "cust_000123", "summary"])
 def test_extra_forbidden_never_keeps_the_extra_key(key: str) -> None:
     # Even a key that is also a schema field elsewhere is the provider's own key here.
-    assert module._loc(("strengths", 0, key), "extra_forbidden") == "strengths.0.<key>"
+    loc = module._loc(("strengths", 0, key), "extra_forbidden", reports.ReportDraft)
+    assert loc == "strengths.0.<key>"
 
 
 @pytest.mark.parametrize("key", [SENTINEL, "Ravi_Kumar", "cust_000123"])
-def test_mapping_or_unknown_keys_are_redacted_and_schema_paths_kept(key: str) -> None:
-    assert module._loc(("strengths", key, 2, "quote"), "string_type") == "strengths.<key>.2.quote"
+def test_unknown_keys_are_redacted_and_the_rest_of_the_path_fails_closed(key: str) -> None:
+    loc = module._loc(("strengths", key, 2, "quote"), "string_type", reports.ReportDraft)
+    assert loc == "strengths.<key>.2.<key>"

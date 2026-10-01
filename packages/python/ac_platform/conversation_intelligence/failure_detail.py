@@ -11,10 +11,12 @@ small, content-free description of the exception chain on the job row:
   or ``GeminiTaskError``), kept only when it is a short identifier;
 - ``site``: the innermost ``ac_platform`` frame as ``file.py:line:function``,
   skipping the bare ``_fail`` raise helpers so the frame names the rule;
-- ``errors``: up to ten pydantic ``{"loc", "type"}`` pairs found in the chain,
-  with schema-defined field names and integer indices only. A key the provider
-  chose (an unexpected extra key or a mapping key) becomes ``<key>`` even when it
-  looks like an identifier, because it can carry a name or an id;
+- ``errors``: up to ten pydantic ``{"loc", "type"}`` pairs found in the chain.
+  Each location is walked through the model that raised the error: a part is
+  kept only when that model's schema declares it at that position (a field name,
+  a list index, or a union member's model name). A mapping key, an unexpected
+  extra key, or any part under an unknown schema becomes ``<key>``, because a
+  provider chose it and it can carry a name or an id;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
 The chain follows ``__cause__`` and then ``__context__`` (also when the context
@@ -30,8 +32,10 @@ from __future__ import annotations
 import json
 import re
 import traceback
+import types
+from collections.abc import Mapping, Sequence
 from pathlib import PurePath
-from typing import Any
+from typing import Annotated, Any, Union, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
@@ -100,10 +104,11 @@ def _describe(
         if frame is not None:
             site = frame
         if isinstance(item, ValidationError) and len(errors) < _MAX_ERRORS:
+            model = _validating_model(item)
             entries = item.errors(include_url=False, include_context=False, include_input=False)
             for entry in entries[: _MAX_ERRORS - len(errors)]:
                 kind = _safe_code(entry.get("type"))
-                errors.append({"loc": _loc(entry.get("loc", ()), kind), "type": kind})
+                errors.append({"loc": _loc(entry.get("loc", ()), kind, model), "type": kind})
     known_stage = stage if stage in _STAGES else None
     return {
         "schema": FAILURE_DETAIL_SCHEMA,
@@ -139,49 +144,101 @@ def _safe_code(value: object) -> str:
     return REDACTED
 
 
-def _loc(parts: object, kind: str | None = None) -> str:
+def _loc(parts: object, kind: str | None = None, model: object = None) -> str:
+    """Walk ``parts`` through ``model``; keep only what its schema declares at each position."""
+
     if not isinstance(parts, list | tuple):
         return _REDACTED_KEY
-    schema = _schema_names()
-    keys = [_key(part, schema) for part in parts]
+    keys: list[str] = []
+    node: object = model
+    for part in parts:
+        text, node = _step(node, part)
+        keys.append(text)
     if kind == "extra_forbidden" and keys:
         # The last element of an extra-forbidden location is the provider's own key.
         keys[-1] = _REDACTED_KEY
     return ".".join(keys)
 
 
-def _key(part: object, schema: frozenset[str]) -> str:
+def _step(node: object, part: object) -> tuple[str, object]:
+    """One location part under the schema ``node``: (kept text or ``<key>``, schema below it)."""
+
+    candidates = _members(node)
     if isinstance(part, bool):
-        return _REDACTED_KEY
+        return _REDACTED_KEY, None
     if isinstance(part, int):
-        return str(part)
-    if isinstance(part, str) and _KEY.fullmatch(part) is not None and part in schema:
-        return part
-    return _REDACTED_KEY
+        return str(part), _first(_item_type(c) for c in candidates)
+    if not isinstance(part, str) or _KEY.fullmatch(part) is None:
+        return _REDACTED_KEY, None
+    mapping = next((c for c in candidates if _is_mapping(c)), None)
+    if mapping is not None:
+        # Any key of a mapping is provider data, whatever word it happens to be.
+        args = get_args(mapping)
+        return _REDACTED_KEY, args[1] if len(args) == 2 else None
+    for candidate in candidates:
+        if _is_model(candidate):
+            for name, field in candidate.model_fields.items():
+                if part in (name, field.alias, field.validation_alias):
+                    return part, field.annotation
+    for candidate in candidates:
+        if _is_model(candidate) and candidate.__name__ == part:
+            return part, candidate  # a union member tag names the member model
+    return _REDACTED_KEY, None
 
 
-def _schema_names() -> frozenset[str]:
-    """Field names (and aliases) declared by the loaded pydantic models, and the model names.
+def _members(node: object) -> list[object]:
+    """``node`` with Annotated and Optional/Union unwrapped; empty when unknown."""
 
-    A location part is kept only when a schema defines it, so a mapping key or an
-    unknown key chosen by a provider never reaches the stored detail.
-    """
+    if node is None:
+        return []
+    origin = get_origin(node)
+    if origin is Annotated:
+        return _members(get_args(node)[0])
+    if origin is Union or isinstance(node, types.UnionType):
+        return [m for arg in get_args(node) for m in _members(arg) if m is not type(None)]
+    return [node]
 
-    names: set[str] = set()
-    seen: set[type] = set()
-    stack: list[type] = list(BaseModel.__subclasses__())
+
+def _first(values: Any) -> object:
+    return next((value for value in values if value is not None), None)
+
+
+def _is_model(node: object) -> bool:
+    return isinstance(node, type) and issubclass(node, BaseModel)
+
+
+def _is_mapping(node: object) -> bool:
+    origin = get_origin(node) or node
+    return isinstance(origin, type) and issubclass(origin, Mapping)
+
+
+def _item_type(node: object) -> object:
+    origin = get_origin(node) or node
+    if not isinstance(origin, type) or not issubclass(origin, Sequence) or issubclass(origin, str | bytes):
+        return None
+    args = get_args(node)
+    return args[0] if args else None
+
+
+def _validating_model(error: ValidationError) -> type[BaseModel] | None:
+    """The one loaded model named by the error's title, else None (and every key is redacted)."""
+
+    matches = [model for model in _models() if model.__name__ == error.title]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _models() -> list[type[BaseModel]]:
+    found: list[type[BaseModel]] = []
+    stack: list[type[BaseModel]] = list(BaseModel.__subclasses__())
+    seen: set[type[BaseModel]] = set()
     while stack:
         model = stack.pop()
         if model in seen:
             continue
         seen.add(model)
+        found.append(model)
         stack.extend(model.__subclasses__())
-        names.add(model.__name__)
-        for name, field in getattr(model, "model_fields", {}).items():
-            names.add(name)
-            if isinstance(field.alias, str):
-                names.add(field.alias)
-    return frozenset(names)
+    return found
 
 
 def _innermost_site(error: BaseException) -> str | None:
