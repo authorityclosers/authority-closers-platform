@@ -161,6 +161,14 @@
 /* lightbox-embed-tokens:end */
 
 /* The body class is applied only by the standalone document layout. */
+html:has(> body.sales-xray-document) {
+  /* Phones: no automatic text inflation in landscape, no rubber-band past the
+     app's own scroll areas, and the theme ground behind any overscroll. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+  background: var(--lx-paper);
+}
 .sales-xray-document {
   margin: 0;
   --font-sans: var(--lx-font-ui);

@@ -263,6 +263,15 @@
   .facts {
     grid-template-columns: 1fr;
   }
+  /* The note about local saving goes under the title instead of beside it. */
+  .head {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .head small {
+    width: 100%;
+    white-space: normal;
+  }
 }
 
 /* Firmness: small tappable steps. */
@@ -373,4 +382,12 @@
     opacity: 0;
     transform: translateY(-4px) scale(0.97);
   }
+}
+
+/* Press feedback. */
+.ask:active,
+.steps button:active,
+.pickerChip:active {
+  transform: scale(0.96);
+  transition-duration: 60ms;
 }

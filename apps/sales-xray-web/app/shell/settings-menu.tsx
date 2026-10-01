@@ -21,6 +21,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 
 import type { Allowance } from "../acquisition-client";
 import { openSettings } from "../settings-open";
@@ -384,6 +385,15 @@ export function SettingsMenu({
                 </div>
               ))}
             </div>
+            <Link
+              className={styles.go}
+              href="/plans"
+              onClick={onClose}
+              data-see-plans
+            >
+              See plans and prices
+              <ChevronRight size={15} aria-hidden="true" />
+            </Link>
             <p className={styles.note}>
               Prices and limits are being set. You will see them here first.
             </p>

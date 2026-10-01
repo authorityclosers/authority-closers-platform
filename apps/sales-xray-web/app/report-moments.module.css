@@ -393,3 +393,22 @@
     opacity: 1;
   }
 }
+
+/* Press feedback and touch-safe hover. */
+.play:active,
+.pin:active,
+.segmented button:active {
+  transform: scale(0.92);
+  transition-duration: 60ms;
+}
+.row:not([data-open]) .rowHead:active {
+  background: color-mix(in srgb, var(--lx-sunken) 80%, var(--lx-surface));
+}
+@media (hover: none) {
+  .play:hover {
+    transform: none;
+  }
+  .row:not([data-open]) .rowHead:hover {
+    background: transparent;
+  }
+}
