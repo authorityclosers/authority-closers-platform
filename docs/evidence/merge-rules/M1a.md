@@ -18,6 +18,8 @@ Protected rules inspect the full case-folded path, including both rename names a
 paths. All card categories, purchases, secret/Infisical names and common top-up spelling
 variants escalate. Ordinary files under exact apps/packages/tests/docs/tools roots are routine;
 case-distinct roots remain unknown on the repository's case-sensitive filesystem.
+Dockerfile protection includes the exact basename, dot/hyphen/underscore suffix variants,
+and `.dockerfile` endings, case-insensitively.
 Every db/migrations path escalates; no AST exception exists until M1b.
 Evidence rules require list/tuple records, a matching nonnegative integer count, a boolean
 truncation flag, recognized added/modified/removed/renamed statuses, canonical relative paths,
@@ -46,6 +48,17 @@ watchdog state, board changes, shadow timing and activation. No strict branch-up
 requirement applies: red/unknown main pauses merges; running main alone does not.
 This PR changes no live authority, workflow, gate, instruction bundle or environment state.
 
+## Review correction
+
+CTO review of `2ba74ef57b55d8a1b33e87132339f9ed9121f152` found that
+`apps/Dockerfile-dev` and `apps/Dockerfile_dev` bypassed deployment protection.
+The two fictional fixtures add 20 cases: original/uppercase names, added/modified/removed
+statuses, and both rename directions. Before the fix they produced **20 failed, 407 passed**;
+after extending the basename prefix rule they produce **427 passed**. Each case requires
+`protected:deployment` and sorted unique reasons. Only the three card files changed.
+This correction is pre-activation evidence; the deferred shadow/pause/switch conditions above
+remain mandatory, and the corrected head requires fresh CTO review then CEO approval.
+
 ## Verification
 
 Offline dev check runs fictional records in the platform lane checkout, using the repository
@@ -55,7 +68,8 @@ evidence, not a claim of merged deployment or the future shadow window. No scree
 changes require browser QA. After merge, repeat the narrow command on dev.
 Results on 2026-10-01:
 
-- Narrow pytest: **407 passed**, exit 0. The pytest console entry point was also verified.
+- Corrected narrow pytest: **427 passed**, exit 0. The initial reviewed head had 407 passing
+  cases, including a separate verification of the pytest console entry point.
 - Repository `pnpm run format:check`, `pnpm run lint`, `pnpm run typecheck`: exit 0.
 - Explicit script/test Ruff formatting and lint: exit 0; explicit classifier mypy: exit 0.
 - `python3 scripts/ac_task.py check`: exit 0. `git diff --check` is required before push.

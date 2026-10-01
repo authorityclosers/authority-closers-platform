@@ -24,6 +24,8 @@ PROTECTED = [
     ("scripts/ac_task.py", "protected:automation"),
     ("apps/Dockerfile", "protected:deployment"),
     ("apps/Dockerfile.dev", "protected:deployment"),
+    ("apps/Dockerfile-dev", "protected:deployment"),
+    ("apps/Dockerfile_dev", "protected:deployment"),
     ("apps/api.Dockerfile", "protected:deployment"),
     ("apps/compose.yml", "protected:deployment"),
     ("apps/docker-compose.dev.yaml", "protected:deployment"),

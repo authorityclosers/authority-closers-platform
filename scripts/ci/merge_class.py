@@ -54,7 +54,7 @@ def _path_reasons(path: str) -> set[str]:
         reasons.add("protected:automation")
     if (
         name == "dockerfile"
-        or name.startswith("dockerfile.")
+        or name.startswith(("dockerfile.", "dockerfile-", "dockerfile_"))
         or name.endswith(".dockerfile")
         or ("compose" in name and name.endswith((".yaml", ".yml", ".json")))
     ):
