@@ -547,7 +547,7 @@ jobs:
         if: always()
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-*
+          pattern: python-test-shard-${{ github.sha }}-*
           path: ${{ runner.temp }}/python-test-shards
           merge-multiple: false
       - name: Verify complete Python shard coverage
@@ -558,6 +558,8 @@ jobs:
           --shard-count 4
           --exclude-file scripts/ci/python-test-exclusions.txt
           --manifest-dir "${{ runner.temp }}/python-test-shards"
+          --sha "${{ github.sha }}"
+          --run-attempt "${{ github.run_attempt }}"
       - name: Require every validation component to pass
         if: always()
         env:
