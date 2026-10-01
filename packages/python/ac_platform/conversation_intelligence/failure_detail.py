@@ -21,8 +21,10 @@ small, content-free description of the exception chain on the job row:
   unexpected extra key, or any part under an unknown schema or an unresolved
   union branch becomes ``<key>``, because a provider chose it and it can carry a
   name or an id. Only the report models the provider pipeline validates are
-  supported roots; any other root (a type adapter, a root model, a title another
-  class shares) keeps nothing in the location, and so does a field name that is
+  supported roots, and only when the traceback proves the error came from one
+  of their known ``model_validate`` call sites; any other root (a type adapter,
+  even one titled like a report model, a root model, a title another class
+  shares) keeps nothing in the location, and so does a field name that is
   also another field's alias or a nested root model;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
@@ -293,12 +295,43 @@ def _validating_model(error: ValidationError) -> type[BaseModel] | None:
     """
 
     model = _supported_roots().get(error.title)
-    if model is None:
+    if model is None or not _validated_at_a_known_site(error, model.__name__):
         return None
     for other in _models():
         if other is not model and error.title in (other.__name__, other.model_config.get("title")):
             return None
     return model
+
+
+# Source-owned call sites that run ``<Model>.model_validate(...)`` for exactly that model:
+# (file, function) -> model name. The traceback must show one of them calling pydantic.
+_VALIDATION_SITES = {
+    ("reports.py", "parse_fact_packet"): "FactPacket",
+    ("reports.py", "merge_fact_packets"): "AggregateFactPacket",
+    ("reports.py", "parse_report_draft"): "ReportDraft",
+    ("reports.py", "_citation_model"): "ReportCitation",
+    ("report_overview.py", "normalize_overview"): "DetailedOverview",
+    ("reporting_pipeline.py", "plan"): "FactPacket",
+    ("acquisition_reports.py", "report"): "ReportDraft",
+    ("report_store.py", "_validated"): "ReportDraft",
+}
+
+
+def _validated_at_a_known_site(error: ValidationError, name: str) -> bool:
+    """Provenance, not a title: the innermost ``ac_platform`` frame is a known site for ``name``
+    and everything below it is pydantic's own validation."""
+
+    frames = traceback.extract_tb(error.__traceback__)
+    owned = [i for i, frame in enumerate(frames) if "ac_platform" in PurePath(frame.filename).parts]
+    if not owned:
+        return False
+    site = frames[owned[-1]]
+    below = frames[owned[-1] + 1 :]
+    if not below or not all("pydantic" in PurePath(frame.filename).parts for frame in below):
+        return False
+    if _VALIDATION_SITES.get((PurePath(site.filename).name, site.name)) != name:
+        return False
+    return not site.line or f"{name}.model_validate(" in site.line
 
 
 def _supported_roots() -> dict[str, type[BaseModel]]:

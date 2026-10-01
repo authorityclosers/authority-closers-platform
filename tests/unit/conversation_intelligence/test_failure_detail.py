@@ -438,6 +438,54 @@ def test_type_adapters_root_models_and_title_collisions_keep_nothing(
     )
 
 
+def test_an_adapter_titled_like_a_report_model_cannot_borrow_its_schema() -> None:
+    # CTO review of 4968e084: the title names ReportDraft, the schema is an adapter's.
+    adapter = TypeAdapter(
+        dict[str, dict[int, dict[str, int]]], config=ConfigDict(title="ReportDraft", strict=True)
+    )
+    with pytest.raises(ValidationError) as caught:
+        adapter.validate_python({"strengths": {123456789: {"quote": "fictional noninteger"}}})
+    assert caught.value.title == "ReportDraft"
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert "123456789" not in canonical_failure_detail(detail)
+    assert detail["errors"] and all(
+        set(entry["loc"].split(".")) == {"<key>"} for entry in detail["errors"]
+    )
+
+
+def test_report_model_validated_outside_a_known_site_keeps_nothing() -> None:
+    with pytest.raises(ValidationError) as caught:
+        reports.ReportDraft.model_validate({"summary": SENTINEL})
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert detail["errors"] and all(
+        set(entry["loc"].split(".")) == {"<key>"} for entry in detail["errors"]
+    )
+
+
+def test_every_validation_site_exists_and_validates_its_model() -> None:
+    import inspect
+
+    from ac_platform.conversation_intelligence import (
+        acquisition_reports,
+        report_overview,
+        report_store,
+        reporting_pipeline,
+    )
+
+    files = {
+        "reports.py": reports,
+        "report_overview.py": report_overview,
+        "reporting_pipeline.py": reporting_pipeline,
+        "acquisition_reports.py": acquisition_reports,
+        "report_store.py": report_store,
+    }
+    for (file, function), name in module._VALIDATION_SITES.items():
+        source = inspect.getsource(files[file])
+        assert f"def {function}(" in source, (file, function)
+        body = source.split(f"def {function}(", 1)[1]
+        assert f"{name}.model_validate(" in body.split("\ndef ", 1)[0], (file, function)
+
+
 def _raise_report_draft_error() -> None:
     payload: dict[str, Any] = {field: [] for field in reports._CONTENT_FIELDS}
     payload["summary"] = [SENTINEL]
