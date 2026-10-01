@@ -23,14 +23,14 @@ describe("patched image runtime dependency policy", () => {
       "apps/coach-web/package.json",
     ]) {
       const manifest = readJson(manifestPath);
-      expect(manifest.dependencies?.next).toBe("16.3.3");
+      expect(manifest.dependencies?.next).toBe("16.3.6");
       expect(manifest.devDependencies?.["eslint-config-next"]).toBe("16.3.3");
     }
 
     const operations = readJson(
       "packages/typescript/operations-web/package.json",
     );
-    expect(operations.peerDependencies?.next).toBe("16.3.3");
+    expect(operations.peerDependencies?.next).toBe("16.3.6");
   });
 
   it("keeps the vulnerable Next and sharp releases out of the lockfile", () => {
@@ -44,7 +44,7 @@ describe("patched image runtime dependency policy", () => {
     );
 
     expect(workspace).toMatch(/^  sharp: 0\.35\.4$/m);
-    expect(lockfile).toMatch(/^  next@16\.3\.3:$/m);
+    expect(lockfile).toMatch(/^  next@16\.3\.6:$/m);
     expect(lockfile).toMatch(/^  sharp@0\.35\.4:$/m);
     expect(lockfile).not.toContain("next@16.2.11");
     expect(lockfile).not.toContain("sharp@0.35.0");

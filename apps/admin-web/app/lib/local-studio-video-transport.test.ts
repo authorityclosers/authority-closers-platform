@@ -211,7 +211,31 @@ describe("local Studio video wire transport", () => {
   it("stops splitting a large chunk after an early permission denial", async () => {
     const cancelled = vi.fn();
     let pulls = 0;
-    const writes = vi.spyOn(ClientRequest.prototype, "write");
+    const originalWrite = ClientRequest.prototype.write;
+    const writes = vi
+      .spyOn(ClientRequest.prototype, "write")
+      .mockImplementation(function (this: ClientRequest, chunk, callback) {
+        const written = callback as unknown as (error?: Error | null) => void;
+        if (writes.mock.calls.length !== 1)
+          return originalWrite.call(this, chunk, "utf8", written);
+        // Make the real denial arrive before another write can complete,
+        // rather than relying on the loopback socket's scheduling order.
+        let responseReceived = false;
+        let releaseWrite: (() => void) | undefined;
+        this.once("response", () => {
+          responseReceived = true;
+          releaseWrite?.();
+        });
+        return originalWrite.call(
+          this,
+          chunk,
+          "utf8",
+          (error?: Error | null) => {
+            releaseWrite = () => written(error);
+            if (error || responseReceived) releaseWrite();
+          },
+        );
+      });
     try {
       await serverTest(
         (request, response) => {
