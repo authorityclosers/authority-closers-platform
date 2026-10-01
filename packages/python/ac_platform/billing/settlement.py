@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from pydantic import TypeAdapter
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.billing.checkout import CheckoutService, one, recurring_provider
@@ -29,6 +30,7 @@ from ac_platform.billing.errors import (
 from ac_platform.billing.ledger import BillingLedger
 from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.billing.order_models import (
+    BillingCommandIdempotency,
     BillingOrder,
     BillingOrderEvent,
     BillingPaymentEvent,
@@ -45,7 +47,6 @@ from ac_platform.billing.reducers import (
     NeedsReview,
     NoAction,
     OrderCopy,
-    RefundResult,
     ReviewReason,
     SubscriptionCopy,
     SubscriptionStateChange,
@@ -53,7 +54,6 @@ from ac_platform.billing.reducers import (
     reduce_subscription_event,
 )
 from ac_platform.billing.views import OrderView, RefundView
-from ac_platform.billing.views import RefundState as RefundViewState
 from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
 from ac_platform.payments.ports import (
     Money,
@@ -61,10 +61,11 @@ from ac_platform.payments.ports import (
     PaymentEventKind,
     PaymentEventRejected,
     PaymentState,
+    RefundAlreadyRequestedError,
     RefundState,
 )
 from ac_platform.payments.recurring import SubscriptionState
-from ac_platform.providers.ports import ProviderError
+from ac_platform.providers.ports import PermanentProviderError, ProviderError
 
 VERIFY_INTERVAL_SECONDS = 10.0
 _EVENT_KIND_NAMES = {
@@ -136,11 +137,23 @@ class Settlement:
         resolved = await self.service.account_by_id(database, caller, order.account_id, write=False)
         if resolved is None:
             raise OrderNotFound("That order does not exist.")
+        await take_admission_lock(database, resolved.tenant_id)
+        digest = self.service.digest(str(order_id))
+        replay = await self.service._replay(
+            database, resolved.account, "verify", idempotency_key, digest
+        )
+        if replay is not None:
+            return TypeAdapter(OrderView).validate_python(replay)
         now = _utc(self.service.clock())
-        last = self.service._verify_at.get(order_id)
-        if last is not None and now.timestamp() - last < VERIFY_INTERVAL_SECONDS:
+        last = await database.scalar(
+            select(func.max(BillingCommandIdempotency.created_at)).where(
+                BillingCommandIdempotency.account_id == resolved.account.id,
+                BillingCommandIdempotency.scope == "verify",
+                BillingCommandIdempotency.request_sha256 == digest,
+            )
+        )
+        if last is not None and (now - _utc(last)).total_seconds() < VERIFY_INTERVAL_SECONDS:
             raise BillingRateLimited("Wait a few seconds before checking again.")
-        self.service._verify_at[order_id] = now.timestamp()
         provider = self.service.providers.get(order.provider)
         try:
             if order.kind == "top_up" and order.provider_order_ref is not None:
@@ -190,7 +203,17 @@ class Settlement:
                             )
         except ProviderError as error:
             raise ProviderUnavailable("The payment provider did not answer.") from error
-        return await self.service.order_view(database, order, resolved.name, now)
+        view = await self.service.order_view(database, order, resolved.name, now)
+        await self.service._remember(
+            database,
+            resolved.account,
+            "verify",
+            idempotency_key,
+            digest,
+            TypeAdapter(OrderView).dump_python(view, mode="json"),
+            200,
+        )
+        return view
 
     async def refund_payment(
         self,
@@ -203,23 +226,126 @@ class Settlement:
     ) -> RefundView:
         """C1 §4: within 7 days of verification and only if nothing from the payment was used."""
 
-        payment = await database.scalar(
-            select(BillingPaymentEvent).where(
-                BillingPaymentEvent.payment_ref == payment_id,
-                BillingPaymentEvent.kind.in_(("payment.captured", "subscription.charged")),
-            )
-        )
+        # The authenticated caller's transaction must not own the money-moving
+        # work: its rollback (or a process crash) cannot undo a submitted hold.
+        async with AsyncSession(bind=database.bind, expire_on_commit=False) as durable:
+            async with durable.begin():
+                prepared = await self._prepare_refund(
+                    durable, caller, payment_id, reason, idempotency_key
+                )
+            view, order, payment, money, send = prepared
+            if not send:
+                return view
+            provider = self.service.providers.get(order.provider)
+            try:
+                receipt = await provider.refund(
+                    order_reference=order.order_ref,
+                    provider_payment_ref=payment_id,
+                    money=money,
+                    idempotency_key=self._refund_key(payment),
+                )
+            except ProviderError as error:
+                if not isinstance(error, PermanentProviderError) or isinstance(
+                    error, RefundAlreadyRequestedError
+                ):
+                    return view  # unknown outcome: keep the committed intent and holds
+                receipt = None  # a definite refusal is the only error that releases
+            async with durable.begin():
+                account = await durable.get(BillingAccount, order.account_id)
+                assert account is not None
+                await take_admission_lock(durable, account.tenant_id)
+                latest = await self._latest_refund(durable, order.id, payment_id)
+                assert latest is not None
+                if latest.state == "pending":
+                    state = (
+                        "refused"
+                        if receipt is None
+                        else "refunded"
+                        if receipt.state is RefundState.PROCESSED
+                        else "pending"
+                    )
+                    if receipt is not None and (
+                        receipt.provider != order.provider or receipt.money != money
+                    ):
+                        return view  # unusable receipt: retain holds for verified recovery
+                    durable.add(
+                        BillingRefundEvent(
+                            id=uuid4(),
+                            order_id=order.id,
+                            payment_ref=payment_id,
+                            state=state,
+                            provider_refund_ref=None
+                            if receipt is None
+                            else receipt.provider_refund_ref,
+                            amount_minor=money.amount_minor,
+                            currency=money.currency,
+                            reason=reason,
+                            actor_type="person",
+                            actor_person_id=caller.person_id,
+                            payment_event_id=payment.id,
+                            created_at=max(
+                                _utc(self.service.clock()),
+                                _utc(latest.created_at) + timedelta(microseconds=1),
+                            ),
+                        )
+                    )
+                    await durable.flush()
+                    if state != "pending":
+                        ledger = self.service.ledger(durable)
+                        sources = await self._sources(durable, order, payment)
+                        lots = [
+                            e
+                            for e in await ledger.entries(order.account_id)
+                            if e.source_ref in sources
+                        ]
+                        await self._settle_refund(
+                            durable,
+                            ledger,
+                            order,
+                            lots,
+                            confirmed=state == "refunded",
+                            now=_utc(self.service.clock()),
+                        )
+            # The immutable command result is acceptance (pending). Status reads
+            # expose subsequent settlement; replay never resends the provider call.
+            return view
+
+    @staticmethod
+    def _refund_key(payment: BillingPaymentEvent) -> str:
+        return hashlib.sha256(
+            f"refund:{payment.provider}:{payment.payment_ref}".encode()
+        ).hexdigest()[:20]
+
+    async def _prepare_refund(
+        self,
+        database: AsyncSession,
+        caller: Caller,
+        payment_id: str,
+        reason: str,
+        idempotency_key: str,
+    ) -> tuple[RefundView, BillingOrder, BillingPaymentEvent, Money, bool]:
+        payment = await self._verified_payment(database, payment_id)
         if payment is None or payment.order_id is None:
             raise PaymentNotFound("That payment does not exist.")
         order = await database.get(BillingOrder, payment.order_id)
-        assert order is not None  # the event references it
+        assert order is not None
         resolved = await self.service.account_by_id(database, caller, order.account_id, write=True)
         if resolved is None:
             raise PaymentNotFound("That payment does not exist.")
+        await take_admission_lock(database, resolved.tenant_id)
+        digest = self.service.digest(payment_id, reason)
+        money = Money(
+            payment.amount_minor or order.amount_minor, payment.currency or order.currency
+        )
+        replay = await self.service._replay(
+            database, resolved.account, "refund", idempotency_key, digest
+        )
+        if replay is not None:
+            return TypeAdapter(RefundView).validate_python(replay), order, payment, money, False
         now = _utc(self.service.clock())
-        latest_refund = await self._latest_refund(database, order.id)
+        latest_refund = await self._latest_refund(database, order.id, payment_id)
         if latest_refund is not None:
-            return RefundView(
+            view = RefundView(
                 payment_id=payment_id,
                 state="pending"
                 if latest_refund.state == "pending"
@@ -228,11 +354,20 @@ class Settlement:
                 else "refused",
                 refundable_until=_utc(payment.verified_at) + REFUND_WINDOW,
             )
+            await self.service._remember(
+                database,
+                resolved.account,
+                "refund",
+                idempotency_key,
+                digest,
+                TypeAdapter(RefundView).dump_python(view, mode="json"),
+                200 if view.state == "refunded" else 202,
+            )
+            return view, order, payment, money, False
         verified_at = _utc(payment.verified_at)
         if now > verified_at + REFUND_WINDOW:
             raise RefundWindowClosed("Refunds are possible within 7 days of payment.")
         ledger = self.service.ledger(database)
-        await take_admission_lock(database, resolved.tenant_id)
         entries = await ledger.entries(resolved.account.id)
         sources = await self._sources(database, order, payment)
         payment_lots = [
@@ -263,28 +398,16 @@ class Settlement:
                 actor_person_id=caller.person_id,
                 reason=reason,
             )
-        money = Money(
-            payment.amount_minor or order.amount_minor, payment.currency or order.currency
+        view = RefundView(
+            payment_id=payment_id, state="pending", refundable_until=verified_at + REFUND_WINDOW
         )
-        provider = self.service.providers.get(order.provider)
-        refund_key = hashlib.sha256(f"refund:{order.id}".encode()).hexdigest()[:20]
-        try:
-            receipt = await provider.refund(
-                order_reference=order.order_ref,
-                provider_payment_ref=payment.payment_ref or "",
-                money=money,
-                idempotency_key=refund_key,
-            )
-        except ProviderError as error:
-            raise ProviderUnavailable("The payment provider did not accept the refund.") from error
-        state: RefundViewState = "refunded" if receipt.state is RefundState.PROCESSED else "pending"
         database.add(
             BillingRefundEvent(
                 id=uuid4(),
                 order_id=order.id,
                 payment_ref=payment_id,
-                state=state,
-                provider_refund_ref=receipt.provider_refund_ref,
+                state="pending",
+                provider_refund_ref=None,
                 amount_minor=money.amount_minor,
                 currency=money.currency,
                 reason=reason,
@@ -294,14 +417,16 @@ class Settlement:
                 created_at=now,
             )
         )
-        await database.flush()
-        if state != "pending":
-            await self._settle_refund(
-                database, ledger, order, payment_lots, confirmed=state == "refunded", now=now
-            )
-        return RefundView(
-            payment_id=payment_id, state=state, refundable_until=verified_at + REFUND_WINDOW
+        await self.service._remember(
+            database,
+            resolved.account,
+            "refund",
+            idempotency_key,
+            digest,
+            TypeAdapter(RefundView).dump_python(view, mode="json"),
+            202,
         )
+        return view, order, payment, money, True
 
     # ---- applying a verified event ------------------------------------------------
 
@@ -319,7 +444,11 @@ class Settlement:
         if existing is not None:
             return "replayed", True
         now = _utc(self.service.clock())
-        subscription = await self._match_subscription(database, event)
+        subscription = (
+            None
+            if event.kind in (PaymentEventKind.REFUNDED, PaymentEventKind.REFUND_FAILED)
+            else await self._match_subscription(database, event)
+        )
         order = await self._match_order(database, event, subscription)
         stored = BillingPaymentEvent(
             id=uuid4(),
@@ -351,6 +480,9 @@ class Settlement:
         account = await database.get(BillingAccount, account_id)
         assert account is not None  # orders and subscriptions reference an account
         await take_admission_lock(database, account.tenant_id)
+        if event.kind in (PaymentEventKind.REFUNDED, PaymentEventKind.REFUND_FAILED):
+            assert order is not None
+            return await self._refund_outcome(database, order, event, stored, now), False
         if subscription is not None:
             period_id = uuid4()
             decision = reduce_subscription_event(
@@ -412,9 +544,6 @@ class Settlement:
                 database, order, "needs_review", stored.id, f"review: {decision.reason.value}", now
             )
             return "needs_review"
-        if isinstance(decision, RefundResult):
-            await self._refund_outcome(database, order, decision, stored, now)
-            return "refund"
         if isinstance(decision, NoAction) and decision.event_kind is PaymentEventKind.FAILED:
             await self._order_event(database, order, "failed", stored.id, "payment failed", now)
             return "failed"
@@ -507,9 +636,6 @@ class Settlement:
                     )
             await database.flush()
             return "needs_review"
-        if isinstance(decision, RefundResult) and order is not None:
-            await self._refund_outcome(database, order, decision, stored, now)
-            return "refund"
         return "no_action"
 
     # ---- helpers ------------------------------------------------------------------
@@ -531,6 +657,35 @@ class Settlement:
             refs.update(f"period:{period.id}:m{k}" for k in range(12))
         return refs
 
+    @staticmethod
+    async def _verified_payment(
+        database: AsyncSession, payment_ref: str | None, provider: str | None = None
+    ) -> BillingPaymentEvent | None:
+        payment: BillingPaymentEvent | None = await database.scalar(
+            select(BillingPaymentEvent)
+            .where(
+                BillingPaymentEvent.payment_ref == payment_ref,
+                *([] if provider is None else [BillingPaymentEvent.provider == provider]),
+                BillingPaymentEvent.kind.in_(("payment.captured", "subscription.charged")),
+                or_(
+                    exists(
+                        select(BillingPeriod.id).where(
+                            BillingPeriod.payment_event_id == BillingPaymentEvent.id
+                        )
+                    ),
+                    exists(
+                        select(BillingOrderEvent.id).where(
+                            BillingOrderEvent.payment_event_id == BillingPaymentEvent.id,
+                            BillingOrderEvent.status == "paid",
+                        )
+                    ),
+                ),
+            )
+            .order_by(BillingPaymentEvent.verified_at, BillingPaymentEvent.id)
+            .limit(1)
+        )
+        return payment
+
     async def _match_subscription(
         self, database: AsyncSession, event: PaymentEvent
     ) -> BillingSubscription | None:
@@ -547,6 +702,12 @@ class Settlement:
     async def _match_order(
         self, database: AsyncSession, event: PaymentEvent, subscription: BillingSubscription | None
     ) -> BillingOrder | None:
+        if event.kind in (PaymentEventKind.REFUNDED, PaymentEventKind.REFUND_FAILED):
+            payment = await self._verified_payment(
+                database, event.provider_payment_ref, event.provider
+            )
+            if payment is not None:
+                return await database.get(BillingOrder, payment.order_id)
         if subscription is not None:
             return await one(
                 database,
@@ -667,12 +828,15 @@ class Settlement:
         await database.flush()
 
     async def _latest_refund(
-        self, database: AsyncSession, order_id: UUID
+        self, database: AsyncSession, order_id: UUID, payment_ref: str | None = None
     ) -> BillingRefundEvent | None:
         return await one(
             database,
             select(BillingRefundEvent)
-            .where(BillingRefundEvent.order_id == order_id)
+            .where(
+                BillingRefundEvent.order_id == order_id,
+                *([] if payment_ref is None else [BillingRefundEvent.payment_ref == payment_ref]),
+            )
             .order_by(BillingRefundEvent.created_at.desc(), BillingRefundEvent.id.desc())
             .limit(1),
         )
@@ -693,55 +857,60 @@ class Settlement:
         self,
         database: AsyncSession,
         order: BillingOrder,
-        decision: RefundResult,
+        event: PaymentEvent,
         stored: BillingPaymentEvent,
         now: datetime,
-    ) -> None:
-        latest = await self._latest_refund(database, order.id)
-        if latest is None or latest.state != "pending":
-            return
+    ) -> str:
+        latest = await self._latest_refund(database, order.id, event.provider_payment_ref)
+        payment = await self._verified_payment(database, event.provider_payment_ref, event.provider)
+        if (
+            latest is None
+            or payment is None
+            or event.provider != order.provider
+            or payment.provider != event.provider
+            or event.provider_payment_ref != latest.payment_ref
+            or payment.payment_ref != latest.payment_ref
+            or event.money != Money(latest.amount_minor, latest.currency)
+            or event.money != Money(payment.amount_minor or 0, payment.currency or order.currency)
+            or event.provider_refund_ref is None
+            or (
+                latest.provider_refund_ref is not None
+                and event.provider_refund_ref != latest.provider_refund_ref
+            )
+            or (
+                latest.provider_refund_ref is None
+                and event.refund_reference != self._refund_key(payment)
+            )
+        ):
+            await self._order_event(
+                database, order, "needs_review", stored.id, "refund correlation mismatch", now
+            )
+            return "needs_review"
+        if latest.state != "pending":
+            return "no_action"
+        confirmed = event.kind is PaymentEventKind.REFUNDED
         database.add(
             BillingRefundEvent(
                 id=uuid4(),
                 order_id=order.id,
                 payment_ref=latest.payment_ref,
-                state="refunded" if decision.confirmed else "refused",
-                provider_refund_ref=decision.provider_refund_ref,
-                amount_minor=decision.money.amount_minor,
-                currency=decision.money.currency,
+                state="refunded" if confirmed else "refused",
+                provider_refund_ref=event.provider_refund_ref,
+                amount_minor=latest.amount_minor,
+                currency=latest.currency,
                 reason=latest.reason,
                 actor_type="provider",
                 actor_person_id=None,
                 payment_event_id=stored.id,
-                created_at=now,
+                created_at=max(now, _utc(latest.created_at) + timedelta(microseconds=1)),
             )
         )
         await database.flush()
-        # Only this payment's lots: another refund on the same account may be
-        # pending too, and its hold stays until its own provider answer.
-        payment = (
-            None
-            if latest.payment_event_id is None
-            else await database.get(BillingPaymentEvent, latest.payment_event_id)
-        )
-        sources = (
-            {f"order:{order.id}"}
-            if payment is None
-            else await self._sources(database, order, payment)
-        )
+        sources = await self._sources(database, order, payment)
         ledger = self.service.ledger(database)
-        entries = await ledger.entries(order.account_id)
-        released = {e.hold_id for e in entries if e.kind == "refund_hold_release"}
-        open_holds = [e for e in entries if e.kind == "refund_hold" and e.id not in released]
-        by_id = {e.id: e for e in entries}
-        held = [
-            by_id[h.lot_id]
-            for h in open_holds
-            if h.lot_id in by_id and by_id[h.lot_id].source_ref in sources
-        ]
-        await self._settle_refund(
-            database, ledger, order, held, confirmed=decision.confirmed, now=now
-        )
+        lots = [e for e in await ledger.entries(order.account_id) if e.source_ref in sources]
+        await self._settle_refund(database, ledger, order, lots, confirmed=confirmed, now=now)
+        return "refund"
 
     async def _settle_refund(
         self,

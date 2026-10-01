@@ -349,8 +349,8 @@ def install_billing_http(
     ) -> RefundCommandResponse:
         require_safe_origin(request, settings)
         key = _idempotency_key(idempotency_key)
-        reason = body.reason.strip()
-        if not reason:
+        reason = body.reason
+        if not reason.strip():
             raise BillingValidationFailed("A refund reason is required.")
         view = await service.refund_payment(
             auth.database,

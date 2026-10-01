@@ -934,7 +934,10 @@ def test_refund_of_an_unused_top_up_writes_hold_release_and_refund(postgres_harn
         paid = await lab.subscribe_and_pay(learner)
         top_up = await lab.top_up_and_pay(learner, "refund-me")
 
-        view = await lab.refund(learner, top_up.payment_ref, key="refund-1")
+        accepted = await lab.refund(learner, top_up.payment_ref, key="refund-1")
+        assert accepted.state == "pending"
+        assert await lab.refund(learner, top_up.payment_ref, key="refund-1") == accepted
+        view = (await lab.read_order(learner, top_up.order_id)).refund
         assert view == RefundView(
             payment_id=top_up.payment_ref,
             state="refunded",
@@ -981,7 +984,8 @@ def test_refund_of_an_unused_top_up_writes_hold_release_and_refund(postgres_harn
         assert (refunded.closed_seconds, refunded.capacity) == (PACK_SECONDS, 0)
         assert lots[f"period:{period.id}"].capacity == PERIOD_SECONDS
 
-        (event,) = await lab.refund_events(top_up.order_id)
+        intent, event = await lab.refund_events(top_up.order_id)
+        assert (intent.state, intent.provider_refund_ref) == ("pending", None)
         assert (event.state, event.payment_ref, event.amount_minor, event.currency) == (
             "refunded",
             top_up.payment_ref,
@@ -1006,7 +1010,7 @@ def test_refund_of_an_unused_top_up_writes_hold_release_and_refund(postgres_harn
         # A second request answers with the same state and writes nothing.
         assert await lab.refund(learner, top_up.payment_ref, key="refund-2", reason="again") == view
         assert len(await lab.entries(learner)) == len(entries)
-        assert len(await lab.refund_events(top_up.order_id)) == 1
+        assert len(await lab.refund_events(top_up.order_id)) == 2
         assert lab.provider_refunds(top_up.order_ref) == [PACK_PRICE]
 
     scenario(postgres_harness, world, exercise)
@@ -1040,7 +1044,8 @@ def test_refund_is_refused_once_minutes_from_the_payment_were_used(postgres_harn
         # A no-work settlement frees the seconds, so the payment is refundable again.
         await lab.settle_no_work(learner, usage)
         assert (await lab.positions(learner))[f"order:{top_up.order_id}"].allocated == 0
-        assert (await lab.refund(learner, top_up.payment_ref, key="used-3")).state == "refunded"
+        assert (await lab.refund(learner, top_up.payment_ref, key="used-3")).state == "pending"
+        assert (await lab.read_order(learner, top_up.order_id)).refund.state == "refunded"
         assert (await lab.lots(learner))[f"order:{top_up.order_id}"].capacity == 0
 
     scenario(postgres_harness, world, exercise)
@@ -1124,7 +1129,7 @@ def test_pending_refunds_settle_only_their_own_holds(
             order_reference=first.order_ref,
             money=PACK_PRICE,
             provider_payment_ref=first.payment_ref,
-            provider_refund_ref="fake_refund_a",
+            provider_refund_ref=(await lab.refund_events(first.order_id))[-1].provider_refund_ref,
         )
         assert await lab.webhook(*confirmed) == ("refund", False)
         closings = await lab.closings(learner)
@@ -1133,11 +1138,10 @@ def test_pending_refunds_settle_only_their_own_holds(
         lots = await lab.lots(learner)
         assert (lots[first_ref].capacity, lots[second_ref].capacity) == (0, 0)
         first_events = await lab.refund_events(first.order_id)
-        assert [(event.state, event.provider_refund_ref) for event in first_events] == [
-            ("pending", "fake_refund_" + first_events[0].provider_refund_ref.split("_")[-1]),
-            ("refunded", "fake_refund_a"),
-        ]
-        assert first_events[1].payment_event_id == (await lab.payment_events(first.order_id))[1].id
+        assert [event.state for event in first_events] == ["pending", "pending", "refunded"]
+        assert first_events[0].provider_refund_ref is None
+        assert first_events[1].provider_refund_ref == first_events[2].provider_refund_ref
+        assert first_events[2].payment_event_id == (await lab.payment_events(first.order_id))[1].id
         assert (await lab.read_order(learner, first.order_id)).refund.state == "refunded"
         assert (await lab.read_order(learner, second.order_id)).refund.state == "pending"
 
@@ -1148,7 +1152,7 @@ def test_pending_refunds_settle_only_their_own_holds(
             order_reference=second.order_ref,
             money=PACK_PRICE,
             provider_payment_ref=second.payment_ref,
-            provider_refund_ref="fake_refund_b",
+            provider_refund_ref=(await lab.refund_events(second.order_id))[-1].provider_refund_ref,
         )
         assert await lab.webhook(*failed) == ("refund", False)
         closings = await lab.closings(learner)
@@ -1157,6 +1161,7 @@ def test_pending_refunds_settle_only_their_own_holds(
         lots = await lab.lots(learner)
         assert (lots[second_ref].closed_seconds, lots[second_ref].capacity) == (0, PACK_SECONDS)
         assert [event.state for event in await lab.refund_events(second.order_id)] == [
+            "pending",
             "pending",
             "refused",
         ]

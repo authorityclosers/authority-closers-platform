@@ -259,6 +259,7 @@ class PaymentEvent:
     provider_order_ref: str | None = None
     provider_payment_ref: str | None = None
     provider_refund_ref: str | None = None
+    refund_reference: str | None = None
     money: Money | None = None
     occurred_at: datetime | None = None
     provider_subscription_ref: str | None = None

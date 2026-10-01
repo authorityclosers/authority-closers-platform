@@ -171,7 +171,6 @@ class CheckoutService:
         self.operations_tenant_id = operations_tenant_id
         self.return_url_base = return_url_base.rstrip("/")
         self.trial_policy = trial_policy or TrialPolicy()
-        self._verify_at: dict[UUID, float] = {}
 
     def ledger(self, database: AsyncSession) -> BillingLedger:
         return BillingLedger(

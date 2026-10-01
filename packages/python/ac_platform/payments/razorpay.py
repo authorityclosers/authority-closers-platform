@@ -254,6 +254,7 @@ class RazorpayAdapter:
                 provider_order_ref=_wire.optional_text(payment, "order_id"),
                 provider_payment_ref=_wire.text(refund, "payment_id", _NAME),
                 provider_refund_ref=_wire.text(refund, "id", _NAME),
+                refund_reference=_wire.optional_text(refund, "receipt"),
                 money=_wire.minor_money(refund.get("amount"), refund.get("currency"), _NAME),
             )
         subscription_kind = _SUBSCRIPTION_EVENTS.get(event_type)
