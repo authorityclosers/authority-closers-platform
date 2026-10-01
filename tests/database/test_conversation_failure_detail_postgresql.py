@@ -219,7 +219,8 @@ def test_c4_strict_model_failure_stores_its_stage_and_field_path(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     def add_unknown_key(content: dict[str, Any]) -> dict[str, Any]:
-        return {**content, "unexpected_key": SENTINEL}
+        # The sentinel is the provider's key itself (CTO repro), not only its value.
+        return {**content, SENTINEL: "fictional value"}
 
     async def exercise() -> None:
         broker = TamperingBroker(b"synthetic", facts=add_unknown_key)
@@ -236,7 +237,7 @@ def test_c4_strict_model_failure_stores_its_stage_and_field_path(
             detail = _assert_detail(job, stage="C4", sentinel=SENTINEL)
             assert job.last_error == "conversation_fact_packet_invalid"
             assert detail["code"] == "fact_packet_invalid"
-            assert detail["errors"] == [{"loc": "unexpected_key", "type": "extra_forbidden"}]
+            assert detail["errors"] == [{"loc": "<key>", "type": "extra_forbidden"}]
         finally:
             await engine.dispose()
 

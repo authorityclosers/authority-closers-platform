@@ -12,7 +12,9 @@ small, content-free description of the exception chain on the job row:
 - ``site``: the innermost ``ac_platform`` frame as ``file.py:line:function``,
   skipping the bare ``_fail`` raise helpers so the frame names the rule;
 - ``errors``: up to ten pydantic ``{"loc", "type"}`` pairs found in the chain,
-  with schema keys and integer indices only;
+  with schema-defined field names and integer indices only. A key the provider
+  chose (an unexpected extra key or a mapping key) becomes ``<key>`` even when it
+  looks like an identifier, because it can carry a name or an id;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
 The chain follows ``__cause__`` and then ``__context__`` (also when the context
@@ -31,7 +33,7 @@ import traceback
 from pathlib import PurePath
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from ac_platform.conversation_intelligence.reports import REPORT_VALIDATOR_REVISION
 
@@ -100,9 +102,8 @@ def _describe(
         if isinstance(item, ValidationError) and len(errors) < _MAX_ERRORS:
             entries = item.errors(include_url=False, include_context=False, include_input=False)
             for entry in entries[: _MAX_ERRORS - len(errors)]:
-                errors.append(
-                    {"loc": _loc(entry.get("loc", ())), "type": _safe_code(entry.get("type"))}
-                )
+                kind = _safe_code(entry.get("type"))
+                errors.append({"loc": _loc(entry.get("loc", ()), kind), "type": kind})
     known_stage = stage if stage in _STAGES else None
     return {
         "schema": FAILURE_DETAIL_SCHEMA,
@@ -138,20 +139,49 @@ def _safe_code(value: object) -> str:
     return REDACTED
 
 
-def _loc(parts: object) -> str:
+def _loc(parts: object, kind: str | None = None) -> str:
     if not isinstance(parts, list | tuple):
         return _REDACTED_KEY
-    return ".".join(_key(part) for part in parts)
+    schema = _schema_names()
+    keys = [_key(part, schema) for part in parts]
+    if kind == "extra_forbidden" and keys:
+        # The last element of an extra-forbidden location is the provider's own key.
+        keys[-1] = _REDACTED_KEY
+    return ".".join(keys)
 
 
-def _key(part: object) -> str:
+def _key(part: object, schema: frozenset[str]) -> str:
     if isinstance(part, bool):
         return _REDACTED_KEY
     if isinstance(part, int):
         return str(part)
-    if isinstance(part, str) and _KEY.fullmatch(part) is not None:
+    if isinstance(part, str) and _KEY.fullmatch(part) is not None and part in schema:
         return part
     return _REDACTED_KEY
+
+
+def _schema_names() -> frozenset[str]:
+    """Field names (and aliases) declared by the loaded pydantic models, and the model names.
+
+    A location part is kept only when a schema defines it, so a mapping key or an
+    unknown key chosen by a provider never reaches the stored detail.
+    """
+
+    names: set[str] = set()
+    seen: set[type] = set()
+    stack: list[type] = list(BaseModel.__subclasses__())
+    while stack:
+        model = stack.pop()
+        if model in seen:
+            continue
+        seen.add(model)
+        stack.extend(model.__subclasses__())
+        names.add(model.__name__)
+        for name, field in getattr(model, "model_fields", {}).items():
+            names.add(name)
+            if isinstance(field.alias, str):
+                names.add(field.alias)
+    return frozenset(names)
 
 
 def _innermost_site(error: BaseException) -> str | None:

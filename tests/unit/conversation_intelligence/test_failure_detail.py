@@ -162,7 +162,7 @@ def test_each_stage_is_stored_with_its_validator_revision(stage: str, revision: 
     assert detail["stage"] == stage
     assert detail["validator_revision"] == revision
     assert detail["code"] == "fact_packet_invalid"
-    assert detail["errors"] == [{"loc": "unexpected", "type": "extra_forbidden"}]
+    assert detail["errors"] == [{"loc": "<key>", "type": "extra_forbidden"}]
     assert SENTINEL not in canonical_failure_detail(detail)
 
 
@@ -202,3 +202,34 @@ def test_loc_keeps_schema_keys_and_indices_only() -> None:
     assert module._loc(("strengths", 0, "evidence", 3, "quote")) == "strengths.0.evidence.3.quote"
     assert module._loc(("bad key!", True, "x" * 41)) == "<key>.<key>.<key>"
     assert module._loc("not-a-tuple") == "<key>"
+
+
+def test_an_unknown_provider_key_is_redacted_even_when_it_looks_like_an_identifier() -> None:
+    # CTO repro on AUT-484: an identifier-shaped extra key must not be stored.
+    error = _task_error(
+        lambda: reports.parse_fact_packet(
+            json.dumps(
+                {
+                    "overview": "fictional overview",
+                    "observations": [],
+                    "uncertainties": [],
+                    SENTINEL: "fictional value",
+                }
+            ),
+            _transcript(),
+        )
+    )
+    detail = build_failure_detail(error, stage="C4", failure_code=provider_failure_code(error))
+    assert detail["errors"] == [{"loc": "<key>", "type": "extra_forbidden"}]
+    assert SENTINEL not in canonical_failure_detail(detail)
+
+
+@pytest.mark.parametrize("key", [SENTINEL, "Ravi_Kumar", "cust_000123", "summary"])
+def test_extra_forbidden_never_keeps_the_extra_key(key: str) -> None:
+    # Even a key that is also a schema field elsewhere is the provider's own key here.
+    assert module._loc(("strengths", 0, key), "extra_forbidden") == "strengths.0.<key>"
+
+
+@pytest.mark.parametrize("key", [SENTINEL, "Ravi_Kumar", "cust_000123"])
+def test_mapping_or_unknown_keys_are_redacted_and_schema_paths_kept(key: str) -> None:
+    assert module._loc(("strengths", key, 2, "quote"), "string_type") == "strengths.<key>.2.quote"
