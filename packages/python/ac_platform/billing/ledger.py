@@ -87,6 +87,13 @@ class AccountProjection:
         )
 
 
+def _legacy_valid_from(event: AuditEvent, now: datetime) -> datetime:
+    """A recorded Admin grant is already in effect for its reader: its audit time,
+    never later than the reader's clock (a grant cannot start in the reader's future)."""
+
+    return min(_utc(event.occurred_at), _utc(now))
+
+
 def _lot_from_entry(entry: BillingLedgerEntry, closed_seconds: int) -> Lot:
     return Lot(
         lot_id=str(entry.id),
@@ -173,6 +180,19 @@ class BillingLedger:
         rows = await self.database.scalars(
             select(BillingLedgerEntry)
             .where(BillingLedgerEntry.account_id == account_id)
+            .order_by(BillingLedgerEntry.created_at, BillingLedgerEntry.id)
+        )
+        return list(rows)
+
+    async def person_entries(self, *, tenant_id: UUID, person_id: UUID) -> list[BillingLedgerEntry]:
+        """The Personal account's entries in one query; empty when it has no account yet."""
+
+        account_ids = select(BillingAccount.id).where(
+            BillingAccount.tenant_id == tenant_id, BillingAccount.person_id == person_id
+        )
+        rows = await self.database.scalars(
+            select(BillingLedgerEntry)
+            .where(BillingLedgerEntry.account_id.in_(account_ids))
             .order_by(BillingLedgerEntry.created_at, BillingLedgerEntry.id)
         )
         return list(rows)
@@ -280,7 +300,7 @@ class BillingLedger:
         return [(grant.seconds, event, grant.reason) for grant, event in verified]
 
     async def mirror_legacy_grants(
-        self, account: BillingAccount, grants: list[tuple[int, AuditEvent, str]]
+        self, account: BillingAccount, grants: list[tuple[int, AuditEvent, str]], now: datetime
     ) -> list[BillingLedgerEntry]:
         """Write the verified legacy grants that the ledger does not hold yet (idempotent)."""
 
@@ -291,7 +311,7 @@ class BillingLedger:
                     account=account,
                     kind="grant",
                     seconds=seconds,
-                    valid_from=_utc(event.occurred_at),
+                    valid_from=_legacy_valid_from(event, now),
                     source_ref=f"{LEGACY_GRANT_PREFIX}{event.id}",
                     actor_type="person",
                     actor_person_id=event.actor_person_id,
@@ -320,12 +340,14 @@ class BillingLedger:
         )
         uses = await self.person_uses(tenant_id=tenant_id, person_id=person_id)
         legacy = await self.legacy_grants(tenant_id=tenant_id, person_id=person_id)
-        entries = [] if account is None else await self.entries(account.id)
+        # One query whether or not the account exists yet, so a read costs the same
+        # number of statements before and after the first reservation (AUT-417 parity).
+        entries = await self.person_entries(tenant_id=tenant_id, person_id=person_id)
         mirrored = {entry.source_ref for entry in entries}
         missing = [item for item in legacy if f"{LEGACY_GRANT_PREFIX}{item[1].id}" not in mirrored]
         lots = self.lots_from_entries(entries)
         if missing and mirror and account is not None:
-            entries.extend(await self.mirror_legacy_grants(account, missing))
+            entries.extend(await self.mirror_legacy_grants(account, missing, now))
             lots = self.lots_from_entries(entries)
         elif missing:
             lots.extend(
@@ -333,7 +355,7 @@ class BillingLedger:
                     lot_id=f"{LEGACY_GRANT_PREFIX}{event.id}",
                     kind=LotKind.GRANT,
                     seconds=seconds,
-                    valid_from=_utc(event.occurred_at),
+                    valid_from=_legacy_valid_from(event, now),
                 )
                 for seconds, event, _ in missing
             )
