@@ -4,6 +4,7 @@
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import re
 import statistics
@@ -280,18 +281,38 @@ def github_metrics(data, start, end):
     return totals
 
 
-def run_tokens(run):
+def run_tokens(run, adapter=None, sessions=None):
     try:
         usage = run["usageJson"]
         usage = json.loads(usage) if isinstance(usage, str) else usage
-        values = [usage[key] for key in ("inputTokens", "outputTokens")]
-        return (
-            sum(values)
-            if isinstance(usage, dict) and all(isinstance(v, (int, float)) for v in values)
-            else None
-        )
+        values = [usage["inputTokens"], usage["outputTokens"], usage.get("cachedInputTokens", 0)]
+        if not all(type(v) in (int, float) and math.isfinite(v) and v >= 0 for v in values):
+            return None
+        adapter = run.get("adapterType") or adapter
+        key = (run.get("agentId"), usage.get("persistedSessionId"))
+        if (sessions is not None and key[1] and adapter in {"codex_local", "claude_local"}
+                and usage.get("usageSource") != "session_delta"):
+            previous = sessions.get(key)
+            sessions[key] = values
+            if previous is not None and all(v >= p for v, p in zip(values, previous, strict=True)):
+                values = [v - p for v, p in zip(values, previous, strict=True)]
+        return values[0] + values[1] + (values[2] if adapter == "claude_local" else 0)
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def normalize_runs(runs, agents):
+    """Difference all available snapshots before selecting tasks or the report week."""
+    adapters = {a["id"]: a.get("adapterType") for a in agents if a.get("id")}
+    result = [{**run, "_tokens": None} for run in runs]
+    sessions = {}
+    ordered = sorted(enumerate(result), key=lambda item: (
+        timestamp(item[1].get("startedAt")) or timestamp(item[1].get("createdAt")) or 0,
+        (0, str(item[1]["id"])) if item[1].get("id") else (1, item[0]),
+    ))
+    for _, run in ordered:
+        run["_tokens"] = run_tokens(run, adapters.get(run.get("agentId")), sessions)
+    return result
 
 
 def activity_status(event):
@@ -316,13 +337,14 @@ def builder_for(issue, events):
 
 
 def build_report(data, monday, start, end):
+    runs = normalize_runs(data["runs"], data["agents"])
     issues = {item["id"]: item for item in data["issues"] if item.get("id")}
     names = {
         a["id"]: a.get("name") or a.get("displayName") or a["id"]
         for a in data["agents"]
         if a.get("id")
     }
-    for run in data["runs"]:
+    for run in runs:
         if run.get("agentId") and run["agentId"] not in names:
             names[run["agentId"]] = run.get("agentName") or run["agentId"]
 
@@ -370,7 +392,7 @@ def build_report(data, monday, start, end):
     relevant = {issue_id for task_ids in done_by.values() for issue_id in task_ids}
     by_issue = defaultdict(list)
     week_runs = []
-    for run in data["runs"]:
+    for run in runs:
         run_at = timestamp(run.get("startedAt") or run.get("createdAt"))
         if run_at is not None and start <= run_at < end:
             week_runs.append(run)
@@ -400,7 +422,7 @@ def build_report(data, monday, start, end):
         failed_pct = 100 * failed / len(selected_runs) if selected_runs else None
         task_runs = [r for issue_id in selected for r in by_issue.get(issue_id, [])]
         complete_runs = bool(selected) and all(by_issue.get(issue_id) for issue_id in selected)
-        token_values = [run_tokens(run) for run in task_runs]
+        token_values = [run["_tokens"] for run in task_runs]
         reported_tokens = [value for value in token_values if value is not None]
         tokens = sum(reported_tokens) / len(selected) if selected and reported_tokens else None
         runs_per_task = len(task_runs) / len(selected) if complete_runs else None

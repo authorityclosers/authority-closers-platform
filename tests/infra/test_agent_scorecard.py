@@ -11,11 +11,88 @@ SPEC.loader.exec_module(scorecard)
 FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/week.json"
 BUILDER_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/builder_attribution.json"
 GITHUB_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/github.json"
+SESSION_FIXTURE = ROOT / "tests/infra/fixtures/agent_scorecard/session_usage.json"
 
 
 def report(source=None):
     monday, start, end = scorecard.week_window("2026-09-21")
     return scorecard.build_report(source or json.loads(FIXTURE.read_text()), monday, start, end)
+
+
+def session_source(adapter):
+    source = json.loads(SESSION_FIXTURE.read_text())
+    source["agents"][0]["adapterType"] = adapter
+    if adapter == "claude_local":
+        source["runs"][0]["usageJson"]["inputTokens"] = 60
+        source["runs"][2]["usageJson"]["inputTokens"] = 40
+    return source
+
+
+@pytest.mark.parametrize("adapter", ["codex_local", "claude_local"])
+def test_reused_sessions_and_cross_task_history(adapter):
+    source = session_source(adapter)
+    source["runs"][2]["usageJson"] = json.dumps(source["runs"][2]["usageJson"])
+    normalized = scorecard.normalize_runs(source["runs"], source["agents"])
+    assert [r["_tokens"] for r in normalized][::2] == [65, 110]
+    rows = dict(report(source)["rows"])
+    assert rows["Fictional Builder"] == rows["Company"]
+    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (175, 2)
+    assert "175.00" in scorecard.render_report(report(source))
+    source["runs"][2]["contextSnapshot"]["issueId"] = "unfinished"
+    rows = dict(report(source)["rows"])
+    assert rows["Fictional Builder"] == rows["Company"]
+    assert (rows["Company"]["tokens"], rows["Company"]["runs_per_task"]) == (65, 1)
+    assert "65.00" in scorecard.render_report(report(source))
+
+
+@pytest.mark.parametrize("adapter,rotation,reset,cache_reset", [
+    ("codex_local", 22, 4, 175), ("claude_local", 27, 6, 77),
+])
+def test_session_rotation_and_counter_resets(adapter, rotation, reset, cache_reset):
+    source = session_source(adapter)
+    usage = source["runs"][0]["usageJson"]
+    for counters, session, expected in [
+        ((20, 2, 5), "fictional-new", rotation),
+        ((3, 1, 2), "fictional-shared", reset),
+        ((usage["inputTokens"], 15, 2), "fictional-shared", cache_reset),
+    ]:
+        keys = ("inputTokens", "outputTokens", "cachedInputTokens")
+        usage.update(zip(keys, counters, strict=True))
+        usage["persistedSessionId"] = session
+        assert scorecard.normalize_runs(source["runs"], source["agents"])[0]["_tokens"] == expected
+
+
+@pytest.mark.parametrize("adapter,delta,session,expected", [
+    ("codex_local", True, "fictional-shared", 285),
+    ("claude_local", True, "fictional-shared", 285),
+    ("gemini_local", True, "fictional-shared", 63),
+    ("codex_local", False, None, 285),
+    ("claude_local", False, None, 285),
+    ("unknown", False, "fictional-shared", 285),
+])
+def test_raw_usage_and_run_adapter_precedence(adapter, delta, session, expected):
+    source = session_source(adapter)
+    source["agents"][0]["adapterType"] = "claude_local"
+    for run, counters in zip(source["runs"][::2], [(35, 5, 12), (20, 3, 7)], strict=True):
+        run["adapterType"] = adapter
+        usage = run["usageJson"]
+        usage["persistedSessionId"] = session
+        usage["usageSource"] = "session_delta" if delta else "per_run"
+        if adapter == "gemini_local":
+            keys = ("inputTokens", "outputTokens", "cachedInputTokens")
+            usage.update(zip(keys, counters, strict=True))
+    assert dict(report(source)["rows"])["Company"]["tokens"] == expected
+
+
+@pytest.mark.parametrize("bad", [None, "{", [], {}, {"inputTokens": "bad", "outputTokens": 1}])
+def test_invalid_snapshot_keeps_baseline_and_missing_cache_defaults_to_zero(bad):
+    source = session_source("codex_local")
+    for run in source["runs"]:
+        run["usageJson"].pop("cachedInputTokens")
+    source["runs"].insert(1, {**source["runs"][0], "id": "invalid",
+                            "startedAt": "2026-09-21T12:00:00Z", "usageJson": bad})
+    row = dict(report(source)["rows"])["Company"]
+    assert (row["tokens"], row["unreported_runs"]) == (175, 1)
 
 
 def test_real_activity_shapes_metrics_alerts_and_week_end():
