@@ -1083,4 +1083,3 @@ it("opens every top-level section as a chapter in Reading mode", async () => {
   expect(summaries).toHaveLength(6);
   expect(summaries[0].textContent).not.toBe("");
 });
-

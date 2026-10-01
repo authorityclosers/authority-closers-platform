@@ -18,7 +18,9 @@
   --doc-border: #e2e7f0;
   --report-text-scale: 1;
   --report-base-font-size: 17px;
-  --report-font-size: calc(var(--report-base-font-size) * var(--report-text-scale));
+  --report-font-size: calc(
+    var(--report-base-font-size) * var(--report-text-scale)
+  );
   min-width: 0;
   color: var(--report-ink);
   /* Every report section shares the accepted Lightbox UI face. */
@@ -44,7 +46,6 @@
     --report-base-font-size: 16px;
   }
 }
-
 
 /* The single sticky report navigation row (both views): sections scroll
    sideways at narrow widths or 200% zoom; the view choice stays trailing. */
@@ -154,7 +155,6 @@
   background: var(--lx-teal-soft);
   color: var(--report-active-ink);
 }
-
 
 /* Sections use the full report width in both views. */
 .layout {
@@ -446,7 +446,6 @@
   padding: 0;
   border: 0;
 }
-
 
 /* Narrow: one row. The sections scroll sideways and the view choice shrinks
    to two icon buttons at the end (their names stay for screen readers), so
@@ -1390,4 +1389,3 @@
     display: table-header-group;
   }
 }
-

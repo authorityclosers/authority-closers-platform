@@ -426,8 +426,7 @@ const defaultSummaries: Record<string, string> = {
     "High-priority development areas, coaching interventions and transcript quotes.",
   signals:
     "Buyer engagement markers, pacing indicators and interaction dynamics.",
-  "strength-gap":
-    "Key competitive edge contrasted with the primary skill gap.",
+  "strength-gap": "Key competitive edge contrasted with the primary skill gap.",
   moments:
     "Key conversational turning points, buyer signals, and coaching moments.",
   "next-call-plan":
@@ -537,11 +536,11 @@ function renderDocumentView(
             </div>
             <div className={styles.docDivider} aria-hidden="true" />
             <p>
-              Aarav establishes immediate conversational rapport and demonstrates
-              genuine active listening during the discovery phase. However, when
-              technical objections arose around migration, the presentation
-              shifted into defensive feature validation rather than exploring
-              commercial impact.
+              Aarav establishes immediate conversational rapport and
+              demonstrates genuine active listening during the discovery phase.
+              However, when technical objections arose around migration, the
+              presentation shifted into defensive feature validation rather than
+              exploring commercial impact.
             </p>
             <ul className={styles.docBullets}>
               <li>
@@ -561,8 +560,8 @@ function renderDocumentView(
             <div className={styles.docQuoteBlock}>
               <div className={styles.docQuoteShift}>
                 <div className={styles.docQuoteOriginal}>
-                  <em>Rep quote:</em> &quot;We have several plans, maybe you want
-                  to start with the standard one?&quot;
+                  <em>Rep quote:</em> &quot;We have several plans, maybe you
+                  want to start with the standard one?&quot;
                 </div>
                 <div className={styles.docQuoteBetter}>
                   <em>Coaching shift:</em> &quot;Based on your team size and Q4
@@ -583,10 +582,7 @@ function renderDocumentView(
             <span>{repName}</span>
           </div>
 
-          <div
-            className={styles.docSection}
-            data-report-mode-section="skills"
-          >
+          <div className={styles.docSection} data-report-mode-section="skills">
             <div className={styles.docSectionHeader}>
               <span className={styles.docSectionNumber}>2.</span>
               <h2
@@ -612,8 +608,8 @@ function renderDocumentView(
                     <td>Discovery &amp; Diagnosis</td>
                     <td className={styles.docScoreGood}>4.2 / 5</td>
                     <td>
-                      Thorough exploration of current operational bottlenecks and
-                      reporting pain.
+                      Thorough exploration of current operational bottlenecks
+                      and reporting pain.
                     </td>
                   </tr>
                   <tr>
@@ -734,10 +730,7 @@ function renderDocumentView(
             <span>{repName}</span>
           </div>
 
-          <div
-            className={styles.docSection}
-            data-report-mode-section="signals"
-          >
+          <div className={styles.docSection} data-report-mode-section="signals">
             <div className={styles.docSectionHeader}>
               <span className={styles.docSectionNumber}>4.</span>
               <h2
@@ -757,8 +750,8 @@ function renderDocumentView(
               </span>
             </div>
             <div className={styles.docQuoteBlock}>
-              &quot;Prospect: We might need IT signoff, not sure when they
-              meet. Rep: Okay, no problem, just let me know when they do.&quot;
+              &quot;Prospect: We might need IT signoff, not sure when they meet.
+              Rep: Okay, no problem, just let me know when they do.&quot;
             </div>
             <ul className={styles.docBullets}>
               <li>
@@ -896,10 +889,7 @@ function renderDocumentView(
             <span>{repName}</span>
           </div>
 
-          <div
-            className={styles.docSection}
-            data-report-mode-section="moments"
-          >
+          <div className={styles.docSection} data-report-mode-section="moments">
             <div className={styles.docSectionHeader}>
               <span className={styles.docSectionNumber}>6.</span>
               <h2
@@ -934,9 +924,7 @@ function renderDocumentView(
                     <td>2</td>
                     <td>Product Framing: Workflow Demo</td>
                     <td className={styles.docScoreGood}>4.0 / 5</td>
-                    <td>
-                      Smooth walkthrough of automated task reassignment.
-                    </td>
+                    <td>Smooth walkthrough of automated task reassignment.</td>
                   </tr>
                   <tr>
                     <td>3</td>
@@ -967,7 +955,8 @@ function renderDocumentView(
                     <td>Call Wrap: Next Step Scheduling</td>
                     <td className={styles.docScoreRisk}>3.4 / 5</td>
                     <td>
-                      Allowed open-ended email follow-up instead of confirmed demo.
+                      Allowed open-ended email follow-up instead of confirmed
+                      demo.
                     </td>
                   </tr>
                 </tbody>
@@ -992,9 +981,9 @@ function renderDocumentView(
             <div className={styles.docDivider} aria-hidden="true" />
             <ol className={styles.docNumberedList}>
               <li>
-                <strong>Lead with multi-stakeholder qualification:</strong> Inquire
-                about IT compliance and procurement requirements before resuming
-                product details.
+                <strong>Lead with multi-stakeholder qualification:</strong>{" "}
+                Inquire about IT compliance and procurement requirements before
+                resuming product details.
               </li>
               <li>
                 <strong>Value re-anchoring before quote revision:</strong> When
@@ -1007,16 +996,18 @@ function renderDocumentView(
                 materials.
               </li>
               <li>
-                <strong>Prepared talking track for IT objections:</strong> Have data
-                privacy architecture slide ready to share during the first 5
-                minutes.
+                <strong>Prepared talking track for IT objections:</strong> Have
+                data privacy architecture slide ready to share during the first
+                5 minutes.
               </li>
             </ol>
             <div className={styles.docClosingBox}>
               <div className={styles.docClosingLine}>
-                <span className={styles.docClosingLabel}>Current position:</span>{" "}
-                Solid rapport builder with clear vocal authority; needs structured
-                objection reframing.
+                <span className={styles.docClosingLabel}>
+                  Current position:
+                </span>{" "}
+                Solid rapport builder with clear vocal authority; needs
+                structured objection reframing.
               </div>
               <div className={styles.docClosingLine}>
                 <span className={styles.docClosingLabel}>
@@ -1063,7 +1054,8 @@ function renderDocumentView(
                 <span className={styles.docTranscriptSpeaker}>
                   {repName} (Rep):
                 </span>{" "}
-                Hi Priya, thanks for joining today. How has your week been so far?
+                Hi Priya, thanks for joining today. How has your week been so
+                far?
               </div>
               <div className={styles.docTranscriptLine}>
                 <span className={styles.docTranscriptTime}>[00:18]</span>{" "}
@@ -1086,8 +1078,8 @@ function renderDocumentView(
                 <span className={styles.docTranscriptSpeaker}>
                   Priya Patel (Prospect):
                 </span>{" "}
-                Permissions take up to three days when cross-functional teams spin
-                up new projects.
+                Permissions take up to three days when cross-functional teams
+                spin up new projects.
               </div>
               <div className={styles.docTranscriptLine}>
                 <span className={styles.docTranscriptTime}>[01:45]</span>{" "}
@@ -1186,8 +1178,8 @@ function renderDocumentView(
                 <span className={styles.docTranscriptSpeaker}>
                   {repName} (Rep):
                 </span>{" "}
-                Both are built into the admin console with Okta and Azure AD SCIM
-                provisioning.
+                Both are built into the admin console with Okta and Azure AD
+                SCIM provisioning.
               </div>
               <div className={styles.docTranscriptLine}>
                 <span className={styles.docTranscriptTime}>[22:10]</span>{" "}
@@ -1202,8 +1194,8 @@ function renderDocumentView(
                 <span className={styles.docTranscriptSpeaker}>
                   {repName} (Rep):
                 </span>{" "}
-                Absolutely. I will email the SOC2 package and you can circle back
-                when convenient.
+                Absolutely. I will email the SOC2 package and you can circle
+                back when convenient.
               </div>
               <div className={styles.docTranscriptLine}>
                 <span className={styles.docTranscriptTime}>[27:50]</span>{" "}
@@ -1226,8 +1218,8 @@ function renderDocumentView(
                 <span className={styles.docTranscriptSpeaker}>
                   Priya Patel (Prospect):
                 </span>{" "}
-                Great, thanks for the walkthrough Aarav. Have a good rest of your
-                week.
+                Great, thanks for the walkthrough Aarav. Have a good rest of
+                your week.
               </div>
               <div className={styles.docTranscriptLine}>
                 <span className={styles.docTranscriptTime}>[32:15]</span>{" "}
