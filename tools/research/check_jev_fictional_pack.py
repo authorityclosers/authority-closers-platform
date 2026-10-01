@@ -44,9 +44,8 @@ def coverage(text, labels, category, language):
             eligible.append((lang, scr))
     langs, scripts = [v[0] for v in eligible], [v[1] for v in eligible]
     native = "Devanagari" if language == "HI" else "Gujarati"
-    expected = ("EN", "Latin") if category == "A" else (language, native)
-    if category == "C":
-        expected = (language, "Latin")
+    expected_script = "Latin" if category == "C" else native
+    expected = ("EN", "Latin") if category == "A" else (language, expected_script)
     require(bool(eligible) and category in CATEGORIES, "empty/unknown category")
     if category in "ABC":
         require(set(eligible) == {expected}, "monolingual category")
@@ -60,7 +59,7 @@ def coverage(text, labels, category, language):
     return [len(langs), sum(s != "Latin" for s in scripts), switches(langs),
             switches(scripts), len(langs) - 1]
 def safe(text, vocabulary):
-    require(not re.search(r"(?:\d[\s+().-]*){7,}|@|https?://|www\.", text), "identity content")
+    require(not re.search(r"(?:\d[\s+().-]*){7,}|@|https?://|www\.|[{}]", text), "unsafe content")
     require(all(t.casefold() in vocabulary for t in tokens(text)), "outside fictional vocabulary")
     require(not re.search(r"<(?!PERSON_\d+>|COMPANY_\d+>)", text), "invalid entity token")
 def grouped(segments):
@@ -183,6 +182,7 @@ def test_selftest():
     require(len(grouped(split)) == 1, "split turn")
     expect_bad(lambda: safe("Call 9876543210", {"call"}))
     expect_bad(lambda: safe("Meet Alicia at WidgetCorp", {"meet", "at"}))
+    expect_bad(lambda: safe("Meet {person}", {"meet", "person"}))
 def test_sealed_pack(): check(ROOT)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

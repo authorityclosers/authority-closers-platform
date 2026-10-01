@@ -1,5 +1,5 @@
 {
-  "version": "jev-fictional-pack-v1",
+  "version": "jev-fictional-pack-v1.1",
   "pins": {
     "pack_card": "778a5c39-8b4c-475f-b53b-731ce0e93ddb",
     "jev_requirement": "05f6e847-6f55-4d12-b8cb-ef3f9b7486d3",
@@ -15,5 +15,16 @@
   },
   "authoring_basis": "Independent synthetic coverage; not an empirical mixing reproduction or a real-call representativeness claim.",
   "author_separation": "The pack author runs no bake-off arm now or later.",
-  "provenance": "Fictional wording authored from scratch; no real transcript, report, name list or holdout source was read. People and companies use protocol category tokens."
+  "provenance": "Fictional wording authored from scratch; no real transcript, report, name list or holdout source was read. People and companies use protocol category tokens.",
+  "supersedes": {
+    "version": "jev-fictional-pack-v1",
+    "commit": "140aca0cb63bf601178edb28dd5d64a16ec94af2",
+    "set_hashes": {
+      "inputs": "a5fd31a4e8c1c8a46bd240fe384a312a08300b6fbe188d2eec5164d8b5a6fc14",
+      "truth": "dc44f7daa468aa1a43183fbbd7eb6e050e44ad90b6101b7b59cc8bef1ff8b2b5"
+    },
+    "review_issue": "AUT-681",
+    "review_revision": "ceb306d9-74c4-412b-886d-9d04b7223ee8",
+    "changes": "Resolve the closing attendee token in situations 4, 8 and 12 across all twins; split the corresponding clean report claim. No synthetic target or source pin changes."
+  }
 }

@@ -1,4 +1,11 @@
-# Sealed fictional pack v1
+# Sealed fictional pack v1.1
+
+Version 1.1 supersedes the initial v1 seal at commit
+`140aca0cb63bf601178edb28dd5d64a16ec94af2`. It resolves the closing attendee
+token and splits its report claim in situations 4, 8 and 12 across all twins,
+following AUT-681. The previous hashes and review revision remain recorded in
+`truth/sources.json` and Git history. The source pins and synthetic targets are
+unchanged; the directory name retains the v1 pack family.
 
 This is authored fictional evidence for the Jev Phase 1 and P4 auditor research,
 using the controlled revisions recorded in `truth/sources.json`. It contains
@@ -28,8 +35,9 @@ the clean base quotas. None of this certifies the separate containment review.
 
 People and companies use `<PERSON_n>` / `<COMPANY_n>` category tokens. No real
 call or identity source was read. The checker rejects phone/email/URL patterns,
-invalid entity tokens and words outside the sealed fictional vocabulary. It
-does not use or claim access to a real-person gazetteer; multilingual meaning
+invalid entity tokens, unresolved template braces and words outside the sealed
+fictional vocabulary. It does not use or claim access to a real-person gazetteer;
+multilingual meaning
 and naturalness also require the named human spot check.
 
 Run locally, without CI or credentials:
