@@ -36,7 +36,8 @@
   animation-delay: calc(var(--i) * 45ms + 120ms);
   transition:
     background-color 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    transform 160ms var(--lx-ease-pop, ease);
 }
 
 .tile:hover,
@@ -135,4 +136,10 @@
   .tile {
     animation: none;
   }
+}
+
+/* Press feedback. */
+.tile:active {
+  transform: scale(0.97);
+  transition-duration: 60ms;
 }

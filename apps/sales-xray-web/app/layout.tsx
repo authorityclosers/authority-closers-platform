@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/plus-jakarta-sans/wght.css";
 import "@fontsource-variable/bricolage-grotesque/wght.css";
 import "@fontsource-variable/newsreader/wght.css";
@@ -18,6 +18,21 @@ export const metadata: Metadata = {
   description:
     "Review the conversation. Understand the evidence. Practice with purpose.",
   robots: { index: false, follow: false },
+};
+
+/* Phones and a native wrapper (Capacitor): draw under the notch and home bar
+   so the shell's safe-area padding applies, keep the browser chrome the
+   app's colour, and let the keyboard shrink the layout rather than cover it.
+   Zoom stays allowed for accessibility. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#060a14" },
+  ],
 };
 export default function Layout({
   children,

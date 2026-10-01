@@ -919,6 +919,36 @@
   }
 }
 
+/* Phones: the same cards, one hand. Play buttons stay a 44px target, cards
+   lose their outer air, and nothing depends on hover. */
+@media (max-width: 640px) {
+  .clip {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+  .bigPlay {
+    width: 44px;
+    height: 44px;
+  }
+  .bigPlay::after {
+    display: none;
+  }
+  .clip:active {
+    transform: scale(0.985);
+  }
+  .doors {
+    gap: 8px;
+  }
+  .door {
+    padding: 12px 12px 11px;
+  }
+  .phaseCta {
+    min-height: 40px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero,
   .section,
@@ -1012,7 +1042,23 @@
     box-shadow 180ms ease;
 }
 
-.phaseCta span {
+/* The label may shorten with an ellipsis; nothing here may widen the card
+   (a nowrap run inside a grid otherwise pushes the whole column wider). */
+.phaseCta {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.phaseCtaText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phaseCtaTime {
+  flex: none;
   margin-left: auto;
   opacity: 0.85;
   font-variant-numeric: tabular-nums;
@@ -1054,6 +1100,7 @@
 .phases li {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 /* Two measured tiles per card, same shape in all three. */
@@ -1222,4 +1269,30 @@
   color: var(--lx-ink-2, var(--lx-ink));
   font-size: 14px;
   line-height: 1.65;
+}
+
+/* Press feedback and touch-safe hover. */
+.door:active,
+.phaseCta:active {
+  transform: scale(0.98);
+  transition-duration: 60ms;
+}
+.play:active,
+.copy:active {
+  transform: scale(0.94);
+  transition-duration: 60ms;
+}
+@media (hover: none) {
+  .clip:hover,
+  .door:hover,
+  .phaseCta:hover,
+  .play:hover {
+    transform: none;
+  }
+  .clip:hover .bigPlay {
+    transform: none;
+  }
+  .clip:hover .bigPlay::after {
+    animation: none;
+  }
 }

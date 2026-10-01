@@ -529,3 +529,24 @@
 .news > li {
   padding: 8px 10px;
 }
+
+/* The way from the card to the full plans page. */
+.go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 120ms var(--lx-ease-pop, ease);
+}
+
+.go:active {
+  transform: scale(0.98);
+}
