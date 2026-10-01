@@ -1187,3 +1187,37 @@ it("keeps print header text inside a quoted CSS string", async () => {
   expect(css).not.toContain("</style>");
   expect(container.querySelector("script")).toBeNull();
 });
+
+it("marks the portaled shell toolbar hidden for the print renderer", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const shell = document.createElement("div");
+  shell.setAttribute("data-lightbox-shell", "");
+  const slot = document.createElement("div");
+  slot.setAttribute("data-shell-toolbar", "");
+  document.body.append(shell);
+  shell.append(slot, container);
+  try {
+    window.history.replaceState(
+      null,
+      "",
+      `/?call=${call}&view=document&print=1`,
+    );
+    await render(call);
+    expect(
+      slot.querySelector(
+        '[data-placement="toolbar"][data-report-print="true"]',
+      ),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-placement="toolbar"]')).toBeNull();
+  } finally {
+    document.body.append(container);
+    shell.remove();
+  }
+});

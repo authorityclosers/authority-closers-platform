@@ -713,6 +713,8 @@ export function ReportModes({
   const view: View = linked
     ? (linked.view ?? preferredView)
     : (local.view ?? preferredView);
+  const printView =
+    view === "document" && new URLSearchParams(search).get("print") === "1";
   const currentSection = panels.some((panel) => panel.id === readingSection)
     ? view === "tabs"
       ? selected
@@ -944,6 +946,7 @@ export function ReportModes({
       className={styles.navRow}
       data-report-nav
       data-placement={slot ? "toolbar" : undefined}
+      data-report-print={printView || undefined}
     >
       {view === "tabs" && (
         <nav
@@ -1102,9 +1105,7 @@ export function ReportModes({
       data-view={view}
       data-report-section={currentSection}
       data-text-size={textSize}
-      data-report-print={
-        new URLSearchParams(search).get("print") === "1" || undefined
-      }
+      data-report-print={printView || undefined}
     >
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>

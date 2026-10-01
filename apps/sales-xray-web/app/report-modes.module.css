@@ -421,7 +421,9 @@
   line-height: 1.5;
 }
 
-.workspace[data-view="reading"] .section :where(p, li, blockquote, dd, td) {
+.workspace:is([data-view="reading"], [data-view="tabs"])
+  .section
+  :where(p, li, blockquote, dd, td, button, summary) {
   font-size: var(--report-font-size);
 }
 
@@ -1042,7 +1044,7 @@
 }
 
 /* The renderer requests this page without opening a browser print dialog. */
-.workspace[data-report-print="true"] .navRow,
+.navRow[data-report-print="true"],
 .workspace[data-report-print="true"] .documentActions {
   display: none;
 }
@@ -1121,6 +1123,13 @@
 
   .documentPage tr {
     break-inside: avoid;
+  }
+
+  .documentPage
+    [data-report-mode-section="transcript"]
+    > .docContent
+    > details {
+    display: block !important;
   }
 
   .documentPage thead {
