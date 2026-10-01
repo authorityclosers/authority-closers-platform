@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import {
   useCallback,
   useEffect,
@@ -143,9 +144,13 @@ function Segmented<T extends string>({
   );
 }
 
-function Steps({ current }: { current: "choose" | "pay" | "active" }) {
-  const order = ["choose", "pay", "active"] as const;
-  const labels = { choose: "Choose a plan", pay: "Pay", active: "Plan active" };
+function Steps({ current }: { current: "choose" | "pay" | "subscription" }) {
+  const order = ["choose", "pay", "subscription"] as const;
+  const labels = {
+    choose: "Choose a plan",
+    pay: "Pay",
+    subscription: "Subscription status",
+  };
   return (
     <ol className={styles.steps} aria-label="Purchase steps">
       {order.map((step, index) => (
@@ -233,7 +238,7 @@ function OfflinePay({
   amount: number | null;
 }) {
   const upiLink = offline.upiId
-    ? `upi://pay?pa=${encodeURIComponent(offline.upiId)}&pn=${encodeURIComponent(offline.payeeName ?? "Authority Closers")}&cu=INR${amount ? `&am=${(amount / 100).toFixed(2)}` : ""}`
+    ? `upi://pay?pa=${encodeURIComponent(offline.upiId)}&pn=${encodeURIComponent(offline.payeeName ?? "")}&cu=INR${amount ? `&am=${(amount / 100).toFixed(2)}` : ""}`
     : null;
   return (
     <div className={styles.offline} data-offline-payment>
@@ -242,6 +247,16 @@ function OfflinePay({
         After you pay, we add your minutes. Send us the payment reference from{" "}
         {CONTACT.split("@")[0]} if it takes more than one working day.
       </p>
+      {upiLink ? (
+        <QRCodeSVG
+          value={upiLink}
+          size={160}
+          marginSize={4}
+          role="img"
+          title="Scan to pay by UPI"
+          aria-label="Scan to pay by UPI"
+        />
+      ) : null}
       {offline.upiId ? (
         <div className={styles.payRow}>
           <span>
@@ -455,8 +470,8 @@ export function PlansView({
   const allowance = fallback.status === "ready" ? fallback.value : null;
   const offlinePay =
     offline.status === "ready" && offline.value.enabled ? offline.value : null;
-  const stage: "choose" | "pay" | "active" = current
-    ? "active"
+  const stage: "choose" | "pay" | "subscription" = current
+    ? "subscription"
     : busy === "checkout"
       ? "pay"
       : "choose";
@@ -497,17 +512,8 @@ export function PlansView({
     async (hosted: Hosted, orderId: string) => {
       const result = await openHostedCheckout(hosted, orderId);
       if (result === "left") return;
-      if (result === "done") {
-        router.push(returnPath(orderId));
-        return;
-      }
-      notify({
-        id: "billing",
-        tone: "info",
-        title: "Payment not completed",
-        message: "No money was taken. You can try again whenever you like.",
-        timeout: 6000,
-      });
+      // Both SDK outcomes need the canonical server-read order result.
+      router.push(returnPath(orderId));
     },
     [router],
   );
@@ -848,11 +854,11 @@ export function PlansView({
     <>
       <div className={styles.planHead}>
         <div>
-          <h2>You are on {current.planName}</h2>
+          <h2>{current.planName} subscription</h2>
           <p className={styles.hint}>
             {current.account === "organisation"
-              ? `${current.seats} seats · one shared pool`
-              : "Your minutes are ready"}
+              ? `${current.seats} subscription seats`
+              : "Subscription details"}
             {current.mode === "test" ? " · TEST" : ""}
           </p>
         </div>
@@ -872,7 +878,11 @@ export function PlansView({
         <Ring allowance={mePlan?.allowance ?? allowance} />
         <dl className={styles.rows}>
           <div>
-            <dt>This {current.interval}</dt>
+            <dt>Current plan</dt>
+            <dd>{mePlan?.plan.name ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Current allowance</dt>
             <dd>
               {mePlan && !mePlan.allowance.unlimited
                 ? `${count(minutes(mePlan.allowance.allowanceSeconds))} minutes`
@@ -933,10 +943,9 @@ export function PlansView({
       <h2>Manage</h2>
       {current.cancelAtPeriodEnd ? (
         <p className={styles.note}>
-          Renewal is off. You keep {current.planName} until{" "}
-          {day(current.currentPeriod?.end ?? current.renewsAt)}. Top-up minutes
-          stay usable until they expire. To continue after that, choose a plan
-          again.
+          Renewal is off for this subscription. The recorded period ends{" "}
+          {day(current.currentPeriod?.end ?? current.renewsAt)}. Check your
+          current plan and available minutes above before analysing a call.
         </p>
       ) : cancelAsk ? (
         <div
@@ -945,9 +954,8 @@ export function PlansView({
           aria-label="Confirm cancel"
         >
           <p>
-            Stop the next renewal? You keep the plan until{" "}
-            {day(current.currentPeriod?.end ?? current.renewsAt)} and nothing is
-            charged again.
+            Stop the next renewal for this subscription? The recorded period
+            ends {day(current.currentPeriod?.end ?? current.renewsAt)}.
           </p>
           <div className={styles.actions}>
             <button
@@ -970,9 +978,8 @@ export function PlansView({
       ) : (
         <>
           <p className={styles.hint}>
-            Cancel stops the next renewal. You keep the plan until{" "}
-            {day(current.currentPeriod?.end ?? current.renewsAt)}, and nothing
-            is charged again.
+            Cancel stops the next renewal for this subscription. The recorded
+            period ends {day(current.currentPeriod?.end ?? current.renewsAt)}.
           </p>
           <button
             type="button"
@@ -1001,7 +1008,7 @@ export function PlansView({
         <header className={styles.top}>
           <div className={styles.brand}>
             <Sparkles size={18} aria-hidden="true" />
-            <h1>{current ? "Your plan" : "Plans"}</h1>
+            <h1>{current ? "Your subscription" : "Plans"}</h1>
           </div>
           <Steps current={stage} />
         </header>

@@ -164,11 +164,7 @@ export function OrderReturn({
             size={40}
             aria-hidden="true"
           />
-          <h2>
-            {order.kind === "top_up"
-              ? "Top-up added"
-              : "Your minutes are ready"}
-          </h2>
+          <h2>Payment confirmed</h2>
           <dl className={styles.rows}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
@@ -181,7 +177,7 @@ export function OrderReturn({
               </div>
             ) : null}
             <div>
-              <dt>Minutes</dt>
+              <dt>Order minutes</dt>
               <dd>{count(order.minutes)}</dd>
             </div>
             <div>
@@ -216,13 +212,11 @@ export function OrderReturn({
         <>
           <CircleX className={styles.iconBad} size={40} aria-hidden="true" />
           <h2>
-            {order.status === "failed"
-              ? "Payment did not go through"
-              : "The payment page timed out"}
+            {order.status === "failed" ? "Payment failed" : "Order expired"}
           </h2>
           <p className={styles.hint}>
-            No money was taken. Check the details and try again whenever you
-            like.
+            We have not confirmed payment for this order. If your bank shows a
+            debit, check its status before starting another payment.
           </p>
           <Link className={styles.primary} href={plansHref}>
             Back to plans

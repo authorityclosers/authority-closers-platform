@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import jsQR from "jsqr";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -106,6 +107,18 @@ const comingSoon: BillingClient = {
   cancelSubscription: notDeployed,
 };
 
+const subscriptionCheckout = () =>
+  fixtureBilling.checkout(
+    {
+      kind: "subscription",
+      account: "personal",
+      planKey: "personal",
+      interval: "month",
+      seats: 1,
+    },
+    "regression-subscription",
+  );
+
 const text = () => host.textContent ?? "";
 const button = (label: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -181,7 +194,7 @@ it("shows the plan you are on, with cancel at period end, once the provider conf
   );
   fixtureProviderReports(checkout.order.orderId, "paid");
   await render(<PlansView client={fixtureBilling} />);
-  expect(text()).toContain("You are on Personal");
+  expect(text()).toContain("Personal subscription");
   expect(text()).toContain("862");
   expect(text()).toContain("Top up 100 minutes · ₹299");
   await act(async () => button("Cancel renewal").click());
@@ -195,7 +208,7 @@ it("shows the plan you are on, with cancel at period end, once the provider conf
   ).toBe(true);
 });
 
-it("the return page only reads: awaiting → paid when the provider reports, failed says no money was taken", async () => {
+it("the return page only reads: awaiting → paid when the server confirms payment", async () => {
   const checkout = await fixtureBilling.checkout(
     {
       kind: "subscription",
@@ -218,7 +231,7 @@ it("the return page only reads: awaiting → paid when the provider reports, fai
   // The page polls every 3 s.
   for (let i = 0; i < 45; i += 1)
     await act(async () => new Promise((resolve) => setTimeout(resolve, 80)));
-  expect(text()).toContain("Your minutes are ready");
+  expect(text()).toContain("Payment confirmed");
   expect(text()).toContain("₹2,499");
 
   await act(async () => root.unmount());
@@ -236,9 +249,223 @@ it("the return page only reads: awaiting → paid when the provider reports, fai
   await render(
     <OrderReturn orderId={failed.order.orderId} client={fixtureBilling} />,
   );
-  expect(text()).toContain("Payment did not go through");
-  expect(text()).toContain("No money was taken");
+  expect(text()).toContain("Payment failed");
+  expect(text()).not.toContain("No money was taken");
 }, 15_000);
+
+it("reads the order result after SDK dismissal without claiming a bank outcome", async () => {
+  const script = document.createElement("script");
+  script.type = "text/plain"; // No provider script or network request in this fixture.
+  script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  script.dataset.loaded = "true";
+  document.head.append(script);
+  vi.stubGlobal(
+    "Razorpay",
+    class {
+      constructor(private options: { modal: { ondismiss: () => void } }) {}
+      open() {
+        this.options.modal.ondismiss();
+      }
+    },
+  );
+  try {
+    await render(
+      <PlansView
+        client={{
+          ...fixtureBilling,
+          checkout: async (...args) => ({
+            ...(await fixtureBilling.checkout(...args)),
+            hosted: {
+              kind: "client_sdk",
+              provider: "razorpay",
+              url: null,
+              params: {},
+              expiresAt: "2030-01-01T00:00:00Z",
+            },
+          }),
+        }}
+      />,
+    );
+    await act(async () => button("Pay ₹2,499").click());
+    await settle();
+    expect(push).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/account\/billing\/return\?order=fixture-/),
+    );
+    expect(text()).not.toMatch(
+      /No money was taken|Payment not completed|try again whenever/,
+    );
+  } finally {
+    script.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+it.each(["failed", "expired"] as const)(
+  "shows %s without promising no debit or advising an immediate retry",
+  async (status) => {
+    const checkout = await subscriptionCheckout();
+    await render(
+      <OrderReturn
+        orderId={checkout.order.orderId}
+        client={{
+          ...fixtureBilling,
+          readOrder: async () => ({ ...checkout.order, status }),
+        }}
+      />,
+    );
+    expect(text()).toContain(
+      status === "failed" ? "Payment failed" : "Order expired",
+    );
+    expect(text()).toContain("If your bank shows a debit, check its status");
+    expect(text()).not.toMatch(/No money was taken|try again whenever/);
+  },
+);
+
+it.each([
+  ["pending_authorisation", "Waiting for your bank"],
+  ["past_due", "Payment due"],
+  ["halted", "Paused"],
+] as const)(
+  "labels a %s subscription without treating it as access",
+  async (status, label) => {
+    const checkout = await subscriptionCheckout();
+    fixtureProviderReports(checkout.order.orderId, "paid");
+    const { current } = await fixtureBilling.readSubscriptions("personal");
+    const me = await fixtureBilling.readMePlan();
+    await render(
+      <PlansView
+        client={{
+          ...fixtureBilling,
+          readSubscriptions: async () => ({
+            current: { ...current!, status },
+            past: [],
+          }),
+          readMePlan: async () => ({
+            ...me,
+            plan: { key: "trial", name: "Trial" },
+            allowance: {
+              unlimited: false,
+              allowanceSeconds: 6000,
+              committedSeconds: 6000,
+              availableSeconds: 0,
+            },
+          }),
+        }}
+      />,
+    );
+    expect(host.querySelector(`[data-status="${status}"]`)?.textContent).toBe(
+      label,
+    );
+    expect(text()).toContain("Current planTrial");
+    expect(text()).toContain("0minutes left");
+    expect(text()).not.toMatch(
+      /Plan active|Your minutes are ready|You are on Personal/,
+    );
+  },
+);
+
+it.each(["unavailable", "zero"] as const)(
+  "shows a historical paid receipt with %s current balance without granting minutes",
+  async (balance) => {
+    const checkout = await subscriptionCheckout();
+    fixtureProviderReports(checkout.order.orderId, "paid");
+    const topUp = await fixtureBilling.checkout(
+      {
+        kind: "top_up",
+        account: "personal",
+        planKey: "personal",
+        packKey: "personal_100",
+      },
+      "historical-top-up",
+    );
+    const order = balance === "zero" ? topUp.order : checkout.order;
+    const me = await fixtureBilling.readMePlan();
+    const readMePlan = vi.fn(
+      balance === "unavailable"
+        ? notDeployed
+        : async () => ({
+            ...me,
+            allowance: {
+              unlimited: false,
+              allowanceSeconds: 0,
+              committedSeconds: 0,
+              availableSeconds: 0,
+            },
+          }),
+    );
+    await render(
+      <OrderReturn
+        orderId={order.orderId}
+        client={{
+          ...fixtureBilling,
+          readMePlan,
+          readOrder: async () => ({
+            ...order,
+            status: "paid",
+            paidAt: "2020-01-01T00:00:00Z",
+          }),
+        }}
+      />,
+    );
+    expect(text()).toContain("Payment confirmed");
+    expect(text()).toContain("Order minutes");
+    expect(text()).not.toMatch(/Your minutes are ready|Top-up added/);
+    expect(readMePlan).not.toHaveBeenCalled(); // A receipt does not claim a current balance.
+  },
+);
+
+it("encodes the displayed fictional offline payee and UPI ID locally, retaining not-on-sale", async () => {
+  const offline = {
+    ...(await fixtureBilling.readOfflinePayment()),
+    upiId: "fictional+pay@upi",
+    payeeName: "Fictional & Payee",
+  };
+  await render(
+    <PlansView
+      client={{ ...comingSoon, readOfflinePayment: async () => offline }}
+    />,
+  );
+  const uri =
+    "upi://pay?pa=fictional%2Bpay%40upi&pn=Fictional%20%26%20Payee&cu=INR";
+  expect(text()).toContain(offline.upiId);
+  expect(text()).toContain(offline.payeeName);
+  expect(text()).toContain("Not on sale yet");
+  expect(
+    host
+      .querySelector<HTMLAnchorElement>('a[href^="upi:"]')
+      ?.getAttribute("href"),
+  ).toBe(uri);
+  const svg = host.querySelector<SVGSVGElement>(
+    'svg[aria-label="Scan to pay by UPI"]',
+  )!;
+  // Rasterise the rendered SVG's black module runs; decode with a separate reader.
+  const modules = Number(svg.getAttribute("viewBox")!.split(" ")[2]);
+  const size = modules * 8;
+  const pixels = new Uint8ClampedArray(size * size * 4).fill(255);
+  const path = svg.querySelector('path[fill="#000000"]')!.getAttribute("d")!;
+  for (const match of path.matchAll(/M(\d+)[ ,](\d+)\s*h(\d+)v1H\d+z/g)) {
+    const [, x, y, width] = match.map(Number);
+    for (let row = y * 8; row < (y + 1) * 8; row++)
+      for (let col = x * 8; col < (x + width) * 8; col++)
+        pixels.fill(0, (row * size + col) * 4, (row * size + col) * 4 + 3);
+  }
+  expect(jsQR(pixels, size, size)?.data).toBe(uri);
+});
+
+it("keeps bank-only offline details usable without a UPI QR", async () => {
+  const offline = {
+    ...(await fixtureBilling.readOfflinePayment()),
+    upiId: null,
+  };
+  await render(
+    <PlansView
+      client={{ ...comingSoon, readOfflinePayment: async () => offline }}
+    />,
+  );
+  expect(text()).toContain("Fictional Bank");
+  expect(host.querySelector('svg[aria-label="Scan to pay by UPI"]')).toBeNull();
+  expect(host.querySelector('a[href^="upi:"]')).toBeNull();
+});
 
 it("asks a signed-out visitor to sign in instead of paying", async () => {
   await render(<PlansView client={fixtureBilling} />, false);
