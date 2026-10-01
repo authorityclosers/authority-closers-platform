@@ -1,6 +1,6 @@
 /** Immutable published copy. Change the version when either policy or consent changes. */
-export const LEARNER_POLICY_VERSION = "ac-learner-terms-privacy-2026-09-13-v1";
-export const LEARNER_POLICY_EFFECTIVE_DATE = "13 September 2026";
+export const LEARNER_POLICY_VERSION = "ac-learner-terms-privacy-2026-09-30-v1";
+export const LEARNER_POLICY_EFFECTIVE_DATE = "30 September 2026";
 export const LEARNER_POLICY_CONTACT = "admin@authorityclosers.com";
 export const LEARNER_CONSENT_COPY = {
   beforeTerms: "I am 18 or older and agree to the ",
@@ -75,7 +75,7 @@ export const LEARNER_PRIVACY = [
     heading: "Account information and its purpose",
     paragraphs: [
       "Email/password registration collects your first name, email address, contact number, password, age-and-terms declaration and consent version. We use these to create and protect your account, verify email, manage access and respond to support requests. Passwords are stored as salted password hashes, not plain text. The contact number is retained in your registration profile; it is not used for automated WhatsApp or promotional messaging.",
-      "If you choose Google sign-in, we receive the Google account identifier and basic profile information, including verified email and display name, needed to authenticate or link your identity. Authority Closers does not receive your Google password. Google handles its own sign-in interaction under its policies. We record session and security information, which can include IP address, browser/device details, timestamps, selected organization context and account actions, to protect access and investigate incidents.",
+      "If you choose Google sign-in, we receive the Google account identifier and basic profile information, including verified email and display name, needed to authenticate or link your identity. Authority Closers does not receive your Google password. Google handles its own sign-in interaction under its policies. We record session and security information, which can include IP address, browser/device details, timestamps, selected organization context and account actions, to protect access and investigate incidents. With Google sign-in we also keep your first and last name, language setting, your Google Workspace organization's email domain when there is one, and our own small copy of your Google profile photo; we refresh them each time you sign in with Google.",
     ],
   },
   {

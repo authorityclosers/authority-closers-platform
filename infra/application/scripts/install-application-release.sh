@@ -393,7 +393,7 @@ validate_release_profile() {
     "AC_COMPOSE_PROJECT=ac-application-$target_environment"
     "AC_ENVIRONMENT=$target_environment"
     "AC_STATE_ROOT=/srv/authority-closers/state/application/$target_environment"
-    "AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-13-v1"
+    "AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-30-v1"
   )
   case "$target_environment" in
     staging)

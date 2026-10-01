@@ -1121,7 +1121,7 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
 
 
 def test_release_consent_profiles_match_the_reviewed_learner_policy() -> None:
-    version = "ac-learner-terms-privacy-2026-09-13-v1"
+    version = "ac-learner-terms-privacy-2026-09-30-v1"
     policy = (ROOT / "apps/learner-web/app/lib/learner-policy.ts").read_text(encoding="utf-8")
     assert f'export const LEARNER_POLICY_VERSION = "{version}";' in policy
     for environment in ("staging", "production"):
@@ -1228,12 +1228,15 @@ def test_installer_profile_parser_rejects_noncanonical_filesystem_root(tmp_path:
 
 
 @pytest.mark.parametrize("target_environment", ("staging", "production"))
-@pytest.mark.parametrize("consent_version", (None, "staging-test-document-v1", "unreviewed-v2"))
+@pytest.mark.parametrize(
+    "consent_version",
+    (None, "ac-learner-terms-privacy-2026-09-13-v1", "staging-test-document-v1", "unreviewed-v2"),
+)
 def test_installer_rejects_absent_or_unreviewed_release_consent(
     tmp_path: Path, target_environment: str, consent_version: str | None
 ) -> None:
     profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes()
-    reviewed = b"AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-13-v1\n"
+    reviewed = b"AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-30-v1\n"
     replacement = (
         b""
         if consent_version is None
