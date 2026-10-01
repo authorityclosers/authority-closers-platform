@@ -923,7 +923,8 @@
   transition:
     background-color var(--lx-dur-quick) var(--lx-ease-quick),
     color var(--lx-dur-quick) var(--lx-ease-quick),
-    box-shadow var(--lx-dur-quick) var(--lx-ease-quick);
+    box-shadow var(--lx-dur-quick) var(--lx-ease-quick),
+    transform 160ms var(--lx-ease-pop, ease);
 }
 .lenses button:hover {
   color: var(--lx-ink);
@@ -1009,4 +1010,82 @@
   );
   opacity: 0.7;
   pointer-events: none;
+}
+
+/* Phones: the switch fills its row with short labels (the full label stays
+   the accessible name), the legend drops to its own line, and the four facts
+   wrap instead of running off the card. */
+@media (max-width: 640px) {
+  .card {
+    gap: 10px;
+    padding: 14px 14px 10px;
+  }
+  .head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .lenses {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lenses button {
+    min-height: 34px;
+    padding: 0 6px;
+    font-size: 0;
+    line-height: 0;
+  }
+  .lenses button::before {
+    content: attr(data-short);
+    font: 600 12.5px/1 var(--lx-font-ui);
+  }
+  .legend {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0 2px;
+  }
+  .legend > span {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  .stat {
+    gap: 9px;
+    padding: 11px 12px 12px;
+  }
+  .icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+  }
+  .body b {
+    font-size: 16px;
+    white-space: normal;
+  }
+  .body b small {
+    font-size: 11px;
+  }
+  .body > small {
+    overflow: visible;
+    font-size: 11px;
+    line-height: 1.25;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
+/* Press feedback and touch-safe hover: chips and the switch squeeze on tap;
+   the facts do not lift on touch screens. */
+.speaker:active,
+.lenses button:active,
+.legend > span:active {
+  transform: scale(0.95);
+  transition-duration: 60ms;
+}
+@media (hover: none) {
+  .stat:hover {
+    background: transparent;
+  }
+  .stat:hover .icon {
+    transform: none;
+  }
 }

@@ -71,10 +71,12 @@ type Tone = (typeof KINDS)[number]["tone"];
 
 /** What the band under the waveform shows: one view at a time. */
 type Lens = "who" | "stages" | "talk-share";
-const LENSES: Array<{ key: Lens; label: string }> = [
-  { key: "who", label: "Who talked" },
-  { key: "stages", label: "Call stages" },
-  { key: "talk-share", label: "Talk share by minute" },
+/** `short` is what a phone-width control shows (CSS); the full label stays
+    the accessible name. */
+const LENSES: Array<{ key: Lens; label: string; short: string }> = [
+  { key: "who", label: "Who talked", short: "Who talked" },
+  { key: "stages", label: "Call stages", short: "Stages" },
+  { key: "talk-share", label: "Talk share by minute", short: "Talk share" },
 ];
 const LENS_KEY = "ac.xray.map-lens";
 
@@ -544,6 +546,7 @@ export function CallMap({
                 key={option.key}
                 type="button"
                 aria-pressed={activeLens === option.key}
+                data-short={option.short}
                 onClick={() => chooseLens(option.key)}
               >
                 {option.label}

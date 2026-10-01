@@ -541,7 +541,10 @@ export function OverviewHook({
       label: "Prospect",
       Icon: UserRound,
       count: overview?.prospect_interpretations.length ?? 0,
-      unit: "reads",
+      unit:
+        (overview?.prospect_interpretations.length ?? 0) === 1
+          ? "read"
+          : "reads",
     },
     {
       id: "next-call-plan",
@@ -792,8 +795,8 @@ export function OverviewHook({
                       onClick={() => onSeek(phase.note.evidence[0].start_ms)}
                     >
                       <Play size={13} aria-hidden="true" />
-                      {phase.cta}
-                      <span>
+                      <span className={styles.phaseCtaText}>{phase.cta}</span>
+                      <span className={styles.phaseCtaTime}>
                         {formatClock(phase.note.evidence[0].start_ms)}
                       </span>
                     </button>

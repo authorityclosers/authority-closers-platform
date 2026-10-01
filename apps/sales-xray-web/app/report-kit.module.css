@@ -477,3 +477,23 @@
     display: none;
   }
 }
+
+/* ---- Press feedback ----
+   Every tappable control answers the finger at once with a small squeeze;
+   on touch screens the hover lift never sticks after a tap. */
+.clipPlay:active,
+.clipContext:active,
+.copy:active,
+.locked button:active {
+  transform: scale(0.94);
+  transition-duration: 60ms;
+}
+@media (hover: none) {
+  .clipPlay:hover {
+    background: var(--lx-teal-soft);
+  }
+  .clipContext:hover {
+    border-color: var(--lx-line);
+    color: var(--lx-ink-3, var(--lx-muted));
+  }
+}
