@@ -20,7 +20,9 @@ small, content-free description of the exception chain on the job row:
   may be tagged by a discriminator) hides everything below its label. A mapping key of any type, an
   unexpected extra key, or any part under an unknown schema or an unresolved
   union branch becomes ``<key>``, because a provider chose it and it can carry a
-  name or an id;
+  name or an id. When the validating model cannot be identified without doubt
+  (a title collision, a type adapter, a root model), nothing in the location is
+  kept;
 - ``validator_revision``: the report validator revision for C4 and C5.
 
 The chain follows ``__cause__`` and then ``__context__`` (also when the context
@@ -41,7 +43,7 @@ from collections.abc import Mapping, Sequence, Set
 from pathlib import PurePath
 from typing import Annotated, Any, TypeGuard, Union, get_args, get_origin
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, RootModel, ValidationError
 
 from ac_platform.conversation_intelligence.reports import REPORT_VALIDATOR_REVISION
 
@@ -176,10 +178,9 @@ def _step(node: object, part: object) -> tuple[str, object]:
         # Pydantic names the union branch first; that label is not an input key.
         return _branch(candidates, part)
     if not candidates:
-        # No validating model was resolved at the root: keep indices only.
-        if isinstance(part, int) and not isinstance(part, bool):
-            return str(part), None
-        return _REDACTED_KEY, None
+        # No supported root schema: an integer could be a mapping key as easily
+        # as an index, so nothing in this location is kept.
+        return _REDACTED_KEY, _OPAQUE
     single = candidates[0]
     if _is_mapping(single):
         # Any key of a mapping is provider data, whatever its type or word: a
@@ -275,10 +276,25 @@ def _item_schema(node: object, index: int) -> object:
 
 
 def _validating_model(error: ValidationError) -> type[BaseModel] | None:
-    """The one loaded model named by the error's title, else None (and every key is redacted)."""
+    """The one loaded model the error's title can only mean, else None (every part is redacted).
 
-    matches = [model for model in _models() if model.__name__ == error.title]
-    return matches[0] if len(matches) == 1 else None
+    A title is a class name or a configured title, and another model can carry
+    the same word, so any collision fails closed. Root models and type adapters
+    are not supported roots.
+    """
+
+    title = error.title
+    matches = [
+        model
+        for model in _models()
+        if model.__name__ == title or model.model_config.get("title") == title
+    ]
+    if len(matches) != 1:
+        return None
+    model = matches[0]
+    if issubclass(model, RootModel) or (model.model_config.get("title") or model.__name__) != title:
+        return None
+    return model
 
 
 def _models() -> list[type[BaseModel]]:

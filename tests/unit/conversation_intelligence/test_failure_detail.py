@@ -7,7 +7,7 @@ import re
 from typing import Annotated, Any, Literal
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, TypeAdapter, ValidationError
 
 from ac_platform.conversation_intelligence import failure_detail as module
 from ac_platform.conversation_intelligence import inference_tasks, reports
@@ -208,8 +208,9 @@ def test_loc_keeps_schema_keys_and_indices_only() -> None:
     assert module._loc("not-a-tuple", "string_type", draft) == "<key>"
 
 
-def test_unknown_schema_fails_closed_but_keeps_indices() -> None:
-    assert module._loc(("strengths", 0, "quote"), "string_type", None) == "<key>.0.<key>"
+def test_unknown_schema_fails_closed_including_indices() -> None:
+    # CTO review of 8a8d114e: without a known schema an integer may be a mapping key.
+    assert module._loc(("strengths", 0, "quote"), "string_type", None) == "<key>.<key>.<key>"
 
 
 class _ProviderExtras(BaseModel):
@@ -302,10 +303,10 @@ def test_union_branch_label_does_not_consume_a_string_mapping_key() -> None:
 def test_an_unresolved_union_branch_hides_everything_below_it() -> None:
     union = dict[str, int] | list[int]
     assert module._loc(("findings", "function-after[x]", 7, "quote"), "int_type", None) == (
-        "<key>.<key>.7.<key>"
+        "<key>.<key>.<key>.<key>"
     )
     assert module._step(union, "custom-label")[1] is module._OPAQUE
-    assert module._loc((1, "a"), "int_type", None) == "1.<key>"
+    assert module._loc((1, "a"), "int_type", None) == "<key>.<key>"
 
 
 class _ReviewTuple(BaseModel):
@@ -382,6 +383,59 @@ def test_a_tagged_union_hides_string_mapping_keys_that_collide_with_fields() -> 
     value = {"kind": "_ReviewListBranch", "findings": {SENTINEL: {"quote": "fictional noninteger"}}}
     locs = _locs(_ReviewStrTaggedUnion, {"result": value})
     assert locs and all("quote" not in loc and loc.startswith("result.<key>") for loc in locs)
+
+
+class _ReviewTitleList(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: list[int]
+
+
+class _ReviewTitleMap(BaseModel):
+    model_config = ConfigDict(title="_ReviewTitleList", strict=True, extra="forbid")
+    findings: dict[int, _ReviewValue]
+
+
+class _ReviewTitleField(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    findings: _ReviewValue
+
+
+class _ReviewTitleFieldMap(BaseModel):
+    model_config = ConfigDict(title="_ReviewTitleField", strict=True, extra="forbid")
+    findings: dict[str, _ReviewValue]
+
+
+class _UnknownTitleMap(BaseModel):
+    model_config = ConfigDict(title="NoLoadedModelHasThisTitle", strict=True, extra="forbid")
+    findings: dict[int, int]
+
+
+class _ReviewRootMap(RootModel[dict[str, int]]):
+    model_config = ConfigDict(strict=True)
+
+
+def test_a_configured_title_collision_fails_closed() -> None:
+    # CTO review of 8a8d114e: the title names a different loaded model.
+    value = {"findings": {123456789: {"quote": "fictional noninteger"}}}
+    assert all(set(loc.split(".")) == {"<key>"} for loc in _locs(_ReviewTitleMap, value))
+    value = {"findings": {"quote": {"quote": "fictional noninteger"}}}
+    assert all("quote" not in loc for loc in _locs(_ReviewTitleFieldMap, value))
+
+
+def test_unknown_titles_type_adapters_and_root_models_fail_closed() -> None:
+    # A unique configured title resolves to its own model; the numeric key is still redacted.
+    assert _locs(_UnknownTitleMap, {"findings": {123456789: "fictional noninteger"}}) == [
+        "findings.<key>"
+    ]
+    with pytest.raises(ValidationError) as caught:
+        TypeAdapter(dict[int, int]).validate_python(
+            {123456789: "fictional noninteger"}, strict=True
+        )
+    detail = build_failure_detail(caught.value, stage="C5", failure_code=CATCH_ALL)
+    assert [entry["loc"] for entry in detail["errors"]] == ["<key>"]
+    assert "123456789" not in canonical_failure_detail(detail)
+    locs = _locs(_ReviewRootMap, {"root": "fictional noninteger"})
+    assert locs and all("root" not in loc for loc in locs)
 
 
 def test_list_indices_are_still_kept() -> None:
