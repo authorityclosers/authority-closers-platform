@@ -1,0 +1,17 @@
+{
+  "issues": [
+    {"id": "done", "identifier": "DEMO-SESSION", "assigneeAgentId": "builder", "startedAt": "2026-09-20T00:00:00Z"},
+    {"id": "unfinished", "identifier": "DEMO-OTHER", "assigneeAgentId": "builder"}
+  ],
+  "agents": [{"id": "builder", "name": "Fictional Builder", "adapterType": "codex_local"}],
+  "activity": {"done": [{"actorType": "agent", "agentId": "builder", "createdAt": "2026-09-23T00:00:00Z",
+    "details": {"changes": {"status": {"from": "in_progress", "to": "done"}}}}]},
+  "runs": [
+    {"id": "second", "agentId": "builder", "status": "succeeded", "startedAt": "2026-09-22T00:00:00Z", "contextSnapshot": {"issueId": "done"},
+      "usageJson": {"persistedSessionId": "fictional-shared", "usageSource": "per_run", "inputTokens": 160, "outputTokens": 15, "cachedInputTokens": 100}},
+    {"id": "other", "agentId": "builder", "status": "failed", "createdAt": "2026-09-21T00:00:00Z", "contextSnapshot": {"issueId": "unfinished"},
+      "usageJson": {"persistedSessionId": "fictional-other", "inputTokens": 20, "outputTokens": 2, "cachedInputTokens": 5}},
+    {"id": "first", "agentId": "builder", "status": "succeeded", "startedAt": "2026-09-20T00:00:00Z", "contextSnapshot": {"issueId": "done"},
+      "usageJson": {"persistedSessionId": "fictional-shared", "usageSource": "per_run", "inputTokens": 100, "outputTokens": 10, "cachedInputTokens": 60}}
+  ]
+}
