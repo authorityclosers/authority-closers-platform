@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { BillingError, type BillingClient } from "../billing/billing-api";
 import { parsePlans } from "../billing/contract";
+import { readAllowance } from "../dashboard/dashboard-data";
 import {
   FIXTURE_PLANS,
   fixtureBilling,
@@ -35,11 +36,11 @@ vi.mock("../acquisition-shell", () => ({
   ),
 }));
 vi.mock("../dashboard/dashboard-data", () => ({
-  readAllowance: async () => ({
+  readAllowance: vi.fn(async () => ({
     allowance_seconds: 6000,
     committed_seconds: 2280,
     available_seconds: 3720,
-  }),
+  })),
 }));
 
 (
@@ -55,6 +56,7 @@ beforeEach(() => {
   resetFixtureBilling();
   push.mockClear();
   vi.mocked(notify).mockClear();
+  vi.mocked(readAllowance).mockClear();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -136,19 +138,43 @@ const settle = async () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 80)));
 };
 
-it("shows honest not-on-sale states with no price, and the trial from the session, before the API exists", async () => {
+it("shows not-on-sale states and unknown plan/minutes when canonical reads are unavailable", async () => {
   await render(<PlansView client={comingSoon} />);
   expect(text()).toContain("Personal");
   expect(text()).toContain("Not on sale yet");
   expect(text()).not.toMatch(/₹/);
   expect(host.querySelector("[data-pay]")).toBeNull();
-  // The trial strip came from the acquisition session fallback.
-  expect(text()).toContain("62 of 100 minutes left");
+  expect(text()).toContain("Current plan and minutes unavailable");
+  expect(text()).not.toContain("62 of 100 minutes left");
+  expect(vi.mocked(readAllowance)).not.toHaveBeenCalled();
   // Enterprise asks by email; nothing is invented.
   await act(async () => button("Talk to us").click());
   expect(
     host.querySelector<HTMLAnchorElement>("[data-enterprise-send]")?.href,
   ).toMatch(/^mailto:admin@authorityclosers\.com/);
+});
+
+it("shows an unknown current subscription balance when canonical endpoints are unavailable, without reading the session", async () => {
+  const checkout = await subscriptionCheckout();
+  fixtureProviderReports(checkout.order.orderId, "paid");
+  const readMePlan = vi.fn(notDeployed);
+  await render(
+    <PlansView
+      client={{
+        ...fixtureBilling,
+        readMePlan,
+        readUsage: notDeployed,
+      }}
+    />,
+  );
+  expect(text()).toContain("Personal subscription");
+  expect(text()).toContain("Current plan—");
+  expect(text()).toContain("Current allowance—");
+  const balance = host.querySelector('[role="img"][aria-label="Minutes"]');
+  expect(balance?.querySelector("b")?.textContent).toBe("—");
+  expect(text()).not.toContain("62minutes left");
+  expect(readMePlan).toHaveBeenCalled();
+  expect(vi.mocked(readAllowance)).not.toHaveBeenCalled();
 });
 
 it("prices the approved catalogue once on sale, sums seats for a team, and starts checkout", async () => {

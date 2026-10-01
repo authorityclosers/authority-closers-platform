@@ -53,7 +53,6 @@ import {
   planPrice,
   yearlySaving,
 } from "../billing/money";
-import { readAllowance } from "../dashboard/dashboard-data";
 import { notify } from "../notice-center";
 import { useWorkspaceAccess } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
@@ -166,20 +165,19 @@ function Steps({ current }: { current: "choose" | "pay" | "subscription" }) {
   );
 }
 
-function TrialStrip({
-  me,
-  allowance,
-}: {
-  me: MePlan | null;
-  allowance: Allowance | null;
-}) {
-  const a = me?.allowance ?? allowance;
-  if (!a) return null;
+function TrialStrip({ me }: { me: MePlan | null }) {
+  if (!me)
+    return (
+      <div className={styles.trial}>
+        <span>Current plan and minutes unavailable</span>
+      </div>
+    );
+  const a = me.allowance;
   if (a.unlimited)
     return (
       <div className={styles.trial}>
         <span>
-          <b>{me?.plan.name ?? "Your plan"}</b> · unlimited analysis time
+          <b>{me.plan.name}</b> · unlimited analysis time
         </span>
       </div>
     );
@@ -192,8 +190,7 @@ function TrialStrip({
   return (
     <div className={styles.trial}>
       <span>
-        <b>{me?.plan.name ?? "Trial"}</b> · {count(left)} of {count(total)}{" "}
-        minutes left
+        <b>{me.plan.name}</b> · {count(left)} of {count(total)} minutes left
       </span>
       <span className={styles.bar} aria-hidden="true">
         <i style={{ width: `${share * 100}%` }} />
@@ -382,30 +379,10 @@ function EnterpriseSheet({ onClose }: { onClose: () => void }) {
  * prototype (AUT-597) and contract C1: prices come only from GET /v1/plans,
  * minutes only from GET /v1/me/plan, and a plan not on sale says so.
  */
-/** The trial allowance from the acquisition session, until /v1/me/plan is deployed. */
-async function sessionAllowance(
-  signal: AbortSignal,
-): Promise<Allowance | null> {
-  try {
-    const raw = await readAllowance(signal);
-    return {
-      allowanceSeconds: raw.allowance_seconds,
-      committedSeconds: raw.committed_seconds,
-      availableSeconds: raw.available_seconds,
-      unlimited: raw.unlimited === true,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export function PlansView({
   client = liveBilling,
-  readAllowanceFallback = sessionAllowance,
 }: {
   client?: BillingClient;
-  /** The trial allowance from the acquisition session, while /v1/me/plan is not deployed. */
-  readAllowanceFallback?: (signal: AbortSignal) => Promise<Allowance | null>;
 }) {
   const router = useRouter();
   const access = useWorkspaceAccess();
@@ -428,14 +405,6 @@ export function PlansView({
     (signal) => client.readMePlan(signal),
     authenticated,
     [],
-  );
-  const [fallback] = useLoaded(
-    (signal) =>
-      readAllowanceFallback
-        ? readAllowanceFallback(signal)
-        : Promise.resolve(null),
-    authenticated && me.status === "missing",
-    [me.status],
   );
   const [subs, reloadSubs] = useLoaded(
     (signal) => client.readSubscriptions(scope, signal),
@@ -467,7 +436,6 @@ export function PlansView({
       : null;
   const current = liveSubscription(subs.status === "ready" ? subs.value : null);
   const mePlan = me.status === "ready" ? me.value : null;
-  const allowance = fallback.status === "ready" ? fallback.value : null;
   const offlinePay =
     offline.status === "ready" && offline.value.enabled ? offline.value : null;
   const stage: "choose" | "pay" | "subscription" = current
@@ -598,7 +566,7 @@ export function PlansView({
           Choose a plan and review its details before paying.
         </p>
       </div>
-      {authenticated ? <TrialStrip me={mePlan} allowance={allowance} /> : null}
+      {authenticated ? <TrialStrip me={mePlan} /> : null}
       <div className={styles.controls}>
         <Segmented
           label="Who is this for"
@@ -875,7 +843,7 @@ export function PlansView({
         </span>
       </div>
       <div className={styles.activeGrid}>
-        <Ring allowance={mePlan?.allowance ?? allowance} />
+        <Ring allowance={mePlan?.allowance ?? null} />
         <dl className={styles.rows}>
           <div>
             <dt>Current plan</dt>
