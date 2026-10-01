@@ -25,6 +25,8 @@ LANE_AGENTS = {
     "platform": "Platform Engineer",
     "admin": "Software Engineer",
     "devenv": "Dev Environment Lead",
+    "api": "Platform Engineer",
+    "billing": "Platform Engineer",
 }
 
 
