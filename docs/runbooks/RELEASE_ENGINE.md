@@ -71,10 +71,18 @@ Logs for each deploy are in `/var/log/ac-release/`.
 
 ## Admin production controls (ADR 0034)
 
-**Status: proposed; implementation pending.** The installed engine does not
-currently provide the Admin request routes, inbox consumer, `promote` command,
-or production rollback command described here. Do not use the planned commands
-below until their implementation tasks have landed and the engine is updated.
+**Status: engine side in progress.** The engine provides `promote` (with
+`--dry-run`), `rollback production` and `publish-status`. The inbox consumer
+and the Admin release routes are not implemented yet.
+
+`sudo ac-release publish-status` writes the Admin snapshot (contract v1,
+`tests/fixtures/release-control/status-v1.json`) to
+`/var/lib/ac-release/admin/outbox/status.json`: a temporary file in the same
+folder, fsync, rename, mode 0644, at most 256 KB. Every staging tick that
+reaches main also publishes it; a publish error is reported as
+`status_publish_error` in the tick result and never fails the tick. A paused
+staging tick does nothing, so run `publish-status` after `pause` or `resume`.
+The snapshot makes no GitHub calls and at most one mirror fetch.
 
 Production Admin submits intent to the engine through the request inbox. The
 production API can create request files but cannot list the inbox. Once the
@@ -121,10 +129,17 @@ come only from production Admin; staging Admin is read-only, and CLI is the
 fallback (D3). The authorization is a new owner-only `platform_release_manage`
 capability, not `platform_access_manage` (D4; see [ADR 0031](../adr/0031-explicit-platform-and-studio-capabilities.md)).
 
-After the engine CLI work is implemented, the planned fallback commands are
-`sudo ac-release promote --bump minor` and
-`sudo ac-release rollback production`. Until then, use only the currently
-implemented commands in this runbook.
+The CLI fallback commands are `sudo ac-release promote --bump minor --version
+vX.Y.Z` and `sudo ac-release rollback production`. Both refuse until
+`/etc/ac-release/production.enabled` exists. Add `--dry-run` to either to run
+every guard and rehearse the steps without changing production, the release
+ledger, train state or failed flags. `rollback production` restores the
+previous release's core first, then its web, skipping a component production
+already runs, and records one `rollback` release only when both succeed. It
+refuses (exit 2) when there is no earlier release, the current release is
+already a rollback, production runs another pair, a build is no longer stored,
+or the database changed; a failed step exits 1. `rollback staging` still needs
+`--component core|web`.
 
 ## Sales Xray activation
 
