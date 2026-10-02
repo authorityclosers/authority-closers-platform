@@ -52,7 +52,10 @@ import type {
 import { IconBadge, Locked } from "./report-kit";
 import { timelineMoments } from "./report-moments";
 import { EntityText } from "./report-entities";
-import { useReportNavigation } from "./report-reading-context";
+import {
+  useReportDocument,
+  useReportNavigation,
+} from "./report-reading-context";
 import {
   afterPrice,
   confirmedRoles,
@@ -419,6 +422,7 @@ export function OverviewHook({
   onUnlock?: () => void;
 }) {
   const navigate = useReportNavigation();
+  const Summary = useReportDocument() ? "div" : "details";
   const go = (section: string) => navigate?.(section);
   const overview = report.overview;
   const outcome = overview?.outcome ?? null;
@@ -1115,12 +1119,14 @@ export function OverviewHook({
                 </div>
               ) : null}
               {report.summary ? (
-                <details className={styles.inShort}>
-                  <summary>Read the full summary</summary>
+                <Summary className={styles.inShort}>
+                  {Summary === "details" && (
+                    <summary>Read the full summary</summary>
+                  )}
                   <p>
                     <EntityText text={report.summary} />
                   </p>
-                </details>
+                </Summary>
               ) : null}
             </div>
           </div>

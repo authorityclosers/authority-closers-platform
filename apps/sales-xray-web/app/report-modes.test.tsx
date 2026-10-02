@@ -1,5 +1,6 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ReportModes } from "./report-modes";
 import { useReportNavigation } from "./report-reading-context";
@@ -11,6 +12,7 @@ import { useReportNavigation } from "./report-reading-context";
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  localStorage.removeItem("ac:report-text-size");
   window.history.replaceState(null, "", "/");
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -20,6 +22,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const call = "c2793fdf-4948-47e4-a4bc-973f2b7720bc";
@@ -971,5 +974,364 @@ it("browser Back cancels an unfinished reading-section jump without a return poi
   } finally {
     restoreScroll();
     restoreRect();
+  }
+});
+
+it("switches to Document view and preserves the reader's place", async () => {
+  window.history.replaceState(null, "", `/?call=${call}&section=moments`);
+  await render(call);
+
+  // Initial state in Reading view
+  expect(mode().dataset.view).toBe("reading");
+  expect(mode().dataset.reportSection).toBe("moments");
+
+  // Click Document view button
+  const docButton = container.querySelector<HTMLButtonElement>(
+    'button[title="Document view"]',
+  )!;
+  expect(docButton).not.toBeNull();
+  await act(async () => docButton.click());
+
+  // Mode and URL updated to Document view
+  expect(mode().dataset.view).toBe("document");
+  expect(window.location.search).toContain("view=document");
+  expect(window.location.search).toContain("section=moments");
+  expect(mode().dataset.reportSection).toBe("moments");
+
+  // Document view renders actions and pages
+  const pdfBtn = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Print / Save PDF"),
+  );
+  expect(pdfBtn).not.toBeNull();
+  const wordBtn = [...container.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Download Word"),
+  );
+  expect(wordBtn).toBeUndefined();
+
+  // Document renders the supplied panels, in the same order as other views.
+  const pages = container.querySelectorAll("[data-document-page]");
+  expect(pages).toHaveLength(6);
+  expect(
+    sections().map((section) => section.dataset.reportModeSection),
+  ).toEqual(panels().map((panel) => panel.id));
+  expect(container.textContent).toContain("Summary point");
+  expect(container.textContent).toContain("Conversation");
+  expect(container.textContent).not.toMatch(/Aarav|Priya|\d\.\d \/ 5/);
+
+  // Physical page counts belong to print pagination, never panel counts.
+  expect(container.textContent).not.toMatch(/Page \d+ of \d+/);
+
+  // Cover page has no running header; page 2 has running header
+  expect(pages[0].querySelector("[class*='docRunningHeader']")).toBeNull();
+  expect(pages[1].querySelector("[class*='docRunningHeader']")).not.toBeNull();
+  expect(pages[1].textContent).toContain(
+    "Authority Closers — Sales Xray call report",
+  );
+
+  // Switch back to Tabbed view preserves place
+  const tabButton = container.querySelector<HTMLButtonElement>(
+    'button[title="Tabbed view"]',
+  )!;
+  await act(async () => tabButton.click());
+  expect(mode().dataset.view).toBe("tabs");
+  expect(mode().dataset.reportSection).toBe("moments");
+  expect(window.location.search).toContain("view=tabs");
+});
+
+it("controls text size with steps 100%, 112.5%, 125% and remembers choice", async () => {
+  localStorage.clear();
+  await render(call);
+
+  expect(mode().dataset.textSize).toBe("100");
+
+  const btn125 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 125%"]',
+  )!;
+  expect(btn125).not.toBeNull();
+  await act(async () => btn125.click());
+
+  expect(mode().dataset.textSize).toBe("125");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("125");
+
+  const btn112 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 112.5%"]',
+  )!;
+  await act(async () => btn112.click());
+  expect(mode().dataset.textSize).toBe("112.5");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("112.5");
+
+  const btn100 = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Text size 100%"]',
+  )!;
+  await act(async () => btn100.click());
+  expect(mode().dataset.textSize).toBe("100");
+  expect(localStorage.getItem("ac:report-text-size")).toBe("100");
+});
+
+it("opens every top-level section as a chapter in Reading mode", async () => {
+  await render();
+  expect(mode().dataset.view).toBe("reading");
+
+  const openers = container.querySelectorAll("[class*='chapterOpener']");
+  expect(openers).toHaveLength(6);
+
+  const numbers = container.querySelectorAll("[class*='chapterNumber']");
+  expect(numbers[0].textContent).toBe("1.");
+  expect(numbers[1].textContent).toBe("2.");
+  expect(numbers[5].textContent).toBe("6.");
+
+  const titles = container.querySelectorAll("[class*='chapterTitle']");
+  expect(titles[0].textContent).toBe("Overview");
+  expect(titles[1].textContent).toBe("Prospect");
+
+  const rules = container.querySelectorAll("[class*='chapterRule']");
+  expect(rules).toHaveLength(6);
+
+  const summaries = container.querySelectorAll("[class*='chapterSummary']");
+  expect(summaries).toHaveLength(6);
+  expect(summaries[0].textContent).not.toBe("");
+  expect(summaries[1].textContent).toBe("Prospect report section.");
+  expect(container.textContent).not.toMatch(
+    /buyer readiness|stakeholder dynamics/,
+  );
+});
+
+it("hydrates a returning viewer's saved text size without retaining default attributes", async () => {
+  localStorage.setItem("ac:report-text-size", "125");
+  const element = <ReportModes panels={panels()} />;
+  const html = renderToString(element);
+  expect(html).toContain('data-text-size="100"');
+  await act(async () => root.unmount());
+  container.innerHTML = html;
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  await act(async () => {
+    root = hydrateRoot(container, element);
+  });
+  expect(mode().dataset.textSize).toBe("125");
+  expect(
+    container
+      .querySelector('[aria-label="Text size 125%"]')
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(consoleError.mock.calls.flat().join(" ")).not.toMatch(
+    /hydrat|didn't match/i,
+  );
+});
+
+it("preserves the current Reading section when moving through Document and Sections", async () => {
+  await render(call);
+  const moments = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(moments, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  expect(mode().dataset.reportSection).toBe("moments");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Document view"]')!
+      .click(),
+  );
+  expect(window.location.search).toContain("section=moments");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('button[title="Reading view"]')!
+      .click(),
+  );
+  expect(mode().dataset.reportSection).toBe("moments");
+});
+
+it.each(["reading", "document"])(
+  "positions the selected Transcript heading after rendering %s from Sections",
+  async (nextView) => {
+    window.history.replaceState(
+      null,
+      "",
+      `/?call=${call}&view=tabs&section=transcript`,
+    );
+    const destinations: HTMLElement[] = [];
+    const restore = replacePrototype(
+      "scrollIntoView",
+      function (this: HTMLElement) {
+        destinations.push(this);
+      },
+    );
+    try {
+      await render(call);
+      await settle();
+      destinations.length = 0;
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            `[title="${nextView === "document" ? "Document" : "Reading"} view"]`,
+          )!
+          .click(),
+      );
+      await settle();
+      const heading = container.querySelector<HTMLElement>(
+        '[data-report-mode-section="transcript"] h2',
+      )!;
+      expect(mode().dataset.view).toBe(nextView);
+      expect(destinations).toEqual([heading]);
+      expect(heading.isConnected).toBe(true);
+      expect(document.activeElement).toBe(heading);
+    } finally {
+      restore();
+    }
+  },
+);
+
+it("tracks the chapter positioned below tall sticky chrome", async () => {
+  await render(call);
+  mode().style.setProperty("--report-scroll-target-offset", "220px");
+  const heading = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
+    top: 220,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  expect(mode().dataset.reportSection).toBe("moments");
+});
+
+it("replaces the bookmark when toggling views from a scrolled chapter", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?call=${call}&view=reading&section=overview`,
+  );
+  await render(call);
+  await settle();
+  const heading = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  const push = vi.spyOn(window.history, "pushState");
+  const replace = vi.spyOn(window.history, "replaceState");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[title="Document view"]')!
+      .click(),
+  );
+  await settle();
+  expect(mode().dataset.reportSection).toBe("moments");
+  expect(window.location.search).toContain("view=document&section=moments");
+  expect(push).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledOnce();
+});
+
+it("renders only supplied document metadata and prints without a fake Word action", async () => {
+  const print = vi.fn();
+  vi.stubGlobal("print", print);
+  window.history.replaceState(null, "", `/?call=${call}&view=document&print=1`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{
+          title: "Bound call",
+          repName: "Fictional seller",
+          analysisBasis: { transcriptRevision: "fixture-r2" },
+        }}
+      />,
+    ),
+  );
+  expect(mode().dataset.view).toBe("document");
+  expect(mode().dataset.reportPrint).toBe("true");
+  expect(container.textContent).toContain("Bound call");
+  expect(container.textContent).toContain("Transcript revision: fixture-r2");
+  expect(container.textContent).not.toMatch(/2 October|34:12|Download Word/);
+  expect(print).not.toHaveBeenCalled();
+  const button = [
+    ...container.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((b) => b.textContent?.includes("Print / Save PDF"))!;
+  await act(async () => button.click());
+  expect(print).toHaveBeenCalledOnce();
+});
+
+it("keeps print header text inside a quoted CSS string", async () => {
+  window.history.replaceState(null, "", `/?call=${call}&view=document`);
+  await act(async () =>
+    root.render(
+      <ReportModes
+        panels={panels()}
+        boundCallId={call}
+        documentData={{ repName: 'Seller "</style><script>example</script>' }}
+      />,
+    ),
+  );
+  const css = container.querySelector("style")!.textContent!;
+  expect(css).toContain("@top-right");
+  expect(css).toContain("\\3c ");
+  expect(css).not.toContain("</style>");
+  expect(container.querySelector("script")).toBeNull();
+});
+
+it("marks the portaled shell toolbar hidden for the print renderer", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const shell = document.createElement("div");
+  shell.setAttribute("data-lightbox-shell", "");
+  const slot = document.createElement("div");
+  slot.setAttribute("data-shell-toolbar", "");
+  document.body.append(shell);
+  shell.append(slot, container);
+  try {
+    window.history.replaceState(
+      null,
+      "",
+      `/?call=${call}&view=document&print=1`,
+    );
+    await render(call);
+    expect(
+      slot.querySelector(
+        '[data-placement="toolbar"][data-report-print="true"]',
+      ),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-placement="toolbar"]')).toBeNull();
+  } finally {
+    document.body.append(container);
+    shell.remove();
+  }
+});
+
+it("keeps the same mounted panel state across all three report views", async () => {
+  await render(call);
+  const note = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Moment note"]',
+  )!;
+  note.value = "unsaved fictional note";
+  const point = container.querySelector('[data-review-point="14"]');
+  for (const title of [
+    "Document view",
+    "Tabbed view",
+    "Reading view",
+    "Document view",
+    "Reading view",
+  ]) {
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(`button[title="${title}"]`)!
+        .click(),
+    );
+    expect(container.querySelector('input[aria-label="Moment note"]')).toBe(
+      note,
+    );
+    expect(note.value).toBe("unsaved fictional note");
+    expect(container.querySelector('[data-review-point="14"]')).toBe(point);
   }
 });

@@ -21,6 +21,7 @@ import type {
   Transcript,
 } from "./report-contract";
 import { RichText } from "./report-entities";
+import { useReportDocument } from "./report-reading-context";
 import {
   Clip,
   Empty,
@@ -344,6 +345,7 @@ export function ReportMoments({
   transcript = EMPTY_TRANSCRIPT,
 }: ReportMomentsProps) {
   const people = useReportPeople(callId, transcript);
+  const documentView = useReportDocument();
   const moments = useMemo(() => timelineMoments(report), [report]);
   const [filter, setFilter] = useState<Kind | "must" | null>(null);
   const [open, setOpen] = useState<Set<string>>(
@@ -360,7 +362,7 @@ export function ReportMoments({
   );
   const mustCount = moments.filter((m) => m.listen === "must_watch").length;
   const shown = moments.filter((moment) =>
-    filter === null
+    documentView || filter === null
       ? true
       : filter === "must"
         ? moment.listen === "must_watch"
@@ -439,7 +441,11 @@ export function ReportMoments({
     );
 
   return (
-    <div className={styles.moments} aria-label="Key moments">
+    <div
+      className={styles.moments}
+      aria-label="Key moments"
+      data-document={documentView || undefined}
+    >
       <div
         className={styles.map}
         aria-label="Where the moments are in the call"
@@ -494,7 +500,7 @@ export function ReportMoments({
           const kind = KINDS[moment.kind];
           const first = moment.listenEvidence ?? moment.evidence[0];
           const more = moment.evidence.filter((item) => !sameClip(item, first));
-          const expanded = open.has(moment.id);
+          const expanded = documentView || open.has(moment.id);
           const detailId = `moment-detail-${moment.id}`;
           return (
             <li
@@ -513,6 +519,7 @@ export function ReportMoments({
                   className={styles.rowToggle}
                   aria-expanded={expanded}
                   aria-controls={detailId}
+                  disabled={documentView}
                   onClick={() => toggle(moment.id)}
                 >
                   <span className={styles.kind}>

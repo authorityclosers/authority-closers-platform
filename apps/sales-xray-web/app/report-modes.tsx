@@ -13,6 +13,7 @@ import {
   Undo2,
   UserRound,
   X,
+  Printer,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -33,9 +34,48 @@ export type ReportPanel = {
   label: string;
   compactLabel?: string;
   content: ReactNode;
+  summary?: string;
 };
 
-type View = "reading" | "tabs";
+export type DocumentReportData = {
+  title?: string;
+  workspaceName?: string;
+  repName?: string;
+  prospectName?: string;
+  callType?: string;
+  callDate?: string;
+  callLength?: string;
+  analysedDate?: string;
+  analysisBasis?: {
+    recordingLength?: string;
+    transcriptRevision?: string;
+    analysisVersion?: string;
+  };
+};
+
+type View = "reading" | "tabs" | "document";
+type TextSize = "100" | "112.5" | "125";
+const TEXT_SIZE_KEY = "ac:report-text-size";
+const TEXT_SIZE_CHANGE = "ac:report-text-size-change";
+function subscribeTextSize(notify: () => void) {
+  window.addEventListener("storage", notify);
+  window.addEventListener(TEXT_SIZE_CHANGE, notify);
+  return () => {
+    window.removeEventListener("storage", notify);
+    window.removeEventListener(TEXT_SIZE_CHANGE, notify);
+  };
+}
+function savedTextSizeSnapshot(): TextSize {
+  try {
+    const saved = localStorage.getItem(TEXT_SIZE_KEY);
+    if (saved === "112.5" || saved === "125") return saved;
+  } catch {}
+  return "100";
+}
+function serverTextSizeSnapshot(): TextSize {
+  return "100";
+}
+
 /** `view: null` means nobody chose yet: the viewport default applies. */
 type Address = { view: View | null; section: string };
 /** Desktop report width where Sections (tabbed) is the better first view. */
@@ -43,6 +83,7 @@ const TABBED_DEFAULT_QUERY = "(min-width: 1100px)";
 /** Wide screens host the report navigation in the shell's top bar. */
 const TOOLBAR_QUERY = "(min-width: 1280px)";
 const CHANGE = "ac:report-mode-change";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sectionIcons: Record<string, LucideIcon> = {
   overview: FileText,
@@ -90,8 +131,9 @@ function addressFromSearch(
     return null;
   // No explicit view: the caller applies its preferred default.
   const view: View | null =
-    views.length === 1 && (views[0] === "reading" || views[0] === "tabs")
-      ? views[0]
+    views.length === 1 &&
+    (views[0] === "reading" || views[0] === "tabs" || views[0] === "document")
+      ? (views[0] as View)
       : null;
   const section =
     sections.length === 1 && panels.some((panel) => panel.id === sections[0])
@@ -385,12 +427,198 @@ function updateReportLayerOffsets(
   return targetOffset;
 }
 
-/** Keeps all real report sections available in a bookmarkable reading or tabbed view. */
+function renderReportPanels(
+  id: string,
+  panels: ReportPanel[],
+  view: View,
+  selected: string,
+  docData?: DocumentReportData,
+) {
+  const documentView = view === "document";
+  const title =
+    docData?.title ??
+    ([docData?.repName, docData?.prospectName].filter(Boolean).join(" — ") ||
+      "Sales Xray call") + " report";
+  const basis = docData?.analysisBasis;
+  const printRep = JSON.stringify((docData?.repName ?? "").replace(/\s/g, " "))
+    .replaceAll("<", "\\3c ")
+    .replaceAll(">", "\\3e ");
+
+  return (
+    <div className={documentView ? styles.documentContainer : undefined}>
+      {documentView && (
+        <style>{`@page { @top-right { content: ${printRep}; font: 8pt sans-serif; } }
+        @page :first { @top-right { content: none; } }`}</style>
+      )}
+      {documentView && (
+        <div className={styles.documentActions}>
+          <button
+            type="button"
+            className={styles.docBtnPrimary}
+            onClick={() => window.print()}
+          >
+            <Printer aria-hidden="true" />
+            <span>Print / Save PDF</span>
+          </button>
+          <span className={styles.documentActionsNote}>
+            A4 portrait · 210×297 mm
+          </span>
+        </div>
+      )}
+      <div
+        key="report-panels"
+        className={documentView ? styles.documentPages : styles.sections}
+      >
+        {panels.map((panel, index) => (
+          <section
+            key={panel.id}
+            id={`${id}-section-${panel.id}`}
+            className={documentView ? styles.documentPage : styles.section}
+            data-document-page={documentView || undefined}
+            data-report-mode-section={panel.id}
+            role={view === "tabs" ? "tabpanel" : "region"}
+            aria-labelledby={
+              view === "tabs"
+                ? `${id}-tab-${panel.id}`
+                : `${id}-heading-${panel.id}`
+            }
+            hidden={view === "tabs" && selected !== panel.id}
+            tabIndex={view === "tabs" ? 0 : -1}
+          >
+            {documentView &&
+              (index === 0 ? (
+                <>
+                  {docData?.workspaceName && (
+                    <div className={styles.docKicker}>
+                      {docData.workspaceName}
+                    </div>
+                  )}
+                  {(docData?.callType || docData?.callDate) && (
+                    <div className={styles.docSubtitle}>
+                      {[docData.callType, docData.callDate]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                  <h1 className={styles.docTitle}>{title}</h1>
+                  {(docData?.callLength || docData?.analysedDate) && (
+                    <div className={styles.docMetaLine}>
+                      {[
+                        docData.callLength &&
+                          `Call length ${docData.callLength}`,
+                        docData.analysedDate &&
+                          `Analysed ${docData.analysedDate}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                  {basis && (
+                    <aside
+                      className={styles.docBasisCallout}
+                      aria-label="Analysis basis"
+                    >
+                      <div className={styles.docBasisLabel}>Analysis basis</div>
+                      {basis.recordingLength && (
+                        <p className={styles.docBasisText}>
+                          Recording length: {basis.recordingLength}
+                        </p>
+                      )}
+                      {basis.transcriptRevision && (
+                        <p className={styles.docBasisText}>
+                          Transcript revision: {basis.transcriptRevision}
+                        </p>
+                      )}
+                      {basis.analysisVersion && (
+                        <p className={styles.docBasisText}>
+                          Analysis version: {basis.analysisVersion}
+                        </p>
+                      )}
+                    </aside>
+                  )}
+                </>
+              ) : (
+                <div className={styles.docRunningHeader}>
+                  <span>Authority Closers — Sales Xray call report</span>
+                  {docData?.repName && <span>{docData.repName}</span>}
+                </div>
+              ))}
+            <div
+              key="section"
+              className={documentView ? styles.docSection : undefined}
+            >
+              {view === "tabs" ? (
+                <h2
+                  id={`${id}-heading-${panel.id}`}
+                  tabIndex={-1}
+                  className={styles.visuallyHiddenHeading}
+                >
+                  {panel.label}
+                </h2>
+              ) : (
+                <div
+                  className={documentView ? undefined : styles.chapterOpener}
+                >
+                  <div
+                    className={
+                      documentView
+                        ? styles.docSectionHeader
+                        : styles.chapterHeader
+                    }
+                  >
+                    <span
+                      className={
+                        documentView
+                          ? styles.docSectionNumber
+                          : styles.chapterNumber
+                      }
+                    >
+                      {index + 1}.
+                    </span>
+                    <h2
+                      id={`${id}-heading-${panel.id}`}
+                      tabIndex={-1}
+                      className={
+                        documentView
+                          ? styles.docSectionTitle
+                          : styles.chapterTitle
+                      }
+                    >
+                      {panel.label}
+                    </h2>
+                  </div>
+                  <div className={styles.chapterRule} aria-hidden="true" />
+                  {!documentView && (
+                    <p className={styles.chapterSummary}>
+                      {panel.summary ?? `${panel.label} report section.`}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div
+                key="content"
+                className={
+                  documentView ? styles.docContent : styles.reportContent
+                }
+              >
+                {panel.content}
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Keeps all real report sections available in a bookmarkable reading, tabbed or document view. */
+
 export function ReportModes({
   label = "Report sections",
   panels,
   boundCallId,
   lightSurface = true,
+  documentData,
 }: {
   label?: string;
   panels: ReportPanel[];
@@ -398,6 +626,8 @@ export function ReportModes({
   lightSurface?: boolean;
   /** Enables view and section bookmarks for this already-bound report. */
   boundCallId?: string;
+  /** Optional custom document report data */
+  documentData?: DocumentReportData;
 }) {
   const id = useId();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
@@ -411,6 +641,24 @@ export function ReportModes({
     view: null,
     section: panels[0]?.id ?? "",
   });
+
+  const savedTextSize = useSyncExternalStore(
+    subscribeTextSize,
+    savedTextSizeSnapshot,
+    serverTextSizeSnapshot,
+  );
+  const [localTextSize, setLocalTextSize] = useState<TextSize | null>(null);
+  const textSize = localTextSize ?? savedTextSize;
+  const changeTextSize = (nextSize: TextSize) => {
+    setLocalTextSize(nextSize);
+    try {
+      localStorage.setItem(TEXT_SIZE_KEY, nextSize);
+      window.dispatchEvent(new Event(TEXT_SIZE_CHANGE));
+    } catch {
+      // Private browsing can deny storage; sizing still works in this view.
+    }
+  };
+
   // Server render and hydration read "reading"; a desktop viewport then
   // prefers Tabbed unless the URL or the reader already chose a view.
   const desktop = useSyncExternalStore(
@@ -503,6 +751,8 @@ export function ReportModes({
   const view: View = linked
     ? (linked.view ?? preferredView)
     : (local.view ?? preferredView);
+  const printView =
+    view === "document" && new URLSearchParams(search).get("print") === "1";
   const currentSection = panels.some((panel) => panel.id === readingSection)
     ? view === "tabs"
       ? selected
@@ -512,7 +762,25 @@ export function ReportModes({
   useEffect(() => {
     if (!selected) return;
     const update = () => {
-      const readingLine = Math.min(180, window.innerHeight * 0.4);
+      const workspace = workspaceRef.current;
+      const scroller = workspace ? reportScroller(workspace) : null;
+      const scrollportTop =
+        scroller &&
+        scroller !== document.scrollingElement &&
+        scroller !== document.documentElement
+          ? scroller.getBoundingClientRect().top + scroller.clientTop
+          : 0;
+      const offset = workspace
+        ? Number.parseFloat(
+            workspace.style.getPropertyValue("--report-scroll-target-offset"),
+          ) || 0
+        : 0;
+      // A chapter positioned below sticky chrome is the current chapter,
+      // even when that clearance lies below the usual reading line.
+      const readingLine = Math.max(
+        Math.min(180, window.innerHeight * 0.4),
+        scrollportTop + offset + 2,
+      );
       let current = panels[0]?.id ?? "";
       let foundHeading = false;
       for (const panel of panels) {
@@ -608,7 +876,12 @@ export function ReportModes({
       );
   }
 
-  function navigate(section: string, nextView: View = view, focus = false) {
+  function navigate(
+    section: string,
+    nextView: View = view,
+    focus = false,
+    history: "push" | "replace" = "push",
+  ) {
     if (!panels.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
@@ -633,7 +906,7 @@ export function ReportModes({
       const sectionChanges =
         current.searchParams.get("section") !==
         new URLSearchParams(window.location.search).get("section");
-      if (changesLocation && sectionChanges) {
+      if (changesLocation && sectionChanges && history !== "replace") {
         window.history.pushState(window.history.state, "", target);
         if (returnRef.current) returnRef.current.pushes += 1;
       } else if (changesLocation)
@@ -721,13 +994,12 @@ export function ReportModes({
 
   function changeView(nextView: View) {
     const section =
-      view === "reading" && nextView === "tabs"
-        ? currentSection
-        : (selected ?? panels[0]?.id);
-    if (section) navigate(section, nextView);
+      view !== "tabs" ? currentSection : (selected ?? panels[0]?.id);
+    if (section && nextView !== view)
+      navigate(section, nextView, true, "replace");
   }
 
-  // One horizontal row: section tabs (Tabbed) or section links (Reading),
+  // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
   // with the view choice at its trailing edge. Wide screens host it in the
   // shell's top bar; otherwise it sticks to the top of the report.
   const navigation = (
@@ -736,6 +1008,7 @@ export function ReportModes({
       className={styles.navRow}
       data-report-nav
       data-placement={slot ? "toolbar" : undefined}
+      data-report-print={printView || undefined}
     >
       {view === "tabs" && (
         <nav
@@ -782,7 +1055,7 @@ export function ReportModes({
           ))}
         </nav>
       )}
-      {view === "reading" && (
+      {(view === "reading" || view === "document") && (
         <nav
           className={styles.contents}
           aria-label={label}
@@ -793,7 +1066,7 @@ export function ReportModes({
               key={panel.id}
               href={
                 boundCallId
-                  ? `?call=${encodeURIComponent(boundCallId)}&view=reading&section=${encodeURIComponent(panel.id)}`
+                  ? `?call=${encodeURIComponent(boundCallId)}&view=${view}&section=${encodeURIComponent(panel.id)}`
                   : `#${id}-section-${panel.id}`
               }
               aria-current={
@@ -810,7 +1083,7 @@ export function ReportModes({
                 )
                   return;
                 event.preventDefault();
-                navigate(panel.id, "reading", true);
+                navigate(panel.id, view, true);
               }}
             >
               <SectionIcon id={panel.id} />
@@ -841,6 +1114,44 @@ export function ReportModes({
           <PanelsTopLeft aria-hidden="true" />
           <span className={styles.toolbarLabel}>Tabbed view</span>
         </button>
+        <button
+          type="button"
+          title="Document view"
+          aria-pressed={view === "document"}
+          onClick={() => changeView("document")}
+        >
+          <FileText aria-hidden="true" />
+          <span className={styles.toolbarLabel}>Document view</span>
+        </button>
+      </div>
+      <div className={styles.textSizeGroup} role="group" aria-label="Text size">
+        <button
+          type="button"
+          title="Default text size (100%)"
+          aria-label="Text size 100%"
+          aria-pressed={textSize === "100"}
+          onClick={() => changeTextSize("100")}
+        >
+          A−
+        </button>
+        <button
+          type="button"
+          title="Medium text size (112.5%)"
+          aria-label="Text size 112.5%"
+          aria-pressed={textSize === "112.5"}
+          onClick={() => changeTextSize("112.5")}
+        >
+          A
+        </button>
+        <button
+          type="button"
+          title="Large text size (125%)"
+          aria-label="Text size 125%"
+          aria-pressed={textSize === "125"}
+          onClick={() => changeTextSize("125")}
+        >
+          A+
+        </button>
       </div>
     </div>
   );
@@ -850,48 +1161,23 @@ export function ReportModes({
       ref={workspaceRef}
       className={styles.workspace}
       data-report-modes
-      data-lx-surface={lightSurface ? "light" : undefined}
+      data-lx-surface={
+        lightSurface || view === "document" ? "light" : undefined
+      }
       data-view={view}
       data-report-section={currentSection}
+      data-text-size={textSize}
+      data-report-print={printView || undefined}
     >
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
         <ReportReadingProvider
-          reading={view === "reading"}
+          reading={view !== "tabs"}
           inline
+          documentView={view === "document"}
           navigate={navigateToReport}
         >
-          <div className={styles.sections}>
-            {panels.map((panel) => (
-              <section
-                key={panel.id}
-                id={`${id}-section-${panel.id}`}
-                className={styles.section}
-                data-report-mode-section={panel.id}
-                role={view === "tabs" ? "tabpanel" : "region"}
-                aria-labelledby={
-                  view === "tabs"
-                    ? `${id}-tab-${panel.id}`
-                    : `${id}-heading-${panel.id}`
-                }
-                hidden={view === "tabs" && selected !== panel.id}
-                tabIndex={view === "tabs" ? 0 : -1}
-              >
-                {/* In Tabbed view the selected tab already names the section;
-                    the heading stays for assistive tech and focus targets. */}
-                <h2
-                  id={`${id}-heading-${panel.id}`}
-                  tabIndex={-1}
-                  className={
-                    view === "tabs" ? styles.visuallyHiddenHeading : undefined
-                  }
-                >
-                  {panel.label}
-                </h2>
-                {panel.content}
-              </section>
-            ))}
-          </div>
+          {renderReportPanels(id, panels, view, selected, documentData)}
         </ReportReadingProvider>
       </div>
       {returnPoint && (

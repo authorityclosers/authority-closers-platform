@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { csvCell, ReportRawData } from "./report-raw-data";
+import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport, Transcript } from "./report-contract";
 
 (
@@ -49,24 +50,30 @@ beforeEach(async () => {
   document.body.append(host);
   root = createRoot(host);
   onSeek = vi.fn();
-  await act(async () =>
-    root.render(
-      <ReportRawData
-        callId="6c1e2f3a-4b5d-4e6f-8a9b-0c1d2e3f4a5b"
-        transcript={transcript}
-        report={report}
-        durationMs={transcript.duration_ms}
-        runId="9f8e7d6c-0000-4000-8000-000000000000"
-        onSeek={onSeek}
-      />,
-    ),
-  );
+  await render();
 });
 
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
 });
+
+async function render(documentView = false) {
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading={documentView} documentView={documentView}>
+        <ReportRawData
+          callId="6c1e2f3a-4b5d-4e6f-8a9b-0c1d2e3f4a5b"
+          transcript={transcript}
+          report={report}
+          durationMs={transcript.duration_ms}
+          runId="9f8e7d6c-0000-4000-8000-000000000000"
+          onSeek={onSeek}
+        />
+      </ReportReadingProvider>,
+    ),
+  );
+}
 
 function section(title: string) {
   return Array.from(host.querySelectorAll("section")).find((element) =>
@@ -144,4 +151,30 @@ it("prevents spreadsheet formulas in exported CSV cells", () => {
   expect(csvCell("\t=1+1")).toBe('"\'\t=1+1"');
   expect(csvCell("\r=1+1")).toBe('"\'\r=1+1"');
   expect(csvCell("ordinary text")).toBe("ordinary text");
+});
+
+it("includes unfiltered rows in Document without search, export or play controls", async () => {
+  const search = host.querySelector<HTMLInputElement>("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(search, "staff");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(section("Questions asked").querySelector("h3")?.textContent).toBe(
+    "Questions asked1",
+  );
+  await render(true);
+  expect(host.querySelector("button, input")).toBeNull();
+  expect(section("Questions asked").querySelector("h3")?.textContent).toBe(
+    "Questions asked2",
+  );
+  expect(section("Numbers heard").textContent).toContain("1 CR");
+  expect(section("Questions asked").textContent).toContain("00:00");
+  await render();
+  expect(section("Questions asked").querySelector("h3")?.textContent).toBe(
+    "Questions asked1",
+  );
+  expect(host.querySelector("input")).not.toBeNull();
 });

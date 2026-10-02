@@ -377,6 +377,14 @@
   }
 }
 
+.moments[data-document] .segmented {
+  display: none;
+}
+
+.moments[data-document] .rowToggle {
+  cursor: default;
+}
+
 @media print {
   .map,
   .segmented,

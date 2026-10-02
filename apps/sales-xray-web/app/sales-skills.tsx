@@ -30,6 +30,7 @@ import { formatClock } from "./lightbox/time";
 import { RichText } from "./report-entities";
 import { getReportUiCopy } from "./report-ui-copy";
 import { Clip, IconBadge, useReportPeople, type Tone } from "./report-kit";
+import { useReportDocument } from "./report-reading-context";
 import styles from "./sales-skills.module.css";
 
 // Colour identifies a topic, never its performance. Labels and observations
@@ -80,6 +81,7 @@ export function SalesSkills({
   transcript?: Transcript;
 }) {
   const people = useReportPeople(callId, transcript);
+  const documentView = useReportDocument();
   const id = useId();
   const list = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState(0);
@@ -123,7 +125,11 @@ export function SalesSkills({
   }
 
   return (
-    <div className={styles.skills} aria-label="Sales skills">
+    <div
+      className={styles.skills}
+      aria-label="Sales skills"
+      data-document={documentView || undefined}
+    >
       <header className={styles.summary}>
         <p>
           <small>Draft observations, not scores. Work on one at a time.</small>
@@ -138,7 +144,11 @@ export function SalesSkills({
         </ul>
       </header>
 
-      <div className={styles.window}>
+      <div
+        className={styles.window}
+        aria-hidden={documentView}
+        inert={documentView}
+      >
         <div
           ref={list}
           className={styles.list}
@@ -281,8 +291,12 @@ export function SalesSkills({
         </section>
       </div>
 
-      {/* Print shows every skill in full. */}
-      <div className={styles.print} aria-hidden="true">
+      {/* Document and print show every supplied skill in full. */}
+      <div
+        className={styles.print}
+        aria-hidden={!documentView}
+        data-document-skills={documentView || undefined}
+      >
         {dimensions.map((dimension) => (
           <section key={dimension.dimension_id}>
             <h4>

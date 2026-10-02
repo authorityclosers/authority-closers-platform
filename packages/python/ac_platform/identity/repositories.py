@@ -47,7 +47,13 @@ from ac_platform.identity.services import (
     StoredSession,
     provider_issuer_lookup_values,
 )
-from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, TenantStatus
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipStatus,
+    Organisation,
+    Tenant,
+    TenantStatus,
+)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -665,6 +671,24 @@ class AsyncSqlAlchemyIdentityRepository:
             .order_by(Tenant.name, Tenant.id)
         )
         return tuple((row.id, row.name) for row in rows)
+
+    async def list_active_organisations(self, person_id: UUID) -> Sequence[tuple[UUID, str, str]]:
+        """Read registered organisations with the caller's active human role."""
+
+        rows = await self._session.execute(
+            select(Tenant.id, Tenant.name, Membership.role)
+            .join(Organisation, Organisation.tenant_id == Tenant.id)
+            .join(Membership, Membership.tenant_id == Tenant.id)
+            .where(
+                Membership.person_id == person_id,
+                Membership.status == MembershipStatus.ACTIVE.value,
+                Membership.ended_at.is_(None),
+                Membership.role != "processing",
+                Tenant.status == TenantStatus.ACTIVE.value,
+            )
+            .order_by(Tenant.name, Tenant.id)
+        )
+        return tuple((row.id, row.name, row.role) for row in rows)
 
     async def select_tenant_for_active_sessions(
         self,

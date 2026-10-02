@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import type { ReportDimension, ReportEvidence } from "./report-contract";
 import { SalesSkills } from "./sales-skills";
+import { ReportReadingProvider } from "./report-reading-context";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -118,4 +119,27 @@ it("says so when no skill was observed", async () => {
   expect(container.textContent).toContain(
     "No skill observations were supplied for this call.",
   );
+});
+
+it("includes every supplied skill in the accessible Document representation", async () => {
+  const items = dimensions.map((d, i) => ({
+    ...d,
+    observation: `Supplied observation ${i}`,
+    evidence: [excerpt],
+  }));
+  await act(async () =>
+    root.render(
+      <ReportReadingProvider reading documentView>
+        <SalesSkills dimensions={items} />
+      </ReportReadingProvider>,
+    ),
+  );
+  const output = container.querySelector("[data-document-skills]")!;
+  expect(output.getAttribute("aria-hidden")).toBe("false");
+  expect(output.querySelectorAll("section")).toHaveLength(items.length);
+  items.forEach((item) =>
+    expect(output.textContent).toContain(item.observation),
+  );
+  expect(output.querySelectorAll("blockquote")).toHaveLength(items.length);
+  expect(panel().closest('[inert][aria-hidden="true"]')).not.toBeNull();
 });

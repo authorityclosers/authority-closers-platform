@@ -7,6 +7,7 @@ import { OverviewHook, shareChartSegments } from "./overview-hook";
 import { talkShareSeries } from "./call-data";
 import type { SalesReport, Transcript } from "./report-contract";
 import { ReportReadingProvider } from "./report-reading-context";
+import { ReportModes } from "./report-modes";
 import { saveSpeakerProfiles } from "./speaker-profiles";
 
 (
@@ -154,6 +155,51 @@ async function renderOverview(
     ),
   );
 }
+
+it.each(["", "&print=1"])(
+  "includes the closed full summary in Document output%s",
+  async (printQuery) => {
+    const boundCall = "00000000-0000-4000-8000-000000000002";
+    window.history.replaceState(
+      null,
+      "",
+      `/?call=${boundCall}&view=reading${printQuery}`,
+    );
+    const fullSummary =
+      "First observation. Final source-backed summary detail.";
+    await act(async () =>
+      root.render(
+        <ReportModes
+          boundCallId={boundCall}
+          panels={[
+            {
+              id: "overview",
+              label: "Overview",
+              content: (
+                <OverviewHook
+                  report={{ ...report, summary: fullSummary }}
+                  transcript={transcript}
+                  callId={callId}
+                  onSeek={() => undefined}
+                />
+              ),
+            },
+          ]}
+        />,
+      ),
+    );
+    const disclosure =
+      host.querySelector<HTMLDetailsElement>("[class*='inShort']")!;
+    expect(disclosure.open).toBe(false);
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[title="Document view"]')!.click(),
+    );
+    const summary = host.querySelector("[class*='inShort'] p")!;
+    expect(summary.textContent).toBe(fullSummary);
+    expect(summary.closest("details")).toBeNull();
+    expect(host.textContent).not.toContain("Read the full summary");
+  },
+);
 
 describe("OverviewHook phase cards", () => {
   it("keeps measurements and source controls with no overview narrative or speaker roles", async () => {

@@ -56,6 +56,7 @@ from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 from ac_platform.http.reviewer_auth import install_reviewer_identity_http
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
+from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -168,6 +169,12 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    install_sales_xray_workspaces_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake=resolved_conversation,
+    )
     tester_policy = (
         None
         if resolved_conversation is None or resolved_conversation.authority is None

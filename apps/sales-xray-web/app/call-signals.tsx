@@ -36,6 +36,7 @@ import {
 } from "./speaker-profiles";
 import styles from "./call-signals.module.css";
 import { RichText } from "./report-entities";
+import { useReportDocument } from "./report-reading-context";
 
 const DONE_EVENT = "sales-xray:promises-done";
 const doneKey = (callId: string) => `ac.xray.promises-done.v1:${callId}`;
@@ -176,6 +177,7 @@ export function CallSignals({
   transcript: Transcript;
   onSeek: (ms: number) => void;
 }) {
+  const documentView = useReportDocument();
   const { profiles, save, canSave } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const voices = useMemo(() => voicesOf(transcript), [transcript]);
@@ -296,13 +298,15 @@ export function CallSignals({
         >
           {data.overs.length ? (
             <ul className={styles.list}>
-              {data.overs.slice(0, 6).map((item) => (
-                <PlayLine key={item.segment.id} item={item} onSeek={onSeek}>
-                  <small className={styles.cut}>
-                    {prospect} was saying: <q>{item.cut}</q>
-                  </small>
-                </PlayLine>
-              ))}
+              {(documentView ? data.overs : data.overs.slice(0, 6)).map(
+                (item) => (
+                  <PlayLine key={item.segment.id} item={item} onSeek={onSeek}>
+                    <small className={styles.cut}>
+                      {prospect} was saying: <q>{item.cut}</q>
+                    </small>
+                  </PlayLine>
+                ),
+              )}
             </ul>
           ) : (
             <Empty text="No talk-overs. The prospect got to finish." />
