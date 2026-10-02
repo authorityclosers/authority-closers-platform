@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   Clock3,
   Download,
   Ellipsis,
@@ -22,6 +23,7 @@ import {
 import { callTitle, type CallLabel } from "./call-label";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import { formatClock } from "./lightbox/time";
+import { openTranscriptReader } from "./report-reading-context";
 import styles from "./acquisition-studio.module.css";
 
 export type ReportHeaderProps = {
@@ -42,6 +44,8 @@ export type ReportHeaderProps = {
   onAnalyseAnother: () => void;
   onDownload: () => void;
   onRequestDeletion: () => void;
+  /** Optional handler to open the full-screen transcript reader. */
+  onOpenTranscript?: () => void;
   /** Server-confirmed owner call name (C1); null/absent on older servers. */
   label?: CallLabel | null;
   /** An optional picture of the call (the call map) below the title. */
@@ -134,6 +138,7 @@ export function ReportHeader({
   onAnalyseAnother,
   onDownload,
   onRequestDeletion,
+  onOpenTranscript,
   label = null,
   rename,
   visual,
@@ -150,6 +155,7 @@ export function ReportHeader({
   const [copyFailed, setCopyFailed] = useState(false);
   const title = callTitle(label, "Untitled call");
   const canRename = claimed && label !== null && rename !== undefined;
+  const openTranscript = onOpenTranscript ?? openTranscriptReader;
 
   useEffect(() => {
     const dismissOutside = (event: Event) => {
@@ -395,6 +401,16 @@ export function ReportHeader({
               Sign in to save
             </Link>
           )}
+          <button
+            type="button"
+            className={styles.reportAction}
+            onClick={openTranscript}
+            aria-label="Open transcript reader"
+            title="Open transcript reader"
+          >
+            <BookOpen size={16} aria-hidden="true" />
+            <span>Transcript</span>
+          </button>
           {/* Every action lives in one calm menu; "New analysis" is in the app header. */}
           <details
             ref={menu}
@@ -415,6 +431,16 @@ export function ReportHeader({
               <Ellipsis size={18} aria-hidden="true" />
             </summary>
             <div className={styles.reportMenu}>
+              <button
+                type="button"
+                onClick={(event) => {
+                  closeMenu(event);
+                  openTranscript();
+                }}
+              >
+                <BookOpen size={16} aria-hidden="true" />
+                Transcript
+              </button>
               {canRename ? (
                 <button
                   type="button"
