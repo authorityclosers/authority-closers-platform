@@ -28,6 +28,9 @@ RUN printf '%s\n' "$AC_RELEASE_ID" | grep -Eq '^[0-9a-f]{40}$' && \
 
 FROM ${PYTHON_IMAGE} AS runtime
 
+ARG AC_RELEASE_ID
+LABEL org.opencontainers.image.revision=${AC_RELEASE_ID}
+
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
