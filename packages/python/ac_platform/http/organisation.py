@@ -3,17 +3,18 @@
 import json
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Literal, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.identity.services import TenantScopeDeniedError
-from ac_platform.kernel.errors import ResourceNotFound
+from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.organisations.service import OrganisationService
 from ac_platform.organisations.usage import member_rows
 from ac_platform.tenancy.models import Membership, Organisation, OrganisationDomainSetting, Tenant
 
@@ -47,6 +48,12 @@ class MembersResponse(BaseModel):
     members: list[MemberResponse]
 
 
+class AddMemberRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    email: str
+    role: Literal["admin", "member"]
+
+
 def install_organisation_http(
     application: FastAPI, *, settings: Settings, require_actor: RequireActor
 ) -> None:
@@ -54,7 +61,8 @@ def install_organisation_http(
 
     async def organisation_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
-            async for auth in require_actor.read_only(request):  # type: ignore[attr-defined]
+            resolver = require_actor.read_only if request.method == "GET" else require_actor  # type: ignore[attr-defined]
+            async for auth in resolver(request):
                 yield auth
         except TenantScopeDeniedError as error:
             raise ResourceNotFound("No organisation selected.") from error
@@ -77,6 +85,17 @@ def install_organisation_http(
         return auth
 
     selected_dependency = Depends(selected, scope="function")
+
+    def command_id(value: Annotated[str, Header(alias="Idempotency-Key")]) -> UUID:
+        try:
+            parsed = UUID(value.strip())
+        except ValueError as error:
+            raise DomainError("Idempotency-Key must be a canonical UUIDv4.") from error
+        if parsed.version != 4 or str(parsed) != value.strip().lower():
+            raise DomainError("Idempotency-Key must be a canonical UUIDv4.")
+        return parsed
+
+    command_dependency = Depends(command_id)
 
     @router.get("", response_model=OrganisationResponse)
     async def organisation(
@@ -121,5 +140,44 @@ def install_organisation_http(
             )
         }
         return MembersResponse.model_validate_json(json.dumps(rows))
+
+    def service(auth: AuthenticatedTransaction) -> OrganisationService:
+        if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
+            raise DomainError("Organisation tenant boundaries are not configured.")
+        return OrganisationService(
+            auth.database,
+            operations_tenant_id=settings.operations_tenant_id,
+            public_learner_tenant_id=settings.public_learner_tenant_id,
+        )
+
+    @router.post("/members", response_model=MemberResponse)
+    async def add(
+        body: AddMemberRequest,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> MemberResponse:
+        assert auth.resolved.actor.tenant_id is not None
+        result = await service(auth).request_member(
+            auth.resolved.actor.tenant_id,
+            body.email,
+            body.role,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
+        return MemberResponse.model_validate_json(json.dumps(result))
+
+    @router.delete("/invites/{invite_id}", status_code=204)
+    async def revoke(
+        invite_id: UUID,
+        auth: AuthenticatedTransaction = selected_dependency,
+        key: UUID = command_dependency,
+    ) -> None:
+        assert auth.resolved.actor.tenant_id is not None
+        await service(auth).revoke_invite(
+            auth.resolved.actor.tenant_id,
+            invite_id,
+            key,
+            actor_person_id=auth.resolved.actor.person_id,
+        )
 
     application.include_router(router)
