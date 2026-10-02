@@ -407,6 +407,15 @@
   }
 }
 
+.skills[data-document] .window {
+  display: none;
+}
+
+.skills[data-document] .print {
+  display: grid;
+  gap: 12px;
+}
+
 @media print {
   .window {
     display: none;

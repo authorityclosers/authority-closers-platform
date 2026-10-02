@@ -70,6 +70,18 @@ def main() -> None:
             expect(summary).to_be_visible()
             assert summary.evaluate("el => el.closest('details') === null")
             expect(summary).to_have_text(SUMMARY)
+            skills = workspace.locator("[data-document-skills] section")
+            expect(skills).to_have_count(4)
+            for skill in skills.all():
+                expect(skill.locator("p")).to_be_visible()
+            moments = workspace.locator('[aria-label="Key moments"] [data-moment]')
+            assert moments.count() > 1
+            for moment in moments.all():
+                detail = moment.locator('[id^="moment-detail-"]')
+                expect(detail).to_be_visible()
+                expect(detail).to_have_attribute("aria-hidden", "false")
+                assert detail.get_attribute("inert") is None
+            assert not workspace.locator("[class*='docFooter']").count()
             for print_query in [False, True]:
                 if print_query:
                     page.goto(
@@ -82,6 +94,10 @@ def main() -> None:
                 path = OUT / f"full-summary-{width}-{'renderer' if print_query else 'native'}.pdf"
                 page.pdf(path=str(path), prefer_css_page_size=True, print_background=True)
                 assert SUMMARY in pdf_text(path), "Full summary missing from PDF"
+                long_report = PdfReader(path)
+                assert len(long_report.pages) > 8, "Fixture must span more pages than panels"
+                for i, pdf_page in enumerate(long_report.pages, 1):
+                    assert f"Page {i} of {len(long_report.pages)}" in pdf_page.extract_text()
             page.emulate_media(media="screen")
             page.goto(
                 f"{BASE}/review-fixture/shell?call={CALL}&view=tabs&section=transcript",

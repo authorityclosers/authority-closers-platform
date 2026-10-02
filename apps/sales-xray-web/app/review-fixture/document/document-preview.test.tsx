@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({
 ).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => vi.unstubAllEnvs());
 
-it("prints seven fictional sections with exact source quotes and no numeric scoring", async () => {
+it("renders seven fictional sections with exact source quotes and no numeric scoring", async () => {
   window.history.replaceState(
     null,
     "",
@@ -29,7 +29,7 @@ it("prints seven fictional sections with exact source quotes and no numeric scor
       container.querySelector("[data-report-modes]")?.getAttribute("data-view"),
     ).toBe("document");
     expect(container.querySelectorAll("[data-document-page]")).toHaveLength(7);
-    expect(container.textContent).toContain("Page 7 of 7");
+    expect(container.textContent).not.toMatch(/Page \d+ of \d+/);
     expect(container.textContent).toContain(
       "I don't want to set another step today. Please don't follow up.",
     );

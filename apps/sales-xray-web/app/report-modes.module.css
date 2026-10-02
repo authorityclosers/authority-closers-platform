@@ -911,14 +911,6 @@
   border-bottom: 1px solid var(--doc-border);
 }
 
-.docFooter {
-  margin-top: auto;
-  padding-top: 6mm;
-  text-align: center;
-  font-size: 11px;
-  color: var(--lx-muted);
-}
-
 .docKicker {
   font-size: 11.5px;
   font-weight: 800;
@@ -1090,8 +1082,7 @@
   .navRow,
   .documentActions,
   .returnBar,
-  .docRunningHeader,
-  .docFooter {
+  .docRunningHeader {
     display: none !important;
   }
 

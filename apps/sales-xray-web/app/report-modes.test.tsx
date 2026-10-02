@@ -1018,9 +1018,8 @@ it("switches to Document view and preserves the reader's place", async () => {
   expect(container.textContent).toContain("Conversation");
   expect(container.textContent).not.toMatch(/Aarav|Priya|\d\.\d \/ 5/);
 
-  // Footers
-  expect(pages[0].textContent).toContain("Page 1 of 6");
-  expect(pages[5].textContent).toContain("Page 6 of 6");
+  // Physical page counts belong to print pagination, never panel counts.
+  expect(container.textContent).not.toMatch(/Page \d+ of \d+/);
 
   // Cover page has no running header; page 2 has running header
   expect(pages[0].querySelector("[class*='docRunningHeader']")).toBeNull();
@@ -1091,6 +1090,10 @@ it("opens every top-level section as a chapter in Reading mode", async () => {
   const summaries = container.querySelectorAll("[class*='chapterSummary']");
   expect(summaries).toHaveLength(6);
   expect(summaries[0].textContent).not.toBe("");
+  expect(summaries[1].textContent).toBe("Prospect report section.");
+  expect(container.textContent).not.toMatch(
+    /buyer readiness|stakeholder dynamics/,
+  );
 });
 
 it("hydrates a returning viewer's saved text size without retaining default attributes", async () => {

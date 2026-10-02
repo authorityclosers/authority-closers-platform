@@ -427,30 +427,6 @@ function updateReportLayerOffsets(
   return targetOffset;
 }
 
-const defaultSummaries: Record<string, string> = {
-  overview:
-    "High-level diagnostic summary, key observations and critical conversation shift.",
-  scorecard: "Capability observations and supporting source evidence.",
-  skills: "Capability observations and supporting source evidence.",
-  strengths:
-    "Observed strengths demonstrated during the conversation with supporting evidence.",
-  prospect:
-    "Prospect profile, buyer readiness, business context and stakeholder dynamics.",
-  improvements:
-    "High-priority development areas, coaching interventions and transcript quotes.",
-  signals:
-    "Buyer engagement markers, pacing indicators and interaction dynamics.",
-  "strength-gap": "Key competitive edge contrasted with the primary skill gap.",
-  moments:
-    "Key conversational turning points, buyer signals, and coaching moments.",
-  "next-call-plan":
-    "Concrete action items, coaching focus and talking tracks for the next call.",
-  transcript:
-    "Complete timestamped dialogue transcript with speaker diarization.",
-  "raw-data":
-    "Structured analysis payload, telemetry data and technical audit trace.",
-};
-
 function renderDocumentView(
   id: string,
   panels: ReportPanel[],
@@ -563,9 +539,6 @@ function renderDocumentView(
               <div className={styles.chapterRule} aria-hidden="true" />
               <div className={styles.docContent}>{panel.content}</div>
             </section>
-            <div className={styles.docFooter}>
-              Page {index + 1} of {panels.length}
-            </div>
           </article>
         ))}
       </div>
@@ -1184,9 +1157,7 @@ export function ReportModes({
                       </div>
                       <div className={styles.chapterRule} aria-hidden="true" />
                       <p className={styles.chapterSummary}>
-                        {panel.summary ??
-                          defaultSummaries[panel.id] ??
-                          `${panel.label} analysis and observations.`}
+                        {panel.summary ?? `${panel.label} report section.`}
                       </p>
                     </div>
                   )}
