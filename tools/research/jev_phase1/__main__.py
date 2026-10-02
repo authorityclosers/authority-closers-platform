@@ -28,25 +28,30 @@ def run_stage(arm: str, pk: dict, out: Path, repeats: int, stage: str, **kw) -> 
                 write(out, arm, arms.run_arm(arm, pk, req, repeat, **kw))
 
 
-def check_records(pk: dict, records: Path) -> None:
-    """Refuse unless A and B answered every request and D every base call (repeat 0).
+def check_records(pk: dict, records: Path, with_j: bool = False) -> None:
+    """Refuse unless A and B answered every request and D every base call (repeat 0); with
+    `with_j`, J must hold every base call × REPEATS and every probe once.
 
     A partial file (an arm stopped at a usage limit) would otherwise score as "no match":
     G2 would pass with overlap 0 and G1 would fall back to the English-only bar.
     """
-    recs = score.load_records(records)
+    recs, need = score.load_records(records), []
+    for req in pk["requests"]:
+        cid, probe = req["input_id"], req["input_id"].startswith("probe-")
+        need += [("A", cid, 0), ("B", cid, 0)] + ([] if probe else [("D", cid, 0)])
+        if with_j:
+            need += [("J", cid, r) for r in ([0] if probe else range(pack.REPEATS))]
+    qids = {req["input_id"]: {q["id"] for q in req["questions"]} for req in pk["requests"]}
     missing = [
-        (arm, req["input_id"])
-        for arm in ARMS_BEFORE_J
-        for req in pk["requests"]
-        if (arm != "D" or not req["input_id"].startswith("probe-"))
-        and not {q["id"] for q in req["questions"]}
-        <= set(recs.get(arm, {}).get((req["input_id"], 0), {}).get("answers", {}))
+        (arm, cid, rep)
+        for arm, cid, rep in need
+        if not qids[cid] <= set(recs.get(arm, {}).get((cid, rep), {}).get("answers", {}))
     ]
     if missing:
         raise pack.PackError(
-            f"arms A, B, D must answer every request before J; {len(missing)} missing "
-            f"(arm, input_id) in {records}: {missing[:12]}{' ...' if len(missing) > 12 else ''}"
+            f"arms {'J, ' if with_j else ''}A, B, D must answer every request before "
+            f"{'scoring' if with_j else 'J'}; {len(missing)} missing (arm, input_id, repeat) "
+            f"in {records}: {missing[:12]}{' ...' if len(missing) > 12 else ''}"
         )
 
 
@@ -73,9 +78,11 @@ def run_j(a: argparse.Namespace, pk: dict) -> int:
         if all(v["pass"] for v in verdicts):
             run_stage("J", pk, a.out, 1, "red-team", **kw)
             verdicts = score.gates(pk, truth, score.load_records(a.out))
+        j_recs = score.load_records(a.out, "J").get("J", {}).values()
         result = {
             "model": pack.MODEL,
             "models_preflight": models,
+            "version_verified": bool(j_recs) and all(r["version_verified"] for r in j_recs),
             "gates": verdicts,
             "spend": meter.state,
             "thresholds": pack.THRESHOLDS,
@@ -118,8 +125,12 @@ def main(argv: list[str] | None = None) -> int:
     if not (a.records and (a.command == "score" or (a.key_file and a.spend_file))):
         p.error("run-j needs --records, --key-file and --spend-file; score needs --records")
     if a.command == "score":
-        recs, truth = score.load_records(a.records), score.load_truth(a.pack)
-        verdicts = score.gates(pk, truth, recs)
+        try:
+            check_records(pk, a.records, with_j=True)
+            recs, truth = score.load_records(a.records), score.load_truth(a.pack)
+            verdicts = score.gates(pk, truth, recs)
+        except (pack.PackError, OSError) as err:
+            return stop(str(err))
         result = {
             "gates": verdicts,
             "thresholds": pack.THRESHOLDS,
@@ -128,7 +139,8 @@ def main(argv: list[str] | None = None) -> int:
         if all(v["pass"] for v in verdicts):
             result["uses"] = score.uses(pk, truth, recs)
         a.out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
-        return 0
+        failed = [v["gate"] for v in verdicts if not v["pass"]]
+        return stop(f"gate {failed[0]} failed") if failed else 0
     return run_j(a, pk)
 
 

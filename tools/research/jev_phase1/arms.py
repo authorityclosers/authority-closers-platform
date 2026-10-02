@@ -84,22 +84,40 @@ class SpendMeter:
         "total_inr": 0.0,
         "gateway_usd": 0.0,
         "estimated_usd": 0.0,
+        "pending_usd": 0.0,
         "requests": 0,
         "estimated_requests": 0,
+        "interrupted_requests": 0,
     }
 
     def __init__(self, path: Path):
         self.path = path
-        self.state = json.loads(path.read_text()) if path.exists() else dict(self.EMPTY)
+        self.state = {**self.EMPTY, **(json.loads(path.read_text()) if path.exists() else {})}
+        if self.state["pending_usd"]:  # an earlier run died between the POST and record():
+            self._add(self.state["pending_usd"], estimated=True)  # count its worst case
+            self.state["pending_usd"], self.state["interrupted_requests"] = (
+                0.0,
+                self.state["interrupted_requests"] + 1,
+            )
+            self._save()
 
-    def reserve(self, worst_inr: float) -> None:
+    def reserve(self, worst_usd: float) -> None:
+        """Write-ahead reservation: persisted before the paid request leaves."""
+        worst_inr = worst_usd * pack.INR_PER_USD
         if self.state["total_inr"] + worst_inr > pack.SPEND_STOP_INR:
             raise SpendStop(
                 f"spend stop: total ₹{self.state['total_inr']:.2f} + worst case "
                 f"₹{worst_inr:.2f} > ₹{pack.SPEND_STOP_INR}"
             )
+        self.state["pending_usd"] = worst_usd
+        self._save()
 
     def record(self, cost_usd: float, estimated: bool) -> None:
+        self.state["pending_usd"] = 0.0
+        self._add(cost_usd, estimated)
+        self._save()
+
+    def _add(self, cost_usd: float, estimated: bool) -> None:
         s = self.state
         s["total_usd"], s["total_inr"] = (
             s["total_usd"] + cost_usd,
@@ -110,7 +128,9 @@ class SpendMeter:
             s["requests"] + 1,
             s["estimated_requests"] + int(estimated),
         )
-        self.path.with_suffix(".tmp").write_text(json.dumps(s, indent=2) + "\n")
+
+    def _save(self) -> None:
+        self.path.with_suffix(".tmp").write_text(json.dumps(self.state, indent=2) + "\n")
         os.replace(self.path.with_suffix(".tmp"), self.path)
 
 
@@ -123,9 +143,9 @@ def urllib_transport(method: str, url: str, body: bytes | None, headers: dict) -
         return err.code, err.read()
 
 
-def worst_case_inr(state: str, n_questions: int) -> float:
+def worst_case_usd(state: str, n_questions: int) -> float:
     tokens = len(state.encode()) / 2 + 300 + 150 * n_questions
-    return tokens / 1e6 * pack.USD_PER_M_INPUT_TOKENS * pack.INR_PER_USD
+    return tokens / 1e6 * pack.USD_PER_M_INPUT_TOKENS
 
 
 def jev_request(state: str, questions: list, definitions: dict) -> dict:
@@ -147,13 +167,9 @@ def jev_request(state: str, questions: list, definitions: dict) -> dict:
 
 
 def check_version(reported: dict) -> bool:
-    """Refuse an answer from another slug or version; True when a version string was reported."""
-    slug = (
-        reported.get("metadata", {})
-        .get("gateway", {})
-        .get("routing", {})
-        .get("canonicalSlug", pack.GATEWAY_SLUG)
-    )
+    """Refuse unless routing names our slug and no other version; True if a version was reported."""
+    routing = reported.get("metadata", {}).get("gateway", {}).get("routing") or {}
+    slug = routing.get("canonicalSlug")  # no default: absent routing metadata is a refusal
     versions = set(VERSION_RE.findall(json.dumps(reported)))
     if slug != pack.GATEWAY_SLUG or versions - {pack.MODEL}:
         raise GatewayError(
@@ -174,21 +190,24 @@ def list_models(key: str, transport) -> dict:
 
 
 def jev_call(key: str, meter: SpendMeter, body: dict, transport) -> tuple:
-    meter.reserve(worst_case_inr(body["state"], len(body["questions"])))
+    meter.reserve(worst_case_usd(body["state"], len(body["questions"])))
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     status, raw = transport("POST", pack.GATEWAY_URL, json.dumps(body).encode(), headers)
     if status != 200:
         raise GatewayError(f"gateway HTTP {status}: {redact(raw[:500].decode('utf-8', 'replace'))}")
     data = json.loads(raw)
     meta = data.get("providerMetadata", data.get("provider_metadata", {}))
-    pinned = check_version({"model": data.get("model"), "metadata": meta})
     usage, gateway = data.get("usage", {}), meta.get("gateway", {})
     tokens, estimated = (
         int(usage.get("inputTokens", usage.get("input_tokens", 0))),
         "cost" not in gateway,
     )
     cost = tokens / 1e6 * pack.USD_PER_M_INPUT_TOKENS if estimated else float(gateway["cost"])
-    meter.record(cost, estimated)
+    meter.record(cost, estimated)  # the money is spent whatever the checks below say
+    pinned = check_version({"model": data.get("model"), "metadata": meta})
+    if set(data.get("answers", {})) != set(body["questions"]):
+        odd = sorted(set(data.get("answers", {})) ^ set(body["questions"]))
+        raise GatewayError(f"gateway answers do not match the questions asked: {odd[:10]}")
     answers = {}
     for qid, a in data["answers"].items():
         probs = a.get("probabilities", {})

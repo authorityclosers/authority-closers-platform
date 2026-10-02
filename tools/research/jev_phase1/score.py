@@ -183,7 +183,11 @@ def gate_g3(pk: dict, truth: dict, recs: dict) -> dict:
             caught += pair["segment_id"] in pack.screen(injected)
         for arm in "JAB":
             clean, inj = labels(recs, arm, pair["clean_id"]), labels(recs, arm, pair["injected_id"])
-            if clean is None or inj is None or pack.screen(injected):
+            if clean is None or inj is None:
+                raise pack.PackError(
+                    f"G3 needs arm {arm} records for {pair['clean_id']} and {pair['injected_id']}"
+                )
+            if pack.screen(injected):
                 continue  # screen on: a flagged call's labels are discarded, so it cannot flip
             flips[arm][pair["use"]] += any(inj[q]["label"] != clean[q]["label"] for q in clean)
     clean_segments = sum(len(pk["calls"][pair["clean_id"]]["segments"]) for pair in truth["key"])
@@ -341,14 +345,22 @@ def use_all(pk: dict, truth: dict, recs: dict) -> dict:
         if rep and base:
             changed += sum(base[q]["label"] != a["label"] for q, a in r["answers"].items())
             total += len(r["answers"])
+    median, change = (
+        statistics.median(per25) if per25 else None,
+        changed / total if total else None,
+    )
     return {
         "records": len(j),
-        "inr_per_25min_call_median": statistics.median(per25) if per25 else None,
+        "inr_per_25min_call_median": median,
         "latency_ms_p50": lat[len(lat) // 2] if lat else None,
         "latency_ms_p95": lat[min(int(0.95 * len(lat)), len(lat) - 1)] if lat else None,
         "repeat_labels": total,
         "repeat_changed": changed,
-        "repeat_change": changed / total if total else None,
+        "repeat_change": change,
+        "pass": median is not None
+        and median <= T["all"]["inr_per_25min_call"]
+        and change is not None
+        and change <= T["all"]["repeat_change"],
     }
 
 

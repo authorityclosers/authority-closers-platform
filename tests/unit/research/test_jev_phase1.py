@@ -288,12 +288,55 @@ def test_key_file_checks(tmp_path: Path, monkeypatch) -> None:
 def test_version_or_slug_mismatch_is_refused() -> None:
     gateway = {"routing": {"canonicalSlug": pack.GATEWAY_SLUG}}
     assert arms.check_version({"model": "jev-1.13.0", "metadata": {"gateway": gateway}}) is True
+    with pytest.raises(arms.GatewayError, match="answered by None"):  # no routing metadata
+        arms.check_version({"model": "other/model", "metadata": {}})
     with pytest.raises(arms.GatewayError, match="jev-1.12.0"):
         arms.check_version({"model": "jev-1.12.0", "metadata": {"gateway": gateway}})
     with pytest.raises(arms.GatewayError, match="other/model"):
         arms.check_version(
             {"model": None, "metadata": {"gateway": {"routing": {"canonicalSlug": "other/model"}}}}
         )
+
+
+def test_partial_gateway_answers_are_refused_but_paid_for(
+    pk: dict, truth: dict, base_of: dict, tmp_path: Path
+) -> None:
+    class Partial(Oracle):
+        def __call__(self, method, url, body, headers):
+            status, raw = super().__call__(method, url, body, headers)
+            data = json.loads(raw)
+            data["answers"].pop(next(iter(data["answers"])))
+            return status, json.dumps(data).encode()
+
+    oracle, meter = Partial(truth, base_of), arms.SpendMeter(tmp_path / "spend.json")
+    oracle.current = pk["requests"][0]["input_id"]
+    with pytest.raises(arms.GatewayError, match="do not match the questions asked"):
+        arms.run_arm("J", pk, pk["requests"][0], 0, key=KEY, meter=meter, transport=oracle)
+    assert meter.state["requests"] == 1 and meter.state["gateway_usd"] > 0
+    assert meter.state["pending_usd"] == 0
+
+
+def test_spend_reservation_is_persisted_before_the_request_and_folded_in_after_a_crash(
+    pk: dict, truth: dict, base_of: dict, tmp_path: Path
+) -> None:
+    spend, seen = tmp_path / "spend.json", []
+
+    class Peek(Oracle):
+        def __call__(self, method, url, body, headers):
+            seen.append(json.loads(spend.read_text())["pending_usd"])
+            return super().__call__(method, url, body, headers)
+
+    oracle, meter = Peek(truth, base_of), arms.SpendMeter(spend)
+    oracle.current = pk["requests"][0]["input_id"]
+    arms.run_arm("J", pk, pk["requests"][0], 0, key=KEY, meter=meter, transport=oracle)
+    assert seen and all(p > 0 for p in seen) and meter.state["pending_usd"] == 0
+    crashed = {**meter.state, "pending_usd": 0.01}  # died between the POST and record()
+    spend.write_text(json.dumps(crashed))
+    again = arms.SpendMeter(spend)
+    assert again.state["pending_usd"] == 0 and again.state["interrupted_requests"] == 1
+    assert again.state["total_usd"] == pytest.approx(crashed["total_usd"] + 0.01)
+    assert again.state["estimated_usd"] == pytest.approx(0.01)
+    assert json.loads(spend.read_text()) == again.state
 
 
 def test_no_key_in_logs_or_outputs(
@@ -364,7 +407,7 @@ def test_partial_b_records_refuse_before_any_gateway_call(
     )
     err = capsys.readouterr().err
     assert code == 2 and "must answer every request before J; 1 missing" in err
-    assert f"('B', '{dropped}')" in err and calls == [] and not (tmp_path / "j").exists()
+    assert f"('B', '{dropped}', 0)" in err and calls == [] and not (tmp_path / "j").exists()
     with pytest.raises(pack.PackError, match="1 missing"):
         cli.check_records(pk, records)
     (records / "B.jsonl").write_text("\n".join(lines) + "\n")
@@ -386,6 +429,11 @@ def test_first_failed_gate_stops_spending(
     assert ids == set(truth["base"]) and all(not i.startswith("probe-") for i in ids)
     repeats = {r["repeat"] for r in score.load_records(out)["J"].values()}
     assert repeats == {0, 1, 2} and json.loads(spend.read_text())["requests"] == len(oracle.bodies)
+    code = cli.main(["score", "--pack", str(PACK), "--records", str(out), "--out", str(out / "s")])
+    err = capsys.readouterr().err  # the standalone scorer refuses J without the red-team set
+    assert (
+        code == 2 and "must answer every request before scoring" in err and "('J', 'probe-" in err
+    )
 
 
 def test_all_gates_pass_then_red_team_and_uses(
@@ -415,6 +463,7 @@ def test_all_gates_pass_then_red_team_and_uses(
     )
     assert uses["c"]["J"]["recall_top20"] >= 0.6 and uses["c"]["pass"] is True
     assert uses["d"]["ece"] == 0 and uses["d"]["units"] > 0 and uses["all"]["repeat_change"] == 0
+    assert uses["all"]["pass"] is True and result["version_verified"] is False
     assert uses["all"]["records"] == 36 * 3 and uses["all"]["inr_per_25min_call_median"] < 1.5
     spent = json.loads(spend.read_text())
     assert (
@@ -429,6 +478,20 @@ def test_all_gates_pass_then_red_team_and_uses(
     ]
     assert len(probe_ids) == 240
     assert sorted(result["thresholds"]) == sorted(pack.THRESHOLDS)
+    scored = out / "scored.json"
+    assert (
+        cli.main(["score", "--pack", str(PACK), "--records", str(out), "--out", str(scored)]) == 0
+    )
+    assert json.loads(scored.read_text())["uses"]["c"] == uses["c"]
+    monkeypatch.setattr(score, "gates", lambda *a, **k: [{"gate": "G1", "pass": False}])
+    assert (
+        cli.main(["score", "--pack", str(PACK), "--records", str(out), "--out", str(scored)]) == 2
+    )
+    assert "uses" not in json.loads(scored.read_text())
+    recs = score.load_records(out)
+    del recs["A"][(truth["key"][0]["clean_id"], 0)]
+    with pytest.raises(pack.PackError, match="G3 needs arm A records"):
+        score.gate_g3(pk, truth, recs)
 
 
 def test_arm_runners_never_open_truth(pk: dict, truth: dict, base_of: dict, tmp_path: Path) -> None:
