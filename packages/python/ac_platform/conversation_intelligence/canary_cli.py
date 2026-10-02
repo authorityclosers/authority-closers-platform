@@ -217,7 +217,8 @@ async def canary(args: argparse.Namespace) -> dict[str, Any]:
         bundle = None
     if (
         bundle is None
-        or bundle.acquisition_policy is None
+        or settings.public_learner_tenant_id is None
+        or bundle.acquisition_policy_for(settings.public_learner_tenant_id) is None
         or not settings.sales_xray_enabled
         or not settings.sales_xray_acquisition_enabled
     ):

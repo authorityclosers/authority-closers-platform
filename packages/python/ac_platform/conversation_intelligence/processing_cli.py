@@ -18,6 +18,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.guest_models import ConversationProcessingPrincipal
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
+from ac_platform.conversation_intelligence.hosted_runtime import load_pinned_approval
 
 
 class CommandError(ValueError):
@@ -59,7 +60,9 @@ async def provision(args: argparse.Namespace) -> dict[str, str]:
     environment = validate_environment(args)
     settings = Settings(environment=environment)
     if args.tenant_id != settings.public_learner_tenant_id:
-        raise CommandError("The tenant must match the configured public learner workspace.")
+        bundle = load_pinned_approval(settings)
+        if args.tenant_id not in bundle.acquisition_tenant_ids():
+            raise CommandError("The tenant must have an approved acquisition provider policy.")
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)

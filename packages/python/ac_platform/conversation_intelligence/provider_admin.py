@@ -131,14 +131,15 @@ class ConversationProviderAdmin:
         model_id: str,
         recipe_revision: str,
     ) -> tuple[Any, ...]:
-        policy = bundle.acquisition_policy
-        if policy is None:
+        if not bundle.acquisition_tenant_ids():
             # Exact-source StageApproval rows cannot authorize a global Admin
             # selection for the next recording. Future sources need the
             # release-bound acquisition template instead.
             return ()
         return tuple(
             item
+            for tenant_id in bundle.acquisition_tenant_ids()
+            if (policy := bundle.acquisition_policy_for(tenant_id)) is not None
             for stages in policy.stage_sets()
             for item in stages
             if (
@@ -165,7 +166,7 @@ class ConversationProviderAdmin:
                 raise ValueError
             if configuration.tenant_id != bundle.provider_control_tenant_id:
                 raise ValueError
-            if bundle.acquisition_policy is None:
+            if not bundle.acquisition_tenant_ids():
                 raise ValueError
             required = {"asr", "facts", "coaching"}
             if {route.task for route in config.routes} < required:
