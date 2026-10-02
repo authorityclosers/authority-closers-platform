@@ -14,6 +14,10 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, requir
 from ac_platform.staff_billing.read import PAGE_LIMIT, billing_overview
 
 BILLING_CAPABILITY = "platform_billing_manage"
+OrderStatus = Literal["awaiting_payment", "confirming", "paid", "failed", "expired", "needs_review"]
+SubscriptionStatus = Literal[
+    "pending_authorisation", "active", "past_due", "halted", "cancelled", "ended"
+]
 
 
 class _Strict(BaseModel):
@@ -43,7 +47,7 @@ class OrderResponse(_Strict):
     amount_minor: int
     currency: str
     gst_inclusive: bool
-    status: str
+    status: OrderStatus
     created_at: datetime
 
 
@@ -91,7 +95,7 @@ class SubscriptionResponse(_Strict):
     amount_minor: int
     currency: str
     gst_inclusive: bool
-    status: str
+    status: SubscriptionStatus
     cancel_state: Literal["none", "requested", "confirmed"]
     cancel_at_period_end: bool
     current_period_end: datetime | None
