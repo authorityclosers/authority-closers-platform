@@ -211,10 +211,41 @@ def _create_clean_source_repository(tmp_path: Path) -> Path:
     return repository
 
 
-def _allow_test_owned_stable_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+def _allow_test_owned_stable_inputs(
+    monkeypatch: pytest.MonkeyPatch, *, fixture_root: Path | None = None
+) -> None:
     if os.name == "posix":
+        if fixture_root is not None:
+            # Exempt the runner's ancestors, preserving checks on generated inputs.
+            path_is_root_owned = restore_drill._path_is_root_owned
+            fixture_ancestors = frozenset(fixture_root.parents)
+            monkeypatch.setattr(
+                restore_drill,
+                "_path_is_root_owned",
+                lambda path: path in fixture_ancestors or path_is_root_owned(path),
+            )
+            return
         monkeypatch.setattr(restore_drill.os, "geteuid", lambda: 0, raising=False)
         monkeypatch.setattr(restore_drill, "_path_is_root_owned", lambda _path: True)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="root ownership requires POSIX")
+def test_permission_fixture_still_rejects_non_root_owned_generated_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(restore_drill.os, "geteuid", lambda: 0)
+    stable_root = tmp_path / "stable-inputs"
+    untrusted = stable_root / "non-root-owned"
+    monkeypatch.setattr(
+        restore_drill,
+        "_path_is_root_owned",
+        lambda path: path.is_relative_to(tmp_path) and path != untrusted,
+    )
+    _allow_test_owned_stable_inputs(monkeypatch, fixture_root=tmp_path)
+    restore_drill._prepare_stable_input_root(stable_root)
+    untrusted.mkdir()
+    with pytest.raises(restore_drill.DrillError, match="non-root-owned ancestor"):
+        restore_drill._prepare_stable_input_root(untrusted)
 
 
 def test_host_script_is_stdlib_only_and_uses_application_probe_boundary() -> None:
@@ -1740,11 +1771,16 @@ def test_postgres_container_user_can_read_the_stable_dump(
 
     if not running_as_root:
         _allow_test_owned_stable_inputs(monkeypatch)
+    else:
+        # Paperclip owns the outer scratch directories as acdev. Only exempt
+        # those ancestors; generated inputs retain real root-ownership checks.
+        _allow_test_owned_stable_inputs(monkeypatch, fixture_root=tmp_path)
     config = _config(tmp_path, execute=True)
     stable_root = tmp_path / "stable-inputs"
     with restore_drill._stable_restore_inputs(config, root=stable_root) as stable_config:
-        if required:
+        if running_as_root:
             assert stable_root.stat().st_uid == 0
+            assert stable_config.backup.parent.stat().st_uid == 0
             assert stable_config.backup.stat().st_uid == 0
             assert stable_config.backup_metadata.stat().st_uid == 0
         command = [

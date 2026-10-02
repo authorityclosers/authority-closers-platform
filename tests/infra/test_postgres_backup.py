@@ -1272,6 +1272,11 @@ def _run_cache_entrypoint(tmp_path, name=RESTIC_ENTRYPOINTS[0], cache_state="val
         cache.symlink_to(target)
     elif cache_state != "missing":
         cache.mkdir(mode=0o500 if cache_state == "unwritable" else 0o750)
+    if cache_state == "unwritable":
+        # Root bypasses mode 0500; simulate the failed probe for every test UID.
+        probe = tmp_path / "mktemp"
+        probe.write_text("#!/usr/bin/env bash\nexit 1\n")
+        probe.chmod(0o700)
     calls = tmp_path / "calls"
     fake = tmp_path / "restic"
     fake.write_text(
