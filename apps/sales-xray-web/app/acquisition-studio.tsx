@@ -54,6 +54,7 @@ import {
   ReportTranscript,
   formatTranscriptTime as time,
 } from "./report-transcript";
+import { TranscriptReader } from "./transcript-reader";
 import {
   type ReportEvidence,
   type SalesReport,
@@ -332,6 +333,13 @@ export function AcquisitionStudio({
   const [statusIssue, setStatusIssue] = useState<string | AcquisitionError>("");
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
+  const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
+  useEffect(() => {
+    const handler = () => setTranscriptReaderOpen(true);
+    window.addEventListener("sales-xray:open-transcript", handler);
+    return () =>
+      window.removeEventListener("sales-xray:open-transcript", handler);
+  }, []);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);
@@ -3367,6 +3375,7 @@ export function AcquisitionStudio({
                   canRequestDeletion={!!submission}
                   deletionDisabled={analysisWriteBlocked}
                   onAnalyseAnother={startAnotherCall}
+                  onOpenTranscript={() => setTranscriptReaderOpen(true)}
                   visual={
                     <CallMap
                       callId={submission?.id ?? null}
@@ -3564,6 +3573,19 @@ export function AcquisitionStudio({
                   ]}
                 />
                 {!embedded ? <ReportScrollRail /> : null}
+                <TranscriptReader
+                  isOpen={transcriptReaderOpen}
+                  onClose={() => setTranscriptReaderOpen(false)}
+                  transcript={result.transcript}
+                  report={report}
+                  callId={submission?.id ?? null}
+                  callTitle={callTitle(
+                    result.label,
+                    file?.name ?? "Sales Xray call report",
+                  )}
+                  onSeek={playFrom}
+                  audioAvailable={Boolean(audio.current)}
+                />
               </section>
               <CallAudioDock
                 audioRef={audio}

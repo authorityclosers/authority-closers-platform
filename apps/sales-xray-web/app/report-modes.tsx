@@ -20,6 +20,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -745,15 +746,32 @@ export function ReportModes({
     ? addressFromSearch(search, boundCallId, panels, pathname)
     : null;
   const address = linked ?? local;
-  const selected = panels.some((panel) => panel.id === address.section)
-    ? address.section
-    : panels[0]?.id;
   const view: View = linked
     ? (linked.view ?? preferredView)
     : (local.view ?? preferredView);
+
+  // Owner order 2 Oct (AUT-741 addendum, item 4): Nobody wants the full transcript while reading.
+  // Remove the transcript section from Reading mode. In Document view, keep it only as the last appendix for print and PDF.
+  const activePanels = useMemo(() => {
+    if (view === "reading") {
+      return panels.filter((panel) => panel.id !== "transcript");
+    }
+    if (view === "document") {
+      const nonTranscript = panels.filter((panel) => panel.id !== "transcript");
+      const transcript = panels.find((panel) => panel.id === "transcript");
+      return transcript ? [...nonTranscript, transcript] : nonTranscript;
+    }
+    return panels;
+  }, [panels, view]);
+
+  const selected = activePanels.some((panel) => panel.id === address.section)
+    ? address.section
+    : activePanels[0]?.id;
   const printView =
     view === "document" && new URLSearchParams(search).get("print") === "1";
-  const currentSection = panels.some((panel) => panel.id === readingSection)
+  const currentSection = activePanels.some(
+    (panel) => panel.id === readingSection,
+  )
     ? view === "tabs"
       ? selected
       : readingSection
@@ -781,9 +799,9 @@ export function ReportModes({
         Math.min(180, window.innerHeight * 0.4),
         scrollportTop + offset + 2,
       );
-      let current = panels[0]?.id ?? "";
+      let current = activePanels[0]?.id ?? "";
       let foundHeading = false;
-      for (const panel of panels) {
+      for (const panel of activePanels) {
         const heading = document.getElementById(`${id}-heading-${panel.id}`);
         const bounds = heading?.getBoundingClientRect();
         if (bounds && bounds.height > 0) foundHeading = true;
@@ -802,7 +820,7 @@ export function ReportModes({
       document.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [id, panels, selected]);
+  }, [id, activePanels, selected]);
 
   useEffect(() => {
     if (!linked?.section || !new URLSearchParams(search).has("section")) return;
@@ -847,7 +865,7 @@ export function ReportModes({
     return () => observer.disconnect();
   }, [currentSection, view, slot]);
 
-  if (!panels.length) return null;
+  if (!activePanels.length) return null;
 
   /** Moves to a destination with motion (unless reduced) and a brief arrival cue. */
   function arriveAt(destination: HTMLElement | null | undefined) {
@@ -882,7 +900,7 @@ export function ReportModes({
     focus = false,
     history: "push" | "replace" = "push",
   ) {
-    if (!panels.some((panel) => panel.id === section)) return;
+    if (!activePanels.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
       const current = new URL(window.location.href);
@@ -933,7 +951,7 @@ export function ReportModes({
       origin
         ?.closest<HTMLElement>("[data-report-mode-section]")
         ?.getAttribute("data-report-mode-section") ?? currentSection;
-    const originLabel = panels.find(
+    const originLabel = activePanels.find(
       (panel) => panel.id === originSection,
     )?.label;
     if (origin && originLabel)
@@ -994,7 +1012,7 @@ export function ReportModes({
 
   function changeView(nextView: View) {
     const section =
-      view !== "tabs" ? currentSection : (selected ?? panels[0]?.id);
+      view !== "tabs" ? currentSection : (selected ?? activePanels[0]?.id);
     if (section && nextView !== view)
       navigate(section, nextView, true, "replace");
   }
@@ -1017,7 +1035,7 @@ export function ReportModes({
           aria-label={label}
           data-report-sections
         >
-          {panels.map((panel, index) => (
+          {activePanels.map((panel, index) => (
             <button
               key={panel.id}
               ref={(element) => {
@@ -1035,17 +1053,17 @@ export function ReportModes({
               onKeyDown={(event) => {
                 const next =
                   event.key === "ArrowRight"
-                    ? (index + 1) % panels.length
+                    ? (index + 1) % activePanels.length
                     : event.key === "ArrowLeft"
-                      ? (index + panels.length - 1) % panels.length
+                      ? (index + activePanels.length - 1) % activePanels.length
                       : event.key === "Home"
                         ? 0
                         : event.key === "End"
-                          ? panels.length - 1
+                          ? activePanels.length - 1
                           : null;
                 if (next === null) return;
                 event.preventDefault();
-                navigate(panels[next].id, "tabs");
+                navigate(activePanels[next].id, "tabs");
                 tabButtons.current[next]?.focus();
               }}
             >
@@ -1061,7 +1079,7 @@ export function ReportModes({
           aria-label={label}
           data-report-sections
         >
-          {panels.map((panel) => (
+          {activePanels.map((panel) => (
             <a
               key={panel.id}
               href={
@@ -1177,7 +1195,7 @@ export function ReportModes({
           documentView={view === "document"}
           navigate={navigateToReport}
         >
-          {renderReportPanels(id, panels, view, selected, documentData)}
+          {renderReportPanels(id, activePanels, view, selected, documentData)}
         </ReportReadingProvider>
       </div>
       {returnPoint && (

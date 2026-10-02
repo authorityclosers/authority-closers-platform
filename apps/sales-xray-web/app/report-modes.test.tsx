@@ -75,20 +75,41 @@ const sections = () => [
 ];
 const mode = () => container.querySelector<HTMLElement>("[data-report-modes]")!;
 
-it("shows all six report sections in one continuous reading layout", async () => {
+it("shows report sections in one continuous reading layout without transcript section", async () => {
   await render();
   expect(mode().dataset.view).toBe("reading");
   // The tab strip, section list and sections share one light report surface,
   // whatever the app theme (tokens.css [data-lx-surface="light"]).
   expect(mode().getAttribute("data-lx-surface")).toBe("light");
-  expect(sections()).toHaveLength(6);
+  expect(sections()).toHaveLength(5);
   expect(sections().every((section) => !section.hidden)).toBe(true);
   expect(
+    container.querySelector("[data-report-mode-section='transcript']"),
+  ).toBeNull();
+  expect(
     container.querySelectorAll("nav[aria-label='Report sections'] a"),
-  ).toHaveLength(6);
+  ).toHaveLength(5);
   expect(
     container.querySelector('[aria-pressed="true"]')?.textContent,
   ).toContain("Reading");
+});
+
+it("keeps transcript as the last appendix in document view", async () => {
+  await render(call);
+  const viewButtons = container.querySelectorAll<HTMLButtonElement>(
+    '[role="group"] button',
+  );
+  await act(async () => viewButtons[2].click());
+  expect(mode().dataset.view).toBe("document");
+  expect(
+    container.querySelector("[data-report-mode-section='transcript']"),
+  ).not.toBeNull();
+  const allSections = sections();
+  expect(
+    allSections[allSections.length - 1].getAttribute(
+      "data-report-mode-section",
+    ),
+  ).toBe("transcript");
 });
 
 it("bookmarks a selected section without hiding other report content", async () => {
@@ -760,10 +781,10 @@ it("opens a direct section bookmark at its section", async () => {
     value: scroll,
   });
   try {
-    window.history.replaceState(null, "", `/?call=${call}&section=transcript`);
+    window.history.replaceState(null, "", `/?call=${call}&section=skills`);
     await render(call);
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(mode().dataset.reportSection).toBe("transcript");
+    expect(mode().dataset.reportSection).toBe("skills");
     expect(scroll).toHaveBeenCalledOnce();
   } finally {
     if (previous)
