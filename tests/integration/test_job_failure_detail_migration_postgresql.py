@@ -9,9 +9,9 @@ from tests.integration.test_media_delivery_renewal_postgresql import postgres_ha
 
 def test_0061_migration_adds_nullable_failure_detail_on_postgresql(postgres_harness: Any) -> None:  # noqa: F811
     with postgres_harness.engine.connect() as connection:
-        # 0061 is applied under the current head (billing 0062-0064 and plans 0065 follow it).
+        # 0061 is applied under the current head (billing 0062-0064, plans 0065 and 0066 follow it).
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "20261002_0065"
+            "20261002_0066"
         )
         column = next(
             item
