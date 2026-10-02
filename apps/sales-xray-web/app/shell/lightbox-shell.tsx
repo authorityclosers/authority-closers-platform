@@ -432,8 +432,18 @@ function LightboxShellFrame({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tenant_id: tenantId }),
         credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
       });
       if (res.ok) {
+        const selected: unknown = await res.json();
+        if (
+          typeof selected !== "object" ||
+          selected === null ||
+          !("tenant_id" in selected) ||
+          selected.tenant_id !== tenantId
+        )
+          return;
         // The next document reads the new context. Do not start reads here
         // between the successful context change and its reload.
         setWorkspaceReloadPending(true);
