@@ -811,7 +811,12 @@ export function ReportModes({
       );
   }
 
-  function navigate(section: string, nextView: View = view, focus = false) {
+  function navigate(
+    section: string,
+    nextView: View = view,
+    focus = false,
+    history: "push" | "replace" = "push",
+  ) {
     if (!panels.some((panel) => panel.id === section)) return;
     if (boundCallId) {
       if (!UUID.test(boundCallId)) return;
@@ -836,7 +841,7 @@ export function ReportModes({
       const sectionChanges =
         current.searchParams.get("section") !==
         new URLSearchParams(window.location.search).get("section");
-      if (changesLocation && sectionChanges) {
+      if (changesLocation && sectionChanges && history !== "replace") {
         window.history.pushState(window.history.state, "", target);
         if (returnRef.current) returnRef.current.pushes += 1;
       } else if (changesLocation)
@@ -925,7 +930,8 @@ export function ReportModes({
   function changeView(nextView: View) {
     const section =
       view !== "tabs" ? currentSection : (selected ?? panels[0]?.id);
-    if (section && nextView !== view) navigate(section, nextView, true);
+    if (section && nextView !== view)
+      navigate(section, nextView, true, "replace");
   }
 
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),

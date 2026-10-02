@@ -1197,6 +1197,36 @@ it("tracks the chapter positioned below tall sticky chrome", async () => {
   expect(mode().dataset.reportSection).toBe("moments");
 });
 
+it("replaces the bookmark when toggling views from a scrolled chapter", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    `/?call=${call}&view=reading&section=overview`,
+  );
+  await render(call);
+  await settle();
+  const heading = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
+    top: 100,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  const push = vi.spyOn(window.history, "pushState");
+  const replace = vi.spyOn(window.history, "replaceState");
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>('[title="Document view"]')!
+      .click(),
+  );
+  await settle();
+  expect(mode().dataset.reportSection).toBe("moments");
+  expect(window.location.search).toContain("view=document&section=moments");
+  expect(push).not.toHaveBeenCalled();
+  expect(replace).toHaveBeenCalledOnce();
+});
+
 it("renders only supplied document metadata and prints without a fake Word action", async () => {
   const print = vi.fn();
   vi.stubGlobal("print", print);
