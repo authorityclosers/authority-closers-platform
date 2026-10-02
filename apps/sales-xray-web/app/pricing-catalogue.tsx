@@ -84,7 +84,7 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
             </header>
 
             <dl className={styles.prices}>
-              {monthly !== null ? (
+              {available && monthly !== null ? (
                 <div>
                   <dt>Monthly</dt>
                   <dd>
@@ -93,7 +93,7 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
                   </dd>
                 </div>
               ) : null}
-              {yearly !== null ? (
+              {available && yearly !== null ? (
                 <div>
                   <dt>Yearly</dt>
                   <dd>
@@ -146,9 +146,11 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
                   {plan.topUpPacks.map((pack) => (
                     <li key={pack.key}>
                       {count(pack.minutes)} minutes
-                      {pack.pricePaise === null
-                        ? " · price not listed in the catalogue"
-                        : " · " + money(pack.pricePaise)}
+                      {!available
+                        ? ""
+                        : pack.pricePaise === null
+                          ? " · price not listed in the catalogue"
+                          : " · " + money(pack.pricePaise)}
                     </li>
                   ))}
                 </ul>

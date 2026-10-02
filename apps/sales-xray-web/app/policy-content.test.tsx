@@ -124,3 +124,43 @@ it("does not show the superseded Company tier on pricing", () => {
   expect(markup).not.toContain("Must not be shown");
   expect(markup).not.toContain("GST");
 });
+
+it("hides unavailable plan prices and top-up amounts", () => {
+  const comingSoon: Plan = {
+    ...samplePlans[2],
+    prices: {
+      monthlyPaise: 765_432_100,
+      yearlyPaise: 1_234_567_800,
+      monthlyCents: null,
+      yearlyCents: null,
+    },
+    topUpPacks: [
+      {
+        key: "fictional-coming-soon-pack",
+        minutes: 300,
+        validityRule: "billing_year_end",
+        pricePaise: 9_876_543,
+        priceCents: null,
+      },
+    ],
+  };
+  const pricingWithComingSoon = renderToStaticMarkup(
+    <PolicyPage
+      slug="pricing"
+      pricingPlans={[...samplePlans.slice(0, 2), comingSoon, samplePlans[3]]}
+    />,
+  );
+  const pricingWithMissingPrice = renderToStaticMarkup(
+    <PolicyPage slug="pricing" pricingPlans={samplePlans} />,
+  );
+
+  expect(pricingWithComingSoon).toContain("Not currently on sale");
+  expect(pricingWithComingSoon).not.toContain("₹7,654,321");
+  expect(pricingWithComingSoon).not.toContain("₹12,345,678");
+  expect(pricingWithComingSoon).not.toContain("₹98,765.43");
+  expect(pricingWithComingSoon).toContain("₹1,234 / month");
+  expect(pricingWithComingSoon).toContain("₹90");
+  expect(pricingWithMissingPrice).toContain(
+    "Price is not listed in the catalogue.",
+  );
+});
