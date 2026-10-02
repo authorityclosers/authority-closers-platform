@@ -150,9 +150,12 @@ def gate_g1(pk: dict, truth: dict, recs: dict) -> dict:
 
 def gate_g2(pk: dict, truth: dict, recs: dict) -> dict:
     confident = shared = 0
+    compared: Counter = Counter()  # A and B answers the J units were checked against
     for cid, us in units(pk, truth, recs, "J", "all").items():
         a, b = labels(recs, "A", cid) or {}, labels(recs, "B", cid) or {}
         for qid, t, p, prob in us:
+            compared["A"] += qid in a
+            compared["B"] += qid in b
             if p != t and prob >= T["G2"]["confident"]:
                 confident += 1
                 shared += any(x.get(qid, {}).get("label") == p for x in (a, b))
@@ -160,6 +163,8 @@ def gate_g2(pk: dict, truth: dict, recs: dict) -> dict:
     return {
         "gate": "G2",
         "pass": rate <= T["G2"]["max_overlap"],
+        "j_units": sum(len(us) for us in units(pk, truth, recs, "J", "all").values()),
+        "compared_units": {"A": compared["A"], "B": compared["B"]},
         "confident_errors": confident,
         "shared_with_a_or_b": shared,
         "overlap": rate,

@@ -330,8 +330,45 @@ def test_run_j_requires_a_b_d_records(pk: dict, tmp_path: Path, monkeypatch, cap
             str(tmp_path / "spend.json"),
         ]
     )
-    assert code == 2 and "must run before J" in capsys.readouterr().err
+    assert code == 2 and "must answer every request before J" in capsys.readouterr().err
     assert not (tmp_path / "j").exists()
+
+
+def test_partial_b_records_refuse_before_any_gateway_call(
+    pk: dict, truth: dict, base_of: dict, tmp_path: Path, monkeypatch, capsys
+) -> None:
+    records, oracle = tmp_path / "records", Oracle(truth, base_of)
+    records.mkdir()
+    for arm in "AB":
+        oracle_arm(arm, pk, oracle, records)
+    cli.run_stage("D", pk, records, 1, "base")
+    lines = (records / "B.jsonl").read_text().splitlines()
+    dropped = json.loads(lines[-1])["input_id"]  # arm B stopped one request short
+    (records / "B.jsonl").write_text("\n".join(lines[:-1]) + "\n")
+    calls: list = []
+    monkeypatch.setattr(arms, "urllib_transport", lambda *a: calls.append(a) or (500, b""))
+    code = cli.main(
+        [
+            "run-j",
+            "--pack",
+            str(PACK),
+            "--records",
+            str(records),
+            "--out",
+            str(tmp_path / "j"),
+            "--key-file",
+            str(tmp_path / "absent.env"),  # would raise OSError if the key were read first
+            "--spend-file",
+            str(tmp_path / "spend.json"),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert code == 2 and "must answer every request before J; 1 missing" in err
+    assert f"('B', '{dropped}')" in err and calls == [] and not (tmp_path / "j").exists()
+    with pytest.raises(pack.PackError, match="1 missing"):
+        cli.check_records(pk, records)
+    (records / "B.jsonl").write_text("\n".join(lines) + "\n")
+    cli.check_records(pk, records)
 
 
 def test_first_failed_gate_stops_spending(

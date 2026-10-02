@@ -28,6 +28,28 @@ def run_stage(arm: str, pk: dict, out: Path, repeats: int, stage: str, **kw) -> 
                 write(out, arm, arms.run_arm(arm, pk, req, repeat, **kw))
 
 
+def check_records(pk: dict, records: Path) -> None:
+    """Refuse unless A and B answered every request and D every base call (repeat 0).
+
+    A partial file (an arm stopped at a usage limit) would otherwise score as "no match":
+    G2 would pass with overlap 0 and G1 would fall back to the English-only bar.
+    """
+    recs = score.load_records(records)
+    missing = [
+        (arm, req["input_id"])
+        for arm in ARMS_BEFORE_J
+        for req in pk["requests"]
+        if (arm != "D" or not req["input_id"].startswith("probe-"))
+        and not {q["id"] for q in req["questions"]}
+        <= set(recs.get(arm, {}).get((req["input_id"], 0), {}).get("answers", {}))
+    ]
+    if missing:
+        raise pack.PackError(
+            f"arms A, B, D must answer every request before J; {len(missing)} missing "
+            f"(arm, input_id) in {records}: {missing[:12]}{' ...' if len(missing) > 12 else ''}"
+        )
+
+
 def stop(message: str, meter: arms.SpendMeter | None = None) -> int:
     s = meter.state if meter else {}
     total = f"; spend total ₹{s['total_inr']:.2f} (${s['total_usd']:.4f})" if meter else ""
@@ -39,12 +61,8 @@ def run_j(a: argparse.Namespace, pk: dict) -> int:
     """Root-run Jev job: preflight, base calls with repeats, G1–G2, then the red-team set and G3."""
     meter, transport = arms.SpendMeter(a.spend_file), arms.urllib_transport
     try:
+        check_records(pk, a.records)  # before the key is read: no spend on a partial baseline
         key = arms.read_key(a.key_file)
-        missing = [arm for arm in ARMS_BEFORE_J if not (a.records / f"{arm}.jsonl").exists()]
-        if missing:
-            raise pack.PackError(
-                f"arms {missing} must run before J; records missing in {a.records}"
-            )
         a.out.mkdir(parents=True, exist_ok=True)
         for arm in ARMS_BEFORE_J:
             (a.out / f"{arm}.jsonl").write_bytes((a.records / f"{arm}.jsonl").read_bytes())
