@@ -138,6 +138,24 @@ def main() -> None:
                 proof.append({"width": width, "view": view, "heading": bounds})
                 page.screenshot(path=str(OUT / f"transcript-{view}-{width}.png"))
             page.goto(
+                f"{BASE}/review-fixture/shell?call={CALL}&view=document&section=overview",
+                wait_until="networkidle",
+            )
+            expect(workspace).to_have_attribute("data-view", "document")
+            page.get_by_title("Reading view", exact=True).click()
+            expect(workspace).to_have_attribute("data-view", "reading")
+            workspace.locator('[data-report-mode-section="moments"] h2').evaluate(
+                "el => el.scrollIntoView({block: 'start', behavior: 'instant'})"
+            )
+            expect(workspace).to_have_attribute("data-report-section", "moments")
+            assert "section=overview" in page.url
+            entries = page.evaluate("history.length")
+            page.get_by_title("Document view", exact=True).click()
+            expect(workspace).to_have_attribute("data-view", "document")
+            expect(workspace).to_have_attribute("data-report-section", "moments")
+            assert "section=moments" in page.url
+            assert page.evaluate("history.length") == entries
+            page.goto(
                 f"{BASE}/review-fixture/document?call={CALL}&view=document&print=1",
                 wait_until="networkidle",
             )
@@ -169,6 +187,7 @@ def main() -> None:
                 "positions": proof,
                 "revision": "synthetic-display-r1",
                 "a4_pages": 7,
+                "scrolled_view_toggle_replaces_history": True,
                 "page_errors": errors,
                 "external_requests": external,
             },
