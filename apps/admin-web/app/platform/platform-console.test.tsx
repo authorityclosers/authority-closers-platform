@@ -78,6 +78,7 @@ it("does not request cross-tenant data for an access-manager-only identity", asy
 it.each([
   ["platform_organisations_manage", "Manage organisations"],
   ["platform_release_manage", "Manage releases"],
+  ["platform_billing_manage", "Manage billing"],
 ] as const)(
   "labels %s without requesting the directory",
   async (permission, label) => {
@@ -88,8 +89,23 @@ it.each([
     await mount();
     expect(container.textContent).toContain(label);
     expect(fetch).not.toHaveBeenCalled();
+    expect(
+      [...container.querySelectorAll("a, button")].some((control) =>
+        /billing/i.test(control.textContent ?? ""),
+      ),
+    ).toBe(false);
   },
 );
+it("requests the directory when billing and tenant-read grants are both explicit", async () => {
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+    ...identity,
+    permissions: ["platform_billing_manage", "platform_tenants_read"],
+  });
+  await mount();
+  expect(container.textContent).toContain("Manage billing");
+  expect(container.textContent).toContain("Example Academy");
+  expect(fetch).toHaveBeenCalledOnce();
+});
 it("rejects response from another session", async () => {
   vi.mocked(fetch).mockResolvedValue(
     Response.json({ ...inventory, session_id: person }),
