@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./api": "./src/admin-api.ts",
+    "./organisations": "./src/organisations-api.ts",
     "./identity": "./src/admin-identity.ts",
     "./platform-identity": "./src/platform-identity.ts",
     "./session": "./src/admin-session.tsx",
