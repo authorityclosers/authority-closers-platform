@@ -35,10 +35,6 @@ def main() -> None:
                 viewport={"width": width, "height": height}, reduced_motion="reduce"
             )
             page.on("pageerror", lambda error: errors.append(str(error)))
-            page.add_init_script(
-                "if (localStorage.getItem('ac:report-text-size') === null) "
-                "localStorage.setItem('ac:report-text-size', '125')"
-            )
 
             def boundary(route):
                 if urlsplit(route.request.url).netloc != urlsplit(BASE).netloc:
@@ -49,21 +45,20 @@ def main() -> None:
 
             page.route("**/*", boundary)
             response = page.goto(
-                f"{BASE}/review-fixture/shell?call={CALL}&view=reading",
+                f"{BASE}/review-fixture/shell?call={CALL}&view=tabs&section=overview",
                 wait_until="networkidle",
             )
             assert response.status == 200
             workspace = page.locator("[data-report-modes]")
-            # Reading is also the server default: wait for the saved size to
-            # prove hydration before clicking a toolbar that may be portaled.
-            expect(workspace).to_have_attribute("data-text-size", "125")
-            page.get_by_role("button", name="Text size 100%", exact=True).click()
-            expect(workspace).to_have_attribute("data-text-size", "100")
-            expect(workspace).to_have_attribute("data-view", "reading")
+            # Tabs differs from the server's Reading default, proving hydration
+            # before clicking a toolbar that may move into the shell.
+            expect(workspace).to_have_attribute("data-view", "tabs")
             if width == 1440:
                 expect(page.locator("[data-report-nav]")).to_have_attribute(
                     "data-placement", "toolbar"
                 )
+            page.get_by_title("Reading view", exact=True).click()
+            expect(workspace).to_have_attribute("data-view", "reading")
             disclosure = workspace.locator("details").filter(
                 has=page.locator("summary", has_text="Read the full summary")
             )
