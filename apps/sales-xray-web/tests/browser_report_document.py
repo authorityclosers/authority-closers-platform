@@ -22,6 +22,23 @@ def pdf_text(path: Path) -> str:
     return " ".join(" ".join(p.extract_text() for p in PdfReader(path).pages).split())
 
 
+def assert_full_quotes(workspace) -> None:
+    # Extend only the dev fixture's DOM with invented text for clipping QA.
+    for selector in ["[class*='who'] q", "[class*='bubble'] q"]:
+        quote = workspace.locator(selector).first
+        quote.evaluate(
+            "el => el.textContent = 'Invented long evidence phrase. '.repeat(40) "
+            "+ 'EvidenceEndMarker'"
+        )
+        bounds = quote.evaluate("""el => ({
+            height: el.clientHeight, fullHeight: el.scrollHeight,
+            clamp: getComputedStyle(el).webkitLineClamp,
+        })""")
+        assert bounds["clamp"] == "none"
+        assert bounds["height"] > 100
+        assert bounds["fullHeight"] <= bounds["height"] + 1
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     expect.set_options(timeout=30_000)
@@ -77,18 +94,7 @@ def main() -> None:
                 expect(workspace).to_have_attribute("data-text-size", size)
                 actual = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
                 assert abs(actual - base_size * scale) < 0.1
-            for selector in ["[class*='who'] q", "[class*='bubble'] p"]:
-                quote = workspace.locator(selector).first
-                quote.evaluate(
-                    "el => el.textContent = 'Invented long evidence phrase. '.repeat(40)"
-                )
-                bounds = quote.evaluate("""el => ({
-                    height: el.clientHeight, fullHeight: el.scrollHeight,
-                    clamp: getComputedStyle(el).webkitLineClamp,
-                })""")
-                assert bounds["clamp"] == "none"
-                assert bounds["height"] > 100
-                assert bounds["fullHeight"] <= bounds["height"] + 1
+            assert_full_quotes(workspace)
             skills = workspace.locator("[data-document-skills] section")
             expect(skills).to_have_count(4)
             for skill in skills.all():
@@ -110,9 +116,11 @@ def main() -> None:
                     expect(workspace).to_have_attribute("data-view", "document")
                     expect(summary).to_be_visible()
                 page.emulate_media(media="print")
+                assert_full_quotes(workspace)
                 path = OUT / f"full-summary-{width}-{'renderer' if print_query else 'native'}.pdf"
                 page.pdf(path=str(path), prefer_css_page_size=True, print_background=True)
                 assert SUMMARY in pdf_text(path), "Full summary missing from PDF"
+                assert pdf_text(path).count("EvidenceEndMarker") == 2
                 long_report = PdfReader(path)
                 assert len(long_report.pages) > 8, "Fixture must span more pages than panels"
                 for i, pdf_page in enumerate(long_report.pages, 1):
