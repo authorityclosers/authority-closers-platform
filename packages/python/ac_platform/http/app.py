@@ -58,6 +58,7 @@ from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 from ac_platform.http.reviewer_auth import install_reviewer_identity_http
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
 from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
+from ac_platform.http.staff_billing import install_staff_billing_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -231,6 +232,7 @@ def create_app(
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
+    install_staff_billing_http(application, settings=settings, require_actor=require_actor)
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(
