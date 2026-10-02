@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence import (
     execution_control_models,
     guest_models,
     recovery_models,
+    sensitive_segment_models,
     source_object_models,
     submission_label_models,
 )
@@ -57,6 +58,7 @@ MODEL_MODULES = (
     execution_control_models,
     recovery_models,
     source_object_models,
+    sensitive_segment_models,
     authorization_models,
     knowledge_models,
     catalog_models,
