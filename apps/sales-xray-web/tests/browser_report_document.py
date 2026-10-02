@@ -223,7 +223,9 @@ def main() -> None:
                     {"reading": "Reading view", "tabs": "Tabbed view"}[next_view], exact=True
                 ).click()
                 if next_view == "tabs":
-                    workspace.locator('button[role="tab"]').first.click()
+                    page.locator('[data-report-nav] button[role="tab"]').filter(
+                        has_text="Prospect"
+                    ).click()
                 base = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
                 for size, scale in [("112.5", 1.125), ("125", 1.25), ("100", 1.0)]:
                     page.get_by_role("button", name=f"Text size {size}%", exact=True).click()
