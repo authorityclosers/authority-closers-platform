@@ -63,6 +63,7 @@ JOB_FAILURE_DETAIL = "20260930_0061"
 BILLING_LEDGER = "20261001_0062"
 BILLING_ORDERS = "20261001_0063"
 BILLING_SUBSCRIPTIONS = "20261001_0064"
+SENSITIVE_SEGMENT_MARKS = "20261002_0065"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -106,6 +107,7 @@ HEADS = (
     BILLING_LEDGER,
     BILLING_ORDERS,
     BILLING_SUBSCRIPTIONS,
+    SENSITIVE_SEGMENT_MARKS,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -218,6 +220,7 @@ NEW_TABLES = {
         "billing_periods",
         "billing_refund_events",
     ),
+    SENSITIVE_SEGMENT_MARKS: ("conversation_sensitive_segment_marks",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -320,6 +323,11 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
                 "billing_periods",
                 "billing_refund_events",
             ),
+        )
+        assert module.SENSITIVE_SEGMENT_MARKS_PARITY_MIGRATION_HEAD == SENSITIVE_SEGMENT_MARKS
+        assert module.VERSIONED_PARITY_CONTRACTS[SENSITIVE_SEGMENT_MARKS] == (
+            "ac-postgres-parity-v39",
+            module.BILLING_SUBSCRIPTIONS_PARITY_TABLES + ("conversation_sensitive_segment_marks",),
         )
 
 
