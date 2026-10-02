@@ -24,6 +24,7 @@ import {
   ReportTranscript,
   formatTranscriptTime,
 } from "../../report-transcript";
+import { TranscriptReader } from "../../transcript-reader";
 import { SalesSkills } from "../../sales-skills";
 import { SourceWaveformProvider } from "../../source-waveform";
 import { WorkspaceAccessProvider } from "../../workspace-access";
@@ -70,6 +71,7 @@ export function FullShellPreview() {
   const [status, setStatus] = useState(
     "Fictional fixture. Actions here do not reach any service.",
   );
+  const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const transcript = {
     ...baseFixture.transcript,
     duration_ms: FIXTURE_DURATION_MS,
@@ -128,6 +130,7 @@ export function FullShellPreview() {
                     canDownload={false}
                     canRequestDeletion
                     deletionDisabled
+                    onOpenTranscript={() => setTranscriptReaderOpen(true)}
                     onAnalyseAnother={() =>
                       setStatus("Would open New analysis. Nothing was sent.")
                     }
@@ -293,6 +296,16 @@ export function FullShellPreview() {
                     ]}
                   />
                   <ReportScrollRail />
+                  <TranscriptReader
+                    isOpen={transcriptReaderOpen}
+                    onClose={() => setTranscriptReaderOpen(false)}
+                    transcript={transcript}
+                    report={syntheticReport}
+                    callId={FIXTURE_CALL_ID}
+                    callTitle="Fictional seller — sample call report"
+                    onSeek={playFrom}
+                    audioAvailable
+                  />
                   <p
                     className={styles.status}
                     role="status"

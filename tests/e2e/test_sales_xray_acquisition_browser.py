@@ -795,13 +795,16 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     await expect(reading_view).to_have_attribute("aria-pressed", "false")
                     # The reader can explicitly choose Reading view: one
                     # horizontal row of section links, all sections shown.
+                    # The transcript lives in its own reader, not in Reading.
                     await reading_view.click()
                     await expect(reading_view).to_have_attribute("aria-pressed", "true")
+                    reading_nav = page.get_by_role(
+                        "navigation", name="Explore your sales report", exact=True
+                    )
+                    await expect(reading_nav.get_by_role("link")).to_have_count(7)
                     await expect(
-                        page.get_by_role(
-                            "navigation", name="Explore your sales report", exact=True
-                        ).get_by_role("link")
-                    ).to_have_count(8)
+                        reading_nav.get_by_role("link", name="Transcript", exact=True)
+                    ).to_have_count(0)
                     await expect(
                         page.get_by_role(
                             "navigation", name="Explore your sales report", exact=True
