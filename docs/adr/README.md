@@ -23,5 +23,6 @@ Business-rule changes must also propagate to the controlled Drive layer.
 - 0036 — [Layered Sales Xray report](0036-layered-sales-xray-report.md)
 - 0041 — [Standing owner approval for automatic production promotion (release train)](0041-release-train-standing-approval.md)
 - 0042 — [Sales Xray speaker map — which speaker is you](0042-sales-xray-speaker-map.md)
+- 0046 — [Plans catalogue with owner activation](0046-plans-catalogue-owner-activation.md)
 - 0049 — [Personal accounts and organisations](0049-personal-accounts-and-organisations.md)
 - 0052 — [Billing ledger, subscriptions and top-ups](0052-billing-ledger-subscriptions-and-top-ups.md)

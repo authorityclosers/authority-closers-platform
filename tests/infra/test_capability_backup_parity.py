@@ -63,6 +63,7 @@ JOB_FAILURE_DETAIL = "20260930_0061"
 BILLING_LEDGER = "20261001_0062"
 BILLING_ORDERS = "20261001_0063"
 BILLING_SUBSCRIPTIONS = "20261001_0064"
+PLAN_CATALOGUE = "20261002_0065"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -106,6 +107,7 @@ HEADS = (
     BILLING_LEDGER,
     BILLING_ORDERS,
     BILLING_SUBSCRIPTIONS,
+    PLAN_CATALOGUE,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (
@@ -218,6 +220,7 @@ NEW_TABLES = {
         "billing_periods",
         "billing_refund_events",
     ),
+    PLAN_CATALOGUE: ("plans",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -320,6 +323,11 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
                 "billing_periods",
                 "billing_refund_events",
             ),
+        )
+        assert module.PLAN_CATALOGUE_PARITY_MIGRATION_HEAD == PLAN_CATALOGUE
+        assert module.VERSIONED_PARITY_CONTRACTS[PLAN_CATALOGUE] == (
+            "ac-postgres-parity-v39",
+            module.BILLING_SUBSCRIPTIONS_PARITY_TABLES + ("plans",),
         )
 
 
@@ -704,6 +712,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         110,
         115,
         119,
+        120,
     )
     expected_contracts = (
         None,
@@ -748,6 +757,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v36",
         "ac-postgres-parity-v37",
         "ac-postgres-parity-v38",
+        "ac-postgres-parity-v39",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

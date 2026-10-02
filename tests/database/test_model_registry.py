@@ -149,6 +149,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "billing_subscription_events",
         "billing_periods",
         "billing_refund_events",
+        "plans",
     }
 
     assert set(model_metadata().tables) == expected
