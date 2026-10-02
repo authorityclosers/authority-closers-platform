@@ -337,6 +337,255 @@ describe("TranscriptReader", () => {
     expect(onSeek).toHaveBeenCalledWith(0);
   });
 
+  it("focuses search on open, keeps Tab inside and restores focus on close", async () => {
+    const transcript = createSampleTranscript();
+    const opener = document.createElement("button");
+    opener.textContent = "Transcript";
+    document.body.appendChild(opener);
+    opener.focus();
+
+    try {
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={true}
+            onClose={() => {}}
+            transcript={transcript}
+            onSeek={() => {}}
+          />,
+        ),
+      );
+
+      const reader = document.querySelector<HTMLElement>(
+        "[data-transcript-reader]",
+      )!;
+      const search = reader.querySelector<HTMLInputElement>(
+        'input[aria-label="Search transcript"]',
+      );
+      expect(document.activeElement).toBe(search);
+
+      const tab = (shiftKey = false) =>
+        act(async () => {
+          window.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Tab",
+              shiftKey,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+        });
+
+      const close = reader.querySelector<HTMLElement>(
+        'button[aria-label="Close transcript reader"]',
+      )!;
+      close.focus();
+      await tab(true);
+      const lastPlay = Array.from(
+        reader.querySelectorAll<HTMLElement>(
+          'button[aria-label^="Play audio from"]',
+        ),
+      ).at(-1);
+      expect(document.activeElement).toBe(lastPlay);
+      await tab();
+      expect(document.activeElement).toBe(close);
+
+      opener.focus();
+      await tab();
+      expect(reader.contains(document.activeElement)).toBe(true);
+
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={false}
+            onClose={() => {}}
+            transcript={transcript}
+          />,
+        ),
+      );
+      expect(document.activeElement).toBe(opener);
+    } finally {
+      opener.remove();
+    }
+  });
+
+  it("returns focus to the menu summary when opened from a closed menu", async () => {
+    const menu = document.createElement("details");
+    menu.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = "More";
+    const item = document.createElement("button");
+    item.textContent = "Transcript";
+    menu.append(summary, item);
+    document.body.appendChild(menu);
+    item.focus();
+
+    try {
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={true}
+            onClose={() => {}}
+            transcript={createSampleTranscript()}
+          />,
+        ),
+      );
+      menu.open = false;
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={false}
+            onClose={() => {}}
+            transcript={createSampleTranscript()}
+          />,
+        ),
+      );
+      expect(document.activeElement).toBe(summary);
+    } finally {
+      menu.remove();
+    }
+  });
+
+  it("scrolls only the reader's own segment when the page has the same id", async () => {
+    const transcript = createSampleTranscript();
+    const outside = document.createElement("button");
+    outside.setAttribute("data-segment-id", "seg-2");
+    const outsideScroll = vi.fn();
+    outside.scrollIntoView = outsideScroll;
+    const scrollIntoViewMock = vi.fn();
+    const originalScroll = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+    document.body.insertBefore(outside, document.body.firstChild);
+
+    try {
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={true}
+            onClose={() => {}}
+            transcript={transcript}
+          />,
+        ),
+      );
+      const searchInput = document.querySelector<HTMLInputElement>(
+        'input[aria-label="Search transcript"]',
+      )!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )?.set?.call(searchInput, "timing");
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () =>
+        document
+          .querySelector<HTMLButtonElement>('button[aria-label="Next match"]')!
+          .click(),
+      );
+
+      expect(outsideScroll).not.toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalledOnce();
+      const scrolled = scrollIntoViewMock.mock.contexts[0] as HTMLElement;
+      expect(scrolled.closest("[data-transcript-reader]")).not.toBeNull();
+      expect(scrolled.getAttribute("data-segment-id")).toBe("seg-2");
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScroll;
+      outside.remove();
+    }
+  });
+
+  it("counts and navigates only matches the speaker filter shows", async () => {
+    const transcript = createSampleTranscript();
+
+    await act(async () =>
+      root.render(
+        <TranscriptReader
+          isOpen={true}
+          onClose={() => {}}
+          transcript={transcript}
+        />,
+      ),
+    );
+    const searchInput = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Search transcript"]',
+    )!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(searchInput, "timing");
+      searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="status"]')?.textContent).toBe(
+      "1 match",
+    );
+
+    const filter = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Filter by speaker"]',
+    )!;
+    await act(async () => {
+      filter.value = "rep";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="status"]')?.textContent).toBe(
+      "No matches",
+    );
+    expect(
+      document.querySelector('button[aria-label="Next match"]'),
+    ).toBeNull();
+    expect(document.querySelectorAll("mark")).toHaveLength(0);
+
+    await act(async () => {
+      filter.value = "prospect";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(document.querySelector('[role="status"]')?.textContent).toBe(
+      "1 match",
+    );
+    expect(document.querySelectorAll("mark").length).toBeGreaterThan(0);
+  });
+
+  it("reveals a jump-to-moment target hidden by the speaker filter", async () => {
+    const scrollIntoViewMock = vi.fn();
+    const originalScroll = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    try {
+      await act(async () =>
+        root.render(
+          <TranscriptReader
+            isOpen={true}
+            onClose={() => {}}
+            transcript={createSampleTranscript()}
+            report={createSampleReport()}
+          />,
+        ),
+      );
+      const filter = document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Filter by speaker"]',
+      )!;
+      await act(async () => {
+        filter.value = "prospect";
+        filter.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      expect(document.querySelector('[data-segment-id="seg-3"]')).toBeNull();
+
+      const jumpSelect = document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Jump to moment"]',
+      )!;
+      await act(async () => {
+        jumpSelect.value = "6500";
+        jumpSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      expect(filter.value).toBe("all");
+      const scrolled = scrollIntoViewMock.mock.contexts.at(-1) as HTMLElement;
+      expect(scrolled.getAttribute("data-segment-id")).toBe("seg-3");
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScroll;
+    }
+  });
+
   it("renders skeletons without layout shift when transcript is loading", async () => {
     await act(async () =>
       root.render(

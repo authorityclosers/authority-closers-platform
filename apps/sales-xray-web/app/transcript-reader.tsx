@@ -154,6 +154,20 @@ function formatTurnTime(ms: number): string {
   return formatClock(ms);
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function attributeValue(value: string): string {
+  return value.replace(/["\\]/g, "\\$&");
+}
+
+/** Where focus goes back to: the opener, or the summary of its closed menu. */
+function returnFocusTarget(opener: HTMLElement | null): HTMLElement | null {
+  if (!opener?.isConnected) return null;
+  const closedMenu = opener.closest("details:not([open])");
+  return closedMenu?.querySelector<HTMLElement>("summary") ?? opener;
+}
+
 export function TranscriptReader({
   isOpen,
   onClose,
@@ -169,19 +183,52 @@ export function TranscriptReader({
   const [query, setQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState("all");
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [jumpTarget, setJumpTarget] = useState<{
+    segmentId: string;
+    nonce: number;
+  } | null>(null);
   const [cornerError, setCornerError] = useState<string | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const { profiles } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
   const waveform = useSourceWaveform();
 
-  // Escape key closes modal & lock body scroll
+  // Modal behaviour: focus search on open, keep Tab inside the reader,
+  // Escape closes, lock body scroll, and give focus back on close.
   useEffect(() => {
     if (!isOpen) return;
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    searchInputRef.current?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = containerRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE),
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && dialog.contains(active);
+      if (event.shiftKey && (!inside || active === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (!inside || active === last)) {
+        event.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -190,8 +237,9 @@ export function TranscriptReader({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = originalOverflow;
+      returnFocusTarget(opener)?.focus({ preventScroll: true });
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Voices and roles
   const voices = useMemo(
@@ -278,59 +326,66 @@ export function TranscriptReader({
     return grouped;
   }, [transcript]);
 
-  // Search matching segments
-  const searchMatches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !transcript?.segments) return [];
-    return transcript.segments.filter((seg) =>
-      seg.text.toLowerCase().includes(q),
-    );
-  }, [query, transcript]);
-
-  const search = (value: string) => {
-    setQuery(value);
-    setActiveMatchIndex(0);
-  };
-
   // Filtered turns based on speaker
   const visibleTurns = useMemo(() => {
     if (selectedSpeaker === "all") return turns;
     return turns.filter((t) => t.speakerId === selectedSpeaker);
   }, [selectedSpeaker, turns]);
 
-  // Jump to specific segment
-  const jumpToSegment = useCallback((segmentId: string) => {
-    const target = document.querySelector<HTMLElement>(
-      `[data-segment-id="${segmentId}"]`,
+  // Search matches only what the reader shows, so the count, the
+  // highlights and Next/Previous always agree with the speaker filter.
+  const searchMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return visibleTurns.flatMap((turn) =>
+      turn.segments.filter((seg) => seg.text.toLowerCase().includes(q)),
+    );
+  }, [query, visibleTurns]);
+
+  const search = (value: string) => {
+    setQuery(value);
+    setActiveMatchIndex(0);
+  };
+
+  const filterSpeaker = (value: string) => {
+    setSelectedSpeaker(value);
+    setActiveMatchIndex(0);
+  };
+
+  // Scroll after render, inside this reader only: the Document view's
+  // transcript appendix carries the same segment ids behind the overlay.
+  useEffect(() => {
+    if (!jumpTarget) return;
+    const target = containerRef.current?.querySelector<HTMLElement>(
+      `[data-segment-id="${attributeValue(jumpTarget.segmentId)}"]`,
     );
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     target.setAttribute("data-arrived", "true");
-    window.setTimeout(() => target.removeAttribute("data-arrived"), 1500);
-  }, []);
+    const timer = window.setTimeout(
+      () => target.removeAttribute("data-arrived"),
+      1500,
+    );
+    return () => window.clearTimeout(timer);
+  }, [jumpTarget]);
+
+  const jumpToSegment = (segmentId: string) =>
+    setJumpTarget({ segmentId, nonce: Date.now() });
 
   // Jump to moment from dropdown
   const handleJumpToMoment = (startMsStr: string) => {
     const startMs = Number(startMsStr);
-    if (Number.isNaN(startMs)) return;
-    // Find matching segment
-    const segment = transcript?.segments.find(
-      (s) => startMs >= s.start_ms && startMs <= s.end_ms,
-    );
-    if (segment) {
-      jumpToSegment(segment.id);
-    } else {
-      // Find turn with closest start_ms
-      const turn = turns.find((t) => t.start_ms >= startMs);
-      if (turn) {
-        const turnEl = document.getElementById(turn.id);
-        if (turnEl) {
-          turnEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          turnEl.setAttribute("data-arrived", "true");
-          window.setTimeout(() => turnEl.removeAttribute("data-arrived"), 1500);
-        }
-      }
+    if (Number.isNaN(startMs) || !transcript?.segments.length) return;
+    const segment =
+      transcript.segments.find(
+        (s) => startMs >= s.start_ms && startMs <= s.end_ms,
+      ) ?? transcript.segments.find((s) => s.start_ms >= startMs);
+    if (!segment) return;
+    // A moment hidden by the speaker filter is revealed, not skipped.
+    if (selectedSpeaker !== "all" && segment.speaker_id !== selectedSpeaker) {
+      filterSpeaker("all");
     }
+    jumpToSegment(segment.id);
   };
 
   // Match navigation
@@ -357,7 +412,8 @@ export function TranscriptReader({
   if (!isOpen) return null;
 
   const matchCount = searchMatches.length;
-  const currentMatch = searchMatches[activeMatchIndex];
+  const currentMatch =
+    searchMatches[Math.min(activeMatchIndex, Math.max(matchCount - 1, 0))];
 
   return createPortal(
     <div
@@ -478,7 +534,7 @@ export function TranscriptReader({
             <select
               className={styles.filterSelect}
               value={selectedSpeaker}
-              onChange={(e) => setSelectedSpeaker(e.target.value)}
+              onChange={(e) => filterSpeaker(e.target.value)}
               aria-label="Filter by speaker"
             >
               <option value="all">All speakers ({voices.length})</option>
