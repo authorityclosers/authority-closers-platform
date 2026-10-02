@@ -48,7 +48,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe("separate Platform Admin admission", () => {
-  it("accepts all seven platform capabilities together", () => {
+  it("accepts all supported platform capabilities together", () => {
     const permissions = [
       "platform_access_manage",
       "platform_tenants_read",
@@ -57,6 +57,7 @@ describe("separate Platform Admin admission", () => {
       "platform_catalog_publish",
       "platform_organisations_manage",
       "platform_release_manage",
+      "platform_billing_manage",
     ];
     expect(platformPermissionSchema.options).toEqual(permissions);
     expect(
@@ -65,6 +66,58 @@ describe("separate Platform Admin admission", () => {
         platform_permissions: permissions,
       })?.permissions,
     ).toEqual(permissions);
+  });
+  it("loads an explicit billing-only projection without membership authority", async () => {
+    const projection = {
+      ...access,
+      platform_permissions: ["platform_billing_manage"],
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(me))
+      .mockResolvedValueOnce(Response.json(context))
+      .mockResolvedValueOnce(Response.json(projection));
+    expect(await loadPlatformIdentity({ fetcher })).toMatchObject({
+      permissions: ["platform_billing_manage"],
+    });
+  });
+  it.each([
+    { platform_permissions: ["billing_manage"] },
+    { platform_permissions: ["platform_billing_read"] },
+    {
+      platform_permissions: [
+        "platform_billing_manage",
+        "platform_billing_manage",
+      ],
+    },
+    { billing: true },
+    { platform_permissions: [] },
+    { session_id: person },
+  ])("rejects malformed billing projection %j", (change) => {
+    expect(
+      verifyPlatformIdentity(me, context, {
+        ...access,
+        platform_permissions: ["platform_billing_manage"],
+        ...change,
+      }),
+    ).toBeNull();
+  });
+  it("does not derive billing authority from an owner membership", () => {
+    const owner = { membership_role: "owner" };
+    expect(
+      verifyPlatformIdentity(
+        { ...me, ...owner },
+        { ...context, ...owner },
+        access,
+      )?.permissions,
+    ).toEqual(["platform_tenants_read"]);
+    expect(
+      verifyPlatformIdentity(
+        { ...me, ...owner },
+        { ...context, ...owner },
+        { ...access, platform_permissions: [] },
+      ),
+    ).toBeNull();
   });
   it("accepts a verified exact grant without changing membership or requiring selected tenant", () => {
     expect(identity).toMatchObject({
