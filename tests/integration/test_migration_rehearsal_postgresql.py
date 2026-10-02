@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
+import runpy
 import subprocess
 import sys
+import tarfile
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,7 +18,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import Engine, MetaData, Table, create_engine, func, insert, inspect, select, text
 from sqlalchemy.engine import URL, make_url
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
@@ -84,6 +87,7 @@ REVIEW_INVITATIONS_TABLES = {
 DEDICATED_DATABASE_PREFIX = "ac_migration_rehearsal_"
 DEDICATED_HOST = "127.0.0.1"
 DEDICATED_PORT = 55432
+PINNED_CANDIDATE = "7dc2a0af6d1c4864a6729021f3ef115a6be4f8cc"
 
 
 def _postgres_url() -> URL:
@@ -228,6 +232,28 @@ def migration_harness() -> Iterator[_MigrationHarness]:
                 admin_engine.dispose()
             except Exception:
                 pytest.fail("dedicated migration rehearsal database disposal failed", pytrace=False)
+
+
+@pytest.fixture
+def pinned_migration_harness(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> _MigrationHarness:
+    """Run the existing schema harness against the exact reviewed source, never main head."""
+
+    assert _postgres_url().database == "ac_migration_rehearsal_fictional"
+    source = tmp_path / "candidate"
+    source.mkdir()
+    archive = subprocess.run(  # noqa: S603 - fixed source pin and paths
+        ["git", "archive", PINNED_CANDIDATE, "alembic.ini", "db/migrations", "packages/python"],  # noqa: S607
+        cwd=ROOT,
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as contents:
+        contents.extractall(source, filter="data")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", source)
+    return request.getfixturevalue("migration_harness")
 
 
 def _seed_populated_0027(engine: Engine) -> None:
@@ -798,3 +824,249 @@ def test_populated_0033_preserves_all_existing_rows_when_upgrading_to_0034(
             connection.scalar(text("SELECT version_num FROM alembic_version"))
             == REVIEW_INVITATIONS_HEAD
         )
+
+
+def test_pinned_populated_0053_to_0061_preserves_rows_and_scope_constraints(
+    pinned_migration_harness: _MigrationHarness,
+) -> None:
+    harness = pinned_migration_harness
+    assert _run_migration(harness.environment, "20260930_0053").returncode == 0
+    engine, metadata = harness.engine, MetaData()
+    metadata.reflect(engine)
+    tables = metadata.tables
+    tenant, program, persons = uuid4(), uuid4(), [uuid4() for _ in range(6)]
+    roles = ("learner", "support", "admin", "owner", "processing")
+    platform_permissions = (
+        "platform_access_manage",
+        "platform_tenants_read",
+        "platform_catalog_read",
+        "platform_catalog_write",
+        "platform_catalog_publish",
+    )
+    scoped_permissions = (
+        "catalog_read",
+        "catalog_write",
+        "catalog_publish",
+        "learner_diagnose",
+        "learning_review",
+    )
+    probe_audit = uuid4()
+
+    def grant(permission: str, scope: str) -> dict[str, object]:
+        return dict(
+            id=uuid4(),
+            subject_person_id=persons[0],
+            permission=permission,
+            scope_kind=scope,
+            tenant_id=tenant if scope != "platform" else None,
+            program_id=program if scope == "program" else None,
+            granted_by_person_id=persons[0],
+            audit_event_id=probe_audit,
+            reason="fictional rehearsal",
+        )
+
+    with engine.begin() as connection:
+        connection.execute(
+            insert(tables["tenants"]).values(
+                id=tenant,
+                slug="fictional-rehearsal",
+                name="Fictional rehearsal",
+            )
+        )
+        for person in persons:
+            connection.execute(
+                insert(tables["persons"]).values(
+                    id=person,
+                    email=f"{person.hex}@example.test",
+                )
+            )
+        for role, person in zip(roles, persons[:-1], strict=True):
+            connection.execute(
+                insert(tables["memberships"]).values(
+                    tenant_id=tenant,
+                    person_id=person,
+                    role=role,
+                )
+            )
+        connection.execute(
+            insert(tables["programs"]).values(
+                id=program,
+                tenant_id=tenant,
+                owner_key=tenant,
+                scope="tenant",
+                slug="fictional-program",
+                title="Fictional program",
+            )
+        )
+        legacy_grants = [grant(p, "platform") for p in platform_permissions] + [
+            grant(p, scope) for scope in ("tenant", "program") for p in scoped_permissions
+        ]
+        for sequence, values in enumerate([*legacy_grants, {"audit_event_id": probe_audit}], 1):
+            audit_id = uuid4() if sequence <= len(legacy_grants) else probe_audit
+            connection.execute(
+                insert(tables["audit_events"]).values(
+                    id=audit_id,
+                    tenant_id=tenant,
+                    sequence_no=sequence,
+                    actor_person_id=persons[0],
+                    action="fictional_grant",
+                    resource_type="capability",
+                    payload={"fictional": True},
+                    previous_hash="0" * 64,
+                    event_hash=f"{sequence:064x}",
+                )
+            )
+            if sequence <= len(legacy_grants):
+                connection.execute(
+                    insert(tables["capability_grants"]).values(
+                        {**values, "audit_event_id": audit_id},
+                    )
+                )
+        connection.execute(
+            insert(tables["jobs"]).values(
+                id=uuid4(),
+                tenant_id=tenant,
+                kind="fictional.rehearsal",
+                dedupe_key="fictional-rehearsal-job",
+                payload={"fictional": True},
+            )
+        )
+
+    permission_refusal = (
+        "ck_capability_grants_permission_supported",
+        "ck_capability_grants_permission_scope",
+    )
+
+    def probe(statement: object, constraint: str | tuple[str, ...] | None = None) -> None:
+        with engine.begin() as connection:
+            savepoint = connection.begin_nested()
+            try:
+                if constraint is None:
+                    connection.execute(statement)
+                else:
+                    with pytest.raises(IntegrityError) as refused:
+                        connection.execute(statement)
+                    expected = (constraint,) if isinstance(constraint, str) else constraint
+                    assert refused.value.orig.diag.constraint_name in expected
+            finally:
+                savepoint.rollback()
+
+    member = insert(tables["memberships"]).values(
+        tenant_id=tenant,
+        person_id=persons[-1],
+        role="member",
+    )
+    probe(member, "ck_memberships_role_supported")
+    for permission in ("platform_organisations_manage", "platform_release_manage"):
+        probe(
+            insert(tables["capability_grants"]).values(grant(permission, "platform")),
+            permission_refusal,
+        )
+    counts = _public_row_counts(engine)
+    assert counts["memberships"] == len(roles)
+    assert counts["capability_grants"] == len(legacy_grants)
+    new_tables = {"organisations", "organisation_domain_settings", "organisation_invites"}
+    assert not set(tables) & new_tables
+
+    def columns() -> dict[str, dict[str, tuple[str, bool]]]:
+        inspector = inspect(engine)
+        return {
+            name: {c["name"]: (str(c["type"]), c["nullable"]) for c in inspector.get_columns(name)}
+            for name in inspector.get_table_names()
+            if name != "alembic_version"
+        }
+
+    for revision in ("20260930_0054", "20260930_0060", "20260930_0061"):
+        before, before_columns = _public_rows(engine), columns()
+        assert _run_migration(harness.environment, revision).returncode == 0
+        after, after_columns = _public_rows(engine), columns()
+        added = new_tables if revision == "20260930_0054" else set()
+        assert set(after) == set(before) | added
+        assert all(after[name] == () for name in added)
+        if revision == "20260930_0061":
+            assert after_columns["jobs"].pop("failure_detail") == ("JSON", True)
+            normalized = []
+            for row in after["jobs"]:
+                values = json.loads(row)
+                assert values.pop("failure_detail") is None
+                normalized.append(json.dumps(values, sort_keys=True, separators=(",", ":")))
+            after["jobs"] = tuple(sorted(normalized))
+        for name in before:
+            assert after[name] == before[name], f"{revision} changed existing {name} rows"
+            assert len(after[name]) == len(before[name])
+            assert after_columns[name] == before_columns[name]
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == revision
+        probe_rows = _public_rows(engine)
+        assert {c["name"] for c in inspect(engine).get_check_constraints("memberships")} >= {
+            "ck_memberships_role_supported",
+        }
+        assert {c["name"] for c in inspect(engine).get_check_constraints("capability_grants")} >= {
+            "ck_capability_grants_permission_supported",
+            "ck_capability_grants_permission_scope",
+            "ck_capability_grants_scope_supported",
+            "ck_capability_grants_scope_shape",
+        }
+        probe(member)
+        probe(member.values(role="unsupported"), "ck_memberships_role_supported")
+        for permission in ("platform_organisations_manage", "platform_release_manage"):
+            available = permission == "platform_organisations_manage" or revision != "20260930_0054"
+            probe(
+                insert(tables["capability_grants"]).values(grant(permission, "platform")),
+                None if available else permission_refusal,
+            )
+            if available:
+                for scope in ("tenant", "program"):
+                    probe(
+                        insert(tables["capability_grants"]).values(grant(permission, scope)),
+                        "ck_capability_grants_permission_scope",
+                    )
+        probe(
+            insert(tables["capability_grants"]).values(grant("unsupported", "platform")),
+            permission_refusal,
+        )
+        probe(
+            insert(tables["capability_grants"]).values(
+                {**grant("platform_catalog_read", "platform"), "tenant_id": tenant}
+            ),
+            "ck_capability_grants_scope_shape",
+        )
+        (migration_file,) = (ROOT / "db/migrations/versions").glob(f"{revision}_*.py")
+        with pytest.raises(RuntimeError, match="^forward-only$"):
+            runpy.run_path(str(migration_file))["downgrade"]()
+        assert _public_rows(engine) == probe_rows
+
+    metadata = MetaData()
+    metadata.reflect(engine)
+    invites = metadata.tables["organisation_invites"]
+    with engine.begin() as connection:
+        connection.execute(
+            insert(metadata.tables["organisations"]).values(
+                tenant_id=tenant,
+                creation_command_id=uuid4(),
+                domain_verification_token="f" * 43,
+            )
+        )
+        command = uuid4()
+        invite = dict(
+            tenant_id=tenant,
+            email_normalized="invite@example.test",
+            role="member",
+            status="pending",
+            command_id=command,
+        )
+        connection.execute(insert(invites).values(id=uuid4(), **invite))
+    probe(
+        insert(invites).values(id=uuid4(), **{**invite, "command_id": uuid4()}),
+        "uq_org_invites_pending_email",
+    )
+    probe(
+        insert(invites).values(id=uuid4(), **{**invite, "email_normalized": "other@example.test"}),
+        "uq_org_invites_command_id",
+    )
+    probe(
+        insert(invites).values(
+            id=uuid4(), **{**invite, "command_id": uuid4(), "status": "accepted"}
+        )
+    )
+    assert _public_row_counts(engine)["organisation_invites"] == 1
