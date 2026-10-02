@@ -50,23 +50,39 @@
    request, or both change shared files.
 4. Done means: the change works on the dev environment, tests and evidence for the
    changed areas pass, the pull request against `main` explains what changed and
-   how to check it on dev, and CI is green. Then stop: the CTO reviews and the CEO
-   approves.
-5. The CEO approves merges on the owner's behalf; the watchdog merges exactly the
-   approved change, re-tested on the latest `main`. When a branch update from
-   `main` is the only new commit and the pull request's own diff is unchanged,
-   the approval carries over; any other change needs a new review. Billing
-   settings, payment settings, purchases, secrets and data deletion still
-   require the owner's explicit permission. Production data changes require the
-   owner's permission, given per change or pre-approved per kind under
-   OWNER-APPROVED DATA CHANGES. UI Guard may approve
-   eligible UI-only merges under ADR 0041's SHA-bound scope, checks and hold
-   rules; all other merges retain CTO review and CEO approval.
+   how to check it on dev, and CI is green. Then stop for review under item 5.
+5. A merge needs the review its class requires; the watchdog merges exactly the
+   approved head, re-tested on the latest `main`. The watchdog classifies a pull
+   request from GitHub's changed-file list; an unreadable list counts as
+   sensitive.
+   - Ordinary change: CI green plus one review. The reviewer is the lane's pod
+     lead (`Review: approved PR #N @ <sha7>`) or the CTO
+     (`CTO review: approved PR #N @ <sha7>`). A pod lead never approves a change
+     on its own task.
+   - Sensitive change: CTO review, then the CEO approves on the owner's behalf
+     (`Merge approved: PR #N @ <sha7>`). Sensitive means billing, payments,
+     identity, auth, security or secrets, database migrations, infrastructure,
+     workflows, the gate, data-change scripts, AGENTS.md, and lockfiles or
+     package manifests.
+   - UI-only studio change: UI Guard may approve eligible UI-only merges under
+     ADR 0041's SHA-bound scope, checks and hold rules.
+
+   When a branch update from `main` is the only new commit and the pull
+   request's own diff is unchanged, the approval carries over; any other change
+   needs a new review. Billing settings, payment settings, purchases, secrets
+   and data deletion still require the owner's explicit permission. Production
+   data changes require the owner's permission, given per change or
+   pre-approved per kind under OWNER-APPROVED DATA CHANGES.
 6. Releases move one way: merge to `main` -> CI builds images once -> staging
    deploys automatically -> the same build is promoted to production. Train
-   promotions run under the owner's standing approval (ADR 0041); everything
-   else is promoted by the owner from Admin -> Releases. No laptop deploys,
-   no manual server edits, no rebuilds between environments.
+   promotions run under the owner's standing approval (ADR 0041). The CEO
+   decides every other production promotion on the owner's behalf by posting
+   `Promote approved: <sha7> as vX.Y.Z` on the `Release decision` task;
+   `/opt/ac-watchdog/ac_release_decision.py`, run by `ac-release-decision.timer`
+   every 10 minutes, then takes a fresh backup, promotes that same build and
+   runs the production canary. The owner can still promote from Admin ->
+   Releases. No laptop deploys, no manual server edits, no rebuilds between
+   environments.
 7. Use included subscriptions only. Stop on usage limits; never fall back to API
    keys or paid credits. Agents run in parallel only as far as the server's
    headroom allows (the launcher's slots).
