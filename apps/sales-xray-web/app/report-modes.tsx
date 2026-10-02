@@ -724,7 +724,25 @@ export function ReportModes({
   useEffect(() => {
     if (!selected) return;
     const update = () => {
-      const readingLine = Math.min(180, window.innerHeight * 0.4);
+      const workspace = workspaceRef.current;
+      const scroller = workspace ? reportScroller(workspace) : null;
+      const scrollportTop =
+        scroller &&
+        scroller !== document.scrollingElement &&
+        scroller !== document.documentElement
+          ? scroller.getBoundingClientRect().top + scroller.clientTop
+          : 0;
+      const offset = workspace
+        ? Number.parseFloat(
+            workspace.style.getPropertyValue("--report-scroll-target-offset"),
+          ) || 0
+        : 0;
+      // A chapter positioned below sticky chrome is the current chapter,
+      // even when that clearance lies below the usual reading line.
+      const readingLine = Math.max(
+        Math.min(180, window.innerHeight * 0.4),
+        scrollportTop + offset + 2,
+      );
       let current = panels[0]?.id ?? "";
       let foundHeading = false;
       for (const panel of panels) {

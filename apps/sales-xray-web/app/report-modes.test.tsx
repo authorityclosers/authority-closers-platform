@@ -1180,6 +1180,20 @@ it.each(["reading", "document"])(
   },
 );
 
+it("tracks the chapter positioned below tall sticky chrome", async () => {
+  await render(call);
+  mode().style.setProperty("--report-scroll-target-offset", "220px");
+  const heading = container.querySelector<HTMLElement>(
+    '[data-report-mode-section="moments"] h2',
+  )!;
+  vi.spyOn(heading, "getBoundingClientRect").mockReturnValue({
+    top: 220,
+    height: 30,
+  } as DOMRect);
+  await act(async () => document.dispatchEvent(new Event("scroll")));
+  expect(mode().dataset.reportSection).toBe("moments");
+});
+
 it("renders only supplied document metadata and prints without a fake Word action", async () => {
   const print = vi.fn();
   vi.stubGlobal("print", print);
