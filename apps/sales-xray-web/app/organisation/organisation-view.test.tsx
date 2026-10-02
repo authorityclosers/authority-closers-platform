@@ -177,18 +177,26 @@ it("shows the personal account card when no organisation is selected", async () 
   expect(host.textContent).toContain("Switch to Authority Closers");
 });
 
-
 it("uses the directory role instead of a context or detail response role", async () => {
-  const choices = routes["/v1/me/sales-xray-workspaces"] as { workspaces: Array<{ role: string | null }> };
+  const choices = routes["/v1/me/sales-xray-workspaces"] as {
+    workspaces: Array<{ role: string | null }>;
+  };
   choices.workspaces[1].role = "member";
   await render();
   expect(host.textContent).toContain("Member");
-  expect(fetchMock.mock.calls.some(([path]) => path === "/v1/context")).toBe(false);
+  expect(fetchMock.mock.calls.some(([path]) => path === "/v1/context")).toBe(
+    false,
+  );
 });
 
 it("rejects expanded directory responses without using the old workspace list", async () => {
-  routes["/v1/me/sales-xray-workspaces"] = { ...(routes["/v1/me/sales-xray-workspaces"] as object), unexpected: true };
+  routes["/v1/me/sales-xray-workspaces"] = {
+    ...(routes["/v1/me/sales-xray-workspaces"] as object),
+    unexpected: true,
+  };
   await render();
   expect(host.textContent).toContain("The organisation could not be loaded");
-  expect(fetchMock.mock.calls.some(([path]) => path === "/v1/me/workspaces")).toBe(false);
+  expect(
+    fetchMock.mock.calls.some(([path]) => path === "/v1/me/workspaces"),
+  ).toBe(false);
 });

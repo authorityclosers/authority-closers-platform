@@ -151,7 +151,9 @@ it("shows the off message and suppresses Recents and upload for a disabled works
   );
   expect(host.textContent).not.toContain("Recents");
   expect(host.querySelector("[data-upload]")).toBeNull();
-  expect(fetcher.mock.calls.some(([path]) => path.startsWith("/v1/conversation/"))).toBe(false);
+  expect(
+    fetcher.mock.calls.some(([path]) => path.startsWith("/v1/conversation/")),
+  ).toBe(false);
   await act(async () => button("Current workspace: Closers Academy").click());
   expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2);
 });
