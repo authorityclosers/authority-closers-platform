@@ -122,6 +122,13 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=60,
     ),
     RateLimitRule(
+        name="public-plans-catalogue",
+        method="GET",
+        path=re.compile(r"^/v1/plans$"),
+        capacity=300,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
         name="community-profile-search",
         method="GET",
         path=re.compile(r"^/v1/community/(?:search|connections|public/[^/]+)$"),

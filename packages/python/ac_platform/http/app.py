@@ -49,6 +49,7 @@ from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
+from ac_platform.http.plans import install_plans_http
 from ac_platform.http.platform import install_platform_http
 from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
@@ -348,6 +349,7 @@ def create_app(
         application, settings=settings, require_actor=require_actor, commands=billing
     )
     install_billing_webhook_http(application, sessions=session_factory, commands=billing)
+    install_plans_http(application, sessions=session_factory)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
