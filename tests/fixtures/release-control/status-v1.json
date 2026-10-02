@@ -1,0 +1,84 @@
+{
+  "v": 1,
+  "generated_at": "2026-10-01T09:00:00Z",
+  "engine": {
+    "commit": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+    "production_enabled": true,
+    "restore_check_ok": true,
+    "train_enabled": false
+  },
+  "environments": {
+    "staging": {
+      "version": null,
+      "core_sha": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+      "web_sha": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+      "core_deployed_at": "2026-10-01T08:40:00Z",
+      "web_deployed_at": "2026-10-01T08:45:00Z",
+      "paused": false,
+      "failed_core": null,
+      "failed_web": null,
+      "approval_days_left": 12
+    },
+    "production": {
+      "version": "v0.4.0",
+      "core_sha": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+      "web_sha": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+      "core_deployed_at": "2026-09-30T16:10:00Z",
+      "web_deployed_at": "2026-09-30T16:12:00Z",
+      "paused": false,
+      "failed_core": null,
+      "failed_web": null,
+      "approval_days_left": 12
+    }
+  },
+  "releases": [
+    {
+      "version": "v0.4.0",
+      "action": "promote",
+      "core_sha": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+      "web_sha": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+      "at": "2026-09-30T16:12:30Z",
+      "requested_by": "cli:root",
+      "rolled_back_from": null
+    }
+  ],
+  "staging_history": [
+    {
+      "at": "2026-10-01T08:45:00Z",
+      "component": "web",
+      "sha": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+      "result": "success",
+      "trigger": "auto",
+      "error": null
+    },
+    {
+      "at": "2026-10-01T08:40:00Z",
+      "component": "core",
+      "sha": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+      "result": "success",
+      "trigger": "auto",
+      "error": null
+    }
+  ],
+  "promote": {
+    "available": true,
+    "reason": null,
+    "core_sha": "3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c",
+    "web_sha": "4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
+    "commits_behind": 7,
+    "next": {
+      "patch": "v0.4.1",
+      "minor": "v0.5.0",
+      "major": "v1.0.0"
+    },
+    "notes": ["AUT-399: copy and serve Google profile photos (#151)"]
+  },
+  "rollback": {
+    "available": false,
+    "reason": "Rollback not available: the database changed in v0.4.0.",
+    "target_version": null,
+    "core_sha": null,
+    "web_sha": null
+  },
+  "busy": null
+}

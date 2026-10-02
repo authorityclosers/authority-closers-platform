@@ -11,10 +11,12 @@ Commands (``ac-release <command>``):
     status [--json]                 what runs where, pause state, last results
     tick                            timer entry point: auto-deploy staging
     deploy ENV [SHA] [--component core|web|all] [--dry-run]
-    promote --bump patch|minor|major --version vX.Y.Z
+    promote --bump patch|minor|major --version vX.Y.Z [--dry-run]
     pause ENV | resume ENV          stop or restart automatic deploys
     train [--now] [--dry-run]        gated automatic patch promotion
     rollback ENV --component core|web restore a previous application component
+    rollback production [--dry-run] restore the previous production release pair
+    publish-status                  write the Admin snapshot (admin/outbox/status.json)
     history [-n N]                  recent deploy records
     prune-artifacts [--apply] [--keep-recent N] [--no-images] [--json]
                                     report (default) or remove installer
@@ -37,6 +39,7 @@ import contextlib
 import datetime as dt
 import getpass
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -112,6 +115,14 @@ DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE_REF_RE = re.compile(r"sha256:[0-9a-f]{64}")
 SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EDGE = "http://127.0.0.1:8080"
+STATUS_MAX_BYTES = 256 * 1024
+STATUS_LIST_LIMIT = 20
+STATUS_NOTES_LIMIT = 50
+BUMPS = ("patch", "minor", "major")
+# Snapshot text is read by Admin: never pass on an email address or a GitHub token.
+UNSAFE_TEXT_RE = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}"
+)
 
 
 class ReleaseError(RuntimeError):
@@ -272,6 +283,10 @@ class Paths:
     @property
     def production_enabled(self) -> Path:
         return self.config / "production.enabled"
+
+    @property
+    def admin(self) -> Path:
+        return self.state / "admin"
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +674,23 @@ def _date(epoch: int) -> str:
     return dt.datetime.fromtimestamp(epoch, dt.UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def _safe_text(value: Any, limit: int = 200) -> str | None:
+    return None if value is None else UNSAFE_TEXT_RE.sub("[redacted]", str(value))[:limit]
+
+
+def _release_notes(git_dir: Path, from_ref: str, to_sha: str) -> list[str]:
+    """Merged pull-request subjects, newest first, from the installed release_notes.py."""
+
+    spec = importlib.util.spec_from_file_location(
+        "ac_release_notes", Path(__file__).resolve().with_name("release_notes.py")
+    )
+    if spec is None or spec.loader is None:
+        raise OSError("release_notes.py is not installed beside the engine")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return list(module.release_notes(git_dir, from_ref, to_sha))
+
+
 def _size(count: int) -> str:
     for unit, scale in (("GB", 10**9), ("MB", 10**6), ("kB", 10**3)):
         if count >= scale:
@@ -754,6 +786,14 @@ class Engine:
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         """Return the current and previous production events, newest first."""
 
+        records = self.release_events()
+        current = records[-1] if records else None
+        previous = records[-2] if len(records) > 1 else None
+        return current, previous
+
+    def release_events(self) -> list[dict[str, Any]]:
+        """Production releases in event order, one entry per promote or rollback."""
+
         # A completed smoke record supersedes the initial promote event, append-only.
         records: list[dict[str, Any]] = []
         for entry in self.release_records():
@@ -765,9 +805,7 @@ class Engine:
                 records[-1] = entry
             else:
                 records.append(entry)
-        current = records[-1] if records else None
-        previous = records[-2] if len(records) > 1 else None
-        return current, previous
+        return records
 
     def passed_staging(self, sha: str, component: str = "core") -> bool:
         return any(
@@ -866,9 +904,15 @@ class Engine:
     def next_version(self, bump: str) -> str:
         """Calculate a patch, minor, or major version from tags and releases."""
 
-        if bump not in ("patch", "minor", "major"):
+        if bump not in BUMPS:
             raise ReleaseError("version bump must be patch, minor, or major")
-        self.sync_mirror()
+        return self.next_versions()[bump]
+
+    def next_versions(self, *, refresh: bool = True) -> dict[str, str]:
+        """Every bump's next version from one tag and ledger read."""
+
+        if refresh:
+            self.sync_mirror()
         result = self.run(
             [
                 "git",
@@ -889,11 +933,11 @@ class Engine:
             if (parts := _version_parts(record["version"])) is not None
         )
         major, minor, patch = max(versions, default=(0, 2, 0))
-        if bump == "major":
-            return f"v{major + 1}.0.0"
-        if bump == "minor":
-            return f"v{major}.{minor + 1}.0"
-        return f"v{major}.{minor}.{patch + 1}"
+        return {
+            "patch": f"v{major}.{minor}.{patch + 1}",
+            "minor": f"v{major}.{minor + 1}.0",
+            "major": f"v{major + 1}.0.0",
+        }
 
     def is_ancestor(self, older: str, newer: str) -> bool:
         return (
@@ -947,8 +991,12 @@ class Engine:
         pair: tuple[str, str] | None = None,
         smoke: dict[str, Any] | None = None,
         train: dict[str, Any] | None = None,
+        dry_run: bool = False,
     ) -> list[dict[str, Any]]:
-        """Promote the tested staging pair, recording a release only on success."""
+        """Promote the tested staging pair, recording a release only on success.
+
+        ``dry_run`` runs every guard and rehearses each attempt, and changes nothing.
+        """
 
         with self.locked(wait=True):
             if not self.paths.production_enabled.exists():
@@ -984,6 +1032,14 @@ class Engine:
                 **({"train": train} if train is not None else {}),
             }
             _validate_release_record(record)  # Before any production mutation.
+            if dry_run:
+                if trigger == "train":
+                    raise ReleaseError("the train does not rehearse through promote")
+                rehearsal = [(core_build, "core")] if production_core != core_sha else []
+                return [
+                    self.attempt("production", component, build, dry_run=True, trigger=trigger)
+                    for build, component in [*rehearsal, (web_build, "web")]
+                ]
             if trigger == "train":
                 if (
                     train is None
@@ -1401,6 +1457,7 @@ class Engine:
         previous: dict[str, Any] | None,
         smoke: dict[str, Any],
         train: dict[str, Any] | None = None,
+        requested_by: str | None = None,
     ) -> None:
         if current is None:
             raise ReleaseError("core_rollback_history_missing")
@@ -1416,9 +1473,8 @@ class Engine:
                 else current["version"],
                 "core_sha": core,
                 "web_sha": web,
-                "requested_by": current["requested_by"]
-                if train is not None
-                else "rollback:train-or-cli",
+                "requested_by": requested_by
+                or (current["requested_by"] if train is not None else "rollback:train-or-cli"),
                 "at": _now(),
                 "action": "rollback",
                 "rolled_back_from": current["version"],
@@ -1426,6 +1482,114 @@ class Engine:
                 **({"train": train} if train is not None else {}),
             }
         )
+
+    def rollback_target(self) -> dict[str, Any]:
+        """The release a production rollback restores; never changes anything."""
+
+        return self._rollback_plan()[1]
+
+    def _rollback_plan(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not self.paths.production_enabled.exists():
+            raise ReleaseError("production deploys are not enabled on this server yet")
+        current, target = self.production_releases()
+        if current is None or target is None:
+            raise ReleaseError("Rollback not available: there is no earlier production release.")
+        if current["action"] == "rollback":
+            raise ReleaseError("Rollback not available: the current release is already a rollback.")
+        running_web = self.current_web("production")[0]
+        # The target core with the current web is a failed web step: retrying is allowed.
+        if (self.current_core("production"), running_web) not in (
+            (current["core_sha"], current["web_sha"]),
+            (target["core_sha"], current["web_sha"]),
+        ):
+            raise ReleaseError(
+                f"Rollback not available: production does not run {current['version']}."
+            )
+        if any(self.stored_build(target[f"{c}_sha"], c) is None for c in COMPONENTS):
+            raise ReleaseError(
+                f"Rollback not available: the builds of {target['version']} are no longer stored."
+            )
+        try:
+            heads = {self.migration_head(record["core_sha"]) for record in (current, target)}
+        except ReleaseError:
+            raise ReleaseError(
+                "Rollback not available: the database version of a release is unknown."
+            ) from None
+        if len(heads) != 1:
+            raise ReleaseError(
+                f"Rollback not available: the database changed in {current['version']}."
+            )
+        if running_web != target["web_sha"]:
+            entry = self.web_rollback_entry("production")
+            if entry is None or entry.get("previous") != target["web_sha"]:
+                raise ReleaseError(
+                    f"Rollback not available: the web release of {target['version']} "
+                    "cannot be restored."
+                )
+        return current, target
+
+    def rollback_production(
+        self,
+        *,
+        requested_by: str,
+        trigger: str,
+        expected_sha: str | None = None,
+        expected_version: str | None = None,
+        dry_run: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Restore the previous production pair; record one release only on success."""
+
+        with self.locked(wait=True):
+            current, target = self._rollback_plan()
+            production_core = self.current_core("production")
+            if expected_sha is not None and expected_sha != production_core:
+                raise ReleaseError("production core changed since this rollback was requested")
+            if expected_version is not None and expected_version != current["version"]:
+                raise ReleaseError("production version changed since this rollback was requested")
+            needed = {
+                "core": production_core != target["core_sha"],
+                "web": self.current_web("production")[0] != target["web_sha"],
+            }
+            steps: list[dict[str, Any]] = []
+            for component in COMPONENTS:
+                step: dict[str, Any] = {"component": component, "result": "skipped", "error": None}
+                steps.append(step)
+                if not needed[component]:
+                    continue
+                if dry_run:
+                    step["result"] = "dry-run"
+                    continue
+                try:
+                    if component == "core":
+                        self.rollback_core("production", record_release=False)
+                    else:
+                        restored = self.rollback_web("production")
+                        matches = self.current_web("production")[0] == target["web_sha"]
+                        self.record(
+                            {
+                                "at": _now(),
+                                "environment": "production",
+                                "component": "web",
+                                "action": "rollback",
+                                "result": "success" if matches else "failed",
+                                "trigger": trigger,
+                                **restored,
+                            }
+                        )
+                        if not matches:
+                            raise ReleaseError("the restored web release is not the target release")
+                    step["result"] = "success"
+                except (ReleaseError, OSError, ValueError, subprocess.SubprocessError) as error:
+                    step["result"] = "failed"
+                    step["error"] = _safe_text(error)
+                    if component == "web":
+                        self.set_paused(
+                            "production", True, "web rollback failed; supervised recovery required"
+                        )
+                    return steps
+            if not dry_run:
+                self.record_rollback(current, target, {}, requested_by=requested_by)
+            return steps
 
     def train_gate(self) -> tuple[str | None, bool]:
         for refuse, reason, alert in (
@@ -2454,31 +2618,39 @@ class Engine:
                 return
         raise ReleaseError("Sales Xray web /health does not report the new release")
 
-    def rollback_web(self, environment: str) -> dict[str, Any]:
+    def web_rollback_entry(self, environment: str) -> dict[str, Any] | None:
+        """The recorded web deploy whose previous image a web rollback restores."""
+
         _, image = self.current_web(environment)
-        for entry in reversed(self.history(10_000)):
-            if (
-                entry.get("environment") == environment
+        return next(
+            (
+                entry
+                for entry in reversed(self.history(10_000))
+                if entry.get("environment") == environment
                 and entry.get("component") == "web"
                 and entry.get("result") == "success"
                 and entry.get("previous_image")
                 and entry.get("runtime_ref") == image
-            ):
-                inputs = (
-                    self.paths.application / "operator-inputs" / f"sales-xray-web-{entry['sha']}"
-                )
-                source = inputs / "source" / "infra" / "sales-xray-web"
-                log = self.new_log(environment, "web-rollback", entry["sha"])
-                self.compose_web(environment, source, inputs / "rollback-runtime.env", log)
-                self.wait_for_container(
-                    self.web_container(environment), entry["previous_image"], True, None, log
-                )
-                return {
-                    "restored_image": entry["previous_image"],
-                    "restored_sha": entry.get("previous"),
-                    "log": str(log),
-                }
-        raise ReleaseError("no recorded web deploy with a previous image to restore")
+            ),
+            None,
+        )
+
+    def rollback_web(self, environment: str) -> dict[str, Any]:
+        entry = self.web_rollback_entry(environment)
+        if entry is None:
+            raise ReleaseError("no recorded web deploy with a previous image to restore")
+        inputs = self.paths.application / "operator-inputs" / f"sales-xray-web-{entry['sha']}"
+        source = inputs / "source" / "infra" / "sales-xray-web"
+        log = self.new_log(environment, "web-rollback", entry["sha"])
+        self.compose_web(environment, source, inputs / "rollback-runtime.env", log)
+        self.wait_for_container(
+            self.web_container(environment), entry["previous_image"], True, None, log
+        )
+        return {
+            "restored_image": entry["previous_image"],
+            "restored_sha": entry.get("previous"),
+            "log": str(log),
+        }
 
     # -- orchestration -------------------------------------------------------
 
@@ -2959,28 +3131,34 @@ class Engine:
             if not acquired:
                 return []
             head = self.main_head()
-            results: list[dict[str, Any]] = []
             update = self.update_engine(head)
             if update is not None:
                 # The next tick runs the new engine; this one stops here.
                 return [update]
-            if (
-                self.current_core(environment) != head
-                and self.failed_sha(environment, "core") != head
-            ):
-                candidate = core_candidate(self.github, head)
-                if candidate.state == "ready" and candidate.build is not None:
-                    results.append(
-                        self.attempt(
-                            environment, "core", candidate.build, dry_run=False, trigger="auto"
-                        )
-                    )
-                    if results[-1]["result"] != "success":
-                        return results
-            web = self.web_target(environment, head)
-            if web is not None and self.failed_sha(environment, "web") != web.sha:
-                results.append(self.attempt(environment, "web", web, dry_run=False, trigger="auto"))
+            results = self.advance(environment, head)
+            try:
+                # main_head() just fetched the mirror. Admin's snapshot never fails the tick.
+                self.publish_status(refresh=False)
+            except Exception as error:
+                results.append({"status_publish_error": _safe_text(error) or type(error).__name__})
             return results
+
+    def advance(self, environment: str, head: str) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        if self.current_core(environment) != head and self.failed_sha(environment, "core") != head:
+            candidate = core_candidate(self.github, head)
+            if candidate.state == "ready" and candidate.build is not None:
+                results.append(
+                    self.attempt(
+                        environment, "core", candidate.build, dry_run=False, trigger="auto"
+                    )
+                )
+                if results[-1]["result"] != "success":
+                    return results
+        web = self.web_target(environment, head)
+        if web is not None and self.failed_sha(environment, "web") != web.sha:
+            results.append(self.attempt(environment, "web", web, dry_run=False, trigger="auto"))
+        return results
 
     def web_target(self, environment: str, head: str) -> Build | None:
         """Newest successful web build on main that is newer than what runs."""
@@ -3053,6 +3231,176 @@ class Engine:
             str(data["artifact_name"]),
             str(data["artifact_digest"]),
         )
+
+    # -- Admin snapshot (ADR 0034) -------------------------------------------
+
+    def snapshot(self, *, refresh: bool = True) -> dict[str, Any]:
+        """Contract v1 status for Admin: local state and the mirror, no GitHub calls."""
+
+        history = self.history(10_000)
+        current, _ = self.production_releases()
+        environments: dict[str, Any] = {}
+        for environment in ENVIRONMENTS:
+            expires = self.approval_expires(environment)
+            deployed = {
+                component: next(
+                    (
+                        entry.get("at")
+                        for entry in reversed(history)
+                        if entry.get("environment") == environment
+                        and entry.get("component") == component
+                        and entry.get("result") == "success"
+                    ),
+                    None,
+                )
+                for component in COMPONENTS
+            }
+            environments[environment] = {
+                "version": current["version"] if environment == "production" and current else None,
+                "core_sha": self.current_core(environment),
+                "web_sha": self.current_web(environment)[0],
+                "core_deployed_at": deployed["core"],
+                "web_deployed_at": deployed["web"],
+                "paused": self.is_paused(environment),
+                "failed_core": self.failed_sha(environment, "core"),
+                "failed_web": self.failed_sha(environment, "web"),
+                "approval_days_left": int((expires - self.clock()) // 86400) if expires else None,
+            }
+        staging_history = [
+            {
+                "at": entry.get("at"),
+                "component": entry["component"],
+                "sha": entry.get("sha"),
+                "result": entry.get("result"),
+                "trigger": entry.get("trigger") or entry.get("action") or "deploy",
+                "error": _safe_text(entry.get("error")),
+            }
+            for entry in reversed(history)
+            if entry.get("environment") == "staging"
+            and entry.get("component") in COMPONENTS
+            and entry.get("result")
+        ][:STATUS_LIST_LIMIT]
+        try:
+            rollback = {"available": True, "reason": None, **self._target_fields()}
+        except (ReleaseError, OSError, ValueError, KeyError) as error:
+            reason = str(error) if isinstance(error, ReleaseError) else None
+            rollback = {
+                "available": False,
+                "reason": _safe_text(reason or "Rollback not available: release state unreadable."),
+                "target_version": None,
+                "core_sha": None,
+                "web_sha": None,
+            }
+        return {
+            "v": 1,
+            "generated_at": _now(),
+            "engine": {
+                "commit": self.installed_engine(),
+                "production_enabled": self.paths.production_enabled.exists(),
+                "restore_check_ok": self.restore_check_ok(),
+                "train_enabled": (self.paths.config / "train.enabled").exists(),
+            },
+            "environments": environments,
+            "releases": [
+                {
+                    "version": record["version"],
+                    "action": record["action"],
+                    "core_sha": record["core_sha"],
+                    "web_sha": record["web_sha"],
+                    "at": record["at"],
+                    "requested_by": _safe_text(record["requested_by"]),
+                    "rolled_back_from": record["rolled_back_from"],
+                }
+                for record in reversed(self.release_events())
+            ][:STATUS_LIST_LIMIT],
+            "staging_history": staging_history,
+            "promote": self._promote_status(environments["production"], refresh=refresh),
+            "rollback": rollback,
+            "busy": self._busy(),
+        }
+
+    def _target_fields(self) -> dict[str, Any]:
+        target = self.rollback_target()
+        return {
+            "target_version": target["version"],
+            "core_sha": target["core_sha"],
+            "web_sha": target["web_sha"],
+        }
+
+    def _promote_status(self, production: Mapping[str, Any], *, refresh: bool) -> dict[str, Any]:
+        status: dict[str, Any] = {
+            "available": False,
+            "reason": None,
+            "core_sha": None,
+            "web_sha": None,
+            "commits_behind": None,
+            "next": dict.fromkeys(BUMPS),
+            "notes": [],
+        }
+        reasons: list[str] = []
+        if not self.paths.production_enabled.exists():
+            reasons.append("production deploys are not enabled on this server yet")
+        try:
+            status["next"] = self.next_versions(refresh=refresh)  # The only mirror fetch.
+        except (ReleaseError, OSError, ValueError, subprocess.SubprocessError):
+            reasons.append("the next release versions could not be read")
+        try:
+            core_sha, web_sha = self.staging_pair(refresh=False)
+        except (ReleaseError, OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+            reasons.append(str(error) if isinstance(error, ReleaseError) else "staging unreadable")
+        else:
+            status.update(core_sha=core_sha, web_sha=web_sha)
+            production_core = production["core_sha"]
+            if production_core and not self.is_ancestor(production_core, core_sha):
+                reasons.append("production core is not an ancestor of the staging core")
+            if (production_core, production["web_sha"]) == (core_sha, web_sha):
+                reasons.append("production already runs this staging pair")
+            if production_core:
+                with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
+                    notes = _release_notes(self.paths.mirror, production_core, core_sha)
+                    status["commits_behind"] = len(notes)
+                    status["notes"] = [_safe_text(note) for note in notes[:STATUS_NOTES_LIMIT]]
+        status["available"] = not reasons
+        status["reason"] = _safe_text(reasons[0]) if reasons else None
+        return status
+
+    def _busy(self) -> dict[str, Any] | None:
+        """E2 writes ``admin/busy.json`` while a request runs; E1 only reads it."""
+
+        with contextlib.suppress(OSError, ValueError):
+            busy = json.loads((self.paths.admin / "busy.json").read_text(encoding="utf-8"))
+            if isinstance(busy, dict) and set(busy) == {"request_id", "action", "since"}:
+                return {key: _safe_text(value) for key, value in busy.items()}
+        return None
+
+    def publish_status(self, *, refresh: bool = True) -> Path:
+        """Atomically write ``admin/outbox/status.json`` (0644, at most 256 KB)."""
+
+        with self.locked(wait=True):
+            return self._write_status(refresh=refresh)
+
+    def _write_status(self, *, refresh: bool) -> Path:
+        data = (json.dumps(self.snapshot(refresh=refresh), sort_keys=True) + "\n").encode()
+        if len(data) > STATUS_MAX_BYTES:
+            raise ReleaseError("the status snapshot is larger than 256 KB")
+        outbox = self.paths.admin / "outbox"
+        self.paths.state.mkdir(parents=True, exist_ok=True)
+        for directory in (self.paths.admin, outbox):
+            if not directory.is_dir():
+                directory.mkdir(mode=0o755)
+                directory.chmod(0o755)
+        handle, name = tempfile.mkstemp(prefix=".status.", suffix=".tmp", dir=outbox)
+        try:
+            with os.fdopen(handle, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fchmod(stream.fileno(), 0o644)
+                os.fsync(stream.fileno())
+            os.replace(name, outbox / "status.json")
+        except BaseException:
+            Path(name).unlink(missing_ok=True)
+            raise
+        return outbox / "status.json"
 
     def status(self) -> dict[str, Any]:
         report: dict[str, Any] = {"at": _now(), "environments": {}}
@@ -3218,11 +3566,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     promote = sub.add_parser("promote")
     promote.add_argument("--bump", choices=("patch", "minor", "major"), required=True)
     promote.add_argument("--version", required=True, metavar="vX.Y.Z")
+    promote.add_argument("--dry-run", action="store_true")
     for name in ("pause", "resume"):
         sub.add_parser(name).add_argument("environment", choices=ENVIRONMENTS)
     rollback = sub.add_parser("rollback")
     rollback.add_argument("environment", choices=ENVIRONMENTS)
-    rollback.add_argument("--component", choices=COMPONENTS, required=True)
+    rollback.add_argument("--component", choices=COMPONENTS)
+    rollback.add_argument("--dry-run", action="store_true", help="production pair only")
+    sub.add_parser("publish-status")
     history = sub.add_parser("history")
     history.add_argument("-n", type=int, default=20)
     prune = sub.add_parser("prune-artifacts")
@@ -3250,7 +3601,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 engine.set_paused(args.environment, args.command == "pause", "paused by operator")
             engine.record({"at": _now(), "environment": args.environment, "action": args.command})
             print(f"{args.environment}: {args.command}d")
+        elif args.command == "rollback" and args.component is None:
+            if args.environment != "production":
+                raise ReleaseError("rollback staging needs --component core or web")
+            user = os.environ.get("SUDO_USER") or getpass.getuser()
+            steps = engine.rollback_production(
+                requested_by=f"cli:{user}", trigger="cli", dry_run=args.dry_run
+            )
+            _print(steps, True)
+            if any(step["result"] == "failed" for step in steps):
+                return 1
         elif args.command == "rollback":
+            if args.dry_run:
+                raise ReleaseError("--dry-run applies to the production pair rollback only")
             with engine.locked(wait=True):
                 operation = (
                     engine.rollback_core if args.component == "core" else engine.rollback_web
@@ -3275,7 +3638,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "promote":
             user = os.environ.get("SUDO_USER") or getpass.getuser()
             results = engine.promote(
-                args.bump, args.version, requested_by=f"cli:{user}", trigger="cli"
+                args.bump,
+                args.version,
+                requested_by=f"cli:{user}",
+                trigger="cli",
+                dry_run=args.dry_run,
             )
             _print(results, True)
             if any(entry.get("result") == "failed" for entry in results):
@@ -3290,6 +3657,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _print_retention(report)
             if report.get("errors"):
                 return 1
+        elif args.command == "publish-status":
+            print(engine.publish_status())
         elif args.command == "store-native":
             engine.github = _load_github(paths, required=True)
             with engine.locked(wait=True):
