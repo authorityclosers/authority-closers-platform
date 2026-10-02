@@ -2,22 +2,12 @@
 
 import { Building2, Check, ChevronsUpDown, Mail, Plus } from "lucide-react";
 import type { RefObject } from "react";
+import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 
 import styles from "./workspace-switcher.module.css";
 
-export type WorkspaceKind = "personal" | "organisation";
-type Workspace = { tenant_id: string; name: string };
-
-/**
- * Personal accounts do not need a workspace (owner decision, 30 Sep 2026).
- * Until workspace choices carry their kind (AUT-422), the shared sign-up
- * workspace is shown as the person's own Personal account.
- */
-export function workspaceKind(name: string): WorkspaceKind {
-  return /public learners|closers academy/i.test(name)
-    ? "personal"
-    : "organisation";
-}
+type WorkspaceKind = SalesXrayWorkspace["kind"];
+type Workspace = SalesXrayWorkspace;
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -52,20 +42,20 @@ export function WorkspaceSwitcher({
     workspaces.find((workspace) => workspace.tenant_id === currentId) ??
     workspaces[0] ??
     null;
-  const kind = current ? workspaceKind(current.name) : "personal";
+  const kind = current?.kind ?? "personal";
   const you = personName || "Your account";
-  const title = kind === "personal" ? you : current!.name;
+  const title = current?.name ?? you;
   const subtitle = kind === "personal" ? "Personal account" : "Organisation";
   const personal = workspaces.filter(
-    (workspace) => workspaceKind(workspace.name) === "personal",
+    (workspace) => workspace.kind === "personal",
   );
   const organisations = workspaces.filter(
-    (workspace) => workspaceKind(workspace.name) === "organisation",
+    (workspace) => workspace.kind === "organisation",
   );
 
   const item = (workspace: Workspace, itemKind: WorkspaceKind) => {
     const selected = workspace.tenant_id === current?.tenant_id;
-    const name = itemKind === "personal" ? you : workspace.name;
+    const name = workspace.name;
     return (
       <button
         key={workspace.tenant_id}

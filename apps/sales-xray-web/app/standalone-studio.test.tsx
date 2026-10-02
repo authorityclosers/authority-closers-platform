@@ -5,6 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { StandaloneStudio } from "./standalone-studio";
+import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
+
+// Keep the existing identity/profile chooser cases isolated from the directory.
+// The real directory and automatic Personal selection have their own integration tests.
+vi.mock("./sales-xray-workspaces", async (original) => ({
+  ...(await original<typeof import("./sales-xray-workspaces")>()),
+  readSalesXrayWorkspaces: vi.fn(),
+}));
 import { AppSession } from "./app-session";
 import { usePendingAnalysis } from "./pending-analysis";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -80,6 +88,18 @@ function workspaceChoices(selected_tenant_id: string | null = null) {
 }
 
 function response(body: unknown, status = 200) {
+  if (body && typeof body === "object" && "workspaces" in body) {
+    const choices = body as ReturnType<typeof workspaceChoices>;
+    vi.mocked(readSalesXrayWorkspaces).mockResolvedValueOnce({
+      selected_tenant_id: choices.selected_tenant_id,
+      workspaces: choices.workspaces.map((item) => ({
+        ...item,
+        kind: "organisation",
+        role: "member",
+        sales_xray_enabled: true,
+      })),
+    });
+  }
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
@@ -117,6 +137,7 @@ async function mount(openingExistingCall = false) {
 }
 
 beforeEach(() => {
+  vi.mocked(readSalesXrayWorkspaces).mockReset();
   pathname = "/";
   authSelectedFile = null;
   authPending = null;

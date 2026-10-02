@@ -29,13 +29,23 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   routes = {
-    "/v1/me/workspaces": {
-      person_id: "p-1",
-      session_id: "s-1",
+    "/v1/me/sales-xray-workspaces": {
       selected_tenant_id: "t-org",
       workspaces: [
-        { tenant_id: "t-me", name: "Authority Closers Public Learners" },
-        { tenant_id: "t-org", name: "Authority Closers" },
+        {
+          tenant_id: "t-me",
+          kind: "personal",
+          name: "Personal",
+          role: null,
+          sales_xray_enabled: true,
+        },
+        {
+          tenant_id: "t-org",
+          kind: "organisation",
+          name: "Authority Closers",
+          role: "owner",
+          sales_xray_enabled: true,
+        },
       ],
     },
     "/v1/context": { membership_role: "owner", permissions: [] },
@@ -160,9 +170,25 @@ it("lists members and adds a person by email once the API is live", async () => 
 
 it("shows the personal account card when no organisation is selected", async () => {
   (
-    routes["/v1/me/workspaces"] as { selected_tenant_id: string }
+    routes["/v1/me/sales-xray-workspaces"] as { selected_tenant_id: string }
   ).selected_tenant_id = "t-me";
   await render();
   expect(host.textContent).toContain("You are on your personal account");
   expect(host.textContent).toContain("Switch to Authority Closers");
+});
+
+
+it("uses the directory role instead of a context or detail response role", async () => {
+  const choices = routes["/v1/me/sales-xray-workspaces"] as { workspaces: Array<{ role: string | null }> };
+  choices.workspaces[1].role = "member";
+  await render();
+  expect(host.textContent).toContain("Member");
+  expect(fetchMock.mock.calls.some(([path]) => path === "/v1/context")).toBe(false);
+});
+
+it("rejects expanded directory responses without using the old workspace list", async () => {
+  routes["/v1/me/sales-xray-workspaces"] = { ...(routes["/v1/me/sales-xray-workspaces"] as object), unexpected: true };
+  await render();
+  expect(host.textContent).toContain("The organisation could not be loaded");
+  expect(fetchMock.mock.calls.some(([path]) => path === "/v1/me/workspaces")).toBe(false);
 });

@@ -370,6 +370,19 @@ beforeEach(() => {
           selected_tenant_id: "tenant-1",
           workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
         });
+      if (path === "/v1/me/sales-xray-workspaces")
+        return response({
+          selected_tenant_id: "tenant-1",
+          workspaces: [
+            {
+              tenant_id: "tenant-1",
+              kind: "personal",
+              name: "Personal",
+              role: null,
+              sales_xray_enabled: true,
+            },
+          ],
+        });
       if (path === "/v1/me/sales-xray-profile/write-eligibility")
         return new Response(null, { status: 204 });
       if (path === "/v1/auth/email-code/config?surface=sales_xray")

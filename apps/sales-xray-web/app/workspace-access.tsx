@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo } from "react";
 
 import { useUploadSession } from "./hooks/upload-session";
+import type { SalesXrayWorkspace } from "./sales-xray-workspaces";
 
 export type WorkspaceAccessStatus =
   | "loading"
@@ -17,6 +18,8 @@ export type WorkspaceAccessValue = Readonly<{
   status: WorkspaceAccessStatus;
   /** True only after the server has confirmed an authenticated AC session. */
   authenticated: boolean | null;
+  /** Strictly parsed Sales Xray directory; never the operations workspace list. */
+  workspaces?: readonly SalesXrayWorkspace[];
   /** Server-confirmed account, session and selected workspace identity. */
   context: Readonly<{
     personId: string;
