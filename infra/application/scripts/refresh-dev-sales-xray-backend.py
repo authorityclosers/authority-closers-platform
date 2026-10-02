@@ -36,6 +36,7 @@ API_DROPIN = Path("/etc/systemd/system/ac-dev-api.service.d/release.conf")
 WORKER_DROPIN = Path("/etc/systemd/system/ac-dev-sales-xray-worker.service.d/manifest.conf")
 API_UNIT = "ac-dev-api.service"
 WORKER_UNIT = "ac-dev-sales-xray-worker.service"
+OUTBOX_UNIT = "ac-dev-outbox-worker.service"
 STUDIO = Path("/home/acdev/src/lanes/ui/authority-closers-platform")
 STUDIO_LOCK = Path("/run/ac-studio-sync/ac-studio-sync.lock")
 SAFE_PATH = "/usr/local/bin:/usr/bin:/bin"
@@ -410,6 +411,7 @@ def restart(runner) -> None:
     call(runner, ["systemctl", "daemon-reload"], timeout=30)
     call(runner, ["systemctl", "restart", API_UNIT], timeout=120)
     call(runner, ["systemctl", "restart", WORKER_UNIT], timeout=120)
+    call(runner, ["systemctl", "restart", OUTBOX_UNIT], timeout=120)
 
 
 def rollback(paths: Paths, runner, previous, marker, api, worker, service) -> bool:
@@ -770,7 +772,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
             "target": target,
             "previous": previous,
             "migrated": "yes" if migrated else "no",
-            "restarted": [API_UNIT, WORKER_UNIT],
+            "restarted": [API_UNIT, WORKER_UNIT, OUTBOX_UNIT],
             "health": checked,
             "studio": error.code,
             "smoke": "skipped",
@@ -782,7 +784,7 @@ def refresh(paths: Paths, runner=command, *, uid: int | None = None) -> dict[str
         "target": target,
         "previous": previous,
         "migrated": "yes",
-        "restarted": [API_UNIT, WORKER_UNIT],
+        "restarted": [API_UNIT, WORKER_UNIT, OUTBOX_UNIT],
         "health": checked,
         "studio": "merged",
         "smoke": smoke_result,
