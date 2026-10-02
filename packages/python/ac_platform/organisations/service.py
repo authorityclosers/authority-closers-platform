@@ -10,13 +10,21 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.identity.services import normalize_email
+from ac_platform.kernel.errors import (
+    AuthorizationDenied,
+    DomainError,
+    ResourceConflict,
+    ResourceNotFound,
+)
+from ac_platform.organisations.usage import invite_row, member_rows
 from ac_platform.tenancy.models import (
     Membership,
     MembershipRole,
@@ -50,12 +58,20 @@ _FREE_EMAIL_DOMAINS = frozenset(
 _DOMAIN_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 
 
-class OrganisationCommandError(ValueError):
+class OrganisationCommandError(DomainError, ValueError):
     """An organisation command fails closed on invalid or protected state."""
 
 
 class OrganisationCommandConflict(OrganisationCommandError):
     """A command ID was reused with a different intent."""
+
+    status = 409
+
+
+class OrganisationAdditionLimit(OrganisationCommandError):
+    """The organisation's daily addition budget is exhausted."""
+
+    status = 429
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +220,7 @@ class OrganisationService:
         actor_person_id: UUID | None = None,
         operator_reference: str | None = None,
         reason: str | None = None,
+        http_intent: dict[str, str] | None = None,
     ) -> MemberResult:
         role = _member_role(role)
         if operator_reference is not None:
@@ -242,15 +259,15 @@ class OrganisationService:
 
         await self._ensure_command_id_available(command_id, "organisation.member_added")
 
+        # The registry lock serializes owner changes; avoid upgrading the
+        # shared owner fence held by another authenticated request here.
         owners = tuple(
             await self.session.scalars(
-                select(Membership)
-                .where(
+                select(Membership).where(
                     Membership.tenant_id == tenant_id,
                     Membership.role == MembershipRole.OWNER.value,
                     Membership.status == MembershipStatus.ACTIVE.value,
                 )
-                .with_for_update()
             )
         )
         if len(owners) != 1:
@@ -265,11 +282,20 @@ class OrganisationService:
         ):
             raise OrganisationCommandError("member must be active and have a verified email")
         email = normalize_email(person.email)
-        membership = await self.session.scalar(
-            select(Membership)
-            .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
-            .with_for_update()
-        )
+        try:
+            membership = await self.session.scalar(
+                select(Membership)
+                .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
+                .with_for_update(nowait=http_intent is not None)
+            )
+        except DBAPIError as error:
+            # Another authenticated actor may hold a shared membership fence
+            # while waiting for this organisation. Refuse the lock upgrade.
+            if getattr(error.orig, "sqlstate", None) == "55P03":
+                raise ResourceConflict(
+                    "Member is busy; retry with the same Idempotency-Key."
+                ) from error
+            raise
         if membership is not None and membership.role == MembershipRole.OWNER.value:
             raise OrganisationCommandError("the active owner cannot be changed by add-member")
         before = (
@@ -315,6 +341,11 @@ class OrganisationService:
         )
         self.session.add(invite)
         await self.session.flush()
+        http_result = None
+        if http_intent is not None:
+            http_result = (await member_rows(self.session, tenant_id, person_id))[0]
+            if before is not None and before["status"] == "inactive":
+                http_result["joined_at"] = now.isoformat()
         await self._audit(
             tenant_id,
             command_id,
@@ -330,11 +361,145 @@ class OrganisationService:
                 },
                 "before": before,
                 "after": {"role": role, "status": "active"},
+                **(
+                    {"http_intent": http_intent, "result": http_result}
+                    if http_intent is not None
+                    else {}
+                ),
             },
             reason,
             actor_person_id=actor_person_id,
         )
         return MemberResult(tenant_id, person_id, person.email, role, "active")
+
+    async def _manager(self, tenant_id: UUID, actor_person_id: UUID) -> Membership:
+        await self._organisation(tenant_id, lock=True)
+        actor = await self.session.scalar(
+            select(Membership)
+            .where(Membership.tenant_id == tenant_id, Membership.person_id == actor_person_id)
+            .execution_options(populate_existing=True)
+        )
+        if actor is None or actor.status != "active" or actor.ended_at is not None:
+            raise ResourceNotFound("No organisation selected.")
+        if actor.role not in {"owner", "admin"}:
+            raise AuthorizationDenied("Organisation administration is required.")
+        return actor
+
+    async def request_member(
+        self, tenant_id: UUID, email: str, role: str, command_id: UUID, *, actor_person_id: UUID
+    ) -> dict[str, object]:
+        actor = await self._manager(tenant_id, actor_person_id)
+        role = _member_role(role)
+        if actor.role == "admin" and role != "member":
+            raise AuthorizationDenied("Only the owner can add an admin.")
+        try:
+            email = normalize_email(email)
+        except ValueError as error:
+            raise OrganisationCommandError("A valid email is required.") from error
+        intent = {"email": email, "role": role, "actor_person_id": str(actor_person_id)}
+        prior = await self.session.scalar(
+            select(AuditEvent).where(AuditEvent.request_id == str(command_id)).limit(1)
+        )
+        if prior is not None:
+            if prior.tenant_id != tenant_id or prior.payload.get("http_intent") != intent:
+                raise OrganisationCommandConflict(
+                    "Idempotency-Key already records a different request."
+                )
+            return cast(dict[str, object], prior.payload["result"])
+        now = datetime.now(UTC)
+        additions = await self.session.scalar(
+            select(func.count())
+            .select_from(OrganisationInvite)
+            .where(
+                OrganisationInvite.tenant_id == tenant_id,
+                OrganisationInvite.created_at
+                >= now.replace(hour=0, minute=0, second=0, microsecond=0),
+            )
+        )
+        if (additions or 0) >= 50:
+            raise OrganisationAdditionLimit(
+                "Limit of 50 member additions per organisation per day reached."
+            )
+        person = await self.session.scalar(
+            select(Person).where(func.lower(Person.email) == email.lower())
+        )
+        if person is not None:
+            target = await self.session.get(Membership, (tenant_id, person.id))
+            if actor.role == "admin" and target is not None and target.role != "member":
+                raise AuthorizationDenied("An admin can add members only.")
+            await self.add_member(
+                tenant_id,
+                person.id,
+                role,
+                command_id,
+                actor_person_id=actor_person_id,
+                http_intent=intent,
+            )
+            audit = await self._command_audit(tenant_id, command_id, "organisation.member_added")
+            assert audit is not None
+            return cast(dict[str, object], audit.payload["result"])
+        pending = await self.session.scalar(
+            select(OrganisationInvite).where(
+                OrganisationInvite.tenant_id == tenant_id,
+                OrganisationInvite.email_normalized == email,
+                OrganisationInvite.status == "pending",
+            )
+        )
+        if pending is not None:
+            raise ResourceConflict("A pending invite already exists for this email.")
+        invite = OrganisationInvite(
+            tenant_id=tenant_id,
+            email_normalized=email,
+            role=role,
+            command_id=command_id,
+            invited_by_person_id=actor_person_id,
+        )
+        self.session.add(invite)
+        await self.session.flush()
+        result = invite_row(invite)
+        await self._audit(
+            tenant_id,
+            command_id,
+            "organisation.member_invited",
+            "organisation_invite",
+            invite.id,
+            {
+                "http_intent": intent,
+                "result": result,
+                "before": None,
+                "after": {"status": "pending"},
+            },
+            None,
+            actor_person_id=actor_person_id,
+        )
+        return result
+
+    async def revoke_invite(
+        self, tenant_id: UUID, invite_id: UUID, command_id: UUID, *, actor_person_id: UUID
+    ) -> None:
+        await self._manager(tenant_id, actor_person_id)
+        prior = await self._command_audit(tenant_id, command_id, "organisation.invite_revoked")
+        if prior is not None:
+            if prior.resource_id != str(invite_id) or prior.actor_person_id != actor_person_id:
+                raise OrganisationCommandConflict(
+                    "Idempotency-Key already records a different request."
+                )
+            return
+        await self._ensure_command_id_available(command_id, "organisation.invite_revoked")
+        invite = await self.session.get(OrganisationInvite, invite_id)
+        if invite is None or invite.tenant_id != tenant_id or invite.status != "pending":
+            raise ResourceNotFound("Pending invite not found.")
+        invite.status, invite.closed_at = "revoked", datetime.now(UTC)
+        await self._audit(
+            tenant_id,
+            command_id,
+            "organisation.invite_revoked",
+            "organisation_invite",
+            invite_id,
+            {"before": {"status": "pending"}, "after": {"status": "revoked"}},
+            None,
+            actor_person_id=actor_person_id,
+        )
 
     async def list_members(self, tenant_id: UUID) -> tuple[MemberResult, ...]:
         await self._organisation(tenant_id)
