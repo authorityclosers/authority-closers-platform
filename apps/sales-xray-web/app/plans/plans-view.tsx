@@ -968,6 +968,7 @@ export function PlansView({
   return (
     <AcquisitionShell
       authenticated={authenticated}
+      showPolicyLinks
       homeHref="/"
       active="account"
       mobileFit={false}
