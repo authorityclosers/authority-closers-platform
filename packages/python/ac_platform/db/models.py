@@ -13,6 +13,8 @@ from sqlalchemy import MetaData
 from ac_platform.app_updates import models as app_update_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
+from ac_platform.billing import models as billing_models
+from ac_platform.billing import order_models as billing_order_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
 from ac_platform.community import models as community_models
@@ -68,6 +70,8 @@ MODEL_MODULES = (
     practice_models,
     focus_models,
     audit_models,
+    billing_models,
+    billing_order_models,
 )
 
 

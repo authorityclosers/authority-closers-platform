@@ -196,6 +196,7 @@ async def _setup(
     tmp_path: Path,
     *,
     gemini: bool = False,
+    separate_operations: bool = False,
     funded: bool = False,
     text_cost_paise: int = 0,
     asr_cost_paise: int = 50_000,
@@ -205,6 +206,7 @@ async def _setup(
 ) -> SimpleNamespace:
     engine = create_async_engine(postgres.url)
     state = await seed(engine)
+    control_state = await seed(engine) if separate_operations else state
     scope_id = await seed_budget(engine)
     principal = await _provision(engine, state)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -230,7 +232,7 @@ async def _setup(
         api_url="https://api.example.test",
         sales_xray_app_url=ORIGIN,
         public_learner_tenant_id=state.tenant_id,
-        operations_tenant_id=uuid4(),
+        operations_tenant_id=control_state.tenant_id if separate_operations else uuid4(),
         session_token_pepper=SecretStr(pepper),
     )
     async with sessions() as db, db.begin():
@@ -247,7 +249,7 @@ async def _setup(
     authority = None
     selected_policy = policy(scope_id, state.tenant_id)
     if gemini:
-        admin = await _promote_admin(engine, state)
+        admin = await _promote_admin(engine, control_state)
         config = _registry_config(
             "guest-gemini-test-v1",
             funded=funded,
@@ -284,6 +286,7 @@ async def _setup(
         )
         bundle = bundle.model_copy(
             update={
+                "provider_control_tenant_id": control_state.tenant_id,
                 "budget_owner_id": state.person_id,
                 "allowances": (),
                 "stages": (),
@@ -304,7 +307,9 @@ async def _setup(
         bundle = type(bundle).model_validate_json(bundle.model_dump_json())
         bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
-            lambda: bundle_box["bundle"], environment="test", operations_tenant_id=state.tenant_id
+            lambda: bundle_box["bundle"],
+            environment="test",
+            operations_tenant_id=control_state.tenant_id,
         )
         selected_policy = IntakePolicy(
             budget_scope_id=bundle.budget_scope_id,

@@ -9,8 +9,10 @@ import pytest
 from sqlalchemy import event, select, update
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.billing.models import BillingAccount, BillingLedgerEntry
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.entitlements import MinuteGrant
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.minute_account_admin import (
@@ -24,6 +26,10 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.submission_labels import update_submission_label
 from ac_platform.http.conversation_acquisition import install_acquisition_http
+from ac_platform.http.conversation_acquisition_runtime import (
+    AcquisitionRuntime,
+    install_acquisition_runtime,
+)
 from tests.database.test_conversation_account_library_postgresql import (
     _seed_retained_guest_submission,
     _session,
@@ -267,6 +273,76 @@ def test_me_http_empty_and_101_rows_have_fixed_read_query_count(postgres_harness
                 assert [row["submission_id"] for row in usage["calls"]] == expected[:0:-1]
                 assert usage["allowance"]["committed_seconds"] == 101
                 assert sum(row["seconds"] for row in usage["calls"]) == 100
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_runtime_new_account_reads_trial_before_any_billing_write(
+    postgres_harness, tmp_path, record_property
+):
+    async def exercise():
+        setup = await _setup(postgres_harness, tmp_path, gemini=True, separate_operations=True)
+        try:
+            assert setup.runtime.authority is not None
+            assert (
+                setup.runtime.authority.operations_tenant_id
+                == setup.settings.operations_tenant_id
+                != setup.state.tenant_id
+            )
+            assert setup.settings.sales_xray_trial_policy == "v1"
+            assert setup.settings.sales_xray_trial_policy_switch_at is None
+            assert setup.settings.billing_enabled is False
+            install_acquisition_runtime(
+                setup.app,
+                settings=setup.settings,
+                sessions=setup.sessions,
+                require_actor=setup.require_actor,
+                runtime=AcquisitionRuntime(
+                    intake=setup.runtime,
+                    challenge=UploadChallenge(
+                        secret=setup.settings.session_token_pepper,
+                        hostname="salesxray.example.test",
+                    ),
+                    preflight=NativeUploadPreflight(setup.native),
+                    site_key="synthetic-site-key",
+                    policy_revision="guest-processing-v1",
+                ),
+            )
+            owned_accounts = select(BillingAccount.id).where(
+                BillingAccount.tenant_id == setup.state.tenant_id,
+                BillingAccount.person_id == setup.state.person_id,
+            )
+            owned_entries = select(BillingLedgerEntry.id).where(
+                BillingLedgerEntry.account_id.in_(owned_accounts)
+            )
+            async with setup.sessions() as database:
+                assert await database.scalar(owned_accounts.limit(1)) is None
+                assert await database.scalar(owned_entries.limit(1)) is None
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                entry = await client.get(PREFIX + "/entry")
+                assert entry.status_code == 200, entry.text
+                assert entry.json()["allowance_seconds"] == 3600
+                session = await client.get(PREFIX + "/session")
+                assert session.status_code == 200, session.text
+                expected = {
+                    "allowance_seconds": 3600,
+                    "committed_seconds": 0,
+                    "available_seconds": 3600,
+                }
+                assert session.json() == {"state": "account", "allowance": expected}
+                for path in ("/v1/me/plan", "/v1/me/usage"):
+                    response = await client.get(path)
+                    assert response.status_code == 200, response.text
+                    assert response.json()["allowance"] == expected
+                record_property("new_account_session", json.dumps(session.json()))
+            async with setup.sessions() as database:
+                assert await database.scalar(owned_accounts.limit(1)) is None
+                assert await database.scalar(owned_entries.limit(1)) is None
         finally:
             await setup.engine.dispose()
 

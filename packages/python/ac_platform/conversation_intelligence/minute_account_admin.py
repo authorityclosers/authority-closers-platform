@@ -149,6 +149,31 @@ async def audited_admin_grant_seconds(
     is bound to the immutable audit event emitted by the admin grant route.
     """
 
+    verified = await audited_admin_grants(
+        database,
+        account=account,
+        tenant_id=tenant_id,
+        person_id=person_id,
+        operations_tenant_id=operations_tenant_id,
+    )
+    return sum(grant.seconds for grant, _ in verified)
+
+
+async def audited_admin_grants(
+    database: AsyncSession,
+    *,
+    account: MinuteAccount,
+    tenant_id: UUID,
+    person_id: UUID,
+    operations_tenant_id: UUID,
+) -> list[tuple[MinuteGrant, AuditEvent]]:
+    """Return each verified finite grant with the audit event that backs it.
+
+    The billing ledger mirrors these once as ``grant`` lots keyed by the event
+    id, so the same verification decides both the legacy allowance and the
+    mirror.
+    """
+
     candidates: list[tuple[MinuteGrant, UUID]] = []
     for grant in account.grants:
         if (
@@ -167,7 +192,7 @@ async def audited_admin_grant_seconds(
             continue
         candidates.append((grant, event_id))
     if not candidates:
-        return 0
+        return []
 
     event_ids = {event_id for _, event_id in candidates}
     events = (
@@ -181,7 +206,7 @@ async def audited_admin_grant_seconds(
         )
     ).all()
     events_by_id = {event.id: event for event in events}
-    additional_seconds = 0
+    verified: list[tuple[MinuteGrant, AuditEvent]] = []
     for grant, event_id in candidates:
         event = events_by_id.get(event_id)
         payload = None if event is None else event.payload
@@ -216,8 +241,8 @@ async def audited_admin_grant_seconds(
             or any(char not in "0123456789abcdef" for char in payload["request_digest"])
         ):
             continue
-        additional_seconds += grant.seconds
-    return additional_seconds
+        verified.append((grant, event))
+    return verified
 
 
 async def append_minute_grant(

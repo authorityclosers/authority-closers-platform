@@ -24,3 +24,4 @@ Business-rule changes must also propagate to the controlled Drive layer.
 - 0041 — [Standing owner approval for automatic production promotion (release train)](0041-release-train-standing-approval.md)
 - 0042 — [Sales Xray speaker map — which speaker is you](0042-sales-xray-speaker-map.md)
 - 0049 — [Personal accounts and organisations](0049-personal-accounts-and-organisations.md)
+- 0052 — [Billing ledger, subscriptions and top-ups](0052-billing-ledger-subscriptions-and-top-ups.md)

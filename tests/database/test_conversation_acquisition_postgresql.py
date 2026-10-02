@@ -21,6 +21,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
+from ac_platform.billing import trial as trial_policy_module
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
@@ -215,10 +216,9 @@ def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
                 with monkeypatch.context() as historical:
-                    historical.setattr(
-                        "ac_platform.conversation_intelligence.acquisition_sessions.ALLOWANCE_SECONDS",
-                        6000,
-                    )
+                    # Admitted under the former 100-minute trial (trial policy v1
+                    # before the shared quota was reduced).
+                    historical.setitem(trial_policy_module._SECONDS, "v1", 6000)
                     original_usage = await app.reserve(original_source, token=guest.token)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)

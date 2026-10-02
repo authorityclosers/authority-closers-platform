@@ -47,7 +47,6 @@ from ac_platform.identity.models import Person
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.outbox.models import Job
 from ac_platform.providers import FakeEmailAdapter
-from ac_platform.tenancy.models import Tenant
 from ac_platform.worker import DurableWorker, build_default_dispatcher
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -87,19 +86,12 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
     async def exercise() -> None:
         import ac_platform.http.app as app_module
 
-        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup = await _setup(postgres_harness, tmp_path, gemini=True, separate_operations=True)
         email = f"browser-{uuid4().hex}@example.test"
-        operations_tenant_id = uuid4()
-        async with setup.sessions() as database, database.begin():
-            # Email-code audit records use the configured operations tenant as
-            # their canonical boundary, so make it part of this isolated DB.
-            database.add(
-                Tenant(
-                    id=operations_tenant_id,
-                    slug=operations_tenant_id.hex,
-                    name="Synthetic browser operations workspace",
-                )
-            )
+        # Provider authority, identity audits and billing agree on one operations
+        # tenant, distinct from the public learner tenant that owns the trial.
+        operations_tenant_id = setup.settings.operations_tenant_id
+        assert operations_tenant_id != setup.state.tenant_id
         server: uvicorn.Server | None = None
         serving = None
         web = None
@@ -529,6 +521,16 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     assert profile_payload["name"] == "Synthetic Browser Learner"
                     assert profile_payload["phone_number_e164"] == "+12025550123"
                     assert profile_payload["phone_verified"] is False
+                    session_read = await context.request.get(ORIGIN + PREFIX + "/session")
+                    assert session_read.status == 200
+                    assert (await session_read.json()) == {
+                        "state": "account",
+                        "allowance": {
+                            "allowance_seconds": 3600,
+                            "committed_seconds": 0,
+                            "available_seconds": 3600,
+                        },
+                    }
                     await expect(
                         page.get_by_role("button", name="Analyse my call", exact=True)
                     ).to_be_visible(timeout=20_000)

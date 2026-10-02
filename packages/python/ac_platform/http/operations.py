@@ -27,6 +27,7 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository, build_audit_tenant_lock_statement
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.billing.ledger import LEGACY_GRANT_PREFIX, BillingLedger
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
     shared_account_committed_seconds,
@@ -918,7 +919,7 @@ def install_operations_http(
                 raise InvalidOperationsRequest(
                     "The resulting allowance exceeds the exact JSON integer range."
                 )
-            await AuditRepository(auth.database).append(
+            event = await AuditRepository(auth.database).append(
                 event_id=audit_event_id,
                 tenant_id=operations_tenant_id,
                 actor_person_id=actor.person_id,
@@ -937,6 +938,25 @@ def install_operations_http(
                 },
                 reason=reason,
                 request_id=_request_id(request),
+            )
+            # The ledger lot is written with its audit event (ADR 0052): the
+            # same source reference the legacy mirror uses, so neither path
+            # can count this grant twice.
+            ledger = BillingLedger(auth.database, operations_tenant_id=operations_tenant_id)
+            billing_account = await ledger.personal_account(
+                tenant_id=tenant_id, person_id=person_id, create=True
+            )
+            assert billing_account is not None  # created above
+            await ledger.write_lot(
+                account=billing_account,
+                kind="grant",
+                seconds=body.minutes * 60,
+                valid_from=event.occurred_at,
+                source_ref=f"{LEGACY_GRANT_PREFIX}{event.id}",
+                actor_type="person",
+                actor_person_id=actor.person_id,
+                reason=reason,
+                audit_event_id=event.id,
             )
 
         effective_unlimited = (
