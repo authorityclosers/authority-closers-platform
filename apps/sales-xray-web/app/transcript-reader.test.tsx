@@ -67,6 +67,7 @@ function createSampleReport(): SalesReport {
     transcript_revision: "test-r1",
     dimensions: [],
     report_sections: [],
+    closing_analysis: [],
     strengths: [
       {
         title: "Confirm the follow-up time",
@@ -216,9 +217,11 @@ describe("TranscriptReader", () => {
     expect(searchInput).not.toBeNull();
 
     await act(async () => {
-      searchInput!.value = "timing";
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set?.call(searchInput, "timing");
       searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
-      searchInput!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     const matchBadge = document.querySelector('[role="status"]');

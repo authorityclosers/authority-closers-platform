@@ -615,7 +615,7 @@ function renderReportPanels(
  * Nobody wants the full transcript while reading (AUT-785): Reading leaves it
  * out, and Document keeps it only as the last appendix for print and PDF.
  */
-function panelsForView(panels: ReportModePanel[], view: View) {
+function panelsForView(panels: ReportPanel[], view: View) {
   if (view === "tabs") return panels;
   const rest = panels.filter((panel) => panel.id !== "transcript");
   const transcript = panels.find((panel) => panel.id === "transcript");
