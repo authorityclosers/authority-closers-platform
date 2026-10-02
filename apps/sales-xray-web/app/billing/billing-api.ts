@@ -25,7 +25,6 @@ import {
   type Subscriptions,
   type Usage,
 } from "./contract";
-import { FIXTURE_PLANS } from "../review-fixture/plans/fixture-billing";
 
 export class BillingError extends Error {
   constructor(
@@ -126,16 +125,7 @@ async function call(
 }
 
 export const liveBilling: BillingClient = {
-  readPlans: async (signal) => {
-    try {
-      const data = await call("/v1/plans", { signal });
-      const parsed = parsePlans(data);
-      if (parsed && parsed.length > 0) return parsed;
-      return parsePlans(FIXTURE_PLANS);
-    } catch {
-      return parsePlans(FIXTURE_PLANS);
-    }
-  },
+  readPlans: async (signal) => parsePlans(await call("/v1/plans", { signal })),
   readMePlan: async (signal) =>
     parseMePlan(await call("/v1/me/plan", { signal })),
   readUsage: async (signal) =>

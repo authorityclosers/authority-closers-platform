@@ -1,6 +1,7 @@
 /* Billing page: current plan, usage, renewal, invoices & receipts, cancel renewal */
 .page {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 20px;
   width: 100%;
@@ -52,12 +53,14 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px;
 }
 
 .card {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 14px;
   padding: 20px;
@@ -279,14 +282,22 @@
 
 .tableWrap {
   width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
 .table {
   width: 100%;
+  min-width: 440px;
   border-collapse: collapse;
   font: 500 13px/1.4 var(--lx-font-ui);
   color: var(--lx-ink-2);
+}
+
+.table caption {
+  display: table-caption;
+  text-align: left;
+  padding-bottom: 8px;
 }
 
 .table th {

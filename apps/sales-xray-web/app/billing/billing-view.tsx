@@ -8,138 +8,57 @@ import {
   Gem,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import {
-  BillingError,
-  idempotencyKey,
-  liveBilling,
-  returnPath,
-  type BillingClient,
-} from "./billing-api";
-import type { Allowance, Hosted, MePlan, Subscriptions } from "./contract";
-import { count, day, formatMoney, minutes, money } from "./money";
-import { notify } from "../notice-center";
-import { openHostedCheckout } from "../plans/hosted-checkout";
+import type { Allowance, MePlan, Money, Subscriptions } from "./contract";
+import { count, day, formatMoney, minutes } from "./money";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./billing.module.css";
 
+export type BillingDocument = {
+  id: string;
+  createdAt: string;
+  description: string;
+  amount: Money;
+  status: string;
+  invoiceHref: string | null;
+  receiptHref: string | null;
+};
+
+export type BillingViewProps = {
+  mePlan?: MePlan | null;
+  subs?: Subscriptions | null;
+  documents?: BillingDocument[];
+  status?: "loading" | "ready" | "error";
+  busy?: boolean;
+  error?: string | null;
+  onRefresh?: () => void;
+  onCancel?: (subscriptionId: string) => void;
+};
+
+/** Account data and actions arrive as props; this screen never invents payments. */
 export function BillingView({
-  client = liveBilling,
-}: {
-  client?: BillingClient;
-}) {
-  const router = useRouter();
+  mePlan = null,
+  subs = null,
+  documents = [],
+  status = "error",
+  busy = false,
+  error,
+  onRefresh,
+  onCancel,
+}: BillingViewProps = {}) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
-
-  const [loading, setLoading] = useState(true);
-  const [mePlan, setMePlan] = useState<MePlan | null>(null);
-  const [subs, setSubs] = useState<Subscriptions | null>(null);
-  const [busy, setBusy] = useState<"cancel" | "top_up" | null>(null);
   const [cancelAsk, setCancelAsk] = useState(false);
-
-  const reload = useCallback(async () => {
-    if (!authenticated) return;
-    setLoading(true);
-    try {
-      const [meRes, subRes] = await Promise.allSettled([
-        client.readMePlan(),
-        client.readSubscriptions("personal"),
-      ]);
-      if (meRes.status === "fulfilled") setMePlan(meRes.value);
-      if (subRes.status === "fulfilled") setSubs(subRes.value);
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticated, client]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const goHosted = useCallback(
-    async (hosted: Hosted, orderId: string) => {
-      const result = await openHostedCheckout(hosted, orderId);
-      if (result === "left") return;
-      router.push(returnPath(orderId));
-    },
-    [router],
-  );
-
-  const cancel = async () => {
-    const current = subs?.current;
-    if (!current || busy) return;
-    setBusy("cancel");
-    try {
-      await client.cancelSubscription(
-        current.subscriptionId,
-        null,
-        idempotencyKey(),
-      );
-      setCancelAsk(false);
-      await reload();
-      notify({
-        id: "billing",
-        tone: "success",
-        title: "Renewal is off",
-        message: `The recorded subscription period ends ${day(current.currentPeriod?.end ?? current.renewsAt)}. Access runs until the period end.`,
-        timeout: 6000,
-      });
-    } catch (error) {
-      notify({
-        id: "billing",
-        tone: "error",
-        title: "Could not stop renewal",
-        message:
-          error instanceof BillingError && error.detail
-            ? error.detail
-            : "Please try again in a moment.",
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const topUp = async (packKey: string) => {
-    if (busy) return;
-    setBusy("top_up");
-    try {
-      const checkout = await client.checkout(
-        {
-          kind: "top_up",
-          account: "personal",
-          planKey: mePlan?.plan.key ?? "personal",
-          packKey,
-        },
-        idempotencyKey(),
-      );
-      await goHosted(checkout.hosted, checkout.order.orderId);
-    } catch (error) {
-      notify({
-        id: "billing",
-        tone: "error",
-        title: "Top-up could not be started",
-        message:
-          error instanceof BillingError && error.detail
-            ? error.detail
-            : "Please try again in a moment.",
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
+  const loading = status === "loading";
   const current = subs?.current;
   const isPaidActive = current?.status === "active";
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const allowance = mePlan?.allowance;
-  const planName = current?.planName ?? mePlan?.plan.name ?? "Free Trial";
+  const planName = mePlan?.plan.name ?? "Unavailable";
 
   return (
     <AcquisitionShell
@@ -166,6 +85,15 @@ export function BillingView({
           </p>
         </header>
 
+        {status !== "ready" ? (
+          <p className={styles.hint} role={loading ? "status" : "alert"}>
+            {loading
+              ? "Loading billing details…"
+              : (error ?? "Billing details are currently unavailable.")}
+          </p>
+        ) : error ? (
+          <p role="alert">{error}</p>
+        ) : null}
         <div className={styles.grid}>
           {/* Card 1: Current Plan */}
           <section className={styles.card}>
@@ -181,23 +109,22 @@ export function BillingView({
                   ? "Cancels at period end"
                   : isPaidActive
                     ? "Active"
-                    : "Trial"}
+                    : current?.status === "pending_authorisation"
+                      ? "Awaiting payment"
+                      : current?.status === "past_due"
+                        ? "Payment due"
+                        : current?.status === "halted"
+                          ? "Paused"
+                          : current?.status === "ended" ||
+                              current?.status === "cancelled"
+                            ? "Ended"
+                            : (mePlan?.plan.name ?? "Unavailable")}
               </span>
             </div>
 
             <p className={styles.planPrice}>
-              {current
-                ? formatMoney(current.amount)
-                : planName === "Personal"
-                  ? "₹2,499"
-                  : "₹0"}
-              <small>
-                {current
-                  ? ` / ${current.interval ?? "month"}`
-                  : planName === "Personal"
-                    ? " / month"
-                    : " · Trial"}
-              </small>
+              {current ? formatMoney(current.amount) : "—"}
+              <small>{current ? ` / ${current.interval}` : ""}</small>
             </p>
 
             <ul className={styles.facts}>
@@ -208,12 +135,13 @@ export function BillingView({
                   ? ` · ${current.seats} team seats`
                   : ""}
               </li>
-              <li>
-                <Clock3 size={14} />
-                Calls up to{" "}
-                {mePlan ? count(minutes(mePlan.longestCallSeconds)) : "90"}{" "}
-                minutes
-              </li>
+              {mePlan ? (
+                <li>
+                  <Clock3 size={14} aria-hidden="true" />
+                  Calls up to {count(minutes(mePlan.longestCallSeconds))}{" "}
+                  minutes
+                </li>
+              ) : null}
               <li>
                 <ShieldCheck size={14} />
                 Full refund within 7 days if none of this payment&apos;s minutes
@@ -225,7 +153,9 @@ export function BillingView({
               <Link className={styles.primary} href="/plans">
                 {current ? "Change plan" : "Upgrade plan"}
               </Link>
-              {current && !isCancelled ? (
+              {current &&
+              !isCancelled &&
+              ["active", "past_due", "halted"].includes(current.status) ? (
                 cancelAsk ? (
                   <div className={styles.confirmBox}>
                     <p>
@@ -235,12 +165,10 @@ export function BillingView({
                       <button
                         type="button"
                         className={styles.danger}
-                        disabled={busy === "cancel"}
-                        onClick={() => void cancel()}
+                        disabled={busy || !onCancel}
+                        onClick={() => onCancel?.(current.subscriptionId)}
                       >
-                        {busy === "cancel"
-                          ? "Stopping…"
-                          : "Yes, cancel renewal"}
+                        {busy ? "Stopping…" : "Yes, cancel renewal"}
                       </button>
                       <button
                         type="button"
@@ -268,7 +196,11 @@ export function BillingView({
           <section className={styles.card}>
             <div className={styles.cardHead}>
               <h2>Analysis time</h2>
-              <span className={styles.hint}>Renews on schedule</span>
+              {current?.renewsAt && !isCancelled ? (
+                <span className={styles.hint}>
+                  Renews {day(current.renewsAt)}
+                </span>
+              ) : null}
             </div>
 
             <div className={styles.ringRow}>
@@ -277,26 +209,22 @@ export function BillingView({
                 <b>
                   {allowance?.unlimited
                     ? "Unlimited minutes"
-                    : `${count(minutes(allowance?.availableSeconds ?? 0))} min left`}
+                    : allowance
+                      ? `${count(minutes(allowance.availableSeconds))} min left`
+                      : "Minutes unavailable"}
                 </b>
                 <span>
                   {allowance?.unlimited
                     ? "No minute cap on your account"
-                    : `of ${count(minutes(allowance?.allowanceSeconds ?? 0))} monthly allowance`}
+                    : allowance
+                      ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
+                      : ""}
                 </span>
               </div>
             </div>
 
             <div className={styles.actions}>
-              <button
-                type="button"
-                className={styles.ghost}
-                disabled={busy !== null}
-                onClick={() => void topUp("personal_100")}
-              >
-                Top up 100 minutes · ₹299
-              </button>
-              <Link className={styles.ghost} href="/analysis/new">
+              <Link className={styles.ghost} href="/new-analysis">
                 Analyse a call
               </Link>
             </div>
@@ -315,10 +243,9 @@ export function BillingView({
                   ? isCancelled
                     ? `Access runs until ${day(current.currentPeriod?.end ?? current.renewsAt)}`
                     : day(current.renewsAt)
-                  : "No renewal scheduled"}
-              </li>
-              <li>
-                <b>Payment method:</b> UPI, Card, Net Banking via Razorpay
+                  : status === "ready"
+                    ? "No renewal scheduled"
+                    : "Unavailable"}
               </li>
               <li>
                 <b>Refund rule:</b> Full refund within 7 days if none of this
@@ -330,8 +257,8 @@ export function BillingView({
               <button
                 type="button"
                 className={styles.ghost}
-                onClick={() => void reload()}
-                disabled={loading}
+                onClick={onRefresh}
+                disabled={loading || busy || !onRefresh}
               >
                 <RefreshCw size={14} /> Refresh status
               </button>
@@ -344,38 +271,61 @@ export function BillingView({
               <h2>Invoices &amp; Receipts</h2>
             </div>
 
-            {current ? (
+            {documents.length > 0 ? (
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
+                  <caption className={styles.hint}>
+                    Invoices and receipts
+                  </caption>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Description</th>
-                      <th>Amount</th>
-                      <th>Status</th>
+                      <th scope="col">Date</th>
+                      <th scope="col">Description</th>
+                      <th scope="col">Amount</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Documents</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>{day(current.createdAt ?? current.renewsAt)}</td>
-                      <td>
-                        {current.planName} (
-                        {current.interval === "year" ? "Yearly" : "Monthly"})
-                      </td>
-                      <td>{formatMoney(current.amount)}</td>
-                      <td>
-                        <span className={styles.statusBadge}>Paid</span>
-                      </td>
-                    </tr>
+                    {documents.map((document) => (
+                      <tr key={document.id}>
+                        <td>{day(document.createdAt)}</td>
+                        <td>{document.description}</td>
+                        <td>{formatMoney(document.amount)}</td>
+                        <td>{document.status}</td>
+                        <td>
+                          {document.invoiceHref ? (
+                            <a
+                              href={document.invoiceHref}
+                              aria-label={`Invoice for ${document.description}`}
+                            >
+                              Invoice
+                            </a>
+                          ) : null}
+                          {document.invoiceHref && document.receiptHref
+                            ? " · "
+                            : ""}
+                          {document.receiptHref ? (
+                            <a
+                              href={document.receiptHref}
+                              aria-label={`Receipt for ${document.description}`}
+                            >
+                              Receipt
+                            </a>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             ) : (
               <div className={styles.empty}>
-                <FileText size={24} />
+                <FileText size={24} aria-hidden="true" />
                 <p>
-                  Invoices and receipts will appear here after your first
-                  payment.
+                  {status === "ready"
+                    ? "No invoices or receipts yet."
+                    : "Invoices and receipts are currently unavailable."}
                 </p>
                 <Link className={styles.primary} href="/plans">
                   Choose a plan

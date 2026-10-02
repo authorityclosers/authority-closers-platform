@@ -29,7 +29,7 @@ import { openSettings } from "../settings-open";
 import { CHANGELOG } from "./changelog";
 import styles from "./settings-menu.module.css";
 
-type View = "main" | "language" | "plans" | "news";
+type View = "main" | "language" | "news";
 
 const SEEN_KEY = "ac.xray.news-seen";
 const SEEN_EVENT = "sales-xray:news-seen";
@@ -376,45 +376,6 @@ export function SettingsMenu({
               Reports: pick English, Hindi + English or Marathi + English when
               you start an analysis.
             </p>
-          </>
-        )}
-
-        {view === "plans" && (
-          <>
-            <Back label="Plans" onBack={() => setView("main")} />
-            <div className={styles.current}>
-              <span>Your plan</span>
-              <b>{allowance?.unlimited ? "Unlimited" : "Trial"}</b>
-              {minutes ? <small>{minutes.text}</small> : null}
-            </div>
-            <div className={styles.plans}>
-              {[
-                { name: "Personal", who: "800 min · ₹2,499/mo (GST included)" },
-                {
-                  name: "Organisation",
-                  who: "1,000 min/seat · ₹10,000/seat/mo + GST",
-                },
-                { name: "Enterprise", who: "50+ seats · SSO & custom SLA" },
-              ].map((plan, index) => (
-                <div
-                  key={plan.name}
-                  className={styles.plan}
-                  style={{ animationDelay: `${index * 60}ms` }}
-                >
-                  <b>{plan.name}</b>
-                  <small>{plan.who}</small>
-                </div>
-              ))}
-            </div>
-            <Link
-              className={styles.go}
-              href="/plans"
-              onClick={onClose}
-              data-see-plans
-            >
-              See plans and buy
-              <ChevronRight size={15} aria-hidden="true" />
-            </Link>
           </>
         )}
 

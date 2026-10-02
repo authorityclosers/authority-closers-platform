@@ -35,7 +35,7 @@ export const FIXTURE_PLANS = {
       status: "active",
       prices: {
         monthly_paise: 249_900,
-        yearly_paise: 2_699_000,
+        yearly_paise: 2_499_000,
         monthly_cents: null,
         yearly_cents: null,
       },
@@ -56,7 +56,7 @@ export const FIXTURE_PLANS = {
         },
       ],
       sort_order: 10,
-      revision: 4,
+      revision: 3,
     },
     {
       key: "organisation",
@@ -64,14 +64,14 @@ export const FIXTURE_PLANS = {
       audience: "For sales teams",
       status: "active",
       prices: {
-        monthly_paise: 1_000_000,
-        yearly_paise: 10_800_000,
+        monthly_paise: 199_900,
+        yearly_paise: 1_999_000,
         monthly_cents: null,
         yearly_cents: null,
       },
       included_minutes: 1000,
-      seat_min: 2,
-      seat_max: 49,
+      seat_min: 3,
+      seat_max: 50,
       longest_call_minutes: 120,
       retention_days: 730,
       rollover_months: 1,
@@ -93,39 +93,24 @@ export const FIXTURE_PLANS = {
         },
       ],
       sort_order: 20,
-      revision: 4,
+      revision: 3,
     },
     {
       key: "enterprise",
       name: "Enterprise",
       audience: "For large sales companies",
-      status: "active",
-      prices: {
-        monthly_paise: 1_000_000,
-        yearly_paise: 10_800_000,
-        monthly_cents: null,
-        yearly_cents: null,
-      },
-      included_minutes: 1000,
+      status: "coming_soon",
+      prices: null,
+      included_minutes: null,
       seat_min: 50,
       seat_max: null,
       longest_call_minutes: 180,
-      retention_days: 730,
-      rollover_months: 1,
-      feature_keys: [
-        "report",
-        "brief",
-        "trends",
-        "library",
-        "team_library",
-        "team_dashboard",
-        "sso",
-        "dedicated_support",
-        "custom_invoicing",
-      ],
+      retention_days: null,
+      rollover_months: null,
+      feature_keys: [],
       top_up_packs: [],
       sort_order: 30,
-      revision: 4,
+      revision: 1,
     },
   ],
 };
@@ -346,11 +331,6 @@ export const fixtureBilling: BillingClient = {
         request.interval === "month"
           ? plan.prices.monthly_paise
           : plan.prices.yearly_paise;
-      const subtotal = unit * request.seats;
-      const gst =
-        request.account === "organisation" || plan.key === "enterprise"
-          ? Math.round(subtotal * 0.18)
-          : 0;
       order = {
         order_id: orderId,
         kind: "subscription",
@@ -358,7 +338,7 @@ export const fixtureBilling: BillingClient = {
         status: "awaiting_payment",
         mode: "test",
         amount: {
-          minor: subtotal + gst,
+          minor: unit * request.seats,
           currency: "INR",
           gst_inclusive: true,
         },

@@ -223,7 +223,7 @@
 /* The plan card. */
 .plansGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 16px;
   align-items: stretch;
 }
@@ -334,8 +334,22 @@
 
 .gstRow {
   display: flex;
+  gap: 8px;
   justify-content: space-between;
   align-items: center;
+}
+
+.gstRow dd {
+  margin: 0;
+  text-align: right;
+}
+
+.planActionBtn:focus-visible,
+.seg button:focus-visible,
+.stepper button:focus-visible,
+.panel[tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--lx-teal);
+  outline-offset: 3px;
 }
 
 .gstTotal {
