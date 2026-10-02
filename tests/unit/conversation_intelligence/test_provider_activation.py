@@ -275,3 +275,117 @@ def test_activation_uses_the_persisted_admin_limit_below_release_cap() -> None:
         _row(config), bundle, budget_limit_paise=50_080
     )
     assert len(dispatches) == 3
+
+
+def _with_organisation(bundle, policy):
+    from ac_platform.conversation_intelligence.activation_contract import (
+        load_hosted_approval_bundle,
+    )
+
+    organisation = policy.model_copy(
+        update={"id": uuid4(), "tenant_id": uuid4(), "processing_person_id": uuid4()}
+    )
+    return load_hosted_approval_bundle(
+        bundle.model_copy(update={"organisation_acquisition_policies": (organisation,)}).to_json()
+    )
+
+
+def test_global_activation_requires_the_configuration_in_every_tenant_policy() -> None:
+    public_config = _registry_config("public-only-activation-v1")
+    organisation_config = _registry_config("organisation-only-activation-v1")
+    public_bundle = _approved_bundle(public_config)
+    organisation_policy = _approved_bundle(organisation_config).acquisition_policy
+    bundle = _with_organisation(public_bundle, organisation_policy)
+
+    for config in (public_config, organisation_config):
+        with pytest.raises(ConversationDenied, match="pinned activation approval"):
+            ConversationProviderAdmin._approved_configuration(_row(config), bundle)
+
+
+@pytest.mark.parametrize("public", [True, False])
+def test_global_activation_accepts_shared_configuration_once_per_stage(public) -> None:
+    config = _registry_config("shared-activation-v1")
+    public_bundle = _approved_bundle(config)
+    bundle = _with_organisation(public_bundle, public_bundle.acquisition_policy)
+    if not public:
+        bundle = bundle.model_copy(update={"acquisition_policy": None})
+    assert len(ConversationProviderAdmin._approved_configuration(_row(config), bundle)) == 3
+
+
+@pytest.mark.parametrize("public_requests, organisation_requests", [(1, 5), (5, 1)])
+def test_global_activation_uses_largest_tenant_c4_cap(
+    public_requests, organisation_requests
+) -> None:
+    config = _registry_config("shared-paid-activation-v1", funded=True, text_cost_paise=40)
+    config = replace(
+        config,
+        providers=tuple(
+            replace(provider, max_cost_paise=10 if provider.provider_id == "elevenlabs" else 40)
+            for provider in config.providers
+        ),
+    )
+    public_bundle = _approved_bundle(config, funded=True, text_cost_paise=40)
+    policy = public_bundle.acquisition_policy
+    stages = tuple(
+        stage.model_copy(
+            update={
+                "max_cost_paise": 10 if stage.stage == "C2" else 40,
+                "max_requests": public_requests if stage.stage == "C4" else 1,
+            }
+        )
+        for stage in policy.stages
+    )
+    public_policy = policy.model_copy(update={"stages": stages})
+    public_bundle = public_bundle.model_copy(
+        update={"acquisition_policy": public_policy, "budget_cap_paise": 250}
+    )
+    organisation_policy = public_policy.model_copy(
+        update={
+            "stages": tuple(
+                stage.model_copy(update={"max_requests": organisation_requests})
+                if stage.stage == "C4"
+                else stage
+                for stage in stages
+            )
+        }
+    )
+    bundle = _with_organisation(public_bundle, organisation_policy)
+
+    # Every stage fits the 100-paise limit. The five-request tenant's complete
+    # plan costs 10 + 5*40 + 40 = 250, so activation must reject the lower limit.
+    with pytest.raises(ConversationDenied, match="pinned activation approval"):
+        ConversationProviderAdmin._approved_configuration(
+            _row(config), bundle, budget_limit_paise=100
+        )
+    with pytest.raises(ConversationDenied, match="pinned activation approval"):
+        ConversationProviderAdmin._approved_configuration(
+            _row(config), bundle.model_copy(update={"budget_cap_paise": 100})
+        )
+    assert (
+        len(
+            ConversationProviderAdmin._approved_configuration(
+                _row(config), bundle, budget_limit_paise=250
+            )
+        )
+        == 3
+    )
+
+
+@pytest.mark.parametrize("field", ["permission_ref", "credential_ref"])
+def test_global_activation_requires_matching_metadata_for_each_tenant(field) -> None:
+    config = _registry_config("shared-metadata-activation-v1")
+    public_bundle = _approved_bundle(config)
+    policy = public_bundle.acquisition_policy
+    organisation_policy = policy.model_copy(
+        update={
+            "stages": tuple(
+                stage.model_copy(update={field: "ref:approval/organisation-only"})
+                if stage.stage == "C4"
+                else stage
+                for stage in policy.stages
+            )
+        }
+    )
+    bundle = _with_organisation(public_bundle, organisation_policy)
+    with pytest.raises(ConversationDenied, match="pinned activation approval"):
+        ConversationProviderAdmin._approved_configuration(_row(config), bundle)

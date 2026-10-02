@@ -130,6 +130,7 @@ class ConversationProviderAdmin:
         provider_id: str,
         model_id: str,
         recipe_revision: str,
+        tenant_id: UUID | None = None,
     ) -> tuple[Any, ...]:
         if not bundle.acquisition_tenant_ids():
             # Exact-source StageApproval rows cannot authorize a global Admin
@@ -138,8 +139,10 @@ class ConversationProviderAdmin:
             return ()
         return tuple(
             item
-            for tenant_id in bundle.acquisition_tenant_ids()
-            if (policy := bundle.acquisition_policy_for(tenant_id)) is not None
+            for approved_tenant_id in (
+                bundle.acquisition_tenant_ids() if tenant_id is None else (tenant_id,)
+            )
+            if (policy := bundle.acquisition_policy_for(approved_tenant_id)) is not None
             for stages in policy.stage_sets()
             for item in stages
             if (
@@ -193,33 +196,37 @@ class ConversationProviderAdmin:
                         route.required_input_stage,
                     ),
                 )
-                candidates = cls._approved_route(
-                    bundle,
-                    configuration_sha256=config.digest,
-                    stage=stage,
-                    provider_id=dispatch.provider_id,
-                    model_id=dispatch.model_id,
-                    recipe_revision=dispatch.recipe_revision,
-                )
-                if not candidates:
-                    raise ValueError
-                for candidate in candidates:
-                    if (
-                        candidate.max_cost_paise != dispatch.max_cost_paise
-                        or candidate.credential_ref != provider.credential_ref
-                        or candidate.provider_terms_ref != provider.provider_terms_ref
-                        or candidate.privacy_ref != provider.privacy_ref
-                        or candidate.pricing_ref != provider.pricing_ref
-                        or candidate.free_allowance_ref != provider.free_allowance_ref
-                        or candidate.permission_ref != provider.permission_ref
-                    ):
-                        continue
-                    dispatches.append(dispatch)
-                    stage_costs[stage] = dispatch.max_cost_paise
-                    stage_max_requests[stage] = candidate.max_requests
-                    break
-                else:
-                    raise ValueError
+                # Activation selects one global operations configuration.
+                # Every affected tenant must approve each of its routes.
+                for tenant_id in bundle.acquisition_tenant_ids():
+                    candidates = cls._approved_route(
+                        bundle,
+                        configuration_sha256=config.digest,
+                        stage=stage,
+                        provider_id=dispatch.provider_id,
+                        model_id=dispatch.model_id,
+                        recipe_revision=dispatch.recipe_revision,
+                        tenant_id=tenant_id,
+                    )
+                    for candidate in candidates:
+                        if (
+                            candidate.max_cost_paise != dispatch.max_cost_paise
+                            or candidate.credential_ref != provider.credential_ref
+                            or candidate.provider_terms_ref != provider.provider_terms_ref
+                            or candidate.privacy_ref != provider.privacy_ref
+                            or candidate.pricing_ref != provider.pricing_ref
+                            or candidate.free_allowance_ref != provider.free_allowance_ref
+                            or candidate.permission_ref != provider.permission_ref
+                        ):
+                            continue
+                        stage_max_requests[stage] = max(
+                            stage_max_requests.get(stage, 0), candidate.max_requests
+                        )
+                        break
+                    else:
+                        raise ValueError
+                dispatches.append(dispatch)
+                stage_costs[stage] = dispatch.max_cost_paise
             # C2 transcription and C5 coaching run once. C4 is the only
             # stage whose approved request count fans out for chunk/retry
             # work. The cap therefore covers one C2, all approved C4
