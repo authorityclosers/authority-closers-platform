@@ -168,24 +168,19 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
         root_runner
     )
     assert root_runner.count('AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST="$require_history"') == 2
-    codec = _required_step(application, "Require codec and filesystem tools for media regressions")
-    assert [shlex.split(line) for line in codec["run"].splitlines()] == [
-        ["set", "-euo", "pipefail"],
-        ["sudo", "apt-get", "update"],
-        [
-            "sudo",
-            "apt-get",
-            "install",
-            "--yes",
-            "--no-install-recommends",
-            "ffmpeg",
-            "e2fsprogs",
-            "util-linux",
-        ],
-        ["command", "-v", "ffmpeg"],
-        ["command", "-v", "ffprobe"],
-        ["ffmpeg", "-version"],
-        ["ffprobe", "-version"],
+    codec = _required_step(
+        application, "Require codec, filesystem and locked browser prerequisites"
+    )
+    assert codec["timeout-minutes"] == 13
+    assert shlex.split(codec["run"]) == [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/ci/ci_prerequisites.py",
+        "codec",
+        "filesystem",
+        "browser",
     ]
     browser = _required_step(
         application, "Prove registration consent and server-rendered readiness"
@@ -241,8 +236,7 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
 
     names = [step.get("name") for step in gate["steps"]]
     install = _required_step(gate, "Install locked browser-gate dependencies")
-    codecs = _required_step(gate, "Install FFmpeg prerequisites for acquisition browser")
-    browser = _required_step(gate, "Install locked acquisition browser")
+    browser = _required_step(gate, "Require codec and locked acquisition browser")
     native = _required_step(gate, "Build verified AudioAtlas for acquisition browser")
     build = _required_step(gate, "Build Sales Xray production standalone")
     required = _required_step(gate, "Require Sales Xray acquisition browser journey")
@@ -256,22 +250,16 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
     assert receipt["with"]["if-no-files-found"] == "error"
     assert "sales-xray-acquisition-browser-receipt.json" in receipt["with"]["path"]
     assert "proof.json" in receipt["with"]["path"]
-    assert names.index(install["name"]) < names.index(codecs["name"]) < names.index(browser["name"])
-    assert [shlex.split(line) for line in codecs["run"].splitlines()] == [
-        ["set", "-euo", "pipefail"],
-        ["sudo", "apt-get", "update"],
-        [
-            "sudo",
-            "apt-get",
-            "install",
-            "--yes",
-            "--no-install-recommends",
-            "ffmpeg",
-        ],
-        ["command", "-v", "ffmpeg"],
-        ["command", "-v", "ffprobe"],
-        ["ffmpeg", "-version"],
-        ["ffprobe", "-version"],
+    assert names.index(install["name"]) < names.index(browser["name"])
+    assert browser["timeout-minutes"] == 13
+    assert shlex.split(browser["run"]) == [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/ci/ci_prerequisites.py",
+        "codec",
+        "browser",
     ]
     assert names.index(browser["name"]) < names.index(native["name"])
     assert names.index(native["name"]) < names.index(build["name"])
