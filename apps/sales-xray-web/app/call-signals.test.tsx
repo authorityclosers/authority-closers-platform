@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { CallSignals, clearPromisesDone } from "./call-signals";
 import type { Transcript } from "./report-contract";
+import { ReportReadingProvider } from "./report-reading-context";
 import { saveSpeakerProfiles } from "./speaker-profiles";
 
 (
@@ -76,4 +77,47 @@ it("clears ticked promises for one call only", () => {
   expect(clearPromisesDone(CALL)).toBe(true);
   expect(localStorage.getItem(PROMISES)).toBeNull();
   expect(localStorage.getItem(other)).toBe("[]");
+});
+
+it("includes talk-overs beyond the six-row preview in Document", async () => {
+  const source: Transcript = {
+    ...transcript,
+    segments: Array.from({ length: 8 }, (_, index) => [
+      {
+        id: `buyer-${index}`,
+        speaker_id: "buyer",
+        start_ms: index * 10_000,
+        end_ms: index * 10_000 + 8_000,
+        text: `Fictional buyer detail ${index + 1}.`,
+      },
+      {
+        id: `rep-${index}`,
+        speaker_id: "rep",
+        start_ms: index * 10_000 + 1_000,
+        end_ms: index * 10_000 + 2_000,
+        text: `Fictional interruption ${index + 1}.`,
+      },
+    ]).flat(),
+  };
+  const render = async (documentView: boolean) =>
+    act(async () =>
+      root.render(
+        <ReportReadingProvider
+          reading={documentView}
+          documentView={documentView}
+        >
+          <CallSignals callId={CALL} transcript={source} onSeek={vi.fn()} />
+        </ReportReadingProvider>,
+      ),
+    );
+  const card = () =>
+    [...host.querySelectorAll("section")].find((element) =>
+      element.querySelector("h3")?.textContent?.includes("Talked over them"),
+    )!;
+  await render(false);
+  expect(card().querySelectorAll("li")).toHaveLength(6);
+  await render(true);
+  expect(card().querySelectorAll("li")).toHaveLength(8);
+  expect(card().textContent).toContain("Fictional interruption 8.");
+  expect(card().textContent).toContain("Fictional buyer detail 8.");
 });

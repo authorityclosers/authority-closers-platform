@@ -87,6 +87,12 @@ def main() -> None:
             expect(summary).to_be_visible()
             assert summary.evaluate("el => el.closest('details') === null")
             expect(summary).to_have_text(SUMMARY)
+            facts = workspace.locator('[aria-label="Key facts"]')
+            assert not facts.locator("button, input, select, form").count()
+            expect(facts).to_contain_text("Source facts and saved confirmations.")
+            raw = workspace.locator('[data-report-mode-section="raw-data"]')
+            expect(raw).to_have_count(1)
+            assert not raw.locator("button, input").count()
             field = workspace.locator('[aria-label="Key facts"] span[class*="value"]').first
             base_size = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
             for size, scale in [("112.5", 1.125), ("125", 1.25), ("100", 1.0)]:
@@ -120,6 +126,10 @@ def main() -> None:
                 path = OUT / f"full-summary-{width}-{'renderer' if print_query else 'native'}.pdf"
                 page.pdf(path=str(path), prefer_css_page_size=True, print_background=True)
                 assert SUMMARY in pdf_text(path), "Full summary missing from PDF"
+                assert not workspace.locator(
+                    '[aria-label="Key facts"] button, [aria-label="Key facts"] input'
+                ).count()
+                assert "Source facts and saved confirmations." in pdf_text(path)
                 assert pdf_text(path).count("EvidenceEndMarker") == 2
                 long_report = PdfReader(path)
                 assert len(long_report.pages) > 8, "Fixture must span more pages than panels"
@@ -217,6 +227,7 @@ def main() -> None:
                 "scrolled_view_toggle_replaces_history": True,
                 "span_text_scales": True,
                 "long_quotes_unclamped": True,
+                "static_document_facts_and_raw_data": True,
                 "page_errors": errors,
                 "external_requests": external,
             },

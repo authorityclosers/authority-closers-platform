@@ -19,10 +19,14 @@ import {
   useSpeakerProfiles,
 } from "./speaker-profiles";
 import styles from "./key-facts.module.css";
+import { useReportDocument } from "./report-reading-context";
 
 const INDUSTRIES = SPEAKER_ICONS.filter((icon) => !icon.generic);
 
 function Heard({ ms, onSeek }: { ms: number; onSeek: (ms: number) => void }) {
+  const documentView = useReportDocument();
+  if (documentView)
+    return <span className={styles.heard}>{formatClock(ms)}</span>;
   return (
     <button
       type="button"
@@ -77,6 +81,7 @@ function ChipPicker({
   disabled?: boolean;
   onChange: (value: string | null) => void;
 }) {
+  const documentView = useReportDocument();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -94,6 +99,7 @@ function ChipPicker({
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
+  if (documentView) return <span>{value ?? "Not labelled"}</span>;
   return (
     <div ref={box} className={styles.picker}>
       <button
@@ -157,10 +163,13 @@ export function KeyFacts({
   durationMs: number;
   onSeek: (ms: number) => void;
 }) {
-  const { facts, save, canSave } = useCallFacts(callId);
+  const documentView = useReportDocument();
+  const { facts, save, canSave: writable } = useCallFacts(callId);
+  const canSave = writable && !documentView;
   const { profiles } = useSpeakerProfiles(callId);
   const accountName = getShellState().profileName;
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editingState, setEditing] = useState<string | null>(null);
+  const editing = documentView ? null : editingState;
   const [draft, setDraft] = useState("");
 
   const voices = useMemo(() => voicesOf(transcript), [transcript]);
@@ -256,7 +265,11 @@ export function KeyFacts({
       <header className={styles.head}>
         <div>
           <h3>Key facts</h3>
-          <p>Checked before we trust them. Tap to confirm or fix.</p>
+          <p>
+            {documentView
+              ? "Source facts and saved confirmations."
+              : "Checked before we trust them. Tap to confirm or fix."}
+          </p>
         </div>
         <small>Saved on this device for now</small>
       </header>
@@ -267,7 +280,7 @@ export function KeyFacts({
         status={
           people.length ? (
             <Confirmed>Named</Confirmed>
-          ) : (
+          ) : documentView ? null : (
             <button
               type="button"
               className={styles.add}
@@ -408,31 +421,35 @@ export function KeyFacts({
       <Row
         label="How firm is the next step"
         value={
-          <div
-            className={styles.steps}
-            role="radiogroup"
-            aria-label="How firm is the next step"
-          >
-            {NEXT_STEP_FIRMNESS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={facts.values.firmness === option}
-                title={option}
-                disabled={!canSave}
-                onClick={() =>
-                  save({
-                    kind: "value",
-                    id: "firmness",
-                    value: facts.values.firmness === option ? null : option,
-                  })
-                }
-              >
-                {FIRMNESS_SHORT[option] ?? option}
-              </button>
-            ))}
-          </div>
+          documentView ? (
+            (facts.values.firmness ?? "Not set")
+          ) : (
+            <div
+              className={styles.steps}
+              role="radiogroup"
+              aria-label="How firm is the next step"
+            >
+              {NEXT_STEP_FIRMNESS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={facts.values.firmness === option}
+                  title={option}
+                  disabled={!canSave}
+                  onClick={() =>
+                    save({
+                      kind: "value",
+                      id: "firmness",
+                      value: facts.values.firmness === option ? null : option,
+                    })
+                  }
+                >
+                  {FIRMNESS_SHORT[option] ?? option}
+                </button>
+              ))}
+            </div>
+          )
         }
         status={facts.values.firmness ? <Confirmed>Set</Confirmed> : null}
       />

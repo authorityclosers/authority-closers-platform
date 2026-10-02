@@ -3,8 +3,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import fixture from "../tests/fixtures/dipak-overview.json";
-import { readCallFacts } from "./call-facts";
+import { readCallFacts, saveCallFact } from "./call-facts";
 import { KeyFacts } from "./key-facts";
+import { ReportReadingProvider } from "./report-reading-context";
 import type { SalesReport, Transcript } from "./report-contract";
 import { saveSpeakerProfiles } from "./speaker-profiles";
 
@@ -71,16 +72,18 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-async function render(source: Transcript = transcript) {
+async function render(source: Transcript = transcript, documentView = false) {
   await act(async () =>
     root.render(
-      <KeyFacts
-        callId={CALL}
-        transcript={source}
-        report={report}
-        durationMs={transcript.duration_ms}
-        onSeek={onSeek}
-      />,
+      <ReportReadingProvider reading={documentView} documentView={documentView}>
+        <KeyFacts
+          callId={CALL}
+          transcript={source}
+          report={report}
+          durationMs={transcript.duration_ms}
+          onSeek={onSeek}
+        />
+      </ReportReadingProvider>,
     ),
   );
 }
@@ -204,4 +207,25 @@ it("shows saved speaker names before a role is selected", async () => {
   });
   expect(row("Who is on the call").textContent).toContain("Fictional Buyer");
   expect(row("Who is on the call").textContent).not.toContain("prospect");
+});
+
+it("prints saved facts rather than an open editor or interactive choices", async () => {
+  await act(async () => {
+    saveCallFact(CALL, { kind: "value", id: "firmness", value: "Invite sent" });
+    saveCallFact(CALL, { kind: "number", id: "a3:0", value: "Yearly sales" });
+    [...row("Time asked for").querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Fix")!
+      .click();
+  });
+  expect(host.querySelector("form")).not.toBeNull();
+  await render(transcript, true);
+  expect(host.querySelector("button, input, select, form")).toBeNull();
+  expect(row("Time asked for").textContent).toContain("Up to 15 min");
+  expect(row("Time asked for").textContent).toContain("00:00");
+  expect(row("Industry").textContent).toContain("Not found");
+  expect(row("How firm is the next step").textContent).toContain("Invite sent");
+  expect(host.textContent).toContain("Yearly sales");
+  expect(host.textContent).toContain("₹1 CR");
+  await render();
+  expect(host.querySelector("form")).not.toBeNull();
 });

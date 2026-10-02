@@ -21,6 +21,7 @@ import {
   useSpeakerProfiles,
 } from "./speaker-profiles";
 import styles from "./report-raw-data.module.css";
+import { useReportDocument } from "./report-reading-context";
 
 const DIMENSION_WORDS: Record<string, string> = {
   observed: "Seen",
@@ -38,6 +39,9 @@ const KIND_WORDS = {
 };
 
 function Time({ ms, onSeek }: { ms: number; onSeek: (ms: number) => void }) {
+  const documentView = useReportDocument();
+  if (documentView)
+    return <span className={styles.time}>{formatClock(ms)}</span>;
   return (
     <button
       type="button"
@@ -108,6 +112,7 @@ export function ReportRawData({
   runId?: string | null;
   onSeek: (ms: number) => void;
 }) {
+  const documentView = useReportDocument();
   const [query, setQuery] = useState("");
   const { profiles } = useSpeakerProfiles(callId);
   const { facts } = useCallFacts(callId);
@@ -129,7 +134,7 @@ export function ReportRawData({
   const voices = data.people.map((person) => person.id);
   const nameOf = (id: string) =>
     speakerName(voices.indexOf(id), profiles[id], accountName);
-  const needle = query.trim().toLocaleLowerCase();
+  const needle = documentView ? "" : query.trim().toLocaleLowerCase();
   const matches = (...parts: string[]) =>
     !needle || parts.some((part) => part.toLocaleLowerCase().includes(needle));
 
@@ -223,25 +228,27 @@ export function ReportRawData({
 
   return (
     <div className={styles.raw}>
-      <div className={styles.tools}>
-        <label className={styles.search}>
-          <Search size={14} aria-hidden="true" />
-          <input
-            value={query}
-            placeholder="Search questions, numbers and findings"
-            aria-label="Search the raw data"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <button type="button" onClick={exportJson}>
-          <Download size={14} aria-hidden="true" />
-          JSON
-        </button>
-        <button type="button" onClick={exportCsv}>
-          <Download size={14} aria-hidden="true" />
-          CSV
-        </button>
-      </div>
+      {!documentView && (
+        <div className={styles.tools}>
+          <label className={styles.search}>
+            <Search size={14} aria-hidden="true" />
+            <input
+              value={query}
+              placeholder="Search questions, numbers and findings"
+              aria-label="Search the raw data"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <button type="button" onClick={exportJson}>
+            <Download size={14} aria-hidden="true" />
+            JSON
+          </button>
+          <button type="button" onClick={exportCsv}>
+            <Download size={14} aria-hidden="true" />
+            CSV
+          </button>
+        </div>
+      )}
 
       <Block title="The call">
         <dl className={styles.facts}>
