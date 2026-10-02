@@ -986,8 +986,13 @@
   scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
 }
 
-.docContent :where(p, li, blockquote, dd, td, button, summary) {
-  font-size: var(--document-font-size);
+.docContent
+  :where(:not(h1, h2, h3, h4, h5, h6, h1 *, h2 *, h3 *, h4 *, h5 *, h6 *)) {
+  font-size: var(--document-font-size) !important;
+}
+
+.docContent * {
+  -webkit-line-clamp: unset !important;
 }
 
 .docContent :where(table) {

@@ -70,6 +70,25 @@ def main() -> None:
             expect(summary).to_be_visible()
             assert summary.evaluate("el => el.closest('details') === null")
             expect(summary).to_have_text(SUMMARY)
+            field = workspace.locator('[aria-label="Key facts"] span[class*="value"]').first
+            base_size = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
+            for size, scale in [("112.5", 1.125), ("125", 1.25), ("100", 1.0)]:
+                page.get_by_role("button", name=f"Text size {size}%", exact=True).click()
+                expect(workspace).to_have_attribute("data-text-size", size)
+                actual = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
+                assert abs(actual - base_size * scale) < 0.1
+            for selector in ["[class*='who'] q", "[class*='bubble'] p"]:
+                quote = workspace.locator(selector).first
+                quote.evaluate(
+                    "el => el.textContent = 'Invented long evidence phrase. '.repeat(40)"
+                )
+                bounds = quote.evaluate("""el => ({
+                    height: el.clientHeight, fullHeight: el.scrollHeight,
+                    clamp: getComputedStyle(el).webkitLineClamp,
+                })""")
+                assert bounds["clamp"] == "none"
+                assert bounds["height"] > 100
+                assert bounds["fullHeight"] <= bounds["height"] + 1
             skills = workspace.locator("[data-document-skills] section")
             expect(skills).to_have_count(4)
             for skill in skills.all():
@@ -188,6 +207,8 @@ def main() -> None:
                 "revision": "synthetic-display-r1",
                 "a4_pages": 7,
                 "scrolled_view_toggle_replaces_history": True,
+                "span_text_scales": True,
+                "long_quotes_unclamped": True,
                 "page_errors": errors,
                 "external_requests": external,
             },
