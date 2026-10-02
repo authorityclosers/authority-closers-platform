@@ -1140,6 +1140,46 @@ it("preserves the current Reading section when moving through Document and Secti
   expect(mode().dataset.reportSection).toBe("moments");
 });
 
+it.each(["reading", "document"])(
+  "positions the selected Transcript heading after rendering %s from Sections",
+  async (nextView) => {
+    window.history.replaceState(
+      null,
+      "",
+      `/?call=${call}&view=tabs&section=transcript`,
+    );
+    const destinations: HTMLElement[] = [];
+    const restore = replacePrototype(
+      "scrollIntoView",
+      function (this: HTMLElement) {
+        destinations.push(this);
+      },
+    );
+    try {
+      await render(call);
+      await settle();
+      destinations.length = 0;
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            `[title="${nextView === "document" ? "Document" : "Reading"} view"]`,
+          )!
+          .click(),
+      );
+      await settle();
+      const heading = container.querySelector<HTMLElement>(
+        '[data-report-mode-section="transcript"] h2',
+      )!;
+      expect(mode().dataset.view).toBe(nextView);
+      expect(destinations).toEqual([heading]);
+      expect(heading.isConnected).toBe(true);
+      expect(document.activeElement).toBe(heading);
+    } finally {
+      restore();
+    }
+  },
+);
+
 it("renders only supplied document metadata and prints without a fake Word action", async () => {
   const print = vi.fn();
   vi.stubGlobal("print", print);
@@ -1152,7 +1192,7 @@ it("renders only supplied document metadata and prints without a fake Word actio
         documentData={{
           title: "Bound call",
           repName: "Fictional seller",
-          analysisBasis: { transcriptSource: "fixture-r2" },
+          analysisBasis: { transcriptRevision: "fixture-r2" },
         }}
       />,
     ),
@@ -1160,7 +1200,7 @@ it("renders only supplied document metadata and prints without a fake Word actio
   expect(mode().dataset.view).toBe("document");
   expect(mode().dataset.reportPrint).toBe("true");
   expect(container.textContent).toContain("Bound call");
-  expect(container.textContent).toContain("fixture-r2");
+  expect(container.textContent).toContain("Transcript revision: fixture-r2");
   expect(container.textContent).not.toMatch(/2 October|34:12|Download Word/);
   expect(print).not.toHaveBeenCalled();
   const button = [

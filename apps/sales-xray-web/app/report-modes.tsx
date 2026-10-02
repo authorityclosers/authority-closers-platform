@@ -48,7 +48,7 @@ export type DocumentReportData = {
   analysedDate?: string;
   analysisBasis?: {
     recordingLength?: string;
-    transcriptSource?: string;
+    transcriptRevision?: string;
     analysisVersion?: string;
   };
 };
@@ -526,9 +526,9 @@ function renderDocumentView(
                         Recording length: {basis.recordingLength}
                       </p>
                     )}
-                    {basis.transcriptSource && (
+                    {basis.transcriptRevision && (
                       <p className={styles.docBasisText}>
-                        Transcript: {basis.transcriptSource}
+                        Transcript revision: {basis.transcriptRevision}
                       </p>
                     )}
                     {basis.analysisVersion && (
@@ -934,7 +934,7 @@ export function ReportModes({
   function changeView(nextView: View) {
     const section =
       view !== "tabs" ? currentSection : (selected ?? panels[0]?.id);
-    if (section) navigate(section, nextView);
+    if (section && nextView !== view) navigate(section, nextView, true);
   }
 
   // One horizontal row: section tabs (Tabbed) or section links (Reading/Document),
@@ -1110,7 +1110,12 @@ export function ReportModes({
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
         {view === "document" ? (
-          <ReportReadingProvider reading inline navigate={navigateToReport}>
+          <ReportReadingProvider
+            reading
+            inline
+            documentView
+            navigate={navigateToReport}
+          >
             {renderDocumentView(id, panels, documentData)}
           </ReportReadingProvider>
         ) : (

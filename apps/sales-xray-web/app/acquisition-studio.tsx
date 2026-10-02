@@ -3435,7 +3435,7 @@ export function AcquisitionStudio({
                       recordingLength: formatClock(
                         result.transcript.duration_ms,
                       ),
-                      transcriptSource: report.transcript_revision,
+                      transcriptRevision: report.transcript_revision,
                     },
                   }}
                   panels={[

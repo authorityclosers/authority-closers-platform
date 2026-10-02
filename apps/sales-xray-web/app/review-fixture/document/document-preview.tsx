@@ -27,7 +27,7 @@ export function DocumentPreview() {
             workspaceName: "Synthetic display only",
             repName: "Fictional seller",
             analysisBasis: {
-              transcriptSource: syntheticReport.transcript_revision,
+              transcriptRevision: syntheticReport.transcript_revision,
             },
           }}
           panels={[
