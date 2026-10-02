@@ -37,6 +37,7 @@ from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
 from ac_platform.outbox import models as outbox_models
+from ac_platform.plans import models as plan_models
 from ac_platform.practice import focus_models
 from ac_platform.practice import models as practice_models
 from ac_platform.providers import models as provider_models
@@ -66,6 +67,7 @@ MODEL_MODULES = (
     planning_models,
     certificate_models,
     outbox_models,
+    plan_models,
     provider_models,
     practice_models,
     focus_models,
