@@ -216,23 +216,23 @@ describe("local Studio video wire transport", () => {
       .spyOn(ClientRequest.prototype, "write")
       .mockImplementation(function (this: ClientRequest, chunk, callback) {
         const written = callback as unknown as (error?: Error | null) => void;
-        if (writes.mock.calls.length !== 1)
+        if (writes.mock.calls.length !== 2)
           return originalWrite.call(this, chunk, "utf8", written);
-        // Make the real denial arrive before another write can complete,
-        // rather than relying on the loopback socket's scheduling order.
+        // Hold the second write callback until the real denial arrives,
+        // so stopping the remaining slices does not depend on socket timing.
         let responseReceived = false;
-        let releaseWrite: (() => void) | undefined;
+        let releaseSecondWrite: (() => void) | undefined;
         this.once("response", () => {
           responseReceived = true;
-          releaseWrite?.();
+          releaseSecondWrite?.();
         });
         return originalWrite.call(
           this,
           chunk,
           "utf8",
           (error?: Error | null) => {
-            releaseWrite = () => written(error);
-            if (error || responseReceived) releaseWrite();
+            releaseSecondWrite = () => written(error);
+            if (error || responseReceived) releaseSecondWrite();
           },
         );
       });
@@ -263,7 +263,7 @@ describe("local Studio video wire transport", () => {
           expect(response.status).toBe(403);
           expect(await response.json()).toEqual({ code: "media_forbidden" });
           expect(cancelled).toHaveBeenCalledOnce();
-          expect(writes.mock.calls.length).toBeLessThan(4);
+          expect(writes).toHaveBeenCalledTimes(2);
           expect(
             writes.mock.calls.every(
               ([chunk]) =>
