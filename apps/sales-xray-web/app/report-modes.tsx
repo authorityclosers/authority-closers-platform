@@ -20,7 +20,6 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -612,6 +611,17 @@ function renderReportPanels(
   );
 }
 
+/**
+ * Nobody wants the full transcript while reading (AUT-785): Reading leaves it
+ * out, and Document keeps it only as the last appendix for print and PDF.
+ */
+function panelsForView(panels: ReportModePanel[], view: View) {
+  if (view === "tabs") return panels;
+  const rest = panels.filter((panel) => panel.id !== "transcript");
+  const transcript = panels.find((panel) => panel.id === "transcript");
+  return view === "document" && transcript ? [...rest, transcript] : rest;
+}
+
 /** Keeps all real report sections available in a bookmarkable reading, tabbed or document view. */
 
 export function ReportModes({
@@ -750,19 +760,7 @@ export function ReportModes({
     ? (linked.view ?? preferredView)
     : (local.view ?? preferredView);
 
-  // Owner order 2 Oct (AUT-741 addendum, item 4): Nobody wants the full transcript while reading.
-  // Remove the transcript section from Reading mode. In Document view, keep it only as the last appendix for print and PDF.
-  const activePanels = useMemo(() => {
-    if (view === "reading") {
-      return panels.filter((panel) => panel.id !== "transcript");
-    }
-    if (view === "document") {
-      const nonTranscript = panels.filter((panel) => panel.id !== "transcript");
-      const transcript = panels.find((panel) => panel.id === "transcript");
-      return transcript ? [...nonTranscript, transcript] : nonTranscript;
-    }
-    return panels;
-  }, [panels, view]);
+  const activePanels = panelsForView(panels, view);
 
   const selected = activePanels.some((panel) => panel.id === address.section)
     ? address.section

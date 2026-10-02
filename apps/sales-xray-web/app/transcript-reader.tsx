@@ -3,11 +3,9 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -228,8 +226,14 @@ export function TranscriptReader({
   const getSpeakerRole = useCallback(
     (speakerId: string | null): string | null => {
       if (!speakerId) return null;
-      const roleKey = profiles[speakerId]?.role ?? roles?.[speakerId];
-      return roleKey ? (ROLE_WORDS[roleKey as SpeakerRole] ?? null) : null;
+      const role: SpeakerRole | null =
+        profiles[speakerId]?.role ??
+        (roles?.seller === speakerId
+          ? "salesperson"
+          : roles?.prospect === speakerId
+            ? "prospect"
+            : null);
+      return role ? ROLE_WORDS[role] : null;
     },
     [profiles, roles],
   );
@@ -287,12 +291,12 @@ export function TranscriptReader({
     return transcript.segments.filter((seg) =>
       seg.text.toLowerCase().includes(q),
     );
-  }, [query, transcript?.segments]);
+  }, [query, transcript]);
 
-  // Reset active match index on query change
-  useEffect(() => {
+  const search = (value: string) => {
+    setQuery(value);
     setActiveMatchIndex(0);
-  }, [query]);
+  };
 
   // Filtered turns based on speaker
   const visibleTurns = useMemo(() => {
@@ -420,7 +424,7 @@ export function TranscriptReader({
                 type="search"
                 className={styles.searchInput}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => search(e.target.value)}
                 placeholder="Search transcript..."
                 aria-label="Search transcript"
               />
@@ -428,7 +432,7 @@ export function TranscriptReader({
                 <button
                   type="button"
                   className={styles.clearSearch}
-                  onClick={() => setQuery("")}
+                  onClick={() => search("")}
                   aria-label="Clear search"
                 >
                   <X size={12} aria-hidden="true" />

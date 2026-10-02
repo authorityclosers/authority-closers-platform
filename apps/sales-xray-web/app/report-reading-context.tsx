@@ -31,13 +31,6 @@ export function goToReportSection(section: string) {
   );
 }
 
-/** Requests opening the full-screen transcript reader. */
-export const OPEN_TRANSCRIPT_EVENT = "sales-xray:open-transcript";
-
-export function openTranscriptReader() {
-  window.dispatchEvent(new CustomEvent(OPEN_TRANSCRIPT_EVENT));
-}
-
 export function useReportNavigation(): NavigateToReport | null {
   return useContext(ReportNavigationContext);
 }

@@ -334,12 +334,6 @@ export function AcquisitionStudio({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
-  useEffect(() => {
-    const handler = () => setTranscriptReaderOpen(true);
-    window.addEventListener("sales-xray:open-transcript", handler);
-    return () =>
-      window.removeEventListener("sales-xray:open-transcript", handler);
-  }, []);
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);

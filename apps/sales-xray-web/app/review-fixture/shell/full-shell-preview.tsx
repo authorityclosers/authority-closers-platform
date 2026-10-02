@@ -72,12 +72,6 @@ export function FullShellPreview() {
     "Fictional fixture. Actions here do not reach any service.",
   );
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
-  useEffect(() => {
-    const handler = () => setTranscriptReaderOpen(true);
-    window.addEventListener("sales-xray:open-transcript", handler);
-    return () =>
-      window.removeEventListener("sales-xray:open-transcript", handler);
-  }, []);
   const transcript = {
     ...baseFixture.transcript,
     duration_ms: FIXTURE_DURATION_MS,
