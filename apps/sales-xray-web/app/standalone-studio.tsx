@@ -33,7 +33,7 @@ import { useProcessingReview } from "./processing-review-port";
 import { SalesXrayFixturePreview } from "./sales-xray-fixture-preview";
 import {
   readSalesXrayWorkspaces,
-  type SalesXrayWorkspaceChoices,
+  type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
 import { WorkspaceNoAccess } from "./workspace-no-access";
 
@@ -49,8 +49,10 @@ type IdentityWorkspaceChoices = Readonly<{
   workspaces: readonly Workspace[];
 }>;
 
-export type WorkspaceChoices = SalesXrayWorkspaceChoices &
-  Pick<IdentityWorkspaceChoices, "person_id" | "session_id">;
+export type WorkspaceChoices = IdentityWorkspaceChoices &
+  Readonly<{
+    salesXrayWorkspaces?: readonly SalesXrayWorkspace[];
+  }>;
 
 type ViewState =
   | { kind: "loading" }
@@ -132,7 +134,10 @@ export function parseWorkspaceChoices(
   };
 }
 
-async function readWorkspaceChoices(signal: AbortSignal) {
+async function readWorkspaceChoices(
+  signal: AbortSignal,
+  standalone: boolean,
+): Promise<WorkspaceChoices | null> {
   const response = await fetch("/v1/me/workspaces", {
     method: "GET",
     credentials: "same-origin",
@@ -145,6 +150,8 @@ async function readWorkspaceChoices(signal: AbortSignal) {
   if (!response.ok) throw new Error("workspace_read_rejected");
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
+  // Academy embeds retain their existing identity/chooser contract.
+  if (!standalone) return choices;
   // The legacy endpoint confirms session identity only. Sales Xray choices
   // and selection come exclusively from its own directory.
   const directory = await readSalesXrayWorkspaces(signal);
@@ -160,6 +167,7 @@ async function readWorkspaceChoices(signal: AbortSignal) {
     person_id: choices.person_id,
     session_id: choices.session_id,
     ...directory,
+    salesXrayWorkspaces: directory.workspaces,
     selected_tenant_id: selected,
   };
 }
@@ -280,7 +288,7 @@ function StandaloneStudioView({
     const requestGeneration = ++generation.current;
     activeController.current?.abort();
     activeController.current = controller;
-    void readWorkspaceChoices(controller.signal)
+    void readWorkspaceChoices(controller.signal, !embedded)
       .then((choices) => {
         if (
           controller.signal.aborted ||
@@ -322,7 +330,13 @@ function StandaloneStudioView({
         activeController.current = null;
       if (generation.current === requestGeneration) generation.current += 1;
     };
-  }, [attempt, observeAccount, review.fixtureRequested, review.readOnly]);
+  }, [
+    attempt,
+    embedded,
+    observeAccount,
+    review.fixtureRequested,
+    review.readOnly,
+  ]);
 
   useEffect(
     () => () => {
@@ -380,7 +394,7 @@ function StandaloneStudioView({
   const identityKey = accountChoices
     ? JSON.stringify([accountChoices.person_id, accountChoices.session_id])
     : null;
-  const selectedWorkspace = accountChoices?.workspaces.find(
+  const selectedWorkspace = accountChoices?.salesXrayWorkspaces?.find(
     (item) => item.tenant_id === accountChoices.selected_tenant_id,
   );
   const salesXrayEnabled = selectedWorkspace?.sales_xray_enabled !== false;
@@ -479,7 +493,7 @@ function StandaloneStudioView({
           ? false
           : null,
     retry,
-    workspaces: accountChoices?.workspaces,
+    workspaces: accountChoices?.salesXrayWorkspaces,
     ...(review.readOnly === false && !review.fixtureRequested
       ? { requestAccountSignIn, requestAnalysisAccess }
       : {}),

@@ -153,6 +153,7 @@ function LightboxShellFrame({
   const [, setCounts] = useState<CallSummary | null>(cached.counts);
   const workspaces = access?.workspaces ?? [];
   const workspacesSettled = access?.status === "ready";
+  const [workspaceReloadPending, setWorkspaceReloadPending] = useState(false);
   const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
     cached.selectedTenantAccountKey,
   );
@@ -169,7 +170,11 @@ function LightboxShellFrame({
     workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
       ?.sales_xray_enabled !== false;
   const recentContextKey =
-    authenticated && salesXrayEnabled && access?.context && effectiveTenantId
+    authenticated &&
+    salesXrayEnabled &&
+    !workspaceReloadPending &&
+    access?.context &&
+    effectiveTenantId
       ? JSON.stringify([
           access.context.personId,
           access.context.sessionId,
@@ -429,6 +434,9 @@ function LightboxShellFrame({
         credentials: "same-origin",
       });
       if (res.ok) {
+        // The next document reads the new context. Do not start reads here
+        // between the successful context change and its reload.
+        setWorkspaceReloadPending(true);
         setSelectedTenantId(tenantId);
         setSelectedTenantAccountKey(accountKey);
         setSwitcherOpen(false);

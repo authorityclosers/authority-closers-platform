@@ -776,3 +776,20 @@ it("does not reuse a 204 for another File or accept a late preflight after the p
     ),
   ).toHaveLength(3);
 });
+
+it("keeps Academy embeds on their existing identity workspace contract", async () => {
+  fetchMock.mockResolvedValueOnce(response(workspaceChoices(firstTenantId)));
+  await act(async () =>
+    root.render(
+      <StandaloneStudio variant="embedded">
+        <div data-testid="academy-studio" />
+      </StandaloneStudio>,
+    ),
+  );
+  await flush();
+  expect(
+    container.querySelector('[data-testid="academy-studio"]'),
+  ).not.toBeNull();
+  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(readSalesXrayWorkspaces).not.toHaveBeenCalled();
+});
