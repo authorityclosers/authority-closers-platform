@@ -184,7 +184,9 @@ def _install_args(
 
 
 def _new_artifact(tmp_path: Path, binding: Any = None) -> tuple[Path, str, Any]:
-    binding = binding or installer.NativeBinding("a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64)
+    binding = binding or installer.NativeBinding(
+        "a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64
+    )
     root = tmp_path / "artifact"
     root.mkdir()
     files = [
@@ -298,8 +300,10 @@ def _predecessor_args(
     return args, binding, previous["units"]
 
 
-def _upgrade_args(tmp_path: Path) -> tuple[dict[str, Any], Any, dict[str, str]]:
-    return _predecessor_args(tmp_path, "legacy", "staging")
+def _upgrade_args(
+    tmp_path: Path, kind: str = "legacy"
+) -> tuple[dict[str, Any], Any, dict[str, str]]:
+    return _predecessor_args(tmp_path, kind, "development" if kind == "exact" else "staging")
 
 
 def _installed(args: dict[str, Any], units: dict[str, str]) -> dict[str, bytes]:
@@ -331,21 +335,6 @@ def test_dry_run_accepts_exact_installed_predecessor_bytes(tmp_path: Path, kind:
     assert [event[0] for event in fake.events] == ["verify"]
     assert not args["receipt"].exists()
     assert _installed(args, old_units) == {k: v.encode() for k, v in old_units.items()}
-
-
-def test_exact_predecessor_upgrade_drains_old_helper_then_starts_mount_first(
-    tmp_path: Path,
-) -> None:
-    args, binding, old_units = _predecessor_args(tmp_path)
-    fake = FakeSystemd(args["unit_root"])
-    fake.active = dict.fromkeys(old_units, True)
-    fake.enabled = dict.fromkeys(old_units, True)
-    result = installer.install(**args, systemd=fake)
-    mount, service = installer._mount_unit("development"), installer._service_unit("development")
-    assert result["status"] == "installed"
-    assert fake.events.index(("stop", service)) < fake.events.index(("daemon_reload", None))
-    assert [event[1] for event in fake.events if event[0] == "enable_now"] == [mount, service]
-    assert binding.helper_source_sha in installer._unit_path(args["unit_root"], service).read_text()
 
 
 @pytest.mark.parametrize(
@@ -428,7 +417,9 @@ def test_exact_predecessor_reference_requires_trusted_root_ownership(
 
 
 def test_exact_predecessor_is_never_a_candidate_alias(tmp_path: Path) -> None:
-    binding = installer.NativeBinding(EXACT.helper_source_sha, EXACT.image_ref, "sha256:" + "c" * 64)
+    binding = installer.NativeBinding(
+        EXACT.helper_source_sha, EXACT.image_ref, "sha256:" + "c" * 64
+    )
     manifest, manifest_digest, _ = _new_artifact(tmp_path, binding)
     payload = _render("development", binding, EXACT.supervisor_source)
     descriptor, digest = _write(tmp_path / "new-units.json", payload)
@@ -451,47 +442,6 @@ def test_exact_predecessor_is_never_a_candidate_alias(tmp_path: Path) -> None:
         )
 
 
-class FailFirstServiceStart(FakeSystemd):
-    failed = False
-
-    def enable_now(self, unit: str) -> None:
-        if unit.endswith(".service") and not self.failed:
-            self.failed = True
-            raise installer.InstallerError("new_helper_failed")
-        super().enable_now(unit)
-
-
-@pytest.mark.parametrize("enabled", [(True, True), (True, False), (False, True), (False, False)])
-def test_exact_predecessor_failed_start_restores_bytes_and_states(
-    tmp_path: Path, enabled: tuple[bool, bool]
-) -> None:
-    args, _, old_units = _predecessor_args(tmp_path)
-    names = (installer._mount_unit("development"), installer._service_unit("development"))
-    fake = FailFirstServiceStart(args["unit_root"])
-    fake.active = dict.fromkeys(names, True)
-    fake.enabled = dict(zip(names, enabled, strict=True))
-    with pytest.raises(installer.InstallerError, match="^new_helper_failed$"):
-        installer.install(**args, systemd=fake)
-    assert _installed(args, old_units) == {k: v.encode() for k, v in old_units.items()}
-    assert fake.active == dict.fromkeys(names, True)
-    assert fake.enabled == dict(zip(names, enabled, strict=True))
-    assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
-
-
-def test_exact_predecessor_failed_stop_never_publishes_candidate(tmp_path: Path) -> None:
-    args, _, old_units = _predecessor_args(tmp_path)
-    service = installer._service_unit("development")
-    fake = FakeSystemd(args["unit_root"], fail_service_stop=True)
-    fake.active = dict.fromkeys(old_units, True)
-    fake.enabled = dict.fromkeys(old_units, True)
-    with pytest.raises(installer.InstallerError, match="^native_service_stop_failed$"):
-        installer.install(**args, systemd=fake)
-    assert ("daemon_reload", None) not in fake.events[: fake.events.index(("stop", service)) + 2]
-    assert fake.events.count(("enable_now", service)) == 1
-    assert _installed(args, old_units) == {k: v.encode() for k, v in old_units.items()}
-    assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
-
-
 @pytest.mark.parametrize(
     "defect", [None, "native_units_sha256_mismatch", "native_image_config_mismatch", "alias"]
 )
@@ -501,7 +451,9 @@ def test_cli_dry_run_json_and_preflight_refusals(
     capsys: pytest.CaptureFixture[str],
     defect: str | None,
 ) -> None:
-    args, binding, _ = _predecessor_args(tmp_path, **({"helper": "e" * 40} if defect == "alias" else {}))
+    args, binding, _ = _predecessor_args(
+        tmp_path, **({"helper": "e" * 40} if defect == "alias" else {})
+    )
     real_install = installer.install
     fixed = {key: args[key] for key in ("application_root", "unit_root", "docker", "group")}
     monkeypatch.setattr(
@@ -515,24 +467,23 @@ def test_cli_dry_run_json_and_preflight_refusals(
             systemd=FakeSystemd(args["unit_root"]),
         ),
     )
-    flags = {
-        "--environment": args["environment"],
-        "--native-units": args["native_units"],
-        "--native-units-sha256": args["native_units_sha256"],
-        "--renderer": RENDERER,
-        "--renderer-python": sys.executable,
-        "--native-image-config-id": args["native_image_config_id"],
-        "--native-artifact-manifest": args["native_artifact_manifest"],
-        "--native-artifact-sha256": args["native_artifact_sha256"],
-        "--previous-native-units": args["previous_native_units"],
-        "--previous-native-units-sha256": args["previous_native_units_sha256"],
-        "--receipt": args["receipt"],
-    }
     if defect == "native_units_sha256_mismatch":
-        flags["--previous-native-units-sha256"] = "0" * 64
+        args["previous_native_units_sha256"] = "0" * 64
     elif defect == "native_image_config_mismatch":
-        flags["--native-image-config-id"] = binding.image_ref
-    argv = [str(item) for pair in flags.items() for item in pair] + ["--dry-run"]
+        args["native_image_config_id"] = binding.image_ref
+    argv = ["--dry-run", "--renderer", str(RENDERER), "--renderer-python", sys.executable]
+    for key in (
+        "environment",
+        "native_units",
+        "native_units_sha256",
+        "native_image_config_id",
+        "native_artifact_manifest",
+        "native_artifact_sha256",
+        "previous_native_units",
+        "previous_native_units_sha256",
+        "receipt",
+    ):
+        argv += ["--" + key.replace("_", "-"), str(args[key])]
     status = installer.main(argv)
     out, err = capsys.readouterr()
     if defect is None:
@@ -544,12 +495,17 @@ def test_cli_dry_run_json_and_preflight_refusals(
     assert not args["receipt"].exists()
 
 
-def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(tmp_path: Path) -> None:
-    args, binding, old_units = _upgrade_args(tmp_path)
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(
+    tmp_path: Path, kind: str
+) -> None:
+    args, binding, old_units = _upgrade_args(tmp_path, kind)
     fake = FakeSystemd(args["unit_root"])
     fake.active = dict.fromkeys(old_units, True)
     result = installer.install(**args, systemd=fake)
-    service = installer._service_unit("staging")
+    mount = installer._mount_unit(args["environment"])
+    service = installer._service_unit(args["environment"])
+    assert [event[1] for event in fake.events if event[0] == "enable_now"] == [mount, service]
     assert result["helper_source_sha"] == binding.helper_source_sha
     assert result["native_image_ref"] == binding.image_ref
     assert fake.events.index(("stop", service)) < fake.events.index(("daemon_reload", None))
@@ -636,9 +592,17 @@ def test_upgrade_rejects_unverified_bindings_before_mutation(tmp_path: Path, def
     } == before
 
 
-def test_upgrade_failure_restores_the_previous_helper(tmp_path: Path) -> None:
-    args, _, old_units = _upgrade_args(tmp_path)
-    service = installer._service_unit("staging")
+@pytest.mark.parametrize("enabled", [(True, True), (True, False), (False, True), (False, False)])
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_failure_restores_the_previous_helper(
+    tmp_path: Path, kind: str, enabled: tuple[bool, bool]
+) -> None:
+    args, _, old_units = _upgrade_args(tmp_path, kind)
+    names = (
+        installer._mount_unit(args["environment"]),
+        installer._service_unit(args["environment"]),
+    )
+    service = names[1]
 
     class FailNewHelperOnce(FakeSystemd):
         failed = False
@@ -650,20 +614,22 @@ def test_upgrade_failure_restores_the_previous_helper(tmp_path: Path) -> None:
             super().enable_now(unit)
 
     fake = FailNewHelperOnce(args["unit_root"])
-    fake.active = dict.fromkeys(old_units, True)
-    fake.enabled = dict.fromkeys(old_units, True)
-    with pytest.raises(installer.InstallerError, match="new_helper_failed"):
+    fake.active = dict.fromkeys(names, True)
+    fake.enabled = dict(zip(names, enabled, strict=True))
+    with pytest.raises(installer.InstallerError, match="^new_helper_failed$"):
         installer.install(**args, systemd=fake)
-    assert {
-        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
-    } == {name: raw.encode() for name, raw in old_units.items()}
-    assert fake.active[service]
+    assert _installed(args, old_units) == {name: raw.encode() for name, raw in old_units.items()}
+    assert fake.active == dict.fromkeys(names, True)
+    assert fake.enabled == dict(zip(names, enabled, strict=True))
     assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
 
 
-def test_upgrade_rejects_a_helper_that_did_not_stop_before_publish(tmp_path: Path) -> None:
-    args, _, old_units = _upgrade_args(tmp_path)
-    service = installer._service_unit("staging")
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_rejects_a_helper_that_did_not_stop_before_publish(
+    tmp_path: Path, kind: str
+) -> None:
+    args, _, old_units = _upgrade_args(tmp_path, kind)
+    service = installer._service_unit(args["environment"])
     fake = FakeSystemd(args["unit_root"], fail_service_stop=True)
     fake.active = dict.fromkeys(old_units, True)
     fake.enabled = dict.fromkeys(old_units, True)
