@@ -1,8 +1,12 @@
-"""Opaque guest sessions and the 60-minute, claim-preserving admission ledger.
+"""Opaque guest sessions and the claim-preserving admission boundary.
 
 Only server composition calls reserve/settle after validating a source-duration
 receipt. Browser duration, IP address and device fingerprint are not authority.
 This boundary does not dispatch providers or mint canonical account sessions.
+
+Admission reads the billing projection (ADR 0052): the derived trial lot plus
+the account's ledger lots, less every use in the reservation and settlement
+tables. It never reads provider or order state.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
+from ac_platform.billing.ledger import AccountProjection, BillingLedger
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
@@ -26,13 +32,11 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.acquisition_usage import (
-    ALLOWANCE_SECONDS,
+    LONGEST_CALL_EXCEEDED_MESSAGE,
     LONGEST_CALL_SECONDS,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
-    acquisition_seconds,
-    existing_account_usage,
-    shared_account_committed_seconds,
 )
+from ac_platform.conversation_intelligence.admission_lock import take_admission_lock
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -92,17 +96,26 @@ class AcquisitionSessions:
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         tester_policy: InternalTesterPolicy | None = None,
         operations_tenant_id: UUID | None = None,
+        trial_policy: TrialPolicy | None = None,
     ) -> None:
         if (
             type(tenant_id) is not UUID
             or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", policy_revision)
             or not timedelta(minutes=5) <= lifetime <= timedelta(days=7)
             or (operations_tenant_id is not None and type(operations_tenant_id) is not UUID)
+            or (trial_policy is not None and type(trial_policy) is not TrialPolicy)
         ):
             raise ValueError("Invalid acquisition policy.")
         self.database, self.tenant_id = database, tenant_id
         self.policy_revision, self.lifetime, self.clock = policy_revision, lifetime, clock
         self.tester_policy, self.operations_tenant_id = tester_policy, operations_tenant_id
+        self.trial_policy = trial_policy or TrialPolicy()
+        self.ledger = BillingLedger(
+            database,
+            clock=clock,
+            trial_policy=self.trial_policy,
+            operations_tenant_id=operations_tenant_id,
+        )
 
     async def _admit(self, *, mutation: bool = False) -> datetime:
         transaction = self.database.get_transaction()
@@ -115,15 +128,9 @@ class AcquisitionSessions:
         if mutation:
             if self.database.get_bind().dialect.name != "postgresql":
                 raise ConversationError("Concurrent acquisition commands require PostgreSQL.")
-            # Every claim/reservation takes the same short transaction lock.
-            # This serializes first claims and concurrent tabs without relying
-            # on SELECT FOR UPDATE over rows that do not exist yet.
-            lock = int.from_bytes(
-                hashlib.sha256(b"acquisition:" + self.tenant_id.bytes).digest()[:8],
-                "big",
-                signed=True,
-            )
-            await self.database.execute(select(func.pg_advisory_xact_lock(lock)))
+            # Every claim/reservation takes the same short transaction lock as
+            # the billing ledger's capacity-lowering writes.
+            await take_admission_lock(self.database, self.tenant_id)
         tenant = await self.database.scalar(
             select(Tenant).where(Tenant.id == self.tenant_id).with_for_update(read=True)
         )
@@ -241,39 +248,19 @@ class AcquisitionSessions:
         )
         return None, actor.person_id
 
-    async def _used(self, visitor_id: UUID | None, person_id: UUID | None) -> int:
-        used, _ = await self._usage_and_additional_allowance(visitor_id, person_id)
-        return used
+    async def _project(
+        self, visitor_id: UUID | None, person_id: UUID | None, now: datetime, *, mirror: bool
+    ) -> AccountProjection:
+        """The billing projection of the owner; ``mirror`` only under the admission lock."""
 
-    async def _usage_and_additional_allowance(
-        self, visitor_id: UUID | None, person_id: UUID | None
-    ) -> tuple[int, int]:
         if person_id is not None:
-            if self.operations_tenant_id is not None:
-                return await shared_account_committed_seconds(
-                    self.database,
-                    tenant_id=self.tenant_id,
-                    person_id=person_id,
-                    operations_tenant_id=self.operations_tenant_id,
-                )
-            total = await acquisition_seconds(
-                self.database,
-                tenant_id=self.tenant_id,
-                person_id=person_id,
+            return await self.ledger.project_person(
+                tenant_id=self.tenant_id, person_id=person_id, now=now, mirror=mirror
             )
-            account_seconds, additional_allowance = await existing_account_usage(
-                self.database,
-                tenant_id=self.tenant_id,
-                person_id=person_id,
-                operations_tenant_id=self.operations_tenant_id,
-            )
-            return total + account_seconds, additional_allowance
-        total = await acquisition_seconds(
-            self.database,
-            tenant_id=self.tenant_id,
-            visitor_id=visitor_id,
+        assert visitor_id is not None  # _owner returns exactly one owner
+        return await self.ledger.project_visitor(
+            tenant_id=self.tenant_id, visitor_id=visitor_id, now=now
         )
-        return total, 0
 
     async def allowance(
         self,
@@ -289,12 +276,11 @@ class AcquisitionSessions:
             now,
             shared_identity_locks=shared_identity_locks,
         )
-        used, additional_allowance = await self._usage_and_additional_allowance(*owner)
-        allowance_seconds = ALLOWANCE_SECONDS + additional_allowance
+        projected = await self._project(*owner, now, mirror=False)
         value: dict[str, int | bool | None] = {
-            "allowance_seconds": allowance_seconds,
-            "committed_seconds": used,
-            "available_seconds": max(0, allowance_seconds - used),
+            "allowance_seconds": projected.granted_seconds,
+            "committed_seconds": projected.committed_seconds,
+            "available_seconds": projected.available_seconds,
         }
         tester = (
             None
@@ -344,10 +330,12 @@ class AcquisitionSessions:
                 raise ConversationConflict("This upload belongs to a different source receipt.")
             return previous.id
         if tester is None:
-            used, additional_allowance = await self._usage_and_additional_allowance(
-                visitor_id, person_id
-            )
-            if used + source.seconds > ALLOWANCE_SECONDS + additional_allowance:
+            projected = await self._project(visitor_id, person_id, now, mirror=True)
+            if source.seconds > projected.per_call_seconds:
+                raise ConversationDenied(LONGEST_CALL_EXCEEDED_MESSAGE)
+            if not projected.projection.can_reserve(
+                source.seconds, per_call_limit=projected.per_call_seconds
+            ):
                 raise ConversationDenied(TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE)
         identifier = uuid4()
         self.database.add(

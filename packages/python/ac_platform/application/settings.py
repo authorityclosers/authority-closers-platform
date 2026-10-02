@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -179,6 +180,21 @@ class Settings(BaseSettings):
     # Network admission is bounded, but must accommodate real guest uploads on
     # slower connections. Keep it deployment-configurable and auditable.
     sales_xray_upload_response_budget_seconds: float = 900.0
+    # Trial policy (ADR 0052): v1 is today's 60-minute shared quota; v2 (100
+    # minutes or 14 days) applies from the switch instant on. Production stays
+    # on v1 until the owner's activation step.
+    sales_xray_trial_policy: Literal["v1", "v2"] = "v1"
+    sales_xray_trial_policy_switch_at: datetime | None = None
+    # Billing (ADR 0052, Contract C1). Off by default: without it the checkout
+    # routes are not installed and the screens show "Not on sale yet". Provider
+    # secrets come from Infisical (/application) as AC_RAZORPAY_*; live mode
+    # is an owner-only switch that also needs the live key pair.
+    billing_enabled: bool = False
+    billing_allow_live: bool = False
+    billing_fake_provider_signing_key: SecretStr | None = None
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: SecretStr | None = None
+    razorpay_webhook_secret: SecretStr | None = None
 
     @field_validator(
         "public_learner_tenant_id",
@@ -302,6 +318,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS must be between 90 and 3600"
             )
+        self._validate_trial_policy()
+        self._validate_billing()
         self._validate_public_films()
         self._validate_media_provider()
         self._validate_filesystem_media()
@@ -517,6 +535,38 @@ class Settings(BaseSettings):
             raise ValueError("AC_MEDIA_SCANNER_PORT must be a valid TCP port")
         if not 0 < self.media_scanner_total_timeout_seconds <= 3600:
             raise ValueError("AC_MEDIA_SCANNER_TOTAL_TIMEOUT_SECONDS must be bounded")
+
+    def _validate_trial_policy(self) -> None:
+        switch_at = self.sales_xray_trial_policy_switch_at
+        if switch_at is not None and self.sales_xray_trial_policy != "v2":
+            raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT requires trial policy v2")
+        if switch_at is not None and switch_at.tzinfo is None:
+            raise ValueError("AC_SALES_XRAY_TRIAL_POLICY_SWITCH_AT must carry a UTC offset")
+
+    def _validate_billing(self) -> None:
+        if not self.billing_enabled:
+            return
+        if self.public_learner_tenant_id is None or self.operations_tenant_id is None:
+            raise ValueError(
+                "AC_BILLING_ENABLED requires AC_PUBLIC_LEARNER_TENANT_ID and "
+                "AC_OPERATIONS_TENANT_ID"
+            )
+        if self.sales_xray_app_url is None:
+            raise ValueError("AC_BILLING_ENABLED requires AC_SALES_XRAY_APP_URL for the return URL")
+        razorpay = (self.razorpay_key_id, self.razorpay_key_secret, self.razorpay_webhook_secret)
+        if any(value is not None for value in razorpay) and not all(
+            value is not None for value in razorpay
+        ):
+            raise ValueError(
+                "AC_RAZORPAY_KEY_ID, AC_RAZORPAY_KEY_SECRET and AC_RAZORPAY_WEBHOOK_SECRET "
+                "are set together"
+            )
+        if self.environment in {"staging", "production"} and (
+            self.billing_fake_provider_signing_key is not None
+        ):
+            raise ValueError("the fake payment provider is for local and test environments only")
+        if self.billing_allow_live and self.environment != "production":
+            raise ValueError("AC_BILLING_ALLOW_LIVE is a production-only owner switch")
 
     def _validate_media_stress_fixtures(self) -> None:
         """Keep local fixture opt-in outside production and normal local mode."""
