@@ -26,7 +26,7 @@ from tests.database.test_conversation_postgresql import postgres_harness as _pos
 
 ROOT = Path(__file__).parents[2]
 REVISION = "20261002_0065"
-HEAD = "20261002_0066"
+HEAD = "20261002_0067"
 SEEDS = {
     "personal": ("Personal", "For one salesperson", 10),
     "organisation": ("Organisation", "For sales teams", 20),

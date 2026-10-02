@@ -25,4 +25,5 @@ Business-rule changes must also propagate to the controlled Drive layer.
 - 0042 — [Sales Xray speaker map — which speaker is you](0042-sales-xray-speaker-map.md)
 - 0046 — [Plans catalogue with owner activation](0046-plans-catalogue-owner-activation.md)
 - 0049 — [Personal accounts and organisations](0049-personal-accounts-and-organisations.md)
+- 0051 — [Sensitive-segment marks](0051-sensitive-segment-marks.md)
 - 0052 — [Billing ledger, subscriptions and top-ups](0052-billing-ledger-subscriptions-and-top-ups.md)
