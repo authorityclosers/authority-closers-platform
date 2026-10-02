@@ -39,6 +39,7 @@ from ac_platform.conversation_intelligence.minute_account_targets import (
 )
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
     CLAIM_PERSONAL_ONLY_MESSAGE,
+    SALES_XRAY_MEMBER_ROLES,
     WORKSPACE_UNAVAILABLE_MESSAGE,
 )
 from ac_platform.http.auth import install_identity_http
@@ -220,9 +221,21 @@ def test_sales_xray_serves_personal_and_approved_organisation_only(
                         tenant_id=organisation.tenant_id,
                         person_id=state.person_id,
                         operations_tenant_id=settings.operations_tenant_id,
+                        roles=SALES_XRAY_MEMBER_ROLES,
                     )
+                    # The learner-only default (unserved tenants) refuses the member.
+                    with pytest.raises(EligibleLearnerUnavailable):
+                        await require_eligible_learner(
+                            db,
+                            tenant_id=organisation.tenant_id,
+                            person_id=state.person_id,
+                            operations_tenant_id=settings.operations_tenant_id,
+                        )
                     target, lookup_kind = await resolve_public_learner_target(
-                        db, tenant_id=organisation.tenant_id, query=workspace.email
+                        db,
+                        tenant_id=organisation.tenant_id,
+                        query=workspace.email,
+                        roles=SALES_XRAY_MEMBER_ROLES,
                     )
                     assert lookup_kind == "email" and target is not None
                     assert (target.tenant_id, target.person_id) == (
@@ -235,6 +248,7 @@ def test_sales_xray_serves_personal_and_approved_organisation_only(
                             tenant_id=organisation.tenant_id,
                             person_id=uuid4(),
                             operations_tenant_id=settings.operations_tenant_id,
+                            roles=SALES_XRAY_MEMBER_ROLES,
                         )
                     ledger = BillingLedger(
                         db,

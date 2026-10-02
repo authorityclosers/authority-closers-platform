@@ -16,6 +16,8 @@ CLAIM_PERSONAL_ONLY_MESSAGE = "Switch to Personal to claim this call."
 # human roles of an approved organisation. The shared processing identity never
 # qualifies.
 SALES_XRAY_MEMBER_ROLES: frozenset[str] = frozenset({"learner", "owner", "admin", "member"})
+# The historical scope of minute administration outside a served tenant.
+LEARNER_ROLES: frozenset[str] = frozenset({"learner"})
 
 
 def sales_xray_tenant_ids(

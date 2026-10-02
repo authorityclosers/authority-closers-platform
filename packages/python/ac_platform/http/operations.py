@@ -51,6 +51,8 @@ from ac_platform.conversation_intelligence.minute_account_targets import (
     resolve_public_learner_target,
 )
 from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    LEARNER_ROLES,
+    SALES_XRAY_MEMBER_ROLES,
     sales_xray_served_tenant_ids,
 )
 from ac_platform.http.auth import (
@@ -285,8 +287,6 @@ class MinuteAccountTargetResolutionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: StrictStr = Field(min_length=1, max_length=MAX_MINUTE_ACCOUNT_LOOKUP_LENGTH)
-    # Personal (the public tenant) when omitted; otherwise an approved organisation.
-    tenant_id: UUID | None = None
 
 
 class MinuteAccountTargetResponse(BaseModel):
@@ -672,12 +672,12 @@ def install_operations_http(
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = Depends(require_actor)
-    # Minute accounts exist in Personal and in the approved organisations only.
+    # Personal plus the approved organisations; owner, admin and member count there.
     served_tenant_ids = sales_xray_served_tenant_ids(settings, intake)
 
-    def require_served_tenant(tenant_id: UUID) -> None:
-        if tenant_id not in served_tenant_ids:
-            raise MinuteAccountTargetUnavailable("The exact active learner account is unavailable.")
+    def eligible_roles(tenant_id: UUID) -> frozenset[str]:
+        """Owner, admin and member count in a served tenant; elsewhere learners only, as before."""
+        return SALES_XRAY_MEMBER_ROLES if tenant_id in served_tenant_ids else LEARNER_ROLES
 
     @router.post(
         "/admin/conversation-minute-accounts/resolve-target",
@@ -707,12 +707,10 @@ def install_operations_http(
             raise PublicLearnerTenantUnconfigured(
                 "Target resolution requires the configured public learner tenant."
             )
-        target_tenant_id = public_tenant_id if body.tenant_id is None else body.tenant_id
-        require_served_tenant(target_tenant_id)
         try:
             target, lookup_kind = await resolve_public_learner_target(
                 auth.database,
-                tenant_id=target_tenant_id,
+                tenant_id=public_tenant_id,
                 query=body.query,
             )
         except MinuteAccountLookupInvalid as error:
@@ -726,11 +724,11 @@ def install_operations_http(
             session_id=actor.session_id,
             action=MINUTE_ACCOUNT_TARGET_LOOKUP_ACTION,
             resource_type=MINUTE_ACCOUNT_TARGET_LOOKUP_RESOURCE,
-            resource_id=target.person_id if target is not None else target_tenant_id,
+            resource_id=target.person_id if target is not None else public_tenant_id,
             payload={
                 "lookup_kind": lookup_kind,
                 "result_count": 1 if target is not None else 0,
-                "target_tenant_id": str(target_tenant_id),
+                "target_tenant_id": str(public_tenant_id),
             },
             reason="Exact public learner resolution for minute-account administration.",
             request_id=_request_id(request),
@@ -772,13 +770,13 @@ def install_operations_http(
         if "platform_access_manage" not in capabilities:
             raise CapabilityDenied("A current platform access-management assignment is required.")
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
-        require_served_tenant(tenant_id)
         try:
             await require_eligible_learner(
                 auth.database,
                 tenant_id=tenant_id,
                 person_id=person_id,
                 operations_tenant_id=operations_tenant_id,
+                roles=eligible_roles(tenant_id),
             )
             state = await load_minute_account(
                 auth.database,
@@ -839,7 +837,7 @@ def install_operations_http(
         if "platform_access_manage" not in capabilities:
             raise CapabilityDenied("A current platform access-management assignment is required.")
         assert operations_tenant_id is not None  # platform_projection rejects missing settings
-        require_served_tenant(tenant_id)
+        roles = eligible_roles(tenant_id)
         key = _normalize_idempotency_key(idempotency_key)
         reason = _normalize_reason(body.reason)
         # Serialize actor/key lookup before touching a target account. The
@@ -882,6 +880,7 @@ def install_operations_http(
                     tenant_id=tenant_id,
                     person_id=person_id,
                     operations_tenant_id=operations_tenant_id,
+                    roles=roles,
                 )
                 state = await load_minute_account(
                     auth.database,
@@ -916,6 +915,7 @@ def install_operations_http(
                     person_id=person_id,
                     operations_tenant_id=operations_tenant_id,
                     grant=grant,
+                    roles=roles,
                 )
             except EligibleLearnerUnavailable as error:
                 raise MinuteAccountTargetUnavailable(
