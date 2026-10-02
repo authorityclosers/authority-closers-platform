@@ -150,6 +150,11 @@
   box-shadow: 0 0 0 3px var(--lx-teal-soft);
 }
 
+/* The reader draws its own clear button; hide the browser's second one. */
+.searchInput::-webkit-search-cancel-button {
+  appearance: none;
+}
+
 .clearSearch {
   position: absolute;
   right: 8px;
