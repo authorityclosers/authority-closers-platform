@@ -66,6 +66,10 @@ from ac_platform.conversation_intelligence.processing_plan import (
 from ac_platform.conversation_intelligence.qualitative_pack import ReportLanguage
 from ac_platform.conversation_intelligence.report_export import report_docx_bytes
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+    sales_xray_served_tenant_ids,
+)
 from ac_platform.conversation_intelligence.source_objects import resolve_source_key
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
@@ -97,7 +101,9 @@ _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _MIN_NATIVE_TIMEOUT_SECONDS = 1.0
-Factory = Callable[[AsyncSession], AcquisitionSessions]
+# One service per request, bound to the caller's selected workspace: Personal
+# (the public tenant, where guests also live) or an approved organisation.
+Factory = Callable[[AsyncSession, UUID], AcquisitionSessions]
 
 
 @dataclass(frozen=True)
@@ -193,6 +199,8 @@ def install_submission_http(
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-acquisition"])
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
     capacity = anyio.CapacityLimiter(1)
+    public = settings.public_learner_tenant_id
+    served = sales_xray_served_tenant_ids(settings, runtime)
 
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
@@ -221,11 +229,22 @@ def install_submission_http(
                 raise fail(403, "Use this Sales Xray page to continue.") from None
         return host
 
-    def ownership(database: AsyncSession) -> GuestOwnership:
-        service = factory(database)
-        if service.tenant_id != settings.public_learner_tenant_id:
-            raise RuntimeError("Acquisition must use the configured public Academy.")
+    def ownership(database: AsyncSession, tenant_id: UUID = public) -> GuestOwnership:
+        """Guest paths stay on Personal; account paths use the selected workspace."""
+        service = factory(database, tenant_id)
+        if service.tenant_id != tenant_id:
+            raise RuntimeError("Acquisition must use the selected Sales Xray workspace.")
         return GuestOwnership(service)
+
+    def workspace(actor: ActorContext) -> UUID:
+        """The selected tenant, when Sales Xray serves it; operations never qualifies."""
+        if actor.tenant_id is None or actor.tenant_id not in served:
+            raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
+        return actor.tenant_id
+
+    def guest_token(actor: ActorContext, current: str | None) -> str | None:
+        """Guest cookies belong to Personal; an organisation session never reads one."""
+        return current if actor.tenant_id == public else None
 
     def surface(request: Request) -> str | None:
         if request.url.hostname == hostname:
@@ -238,11 +257,7 @@ def install_submission_http(
     async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(require_actor)(request) as auth:
-                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
-                    raise fail(
-                        403,
-                        "The public Academy account is required for this upload workspace.",
-                    )
+                workspace(auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -255,7 +270,8 @@ def install_submission_http(
         if host == "learner":
             try:
                 async with learner_account(request) as auth:
-                    yield _Owner(ownership(auth.database), None, auth.resolved.actor)
+                    actor = auth.resolved.actor
+                    yield _Owner(ownership(auth.database, workspace(actor)), None, actor)
             except ConversationError as error:
                 # Unwind the owner transaction before translating an endpoint's
                 # domain denial, just as the standalone account/guest paths do.
@@ -266,7 +282,12 @@ def install_submission_http(
             account = _session_cookie(request, settings, required=False)
             if account is not None:
                 async with asynccontextmanager(require_actor)(request) as auth:
-                    yield _Owner(ownership(auth.database), current, auth.resolved.actor)
+                    actor = auth.resolved.actor
+                    yield _Owner(
+                        ownership(auth.database, workspace(actor)),
+                        guest_token(actor, current),
+                        actor,
+                    )
             else:
                 if current is None:
                     raise fail(401, "Start an upload session to continue.")
@@ -289,8 +310,8 @@ def install_submission_http(
     ) -> tuple[ConversationApplication, Any, Any, Any, Any, Any]:
         if owner.actor is None:
             raise fail(401, "Sign in to the public Academy account to continue.")
-        if owner.actor.tenant_id != settings.public_learner_tenant_id:
-            raise fail(403, "The public Academy account is required for this benchmark.")
+        if owner.actor.tenant_id != owner.ownership.tenant_id:
+            raise fail(403, WORKSPACE_UNAVAILABLE_MESSAGE)
         await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
         if not scope.claimed_account:
@@ -345,11 +366,7 @@ def install_submission_http(
     async def learner_read_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         try:
             async with asynccontextmanager(read_require_actor)(request) as auth:
-                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
-                    raise fail(
-                        403,
-                        "The public Academy account is required for this upload workspace.",
-                    )
+                workspace(auth.resolved.actor)
                 yield auth
         except DomainError:
             raise fail(
@@ -362,10 +379,11 @@ def install_submission_http(
         if host == "learner":
             try:
                 async with learner_read_account(request) as auth:
+                    actor = auth.resolved.actor
                     yield _Owner(
-                        ownership(auth.database),
+                        ownership(auth.database, workspace(actor)),
                         None,
-                        auth.resolved.actor,
+                        actor,
                         shared_identity_locks=True,
                     )
             except ConversationError as error:
@@ -378,10 +396,11 @@ def install_submission_http(
             account = _session_cookie(request, settings, required=False)
             if account is not None:
                 async with asynccontextmanager(read_require_actor)(request) as auth:
+                    actor = auth.resolved.actor
                     yield _Owner(
-                        ownership(auth.database),
-                        current,
-                        auth.resolved.actor,
+                        ownership(auth.database, workspace(actor)),
+                        guest_token(actor, current),
+                        actor,
                         shared_identity_locks=True,
                     )
             else:
@@ -471,7 +490,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_library(
-                    ownership(auth.database),
+                    ownership(auth.database, workspace(auth.resolved.actor)),
                     auth.resolved.actor,
                     before=before,
                     shared_identity_locks=True,
@@ -492,7 +511,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_library_summary(
-                    ownership(auth.database),
+                    ownership(auth.database, workspace(auth.resolved.actor)),
                     auth.resolved.actor,
                     shared_identity_locks=True,
                 )
@@ -512,7 +531,7 @@ def install_submission_http(
             )
             async with context as auth:
                 return await account_activity(
-                    ownership(auth.database),
+                    ownership(auth.database, workspace(auth.resolved.actor)),
                     auth.resolved.actor,
                     shared_identity_locks=True,
                 )

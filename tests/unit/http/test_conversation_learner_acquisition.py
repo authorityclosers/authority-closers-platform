@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import httpx
@@ -23,6 +25,10 @@ from ac_platform.conversation_intelligence.application import ConversationNotFou
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.native_runtime import NativeRuntime
+from ac_platform.conversation_intelligence.sales_xray_tenants import (
+    CLAIM_PERSONAL_ONLY_MESSAGE,
+    WORKSPACE_UNAVAILABLE_MESSAGE,
+)
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
 from ac_platform.http.conversation_acquisition_runtime import (
     AcquisitionRuntime,
@@ -114,10 +120,8 @@ class _SessionScope:
 
 
 class _Service:
-    tenant_id = PUBLIC_TENANT
-
-    def __init__(self, database: _Database) -> None:
-        self.database = database
+    def __init__(self, database: _Database, tenant_id: UUID = PUBLIC_TENANT) -> None:
+        self.database, self.tenant_id = database, tenant_id
         self.allowance_actors: list[ActorContext] = []
         self.allowance_lock_modes: list[bool] = []
 
@@ -438,3 +442,156 @@ async def test_unavailable_learner_submission_returns_private_not_found(
     assert "This upload is unavailable." in response.text
     assert "no-store" in response.headers["cache-control"]
     assert unwound == [True]
+
+
+ORGANISATION_TENANT = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+UNLISTED_TENANT = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+_SELECTED_TENANTS = {
+    "personal": PUBLIC_TENANT,
+    "organisation": ORGANISATION_TENANT,
+    "operations": OTHER_TENANT,
+    "unlisted": UNLISTED_TENANT,
+}
+
+
+@pytest.mark.asyncio
+async def test_routes_serve_the_selected_workspace_and_refuse_operations_and_unlisted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AUT-436: Personal and an approved organisation are served; nothing else is."""
+
+    settings = _settings()
+    database = _Database()
+
+    async def current_settings(_database: object, _tenant_id: UUID):
+        return None, DEFAULT_ANALYSIS_SETTINGS
+
+    monkeypatch.setattr(acquisition_runtime_module, "latest_analysis_settings", current_settings)
+    services: list[tuple[UUID, bool, str | None]] = []
+
+    async def allowance(
+        _self: AcquisitionSessions,
+        *,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+        shared_identity_locks: bool = False,
+    ) -> dict[str, int]:
+        services.append((_self.tenant_id, _self.trial_enabled, token))
+        return {"allowance_seconds": 0, "committed_seconds": 0, "available_seconds": 0}
+
+    monkeypatch.setattr(AcquisitionSessions, "allowance", allowance)
+    summaries: list[UUID] = []
+
+    async def summary(ownership: GuestOwnership, actor: ActorContext, **_kwargs: object):
+        summaries.append(ownership.tenant_id)
+        return {"total": 0, "processing": 0, "completed": 0, "needs_attention": 0}
+
+    monkeypatch.setattr(
+        "ac_platform.http.conversation_submissions.account_library_summary", summary
+    )
+
+    async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        selected = _SELECTED_TENANTS.get(request.headers.get("x-test-tenant", ""))
+        if selected is None:
+            raise AuthenticationRequired("a real account session is required")
+        yield AuthenticatedTransaction(
+            database,  # type: ignore[arg-type]
+            SimpleNamespace(),  # type: ignore[arg-type]
+            ResolvedActorContext(
+                actor=ActorContext(PERSON_ID, SESSION_ID, selected),
+                membership_role="learner" if selected == PUBLIC_TENANT else "member",
+                person_revision=1,
+                session_revision=1,
+            ),
+            "opaque-session",
+        )
+
+    def sessions() -> _SessionScope:
+        return _SessionScope(database)
+
+    runtime = _runtime(tmp_path)
+    runtime = replace(
+        runtime,
+        intake=replace(
+            runtime.intake,
+            policy=replace(
+                runtime.intake.policy,
+                tenant_ids=frozenset({PUBLIC_TENANT, ORGANISATION_TENANT, OTHER_TENANT}),
+            ),
+        ),
+    )
+    app = FastAPI()
+    register_problem_handlers(app)
+    install_acquisition_runtime(
+        app,
+        settings=settings,
+        sessions=sessions,  # type: ignore[arg-type]
+        require_actor=require_actor,
+        runtime=runtime,
+    )
+    prefix = "/v1/conversation/acquisition"
+    reads = (
+        prefix + "/entry",
+        prefix + "/session",
+        prefix + "/submissions/summary",
+        "/v1/me/plan",
+        "/v1/me/usage",
+    )
+    monkeypatch.setattr(
+        "ac_platform.http.conversation_acquisition.account_usage",
+        AsyncMock(return_value={"calls": [], "earlier_seconds": 0, "truncated": False}),
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://learner.example.test"
+    ) as learner:
+        for path in reads:
+            served = await learner.get(path, headers={"X-Test-Tenant": "organisation"})
+            assert served.status_code == 200, (path, served.text)
+            for name in ("operations", "unlisted"):
+                refused = await learner.get(path, headers={"X-Test-Tenant": name})
+                assert refused.status_code == 403, (path, name, refused.text)
+                assert refused.json()["detail"] == WORKSPACE_UNAVAILABLE_MESSAGE
+        # The organisation service carries the selected tenant and no trial.
+        assert services and set(services) == {(ORGANISATION_TENANT, False, None)}
+        assert summaries == [ORGANISATION_TENANT]
+        personal = await learner.get(prefix + "/session", headers={"X-Test-Tenant": "personal"})
+        assert personal.status_code == 200
+        assert services[-1] == (PUBLIC_TENANT, True, None)
+
+    services.clear()
+    summaries.clear()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://salesxray.example.test"
+    ) as sales:
+        sales.cookies.set(settings.session_cookie_name, "s" * 43)
+        organisation = {"X-Test-Tenant": "organisation"}
+        session = await sales.get(prefix + "/session", headers=organisation)
+        assert session.status_code == 200 and session.json()["state"] == "account"
+        assert services[-1] == (ORGANISATION_TENANT, False, None)
+        summary_response = await sales.get(prefix + "/submissions/summary", headers=organisation)
+        assert summary_response.status_code == 200 and summaries == [ORGANISATION_TENANT]
+        for name in ("operations", "unlisted"):
+            refused = await sales.get(prefix + "/session", headers={"X-Test-Tenant": name})
+            assert refused.status_code == 403, refused.text
+            assert refused.json()["detail"] == WORKSPACE_UNAVAILABLE_MESSAGE
+
+        # A guest cookie belongs to Personal: the organisation session reports the
+        # unclaimed visitor (checked on the Personal service) and the claim says
+        # how to proceed instead of moving the upload into the organisation.
+        sales.cookies.set("ac_xray_guest", "a" * 43)
+        claim_required = await sales.get(prefix + "/session", headers=organisation)
+        assert claim_required.status_code == 200
+        assert claim_required.json()["state"] == "claim_required"
+        assert services[-1] == (PUBLIC_TENANT, True, "a" * 43)
+        claim = await sales.post(
+            prefix + "/claim",
+            headers={**organisation, "Origin": "https://salesxray.example.test"},
+        )
+        assert claim.status_code == 409 and claim.json()["detail"] == CLAIM_PERSONAL_ONLY_MESSAGE
+        refused_claim = await sales.post(
+            prefix + "/claim",
+            headers={"X-Test-Tenant": "operations", "Origin": "https://salesxray.example.test"},
+        )
+        assert refused_claim.status_code == 403
+        assert refused_claim.json()["detail"] == WORKSPACE_UNAVAILABLE_MESSAGE

@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     grant_minutes,
 )
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
+from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -49,7 +50,11 @@ async def require_eligible_learner(
     operations_tenant_id: UUID,
     lock_person: bool = False,
 ) -> None:
-    """Check the exact active learner pair; platform authority does not bypass it."""
+    """Check the exact active account pair; platform authority does not bypass it.
+
+    The pair is a Personal learner or a human member (owner, admin or member)
+    of an organisation. The caller checks that the organisation is approved.
+    """
 
     if tenant_id == operations_tenant_id:
         raise EligibleLearnerUnavailable
@@ -72,7 +77,7 @@ async def require_eligible_learner(
     membership_statement = select(Membership).where(
         Membership.tenant_id == tenant_id,
         Membership.person_id == person_id,
-        Membership.role == "learner",
+        Membership.role.in_(SALES_XRAY_MEMBER_ROLES),
         Membership.status == "active",
         Membership.ended_at.is_(None),
     )
