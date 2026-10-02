@@ -47,6 +47,7 @@ from ac_platform.http.learning import (
 from ac_platform.http.media import install_media_http
 from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
+from ac_platform.http.organisation import install_organisation_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.platform import install_platform_http
 from ac_platform.http.practice import install_practice_http
@@ -143,6 +144,7 @@ def create_app(
         sessions=session_factory,
         provider=configured_identity_provider,
     )
+    install_organisation_http(application, settings=settings, require_actor=require_actor)
     install_sales_xray_profile_http(
         application,
         settings=settings,
