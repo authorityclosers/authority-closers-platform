@@ -255,7 +255,7 @@ def _render(environment: str, binding: Any, supervisor: str | None = None) -> di
         canonical_paths=False,
         binding=binding,
         supervisor_source=supervisor,
-    )
+    )[0]
 
 
 def _write(path: Path, payload: dict[str, Any]) -> tuple[Path, str]:
@@ -532,7 +532,7 @@ def test_previous_release_renderer_path_is_not_rechecked_as_candidate_path(
     )
     renderer = Path("/candidate/release/scripts/render-sales-xray-native.py")
     descriptor: dict[str, Any] = {}
-    monkeypatch.setattr(installer, "_rendered_descriptor", lambda **_: descriptor)
+    monkeypatch.setattr(installer, "_rendered_descriptor", lambda **_: (descriptor, "0" * 64))
     monkeypatch.setattr(installer, "_ensure_existing_parents", lambda *_, **__: None)
     monkeypatch.setattr(installer, "_ensure_owner", lambda *_, **__: None)
 
@@ -990,3 +990,53 @@ def test_deployment_lock_uses_exclusive_flock(
         assert len(events) == 1
         assert events[0][1] == FakeFcntl.LOCK_EX
     assert events[1][1] == FakeFcntl.LOCK_UN
+
+
+def test_checked_in_renderer_is_reviewed_for_every_environment() -> None:
+    digest = hashlib.sha256(RENDERER.read_bytes()).hexdigest()
+    assert installer.REVIEWED_RENDERERS[digest] == installer.ENVIRONMENTS
+
+
+def _reviewed_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, environments: frozenset[str] | None
+) -> tuple[Path, str]:
+    renderer = tmp_path / "render-sales-xray-native.py"
+    renderer.write_bytes(RENDERER.read_bytes() + b"# older reviewed release\n")
+    digest = hashlib.sha256(renderer.read_bytes()).hexdigest()
+    reviewed = {} if environments is None else {digest: environments}
+    monkeypatch.setattr(installer, "REVIEWED_RENDERERS", reviewed)
+    return renderer, digest
+
+
+def test_release_renderer_is_accepted_only_for_its_reviewed_environments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staging, staging_digest = _render_descriptor(tmp_path / "staging.json", "staging")
+    development, development_digest = _render_descriptor(
+        tmp_path / "development.json", "development"
+    )
+    renderer, digest = _reviewed_copy(tmp_path, monkeypatch, frozenset({"staging", "production"}))
+    args = {**_install_args(tmp_path, staging, staging_digest), "renderer": renderer}
+    result = installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+    assert result["status"] == "installed"
+    assert json.loads(args["receipt"].read_text())["renderer_sha256"] == digest
+
+    def renderer_must_not_run(*_: Any, **__: Any) -> None:
+        raise AssertionError("renderer ran")
+
+    monkeypatch.setattr(installer.subprocess, "run", renderer_must_not_run)
+    args = {
+        **_install_args(tmp_path, development, development_digest, "development"),
+        "renderer": renderer,
+    }
+    with pytest.raises(installer.InstallerError, match="^renderer_environment_unsupported$"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+    assert not args["receipt"].exists()
+
+
+def test_unknown_renderer_hash_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    descriptor, digest = _render_descriptor(tmp_path / "native-units.json")
+    renderer, _ = _reviewed_copy(tmp_path, monkeypatch, None)
+    args = {**_install_args(tmp_path, descriptor, digest), "renderer": renderer}
+    with pytest.raises(installer.InstallerError, match="^renderer_sha256_mismatch$"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))

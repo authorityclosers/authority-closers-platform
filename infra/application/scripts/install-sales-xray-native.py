@@ -44,9 +44,18 @@ NATIVE_IMAGE_CONFIG_ID = "sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2
 # image artifact. Docker 29/containerd may report the transport manifest while
 # classic Docker may report the config ID; either is safe only as this pair.
 NATIVE_IMAGE_BINDING = frozenset({NATIVE_IMAGE_REF, NATIVE_IMAGE_CONFIG_ID})
-RENDERER_SHA256 = "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76"
 SCHEMA = "ac.sales-xray.native-supervisor/1"
 ENVIRONMENTS = frozenset({"development", "staging", "production"})
+# Every reviewed renderer and the environments it may render. The renderer runs
+# from the candidate build's own release, so each stored build's renderer needs
+# an entry; a renderer edit without a reviewed entry here fails closed.
+REVIEWED_RENDERERS: Mapping[str, frozenset[str]] = {
+    # 390b4285 (the staging and production native build of 29 Sep).
+    "33787dcc6d08219f6e595d86ccc0a80574f822678d13f629471171cdd5ce2544": frozenset(
+        {"staging", "production"}
+    ),
+    "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76": ENVIRONMENTS,
+}
 NATIVE_GROUP_NAME = "ac-sales-xray-native"
 NATIVE_GROUP_GID = 10001
 NATIVE_READINESS_TIMEOUT_SECONDS = 10.0
@@ -478,12 +487,15 @@ def _rendered_descriptor(
     canonical_paths: bool,
     binding: NativeBinding = LEGACY_BINDING,
     supervisor_source: str | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], str]:
     _ensure_absolute(renderer, "renderer_path_not_absolute")
     _ensure_existing_parents(renderer, "renderer_parent_invalid")
     _ensure_regular(renderer, "renderer_path_invalid")
-    if _sha256_file(renderer) != RENDERER_SHA256:
+    renderer_sha256 = _sha256_file(renderer)
+    if renderer_sha256 not in REVIEWED_RENDERERS:
         raise _fail("renderer_sha256_mismatch")
+    if environment not in REVIEWED_RENDERERS[renderer_sha256]:
+        raise _fail("renderer_environment_unsupported")
     _ensure_absolute(renderer_python, "renderer_python_not_absolute")
     try:
         resolved_python = renderer_python.resolve(strict=True)
@@ -531,7 +543,7 @@ def _rendered_descriptor(
         raise _fail("renderer_output_invalid") from exc
     if not isinstance(parsed, dict):
         raise _fail("renderer_output_invalid")
-    return parsed
+    return parsed, renderer_sha256
 
 
 def _validate_renderer_binding(
@@ -544,7 +556,8 @@ def _validate_renderer_binding(
     binding: NativeBinding = LEGACY_BINDING,
     enforce_path_binding: bool = True,
     supervisor_source: str | None = None,
-) -> None:
+) -> str:
+    """Check the descriptor against the renderer; return the hash that ran."""
     # The candidate descriptor must use the renderer path bound to its artifact.
     # During an upgrade, however, the previous descriptor is intentionally
     # checked with the current release's renderer executable.  Its own
@@ -560,7 +573,7 @@ def _validate_renderer_binding(
     if canonical_paths:
         _ensure_existing_parents(renderer, "renderer_parent_invalid", require_root=True)
         _ensure_owner(renderer, group="acops", code="renderer_owner_invalid")
-    rendered = _rendered_descriptor(
+    rendered, renderer_sha256 = _rendered_descriptor(
         renderer=renderer,
         renderer_python=renderer_python,
         environment=environment,
@@ -570,6 +583,7 @@ def _validate_renderer_binding(
     )
     if rendered != dict(descriptor):
         raise _fail("native_units_renderer_drift")
+    return renderer_sha256
 
 
 def _exact_predecessor(
@@ -1273,7 +1287,7 @@ def install(
         supplied_sha256=native_units_sha256,
         binding=binding,
     )
-    _validate_renderer_binding(
+    renderer_sha256 = _validate_renderer_binding(
         descriptor,
         renderer=renderer,
         renderer_python=renderer_python,
@@ -1324,7 +1338,7 @@ def install(
                 exact.renderer_sha256,
                 trusted_owner=require_root or canonical_paths,
             )
-        _validate_renderer_binding(
+        if renderer_sha256 != _validate_renderer_binding(
             previous,
             renderer=renderer,
             renderer_python=renderer_python,
@@ -1333,7 +1347,8 @@ def install(
             binding=previous_binding,
             enforce_path_binding=False,
             supervisor_source=previous_supervisor,
-        )
+        ):
+            raise _fail("renderer_sha256_mismatch")
         previous_units = previous["units"]
     units = descriptor["units"]
     assert isinstance(units, dict)
@@ -1357,7 +1372,7 @@ def install(
         "helper_source_sha": binding.helper_source_sha,
         "native_artifact_sha256": native_artifact_sha256,
         "previous_native_units_sha256": previous_native_units_sha256,
-        "renderer_sha256": RENDERER_SHA256,
+        "renderer_sha256": renderer_sha256,
         "start_requested": start,
         "provider_calls": 0,
         "database_writes": 0,
