@@ -175,13 +175,12 @@ class ConversationAuthority:
                 raise ValueError("hosted_control_tenant_mismatch")
             if self.environment != "test" and (
                 any(item.zero_cost_basis == "synthetic" for item in bundle.stages)
-                or (
-                    bundle.acquisition_policy is not None
-                    and any(
-                        item.zero_cost_basis == "synthetic"
-                        for stages in bundle.acquisition_policy.stage_sets()
-                        for item in stages
-                    )
+                or any(
+                    item.zero_cost_basis == "synthetic"
+                    for tenant_id in bundle.acquisition_tenant_ids()
+                    if (policy := bundle.acquisition_policy_for(tenant_id)) is not None
+                    for stages in policy.stage_sets()
+                    for item in stages
                 )
             ):
                 raise ValueError("synthetic_approval_not_hosted")
@@ -193,7 +192,7 @@ class ConversationAuthority:
 
     def recipient(self, bundle: HostedApprovalBundle, actor: ConversationActor) -> None:
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy
+            policy = bundle.acquisition_policy_for(actor.tenant_id)
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition provider policy."
@@ -436,7 +435,7 @@ class ConversationAuthority:
         if intent.source_bytes > MAX_AUDIO_BYTES:
             raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy
+            policy = bundle.acquisition_policy_for(actor.tenant_id)
             if policy is None or not policy.matches_actor(actor):
                 raise ConversationDenied(
                     "This processing lease has no approved acquisition upload policy."
@@ -759,7 +758,7 @@ class ConversationAuthority:
         """
 
         if isinstance(actor, ProcessingActor):
-            policy = bundle.acquisition_policy
+            policy = bundle.acquisition_policy_for(actor.tenant_id)
             if policy is None or not policy.matches_actor(actor):
                 return None
             candidates = tuple(
@@ -796,7 +795,9 @@ class ConversationAuthority:
         """
 
         if isinstance(actor, ProcessingActor):
-            policy: AcquisitionProviderPolicy | None = bundle.acquisition_policy
+            policy: AcquisitionProviderPolicy | None = bundle.acquisition_policy_for(
+                actor.tenant_id
+            )
             if policy is None or not policy.matches_actor(actor):
                 return None
             try:
@@ -1561,8 +1562,10 @@ class ConversationAuthority:
         )
         if len(candidates) == 1:
             return candidates[0].configuration_sha256
-        if isinstance(actor, ProcessingActor) and bundle.acquisition_policy is not None:
-            policy = bundle.acquisition_policy
+        if (
+            isinstance(actor, ProcessingActor)
+            and (policy := bundle.acquisition_policy_for(actor.tenant_id)) is not None
+        ):
             for configuration_sha256 in policy.configuration_digests():
                 try:
                     derived = policy.derive_stage(

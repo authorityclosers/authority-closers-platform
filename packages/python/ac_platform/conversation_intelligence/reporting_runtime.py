@@ -54,7 +54,7 @@ def validate_bootstrap_approval(bundle: HostedApprovalBundle) -> None:
         bundle.allowances
         or bundle.internal_tester_accounts
         or bundle.stages
-        or bundle.acquisition_policy is not None
+        or bundle.acquisition_tenant_ids()
         or bundle.budget_cap_paise != 0
         or bundle.paid_approval_ref is not None
     ):
@@ -92,11 +92,13 @@ def compose_hosted_reporting(
     approved_references = tuple(
         (stage.provider_id, stage.credential_ref) for stage in bundle.stages
     )
-    if bundle.acquisition_policy is not None:
-        # Public sources do not exist when the worker starts. Bind their
+    for tenant_id in bundle.acquisition_tenant_ids():
+        # Acquisition sources do not exist when the worker starts. Bind their
         # release-approved credential references now so a later source cannot
         # introduce a browser-selected provider or secret path.
-        approved_references += bundle.acquisition_policy.provider_references()
+        policy = bundle.acquisition_policy_for(tenant_id)
+        if policy is not None:
+            approved_references += policy.provider_references()
     for provider, credential_ref in approved_references:
         previous = references.setdefault(provider, credential_ref)
         if previous != credential_ref:

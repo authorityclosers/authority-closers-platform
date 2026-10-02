@@ -459,7 +459,7 @@ class AcquisitionProviderProfile(_StrictFrozenModel):
 
 
 class AcquisitionProviderPolicy(_StrictFrozenModel):
-    """An exact processing principal's bounded public acquisition template."""
+    """An exact processing principal's bounded tenant acquisition template."""
 
     schema_id: Literal["ac.sales-xray.acquisition-provider-policy/1"] = Field(alias="schema")
     id: UUID
@@ -613,6 +613,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
         default=(), max_length=MAX_INTERNAL_TESTER_ACCOUNTS
     )
     acquisition_policy: AcquisitionProviderPolicy | None = None
+    organisation_acquisition_policies: tuple[AcquisitionProviderPolicy, ...] = ()
     stage_call_supplements: tuple[StageCallSupplement, ...] = Field(
         default=(), max_length=MAX_STAGE_CALL_SUPPLEMENTS
     )
@@ -689,14 +690,30 @@ class HostedApprovalBundle(_StrictFrozenModel):
             raise ValueError("allowance_stored_bytes_exceed_bundle_cap")
 
         policy = self.acquisition_policy
+        tenant_ids = [item.tenant_id for item in self.organisation_acquisition_policies]
+        if self.provider_control_tenant_id in tenant_ids or (
+            policy is not None and policy.tenant_id in tenant_ids
+        ):
+            raise ValueError("organisation_acquisition_tenant_invalid")
+        if len(tenant_ids) != len(set(tenant_ids)):
+            raise ValueError("duplicate_acquisition_tenant")
+        # Validate the original entries, before lookup can collapse duplicates.
+        policies = (() if policy is None else (policy,)) + self.organisation_acquisition_policies
+        processing_ids = [item.processing_person_id for item in policies]
+        if len(processing_ids) != len(set(processing_ids)):
+            raise ValueError("duplicate_acquisition_processing_person")
+        policy_ids = [item.id for item in policies]
+        if len(policy_ids) != len(set(policy_ids)):
+            raise ValueError("duplicate_approval_id")
         paid_stages = [
             approval
             for approval in self.stages
             if approval.zero_cost_basis == "paid_pricing_evidence"
         ]
-        policy_has_paid_stages = policy is not None and any(
+        policy_has_paid_stages = any(
             item.zero_cost_basis == "paid_pricing_evidence"
-            for stages in policy.stage_sets()
+            for candidate in policies
+            for stages in candidate.stage_sets()
             for item in stages
         )
         if paid_stages or policy_has_paid_stages:
@@ -704,13 +721,13 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("paid_project_cap_required")
             if self.paid_approval_ref is None:
                 raise ValueError("paid_approval_reference_required")
-            if any(approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages) or (
-                policy is not None
-                and any(
-                    item.max_cost_paise > self.budget_cap_paise
-                    for stages in policy.stage_sets()
-                    for item in stages
-                )
+            if any(
+                approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages
+            ) or any(
+                item.max_cost_paise > self.budget_cap_paise
+                for candidate in policies
+                for stages in candidate.stage_sets()
+                for item in stages
             ):
                 raise ValueError("paid_stage_cost_exceeds_project_cap")
         elif self.budget_cap_paise != 0 or self.paid_approval_ref is not None:
@@ -740,22 +757,22 @@ class HostedApprovalBundle(_StrictFrozenModel):
             for approval in self.stages
         ):
             raise ValueError("stage_expiry_outside_bundle")
-        if policy is not None:
+        for candidate in policies:
             if (
-                policy.expires_at_epoch <= self.issued_at_epoch
-                or policy.expires_at_epoch > self.expires_at_epoch
-                or policy.max_stored_source_bytes > self.max_stored_source_bytes
+                candidate.expires_at_epoch <= self.issued_at_epoch
+                or candidate.expires_at_epoch > self.expires_at_epoch
+                or candidate.max_stored_source_bytes > self.max_stored_source_bytes
             ):
                 raise ValueError("acquisition_policy_expiry_or_capacity_invalid")
             if any(
                 item.expires_at_epoch <= self.issued_at_epoch
-                for stages in policy.stage_sets()
+                for stages in candidate.stage_sets()
                 for item in stages
             ):
                 raise ValueError("acquisition_stage_expiry_outside_bundle")
-            if policy.id in approval_ids:
+            if candidate.id in approval_ids:
                 raise ValueError("duplicate_approval_id")
-        elif self.stage_call_supplements:
+        if policy is None and self.stage_call_supplements:
             raise ValueError("stage_supplement_requires_acquisition_policy")
         if policy is not None:
             for supplement in self.stage_call_supplements:
@@ -818,6 +835,28 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("acquisition_c5_benchmark_stage_scope_invalid")
         return self
 
+    def acquisition_policy_for(self, tenant_id: UUID) -> AcquisitionProviderPolicy | None:
+        """Resolve only an explicitly approved tenant's processing policy."""
+
+        if self.acquisition_policy is not None and self.acquisition_policy.tenant_id == tenant_id:
+            return self.acquisition_policy
+        return next(
+            (
+                item
+                for item in self.organisation_acquisition_policies
+                if item.tenant_id == tenant_id
+            ),
+            None,
+        )
+
+    def acquisition_tenant_ids(self) -> tuple[UUID, ...]:
+        """Return public and organisation tenants in release order."""
+
+        return (
+            *((self.acquisition_policy.tenant_id,) if self.acquisition_policy is not None else ()),
+            *(item.tenant_id for item in self.organisation_acquisition_policies),
+        )
+
     @property
     def digest(self) -> str:
         """SHA-256 of the canonical JSON content, including the schema."""
@@ -839,6 +878,12 @@ class HostedApprovalBundle(_StrictFrozenModel):
             # The optional field is omitted when empty so an existing /1
             # bundle keeps its exact canonical bytes and digest.
             value["acquisition_policy"].pop("profiles", None)
+        if not self.organisation_acquisition_policies:
+            value.pop("organisation_acquisition_policies", None)
+        else:
+            for item in value["organisation_acquisition_policies"]:
+                if not item["profiles"]:
+                    item.pop("profiles")
         if not self.internal_tester_accounts:
             # Existing /1 artifacts retain byte-for-byte canonical form until
             # an operator explicitly issues a tester exemption approval.
@@ -865,7 +910,11 @@ class HostedApprovalBundle(_StrictFrozenModel):
             raise ActivationContractError("approval_environment_mismatch")
         if not self.issued_at_epoch <= now < self.expires_at_epoch:
             raise ActivationContractError("approval_bundle_inactive")
-        if self.acquisition_policy is not None and now >= self.acquisition_policy.expires_at_epoch:
+        if any(
+            now >= policy.expires_at_epoch
+            for tenant_id in self.acquisition_tenant_ids()
+            if (policy := self.acquisition_policy_for(tenant_id)) is not None
+        ):
             raise ActivationContractError("acquisition_policy_inactive")
         return self
 

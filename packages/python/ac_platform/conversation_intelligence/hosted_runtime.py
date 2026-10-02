@@ -61,6 +61,7 @@ class PinnedApprovalLoader:
     sha256: str
     environment: str
     operations_tenant_id: UUID
+    public_learner_tenant_id: UUID | None = None
 
     def __call__(self) -> HostedApprovalBundle:
         try:
@@ -89,15 +90,19 @@ class PinnedApprovalLoader:
             bundle.current(int(datetime.now(UTC).timestamp()), self.environment)
             if bundle.provider_control_tenant_id != self.operations_tenant_id:
                 raise ValueError
+            if any(
+                policy.tenant_id == self.public_learner_tenant_id
+                for policy in bundle.organisation_acquisition_policies
+            ):
+                raise ValueError
             if self.environment != "test" and (
                 any(item.zero_cost_basis == "synthetic" for item in bundle.stages)
-                or (
-                    bundle.acquisition_policy is not None
-                    and any(
-                        item.zero_cost_basis == "synthetic"
-                        for stages in bundle.acquisition_policy.stage_sets()
-                        for item in stages
-                    )
+                or any(
+                    item.zero_cost_basis == "synthetic"
+                    for tenant_id in bundle.acquisition_tenant_ids()
+                    if (policy := bundle.acquisition_policy_for(tenant_id)) is not None
+                    for stages in policy.stage_sets()
+                    for item in stages
                 )
             ):
                 raise ValueError
@@ -126,6 +131,7 @@ def load_pinned_approval(settings: HostedConversationSettings) -> HostedApproval
         settings.sales_xray_approval_sha256 or "",
         settings.environment,
         settings.operations_tenant_id,
+        getattr(settings, "public_learner_tenant_id", None),
     )()
 
 
@@ -154,6 +160,7 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
         settings.sales_xray_approval_sha256 or "",
         settings.environment,
         settings.operations_tenant_id,
+        getattr(settings, "public_learner_tenant_id", None),
     )
     bundle = loader()
     tester_policy = InternalTesterPolicy(loader, settings.environment)
@@ -183,11 +190,7 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
                         if not bundle.internal_tester_accounts or public_learner_tenant_id is None
                         else (public_learner_tenant_id,)
                     ),
-                    *(
-                        ()
-                        if bundle.acquisition_policy is None
-                        else (bundle.acquisition_policy.tenant_id,)
-                    ),
+                    *bundle.acquisition_tenant_ids(),
                 }
             ),
             authorization_ref=bundle.intake_authorization_ref,

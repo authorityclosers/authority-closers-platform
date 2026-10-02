@@ -87,6 +87,7 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
     cleanup_error = RuntimeError("accidental-sensitive-value") if scenario == "cleanup" else None
     engine = SimpleNamespace(dispose=AsyncMock(side_effect=cleanup_error))
     settings = SimpleNamespace(
+        public_learner_tenant_id=uuid4(),
         sales_xray_enabled=True,
         sales_xray_acquisition_enabled=True,
         database_url="unused",
@@ -138,7 +139,9 @@ def test_scripted_pipeline(monkeypatch, capsys, tmp_path, scenario, exit_code, s
     monkeypatch.setenv("AC_DATABASE_URL", "unused-sensitive-connection")
     for name, replacement in {
         "Settings": lambda **kw: settings,
-        "load_pinned_approval": lambda s: SimpleNamespace(acquisition_policy=object()),
+        "load_pinned_approval": lambda s: SimpleNamespace(
+            acquisition_policy_for=lambda tenant_id: object()
+        ),
         "compose_hosted_intake": lambda s: runtime,
         "SocketNativeRuntime": lambda *a, **kw: object(),
         "create_async_engine": lambda *a, **kw: engine,
@@ -208,6 +211,7 @@ def test_retention_by_environment(monkeypatch, capsys, environment, days, ref, a
     monkeypatch.setenv("AC_ENVIRONMENT", environment)
     monkeypatch.setenv("AC_DATABASE_URL", "unused-sensitive-connection")
     settings = SimpleNamespace(
+        public_learner_tenant_id=uuid4(),
         sales_xray_enabled=True,
         sales_xray_acquisition_enabled=True,
         database_url="unused",
@@ -224,7 +228,9 @@ def test_retention_by_environment(monkeypatch, capsys, environment, days, ref, a
     for name, replacement in {
         "Settings": lambda **kw: settings,
         "require_baked_release_id": lambda _: None,
-        "load_pinned_approval": lambda s: SimpleNamespace(acquisition_policy=object()),
+        "load_pinned_approval": lambda s: SimpleNamespace(
+            acquisition_policy_for=lambda tenant_id: object()
+        ),
         "compose_hosted_intake": lambda s: runtime,
         "SocketNativeRuntime": lambda *a, **kw: object(),
         "create_async_engine": engine,
