@@ -9,6 +9,7 @@ export const platformPermissionSchema = z.enum([
   "platform_catalog_publish",
   "platform_organisations_manage",
   "platform_release_manage",
+  "platform_billing_manage",
 ]);
 export const platformAccessSchema = z
   .object({
