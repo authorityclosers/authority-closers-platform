@@ -26,10 +26,16 @@ Accepted `upgrade()` statements, and nothing else (docstring and `pass` allowed)
 - `op.add_column("t", sa.Column(...))`: explicit `nullable=True`, or a static non-None
   `server_default`; never `primary_key=True`.
 
-Columns take a literal name and an allowlisted `sa.*` or `postgresql.JSONB/TSVECTOR` type with
-literal arguments only; keywords limited to `nullable`, `server_default`, `primary_key`
-(literal bools) and `comment`. A static default is a string literal, `sa.text("<literal>")`,
-`sa.func.now()`, `sa.false()` or `sa.true()`. Positional `ForeignKey`, FK/unique/check
+Columns take a literal name and an allowlisted `sa.*` or `postgresql.JSONB/TSVECTOR` type whose
+arguments are `int`/`bool` literals only, with keywords limited to `length`, `timezone`,
+`precision`, `scale`, `asdecimal` and `as_uuid` (type arguments are written into DDL raw, so
+string precisions and `collation` escalate). Column keywords are limited to `nullable`,
+`server_default`, `primary_key` (literal bools) and `comment`. A static default is a string
+literal (SQLAlchemy quotes it), `sa.func.now()`, `sa.false()`, `sa.true()`, or
+`sa.text("<sql>")` whose whole string is one of: a signed integer or decimal, `true`, `false`,
+`now()`, or one single-quoted literal with no `'`, `;`, `\` or `--` inside, optionally followed
+by `::jsonb`. `sa.text` is written into DDL unchanged, so anything else (multi-statement SQL,
+function calls such as `gen_random_uuid()`, casts other than `::jsonb`, comments) escalates. Positional `ForeignKey`, FK/unique/check
 constraints, `sa.Index`, `sa.Enum`, `unique=`/`index=` and `**kwargs` all escalate: this is
 narrower than the `migration_safety` helper's additive allowlist, which is not the merge rule.
 
@@ -42,16 +48,19 @@ call-free annotations, and exactly one undecorated, argument-free `upgrade()` (a
 `op`, module calls, `if`/`class`, `async def`, defaults or decorators) escalates. Parse
 failures, null bytes, deep nesting, missing or duplicate `upgrade()` escalate.
 
-Against the 60 migrations on main, exactly 3 qualify (`0024` plain index, `0048` add_column with
+Against the 59 revision files on main (60 `.py` files with `env.py`), after the CTO review fix,
+exactly 3 still qualify (`0024` plain index, `0048` add_column with
 `sa.false()` default, `0061` nullable JSON column); all others use FK/check constraints,
 `execute`, data writes or alter/drop and stay escalations.
 
 ## Tests
 
 `tests/unit/test_merge_class.py` keeps every M1a fixture and adds fictional cases: 15 allowed
-upgrade bodies; 63 disallowed bodies (unique/dynamic indexes, implicit vs explicit
-nullability, None/dynamic defaults, FK/unique/check, raw SQL, execute, drop/alter/rename/batch,
-other ops, non-call statements); 21 parse-error, missing/ambiguous upgrade and module-code
+upgrade bodies plus 16 allowed `sa.text` default forms and a literal-int Numeric table; 73
+disallowed bodies (unique/dynamic indexes, implicit vs explicit nullability, None/dynamic
+defaults, FK/unique/check, string type arguments and collations, raw SQL, execute,
+drop/alter/rename/batch, other ops, non-call statements) plus 25 unsafe `sa.text` defaults
+(multi-statement, `gen_random_uuid()`, comments, quotes, casts, case and whitespace variants); 21 parse-error, missing/ambiguous upgrade and module-code
 cases; merged-migration edit/delete/rename, wrong case or suffix and other protected rules;
 missing contents; and a no-execution test with `open`/`exec`/`eval`/`__import__`/`os.system`/
 `socket` patched to raise. Mutation sanity: removing the unique, nullability or import guard
@@ -60,7 +69,9 @@ each fails 2-3 tests.
 ## Verification (2026-10-02, platform lane checkout, repository venv)
 
 - `PATH="$PWD/.venv/bin:$PATH" python3 -m pytest tests/unit/test_merge_class.py -q`:
-  **537 passed**, exit 0 (M1a: 427).
+  **589 passed**, exit 0 (M1a: 427; first M1b head `c16e433`: 537). Against `c16e433`'s
+  classifier the same suite fails 31 of the new fixtures, including the CTO's
+  `sa.text("0; DROP TABLE demo_victim; --")` and `sa.Numeric("10) CHECK (false")` cases.
 - Ruff format/lint and mypy on both files; `pnpm run format:check`, `pnpm run lint`,
   `pnpm run typecheck`; `git diff --check`; `python3 scripts/ac_task.py check`: all exit 0.
   Remote CI/single-track receipts are on the PR; this offline evidence does not claim them.

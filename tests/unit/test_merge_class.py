@@ -297,7 +297,25 @@ ALLOWED = [
     ' comment="fictional"), schema="fictional")',
     'op.create_table("fictional_widgets", sa.Column("id", sa.Uuid(), nullable=False))\n'
     '    op.create_index("ix_fictional", "fictional_widgets", ["id"])',
+    'op.create_table("fictional_widgets", sa.Column("amount", sa.Numeric(10, 2)),'
+    ' sa.Column("ok", sa.Numeric(precision=12, scale=4, asdecimal=False)))',
 ]
+
+
+def text_default(sql):
+    return (
+        'op.add_column("fictional_widgets", sa.Column("n", sa.Text(), nullable=False,'
+        f" server_default=sa.text({sql!r})))"
+    )
+
+
+# Every sa.text() form main's migrations use, plus ::jsonb literals.
+TEXT_ALLOWED = [
+    "0", "5", "-1", "2.50", "true", "false", "now()", "'active'", "'pending'",
+    "'course-completion'", "'audit.enrollment.created.v1'", "''", "'[]'", "'{}'",
+    "'{}'::jsonb", "'[]'::jsonb",
+]  # fmt: skip
+ALLOWED += [text_default(sql) for sql in TEXT_ALLOWED]
 
 
 @pytest.mark.parametrize("body", ALLOWED)
@@ -350,6 +368,18 @@ DISALLOWED = [
     'op.create_table("fictional_widgets", *COLUMNS)',
     'op.create_table("fictional_widgets")',
     'op.create_table(TABLE, sa.Column("id", sa.Uuid()))',
+    # Type arguments are written into DDL raw: strings, collations and unknown keywords.
+    'op.create_table("fictional_widgets", sa.Column("n", sa.Numeric("10) CHECK (false")))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.Numeric(precision="10")))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(collation="C")))',
+    'op.create_table("fictional_widgets",'
+    """ sa.Column("n", sa.String(collation='C" ; DROP TABLE x; --')))""",
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(64, "C")))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(length=1.5)))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(length=-1)))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(length=None)))',
+    'op.create_table("fictional_widgets", sa.Column("n", sa.String(**OPTIONS)))',
+    'op.create_table("fictional_widgets", sa.Column("n", postgresql.JSONB(astext_type=1)))',
     # Raw SQL, execute, destructive, alter, rename, batch and other schema ops.
     'op.execute("CREATE TABLE fictional_widgets (id int)")',
     'op.execute(sa.text("UPDATE fictional_widgets SET n = 1"))',
@@ -379,6 +409,16 @@ DISALLOWED = [
     'import os\n    os.system("fictional")',
     "return None",
 ]
+
+
+# sa.text() defaults are written into DDL unchanged: only whole literal forms are static.
+TEXT_DISALLOWED = [
+    "0; DROP TABLE demo_victim; --", "gen_random_uuid()", "now() + interval '1 day'",
+    "NOW()", "TRUE", "1e3", "0x10", "1.", ".5", "--", "0 --", "'a' || 'b'", "'it''s'",
+    "'a;b'", "'a--b'", "'a\\b'", "'unterminated", "'a'::text", "'{}'::jsonb; SELECT 1",
+    "now()\n", " 0", "", "current_timestamp", "nextval('fictional_seq')", "(0)",
+]  # fmt: skip
+DISALLOWED += [text_default(sql) for sql in TEXT_DISALLOWED]
 
 
 @pytest.mark.parametrize("body", DISALLOWED)

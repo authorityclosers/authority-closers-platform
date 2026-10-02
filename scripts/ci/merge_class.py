@@ -5,6 +5,7 @@ prove its upgrade() is purely additive. Contents are parsed, never executed.
 """
 
 import ast
+import re
 from collections.abc import Mapping
 
 _ROUTINE_ROOTS = {"apps", "packages", "tests", "docs", "tools"}
@@ -98,6 +99,9 @@ _SA_TYPES = {
     "LargeBinary", "Numeric", "SmallInteger", "String", "Text", "Time", "Uuid",
 }  # fmt: skip
 _PG_TYPES = {"JSONB", "TSVECTOR"}
+_TYPE_KEYWORDS = {"length", "timezone", "precision", "scale", "asdecimal", "as_uuid"}
+# sa.text() is written into DDL unchanged, so only these whole-string forms are static defaults.
+_TEXT_DEFAULT = re.compile(r"-?[0-9]+(?:\.[0-9]+)?|true|false|now\(\)|'[^';\\]*'(?:::jsonb)?")
 
 
 def _const(node: ast.AST | None, *types: type) -> bool:
@@ -141,10 +145,13 @@ def _type(node: ast.AST) -> bool:
     if _member(node, "sa", _SA_TYPES) or _member(node, "postgresql", _PG_TYPES):
         return True
     call = _call(node, "sa", _SA_TYPES) or _call(node, "postgresql", _PG_TYPES)
+    # String type arguments (precision, collation) are written into DDL raw: ints/bools only.
+    kw = _keywords(call, _TYPE_KEYWORDS) if call else None
     return (
         call is not None
-        and all(_const(arg, str, int, bool) for arg in call.args)
-        and all(kw.arg is not None and _const(kw.value, str, int, bool) for kw in call.keywords)
+        and kw is not None
+        and all(_const(arg, int, bool) for arg in call.args)
+        and all(_const(value, int, bool) for value in kw.values())
     )
 
 
@@ -155,7 +162,10 @@ def _server_default(node: ast.AST | None) -> bool:
         return True
     text = _call(node, "sa", {"text"})
     if text is not None:
-        return len(text.args) == 1 and not text.keywords and _const(text.args[0])
+        sql = text.args[0] if len(text.args) == 1 and not text.keywords else None
+        if not (isinstance(sql, ast.Constant) and isinstance(sql.value, str)):
+            return False
+        return _TEXT_DEFAULT.fullmatch(sql.value) is not None and "--" not in sql.value
     call = _call(node, "sa", {"false", "true"})
     if (
         isinstance(node, ast.Call)
