@@ -72,13 +72,20 @@ class GuestOwnership:
         self.sessions, self.database = sessions, sessions.database
         self.tenant_id, self.clock = sessions.tenant_id, sessions.clock
 
-    async def provision(self, *, operator_reference: str, reason: str) -> UUID:
+    async def provision(
+        self,
+        *,
+        operator_reference: str,
+        reason: str,
+        processing_person_id: UUID | None = None,
+    ) -> UUID:
         """Operator-only composition command; never mount on an anonymous route."""
         if (
             not isinstance(operator_reference, str)
             or re.fullmatch(r"[A-Za-z0-9_.:/-]{6,160}", operator_reference) is None
             or not isinstance(reason, str)
             or not 1 <= len(reason.strip()) <= 500
+            or (processing_person_id is not None and type(processing_person_id) is not UUID)
         ):
             raise ConversationError("An attributable non-secret operator intent is required.")
         now = await self.sessions._admit(mutation=True)
@@ -88,6 +95,10 @@ class GuestOwnership:
             .execution_options(populate_existing=True)
         )
         if existing is not None:
+            if processing_person_id is not None and existing.person_id != processing_person_id:
+                raise ConversationDenied(
+                    "The processing principal does not match the approved person."
+                )
             if existing.revoked_at is not None:
                 raise ConversationDenied("This processing principal has been revoked.")
             ledger = await self.database.get(
@@ -98,7 +109,12 @@ class GuestOwnership:
                     "The processing ledger needs its complete restore history."
                 )
             return existing.id
-        person_id, principal_id = uuid4(), uuid4()
+        person_id, principal_id = processing_person_id or uuid4(), uuid4()
+        if (
+            processing_person_id is not None
+            and await self.database.get(Person, person_id) is not None
+        ):
+            raise ConversationDenied("The approved processing person is already in use.")
         self.database.add(
             Person(id=person_id, display_name="Sales Xray processing", status="active")
         )

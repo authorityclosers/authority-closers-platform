@@ -59,10 +59,13 @@ def validate_environment(args: argparse.Namespace) -> str:
 async def provision(args: argparse.Namespace) -> dict[str, str]:
     environment = validate_environment(args)
     settings = Settings(environment=environment)
+    processing_person_id: UUID | None = None
     if args.tenant_id != settings.public_learner_tenant_id:
         bundle = load_pinned_approval(settings)
-        if args.tenant_id not in bundle.acquisition_tenant_ids():
+        policy = bundle.acquisition_policy_for(args.tenant_id)
+        if policy is None:
             raise CommandError("The tenant must have an approved acquisition provider policy.")
+        processing_person_id = policy.processing_person_id
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
@@ -77,7 +80,9 @@ async def provision(args: argparse.Namespace) -> dict[str, str]:
                 )
             )
             identifier = await ownership.provision(
-                operator_reference=args.operator_reference, reason=args.reason
+                operator_reference=args.operator_reference,
+                reason=args.reason,
+                processing_person_id=processing_person_id,
             )
             principal = await database.get(ConversationProcessingPrincipal, identifier)
             if principal is None:

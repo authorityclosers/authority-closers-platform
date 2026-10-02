@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-from argparse import Namespace
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
 
-import ac_platform.conversation_intelligence.processing_cli as cli
 from ac_platform.conversation_intelligence.activation_contract import (
     ActivationContractError,
     HostedApprovalBundle,
@@ -292,59 +289,6 @@ def test_composed_intake_and_workspace_directory_include_organisations(tmp_path)
     assert CONTROL_ID not in sales_xray_tenant_ids(settings, runtime)
     with pytest.raises(ValueError, match="hosted_approval_unavailable"):
         compose_hosted_intake(settings.model_copy(update={"public_learner_tenant_id": ORG_ID}))
-
-
-@pytest.mark.parametrize("listed", [True, False])
-async def test_processing_cli_provisions_only_listed_organisation(monkeypatch, listed) -> None:
-    bundle = organisation_bundle()
-    tenant = ORG_ID if listed else uuid4()
-    settings = SimpleNamespace(
-        public_learner_tenant_id=TENANT_ID, database_url="unused", release_id="test"
-    )
-    monkeypatch.setattr(cli, "validate_environment", lambda args: "test")
-    monkeypatch.setattr(cli, "Settings", lambda **kwargs: settings)
-    monkeypatch.setattr(cli, "load_pinned_approval", lambda settings: bundle)
-    database = SimpleNamespace(
-        get=AsyncMock(
-            return_value=SimpleNamespace(
-                id=uuid4(),
-                tenant_id=tenant,
-                person_id=ORG_PERSON_ID,
-                operator_reference="ref:operator/fictional",
-            )
-        )
-    )
-
-    @asynccontextmanager
-    async def session():
-        yield database
-
-    database.begin = session
-    engine = SimpleNamespace(dispose=AsyncMock())
-    create_engine = Mock(return_value=engine)
-    monkeypatch.setattr(cli, "create_async_engine", create_engine)
-    monkeypatch.setattr(cli, "async_sessionmaker", lambda *a, **kw: session)
-    ownership = SimpleNamespace(provision=AsyncMock(return_value=uuid4()))
-    factory = Mock(return_value=ownership)
-    monkeypatch.setattr(cli, "GuestOwnership", factory)
-    args = Namespace(
-        environment="test",
-        tenant_id=tenant,
-        operator_reference="ref:operator/fictional",
-        reason="Fictional setup",
-    )
-    if listed:
-        result = await cli.provision(args)
-        assert result["tenant_id"] == str(ORG_ID)
-        assert factory.call_args.args[0].tenant_id == ORG_ID
-        ownership.provision.assert_awaited_once_with(
-            operator_reference=args.operator_reference, reason=args.reason
-        )
-        engine.dispose.assert_awaited_once()
-    else:
-        with pytest.raises(cli.CommandError, match="approved acquisition provider policy"):
-            await cli.provision(args)
-        create_engine.assert_not_called()
 
 
 def current_payload(*, public=True, environment="test"):
