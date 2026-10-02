@@ -37,6 +37,9 @@ LONGEST_CALL_SECONDS = 6000
 TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
     "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
 )
+LONGEST_CALL_EXCEEDED_MESSAGE = (
+    "This recording is longer than the longest call your plan allows. Split it and try again."
+)
 
 
 def _owner_filter(

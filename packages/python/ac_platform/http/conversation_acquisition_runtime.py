@@ -8,6 +8,7 @@ import stat
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -15,13 +16,13 @@ from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.billing.trial import TrialPolicy
 from ac_platform.conversation_intelligence.acquisition_challenge import (
     UPLOAD_ACTION,
     UploadChallenge,
 )
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
-from ac_platform.conversation_intelligence.acquisition_usage import ALLOWANCE_SECONDS
 from ac_platform.conversation_intelligence.analysis_settings import (
     DEFAULT_ANALYSIS_SETTINGS,
     latest_analysis_settings,
@@ -127,6 +128,9 @@ def install_acquisition_runtime(
 ) -> None:
     sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
     learner_host = settings.public_app_url.host
+    trial_policy = TrialPolicy(
+        settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
+    )
 
     def surface(request: Request) -> str | None:
         if request.url.hostname == sales_host:
@@ -173,7 +177,7 @@ def install_acquisition_runtime(
             "site_key": runtime.site_key if runtime else None,
             "challenge_action": UPLOAD_ACTION if runtime else None,
             "policy_revision": runtime.policy_revision if runtime else None,
-            "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
+            "allowance_seconds": (trial_policy.seconds(datetime.now(UTC)) if runtime else None),
         }
         if runtime is None:
             # Optional acquisition must remain disabled without touching its
@@ -223,6 +227,7 @@ def install_acquisition_runtime(
             policy_revision=runtime.policy_revision,
             tester_policy=runtime.tester_policy,
             operations_tenant_id=operations_tenant_id,
+            trial_policy=trial_policy,
         )
 
     install_acquisition_http(

@@ -21,3 +21,19 @@ and restore inventories with the migration-bound parity contract.
 Invite rows are included in the migration-bound Postgres backup and restore
 parity contract. Full invite addresses must not be written to CLI output or
 audit payloads.
+
+## Billing ledger (ADR 0052, migration 0062)
+
+| Field | Storage | Source | Purpose | Where shown | Retention | Erasure path |
+| --- | --- | --- | --- | --- | --- | --- |
+| Account holder id | `billing_accounts.person_id` in Postgres (NULL for an Organisation account) | The signed-in person's id when their Personal account is first admitted | Bind capacity lots and closings to one person in one tenant | The person's own usage statement and Admin billing reads for `platform_billing_manage` staff | For the life of the ledger; the row is never updated or deleted | None by deletion: the account row is financial history. Identity deletion marks the person `deleted` and ends memberships; the id stays as an opaque reference |
+| Actor id | `billing_ledger_entries.actor_person_id` (with `actor_type` person, system or provider) | The person who wrote the row: the account holder for a purchase or refund request, a staff member for a grant or correction | Attribute every capacity change to a person, a system job or a provider event | Admin billing reads; never in the customer-facing statement beyond "granted by the AC team" | With the ledger row, for as long as the audit history it references | Supersession only: a wrong row is closed or corrected by a new row. The tables refuse `UPDATE` and `DELETE` at the database |
+| Reason | `billing_ledger_entries.reason` (free text, at most 500 characters) | Typed by the staff member or set by the server (renewal, expiry, refund) | Explain a grant, correction, hold or refund to the customer and to reviewers | Admin billing reads; customer statement lines for grants and refunds | With the ledger row | Supersession only; staff must not type third-party personal data, contact details or payment identifiers into a reason |
+| Audit event id | `billing_ledger_entries.audit_event_id` | The audit event written in the same transaction as the row | Tie each capacity change to the append-only audit chain | Admin billing reads | With the audit history; no purge rule is introduced by this slice | Follows the audit chain, which is never rewritten |
+
+Both tables are included in the migration-bound Postgres backup and restore
+parity contract (`ac-postgres-parity-v35`). The ledger stores seconds of
+capacity, actor ids, reasons and references; it holds no name, email, card or
+bank detail, and `source_ref` carries only our own order, period or audit
+identifiers. Use is not stored here; it stays in the Sales Xray acquisition
+reservation and settlement tables.

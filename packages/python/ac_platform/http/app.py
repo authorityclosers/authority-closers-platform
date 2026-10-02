@@ -13,6 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
+from ac_platform.billing.compose import compose_billing
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
 from ac_platform.conversation_intelligence.internal_tester import (
     InternalTesterPolicy,
@@ -23,6 +24,7 @@ from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
+from ac_platform.http.billing import install_billing_http, install_billing_webhook_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.community import install_community_http
 from ac_platform.http.conversation import install_conversation_http
@@ -329,6 +331,14 @@ def create_app(
         require_actor=require_actor,
         tester_policy=tester_policy,
     )
+    # Billing (ADR 0052): composed only when switched on; otherwise the C1
+    # routes are absent and the screens show "Not on sale yet".
+    billing = compose_billing(settings)
+    application.state.billing_configured = billing is not None
+    install_billing_http(
+        application, settings=settings, require_actor=require_actor, commands=billing
+    )
+    install_billing_webhook_http(application, sessions=session_factory, commands=billing)
     application.add_middleware(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
