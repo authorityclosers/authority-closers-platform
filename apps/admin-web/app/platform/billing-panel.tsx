@@ -199,11 +199,11 @@ export function BillingPanel() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setPending(true);
-    setError("");
     loadStaffBilling(controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setData(result);
+        if (controller.signal.aborted) return;
+        setData(result);
+        setError("");
       })
       .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
@@ -220,7 +220,11 @@ export function BillingPanel() {
     return () => controller.abort();
   }, [retry]);
 
-  const reload = () => setRetry((value) => value + 1);
+  const reload = () => {
+    setPending(true);
+    setError("");
+    setRetry((value) => value + 1);
+  };
 
   return (
     <section className={styles.panel} aria-labelledby="billing-heading">

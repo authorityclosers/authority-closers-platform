@@ -8,7 +8,8 @@ import {
 } from "./billing-api";
 import { billingFixture } from "./billing-fixture";
 
-const clone = () => structuredClone(billingFixture);
+type Draft = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const clone = (): Draft => structuredClone(billingFixture);
 const signal = () => new AbortController().signal;
 
 afterEach(() => vi.restoreAllMocks());
@@ -28,39 +29,45 @@ describe("staffBillingSchema", () => {
   });
 
   it.each([
-    ["an extra top-level field", (v: any) => (v.invoices = [])],
-    ["an extra row field", (v: any) => (v.orders[0].secret = "x")],
-    ["an extra customer field", (v: any) => (v.orders[0].customer.phone = "1")],
-    ["an unknown order status", (v: any) => (v.orders[0].status = "settled")],
-    ["an unknown customer kind", (v: any) => (v.orders[0].customer.kind = "x")],
-    ["a negative amount", (v: any) => (v.orders[0].amount_minor = -1)],
-    ["a fractional amount", (v: any) => (v.payments[0].amount_minor = 1.5)],
-    ["a lower-case currency", (v: any) => (v.orders[0].currency = "inr")],
-    ["zero seats", (v: any) => (v.subscriptions[0].seats = 0)],
-    ["a bad payment id", (v: any) => (v.payments[0].payment_id = "pay/../x")],
-    ["an unknown refund state", (v: any) => (v.refunds[0].state = "partial")],
-    ["a date without offset", (v: any) => (v.orders[0].created_at = "2026")],
-    ["a different page limit", (v: any) => (v.page_limit = 1000)],
-    ["a missing field", (v: any) => delete v.subscriptions[0].renews_at],
+    ["an extra top-level field", (v: Draft) => (v.invoices = [])],
+    ["an extra row field", (v: Draft) => (v.orders[0].secret = "x")],
+    [
+      "an extra customer field",
+      (v: Draft) => (v.orders[0].customer.phone = "1"),
+    ],
+    ["an unknown order status", (v: Draft) => (v.orders[0].status = "settled")],
+    [
+      "an unknown customer kind",
+      (v: Draft) => (v.orders[0].customer.kind = "x"),
+    ],
+    ["a negative amount", (v: Draft) => (v.orders[0].amount_minor = -1)],
+    ["a fractional amount", (v: Draft) => (v.payments[0].amount_minor = 1.5)],
+    ["a lower-case currency", (v: Draft) => (v.orders[0].currency = "inr")],
+    ["zero seats", (v: Draft) => (v.subscriptions[0].seats = 0)],
+    ["a bad payment id", (v: Draft) => (v.payments[0].payment_id = "pay/../x")],
+    ["an unknown refund state", (v: Draft) => (v.refunds[0].state = "partial")],
+    ["a date without offset", (v: Draft) => (v.orders[0].created_at = "2026")],
+    ["a different page limit", (v: Draft) => (v.page_limit = 1000)],
+    ["a missing field", (v: Draft) => delete v.subscriptions[0].renews_at],
     [
       "duplicate orders",
-      (v: any) => (v.orders[1].order_id = v.orders[0].order_id),
+      (v: Draft) => (v.orders[1].order_id = v.orders[0].order_id),
     ],
     [
       "duplicate payments",
-      (v: any) => (v.payments[1].payment_id = v.payments[0].payment_id),
+      (v: Draft) => (v.payments[1].payment_id = v.payments[0].payment_id),
     ],
     [
       "a renewal on a cancelled-at-period-end subscription",
-      (v: any) => (v.subscriptions[0].renews_at = "2026-11-01T09:00:00Z"),
+      (v: Draft) => (v.subscriptions[0].renews_at = "2026-11-01T09:00:00Z"),
     ],
     [
       "cancel flag disagreeing with cancel state",
-      (v: any) => (v.subscriptions[0].cancel_state = "none"),
+      (v: Draft) => (v.subscriptions[0].cancel_state = "none"),
     ],
     [
       "more than 100 rows",
-      (v: any) =>
+      (v: Draft) =>
         (v.refunds = Array.from({ length: 101 }, (_, i) => ({
           ...v.refunds[0],
           payment_id: "pay_" + i,
