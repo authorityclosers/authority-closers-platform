@@ -74,6 +74,8 @@ jobs:
         run: pnpm -r --if-present typecheck
       - name: Check frontend tests
         run: pnpm -r --if-present test
+      - name: Check organisation directory tests
+        run: pnpm --filter @ac/admin-web exec vitest run --root ../.. packages/typescript/operations-web/src/organisations-api.test.ts
       - name: Build frontend packages
         run: pnpm -r --if-present build
 
