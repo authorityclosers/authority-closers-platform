@@ -32,7 +32,10 @@ import { callDate } from "../call-status";
 import { readAllowance } from "../dashboard/dashboard-data";
 import { formatClock } from "../lightbox/time";
 import { useShellProfile } from "../shell/profile-store";
-import { workspaceKind } from "../shell/workspace-switcher";
+import {
+  readSalesXrayWorkspaces,
+  type SalesXrayWorkspace as Workspace,
+} from "../sales-xray-workspaces";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   addMember,
@@ -51,15 +54,13 @@ import {
 } from "./organisation-api";
 import styles from "./organisation.module.css";
 
-type Workspace = { tenant_id: string; name: string };
 type Base =
   | { status: "loading" }
   | { status: "error" }
   | {
       status: "ready";
-      workspaces: Workspace[];
+      workspaces: readonly Workspace[];
       selected: string | null;
-      contextRole: string | null;
     };
 type Live<T> =
   | { status: "loading" }
@@ -85,11 +86,6 @@ const ROLE_LABEL: Record<OrgRole, string> = {
   member: "Member",
 };
 
-function contextRole(role: string | null): OrgRole | null {
-  if (role === "owner" || role === "admin") return role;
-  return role ? "member" : null;
-}
-
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return (
@@ -98,32 +94,11 @@ function initials(name: string) {
 }
 
 async function readBase(signal: AbortSignal): Promise<Base> {
-  const get = (path: string) =>
-    fetch(path, { credentials: "same-origin", signal }).then((response) => {
-      if (!response.ok) throw new Error(String(response.status));
-      return response.json() as Promise<Record<string, unknown>>;
-    });
-  const [choices, context] = await Promise.all([
-    get("/v1/me/workspaces"),
-    get("/v1/context").catch(() => null),
-  ]);
+  const choices = await readSalesXrayWorkspaces(signal);
   return {
     status: "ready",
-    workspaces: Array.isArray(choices.workspaces)
-      ? (choices.workspaces as Workspace[]).filter(
-          (item) =>
-            typeof item?.tenant_id === "string" &&
-            typeof item?.name === "string",
-        )
-      : [],
-    selected:
-      typeof choices.selected_tenant_id === "string"
-        ? choices.selected_tenant_id
-        : null,
-    contextRole:
-      context && typeof context.membership_role === "string"
-        ? context.membership_role
-        : null,
+    workspaces: choices.workspaces,
+    selected: choices.selected_tenant_id,
   };
 }
 
@@ -216,17 +191,13 @@ export function OrganisationView() {
       ? (base.workspaces.find((item) => item.tenant_id === base.selected) ??
         null)
       : null;
-  const isOrganisation =
-    current !== null && workspaceKind(current.name) === "organisation";
+  const isOrganisation = current?.kind === "organisation";
 
   const [org, reloadOrg] = useLive(readOrganisation, isOrganisation);
   const [members, reloadMembers] = useLive(readMembers, isOrganisation);
   const [activity] = useLive(readActivity, isOrganisation);
   const live = org.status === "ready";
-  const myRole: OrgRole | null =
-    org.status === "ready"
-      ? org.value.role
-      : contextRole(base.status === "ready" ? base.contextRole : null);
+  const myRole: OrgRole | null = current?.role ?? null;
   const canManage = live && (myRole === "owner" || myRole === "admin");
   const you = profile?.name?.trim() || "You";
   const usedMinutes =
@@ -260,7 +231,7 @@ export function OrganisationView() {
         ) : !isOrganisation ? (
           <PersonalCard
             organisations={base.workspaces.filter(
-              (item) => workspaceKind(item.name) === "organisation",
+              (item) => item.kind === "organisation",
             )}
           />
         ) : (

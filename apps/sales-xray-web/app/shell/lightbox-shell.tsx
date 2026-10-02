@@ -56,7 +56,7 @@ import {
   type ShellRecentCall,
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
-import { WorkspaceSwitcher, workspaceKind } from "./workspace-switcher";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import { SettingsMenu, useUnseenNews } from "./settings-menu";
 import styles from "./lightbox-shell.module.css";
 
@@ -151,24 +151,20 @@ function LightboxShellFrame({
   );
   const collapsed = hydrated && savedCollapsed;
   const [, setCounts] = useState<CallSummary | null>(cached.counts);
-  const [workspaces, setWorkspaces] = useState(cached.workspaces);
-  const [workspacesSettled, setWorkspacesSettled] = useState(
-    cached.workspaces.length > 0,
-  );
-  const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
-    cached.selectedTenantAccountKey,
-  );
-  const [selectedTenantId, setSelectedTenantId] = useState(() =>
-    accountKey && cached.selectedTenantAccountKey === accountKey
-      ? cached.selectedTenantId
-      : (access?.context?.tenantId ?? null),
-  );
-  const effectiveTenantId =
-    accountKey && selectedTenantAccountKey === accountKey
-      ? selectedTenantId
-      : (access?.context?.tenantId ?? null);
+  const workspaces = access?.workspaces ?? [];
+  const workspacesSettled = access?.status === "ready";
+  const [workspaceReloadPending, setWorkspaceReloadPending] = useState(false);
+  // The confirmed server context owns selection across mounts and sessions.
+  const effectiveTenantId = access?.context?.tenantId ?? null;
+  const salesXrayEnabled =
+    workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
+      ?.sales_xray_enabled !== false;
   const recentContextKey =
-    authenticated && access?.context && effectiveTenantId
+    authenticated &&
+    salesXrayEnabled &&
+    !workspaceReloadPending &&
+    access?.context &&
+    effectiveTenantId
       ? JSON.stringify([
           access.context.personId,
           access.context.sessionId,
@@ -360,7 +356,11 @@ function LightboxShellFrame({
   }, [authenticated, recentContextKey, hasPageAllowance, recentsNudge]);
 
   useEffect(() => {
-    if (!authenticated || process.env.NODE_ENV === "test") {
+    if (
+      !authenticated ||
+      recentContextKey === null ||
+      process.env.NODE_ENV === "test"
+    ) {
       return;
     }
     const controller = new AbortController();
@@ -379,47 +379,14 @@ function LightboxShellFrame({
   }, [authenticated, recentContextKey]);
 
   useEffect(() => {
-    if (!authenticated || !accountKey || process.env.NODE_ENV === "test") {
-      return;
-    }
-    const controller = new AbortController();
-    try {
-      const promise = fetch("/v1/me/workspaces", {
-        signal: controller.signal,
-        credentials: "same-origin",
-      });
-      if (promise && typeof promise.then === "function") {
-        promise
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (!controller.signal.aborted) setWorkspacesSettled(true);
-            if (
-              !controller.signal.aborted &&
-              data &&
-              Array.isArray(data.workspaces)
-            ) {
-              setWorkspaces(data.workspaces);
-              const chosen =
-                data.selected_tenant_id ||
-                data.workspaces[0]?.tenant_id ||
-                null;
-              setSelectedTenantAccountKey(accountKey);
-              setSelectedTenantId(chosen);
-              updateShellState({
-                workspaces: data.workspaces,
-                selectedTenantId: chosen,
-                selectedTenantAccountKey: accountKey,
-                fetchedAt: Date.now(),
-              });
-            }
-          })
-          .catch(() => {
-            if (!controller.signal.aborted) setWorkspacesSettled(true);
-          });
-      }
-    } catch {}
-    return () => controller.abort();
-  }, [authenticated, accountKey]);
+    if (!accountKey || !access?.workspaces) return;
+    updateShellState({
+      workspaces: [...access.workspaces],
+      selectedTenantId: access.context?.tenantId ?? null,
+      selectedTenantAccountKey: accountKey,
+      fetchedAt: Date.now(),
+    });
+  }, [accountKey, access?.workspaces, access?.context?.tenantId]);
 
   useEffect(() => {
     if (!switcherOpen) return;
@@ -455,10 +422,21 @@ function LightboxShellFrame({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tenant_id: tenantId }),
         credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
       });
       if (res.ok) {
-        setSelectedTenantId(tenantId);
-        setSelectedTenantAccountKey(accountKey);
+        const selected: unknown = await res.json();
+        if (
+          typeof selected !== "object" ||
+          selected === null ||
+          !("tenant_id" in selected) ||
+          selected.tenant_id !== tenantId
+        )
+          return;
+        // The next document reads the new context. Do not start reads here
+        // between the successful context change and its reload.
+        setWorkspaceReloadPending(true);
         setSwitcherOpen(false);
         setRecentCalls([]);
         setRecentCallsContextKey(null);
@@ -493,7 +471,7 @@ function LightboxShellFrame({
   const inOrganisation = workspaces.some(
     (workspace) =>
       workspace.tenant_id === effectiveTenantId &&
-      workspaceKind(workspace.name) === "organisation",
+      workspace.kind === "organisation",
   );
   // Signed in but names not fetched yet: placeholders, never a guest-looking
   // "Workspace". A failed fetch settles too, so this cannot shimmer forever.
@@ -706,74 +684,76 @@ function LightboxShellFrame({
           </div>
 
           {/* Recents Section */}
-          <div className={styles.recentsSection}>
-            <div className={styles.recentsHeader}>
-              <button
-                type="button"
-                className={styles.recentsToggleBtn}
-                onClick={() => {
-                  setRecentsOpen((prev) => {
-                    const next = !prev;
-                    updateShellState({ recentsOpen: next });
-                    return next;
-                  });
-                }}
-                aria-expanded={recentsOpen}
-                title={recentsOpen ? "Collapse recents" : "Expand recents"}
-              >
-                <ChevronDown
-                  size={14}
-                  className={`${styles.recentsChevron}${recentsOpen ? "" : ` ${styles.recentsChevronCollapsed}`}`}
-                  aria-hidden="true"
-                />
-                <span className={styles.recentsTitle}>Recents</span>
-              </button>
-              <Link
-                href="/analysis/calls"
-                className={styles.recentsViewAll}
-                title="View all calls"
-              >
-                View all
-              </Link>
-            </div>
-            {recentsOpen && (
-              <div className={styles.recentsList}>
-                {recentsPending && visibleRecentCalls.length === 0
-                  ? [62, 44, 72].map((width, index) => (
-                      <div
-                        key={width}
-                        className={styles.recentSkeleton}
-                        style={
-                          {
-                            "--i": index,
-                            "--w": `${width}%`,
-                          } as CSSProperties
-                        }
-                        aria-hidden="true"
-                      >
-                        <i />
-                        <span />
-                        <em />
-                      </div>
-                    ))
-                  : null}
-                {!recentsPending &&
-                recentsReady &&
-                visibleRecentCalls.length === 0 ? (
-                  <p className={styles.recentsEmpty}>No calls here yet</p>
-                ) : null}
-                {visibleRecentCalls.map((call, index) => (
-                  <RecentCallItem
-                    key={call.id}
-                    index={index}
-                    call={call}
-                    href={callHref(call.id)}
-                    onChange={(next) => updateRecentCall(call.id, next)}
+          {salesXrayEnabled && (
+            <div className={styles.recentsSection}>
+              <div className={styles.recentsHeader}>
+                <button
+                  type="button"
+                  className={styles.recentsToggleBtn}
+                  onClick={() => {
+                    setRecentsOpen((prev) => {
+                      const next = !prev;
+                      updateShellState({ recentsOpen: next });
+                      return next;
+                    });
+                  }}
+                  aria-expanded={recentsOpen}
+                  title={recentsOpen ? "Collapse recents" : "Expand recents"}
+                >
+                  <ChevronDown
+                    size={14}
+                    className={`${styles.recentsChevron}${recentsOpen ? "" : ` ${styles.recentsChevronCollapsed}`}`}
+                    aria-hidden="true"
                   />
-                ))}
+                  <span className={styles.recentsTitle}>Recents</span>
+                </button>
+                <Link
+                  href="/analysis/calls"
+                  className={styles.recentsViewAll}
+                  title="View all calls"
+                >
+                  View all
+                </Link>
               </div>
-            )}
-          </div>
+              {recentsOpen && (
+                <div className={styles.recentsList}>
+                  {recentsPending && visibleRecentCalls.length === 0
+                    ? [62, 44, 72].map((width, index) => (
+                        <div
+                          key={width}
+                          className={styles.recentSkeleton}
+                          style={
+                            {
+                              "--i": index,
+                              "--w": `${width}%`,
+                            } as CSSProperties
+                          }
+                          aria-hidden="true"
+                        >
+                          <i />
+                          <span />
+                          <em />
+                        </div>
+                      ))
+                    : null}
+                  {!recentsPending &&
+                  recentsReady &&
+                  visibleRecentCalls.length === 0 ? (
+                    <p className={styles.recentsEmpty}>No calls here yet</p>
+                  ) : null}
+                  {visibleRecentCalls.map((call, index) => (
+                    <RecentCallItem
+                      key={call.id}
+                      index={index}
+                      call={call}
+                      href={callHref(call.id)}
+                      onChange={(next) => updateRecentCall(call.id, next)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className={styles.panelSpacer} />
         </div>

@@ -118,7 +118,9 @@ it("explains a workspace without Sales Xray access instead of failing each card"
       new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403 }),
   );
   await renderPage(true);
-  expect(host.textContent).toContain("Sales Xray is not switched on for");
+  expect(host.textContent).toContain(
+    "Sales Xray isn't on for this workspace yet",
+  );
   expect(host.textContent).not.toContain("Couldn't load");
   expect(host.querySelector('[role="alert"]')).toBeNull();
   expect(

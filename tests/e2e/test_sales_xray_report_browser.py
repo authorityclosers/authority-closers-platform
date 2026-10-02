@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import uvicorn
@@ -45,6 +45,7 @@ from ac_platform.http.conversation_acquisition_runtime import install_acquisitio
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
 from ac_platform.identity.models import Session as IdentitySession
 from tests.database.test_conversation_inference_postgresql import _provider_quote
 from tests.database.test_conversation_intake_postgresql import policy
@@ -179,6 +180,8 @@ def _make_live_backend(
         coach_app_url="http://coach.test",
         api_url="http://api.test",
         sales_xray_app_url=origin,
+        public_learner_tenant_id=prepared.state.tenant_id,
+        operations_tenant_id=uuid4(),
         session_token_pepper=pepper,
         oauth_transaction_secret=secrets.token_urlsafe(32),
         email_challenge_secret=secrets.token_urlsafe(32),
@@ -214,15 +217,16 @@ def _make_live_backend(
             app = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(app)
             require_actor = install_identity_http(app, settings=settings, sessions=sessions)
+            intake_runtime = ConversationIntakeRuntime(
+                policy(prepared.scope_id, prepared.state.tenant_id),
+                prepared.storage,
+                prepared.scratch,
+            )
+            install_sales_xray_workspaces_http(
+                app, settings=settings, require_actor=require_actor, intake=intake_runtime
+            )
             install_conversation_http(
-                app,
-                settings=settings,
-                require_actor=require_actor,
-                intake_runtime=ConversationIntakeRuntime(
-                    policy(prepared.scope_id, prepared.state.tenant_id),
-                    prepared.storage,
-                    prepared.scratch,
-                ),
+                app, settings=settings, require_actor=require_actor, intake_runtime=intake_runtime
             )
             install_acquisition_runtime(
                 app,

@@ -31,18 +31,28 @@ import {
 } from "./pending-analysis";
 import { useProcessingReview } from "./processing-review-port";
 import { SalesXrayFixturePreview } from "./sales-xray-fixture-preview";
+import {
+  readSalesXrayWorkspaces,
+  type SalesXrayWorkspace,
+} from "./sales-xray-workspaces";
+import { WorkspaceNoAccess } from "./workspace-no-access";
 
 type Workspace = Readonly<{
   tenant_id: string;
   name: string;
 }>;
 
-export type WorkspaceChoices = Readonly<{
+type IdentityWorkspaceChoices = Readonly<{
   person_id: string;
   session_id: string;
   selected_tenant_id: string | null;
   workspaces: readonly Workspace[];
 }>;
+
+export type WorkspaceChoices = IdentityWorkspaceChoices &
+  Readonly<{
+    salesXrayWorkspaces?: readonly SalesXrayWorkspace[];
+  }>;
 
 type ViewState =
   | { kind: "loading" }
@@ -88,7 +98,9 @@ function nonEmptyString(value: unknown): value is string {
 }
 
 /** Keep the chooser boundary strict: every identity value comes from the API. */
-export function parseWorkspaceChoices(value: unknown): WorkspaceChoices | null {
+export function parseWorkspaceChoices(
+  value: unknown,
+): IdentityWorkspaceChoices | null {
   if (!isRecord(value)) return null;
   const keys = ["person_id", "session_id", "selected_tenant_id", "workspaces"];
   if (Object.keys(value).some((key) => !keys.includes(key))) return null;
@@ -122,7 +134,10 @@ export function parseWorkspaceChoices(value: unknown): WorkspaceChoices | null {
   };
 }
 
-async function readWorkspaceChoices(signal: AbortSignal) {
+async function readWorkspaceChoices(
+  signal: AbortSignal,
+  standalone: boolean,
+): Promise<WorkspaceChoices | null> {
   const response = await fetch("/v1/me/workspaces", {
     method: "GET",
     credentials: "same-origin",
@@ -135,7 +150,26 @@ async function readWorkspaceChoices(signal: AbortSignal) {
   if (!response.ok) throw new Error("workspace_read_rejected");
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
-  return choices;
+  // Academy embeds retain their existing identity/chooser contract.
+  if (!standalone) return choices;
+  // The legacy endpoint confirms session identity only. Sales Xray choices
+  // and selection come exclusively from its own directory.
+  const directory = await readSalesXrayWorkspaces(signal);
+  const personal = directory.workspaces.find(
+    (item) => item.kind === "personal",
+  );
+  let selected = directory.selected_tenant_id;
+  if (selected === null && personal) {
+    await selectWorkspace(personal.tenant_id, signal);
+    selected = personal.tenant_id;
+  }
+  return {
+    person_id: choices.person_id,
+    session_id: choices.session_id,
+    ...directory,
+    salesXrayWorkspaces: directory.workspaces,
+    selected_tenant_id: selected,
+  };
 }
 
 async function selectWorkspace(tenantId: string, signal: AbortSignal) {
@@ -254,7 +288,7 @@ function StandaloneStudioView({
     const requestGeneration = ++generation.current;
     activeController.current?.abort();
     activeController.current = controller;
-    void readWorkspaceChoices(controller.signal)
+    void readWorkspaceChoices(controller.signal, !embedded)
       .then((choices) => {
         if (
           controller.signal.aborted ||
@@ -296,7 +330,13 @@ function StandaloneStudioView({
         activeController.current = null;
       if (generation.current === requestGeneration) generation.current += 1;
     };
-  }, [attempt, observeAccount, review.fixtureRequested, review.readOnly]);
+  }, [
+    attempt,
+    embedded,
+    observeAccount,
+    review.fixtureRequested,
+    review.readOnly,
+  ]);
 
   useEffect(
     () => () => {
@@ -354,10 +394,15 @@ function StandaloneStudioView({
   const identityKey = accountChoices
     ? JSON.stringify([accountChoices.person_id, accountChoices.session_id])
     : null;
+  const selectedWorkspace = accountChoices?.salesXrayWorkspaces?.find(
+    (item) => item.tenant_id === accountChoices.selected_tenant_id,
+  );
+  const salesXrayEnabled = selectedWorkspace?.sales_xray_enabled !== false;
   const eligibilityKey =
     review.readOnly === false &&
     !review.fixtureRequested &&
     selected &&
+    salesXrayEnabled &&
     view.kind === "ready" &&
     view.choices.selected_tenant_id &&
     selected.boundContextKey ===
@@ -393,6 +438,7 @@ function StandaloneStudioView({
       setAuthRequested(true);
       return false;
     }
+    if (!salesXrayEnabled) return false;
     if (view.kind !== "ready") {
       if (accountChoices) openProfileGate(selected.intentId);
       return false;
@@ -447,6 +493,7 @@ function StandaloneStudioView({
           ? false
           : null,
     retry,
+    workspaces: accountChoices?.salesXrayWorkspaces,
     ...(review.readOnly === false && !review.fixtureRequested
       ? { requestAccountSignIn, requestAnalysisAccess }
       : {}),
@@ -561,7 +608,15 @@ function StandaloneStudioView({
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <AppFrame embedded={embedded}>{children}</AppFrame>
+        <AppFrame embedded={embedded}>
+          {view.kind === "ready" && !salesXrayEnabled ? (
+            <AcquisitionShell authenticated active={activeFor(pathname)}>
+              <WorkspaceNoAccess workspace={null} />
+            </AcquisitionShell>
+          ) : (
+            children
+          )}
+        </AppFrame>
       </WorkspaceAccessProvider>
     );
   // A failed check keeps the app frame and skeleton; a corner card explains

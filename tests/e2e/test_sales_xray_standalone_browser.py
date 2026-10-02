@@ -42,10 +42,11 @@ from ac_platform.http.conversation_execution_control import install_execution_co
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.sales_xray_profile import install_sales_xray_profile_http
+from ac_platform.http.sales_xray_workspaces import install_sales_xray_workspaces_http
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.password_auth import hash_password
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from tests.database.test_conversation_intake_postgresql import policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -138,6 +139,14 @@ async def _prepare_account(postgres_harness: Any, fixture: Any) -> BrowserAccoun
                 )
             )
             database.add(
+                Organisation(
+                    tenant_id=second_tenant_id,
+                    created_by_person_id=person_id,
+                    creation_command_id=uuid4(),
+                    domain_verification_token="synthetic-browser-organisation-" + uuid4().hex,
+                )
+            )
+            database.add(
                 Tenant(
                     id=foreign_tenant_id,
                     slug=foreign_tenant_id.hex,
@@ -216,6 +225,12 @@ def _make_backend(
             require_actor = install_identity_http(application, settings=settings, sessions=sessions)
             install_sales_xray_profile_http(
                 application, settings=profile_settings, require_actor=require_actor
+            )
+            install_sales_xray_workspaces_http(
+                application,
+                settings=profile_settings,
+                require_actor=require_actor,
+                intake=intake_runtime,
             )
             install_conversation_http(
                 application,
@@ -526,42 +541,57 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 page.wait_for_load_state("networkidle")
             checks.append("Correct password login navigates the standalone host to /dashboard/.")
 
+            # Identity leaves selection null; the Sales Xray directory supplies
+            # Personal and the registered organisation, then the UI selects Personal.
+            switcher = page.get_by_role("button", name="Current workspace: Personal", exact=True)
+            expect(switcher).to_be_visible()
+            switcher.click()
+            workspace_menu = page.get_by_role("menu", name="Switch account")
+            expect(workspace_menu.get_by_role("menuitemradio")).to_have_count(2)
             expect(
-                page.get_by_role("heading", name="Choose your Sales Xray workspace.")
+                workspace_menu.get_by_role("menuitemradio", name="Personal Just you")
+            ).to_have_attribute("aria-checked", "true")
+            expect(
+                workspace_menu.get_by_text("Synthetic second Sales Xray workspace", exact=True)
             ).to_be_visible()
-            workspace_buttons = page.locator("button[data-tenant-id]")
-            expect(workspace_buttons).to_have_count(2)
-            own_button = page.get_by_role(
-                "button", name=backend.account.own_workspace_name, exact=True
+            page.screenshot(path=str(evidence / "workspace-switcher.png"), full_page=True)
+            switcher.click()
+            checks.append(
+                "The Sales Xray directory supplies Personal + an organisation; "
+                "null selection activates Personal."
             )
-            expect(own_button).to_be_visible()
-            page.screenshot(path=str(evidence / "workspace-chooser.png"), full_page=True)
-            checks.append("Workspace choices came from GET /v1/me/workspaces.")
 
-            # Workspace selection mounts the dashboard after the current
-            # document has already reached networkidle. Wait for its reads
-            # before navigating away, rather than reusing that earlier state.
-            with ExitStack() as dashboard_reads:
-                responses = [
-                    dashboard_reads.enter_context(
-                        page.expect_response(
-                            lambda response, path=path: (
-                                response.request.method == "GET"
-                                and urlsplit(response.url).path == path
-                            )
-                        )
-                    )
-                    for path in (
-                        "/v1/conversation/acquisition/submissions/summary",
-                        "/v1/conversation/acquisition/activity",
-                        "/v1/conversation/acquisition/session",
-                        "/v1/conversation/acquisition/submissions",
-                    )
-                ]
-                own_button.click()
-            for response in responses:
-                response.value.finished()
-            page.wait_for_load_state("networkidle")
+            disabled_reads_start = len(network)
+            switcher.click()
+            with _navigation_window(page, navigation_windows):
+                workspace_menu.get_by_role(
+                    "menuitemradio",
+                    name="Synthetic second Sales Xray workspace Your organisation",
+                ).click()
+                expect(
+                    page.get_by_text("Sales Xray isn't on for this workspace yet", exact=True)
+                ).to_be_visible()
+                page.wait_for_load_state("networkidle")
+            expect(page.get_by_text("Recents", exact=True)).to_have_count(0)
+            expect(page.locator('input[type="file"]')).to_have_count(0)
+            assert not any(
+                item["path"].startswith("/v1/conversation/")
+                for item in network[disabled_reads_start:]
+            )
+            page.set_viewport_size({"width": 390, "height": 844})
+            page.screenshot(path=str(evidence / "workspace-disabled-phone.png"), full_page=True)
+            page.set_viewport_size({"width": 1365, "height": 1000})
+            page.get_by_role(
+                "button", name="Current workspace: Synthetic second Sales Xray workspace"
+            ).click()
+            with _navigation_window(page, navigation_windows):
+                workspace_menu.get_by_role("menuitemradio", name="Personal Just you").click()
+                expect(switcher).to_be_visible()
+                page.wait_for_load_state("networkidle")
+            checks.append(
+                "Disabled organisation suppresses upload, Recents and conversation reads."
+            )
+
             page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
                 "link", name="New analysis", exact=True
             ).click()
@@ -570,7 +600,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(1)
             checks.append(
-                "Selecting the assigned workspace then New analysis opens CallStudio "
+                "Automatic Personal selection then New analysis opens CallStudio "
                 "and private history."
             )
 
@@ -785,6 +815,16 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 item["method"] == "GET"
                 and item["path"] == "/v1/me/workspaces"
                 and item["status"] == 200
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"] == "/v1/me/sales-xray-workspaces"
+                and item["status"] == 200
+                for item in network
+            )
+            assert any(
+                item["method"] == "POST" and item["path"] == "/v1/context" and item["status"] == 200
                 for item in network
             )
             assert any(
