@@ -365,7 +365,7 @@ def test_workflow_installs_browser_before_standalone_build_and_runs_gate_after()
     workflow = yaml.safe_load((ROOT / ".github/workflows/application.yml").read_text("utf-8"))
     job = workflow["jobs"]["validate-python-gates"]
     names = [step.get("name") for step in job["steps"]]
-    install_name = "Install locked registration browser"
+    install_name = "Require codec, filesystem and locked browser prerequisites"
     build_name = "Build learner standalone for registration proof"
     gate_name = "Prove registration consent and server-rendered readiness"
     assert names.count(install_name) == names.count(gate_name) == 1
@@ -375,17 +375,17 @@ def test_workflow_installs_browser_before_standalone_build_and_runs_gate_after()
     required = job["steps"][names.index(gate_name)]
     for step in (install, required):
         assert "if" not in step and not step.get("continue-on-error", False)
-        assert step["timeout-minutes"] == 5
+    assert install["timeout-minutes"] == 13
+    assert required["timeout-minutes"] == 5
     assert shlex.split(install["run"]) == [
         "uv",
         "run",
         "--frozen",
         "python",
-        "-m",
-        "playwright",
-        "install",
-        "--with-deps",
-        "chromium",
+        "scripts/ci/ci_prerequisites.py",
+        "codec",
+        "filesystem",
+        "browser",
     ]
     assert required["env"] == {
         gate.REQUIRED_FLAG: "1",
