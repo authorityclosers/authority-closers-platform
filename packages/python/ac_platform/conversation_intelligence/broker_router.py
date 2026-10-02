@@ -193,7 +193,10 @@ class FixedProviderRouter:
         # then require the permission reference to name that derived approval.
         # This keeps a reservation payload from selecting a wildcard provider
         # route or borrowing a different source's stage.
-        policy = bundle.acquisition_policy
+        try:
+            policy = bundle.acquisition_policy_for(UUID(quote.source.tenant_id))
+        except (TypeError, ValueError):
+            policy = None
         if policy is not None:
             try:
                 tenant_id = UUID(quote.source.tenant_id)

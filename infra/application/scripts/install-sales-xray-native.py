@@ -44,9 +44,18 @@ NATIVE_IMAGE_CONFIG_ID = "sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2
 # image artifact. Docker 29/containerd may report the transport manifest while
 # classic Docker may report the config ID; either is safe only as this pair.
 NATIVE_IMAGE_BINDING = frozenset({NATIVE_IMAGE_REF, NATIVE_IMAGE_CONFIG_ID})
-RENDERER_SHA256 = "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76"
 SCHEMA = "ac.sales-xray.native-supervisor/1"
 ENVIRONMENTS = frozenset({"development", "staging", "production"})
+# Every reviewed renderer and the environments it may render. The renderer runs
+# from the candidate build's own release, so each stored build's renderer needs
+# an entry; a renderer edit without a reviewed entry here fails closed.
+REVIEWED_RENDERERS: Mapping[str, frozenset[str]] = {
+    # 390b4285 (the staging and production native build of 29 Sep).
+    "33787dcc6d08219f6e595d86ccc0a80574f822678d13f629471171cdd5ce2544": frozenset(
+        {"staging", "production"}
+    ),
+    "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76": ENVIRONMENTS,
+}
 NATIVE_GROUP_NAME = "ac-sales-xray-native"
 NATIVE_GROUP_GID = 10001
 NATIVE_READINESS_TIMEOUT_SECONDS = 10.0
@@ -77,6 +86,29 @@ class NativeBinding(NamedTuple):
 
 
 LEGACY_BINDING = NativeBinding()
+
+
+class ExactPredecessor(NamedTuple):
+    environment: str
+    helper_source_sha: str
+    image_ref: str
+    supervisor_source: str
+    renderer_sha256: str
+
+
+# ADR 0050: the development helper installed before artifact-bound supervisors
+# was rendered with a different release's renderer. This one immutable tuple may
+# be accepted as the previous descriptor only; it never widens candidate checks.
+EXACT_PREDECESSORS = (
+    ExactPredecessor(
+        "development",
+        "390b428568b443ae6b748ccb11e7789574c8c926",
+        "sha256:a855e207cd866e97ddf6f50d75e33b93680b6c74ec1aa6dd8f9b517f249c57ae",
+        "/srv/authority-closers/application/releases/"
+        "fd385bb607ae1967e630fe2c98e0685790346fe6/scripts/render-sales-xray-native.py",
+        "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76",
+    ),
+)
 
 
 class InstallerError(RuntimeError):
@@ -377,6 +409,7 @@ def _validate_descriptor(
     environment: str,
     supplied_sha256: str,
     binding: NativeBinding = LEGACY_BINDING,
+    supervisor_source: str | None = None,
 ) -> None:
     if not SHA256_RE.fullmatch(supplied_sha256):
         raise _fail("native_units_sha256_invalid")
@@ -405,7 +438,9 @@ def _validate_descriptor(
         raise _fail("native_units_helper_root_mismatch")
     if descriptor.get("native_image_ref") != binding.image_ref:
         raise _fail("native_units_image_mismatch")
-    if descriptor.get("supervisor_source") != _supervisor_source_for_binding(binding):
+    if descriptor.get("supervisor_source") != (
+        supervisor_source or _supervisor_source_for_binding(binding)
+    ):
         raise _fail("native_units_release_mismatch")
     if descriptor.get("installed") is not False:
         raise _fail("native_units_already_installed")
@@ -451,12 +486,16 @@ def _rendered_descriptor(
     environment: str,
     canonical_paths: bool,
     binding: NativeBinding = LEGACY_BINDING,
-) -> dict[str, Any]:
+    supervisor_source: str | None = None,
+) -> tuple[dict[str, Any], str]:
     _ensure_absolute(renderer, "renderer_path_not_absolute")
     _ensure_existing_parents(renderer, "renderer_parent_invalid")
     _ensure_regular(renderer, "renderer_path_invalid")
-    if _sha256_file(renderer) != RENDERER_SHA256:
+    renderer_sha256 = _sha256_file(renderer)
+    if renderer_sha256 not in REVIEWED_RENDERERS:
         raise _fail("renderer_sha256_mismatch")
+    if environment not in REVIEWED_RENDERERS[renderer_sha256]:
+        raise _fail("renderer_environment_unsupported")
     _ensure_absolute(renderer_python, "renderer_python_not_absolute")
     try:
         resolved_python = renderer_python.resolve(strict=True)
@@ -483,7 +522,7 @@ def _rendered_descriptor(
         "--native-image-ref",
         binding.image_ref,
         "--supervisor-source",
-        _supervisor_source_for_binding(binding),
+        supervisor_source or _supervisor_source_for_binding(binding),
     ]
     try:
         completed = subprocess.run(  # noqa: S603 - argv is fixed below.
@@ -504,7 +543,7 @@ def _rendered_descriptor(
         raise _fail("renderer_output_invalid") from exc
     if not isinstance(parsed, dict):
         raise _fail("renderer_output_invalid")
-    return parsed
+    return parsed, renderer_sha256
 
 
 def _validate_renderer_binding(
@@ -516,7 +555,9 @@ def _validate_renderer_binding(
     canonical_paths: bool,
     binding: NativeBinding = LEGACY_BINDING,
     enforce_path_binding: bool = True,
-) -> None:
+    supervisor_source: str | None = None,
+) -> str:
+    """Check the descriptor against the renderer; return the hash that ran."""
     # The candidate descriptor must use the renderer path bound to its artifact.
     # During an upgrade, however, the previous descriptor is intentionally
     # checked with the current release's renderer executable.  Its own
@@ -532,15 +573,44 @@ def _validate_renderer_binding(
     if canonical_paths:
         _ensure_existing_parents(renderer, "renderer_parent_invalid", require_root=True)
         _ensure_owner(renderer, group="acops", code="renderer_owner_invalid")
-    rendered = _rendered_descriptor(
+    rendered, renderer_sha256 = _rendered_descriptor(
         renderer=renderer,
         renderer_python=renderer_python,
         environment=environment,
         canonical_paths=canonical_paths,
         binding=binding,
+        supervisor_source=supervisor_source,
     )
     if rendered != dict(descriptor):
         raise _fail("native_units_renderer_drift")
+    return renderer_sha256
+
+
+def _exact_predecessor(
+    descriptor: Mapping[str, Any], *, environment: str
+) -> ExactPredecessor | None:
+    """Select the pinned predecessor only when every identity field matches."""
+    for entry in EXACT_PREDECESSORS:
+        if (
+            environment == entry.environment
+            and descriptor.get("environment") == entry.environment
+            and descriptor.get("helper_source_sha") == entry.helper_source_sha
+            and descriptor.get("native_image_ref") == entry.image_ref
+            and descriptor.get("supervisor_source") == entry.supervisor_source
+        ):
+            return entry
+    return None
+
+
+def _verify_reference_renderer(path: Path, expected_sha256: str, *, trusted_owner: bool) -> None:
+    """Verify the historical renderer a predecessor names; it is never executed."""
+    _ensure_absolute(path, "renderer_path_not_absolute")
+    _ensure_regular(path, "renderer_path_invalid")
+    _ensure_existing_parents(path, "renderer_parent_invalid", require_root=trusted_owner)
+    if trusted_owner:
+        _ensure_owner(path, group="acops", code="renderer_owner_invalid")
+    if _sha256_file(path) != expected_sha256:
+        raise _fail("renderer_sha256_mismatch")
 
 
 def _write_exact(
@@ -1217,7 +1287,7 @@ def install(
         supplied_sha256=native_units_sha256,
         binding=binding,
     )
-    _validate_renderer_binding(
+    renderer_sha256 = _validate_renderer_binding(
         descriptor,
         renderer=renderer,
         renderer_python=renderer_python,
@@ -1246,14 +1316,29 @@ def install(
         if not isinstance(image_ref, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_ref):
             raise _fail("native_previous_binding_invalid")
         previous_binding = NativeBinding(helper_sha, image_ref, image_ref)
+        exact = _exact_predecessor(previous, environment=environment)
+        previous_supervisor = (
+            exact.supervisor_source
+            if exact is not None
+            else _supervisor_source_for_binding(previous_binding)
+        )
         _validate_descriptor(
             previous,
             previous_raw,
             environment=environment,
             supplied_sha256=previous_native_units_sha256,
             binding=previous_binding,
+            supervisor_source=previous_supervisor,
         )
-        _validate_renderer_binding(
+        if exact is not None:
+            # The executed renderer stays the candidate's; the historical one
+            # is only proven to be the exact reviewed file it names.
+            _verify_reference_renderer(
+                application_root / Path(exact.supervisor_source).relative_to(APPLICATION_ROOT),
+                exact.renderer_sha256,
+                trusted_owner=require_root or canonical_paths,
+            )
+        if renderer_sha256 != _validate_renderer_binding(
             previous,
             renderer=renderer,
             renderer_python=renderer_python,
@@ -1261,7 +1346,9 @@ def install(
             canonical_paths=canonical_paths,
             binding=previous_binding,
             enforce_path_binding=False,
-        )
+            supervisor_source=previous_supervisor,
+        ):
+            raise _fail("renderer_sha256_mismatch")
         previous_units = previous["units"]
     units = descriptor["units"]
     assert isinstance(units, dict)
@@ -1285,7 +1372,7 @@ def install(
         "helper_source_sha": binding.helper_source_sha,
         "native_artifact_sha256": native_artifact_sha256,
         "previous_native_units_sha256": previous_native_units_sha256,
-        "renderer_sha256": RENDERER_SHA256,
+        "renderer_sha256": renderer_sha256,
         "start_requested": start,
         "provider_calls": 0,
         "database_writes": 0,

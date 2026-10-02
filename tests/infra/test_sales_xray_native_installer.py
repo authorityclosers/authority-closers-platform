@@ -183,8 +183,10 @@ def _install_args(
     }
 
 
-def _new_artifact(tmp_path: Path) -> tuple[Path, str, Any]:
-    binding = installer.NativeBinding("a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64)
+def _new_artifact(tmp_path: Path, binding: Any = None) -> tuple[Path, str, Any]:
+    binding = binding or installer.NativeBinding(
+        "a" * 40, "sha256:" + "b" * 64, "sha256:" + "c" * 64
+    )
     root = tmp_path / "artifact"
     root.mkdir()
     files = [
@@ -233,19 +235,53 @@ def _new_artifact(tmp_path: Path) -> tuple[Path, str, Any]:
     return path, hashlib.sha256(path.read_bytes()).hexdigest(), binding
 
 
-def _upgrade_args(tmp_path: Path) -> tuple[dict[str, Any], Any, dict[str, str]]:
-    old, old_digest = _render_descriptor(tmp_path / "previous-units.json")
-    manifest, manifest_digest, binding = _new_artifact(tmp_path)
-    payload = installer._rendered_descriptor(
+EXACT = installer.EXACT_PREDECESSORS[0]
+PREDECESSORS = {
+    "exact": (EXACT.helper_source_sha, EXACT.image_ref, EXACT.supervisor_source),
+    "legacy": (
+        installer.HELPER_SOURCE_SHA,
+        installer.NATIVE_IMAGE_REF,
+        installer._supervisor_source(),
+    ),
+    "new": ("d" * 40, "sha256:" + "e" * 64, installer._supervisor_source("d" * 40)),
+}
+
+
+def _render(environment: str, binding: Any, supervisor: str | None = None) -> dict[str, Any]:
+    return installer._rendered_descriptor(
         renderer=RENDERER,
         renderer_python=Path(sys.executable),
-        environment="staging",
+        environment=environment,
         canonical_paths=False,
         binding=binding,
+        supervisor_source=supervisor,
+    )[0]
+
+
+def _write(path: Path, payload: dict[str, Any]) -> tuple[Path, str]:
+    path.write_text(json.dumps(payload))
+    return path, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _predecessor_args(
+    tmp_path: Path,
+    kind: str = "exact",
+    environment: str = "development",
+    previous_environment: str | None = None,
+    **changes: str,
+) -> tuple[dict[str, Any], Any, dict[str, str]]:
+    """Fictional candidate artifact over an installed predecessor and its historical R."""
+    helper, image, supervisor = PREDECESSORS[kind]
+    fields = {"helper": helper, "image": image, "supervisor": supervisor, **changes}
+    previous = _render(
+        previous_environment or environment,
+        installer.NativeBinding(fields["helper"], fields["image"], fields["image"]),
+        fields["supervisor"],
     )
-    descriptor = tmp_path / "new-units.json"
-    descriptor.write_text(json.dumps(payload))
-    args = _install_args(tmp_path, descriptor, hashlib.sha256(descriptor.read_bytes()).hexdigest())
+    old, old_digest = _write(tmp_path / "previous-units.json", previous)
+    manifest, manifest_digest, binding = _new_artifact(tmp_path)
+    descriptor, digest = _write(tmp_path / "new-units.json", _render(environment, binding))
+    args = _install_args(tmp_path, descriptor, digest, environment)
     args.update(
         native_artifact_manifest=manifest,
         native_artifact_sha256=manifest_digest,
@@ -254,18 +290,222 @@ def _upgrade_args(tmp_path: Path) -> tuple[dict[str, Any], Any, dict[str, str]]:
         previous_native_units_sha256=old_digest,
     )
     args["docker"] = type("NewDocker", (), {"inspect_identity": lambda self: binding.image_ref})()
-    old_units = json.loads(old.read_text())["units"]
-    for name, content in old_units.items():
+    reference = args["application_root"] / Path(EXACT.supervisor_source).relative_to(
+        installer.APPLICATION_ROOT
+    )
+    reference.parent.mkdir(parents=True)
+    reference.write_bytes(RENDERER.read_bytes())
+    for name, content in previous["units"].items():
         installer._unit_path(args["unit_root"], name).write_bytes(content.encode())
-    return args, binding, old_units
+    return args, binding, previous["units"]
 
 
-def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(tmp_path: Path) -> None:
-    args, binding, old_units = _upgrade_args(tmp_path)
+def _upgrade_args(
+    tmp_path: Path, kind: str = "legacy"
+) -> tuple[dict[str, Any], Any, dict[str, str]]:
+    return _predecessor_args(tmp_path, kind, "development" if kind == "exact" else "staging")
+
+
+def _installed(args: dict[str, Any], units: dict[str, str]) -> dict[str, bytes]:
+    return {name: installer._unit_path(args["unit_root"], name).read_bytes() for name in units}
+
+
+def _assert_refused(args: dict[str, Any], old_units: dict[str, str], code: str) -> None:
+    fake = FakeSystemd(args["unit_root"])
+    fake.active = dict.fromkeys(old_units, True)
+    fake.enabled = dict.fromkeys(old_units, True)
+    before = _installed(args, old_units)
+    with pytest.raises(installer.InstallerError, match=f"^{code}$"):
+        installer.install(**args, systemd=fake)
+    assert not fake.events
+    assert not args["receipt"].exists()
+    assert _installed(args, old_units) == before
+    assert fake.active == fake.enabled == dict.fromkeys(old_units, True)
+
+
+@pytest.mark.parametrize("kind", ["exact", "legacy", "new"])
+def test_dry_run_accepts_exact_installed_predecessor_bytes(tmp_path: Path, kind: str) -> None:
+    args, _, old_units = _predecessor_args(tmp_path, kind)
+    fake = FakeSystemd(args["unit_root"])
+    fake.active = dict.fromkeys(old_units, True)
+    result = installer.install(**{**args, "start": False}, dry_run=True, systemd=fake)
+    assert result["status"] == "dry_run"
+    assert result["runtime_mutation"] is result["systemd_started"] is False
+    assert result["start_requested"] is False
+    assert [event[0] for event in fake.events] == ["verify"]
+    assert not args["receipt"].exists()
+    assert _installed(args, old_units) == {k: v.encode() for k, v in old_units.items()}
+
+
+@pytest.mark.parametrize(
+    ("change", "code"),
+    [
+        ({"previous_environment": "staging"}, "native_units_environment_mismatch"),
+        ({"environment": "staging"}, "native_units_release_mismatch"),
+        ({"helper": "e" * 40}, "native_units_release_mismatch"),
+        ({"image": "sha256:" + "f" * 64}, "native_units_release_mismatch"),
+        ({"supervisor": installer._supervisor_source("e" * 40)}, "native_units_release_mismatch"),
+    ],
+)
+def test_changed_predecessor_tuple_has_no_exception(
+    tmp_path: Path, change: dict[str, str], code: str
+) -> None:
+    args, _, old_units = _predecessor_args(tmp_path, **change)
+    _assert_refused(args, old_units, code)
+
+
+@pytest.mark.parametrize(
+    ("defect", "code"),
+    [
+        ("stale_checksum", "native_units_sha256_mismatch"),
+        ("descriptor_unit", "native_units_renderer_drift"),
+        ("installed_service", "native_unit_existing_drift"),
+        ("installed_mount", "native_unit_existing_drift"),
+        ("reference_missing", "renderer_path_invalid"),
+        ("reference_symlink", "renderer_path_invalid"),
+        ("reference_parent_symlink", "renderer_parent_invalid"),
+        ("reference_hash", "renderer_sha256_mismatch"),
+    ],
+)
+def test_exact_predecessor_refusals_leave_runtime_untouched(
+    tmp_path: Path, defect: str, code: str
+) -> None:
+    args, _, old_units = _predecessor_args(tmp_path)
+    service = installer._service_unit("development")
+    reference = args["application_root"] / Path(EXACT.supervisor_source).relative_to(
+        installer.APPLICATION_ROOT
+    )
+    if defect == "stale_checksum":
+        args["previous_native_units_sha256"] = "0" * 64
+    elif defect == "descriptor_unit":
+        payload = json.loads(args["previous_native_units"].read_text())
+        payload["units"][service] += "# tampered\n"
+        _, args["previous_native_units_sha256"] = _write(args["previous_native_units"], payload)
+    elif defect.startswith("installed_"):
+        name = service if defect.endswith("service") else installer._mount_unit("development")
+        installer._unit_path(args["unit_root"], name).write_text(old_units[name] + "# drift\n")
+    elif defect == "reference_missing":
+        reference.unlink()
+    elif defect == "reference_symlink":
+        reference.rename(tmp_path / "moved.py")
+        reference.symlink_to(tmp_path / "moved.py")
+    elif defect == "reference_parent_symlink":
+        reference.parent.rename(tmp_path / "moved")
+        reference.parent.symlink_to(tmp_path / "moved")
+    else:
+        reference.write_bytes(RENDERER.read_bytes() + b"\n")
+    _assert_refused(args, old_units, code)
+
+
+@pytest.mark.parametrize("code", ["renderer_parent_invalid", "renderer_owner_invalid"])
+def test_exact_predecessor_reference_requires_trusted_root_ownership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    """Scratch fixtures cannot be root-owned, so force the host's trusted mode."""
+    args, _, old_units = _predecessor_args(tmp_path)
+    verify = installer._verify_reference_renderer
+    monkeypatch.setattr(
+        installer,
+        "_verify_reference_renderer",
+        lambda path, digest, **_: verify(path, digest, trusted_owner=True),
+    )
+    if code == "renderer_owner_invalid":
+        parents = installer._ensure_existing_parents
+        monkeypatch.setattr(installer, "_ensure_existing_parents", lambda p, c, **_: parents(p, c))
+        monkeypatch.setattr(installer, "_group_id", lambda _: -1)
+    _assert_refused(args, old_units, code)
+
+
+def test_exact_predecessor_is_never_a_candidate_alias(tmp_path: Path) -> None:
+    binding = installer.NativeBinding(
+        EXACT.helper_source_sha, EXACT.image_ref, "sha256:" + "c" * 64
+    )
+    manifest, manifest_digest, _ = _new_artifact(tmp_path, binding)
+    payload = _render("development", binding, EXACT.supervisor_source)
+    descriptor, digest = _write(tmp_path / "new-units.json", payload)
+    args = _install_args(tmp_path, descriptor, digest, "development")
+    args.update(
+        native_artifact_manifest=manifest,
+        native_artifact_sha256=manifest_digest,
+        native_image_config_id=binding.image_config_id,
+    )
+    with pytest.raises(installer.InstallerError, match="^native_units_release_mismatch$"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+    with pytest.raises(installer.InstallerError, match="^renderer_path_not_release_bound$"):
+        installer._validate_renderer_binding(
+            payload,
+            renderer=Path(EXACT.supervisor_source),
+            renderer_python=Path("/usr/bin/python3"),
+            environment="development",
+            canonical_paths=True,
+            binding=binding,
+        )
+
+
+@pytest.mark.parametrize(
+    "defect", [None, "native_units_sha256_mismatch", "native_image_config_mismatch", "alias"]
+)
+def test_cli_dry_run_json_and_preflight_refusals(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    defect: str | None,
+) -> None:
+    args, binding, _ = _predecessor_args(
+        tmp_path, **({"helper": "e" * 40} if defect == "alias" else {})
+    )
+    real_install = installer.install
+    fixed = {key: args[key] for key in ("application_root", "unit_root", "docker", "group")}
+    monkeypatch.setattr(
+        installer,
+        "install",
+        lambda **kw: real_install(
+            **kw,
+            **fixed,
+            require_root=False,
+            canonical_paths=False,
+            systemd=FakeSystemd(args["unit_root"]),
+        ),
+    )
+    if defect == "native_units_sha256_mismatch":
+        args["previous_native_units_sha256"] = "0" * 64
+    elif defect == "native_image_config_mismatch":
+        args["native_image_config_id"] = binding.image_ref
+    argv = ["--dry-run", "--renderer", str(RENDERER), "--renderer-python", sys.executable]
+    for key in (
+        "environment",
+        "native_units",
+        "native_units_sha256",
+        "native_image_config_id",
+        "native_artifact_manifest",
+        "native_artifact_sha256",
+        "previous_native_units",
+        "previous_native_units_sha256",
+        "receipt",
+    ):
+        argv += ["--" + key.replace("_", "-"), str(args[key])]
+    status = installer.main(argv)
+    out, err = capsys.readouterr()
+    if defect is None:
+        assert (status, err) == (0, "")
+        assert json.loads(out)["status"] == "dry_run"
+    else:
+        code = "native_units_release_mismatch" if defect == "alias" else defect
+        assert (status, out, err) == (1, "", f"FAIL {code}\n")
+    assert not args["receipt"].exists()
+
+
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_uses_verified_artifact_and_drains_running_old_helper(
+    tmp_path: Path, kind: str
+) -> None:
+    args, binding, old_units = _upgrade_args(tmp_path, kind)
     fake = FakeSystemd(args["unit_root"])
     fake.active = dict.fromkeys(old_units, True)
     result = installer.install(**args, systemd=fake)
-    service = installer._service_unit("staging")
+    mount = installer._mount_unit(args["environment"])
+    service = installer._service_unit(args["environment"])
+    assert [event[1] for event in fake.events if event[0] == "enable_now"] == [mount, service]
     assert result["helper_source_sha"] == binding.helper_source_sha
     assert result["native_image_ref"] == binding.image_ref
     assert fake.events.index(("stop", service)) < fake.events.index(("daemon_reload", None))
@@ -292,7 +532,7 @@ def test_previous_release_renderer_path_is_not_rechecked_as_candidate_path(
     )
     renderer = Path("/candidate/release/scripts/render-sales-xray-native.py")
     descriptor: dict[str, Any] = {}
-    monkeypatch.setattr(installer, "_rendered_descriptor", lambda **_: descriptor)
+    monkeypatch.setattr(installer, "_rendered_descriptor", lambda **_: (descriptor, "0" * 64))
     monkeypatch.setattr(installer, "_ensure_existing_parents", lambda *_, **__: None)
     monkeypatch.setattr(installer, "_ensure_owner", lambda *_, **__: None)
 
@@ -352,9 +592,17 @@ def test_upgrade_rejects_unverified_bindings_before_mutation(tmp_path: Path, def
     } == before
 
 
-def test_upgrade_failure_restores_the_previous_helper(tmp_path: Path) -> None:
-    args, _, old_units = _upgrade_args(tmp_path)
-    service = installer._service_unit("staging")
+@pytest.mark.parametrize("enabled", [(True, True), (True, False), (False, True), (False, False)])
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_failure_restores_the_previous_helper(
+    tmp_path: Path, kind: str, enabled: tuple[bool, bool]
+) -> None:
+    args, _, old_units = _upgrade_args(tmp_path, kind)
+    names = (
+        installer._mount_unit(args["environment"]),
+        installer._service_unit(args["environment"]),
+    )
+    service = names[1]
 
     class FailNewHelperOnce(FakeSystemd):
         failed = False
@@ -366,20 +614,22 @@ def test_upgrade_failure_restores_the_previous_helper(tmp_path: Path) -> None:
             super().enable_now(unit)
 
     fake = FailNewHelperOnce(args["unit_root"])
-    fake.active = dict.fromkeys(old_units, True)
-    fake.enabled = dict.fromkeys(old_units, True)
-    with pytest.raises(installer.InstallerError, match="new_helper_failed"):
+    fake.active = dict.fromkeys(names, True)
+    fake.enabled = dict(zip(names, enabled, strict=True))
+    with pytest.raises(installer.InstallerError, match="^new_helper_failed$"):
         installer.install(**args, systemd=fake)
-    assert {
-        name: installer._unit_path(args["unit_root"], name).read_bytes() for name in old_units
-    } == {name: raw.encode() for name, raw in old_units.items()}
-    assert fake.active[service]
+    assert _installed(args, old_units) == {name: raw.encode() for name, raw in old_units.items()}
+    assert fake.active == dict.fromkeys(names, True)
+    assert fake.enabled == dict(zip(names, enabled, strict=True))
     assert json.loads(args["receipt"].read_text())["rollback"] == "completed"
 
 
-def test_upgrade_rejects_a_helper_that_did_not_stop_before_publish(tmp_path: Path) -> None:
-    args, _, old_units = _upgrade_args(tmp_path)
-    service = installer._service_unit("staging")
+@pytest.mark.parametrize("kind", ["legacy", "exact"])
+def test_upgrade_rejects_a_helper_that_did_not_stop_before_publish(
+    tmp_path: Path, kind: str
+) -> None:
+    args, _, old_units = _upgrade_args(tmp_path, kind)
+    service = installer._service_unit(args["environment"])
     fake = FakeSystemd(args["unit_root"], fail_service_stop=True)
     fake.active = dict.fromkeys(old_units, True)
     fake.enabled = dict.fromkeys(old_units, True)
@@ -740,3 +990,53 @@ def test_deployment_lock_uses_exclusive_flock(
         assert len(events) == 1
         assert events[0][1] == FakeFcntl.LOCK_EX
     assert events[1][1] == FakeFcntl.LOCK_UN
+
+
+def test_checked_in_renderer_is_reviewed_for_every_environment() -> None:
+    digest = hashlib.sha256(RENDERER.read_bytes()).hexdigest()
+    assert installer.REVIEWED_RENDERERS[digest] == installer.ENVIRONMENTS
+
+
+def _reviewed_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, environments: frozenset[str] | None
+) -> tuple[Path, str]:
+    renderer = tmp_path / "render-sales-xray-native.py"
+    renderer.write_bytes(RENDERER.read_bytes() + b"# older reviewed release\n")
+    digest = hashlib.sha256(renderer.read_bytes()).hexdigest()
+    reviewed = {} if environments is None else {digest: environments}
+    monkeypatch.setattr(installer, "REVIEWED_RENDERERS", reviewed)
+    return renderer, digest
+
+
+def test_release_renderer_is_accepted_only_for_its_reviewed_environments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staging, staging_digest = _render_descriptor(tmp_path / "staging.json", "staging")
+    development, development_digest = _render_descriptor(
+        tmp_path / "development.json", "development"
+    )
+    renderer, digest = _reviewed_copy(tmp_path, monkeypatch, frozenset({"staging", "production"}))
+    args = {**_install_args(tmp_path, staging, staging_digest), "renderer": renderer}
+    result = installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+    assert result["status"] == "installed"
+    assert json.loads(args["receipt"].read_text())["renderer_sha256"] == digest
+
+    def renderer_must_not_run(*_: Any, **__: Any) -> None:
+        raise AssertionError("renderer ran")
+
+    monkeypatch.setattr(installer.subprocess, "run", renderer_must_not_run)
+    args = {
+        **_install_args(tmp_path, development, development_digest, "development"),
+        "renderer": renderer,
+    }
+    with pytest.raises(installer.InstallerError, match="^renderer_environment_unsupported$"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))
+    assert not args["receipt"].exists()
+
+
+def test_unknown_renderer_hash_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    descriptor, digest = _render_descriptor(tmp_path / "native-units.json")
+    renderer, _ = _reviewed_copy(tmp_path, monkeypatch, None)
+    args = {**_install_args(tmp_path, descriptor, digest), "renderer": renderer}
+    with pytest.raises(installer.InstallerError, match="^renderer_sha256_mismatch$"):
+        installer.install(**args, systemd=FakeSystemd(args["unit_root"]))

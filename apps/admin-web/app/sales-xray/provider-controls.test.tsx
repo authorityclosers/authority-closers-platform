@@ -273,6 +273,18 @@ describe("provider control contract", () => {
   });
 
   it("previews and saves an imported profile through the current revision", async () => {
+    const nativeDigest = crypto.subtle.digest.bind(crypto.subtle);
+    let releaseDigest!: () => void;
+    const digestGate = new Promise<void>((resolve) => {
+      releaseDigest = resolve;
+    });
+    let pendingDigest!: Promise<ArrayBuffer>;
+    const digest = vi
+      .spyOn(crypto.subtle, "digest")
+      .mockImplementation((...args) => {
+        pendingDigest = digestGate.then(() => nativeDigest(...args));
+        return pendingDigest;
+      });
     const saved = {
       id: "imported-registry",
       revision: 3,
@@ -288,6 +300,9 @@ describe("provider control contract", () => {
       .mockResolvedValueOnce(jsonResponse(saved));
 
     await renderPanel();
+    const importPanel = host.querySelector(
+      'section[aria-labelledby="approved-profile-import-title"]',
+    ) as HTMLElement;
     const textarea = host.querySelector(
       'textarea[aria-label="Reviewed provider configuration JSON"]',
     ) as HTMLTextAreaElement;
@@ -296,14 +311,35 @@ describe("provider control contract", () => {
       [...host.querySelectorAll("button")]
         .find((button) => button.textContent?.includes("Check profile"))!
         .click();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
-    expect(host.textContent).toContain("Local contract check passed");
-    expect(host.textContent).toContain("groq/openai/gpt-oss-120b");
-    expect(host.textContent).toContain("₹7.00 per dispatch ceiling");
-    expect(host.textContent).toContain(importedConfiguration.revision);
+    expect(digest).toHaveBeenCalledTimes(1);
+    expect(importPanel.textContent).toContain("Checking…");
+    expect(importPanel.textContent).not.toContain(
+      "Local contract check passed",
+    );
+    expect(importPanel.querySelector('[role="status"]')).toBeNull();
+    expect(importPanel.textContent).not.toContain("Save imported revision");
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(0);
+
+    await act(async () => {
+      releaseDigest();
+      await pendingDigest;
+    });
+
+    const preview = importPanel.querySelector('[role="status"]') as HTMLElement;
+    expect(preview.textContent).toContain("Local contract check passed");
+    expect(preview.querySelector("strong")?.textContent).toBe(
+      "groq/openai/gpt-oss-120b",
+    );
+    expect(
+      [...preview.querySelectorAll("span")].map((span) => span.textContent),
+    ).toContain("₹7.00 per dispatch ceiling");
+    expect(preview.querySelector("h3")?.textContent).toBe(
+      importedConfiguration.revision,
+    );
 
     await act(async () => {
       [...host.querySelectorAll("button")]
@@ -322,6 +358,7 @@ describe("provider control contract", () => {
     expect(request?.[1]?.headers).toEqual(
       expect.objectContaining({ "idempotency-key": expect.any(String) }),
     );
+    expect(request?.[1]?.headers["idempotency-key"]).toMatch(/\S/);
     expect(JSON.parse(request?.[1]?.body as string)).toEqual({
       expected_revision: 0,
       configuration: importedConfiguration,

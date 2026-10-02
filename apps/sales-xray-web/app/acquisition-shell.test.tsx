@@ -220,6 +220,27 @@ it("shows trial minutes only from a verified allowance", () => {
   expect(unlimited.textContent).toContain("Unlimited analysis time");
 });
 
+it("shows the public policy footer on signed-out shells", async () => {
+  await act(async () =>
+    root.render(
+      <AcquisitionShell authenticated={false}>
+        <p>Signed-out entry</p>
+      </AcquisitionShell>,
+    ),
+  );
+  const footer = host.querySelector(
+    'footer nav[aria-label="Sales Xray policy pages"]',
+  );
+  expect(footer).not.toBeNull();
+  expect(footer?.querySelectorAll("a")).toHaveLength(6);
+  expect(footer?.querySelector('a[href="/pricing"]')?.textContent).toBe(
+    "Pricing",
+  );
+  expect(footer?.querySelector('a[href="/contact"]')?.textContent).toBe(
+    "Contact",
+  );
+});
+
 it("never claims privacy in the shell chrome; each saved report states it", async () => {
   const signedIn = renderToStaticMarkup(
     <AcquisitionShell authenticated>

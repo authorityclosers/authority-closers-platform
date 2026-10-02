@@ -31,8 +31,16 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/plans",
 }));
 vi.mock("../acquisition-shell", () => ({
-  AcquisitionShell: ({ children }: { children: ReactNode }) => (
-    <main>{children}</main>
+  AcquisitionShell: ({
+    children,
+    showPolicyLinks,
+  }: {
+    children: ReactNode;
+    showPolicyLinks?: boolean;
+  }) => (
+    <main data-policy-links={showPolicyLinks ? "true" : "false"}>
+      {children}
+    </main>
   ),
 }));
 vi.mock("../dashboard/dashboard-data", () => ({
@@ -179,6 +187,7 @@ it("shows an unknown current subscription balance when canonical endpoints are u
 
 it("prices the approved catalogue once on sale, sums seats for a team, and starts checkout", async () => {
   await render(<PlansView client={fixtureBilling} />);
+  expect(host.querySelector("[data-policy-links='true']")).not.toBeNull();
   expect(text()).toContain("₹2,499");
   expect(text()).toContain("800 analysis minutes every month");
   expect(host.querySelector("[data-pay]")?.textContent).toContain("Pay ₹2,499");
@@ -204,6 +213,7 @@ it("prices the approved catalogue once on sale, sums seats for a team, and start
   vi.stubGlobal("location", { ...window.location, assign });
   await act(async () => button("Pay ₹79,960").click());
   await settle();
+  expect(host.querySelector("[data-policy-links='true']")).not.toBeNull();
   expect(assign).toHaveBeenCalledWith(
     expect.stringMatching(/^\/review-fixture\/plans\/pay\?order=fixture-/),
   );
