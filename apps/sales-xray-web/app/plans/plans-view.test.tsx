@@ -197,21 +197,25 @@ it("prices the approved catalogue once on sale, sums seats for a team, and start
   expect(host.querySelector("[data-plan]")?.getAttribute("data-plan")).toBe(
     "organisation",
   );
-  expect(host.querySelector("output")?.textContent).toBe("3");
-  expect(host.querySelector("[data-pay]")?.textContent).toContain("Pay ₹5,997");
+  expect(host.querySelector("output")?.textContent).toBe("2");
+  expect(host.querySelector("[data-pay]")?.textContent).toContain(
+    "Pay ₹23,600",
+  );
   await act(async () => button("Add a seat").click());
-  expect(host.querySelector("[data-pay]")?.textContent).toContain("Pay ₹7,996");
-  expect(text()).toContain("4,000 pooled minutes a month");
+  expect(host.querySelector("[data-pay]")?.textContent).toContain(
+    "Pay ₹35,400",
+  );
+  expect(text()).toContain("3,000 pooled minutes a month");
 
   await act(async () => button("Yearly").click());
   await act(async () => {});
-  // Four seats a year is above the e-mandate limit: the bank asks each time.
+  // Three seats a year is above the e-mandate limit: the bank asks each time.
   expect(text()).toContain("your bank will ask you to approve each renewal");
 
   // Pay hands off to the hosted step (a redirect in the fixture).
   const assign = vi.fn();
   vi.stubGlobal("location", { ...window.location, assign });
-  await act(async () => button("Pay ₹79,960").click());
+  await act(async () => button("Pay ₹3,82,320").click());
   await settle();
   expect(host.querySelector("[data-policy-links='true']")).not.toBeNull();
   expect(assign).toHaveBeenCalledWith(

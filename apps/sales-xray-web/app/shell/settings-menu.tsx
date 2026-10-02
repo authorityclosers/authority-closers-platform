@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  CreditCard,
   Gem,
   Globe,
   LifeBuoy,
@@ -309,13 +310,31 @@ export function SettingsMenu({
                 }
                 onClick={() => settings("usage")}
               />
-              <Row
-                icon={<Gem size={16} />}
-                label="Plans"
-                value={allowance?.unlimited ? "Unlimited" : "Trial"}
-                next
-                onClick={() => setView("plans")}
-              />
+              <Link href="/plans" className={styles.row} onClick={onClose}>
+                <span className={styles.rowIcon} aria-hidden="true">
+                  <Gem size={16} />
+                </span>
+                <span className={styles.rowLabel}>Plans</span>
+                <span className={styles.rowValue}>
+                  {allowance?.unlimited ? "Unlimited" : "Trial"}
+                </span>
+                <ChevronRight
+                  size={15}
+                  className={styles.chev}
+                  aria-hidden="true"
+                />
+              </Link>
+              <Link href="/billing" className={styles.row} onClick={onClose}>
+                <span className={styles.rowIcon} aria-hidden="true">
+                  <CreditCard size={16} />
+                </span>
+                <span className={styles.rowLabel}>Billing</span>
+                <ChevronRight
+                  size={15}
+                  className={styles.chev}
+                  aria-hidden="true"
+                />
+              </Link>
               <Row
                 icon={<Sparkles size={16} />}
                 label="What's new"
@@ -370,9 +389,12 @@ export function SettingsMenu({
             </div>
             <div className={styles.plans}>
               {[
-                { name: "Personal", who: "For one salesperson" },
-                { name: "Organisation", who: "For sales teams" },
-                { name: "Enterprise", who: "For large sales companies" },
+                { name: "Personal", who: "800 min · ₹2,499/mo (GST included)" },
+                {
+                  name: "Organisation",
+                  who: "1,000 min/seat · ₹10,000/seat/mo + GST",
+                },
+                { name: "Enterprise", who: "50+ seats · SSO & custom SLA" },
               ].map((plan, index) => (
                 <div
                   key={plan.name}
@@ -381,7 +403,6 @@ export function SettingsMenu({
                 >
                   <b>{plan.name}</b>
                   <small>{plan.who}</small>
-                  <span className={styles.soon}>Coming soon</span>
                 </div>
               ))}
             </div>
@@ -391,12 +412,9 @@ export function SettingsMenu({
               onClick={onClose}
               data-see-plans
             >
-              See plans and prices
+              See plans and buy
               <ChevronRight size={15} aria-hidden="true" />
             </Link>
-            <p className={styles.note}>
-              Prices and limits are being set. You will see them here first.
-            </p>
           </>
         )}
 

@@ -389,8 +389,10 @@ export function PlansView({
   const authenticated = access?.authenticated === true;
 
   const [scope, setScope] = useState<Account>("personal");
+  const [selectedPlanKey, setSelectedPlanKey] = useState<string>("personal");
   const [interval, setInterval_] = useState<Interval>("month");
   const [seats, setSeats] = useState<number | null>(null);
+  const [enterpriseSeats, setEnterpriseSeats] = useState<number>(50);
   const [enterprise, setEnterprise] = useState(false);
   const [busy, setBusy] = useState<"checkout" | "top_up" | "cancel" | null>(
     null,
@@ -418,17 +420,57 @@ export function PlansView({
   );
 
   const plans = catalogue.status === "ready" ? catalogue.value : [];
-  const plan: Plan | null =
-    plans.find((item) => item.key === PLAN_KEY[scope]) ?? null;
+  const personalPlan = plans.find((item) => item.key === "personal") ?? null;
+  const orgPlan = plans.find((item) => item.key === "organisation") ?? null;
   const enterprisePlan =
     plans.find((item) => item.key === ENTERPRISE_KEY) ?? null;
+
+  const effectiveKey =
+    scope === "personal"
+      ? "personal"
+      : selectedPlanKey === "enterprise"
+        ? "enterprise"
+        : "organisation";
+
+  const plan: Plan | null =
+    effectiveKey === "enterprise"
+      ? (enterprisePlan ?? orgPlan)
+      : effectiveKey === "organisation"
+        ? orgPlan
+        : personalPlan;
+
   const buyable =
     plan !== null && onSale(plan) && planPrice(plan, interval) !== null;
   const seatMin = plan?.seatMin ?? null;
   const seatMax = plan?.seatMax ?? null;
-  const seatCount = scope === "organisation" ? (seats ?? seatMin ?? 0) : 1;
+  const orgSeats = seats ?? seatMin ?? 2;
+  const seatCount =
+    effectiveKey === "enterprise"
+      ? enterpriseSeats
+      : effectiveKey === "organisation"
+        ? orgSeats
+        : 1;
   const unit = plan ? planPrice(plan, interval) : null;
-  const total = unit !== null ? unit * Math.max(1, seatCount) : null;
+  const subtotal = unit !== null ? unit * Math.max(1, seatCount) : null;
+  const gstRate = scope === "organisation" ? 0.18 : 0;
+  const gstAmount =
+    subtotal !== null && gstRate > 0 ? Math.round(subtotal * gstRate) : 0;
+  const total = subtotal !== null ? subtotal + gstAmount : null;
+  const personalPrice = personalPlan
+    ? (planPrice(personalPlan, interval) ?? 249_900)
+    : 249_900;
+  const orgUnitPrice = orgPlan
+    ? (planPrice(orgPlan, interval) ?? 1_000_000)
+    : 1_000_000;
+  const orgSubtotal = orgUnitPrice * orgSeats;
+  const orgGst = Math.round(orgSubtotal * 0.18);
+  const orgTotal = orgSubtotal + orgGst;
+  const enterpriseUnitPrice = enterprisePlan
+    ? (planPrice(enterprisePlan, interval) ?? orgUnitPrice)
+    : orgUnitPrice;
+  const enterpriseSubtotal = enterpriseUnitPrice * enterpriseSeats;
+  const enterpriseGst = Math.round(enterpriseSubtotal * 0.18);
+  const enterpriseTotal = enterpriseSubtotal + enterpriseGst;
   const saving = plan ? yearlySaving(plan) : 0;
   const includedMinutes =
     plan?.includedMinutes !== null && plan?.includedMinutes !== undefined
@@ -438,6 +480,12 @@ export function PlansView({
   const mePlan = me.status === "ready" ? me.value : null;
   const offlinePay =
     offline.status === "ready" && offline.value.enabled ? offline.value : null;
+  const renewalDate = new Date();
+  if (interval === "month") {
+    renewalDate.setMonth(renewalDate.getMonth() + 1);
+  } else {
+    renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+  }
   const stage: "choose" | "pay" | "subscription" = current
     ? "subscription"
     : busy === "checkout"
@@ -575,7 +623,14 @@ export function PlansView({
             { value: "personal", label: "Just me" },
             { value: "organisation", label: "My team" },
           ]}
-          onChange={setScope}
+          onChange={(newScope) => {
+            setScope(newScope);
+            if (newScope === "personal") {
+              setSelectedPlanKey("personal");
+            } else if (selectedPlanKey === "personal") {
+              setSelectedPlanKey("organisation");
+            }
+          }}
         />
         <Segmented
           label="How often you pay"
@@ -587,7 +642,7 @@ export function PlansView({
               label: (
                 <>
                   Yearly
-                  {saving > 0 ? <small>save {money(saving)}</small> : null}
+                  <small>save 10% off</small>
                 </>
               ),
             },
@@ -605,70 +660,90 @@ export function PlansView({
         <p className={styles.note} role="alert">
           The plans could not be loaded. Refresh to try again.
         </p>
-      ) : plan ? (
-        <div
-          className={styles.plan}
-          data-plan={plan.key}
-          data-on-sale={buyable ? "true" : "false"}
-        >
-          <div className={styles.planHead}>
-            <div>
-              <h3>{plan.name}</h3>
-              <p className={styles.hint}>{plan.audience}</p>
-            </div>
-            {buyable && unit !== null ? (
+      ) : buyable && plan ? (
+        <div className={styles.plansGrid}>
+          {/* Card 1: Personal */}
+          <div
+            className={styles.planCard}
+            data-selected={effectiveKey === "personal" ? "true" : "false"}
+            data-current={mePlan?.plan.key === "personal" ? "true" : undefined}
+            data-plan={effectiveKey === "personal" ? "personal" : undefined}
+            data-on-sale="true"
+          >
+            {mePlan?.plan.key === "personal" ? (
+              <span className={`${styles.planBadge} ${styles.currentBadge}`}>
+                Current plan
+              </span>
+            ) : null}
+            <div className={styles.planHead}>
+              <div>
+                <h3>Personal</h3>
+                <p className={styles.hint}>For one salesperson</p>
+              </div>
               <p className={styles.price}>
-                {money(unit)}
-                <small>
-                  {perSeat} / {periodWord}
-                </small>
+                {money(personalPrice)}
+                <small> / {periodWord} · GST included</small>
               </p>
-            ) : (
-              <span className={styles.soon}>Not on sale yet</span>
-            )}
+            </div>
+            <ul className={styles.facts}>
+              <li>800 analysis minutes every month</li>
+              <li>Calls up to 90 minutes long</li>
+              <li>1 user seat</li>
+              <li>Top up any time: 100 minutes for ₹299</li>
+              <li>Recordings and reports kept for 12 months</li>
+            </ul>
+            <button
+              type="button"
+              className={styles.planActionBtn}
+              data-primary={effectiveKey === "personal" ? "true" : undefined}
+              disabled={mePlan?.plan.key === "personal" || busy !== null}
+              onClick={() => {
+                if (effectiveKey !== "personal") {
+                  setScope("personal");
+                  setSelectedPlanKey("personal");
+                } else void pay();
+              }}
+            >
+              {mePlan?.plan.key === "personal"
+                ? "Current plan"
+                : effectiveKey === "personal"
+                  ? "Buy Personal"
+                  : "Select Personal"}
+            </button>
           </div>
-          <ul className={styles.facts}>
-            {plan.includedMinutes !== null ? (
-              <li>
-                {count(plan.includedMinutes)} analysis minutes{perSeat} every
-                month
-              </li>
-            ) : null}
-            {plan.longestCallMinutes !== null ? (
-              <li>Calls up to {plan.longestCallMinutes} minutes long</li>
-            ) : null}
-            {plan.rolloverMonths !== null ? (
-              <li>
-                {plan.rolloverMonths === 0
-                  ? "Unused minutes do not carry over"
-                  : `Unused minutes carry over for ${plan.rolloverMonths} month${plan.rolloverMonths === 1 ? "" : "s"}`}
-              </li>
-            ) : null}
-            {packs.map((pack) => (
-              <li key={pack.key}>
-                Top up any time: {count(pack.minutes)} minutes for{" "}
-                {money(pack.pricePaise ?? 0)}
-              </li>
-            ))}
-            {plan.retentionDays !== null ? (
-              <li>
-                Recordings and reports kept for{" "}
-                {Math.round(plan.retentionDays / 30)} months
-              </li>
-            ) : null}
-            {scope === "organisation" ? (
-              <>
-                <li>One shared pool of minutes for the whole team</li>
-                <li>Only the organisation owner can buy or cancel</li>
-              </>
-            ) : null}
-            {!buyable && plan.includedMinutes === null ? (
-              <li>
-                Limits and prices are being set. You will see them here first.
-              </li>
-            ) : null}
-          </ul>
-          {scope === "organisation" ? (
+
+          {/* Card 2: Organisation */}
+          <div
+            className={styles.planCard}
+            data-selected={effectiveKey === "organisation" ? "true" : "false"}
+            data-current={
+              mePlan?.plan.key === "organisation" ? "true" : undefined
+            }
+            data-plan={
+              scope === "organisation" && effectiveKey === "organisation"
+                ? "organisation"
+                : undefined
+            }
+            data-on-sale="true"
+          >
+            <span
+              className={`${styles.planBadge} ${mePlan?.plan.key === "organisation" ? styles.currentBadge : styles.popularBadge}`}
+            >
+              {mePlan?.plan.key === "organisation"
+                ? "Current plan"
+                : "Most popular"}
+            </span>
+            <div className={styles.planHead}>
+              <div>
+                <h3>Organisation</h3>
+                <p className={styles.hint}>For sales teams</p>
+              </div>
+              <p className={styles.price}>
+                {money(orgUnitPrice)}
+                <small> per seat / {periodWord} + GST</small>
+              </p>
+            </div>
+
             <div className={styles.seats}>
               <b id="seat-label">Seats</b>
               <span
@@ -679,55 +754,235 @@ export function PlansView({
                 <button
                   type="button"
                   aria-label="Remove a seat"
-                  disabled={seatMin === null || seatCount <= seatMin}
-                  onClick={() =>
-                    setSeats(Math.max(seatMin ?? 1, seatCount - 1))
-                  }
+                  disabled={orgSeats <= 2}
+                  onClick={() => {
+                    setScope("organisation");
+                    setSelectedPlanKey("organisation");
+                    setSeats(Math.max(2, orgSeats - 1));
+                  }}
                 >
                   <Minus size={16} aria-hidden="true" />
                 </button>
-                <output aria-live="polite">
-                  {seatMin === null ? "–" : seatCount}
-                </output>
+                <output aria-live="polite">{orgSeats}</output>
                 <button
                   type="button"
                   aria-label="Add a seat"
-                  disabled={seatMax === null || seatCount >= seatMax}
-                  onClick={() =>
-                    setSeats(Math.min(seatMax ?? seatCount, seatCount + 1))
-                  }
+                  disabled={orgSeats >= 49}
+                  onClick={() => {
+                    setScope("organisation");
+                    setSelectedPlanKey("organisation");
+                    setSeats(Math.min(49, orgSeats + 1));
+                  }}
                 >
                   <Plus size={16} aria-hidden="true" />
                 </button>
               </span>
               <span className={styles.hint}>
-                {seatMin !== null && seatMax !== null
-                  ? `${includedMinutes !== null ? `${count(includedMinutes)} pooled minutes a month · ` : ""}${seatMin} to ${seatMax} seats`
-                  : "Seat limits are set when the plan goes on sale"}
+                {count(orgSeats * 1000)} pooled minutes a month · 2 to 49 seats
               </span>
             </div>
-          ) : null}
+
+            <div className={styles.gstLine}>
+              <div className={styles.gstRow}>
+                <span>Subtotal ({orgSeats} seats):</span>
+                <b>{money(orgSubtotal)}</b>
+              </div>
+              <div className={styles.gstRow}>
+                <span>GST (18%):</span>
+                <b>{money(orgGst)}</b>
+              </div>
+              <div className={`${styles.gstRow} ${styles.gstTotal}`}>
+                <span>Total:</span>
+                <b>
+                  {money(orgTotal)} / {periodWord}
+                </b>
+              </div>
+            </div>
+
+            <ul className={styles.facts}>
+              <li>
+                {count(orgSeats * 1000)} pooled analysis minutes every month
+              </li>
+              <li>Calls up to 90 minutes long</li>
+              <li>One shared pool of minutes for the whole team</li>
+              <li>Team dashboard &amp; shared call library</li>
+              <li>Only the organisation owner can buy or cancel</li>
+              <li>Top up any time: 500 minutes for ₹1,299</li>
+            </ul>
+
+            <button
+              type="button"
+              className={styles.planActionBtn}
+              data-primary={
+                effectiveKey === "organisation" ? "true" : undefined
+              }
+              disabled={mePlan?.plan.key === "organisation" || busy !== null}
+              onClick={() => {
+                if (effectiveKey !== "organisation") {
+                  setScope("organisation");
+                  setSelectedPlanKey("organisation");
+                } else void pay();
+              }}
+            >
+              {mePlan?.plan.key === "organisation"
+                ? "Current plan"
+                : mePlan?.plan.key === "personal"
+                  ? "Upgrade to Organisation"
+                  : effectiveKey === "organisation"
+                    ? "Buy Organisation"
+                    : "Select Organisation"}
+            </button>
+          </div>
+
+          {/* Card 3: Enterprise */}
+          <div
+            className={styles.planCard}
+            data-selected={effectiveKey === "enterprise" ? "true" : "false"}
+            data-current={
+              mePlan?.plan.key === "enterprise" ? "true" : undefined
+            }
+            data-plan={effectiveKey === "enterprise" ? "enterprise" : undefined}
+            data-on-sale="true"
+          >
+            <span className={`${styles.planBadge} ${styles.currentBadge}`}>
+              {mePlan?.plan.key === "enterprise" ? "Current plan" : "50+ seats"}
+            </span>
+            <div className={styles.planHead}>
+              <div>
+                <h3>Enterprise</h3>
+                <p className={styles.hint}>For large sales companies</p>
+              </div>
+              <p className={styles.price}>
+                {money(enterpriseUnitPrice)}
+                <small> per seat / {periodWord} + GST</small>
+              </p>
+            </div>
+
+            <div className={styles.seats}>
+              <b id="ent-seat-label">Seats</b>
+              <span
+                className={styles.stepper}
+                role="group"
+                aria-labelledby="ent-seat-label"
+              >
+                <button
+                  type="button"
+                  aria-label="Remove an enterprise seat"
+                  disabled={enterpriseSeats <= 50}
+                  onClick={() => {
+                    setScope("organisation");
+                    setSelectedPlanKey("enterprise");
+                    setEnterpriseSeats(Math.max(50, enterpriseSeats - 1));
+                  }}
+                >
+                  <Minus size={16} aria-hidden="true" />
+                </button>
+                <output aria-live="polite">{enterpriseSeats}</output>
+                <button
+                  type="button"
+                  aria-label="Add an enterprise seat"
+                  onClick={() => {
+                    setScope("organisation");
+                    setSelectedPlanKey("enterprise");
+                    setEnterpriseSeats(enterpriseSeats + 1);
+                  }}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                </button>
+              </span>
+              <span className={styles.hint}>
+                {count(enterpriseSeats * 1000)} pooled minutes a month · 50+
+                seats
+              </span>
+            </div>
+
+            <div className={styles.gstLine}>
+              <div className={styles.gstRow}>
+                <span>Subtotal ({enterpriseSeats} seats):</span>
+                <b>{money(enterpriseSubtotal)}</b>
+              </div>
+              <div className={styles.gstRow}>
+                <span>GST (18%):</span>
+                <b>{money(enterpriseGst)}</b>
+              </div>
+              <div className={`${styles.gstRow} ${styles.gstTotal}`}>
+                <span>Total:</span>
+                <b>
+                  {money(enterpriseTotal)} / {periodWord}
+                </b>
+              </div>
+            </div>
+
+            <ul className={styles.facts}>
+              <li>Everything in Organisation</li>
+              <li>
+                {count(enterpriseSeats * 1000)} pooled analysis minutes every
+                month
+              </li>
+              <li>Calls up to 120 minutes long</li>
+              <li>Priority support</li>
+              <li>Onboarding session for the team</li>
+              <li>Single sign-on (SSO)</li>
+            </ul>
+
+            <button
+              type="button"
+              className={styles.planActionBtn}
+              data-primary={effectiveKey === "enterprise" ? "true" : undefined}
+              disabled={mePlan?.plan.key === "enterprise" || busy !== null}
+              onClick={() => {
+                if (effectiveKey !== "enterprise") {
+                  setScope("organisation");
+                  setSelectedPlanKey("enterprise");
+                } else void pay();
+              }}
+            >
+              {mePlan?.plan.key === "enterprise"
+                ? "Current plan"
+                : effectiveKey === "enterprise"
+                  ? "Buy Enterprise"
+                  : "Select Enterprise"}
+            </button>
+          </div>
+        </div>
+      ) : plan ? (
+        <div className={styles.plan} data-plan={plan.key} data-on-sale="false">
+          <div className={styles.planHead}>
+            <div>
+              <h3>{plan.name}</h3>
+              <p className={styles.hint}>{plan.audience}</p>
+            </div>
+            <span className={styles.soon}>Not on sale yet</span>
+          </div>
+          <ul className={styles.facts}>
+            <li>
+              Limits and prices are being set. You will see them here first.
+            </li>
+          </ul>
         </div>
       ) : (
         <p className={styles.note}>This plan is not listed yet.</p>
       )}
-      <div className={styles.enterprise}>
-        <span>
-          <Building2 size={16} aria-hidden="true" />
+      {!buyable ? (
+        <div className={styles.enterprise}>
           <span>
-            <b>{enterprisePlan?.name ?? "Enterprise"}</b> ·{" "}
-            {enterprisePlan?.audience ?? "For large sales companies"}: single
-            sign-on, invoices on your terms, a named contact
+            <Building2 size={16} aria-hidden="true" />
+            <span>
+              <b>{enterprisePlan?.name ?? "Enterprise"}</b> ·{" "}
+              {enterprisePlan?.audience ?? "For large sales companies"}: 50+
+              seats, the same per-seat price, single sign-on, invoices on your
+              terms
+            </span>
           </span>
-        </span>
-        <button
-          type="button"
-          className={styles.ghost}
-          onClick={() => setEnterprise(true)}
-        >
-          Talk to us
-        </button>
-      </div>
+          <button
+            type="button"
+            className={styles.ghost}
+            onClick={() => setEnterprise(true)}
+          >
+            Talk to us
+          </button>
+        </div>
+      ) : null}
     </>
   );
 
@@ -744,13 +999,28 @@ export function PlansView({
               </dd>
             </div>
             {scope === "organisation" ? (
+              <>
+                <div>
+                  <dt>Seats</dt>
+                  <dd>
+                    {seatCount} × {money(unit)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Subtotal</dt>
+                  <dd>{money(subtotal)}</dd>
+                </div>
+                <div>
+                  <dt>GST (18%)</dt>
+                  <dd>{money(gstAmount)}</dd>
+                </div>
+              </>
+            ) : (
               <div>
-                <dt>Seats</dt>
-                <dd>
-                  {seatCount} × {money(unit)}
-                </dd>
+                <dt>GST</dt>
+                <dd>Included</dd>
               </div>
-            ) : null}
+            )}
             {includedMinutes !== null ? (
               <div>
                 <dt>Minutes</dt>
@@ -758,8 +1028,8 @@ export function PlansView({
               </div>
             ) : null}
             <div>
-              <dt>GST</dt>
-              <dd>Included</dd>
+              <dt>Renewal date</dt>
+              <dd>{day(renewalDate.toISOString())}</dd>
             </div>
             <div className={styles.total}>
               <dt>Pay today</dt>
@@ -768,14 +1038,16 @@ export function PlansView({
           </dl>
           {total > APPROVAL_LIMIT_PAISE ? (
             <p className={`${styles.note} ${styles.warn}`}>
-              Renews every {periodWord}. This amount is above{" "}
+              Renews every {periodWord}. Next renewal date:{" "}
+              {day(renewalDate.toISOString())}. This amount is above{" "}
               {money(APPROVAL_LIMIT_PAISE)}, so your bank will ask you to
               approve each renewal.
             </p>
           ) : (
             <p className={styles.note}>
-              Renews every {periodWord} on the same date. We remind you before
-              each renewal.
+              Renews every {periodWord} on the same date (next:{" "}
+              {day(renewalDate.toISOString())}). We remind you before each
+              renewal.
             </p>
           )}
           <button
@@ -794,7 +1066,8 @@ export function PlansView({
           <p className={styles.hint}>
             <ShieldCheck size={13} aria-hidden="true" /> You pay by UPI, card or
             net banking on the payment partner&apos;s secure page. We never see
-            your card. Refund within 7 days if you have not used any minutes.
+            your card. Full refund within 7 days if none of this payment&apos;s
+            minutes were used.
           </p>
         </>
       ) : (
@@ -921,10 +1194,7 @@ export function PlansView({
           role="group"
           aria-label="Confirm cancel"
         >
-          <p>
-            Stop the next renewal for this subscription? The recorded period
-            ends {day(current.currentPeriod?.end ?? current.renewsAt)}.
-          </p>
+          <p>Renewal stops; access continues to the end of the period.</p>
           <div className={styles.actions}>
             <button
               type="button"
@@ -946,8 +1216,7 @@ export function PlansView({
       ) : (
         <>
           <p className={styles.hint}>
-            Cancel stops the next renewal for this subscription. The recorded
-            period ends {day(current.currentPeriod?.end ?? current.renewsAt)}.
+            Renewal stops; access continues to the end of the period.
           </p>
           <button
             type="button"
@@ -959,8 +1228,8 @@ export function PlansView({
         </>
       )}
       <p className={styles.hint}>
-        Paid recently and not used any minutes? You can ask for a refund for 7
-        days from the order page.
+        Full refund within 7 days if none of this payment&apos;s minutes were
+        used.
       </p>
     </>
   ) : null;

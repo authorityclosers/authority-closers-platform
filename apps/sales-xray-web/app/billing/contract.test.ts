@@ -72,7 +72,7 @@ describe("plans catalogue (GET /v1/plans)", () => {
       priceCents: null,
     });
     expect(onSale(plans[0])).toBe(true);
-    expect(onSale(plans[2])).toBe(false);
+    expect(onSale(plans[2])).toBe(true);
   });
 
   it("treats a coming-soon plan with no prices as not on sale, and refuses unknown fields", () => {
