@@ -121,8 +121,12 @@ it("does not show the superseded Company tier on pricing", () => {
   const markup = renderToStaticMarkup(
     <PolicyPage slug="pricing" pricingPlans={samplePlans} />,
   );
+  const terms = renderToStaticMarkup(
+    <PolicyPage slug="terms" pricingPlans={samplePlans} />,
+  );
   expect(markup).not.toContain("Must not be shown");
   expect(markup).not.toContain("GST");
+  expect(terms).not.toContain("GST");
 });
 
 it("hides unavailable plan prices and top-up amounts", () => {

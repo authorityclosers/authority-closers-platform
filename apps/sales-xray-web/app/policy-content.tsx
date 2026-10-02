@@ -34,9 +34,9 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       title: "Online service",
       paragraphs: [
         "Sales Xray is an online software service. Nothing is shipped.",
-        "Your plan and analysis minutes are added to your account after our server receives payment confirmation from Razorpay.",
+        "Your plan and its analysis minutes are added to your account as soon as our server receives the payment confirmation from Razorpay, normally within a few minutes of paying.",
         "You use the service in your browser at the Sales Xray website. Reports are delivered in your account, and you can download them where your plan allows.",
-        "If your minutes do not appear, email us with your order number.",
+        "If your minutes do not appear within 30 minutes of a successful payment, email us with your order number and we will fix it within one working day.",
       ],
     },
   ],
@@ -44,20 +44,40 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Cancellation",
       paragraphs: [
-        "You can cancel at any time to stop the next renewal. Your plan stays active until the end of the period you have paid for.",
+        "You can cancel at any time to stop the next renewal. Your plan stays active until the end of the period you have paid for. We do not charge a cancellation fee.",
+      ],
+    },
+    {
+      title: "After using minutes",
+      bullets: [
+        "After you use minutes, that period's payment is not refundable.",
+        "Unused minutes do not turn into money.",
       ],
     },
     {
       title: "Refunds",
       bullets: [
-        "A full refund is available if you ask within 7 days of a new subscription payment and have not used any minutes from it.",
-        "Top-up packs are refundable only if none of their minutes have been used.",
+        "If you ask within 7 days of a new subscription payment and have not used any minutes from it, we refund the full amount.",
+        "Top-up packs are refundable within 7 days only if none of the pack's minutes have been used.",
+        "Failed, duplicate or wrongly charged payments are refunded in full.",
+      ],
+    },
+    {
+      title: "How refunds are paid",
+      paragraphs: [
+        "Refunds are paid to the original payment method through Razorpay. Allow 5–7 working days after we approve the refund; your bank may take longer to show it.",
       ],
     },
     {
       title: "How to ask",
       paragraphs: [
         "Email marketing@estateautopilots.com from your account email and include your order number.",
+      ],
+    },
+    {
+      title: "Organisation plans",
+      paragraphs: [
+        "Only the organisation owner can cancel or ask for a refund.",
       ],
     },
   ],
@@ -94,8 +114,11 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     },
     {
       title: "6. Plans and payment",
-      paragraphs: [
-        "Plan prices are shown in Indian rupees in the catalogue. Cancel your subscription at any time to stop the next renewal. Your plan stays active until the end of the period you have paid for. Payments are processed by Razorpay.",
+      bullets: [
+        "Plan prices are shown in Indian rupees in the catalogue.",
+        "Monthly and yearly plans renew automatically until cancelled. We remind you before each renewal.",
+        "Minutes are counted per analysed recording, and a plan's minutes do not carry over unless the plan says so.",
+        "Payments are processed by Razorpay; we never see your card details.",
       ],
     },
     {
