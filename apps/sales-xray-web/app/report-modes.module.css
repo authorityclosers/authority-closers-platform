@@ -7,12 +7,39 @@
   --report-border: var(--lx-line);
   --report-teal: var(--lx-teal);
   --report-active-ink: var(--lx-strength-ink);
+  --doc-heading: var(--lx-ink-2);
+  --doc-accent: var(--lx-focus);
+  --doc-callout-fill: var(--lx-paper-2);
+  --doc-border: var(--lx-line);
+  --report-text-scale: 1;
+  --report-base-font-size: 17px;
+  --report-font-size: calc(
+    var(--report-base-font-size) * var(--report-text-scale)
+  );
   min-width: 0;
   color: var(--report-ink);
   /* Every report section shares the accepted Lightbox UI face. */
   font-family: var(--lx-font-ui);
-  font-size: 16px;
+  font-size: var(--report-font-size);
   line-height: 1.6;
+}
+
+.workspace[data-text-size="100"] {
+  --report-text-scale: 1;
+}
+
+.workspace[data-text-size="112.5"] {
+  --report-text-scale: 1.125;
+}
+
+.workspace[data-text-size="125"] {
+  --report-text-scale: 1.25;
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    --report-base-font-size: 16px;
+  }
 }
 
 /* The single sticky report navigation row (both views): sections scroll
@@ -57,8 +84,11 @@
   border-radius: 9px 0 0 9px;
 }
 
-.toolbar > button:last-child {
+.toolbar > button:not(:first-child) {
   margin-left: -1px;
+}
+
+.toolbar > button:last-child {
   border-radius: 0 9px 9px 0;
 }
 
@@ -73,6 +103,52 @@
 .toolbar svg {
   width: 17px;
   height: 17px;
+}
+
+.textSizeGroup {
+  display: flex;
+  flex: none;
+  margin: 0;
+}
+
+.textSizeGroup > button {
+  display: inline-flex;
+  min-width: 34px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border: 1px solid var(--report-border);
+  background: var(--lx-surface);
+  color: var(--report-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.textSizeGroup > button:first-child {
+  border-radius: 9px 0 0 9px;
+}
+
+.textSizeGroup > button:not(:first-child) {
+  margin-left: -1px;
+}
+
+.textSizeGroup > button:last-child {
+  border-radius: 0 9px 9px 0;
+}
+
+.textSizeGroup > button[aria-pressed="true"] {
+  position: relative;
+  z-index: 1;
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-soft);
+  color: var(--report-active-ink);
 }
 
 /* Sections use the full report width in both views. */
@@ -295,8 +371,60 @@
 }
 
 .section + .section {
+  margin-top: 48px;
   padding-top: 24px;
   border-top: 1px solid var(--report-border);
+}
+
+.chapterOpener {
+  margin-top: 48px;
+  margin-bottom: 24px;
+}
+
+.chapterHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.chapterNumber {
+  font-family: var(--lx-font-ui);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--doc-heading);
+  line-height: 1.2;
+}
+
+.chapterTitle {
+  margin: 0;
+  color: var(--doc-heading);
+  font-family: var(--lx-font-ui);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
+}
+
+.chapterRule {
+  width: 100%;
+  height: 1px;
+  background: var(--doc-accent);
+  margin: 10px 0 8px;
+}
+
+.chapterSummary {
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: var(--report-font-size);
+  line-height: 1.5;
+}
+
+.workspace:is([data-view="reading"], [data-view="tabs"])
+  .reportContent
+  :where(:not(h1, h2, h3, h4, h5, h6, h1 *, h2 *, h3 *, h4 *, h5 *, h6 *)) {
+  font-size: var(--report-font-size) !important;
 }
 
 .section > h2 {
@@ -316,6 +444,7 @@
 }
 
 .workspace[data-view="tabs"] .section {
+  margin-top: 0;
   padding: 0;
   border: 0;
 }
@@ -342,8 +471,9 @@
     border-radius: 10px;
   }
 
-  .toolbar > button:last-child {
+  .toolbar > button:not(:first-child) {
     margin-left: 4px;
+    border-radius: 10px;
   }
 
   .toolbar > button:first-child {
@@ -362,6 +492,29 @@
   .toolbar svg {
     width: 18px;
     height: 18px;
+  }
+
+  .textSizeGroup {
+    flex: none;
+    padding-left: 6px;
+    border-left: 1px solid var(--report-border);
+  }
+
+  .textSizeGroup > button {
+    width: 32px;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0;
+    border-radius: 8px;
+  }
+
+  .textSizeGroup > button:not(:first-child) {
+    margin-left: 3px;
+    border-radius: 8px;
+  }
+
+  .textSizeGroup > button:first-child {
+    border-radius: 8px;
   }
 }
 
@@ -627,5 +780,352 @@
   .navRow[data-placement="toolbar"] .sectionIcon {
     animation: none;
     transition: none;
+  }
+}
+
+.navRow[data-placement="toolbar"] .textSizeGroup {
+  position: relative;
+  flex: 0 1 auto;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--lx-line-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lx-sunken) 78%, transparent);
+  -webkit-backdrop-filter: saturate(1.5) blur(14px);
+  backdrop-filter: saturate(1.5) blur(14px);
+}
+
+.navRow[data-placement="toolbar"] .textSizeGroup > button {
+  min-width: 28px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lx-muted);
+  font: 700 12px/1 var(--lx-font-ui);
+}
+
+.navRow[data-placement="toolbar"] .textSizeGroup > button:hover {
+  color: var(--lx-ink);
+}
+
+.navRow[data-placement="toolbar"] .textSizeGroup > button[aria-pressed="true"] {
+  background: var(--lx-surface);
+  box-shadow:
+    var(--lx-shadow-1),
+    0 0 0 0.5px var(--lx-line);
+  color: var(--lx-teal);
+}
+
+/* ==================== DOCUMENT VIEW ==================== */
+.documentContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.documentActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 210mm;
+  max-width: 100%;
+  margin: 0 auto 20px;
+  padding: 12px 18px;
+  background: var(--lx-paper-2);
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.docBtnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--doc-heading);
+  border-radius: 8px;
+  background: var(--doc-heading);
+  color: var(--lx-surface);
+  font: 700 13.5px var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.docBtnPrimary:focus-visible {
+  outline: 2px solid var(--doc-accent);
+  outline-offset: 3px;
+}
+
+.docBtnPrimary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.documentActionsNote {
+  font-size: 12px;
+  color: var(--lx-muted);
+}
+
+.documentPages {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+}
+
+.documentPage {
+  --document-font-size: calc(14.5px * var(--report-text-scale));
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 16mm 18mm;
+  margin: 0 auto 32px;
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-2);
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  font-size: var(--document-font-size);
+  line-height: 1.5;
+  color: var(--lx-ink);
+  overflow-wrap: anywhere;
+}
+
+.docRunningHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--lx-muted);
+  padding-bottom: 5mm;
+  margin-bottom: 6mm;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.docKicker {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--doc-accent);
+  margin-bottom: 4px;
+}
+
+.docSubtitle {
+  font-size: 13.5px;
+  color: var(--lx-muted);
+  margin-bottom: 8px;
+}
+
+.docTitle {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--doc-heading);
+  line-height: 1.25;
+  margin: 0 0 8px;
+}
+
+.docMetaLine {
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--lx-muted);
+  margin-bottom: 16px;
+}
+
+.docBasisCallout {
+  background: var(--doc-callout-fill);
+  border-left: 4px solid var(--doc-heading);
+  padding: 12px 16px;
+  margin-bottom: 22px;
+}
+
+.docBasisLabel {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--doc-heading);
+}
+
+.docBasisText {
+  margin: 3px 0;
+  font-size: 13px;
+  color: var(--lx-ink-3);
+}
+
+.docSection {
+  min-width: 0;
+  margin-bottom: 20px;
+}
+
+.docSectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
+  margin-bottom: 8px;
+}
+
+.docSectionNumber,
+.docSectionTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--doc-heading);
+}
+
+.docSectionTitle {
+  scroll-margin-block-start: var(--report-scroll-target-offset, 64px);
+}
+
+.docContent
+  :where(:not(h1, h2, h3, h4, h5, h6, h1 *, h2 *, h3 *, h4 *, h5 *, h6 *)) {
+  font-size: var(--document-font-size) !important;
+}
+
+.docContent * {
+  -webkit-line-clamp: unset !important;
+}
+
+.docContent :where(table) {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.docContent :where(th, td) {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.docContent :where(th) {
+  background: var(--doc-heading);
+  color: var(--lx-surface);
+}
+
+.docContent :where(tbody tr:nth-child(even)) {
+  background: var(--lx-paper-2);
+}
+
+.docContent :where(blockquote) {
+  margin-inline: 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--doc-accent);
+  background: var(--doc-callout-fill);
+}
+
+@media (max-width: 760px) {
+  .navRow {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .documentPage {
+    --document-font-size: calc(16px * var(--report-text-scale));
+    width: 100%;
+    min-height: auto;
+    padding: 20px 16px;
+    margin-bottom: 20px;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* The renderer requests this page without opening a browser print dialog. */
+.navRow[data-report-print="true"],
+.workspace[data-report-print="true"] .documentActions {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 16mm 18mm;
+    @top-left {
+      content: "Authority Closers — Sales Xray call report";
+      font: 8pt sans-serif;
+    }
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font: 8pt sans-serif;
+    }
+  }
+  @page :first {
+    @top-left {
+      content: none;
+    }
+  }
+
+  :global(body):has(.workspace[data-view="document"]) {
+    background: var(--lx-surface) !important;
+  }
+
+  :global(body):has(.workspace[data-view="document"]) :global(*) {
+    visibility: hidden;
+  }
+
+  .workspace[data-view="document"],
+  .workspace[data-view="document"] * {
+    visibility: visible !important;
+  }
+
+  .workspace[data-view="document"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+
+  .navRow,
+  .documentActions,
+  .returnBar,
+  .docRunningHeader {
+    display: none !important;
+  }
+
+  .documentPage {
+    width: 100% !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    break-after: page;
+  }
+
+  .documentPage:last-child {
+    break-after: auto;
+  }
+
+  .documentPage h1,
+  .documentPage h2,
+  .documentPage h3,
+  .documentPage h4,
+  .documentPage .docSectionHeader {
+    break-after: avoid;
+  }
+
+  .documentPage table {
+    break-inside: auto;
+  }
+
+  .documentPage tr {
+    break-inside: avoid;
+  }
+
+  .documentPage[data-report-mode-section="transcript"] .docContent > details {
+    display: block !important;
+  }
+
+  .documentPage thead {
+    display: table-header-group;
   }
 }

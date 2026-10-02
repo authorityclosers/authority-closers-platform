@@ -20,6 +20,7 @@ import {
   ReportMoments,
   timelineMoments,
 } from "./report-moments";
+import { ReportReadingProvider } from "./report-reading-context";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -124,6 +125,33 @@ const pressed = (label: string) =>
   [
     ...container.querySelectorAll<HTMLButtonElement>('[role="group"] button'),
   ].find((button) => button.textContent?.startsWith(label))!;
+
+it("keeps every moment expanded and unfiltered in Document", async () => {
+  const report = mixed();
+  const show = async (documentView: boolean) =>
+    act(async () =>
+      root.render(
+        <ReportReadingProvider reading documentView={documentView}>
+          <ReportMoments report={report} onSelectEvidence={vi.fn()} />
+        </ReportReadingProvider>,
+      ),
+    );
+  await show(false);
+  await act(async () => pressed("Did well").click());
+  expect(cards()).toHaveLength(1);
+  await show(true);
+  expect(cards()).toHaveLength(timelineMoments(report).length);
+  for (const detail of container.querySelectorAll('[id^="moment-detail-"]')) {
+    expect(detail.getAttribute("aria-hidden")).toBe("false");
+    expect(detail.hasAttribute("inert")).toBe(false);
+  }
+  for (const toggle of container.querySelectorAll<HTMLButtonElement>(
+    "button[aria-expanded]",
+  )) {
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  }
+});
 
 it("puts one moment per finding on a single timeline in call order", () => {
   const moments = timelineMoments(mixed());

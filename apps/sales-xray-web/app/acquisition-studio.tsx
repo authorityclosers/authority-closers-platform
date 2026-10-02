@@ -122,7 +122,7 @@ import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
 import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
 import { ReportHeader } from "./report-header";
-import type { CallLabel } from "./call-label";
+import { callTitle, type CallLabel } from "./call-label";
 import { readCallLabel, renameCall } from "./call-label-client";
 import {
   revalidateContextualSourcePlayback,
@@ -3424,6 +3424,20 @@ export function AcquisitionStudio({
                   label="Explore your sales report"
                   lightSurface={resolvedTheme !== "dark"}
                   boundCallId={submission?.id}
+                  documentData={{
+                    title: callTitle(
+                      result.label,
+                      file?.name ?? "Sales Xray call report",
+                    ),
+                    callType: result.callRecord?.call_type ?? undefined,
+                    callLength: formatClock(result.transcript.duration_ms),
+                    analysisBasis: {
+                      recordingLength: formatClock(
+                        result.transcript.duration_ms,
+                      ),
+                      transcriptRevision: report.transcript_revision,
+                    },
+                  }}
                   panels={[
                     {
                       id: "overview",
