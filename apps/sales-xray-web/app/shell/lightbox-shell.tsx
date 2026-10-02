@@ -154,18 +154,8 @@ function LightboxShellFrame({
   const workspaces = access?.workspaces ?? [];
   const workspacesSettled = access?.status === "ready";
   const [workspaceReloadPending, setWorkspaceReloadPending] = useState(false);
-  const [selectedTenantAccountKey, setSelectedTenantAccountKey] = useState(
-    cached.selectedTenantAccountKey,
-  );
-  const [selectedTenantId, setSelectedTenantId] = useState(() =>
-    accountKey && cached.selectedTenantAccountKey === accountKey
-      ? cached.selectedTenantId
-      : (access?.context?.tenantId ?? null),
-  );
-  const effectiveTenantId =
-    accountKey && selectedTenantAccountKey === accountKey
-      ? selectedTenantId
-      : (access?.context?.tenantId ?? null);
+  // The confirmed server context owns selection across mounts and sessions.
+  const effectiveTenantId = access?.context?.tenantId ?? null;
   const salesXrayEnabled =
     workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
       ?.sales_xray_enabled !== false;
@@ -447,8 +437,6 @@ function LightboxShellFrame({
         // The next document reads the new context. Do not start reads here
         // between the successful context change and its reload.
         setWorkspaceReloadPending(true);
-        setSelectedTenantId(tenantId);
-        setSelectedTenantAccountKey(accountKey);
         setSwitcherOpen(false);
         setRecentCalls([]);
         setRecentCallsContextKey(null);

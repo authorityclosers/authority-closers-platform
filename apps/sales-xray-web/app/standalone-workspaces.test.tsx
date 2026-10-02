@@ -68,11 +68,15 @@ beforeEach(() => {
       });
     if (path === "/v1/me/sales-xray-workspaces")
       return Response.json(directory);
-    if (path === "/v1/context")
+    if (path === "/v1/context") {
+      const tenantId = JSON.parse(init!.body as string).tenant_id;
+      if (selectionStatus === 200)
+        directory = { ...directory, selected_tenant_id: tenantId };
       return Response.json(
-        { tenant_id: JSON.parse(init!.body as string).tenant_id },
+        { tenant_id: tenantId },
         { status: selectionStatus },
       );
+    }
     return Response.json({}, { status: 404 });
   });
   vi.stubGlobal("fetch", fetcher);
@@ -91,6 +95,11 @@ async function mount() {
       </StandaloneStudio>,
     ),
   );
+}
+async function remount() {
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await mount();
 }
 const button = (label: string) =>
   host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
@@ -158,6 +167,42 @@ it("shows the off message and suppresses Recents and upload for a disabled works
   expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2);
 });
 
+it.each([true, false])(
+  "keeps the confirmed organisation on same-session remount (enabled: %s)",
+  async (enabled) => {
+    vi.stubEnv("NODE_ENV", "development");
+    directory = {
+      selected_tenant_id: "org-id",
+      workspaces: [personal, { ...organisation, sales_xray_enabled: enabled }],
+    };
+    await mount();
+    expect(getShellState().selectedTenantId).toBe("org-id");
+    await remount();
+    expect(button("Current workspace: Closers Academy")).not.toBeNull();
+    expect(host.textContent?.includes("Recents")).toBe(enabled);
+    expect(host.querySelector("[data-upload]") !== null).toBe(enabled);
+    if (enabled) {
+      expect(
+        host.querySelector("[data-upload]")?.getAttribute("data-tenant"),
+      ).toBe("org-id");
+    } else {
+      expect(host.textContent).toContain(
+        "Sales Xray isn't on for this workspace yet",
+      );
+      expect(
+        fetcher.mock.calls.some(([path]) =>
+          path.startsWith("/v1/conversation/"),
+        ),
+      ).toBe(false);
+    }
+    await act(async () => button("Current workspace: Closers Academy").click());
+    const selected = host.querySelector(
+      '[role="menuitemradio"][aria-checked="true"]',
+    );
+    expect(selected?.textContent).toContain("Closers Academy");
+  },
+);
+
 it("switches both ways and clears the previous workspace's cached Recents", async () => {
   await mount();
   for (const [from, to, name] of [
@@ -178,5 +223,7 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     expect(getShellState().selectedTenantId).toBe(to);
     expect(getShellState().recentCalls).toEqual([]);
     expect(getShellState().recentCallsContextKey).toBeNull();
+    await remount();
+    expect(button(`Current workspace: ${name}`)).not.toBeNull();
   }
 });
