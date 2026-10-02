@@ -58,9 +58,7 @@ def upgrade() -> None:
             "reason_ref ~ '^[A-Za-z0-9][A-Za-z0-9 ._:#/-]{2,79}$'", name="reason_ref_pattern"
         ),
         sa.CheckConstraint("length(trim(segment_id)) > 0", name="segment_id_bound"),
-        sa.CheckConstraint(
-            "length(trim(transcript_revision)) > 0", name="transcript_revision_bound"
-        ),
+        sa.CheckConstraint("length(trim(transcript_revision)) > 0", name="revision_bound"),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.ForeignKeyConstraint(["recording_id"], ["conversation_recordings.id"]),
         sa.ForeignKeyConstraint(["supersedes_mark_id"], [f"{TABLE}.id"]),

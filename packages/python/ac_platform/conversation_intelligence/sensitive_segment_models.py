@@ -25,7 +25,9 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.engine import Connection
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, Mapper, mapped_column
+from sqlalchemy.sql.elements import ColumnElement
 
 from ac_platform.db.base import Base
 
@@ -33,6 +35,27 @@ SENSITIVE_CATEGORIES = frozenset({"SENSITIVE_FINANCIAL", "SENSITIVE_LEGAL"})
 MARK_ACTIONS = frozenset({"mark", "release"})
 MARK_SOURCES = frozenset({"operator", "generation"})
 REASON_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:#/-]{2,79}$")
+REASON_REF_SQL_PATTERN = "^[A-Za-z0-9][A-Za-z0-9 ._:#/-]{2,79}$"
+
+
+class _ReasonRefPatternExpression(ColumnElement[bool]):
+    """PostgreSQL enforces the ``reason_ref`` pattern; SQLite keeps the length bound."""
+
+    inherit_cache = True
+
+
+@compiles(_ReasonRefPatternExpression, "postgresql")
+def _compile_postgresql_reason_ref_pattern(
+    _element: _ReasonRefPatternExpression, _compiler: object, **_kw: object
+) -> str:
+    return f"reason_ref ~ '{REASON_REF_SQL_PATTERN}'"
+
+
+@compiles(_ReasonRefPatternExpression)
+def _compile_default_reason_ref_pattern(
+    _element: _ReasonRefPatternExpression, _compiler: object, **_kw: object
+) -> str:
+    return "length(trim(reason_ref)) >= 3 AND length(reason_ref) <= 80"
 
 
 def utc_now() -> datetime:
@@ -61,8 +84,9 @@ class ConversationSensitiveSegmentMark(Base):
         CheckConstraint(
             "length(trim(reason_ref)) >= 3 AND length(reason_ref) <= 80", name="reason_ref_bound"
         ),
+        CheckConstraint(_ReasonRefPatternExpression(), name="reason_ref_pattern"),
         CheckConstraint("length(trim(segment_id)) > 0", name="segment_id_bound"),
-        CheckConstraint("length(trim(transcript_revision)) > 0", name="transcript_revision_bound"),
+        CheckConstraint("length(trim(transcript_revision)) > 0", name="revision_bound"),
         UniqueConstraint(
             "supersedes_mark_id", name="uq_conversation_sensitive_segment_marks_supersedes"
         ),
