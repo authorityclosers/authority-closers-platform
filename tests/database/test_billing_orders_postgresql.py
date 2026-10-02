@@ -294,9 +294,9 @@ def test_0063_and_0064_apply_after_0062_and_are_the_head(postgres_harness: Engin
     scripts = ScriptDirectory.from_config(config)
     assert scripts.get_revision("20261001_0063").down_revision == "20261001_0062"
     assert scripts.get_revision("20261001_0064").down_revision == "20261001_0063"
-    assert scripts.get_current_head() == "20261002_0065"
+    assert scripts.get_current_head() == "20261002_0066"
     with postgres_harness.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_0065"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_0066"
         present = set(inspect(connection).get_table_names())
     assert set(NEW_TABLES) <= present
 
