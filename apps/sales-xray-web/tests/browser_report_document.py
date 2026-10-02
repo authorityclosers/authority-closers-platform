@@ -130,6 +130,9 @@ def main() -> None:
                     '[aria-label="Key facts"] button, [aria-label="Key facts"] input'
                 ).count()
                 assert "Source facts and saved confirmations." in pdf_text(path)
+                expect(
+                    workspace.locator('[data-report-mode-section="transcript"] details')
+                ).to_be_visible()
                 assert pdf_text(path).count("EvidenceEndMarker") == 2
                 long_report = PdfReader(path)
                 assert len(long_report.pages) > 8, "Fixture must span more pages than panels"
@@ -192,6 +195,41 @@ def main() -> None:
             expect(workspace).to_have_attribute("data-report-section", "moments")
             assert "section=moments" in page.url
             assert page.evaluate("history.length") == entries
+            # Real widget draft and filters survive a Document preview.
+            page.get_by_title("Reading view", exact=True).click()
+            expect(workspace).to_have_attribute("data-view", "reading")
+            facts = workspace.locator('[aria-label="Key facts"]')
+            facts.get_by_role("button", name="Add budget", exact=True).click()
+            editor = facts.locator("form input")
+            editor.fill("Fictional unsaved draft")
+            raw = workspace.locator('[data-report-mode-section="raw-data"]')
+            raw.get_by_role("textbox", name="Search the raw data").fill("Fictional retained filter")
+            for next_view in ["document", "reading", "tabs", "reading"]:
+                page.get_by_title(
+                    {"document": "Document view", "reading": "Reading view", "tabs": "Tabbed view"}[
+                        next_view
+                    ],
+                    exact=True,
+                ).click()
+                expect(workspace).to_have_attribute("data-view", next_view)
+                if next_view == "document":
+                    assert not facts.locator("form").count()
+                    assert not raw.locator("input").count()
+                elif next_view == "reading":
+                    expect(editor).to_have_value("Fictional unsaved draft")
+                    expect(raw.locator("input")).to_have_value("Fictional retained filter")
+            for next_view in ["reading", "tabs"]:
+                page.get_by_title(
+                    {"reading": "Reading view", "tabs": "Tabbed view"}[next_view], exact=True
+                ).click()
+                if next_view == "tabs":
+                    workspace.locator('button[role="tab"]').first.click()
+                base = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
+                for size, scale in [("112.5", 1.125), ("125", 1.25), ("100", 1.0)]:
+                    page.get_by_role("button", name=f"Text size {size}%", exact=True).click()
+                    expect(workspace).to_have_attribute("data-text-size", size)
+                    actual = field.evaluate("el => parseFloat(getComputedStyle(el).fontSize)")
+                    assert abs(actual - base * scale) < 0.1
             page.goto(
                 f"{BASE}/review-fixture/document?call={CALL}&view=document&print=1",
                 wait_until="networkidle",
@@ -225,7 +263,8 @@ def main() -> None:
                 "revision": "synthetic-display-r1",
                 "a4_pages": 7,
                 "scrolled_view_toggle_replaces_history": True,
-                "span_text_scales": True,
+                "span_text_scales": "all three views",
+                "draft_and_filter_survive_document_preview": True,
                 "long_quotes_unclamped": True,
                 "static_document_facts_and_raw_data": True,
                 "page_errors": errors,

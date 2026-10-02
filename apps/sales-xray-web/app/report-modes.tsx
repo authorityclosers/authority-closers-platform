@@ -427,11 +427,14 @@ function updateReportLayerOffsets(
   return targetOffset;
 }
 
-function renderDocumentView(
+function renderReportPanels(
   id: string,
   panels: ReportPanel[],
+  view: View,
+  selected: string,
   docData?: DocumentReportData,
 ) {
+  const documentView = view === "document";
   const title =
     docData?.title ??
     ([docData?.repName, docData?.prospectName].filter(Boolean).join(" — ") ||
@@ -442,104 +445,166 @@ function renderDocumentView(
     .replaceAll(">", "\\3e ");
 
   return (
-    <div className={styles.documentContainer}>
-      <style>{`@page { @top-right { content: ${printRep}; font: 8pt sans-serif; } }
+    <div className={documentView ? styles.documentContainer : undefined}>
+      {documentView && (
+        <style>{`@page { @top-right { content: ${printRep}; font: 8pt sans-serif; } }
         @page :first { @top-right { content: none; } }`}</style>
-      <div className={styles.documentActions}>
-        <button
-          type="button"
-          className={styles.docBtnPrimary}
-          onClick={() => window.print()}
-        >
-          <Printer aria-hidden="true" />
-          <span>Print / Save PDF</span>
-        </button>
-        <span className={styles.documentActionsNote}>
-          A4 portrait · 210×297 mm
-        </span>
-      </div>
-      <div className={styles.documentPages}>
-        {panels.map((panel, index) => (
-          <article
-            className={styles.documentPage}
-            data-document-page
-            key={panel.id}
+      )}
+      {documentView && (
+        <div className={styles.documentActions}>
+          <button
+            type="button"
+            className={styles.docBtnPrimary}
+            onClick={() => window.print()}
           >
-            {index === 0 ? (
-              <>
-                {docData?.workspaceName && (
-                  <div className={styles.docKicker}>
-                    {docData.workspaceName}
-                  </div>
-                )}
-                {(docData?.callType || docData?.callDate) && (
-                  <div className={styles.docSubtitle}>
-                    {[docData.callType, docData.callDate]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                )}
-                <h1 className={styles.docTitle}>{title}</h1>
-                {(docData?.callLength || docData?.analysedDate) && (
-                  <div className={styles.docMetaLine}>
-                    {[
-                      docData.callLength && `Call length ${docData.callLength}`,
-                      docData.analysedDate &&
-                        `Analysed ${docData.analysedDate}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                )}
-                {basis && (
-                  <aside
-                    className={styles.docBasisCallout}
-                    aria-label="Analysis basis"
-                  >
-                    <div className={styles.docBasisLabel}>Analysis basis</div>
-                    {basis.recordingLength && (
-                      <p className={styles.docBasisText}>
-                        Recording length: {basis.recordingLength}
-                      </p>
-                    )}
-                    {basis.transcriptRevision && (
-                      <p className={styles.docBasisText}>
-                        Transcript revision: {basis.transcriptRevision}
-                      </p>
-                    )}
-                    {basis.analysisVersion && (
-                      <p className={styles.docBasisText}>
-                        Analysis version: {basis.analysisVersion}
-                      </p>
-                    )}
-                  </aside>
-                )}
-              </>
-            ) : (
-              <div className={styles.docRunningHeader}>
-                <span>Authority Closers — Sales Xray call report</span>
-                {docData?.repName && <span>{docData.repName}</span>}
-              </div>
-            )}
-            <section
-              className={styles.docSection}
-              data-report-mode-section={panel.id}
-              aria-labelledby={`${id}-heading-${panel.id}`}
+            <Printer aria-hidden="true" />
+            <span>Print / Save PDF</span>
+          </button>
+          <span className={styles.documentActionsNote}>
+            A4 portrait · 210×297 mm
+          </span>
+        </div>
+      )}
+      <div
+        key="report-panels"
+        className={documentView ? styles.documentPages : styles.sections}
+      >
+        {panels.map((panel, index) => (
+          <section
+            key={panel.id}
+            id={`${id}-section-${panel.id}`}
+            className={documentView ? styles.documentPage : styles.section}
+            data-document-page={documentView || undefined}
+            data-report-mode-section={panel.id}
+            role={view === "tabs" ? "tabpanel" : "region"}
+            aria-labelledby={
+              view === "tabs"
+                ? `${id}-tab-${panel.id}`
+                : `${id}-heading-${panel.id}`
+            }
+            hidden={view === "tabs" && selected !== panel.id}
+            tabIndex={view === "tabs" ? 0 : -1}
+          >
+            {documentView &&
+              (index === 0 ? (
+                <>
+                  {docData?.workspaceName && (
+                    <div className={styles.docKicker}>
+                      {docData.workspaceName}
+                    </div>
+                  )}
+                  {(docData?.callType || docData?.callDate) && (
+                    <div className={styles.docSubtitle}>
+                      {[docData.callType, docData.callDate]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                  <h1 className={styles.docTitle}>{title}</h1>
+                  {(docData?.callLength || docData?.analysedDate) && (
+                    <div className={styles.docMetaLine}>
+                      {[
+                        docData.callLength &&
+                          `Call length ${docData.callLength}`,
+                        docData.analysedDate &&
+                          `Analysed ${docData.analysedDate}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                  {basis && (
+                    <aside
+                      className={styles.docBasisCallout}
+                      aria-label="Analysis basis"
+                    >
+                      <div className={styles.docBasisLabel}>Analysis basis</div>
+                      {basis.recordingLength && (
+                        <p className={styles.docBasisText}>
+                          Recording length: {basis.recordingLength}
+                        </p>
+                      )}
+                      {basis.transcriptRevision && (
+                        <p className={styles.docBasisText}>
+                          Transcript revision: {basis.transcriptRevision}
+                        </p>
+                      )}
+                      {basis.analysisVersion && (
+                        <p className={styles.docBasisText}>
+                          Analysis version: {basis.analysisVersion}
+                        </p>
+                      )}
+                    </aside>
+                  )}
+                </>
+              ) : (
+                <div className={styles.docRunningHeader}>
+                  <span>Authority Closers — Sales Xray call report</span>
+                  {docData?.repName && <span>{docData.repName}</span>}
+                </div>
+              ))}
+            <div
+              key="section"
+              className={documentView ? styles.docSection : undefined}
             >
-              <div className={styles.docSectionHeader}>
-                <span className={styles.docSectionNumber}>{index + 1}.</span>
+              {view === "tabs" ? (
                 <h2
                   id={`${id}-heading-${panel.id}`}
                   tabIndex={-1}
-                  className={styles.docSectionTitle}
+                  className={styles.visuallyHiddenHeading}
                 >
                   {panel.label}
                 </h2>
+              ) : (
+                <div
+                  className={documentView ? undefined : styles.chapterOpener}
+                >
+                  <div
+                    className={
+                      documentView
+                        ? styles.docSectionHeader
+                        : styles.chapterHeader
+                    }
+                  >
+                    <span
+                      className={
+                        documentView
+                          ? styles.docSectionNumber
+                          : styles.chapterNumber
+                      }
+                    >
+                      {index + 1}.
+                    </span>
+                    <h2
+                      id={`${id}-heading-${panel.id}`}
+                      tabIndex={-1}
+                      className={
+                        documentView
+                          ? styles.docSectionTitle
+                          : styles.chapterTitle
+                      }
+                    >
+                      {panel.label}
+                    </h2>
+                  </div>
+                  <div className={styles.chapterRule} aria-hidden="true" />
+                  {!documentView && (
+                    <p className={styles.chapterSummary}>
+                      {panel.summary ?? `${panel.label} report section.`}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div
+                key="content"
+                className={
+                  documentView ? styles.docContent : styles.reportContent
+                }
+              >
+                {panel.content}
               </div>
-              <div className={styles.chapterRule} aria-hidden="true" />
-              <div className={styles.docContent}>{panel.content}</div>
-            </section>
-          </article>
+            </div>
+          </section>
         ))}
       </div>
     </div>
@@ -1106,73 +1171,14 @@ export function ReportModes({
     >
       {slot ? createPortal(navigation, slot) : navigation}
       <div className={styles.layout}>
-        {view === "document" ? (
-          <ReportReadingProvider
-            reading
-            inline
-            documentView
-            navigate={navigateToReport}
-          >
-            {renderDocumentView(id, panels, documentData)}
-          </ReportReadingProvider>
-        ) : (
-          <ReportReadingProvider
-            reading={view === "reading"}
-            inline
-            navigate={navigateToReport}
-          >
-            <div className={styles.sections}>
-              {panels.map((panel, index) => (
-                <section
-                  key={panel.id}
-                  id={`${id}-section-${panel.id}`}
-                  className={styles.section}
-                  data-report-mode-section={panel.id}
-                  role={view === "tabs" ? "tabpanel" : "region"}
-                  aria-labelledby={
-                    view === "tabs"
-                      ? `${id}-tab-${panel.id}`
-                      : `${id}-heading-${panel.id}`
-                  }
-                  hidden={view === "tabs" && selected !== panel.id}
-                  tabIndex={view === "tabs" ? 0 : -1}
-                >
-                  {/* In Tabbed view the selected tab already names the section;
-                      the heading stays for assistive tech and focus targets. */}
-                  {view === "tabs" ? (
-                    <h2
-                      id={`${id}-heading-${panel.id}`}
-                      tabIndex={-1}
-                      className={styles.visuallyHiddenHeading}
-                    >
-                      {panel.label}
-                    </h2>
-                  ) : (
-                    <div className={styles.chapterOpener}>
-                      <div className={styles.chapterHeader}>
-                        <span className={styles.chapterNumber}>
-                          {index + 1}.
-                        </span>
-                        <h2
-                          id={`${id}-heading-${panel.id}`}
-                          tabIndex={-1}
-                          className={styles.chapterTitle}
-                        >
-                          {panel.label}
-                        </h2>
-                      </div>
-                      <div className={styles.chapterRule} aria-hidden="true" />
-                      <p className={styles.chapterSummary}>
-                        {panel.summary ?? `${panel.label} report section.`}
-                      </p>
-                    </div>
-                  )}
-                  {panel.content}
-                </section>
-              ))}
-            </div>
-          </ReportReadingProvider>
-        )}
+        <ReportReadingProvider
+          reading={view !== "tabs"}
+          inline
+          documentView={view === "document"}
+          navigate={navigateToReport}
+        >
+          {renderReportPanels(id, panels, view, selected, documentData)}
+        </ReportReadingProvider>
       </div>
       {returnPoint && (
         <div className={styles.returnBar} data-report-return>

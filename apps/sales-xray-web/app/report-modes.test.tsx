@@ -1308,3 +1308,30 @@ it("marks the portaled shell toolbar hidden for the print renderer", async () =>
     shell.remove();
   }
 });
+
+it("keeps the same mounted panel state across all three report views", async () => {
+  await render(call);
+  const note = container.querySelector<HTMLInputElement>(
+    'input[aria-label="Moment note"]',
+  )!;
+  note.value = "unsaved fictional note";
+  const point = container.querySelector('[data-review-point="14"]');
+  for (const title of [
+    "Document view",
+    "Tabbed view",
+    "Reading view",
+    "Document view",
+    "Reading view",
+  ]) {
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(`button[title="${title}"]`)!
+        .click(),
+    );
+    expect(container.querySelector('input[aria-label="Moment note"]')).toBe(
+      note,
+    );
+    expect(note.value).toBe("unsaved fictional note");
+    expect(container.querySelector('[data-review-point="14"]')).toBe(point);
+  }
+});
