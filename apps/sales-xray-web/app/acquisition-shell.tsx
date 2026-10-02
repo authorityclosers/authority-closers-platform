@@ -10,10 +10,11 @@ export type AcquisitionShellProps = LightboxShellProps & {
 /** The standalone Sales Xray shell. Callers and the embed API are unchanged. */
 export function AcquisitionShell(props: AcquisitionShellProps) {
   const { showPolicyLinks, children, ...shellProps } = props;
+  const shouldShowPolicyLinks = showPolicyLinks ?? !shellProps.authenticated;
   return (
     <LightboxShell {...shellProps}>
       {children}
-      {showPolicyLinks ? <PolicyFooter /> : null}
+      {shouldShowPolicyLinks ? <PolicyFooter /> : null}
     </LightboxShell>
   );
 }

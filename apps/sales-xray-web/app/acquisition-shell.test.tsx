@@ -220,10 +220,10 @@ it("shows trial minutes only from a verified allowance", () => {
   expect(unlimited.textContent).toContain("Unlimited analysis time");
 });
 
-it("shows the public policy footer when requested", async () => {
+it("shows the public policy footer on signed-out shells", async () => {
   await act(async () =>
     root.render(
-      <AcquisitionShell authenticated={false} showPolicyLinks>
+      <AcquisitionShell authenticated={false}>
         <p>Signed-out entry</p>
       </AcquisitionShell>,
     ),

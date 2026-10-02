@@ -1881,7 +1881,6 @@ export function AcquisitionStudio({
       <AcquisitionShell
         active={activeRequestedCallId ? "calls" : "analyse"}
         authenticated={access?.authenticated === true}
-        showPolicyLinks={access?.authenticated !== true}
         homeHref={homeHref}
       >
         {reviewStatus}
@@ -1952,7 +1951,6 @@ export function AcquisitionStudio({
         <AcquisitionShell
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
-          showPolicyLinks={access?.authenticated !== true}
           homeHref={homeHref}
           allowance={allowance}
         >
@@ -2175,7 +2173,6 @@ export function AcquisitionStudio({
         <AcquisitionShell
           active={activeRequestedCallId ? "calls" : "analyse"}
           authenticated={access?.authenticated === true}
-          showPolicyLinks={access?.authenticated !== true}
           loading={opening && access?.authenticated !== true}
           homeHref={homeHref}
           mobileFit
@@ -3588,7 +3585,6 @@ export function AcquisitionStudio({
       <AcquisitionShell
         active={activeRequestedCallId || reportReady ? "calls" : "analyse"}
         authenticated={access?.authenticated === true}
-        showPolicyLinks={access?.authenticated !== true}
         homeHref={homeHref}
         mobileFit
         allowance={allowance}
