@@ -282,6 +282,49 @@ def test_github_failures_list_first_ci_owner_request_and_post_merge_bugs(monkeyp
     assert not any(item[1] == "PR #107" for item in failures)
 
 
+@pytest.mark.parametrize(
+    "agent_name",
+    [
+        "Dev Environment Lead",
+        "Dev Environment Lead · Claude (Opus 5.5)",
+        "Dev Environment Lead · Sol",
+    ],
+)
+def test_devenv_pr_metrics_use_real_agent_row_across_model_suffixes(agent_name):
+    source = {
+        "issues": [],
+        "agents": [{"id": "fictional-devenv-agent", "name": agent_name}],
+        "runs": [],
+        "activity": {},
+        "github": {
+            "pull_requests": [
+                {
+                    "number": 108,
+                    "branch": "task/devenv/108-fictional-fix",
+                    "created_at": "2026-09-21T00:00:00Z",
+                    "merged_at": "2026-09-23T00:00:00Z",
+                    "first_try_ci": "failure",
+                    "rework_pushes": 1,
+                }
+            ],
+            "bugs": [],
+            "reverts": [],
+        },
+    }
+    result = report(source)
+    rows = dict(result["rows"])
+    assert [label for label, _ in result["rows"]] == [agent_name, "Company"]
+    metrics = rows[agent_name]["github"]
+    assert (metrics["cycles"], metrics["pass"], metrics["total"], metrics["rework"]) == (
+        [2],
+        0,
+        1,
+        1,
+    )
+    assert metrics == rows["Company"]["github"]
+    assert result["failures"] == [("Dev Environment Lead", "PR #108", "first-try CI failure")]
+
+
 def test_github_get_guard_rejects_write_methods_and_bodies():
     for flags in (
         ("-X", "POST"),

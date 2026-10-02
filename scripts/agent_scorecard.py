@@ -427,8 +427,15 @@ def build_report(data, monday, start, end):
     gh_metrics = github_metrics(data, start, end)
     lane_names = {lane_agent(p.get("branch", ""))
                   for p in (data.get("github") or {}).get("pull_requests", [])} - {None}
-    groups.update(next((key for key, value in names.items() if value == name), f"__lane__:{name}")
-                  for name in lane_names)
+    for name in lane_names:
+        group = next(
+            (key for key, value in names.items()
+             if value == name or value.startswith(f"{name} · ")),
+            f"__lane__:{name}",
+        )
+        groups.add(group)
+        if group in names and gh_metrics is not None:
+            gh_metrics[names[group]] = gh_metrics[name]
     company_key = "__company__"
 
     def label(group):
