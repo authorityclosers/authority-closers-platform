@@ -212,6 +212,10 @@ describe("local Studio video wire transport", () => {
     const cancelled = vi.fn();
     let pulls = 0;
     const originalWrite = ClientRequest.prototype.write;
+    let observeSecondWrite: () => void = () => undefined;
+    const secondWriteObserved = new Promise<void>((resolve) => {
+      observeSecondWrite = resolve;
+    });
     const writes = vi
       .spyOn(ClientRequest.prototype, "write")
       .mockImplementation(function (this: ClientRequest, chunk, callback) {
@@ -226,6 +230,7 @@ describe("local Studio video wire transport", () => {
           responseReceived = true;
           releaseSecondWrite?.();
         });
+        observeSecondWrite();
         return originalWrite.call(
           this,
           chunk,
@@ -239,7 +244,10 @@ describe("local Studio video wire transport", () => {
     try {
       await serverTest(
         (request, response) => {
-          request.once("data", () => {
+          // Consume the upload so backpressure cannot stop the first write,
+          // then deny only after the second write's callback hold is installed.
+          request.resume();
+          void secondWriteObserved.then(() => {
             response.writeHead(403, {
               "content-type": "application/problem+json",
             });
