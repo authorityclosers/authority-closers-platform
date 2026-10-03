@@ -318,7 +318,10 @@ class OrganisationService:
             )
             .with_for_update()
         )
-        if membership is None or membership.status != "active" or membership.ended_at is not None:
+        # Audited operator provisioning does not require a paid subscription.
+        if operator_reference is None and (
+            membership is None or membership.status != "active" or membership.ended_at is not None
+        ):
             await self._ensure_seat_available(tenant_id, extra=0 if pending is not None else 1)
         now = datetime.now(UTC)
         if membership is None:
@@ -711,6 +714,7 @@ class OrganisationService:
                 role,
                 command_id,
                 actor_person_id=actor_person_id,
+                operator_reference=operator_reference,
                 reason=operator_reference,
                 http_intent=intent,
             )
@@ -726,7 +730,8 @@ class OrganisationService:
         )
         if pending is not None:
             raise ResourceConflict("A pending invite already exists for this email.")
-        await self._ensure_seat_available(tenant_id)
+        if acting != "operator":
+            await self._ensure_seat_available(tenant_id)
         invite = OrganisationInvite(
             tenant_id=tenant_id,
             email_normalized=email,

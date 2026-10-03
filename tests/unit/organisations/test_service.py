@@ -234,6 +234,65 @@ async def test_unpaid_organisation_refuses_invites_and_direct_adds_without_write
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["direct", "request"])
+async def test_operator_provisions_unpaid_org_but_self_service_still_needs_seats(state, method):
+    org = await state.service.create("Operator fixture", state.owner_id, uuid4(), "AUT-881")
+    reference = "AUT-881 fictional operator provisioning"
+    key = uuid4()
+    if method == "direct":
+        added = await state.service.add_member(
+            org.tenant_id,
+            state.worker_id,
+            "member",
+            key,
+            actor_person_id=state.owner_id,
+            operator_reference=reference,
+        )
+        assert added.status == "active"
+    else:
+        added = await state.service.request_member(
+            org.tenant_id,
+            "worker@example.test",
+            "member",
+            key,
+            actor_person_id=state.owner_id,
+            operator_reference=reference,
+        )
+        assert added["status"] == "active"
+    audit = state.session.scalar(select(AuditEvent).where(AuditEvent.request_id == str(key)))
+    assert audit.actor_person_id == state.owner_id
+    assert audit.payload["intent"]["operator_reference"] == reference
+    invited = await state.service.request_member(
+        org.tenant_id,
+        "staff-invite@example.test",
+        "member",
+        uuid4(),
+        actor_person_id=state.owner_id,
+        operator_reference=reference,
+    )
+    assert invited["status"] == "invited"
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "self-service@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    # Operator-created pending invites occupy seats when self-service later becomes paid.
+    await seed_paid_seats(state.adapter, org.tenant_id, state.owner_id, seats=3)
+    with pytest.raises(OrganisationSeatsFull):
+        await state.service.request_member(
+            org.tenant_id,
+            "self-service@example.test",
+            "member",
+            uuid4(),
+            actor_person_id=state.owner_id,
+        )
+    assert state.session.scalar(select(func.count()).select_from(AuditEvent)) == 3
+
+
+@pytest.mark.asyncio
 async def test_current_period_seats_are_not_extended_by_rollover_or_refunded_grants(state):
     from ac_platform.organisations.usage import paid_seats
 
