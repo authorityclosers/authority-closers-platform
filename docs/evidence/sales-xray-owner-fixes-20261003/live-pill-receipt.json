@@ -1,0 +1,29 @@
+{
+  "route": "/dashboard",
+  "state": "guest dashboard; APIs mocked unauthenticated",
+  "public_dev": "Cloudflare Access sign-in required",
+  "live_dev_checkout": "UI lane",
+  "source_base": "7d65c62906f314acaf6ea1bcba077e743c6894d8",
+  "rows": [
+    {
+      "width": 1440,
+      "height": 900,
+      "live_pill_count": 0,
+      "dashboard_heading": true,
+      "navigation_and_main": true,
+      "guest_sign_in": true,
+      "horizontal_overflow_px": 0,
+      "screenshot": "live-pill-after-1440.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "live_pill_count": 0,
+      "dashboard_heading": true,
+      "navigation_and_main": true,
+      "guest_sign_in": true,
+      "horizontal_overflow_px": 0,
+      "screenshot": "live-pill-after-390.png"
+    }
+  ]
+}
