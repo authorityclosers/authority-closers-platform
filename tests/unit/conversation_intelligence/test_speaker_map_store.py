@@ -45,6 +45,25 @@ def test_32_speakers_and_128_character_label_are_accepted() -> None:
     assert len(normalize_speaker_decisions(speakers, transcript)) == 32
 
 
+def test_optional_icons_are_preserved_or_explicitly_cleared() -> None:
+    choices = [{**CHOICES[0], "icon": None}, {**CHOICES[1], "icon": "carpentry"}]
+    normalized = normalize_speaker_decisions(choices, TRANSCRIPT)
+    assert normalized[0]["icon"] is None
+    assert normalized[1]["icon"] == "carpentry"
+    assert "icon" not in normalize_speaker_decisions(CHOICES, TRANSCRIPT)[0]
+    assert (
+        normalize_speaker_decisions([{**CHOICES[0], "icon": "x" * 64}, CHOICES[1]], TRANSCRIPT)[0][
+            "icon"
+        ]
+        == "x" * 64
+    )
+    with pytest.raises(ConversationError):
+        normalize_speaker_decisions(
+            [{"speaker_id": "unattributed", "role": "other", "icon": "person"}],
+            {"segments": [{"speaker_id": "unattributed"}]},
+        )
+
+
 @pytest.mark.parametrize(
     "invalid",
     [
@@ -65,12 +84,40 @@ def test_32_speakers_and_128_character_label_are_accepted() -> None:
         ],
         [CHOICES[0], {**CHOICES[1], "role": "you"}],
         [{**CHOICES[0], "confidence": "high"}, CHOICES[1]],
+        *[
+            [{**CHOICES[0], "icon": value}, CHOICES[1]]
+            for value in ("", "../person", "Person", "x" * 65, "person\n", "person.svg", 3, [])
+        ],
     ],
 )
 def test_invalid_choices_fail_without_names_in_error(invalid) -> None:
     with pytest.raises(ConversationError) as error:
         normalize_speaker_decisions(invalid, TRANSCRIPT)
     assert "ज़ोया" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_legacy_client_retry_preserves_saved_icon_without_a_new_revision(monkeypatch) -> None:
+    scope = _scope()
+    speakers = normalize_speaker_decisions(CHOICES, TRANSCRIPT)
+    speakers[1]["icon"] = "carpentry"
+    latest = SimpleNamespace(revision=1, transcript_revision="fictional-c2", speakers=speakers)
+    ownership = _ownership(scope, scalar_values=[object(), latest])
+    monkeypatch.setattr(
+        "ac_platform.conversation_intelligence.speaker_map_store.AcquisitionReports",
+        lambda _: SimpleNamespace(render_transcript=AsyncMock(return_value=TRANSCRIPT)),
+    )
+    result = await update_speaker_map(
+        ownership,
+        scope.submission_id,
+        actor=_actor(tenant_id=scope.tenant_id),
+        expected_revision=0,
+        transcript_revision="fictional-c2",
+        speakers=CHOICES,
+    )
+    assert result["revision"] == 1 and result["speakers"][1]["icon"] == "carpentry"
+    ownership.database.add.assert_not_called()
+    ownership.database.flush.assert_not_awaited()
 
 
 @pytest.mark.asyncio

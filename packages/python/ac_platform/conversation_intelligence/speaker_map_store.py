@@ -1,5 +1,6 @@
 """Owner-authored speaker revisions within caller-owned transactions."""
 
+import re
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -44,6 +45,7 @@ def normalize_speaker_decisions(
             "speaker_id",
             "role",
             "display_name",
+            "icon",
         }:
             raise ConversationError("Each speaker needs a label, role and optional name.")
         speaker_id, role = row["speaker_id"], row["role"]
@@ -66,6 +68,15 @@ def normalize_speaker_decisions(
             "role": cast(Role, role),
             "display_name": name,
         }
+        if "icon" in row:
+            icon = row["icon"]
+            if icon is not None and (
+                not isinstance(icon, str) or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", icon) is None
+            ):
+                raise ConversationError("Choose a valid speaker icon.")
+            if speaker_id == "unattributed" and icon is not None:
+                raise ConversationError("Unattributed speech cannot have a speaker icon.")
+            decisions[speaker_id]["icon"] = icon
     if decisions.keys() != known or sum(row["role"] == "you" for row in decisions.values()) > 1:
         raise ConversationError("List every speaker and choose at most one as you.")
     return [decisions[key] for key in sorted(decisions)]
@@ -165,6 +176,13 @@ async def update_speaker_map(
         raise ConversationConflict("The transcript changed. Reload before saving again.")
     normalized = normalize_speaker_decisions(speakers, transcript)
     latest = await _latest(ownership.database, scope)
+    if latest is not None and latest["transcript_revision"] == transcript_revision:
+        previous = {row["speaker_id"]: row for row in latest["speakers"]}
+        for decision in normalized:
+            old = previous.get(decision["speaker_id"])
+            # Older clients omit icons; only an explicit null clears a saved choice.
+            if "icon" not in decision and old is not None and "icon" in old:
+                decision["icon"] = old["icon"]
     current_revision = 0 if latest is None else latest["revision"]
     if (
         latest is not None
