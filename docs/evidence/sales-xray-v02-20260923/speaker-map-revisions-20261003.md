@@ -42,3 +42,44 @@ that normal dev migration and metadata read-back as a dev check, not a merge
 prerequisite (CTO direction of 3 Oct). No staging/production state or customer
 call was used.
 The API endpoints, model naming and report input remain later approved slices.
+
+## S2b: validated revision service
+
+Base `59115890` (merged PR #244). The lane gate created
+`task/sales-xray/311-speaker-map-storage` from latest main; `ac-gate check` passed.
+The bounded slice changes only the storage service, its tests and this evidence.
+Its size includes the PostgreSQL concurrency/rollback/ownership proof; HTTP and
+pipeline wiring remain separate slices.
+
+- Reads require the signed-in, claimed call owner and current retention authority.
+  Writes lock the canonical recording and repeat the complete ownership binding
+  check. Current C2 is read through the authorized transcript projection inside
+  the lock; a stale transcript cannot confirm names or roles.
+- Choices cover every non-null transcript label exactly once: at most 32 labels,
+  IDs up to 128 characters, supported roles and at most one `you`. Names retain
+  Unicode and honorifics, use null for the default, and reject controls and names
+  over 80 characters. Extra model/source fields cannot be persisted as user choices.
+- Equivalent reordered retries return the current revision without writing.
+  Competing stale revisions and the 50-revision limit conflict. Each successful
+  change appends one revision and `conversation.speaker_map_changed` in the same
+  transaction; the audit payload contains only old/new revision numbers.
+- Erasure hooks stay unchanged. Moving their imports to module scope would cycle
+  through `application` / `guest_ownership` / `acquisition_reports`, now used by
+  the storage service. The redundant historical index remains unchanged.
+
+Validation on the dev host, fictional data in disposable loopback schemas:
+
+- `uv run pytest tests/unit/conversation_intelligence/test_speaker_map_store.py
+tests/unit/conversation_intelligence/test_speaker_map.py
+  tests/unit/conversation_intelligence/test_submission_labels.py -q`: **131 passed**.
+- `uv run pytest tests/database/test_speaker_map_postgresql.py -q`: **5 passed**.
+  Includes actual concurrent transactions, same-content and competing retries,
+  rollback of both history and audit, latest-read/superseding history, same-tenant
+  non-owner and cross-tenant rejection, migration parity and canonical erasure.
+  The storage proof supplies a fictional authorized C2 projection at the existing
+  renderer boundary; it does not exercise a provider or the future HTTP routes.
+- `uv run ruff format --check packages/python tests`, `uv run ruff check
+packages/python tests`, `uv run mypy packages/python` and Prettier check pass.
+- Root's completed AUT-977 receipt verifies dev head 0070, the append-only table
+  and nullable plan column. This heartbeat independently read API readiness (200).
+  The new service is dormant until S3; no new screen behavior is claimed.
