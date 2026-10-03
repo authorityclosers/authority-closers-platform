@@ -32,8 +32,8 @@
     ]
   },
   "runs": [
-    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-23T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"inputTokens": 100, "outputTokens": 50}},
-    {"agentId": "agent-b", "status": "succeeded", "startedAt": "2026-09-24T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"inputTokens": 200, "outputTokens": 50}},
-    {"agentId": "agent-d", "status": "succeeded", "startedAt": "2026-09-25T00:00:00Z", "contextSnapshot": {"issueId": "direct-task"}, "usageJson": {"inputTokens": 50, "outputTokens": 25}}
+    {"agentId": "agent-a", "status": "succeeded", "startedAt": "2026-09-23T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"usageSource": "per_run", "inputTokens": 100, "outputTokens": 50}},
+    {"agentId": "agent-b", "status": "succeeded", "startedAt": "2026-09-24T00:00:00Z", "contextSnapshot": {"issueId": "builder-task"}, "usageJson": {"usageSource": "per_run", "inputTokens": 200, "outputTokens": 50}},
+    {"agentId": "agent-d", "status": "succeeded", "startedAt": "2026-09-25T00:00:00Z", "contextSnapshot": {"issueId": "direct-task"}, "usageJson": {"usageSource": "per_run", "inputTokens": 50, "outputTokens": 25}}
   ]
 }

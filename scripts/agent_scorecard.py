@@ -303,37 +303,53 @@ def github_metrics(data, start, end):
     return totals
 
 
-def run_tokens(run, adapter=None, sessions=None):
+def token_usage(run, adapter=None):
+    """Read reported run counts; session IDs and counter trends cannot prove a basis."""
     try:
-        usage = run["usageJson"]
+        usage = run.get("usageJson")
+        if usage is None:
+            return None, "missing_usage"
         usage = json.loads(usage) if isinstance(usage, str) else usage
+        if not isinstance(usage, dict):
+            return None, "invalid_usage"
+        if not usage:
+            return None, "missing_usage"
+        adapter = run.get("adapterType") or adapter
+        if adapter not in {"codex_local", "claude_local"}:
+            return None, "unsupported_adapter"
+        basis = usage.get("usageSource")
+        if basis not in ("per_run", "session_delta") or usage.get("usageBasis", basis) != basis:
+            return None, "unverified_basis"
+        if "cachedReadTokens" in usage or "cachedWriteTokens" in usage:
+            return None, "invalid_usage"  # ACPX mappings are outside this receipt contract.
+        required = ["inputTokens", "outputTokens"]
+        if adapter == "claude_local":
+            required.append("cachedInputTokens")
+        if any(key not in usage for key in required):
+            return None, "missing_usage"
         values = [usage["inputTokens"], usage["outputTokens"], usage.get("cachedInputTokens", 0)]
         if not all(type(v) in (int, float) and math.isfinite(v) and v >= 0 for v in values):
-            return None
-        adapter = run.get("adapterType") or adapter
-        key = (run.get("agentId"), usage.get("persistedSessionId"))
-        if (sessions is not None and key[1] and adapter in {"codex_local", "claude_local"}
-                and usage.get("usageSource") != "session_delta"):
-            previous = sessions.get(key)
-            sessions[key] = values
-            if previous is not None and all(v >= p for v, p in zip(values, previous, strict=True)):
-                values = [v - p for v, p in zip(values, previous, strict=True)]
-        return values[0] + values[1] + (values[2] if adapter == "claude_local" else 0)
-    except (KeyError, TypeError, ValueError):
-        return None
+            return None, "invalid_usage"
+        total = values[0] + values[1] + (values[2] if adapter == "claude_local" else 0)
+        return (total, f"reported_{basis}") if math.isfinite(total) else (None, "invalid_usage")
+    except (TypeError, ValueError, OverflowError):
+        return None, "invalid_usage"
+
+
+def run_tokens(run, adapter=None, sessions=None):
+    return token_usage(run, adapter)[0]
 
 
 def normalize_runs(runs, agents):
-    """Difference all available snapshots before selecting tasks or the report week."""
+    """Validate receipts chronologically before selecting tasks or the report week."""
     adapters = {a["id"]: a.get("adapterType") for a in agents if a.get("id")}
     result = [{**run, "_tokens": None} for run in runs]
-    sessions = {}
     ordered = sorted(enumerate(result), key=lambda item: (
         timestamp(item[1].get("startedAt")) or timestamp(item[1].get("createdAt")) or 0,
         (0, str(item[1]["id"])) if item[1].get("id") else (1, item[0]),
     ))
     for _, run in ordered:
-        run["_tokens"] = run_tokens(run, adapters.get(run.get("agentId")), sessions)
+        run["_tokens"], run["_token_status"] = token_usage(run, adapters.get(run.get("agentId")))
     return result
 
 
@@ -454,7 +470,9 @@ def build_report(data, monday, start, end):
         complete_runs = bool(selected) and all(by_issue.get(issue_id) for issue_id in selected)
         token_values = [run["_tokens"] for run in task_runs]
         reported_tokens = [value for value in token_values if value is not None]
-        tokens = sum(reported_tokens) / len(selected) if selected and reported_tokens else None
+        known_tokens = sum(reported_tokens)
+        tokens = (known_tokens / len(selected)
+                  if complete_runs and len(reported_tokens) == len(token_values) else None)
         runs_per_task = len(task_runs) / len(selected) if complete_runs else None
         return {
             "done": len(selected),
@@ -463,6 +481,7 @@ def build_report(data, monday, start, end):
             "cycle_missing": len(selected) - len(values),
             "bounces": sum(bounces.values()) if group == company_key else bounces[group],
             "tokens": tokens,
+            "known_tokens": known_tokens,
             "unreported_runs": len(token_values) - len(reported_tokens),
             "runs_per_task": runs_per_task,
             "failed_pct": failed_pct,
@@ -532,8 +551,8 @@ def render_report(report):
             if tokens is not None
             else f"n/a ({'no usage' if row['done'] else 'no done tasks'})"
         )
-        if tokens is not None and row["unreported_runs"]:
-            token_cell += f" ({row['unreported_runs']} runs unreported)"
+        if row["unreported_runs"]:
+            token_cell = f"n/a (incomplete usage) ({row['unreported_runs']} runs unreported)"
         cells = [
             label,
             str(row["done"]),

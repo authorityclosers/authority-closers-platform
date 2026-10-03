@@ -125,7 +125,7 @@
       "contextSnapshot": {
         "issueId": "task-a"
       },
-      "usageJson": "{\"inputTokens\":100,\"outputTokens\":50}"
+      "usageJson": "{\"usageSource\":\"per_run\",\"inputTokens\":100,\"outputTokens\":50}"
     },
     {
       "agentId": "agent-a",
@@ -144,6 +144,7 @@
         "issueId": "task-b"
       },
       "usageJson": {
+        "usageSource": "per_run",
         "reason": "missing token fields"
       }
     },
@@ -155,6 +156,7 @@
         "issueId": "task-b"
       },
       "usageJson": {
+        "usageSource": "per_run",
         "inputTokens": 200,
         "outputTokens": 50
       }
@@ -167,6 +169,7 @@
         "issueId": "task-b"
       },
       "usageJson": {
+        "usageSource": "per_run",
         "inputTokens": 9,
         "outputTokens": 9
       }
