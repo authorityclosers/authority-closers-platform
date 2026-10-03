@@ -13,7 +13,7 @@ import hashlib
 import json
 import secrets
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -71,13 +71,13 @@ SIGNING_KEY = "fictional-fake-signing-key"
 TRIAL_SECONDS = 3_600
 
 PERSONAL_MONTHLY_PAISE = 249_900
-PERSONAL_YEARLY_PAISE = 2_499_000
+PERSONAL_YEARLY_PAISE = 2_699_000
 PERSONAL_MINUTES = 800
 ORGANISATION_MONTHLY_PAISE = 59_900
 ORGANISATION_YEARLY_PAISE = 599_900
 ORGANISATION_MINUTES = 1_200
 ORGANISATION_SEATS = 3
-ORGANISATION_YEAR_TOTAL_PAISE = ORGANISATION_YEARLY_PAISE * ORGANISATION_SEATS
+ORGANISATION_YEAR_TOTAL_PAISE = 2_123_646  # 1,799,700 taxable + 323,946 GST.
 
 PERSONAL = PlanCopy(
     key="personal",
@@ -506,7 +506,7 @@ def test_personal_monthly_subscription_checkout_is_idempotent(
                     "fake",
                 )
                 assert row.provider_subscription_ref == f"fake_sub_{personal.order_ref}"
-                assert row.provider_plan_ref == "fake_plan_personal_month_r1"
+                assert row.provider_plan_ref.startswith("fake_plan_gst_")
                 assert (row.plan_key, row.plan_name, row.plan_revision) == (
                     "personal",
                     "Personal",
@@ -552,7 +552,7 @@ def test_personal_monthly_subscription_checkout_is_idempotent(
                 # in a new settings revision; the price is the per-unit price.
                 settings = await latest_settings(database)
                 assert settings.enabled is True
-                assert settings.plan_refs["personal:month:1"] == row.provider_plan_ref
+                assert settings.plan_refs["personal:month:1:gst18:249900"] == row.provider_plan_ref
                 assert world.provider.plans[row.provider_plan_ref].money == Money(
                     PERSONAL_MONTHLY_PAISE, "INR"
                 )
@@ -596,6 +596,165 @@ def test_personal_monthly_subscription_checkout_is_idempotent(
                     )
                     == 1
                 )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize(
+    "account,interval,seats,taxable,gst,total,pack_total",
+    [
+        ("personal", "month", 1, 211780, 38120, 249900, 29900),
+        ("personal", "year", 1, 2287288, 411712, 2699000, 29900),
+        ("organisation", "month", 2, 2000000, 360000, 2360000, 153282),
+        ("organisation", "year", 2, 21600000, 3888000, 25488000, 153282),
+        ("organisation", "month", 2, 6, 1, 7, None),
+    ],
+)
+def test_taxed_checkout_provider_amounts_and_top_ups(
+    postgres_harness, world: World, account, interval, seats, taxable, gst, total, pack_total
+):
+    async def exercise():
+        engine = engine_for(postgres_harness)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        plan = replace(
+            PERSONAL if account == "personal" else ORGANISATION,
+            revision=878,
+            monthly_price_paise=249900 if account == "personal" else 1000000,
+            yearly_price_paise=2699000 if account == "personal" else 10800000,
+            seat_min=1 if account == "personal" else 2,
+            packs=(
+                PackCopy(
+                    "tax_test_pack",
+                    100 if account == "personal" else 500,
+                    29900 if account == "personal" else 129900,
+                ),
+            ),
+        )
+        if total == 7:
+            plan = replace(plan, monthly_price_paise=3)
+        service = CheckoutService(
+            catalogue=StaticCatalogue((plan,)),
+            providers=world.app.service.providers,
+            public_learner_tenant_id=world.public_tenant_id,
+            operations_tenant_id=world.operations_tenant_id,
+            return_url_base=RETURN_URL_BASE,
+            clock=lambda: T0,
+        )
+        app = BillingApplication(service)
+        try:
+            learner = await seed(engine, tenant_id=world.public_tenant_id)
+            buyer = caller(learner)
+            async with sessions() as database, database.begin():
+                if account == "organisation":
+                    tenant_id = uuid4()
+                    database.add(Tenant(id=tenant_id, slug=tenant_id.hex, name="Tax proof org"))
+                    await database.flush()
+                    database.add_all(
+                        [
+                            Organisation(
+                                tenant_id=tenant_id,
+                                created_by_person_id=learner.person_id,
+                                creation_command_id=uuid4(),
+                                domain_verification_token=secrets.token_urlsafe(32),
+                            ),
+                            Membership(
+                                tenant_id=tenant_id, person_id=learner.person_id, role="owner"
+                            ),
+                        ]
+                    )
+                    buyer = caller(learner, tenant_id=tenant_id, role="owner")
+                settings = await latest_settings(database)
+                database.add(
+                    BillingProviderSettings(
+                        id=uuid4(),
+                        revision=settings.revision + 1,
+                        provider="fake",
+                        mode="test",
+                        enabled=True,
+                        plan_refs={
+                            **settings.plan_refs,
+                            f"{plan.key}:{interval}:878": "fictional_old_pre_tax_plan",
+                        },
+                        key_alias=None,
+                        actor_person_id=None,
+                        reason="fictional old plan cache",
+                        audit_event_id=None,
+                        created_at=T0,
+                    )
+                )
+                await database.flush()
+                buy = command(
+                    uuid4().hex,
+                    kind="subscription",
+                    account=account,
+                    plan_key=plan.key,
+                    interval=interval,
+                    seats=seats,
+                )
+                if total == 7:
+                    before = len(world.provider.subscriptions)
+                    with pytest.raises(NotOnSale, match="exactly per seat"):
+                        await app.checkout(database, buyer, buy)
+                    assert len(world.provider.subscriptions) == before
+                    assert (
+                        await count(
+                            database,
+                            BillingOrder,
+                            BillingOrder.created_by_person_id == learner.person_id,
+                        )
+                        == 0
+                    )
+                    return
+                view = await app.checkout(
+                    database,
+                    buyer,
+                    buy,
+                )
+                order = await database.get(BillingOrder, UUID(view.order.order_id))
+                subscription = await database.get(
+                    BillingSubscription, UUID(view.order.subscription_id)
+                )
+                assert order is not None and subscription is not None
+                assert (order.amount_minor, subscription.amount_minor) == (total, total)
+                assert await account_lots(database, order.account_id) == []
+            tax = view.order.tax
+            assert (tax.taxable_minor, tax.gst_minor, tax.total_minor) == (taxable, gst, total)
+            provider_plan = world.provider.plans[subscription.provider_plan_ref]
+            assert provider_plan.money.amount_minor * seats == total
+            assert subscription.renewal_needs_customer_approval == (total > E_MANDATE_LIMIT_PAISE)
+            headers, body = world.provider.charge(
+                subscription.provider_subscription_ref,
+                event_id=uuid4().hex,
+                order_reference=order.order_ref,
+                money=Money(total, "INR"),
+                period_start=T0,
+                period_end=add_months(T0, 1 if interval == "month" else 12),
+            )
+            async with sessions() as database, database.begin():
+                assert (
+                    await app.receive_webhook(database, "fake", headers, body)
+                ).outcome == "paid"
+                top_up = await app.checkout(
+                    database,
+                    buyer,
+                    command(
+                        uuid4().hex,
+                        kind="top_up",
+                        account=account,
+                        plan_key=plan.key,
+                        pack_key="tax_test_pack",
+                    ),
+                )
+                pack_order = await database.get(BillingOrder, UUID(top_up.order.order_id))
+                assert pack_order is not None and pack_order.amount_minor == pack_total
+                assert world.provider.orders[pack_order.order_ref].money.amount_minor == pack_total
+                assert top_up.order.tax.total_minor == pack_total
+                assert top_up.order.tax.gst_minor == (4561 if account == "personal" else 23382)
+                # Historical reads use the immutable total, even if current prices change.
+                service.catalogue = StaticCatalogue((replace(plan, monthly_price_paise=1),))
+                assert (await app.read_order(database, buyer, order.id)).tax == tax
         finally:
             await engine.dispose()
 
@@ -840,7 +999,7 @@ def test_yearly_organisation_subscription_with_seats_and_roles(postgres_harness,
                 row = await database.get(BillingSubscription, subscription_id)
                 assert row is not None
                 assert row.provider_subscription_ref is not None
-                assert row.provider_plan_ref == "fake_plan_organisation_year_r1"
+                assert row.provider_plan_ref.startswith("fake_plan_gst_")
                 assert (row.interval, row.seats, row.included_minutes) == (
                     "year",
                     ORGANISATION_SEATS,
@@ -873,7 +1032,8 @@ def test_yearly_organisation_subscription_with_seats_and_roles(postgres_harness,
                 # The provider plan carries the per-seat price; the seats travel as
                 # the subscription quantity (section E; Razorpay plan x quantity).
                 assert world.provider.plans[row.provider_plan_ref].money == Money(
-                    ORGANISATION_YEARLY_PAISE, "INR"
+                    707_882,
+                    "INR",  # Per-seat total including GST.
                 )
                 assert (
                     world.provider.subscriptions[row.provider_subscription_ref].quantity

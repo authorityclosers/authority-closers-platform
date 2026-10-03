@@ -380,6 +380,13 @@ def test_checkout_returns_the_c1_shape_and_replays_with_200() -> None:
             "status": "awaiting_payment",
             "mode": "test",
             "amount": {"minor": 249900, "currency": "INR", "gst_inclusive": True},
+            "tax": {
+                "mode": "inclusive",
+                "rate_basis_points": 1800,
+                "taxable_minor": 211780,
+                "gst_minor": 38120,
+                "total_minor": 249900,
+            },
             "plan_key": "personal",
             "plan_name": "Personal",
             "interval": "month",
