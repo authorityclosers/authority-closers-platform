@@ -787,12 +787,6 @@ function LightboxShellFrame({
                       {pageTitle}
                     </span>
                   )}
-                  {active === "dashboard" && (
-                    <span className={styles.titleBadge}>
-                      <span className={styles.titleDot} aria-hidden="true" />
-                      Live Overview
-                    </span>
-                  )}
                 </div>
               </div>
             )}
