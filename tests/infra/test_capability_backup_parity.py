@@ -70,6 +70,7 @@ INACTIVE_PLAN_VALUES = "20261003_0068"
 BILLING_INVOICES = "20261003_0069"
 SPEAKER_MAPS = "20261003_0070"
 CALL_METRICS = "20261003_0071"
+BILLING_CREDITS = "20261003_0072"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -122,6 +123,8 @@ HEADS = (
     CALL_METRICS,
 )
 VERSIONED_HEADS = HEADS[1:]
+# Reserve parity before the separately owned billing migration lands.
+PARITY_HEADS = HEADS + (BILLING_CREDITS,)
 TABLELESS_VERSIONED_HEADS = (
     REVISION,
     MEDIA_LIBRARY,
@@ -245,6 +248,7 @@ NEW_TABLES = {
     SPEAKER_MAPS: ("conversation_speaker_map_revisions",),
     CALL_METRICS: ("conversation_call_metrics",),
 }
+PARITY_NEW_TABLES = NEW_TABLES | {BILLING_CREDITS: ("billing_credit_entries",)}
 ROOT = Path(__file__).parents[2]
 
 
@@ -269,7 +273,7 @@ def _metadata(root: Path, head: str) -> tuple[Path, Path, dict]:
     payload.update(backup.parity_metadata_fields(head))
     if head != LEGACY:
         payload["row_counts"].update(capability_grants=3, capability_revocations=1)
-    for tables in NEW_TABLES.values():
+    for tables in PARITY_NEW_TABLES.values():
         for table in tables:
             if table in payload["row_counts"]:
                 payload["row_counts"][table] = 4
@@ -374,6 +378,12 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             "ac-postgres-parity-v43",
             module.SPEAKER_MAPS_PARITY_TABLES + NEW_TABLES[CALL_METRICS],
         )
+        assert module.BILLING_CREDITS_PARITY_MIGRATION_HEAD == BILLING_CREDITS
+        assert module.VERSIONED_PARITY_CONTRACTS[BILLING_CREDITS] == (
+            "ac-postgres-parity-v44",
+            module.CALL_METRICS_PARITY_TABLES + ("billing_credit_entries",),
+        )
+        assert len(module.parity_tables_for_head(BILLING_CREDITS)) == 128
         assert module.INACTIVE_PLAN_VALUES_PARITY_MIGRATION_HEAD == INACTIVE_PLAN_VALUES
         assert module.VERSIONED_PARITY_CONTRACTS[INACTIVE_PLAN_VALUES] == (
             module.SENSITIVE_SEGMENT_MARKS_PARITY_CONTRACT,
@@ -388,7 +398,7 @@ def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
             module.parity_tables_for_head(head)
 
 
-@pytest.mark.parametrize("head", HEADS)
+@pytest.mark.parametrize("head", PARITY_HEADS)
 def test_capture_queries_version_and_all_counts_from_same_exported_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -414,7 +424,7 @@ def test_capture_queries_version_and_all_counts_from_same_exported_snapshot(
 
 
 @pytest.mark.parametrize("mode", ["wrong_head", "missing_head", "duplicate_head", "partial"])
-@pytest.mark.parametrize("head", VERSIONED_HEADS)
+@pytest.mark.parametrize("head", PARITY_HEADS[1:])
 def test_capture_refuses_snapshot_release_mismatch_and_partial_results(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -440,7 +450,7 @@ def test_capture_refuses_snapshot_release_mismatch_and_partial_results(
         backup.source_row_counts(target, "00000003-0000001B-1")
 
 
-@pytest.mark.parametrize("head", HEADS)
+@pytest.mark.parametrize("head", PARITY_HEADS)
 def test_exact_old_and_new_metadata_are_accepted_without_format_substitution(
     tmp_path: Path,
     head: str,
@@ -455,7 +465,7 @@ def test_exact_old_and_new_metadata_are_accepted_without_format_substitution(
         assert payload["row_counts"]["capability_revocations"] == 1
 
 
-@pytest.mark.parametrize("source,expected", list(itertools.permutations(HEADS, 2)))
+@pytest.mark.parametrize("source,expected", list(itertools.permutations(PARITY_HEADS, 2)))
 def test_old_backup_cannot_prove_new_capabilities_or_reverse(
     tmp_path: Path,
     source: str,
@@ -588,7 +598,7 @@ def test_exact_capability_parity_and_legacy_schema_proofs_pass(tmp_path: Path) -
         ),
         source["row_counts"],
     )
-    for head in HEADS:
+    for head in PARITY_HEADS:
         counts = {table: 0 for table in proof.parity_tables_for_head(head)}
         payload = {"row_counts": counts, "schema": _schema_evidence(head)}
         if head != LEGACY:
@@ -836,11 +846,11 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             previous = current
 
 
-@pytest.mark.parametrize("head", tuple(NEW_TABLES))
+@pytest.mark.parametrize("head", tuple(PARITY_NEW_TABLES))
 def test_new_writer_populated_metadata_and_restore_parity_pass(tmp_path: Path, head: str) -> None:
     dump, metadata, payload = _metadata(tmp_path, head)
     _validate_both(dump, metadata, head)
-    assert all(payload["row_counts"][name] == 4 for name in NEW_TABLES[head])
+    assert all(payload["row_counts"][name] == 4 for name in PARITY_NEW_TABLES[head])
     drill._verify_versioned_backup_parity(
         SimpleNamespace(expected_migration_head=head, backup_metadata=metadata),
         payload["row_counts"],
@@ -859,7 +869,7 @@ def test_new_writer_populated_metadata_and_restore_parity_pass(tmp_path: Path, h
     proof._verify_row_count_parity(evidence, payload["row_counts"], expected_migration_head=head)
 
 
-@pytest.mark.parametrize("head", tuple(NEW_TABLES))
+@pytest.mark.parametrize("head", tuple(PARITY_NEW_TABLES))
 @pytest.mark.parametrize("missing", ["row_counts", "migration_head", "parity_contract"])
 def test_new_metadata_requires_complete_version_identity(
     tmp_path: Path, head: str, missing: str
@@ -879,7 +889,7 @@ def test_new_metadata_requires_complete_version_identity(
         )
 
 
-@pytest.mark.parametrize("head", tuple(NEW_TABLES))
+@pytest.mark.parametrize("head", tuple(PARITY_NEW_TABLES))
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -906,7 +916,7 @@ def test_new_metadata_cannot_relabel_complete_counts_as_an_older_contract(
 
 
 @pytest.mark.parametrize(
-    "head,table", [(head, table) for head, tables in NEW_TABLES.items() for table in tables]
+    "head,table", [(head, table) for head, tables in PARITY_NEW_TABLES.items() for table in tables]
 )
 def test_every_new_table_is_required_in_source_metadata_and_restored_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, head: str, table: str
@@ -936,7 +946,7 @@ def test_every_new_table_is_required_in_source_metadata_and_restored_schema(
 
 
 @pytest.mark.parametrize(
-    "head,table", [(head, table) for head, tables in NEW_TABLES.items() for table in tables]
+    "head,table", [(head, table) for head, tables in PARITY_NEW_TABLES.items() for table in tables]
 )
 @pytest.mark.parametrize("mode", ["lost_record", "missing_table", "boolean_count"])
 def test_each_new_history_table_rejects_partial_restoration(
@@ -970,7 +980,7 @@ def test_each_new_history_table_rejects_partial_restoration(
         )
 
 
-@pytest.mark.parametrize("head", tuple(NEW_TABLES))
+@pytest.mark.parametrize("head", tuple(PARITY_NEW_TABLES))
 @pytest.mark.parametrize("mode", ["wrong_head", "missing_contract", "wrong_contract", "extra_head"])
 def test_new_restore_evidence_requires_exact_migration_and_contract(
     tmp_path: Path, head: str, mode: str
@@ -993,6 +1003,54 @@ def test_new_restore_evidence_requires_exact_migration_and_contract(
     evidence.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(proof.RestoreProofError, match="parity"):
         proof._verify_row_count_parity(evidence, source["row_counts"], expected_migration_head=head)
+
+
+def test_billing_credit_parity_rejects_extra_tables_at_each_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    head = BILLING_CREDITS
+    dump, metadata, payload = _metadata(tmp_path, head)
+    expected = dict(payload["row_counts"])
+    actual = expected | {"unexpected_credit_table": 0}
+    rows = [f"__migration_head__|{head}"] + [f"{table}|{count}" for table, count in actual.items()]
+    monkeypatch.setattr(
+        backup, "run_checked", lambda *_a, **_kw: SimpleNamespace(stdout="\n".join(rows))
+    )
+    with pytest.raises(backup.BackupError, match="unsafe result"):
+        backup.source_row_counts(_target(tmp_path, head), "00000003-0000001B-1")
+
+    payload["row_counts"] = actual
+    metadata.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(proof.RestoreProofError):
+        proof._validate_metadata(metadata, dump, "staging", expected_migration_head=head)
+    with pytest.raises(drill.DrillError):
+        drill._validate_backup_metadata(
+            str(metadata),
+            backup=dump,
+            environment="staging",
+            workspace_root=ROOT,
+            expected_migration_head=head,
+        )
+
+    evidence = tmp_path / "extra-table.json"
+    evidence.write_text(
+        json.dumps(
+            {
+                "row_counts": actual,
+                "schema": _schema_evidence(head),
+                "parity_contract": payload["parity_contract"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(proof.RestoreProofError, match="parity"):
+        proof._verify_row_count_parity(evidence, expected, expected_migration_head=head)
+    payload["row_counts"] = expected
+    metadata.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(drill.DrillError, match="parity"):
+        drill._verify_versioned_backup_parity(
+            SimpleNamespace(expected_migration_head=head, backup_metadata=metadata), actual
+        )
 
 
 def _coach_image_manifest(tmp_path: Path) -> Path:
