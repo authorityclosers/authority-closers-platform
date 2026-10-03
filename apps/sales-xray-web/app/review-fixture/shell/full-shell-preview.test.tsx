@@ -78,21 +78,20 @@ it("mounts the actual shell, report header, sections and dock with fictional dat
   ).not.toBeNull();
   expect(report?.textContent).toContain("59:58");
   // Real report sections and the one call dock.
-  // The same seven Reading sections as the live report, in the same order;
-  // the transcript lives in the transcript reader (AUT-785).
+  // The live report's four Reading sections; Transcript remains available
+  // in Tabs, Document and the header's transcript reader.
   expect(
     [...container.querySelectorAll("[data-report-mode-section]")].map((s) =>
       s.getAttribute("data-report-mode-section"),
     ),
-  ).toEqual([
-    "overview",
-    "moments",
-    "prospect",
-    "next-call-plan",
-    "skills",
-    "signals",
-    "raw-data",
-  ]);
+  ).toEqual(["overview", "moments", "analysis", "coaching"]);
+  const analysis = container.querySelector(
+    '[data-report-mode-section="analysis"]',
+  )!;
+  expect(analysis.textContent).toContain("Which voice is the salesperson?");
+  expect(
+    analysis.querySelector('input[aria-label="Search the raw data"]'),
+  ).not.toBeNull();
   // The header's glance strip and call map are mounted too.
   expect(
     report?.querySelector('[aria-label="This call at a glance"]'),

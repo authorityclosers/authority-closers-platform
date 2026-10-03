@@ -8,11 +8,11 @@ import { CallAudioDock } from "../../call-audio-dock";
 import { CallContext } from "../../call-context";
 import { CallMap, CallMapMini } from "../../call-map";
 import { CallSignals } from "../../call-signals";
+import { DipakOverview, ReportAnalysis } from "../../dipak-overview";
+import { ReportCoaching } from "../../report-coaching";
 import { UploadSessionProvider } from "../../hooks/upload-session";
 import { KeyFacts } from "../../key-facts";
 import { useTheme } from "../../lightbox/theme-provider";
-import { NextCallPlan } from "../../next-call-plan";
-import { OverviewHook } from "../../overview-hook";
 import { ProspectSnapshot } from "../../prospect-snapshot";
 import type { ReportEvidence } from "../../report-contract";
 import { ReportHeader } from "../../report-header";
@@ -170,23 +170,12 @@ export function FullShellPreview() {
                         id: "overview",
                         label: "Overview",
                         content: (
-                          <OverviewHook
+                          <DipakOverview
+                            showHeading={false}
                             report={syntheticReport}
                             transcript={transcript}
                             callId={FIXTURE_CALL_ID}
-                            onSeek={playFrom}
-                            onUnlock={unlock}
-                          />
-                        ),
-                      },
-                      {
-                        id: "moments",
-                        label: "Moments",
-                        content: (
-                          <ReportMoments
-                            report={syntheticReport}
-                            callId={FIXTURE_CALL_ID}
-                            transcript={transcript}
+                            durationMs={FIXTURE_DURATION_MS}
                             onSelectEvidence={seek}
                             onSelectContextualPlayback={(_selection, title) =>
                               setStatus(
@@ -194,66 +183,6 @@ export function FullShellPreview() {
                               )
                             }
                             onUnlock={unlock}
-                          />
-                        ),
-                      },
-                      {
-                        id: "prospect",
-                        label: "Prospect",
-                        content: (
-                          <>
-                            <KeyFacts
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              report={syntheticReport}
-                              durationMs={FIXTURE_DURATION_MS}
-                              onSeek={playFrom}
-                            />
-                            <ProspectSnapshot
-                              report={syntheticReport}
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              onSelectEvidence={seek}
-                              onUnlock={unlock}
-                            />
-                          </>
-                        ),
-                      },
-                      {
-                        id: "next-call-plan",
-                        label: "Next-call plan",
-                        compactLabel: "Next-call",
-                        content: (
-                          <NextCallPlan
-                            report={syntheticReport}
-                            callId={FIXTURE_CALL_ID}
-                            transcript={transcript}
-                            onSelectEvidence={seek}
-                            onUnlock={unlock}
-                          />
-                        ),
-                      },
-                      {
-                        id: "skills",
-                        label: "Sales skills",
-                        compactLabel: "Skills",
-                        content: (
-                          <SalesSkills
-                            dimensions={syntheticReport.dimensions}
-                            callId={FIXTURE_CALL_ID}
-                            transcript={transcript}
-                            onSelectEvidence={seek}
-                          />
-                        ),
-                      },
-                      {
-                        id: "signals",
-                        label: "Call signals",
-                        content: (
-                          <CallSignals
-                            callId={FIXTURE_CALL_ID}
-                            transcript={transcript}
-                            onSeek={playFrom}
                           />
                         ),
                       },
@@ -280,16 +209,90 @@ export function FullShellPreview() {
                         ),
                       },
                       {
-                        id: "raw-data",
-                        label: "Raw data",
+                        id: "moments",
+                        label: "Moments",
                         content: (
-                          <ReportRawData
+                          <ReportMoments
+                            report={syntheticReport}
                             callId={FIXTURE_CALL_ID}
                             transcript={transcript}
+                            onSelectEvidence={seek}
+                            onSelectContextualPlayback={(_selection, title) =>
+                              setStatus(
+                                `Would play with context · ${title}. No audio exists in this fixture.`,
+                              )
+                            }
+                            onUnlock={unlock}
+                          />
+                        ),
+                      },
+                      {
+                        id: "analysis",
+                        label: "Analysis",
+                        content: (
+                          <>
+                            <ReportAnalysis
+                              showHeading={false}
+                              report={syntheticReport}
+                              transcript={transcript}
+                              callId={FIXTURE_CALL_ID}
+                              durationMs={FIXTURE_DURATION_MS}
+                              onSelectEvidence={seek}
+                              onSelectContextualPlayback={(_selection, title) =>
+                                setStatus(
+                                  `Would play with context · ${title}. No audio exists in this fixture.`,
+                                )
+                              }
+                              onUnlock={unlock}
+                              onSeek={playFrom}
+                            />
+                            <SalesSkills
+                              dimensions={syntheticReport.dimensions}
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              onSelectEvidence={seek}
+                            />
+                            <KeyFacts
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              report={syntheticReport}
+                              durationMs={FIXTURE_DURATION_MS}
+                              onSeek={playFrom}
+                            />
+                            <ProspectSnapshot
+                              report={syntheticReport}
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              onSelectEvidence={seek}
+                              onUnlock={unlock}
+                            />
+                            <CallSignals
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              onSeek={playFrom}
+                            />
+                            <ReportRawData
+                              callId={FIXTURE_CALL_ID}
+                              transcript={transcript}
+                              report={syntheticReport}
+                              durationMs={FIXTURE_DURATION_MS}
+                              runId={null}
+                              onSeek={playFrom}
+                            />
+                          </>
+                        ),
+                      },
+                      {
+                        id: "coaching",
+                        label: "Coaching",
+                        content: (
+                          <ReportCoaching
                             report={syntheticReport}
+                            transcript={transcript}
+                            callId={FIXTURE_CALL_ID}
                             durationMs={FIXTURE_DURATION_MS}
-                            runId={null}
-                            onSeek={playFrom}
+                            onSelectEvidence={seek}
+                            onUnlock={unlock}
                           />
                         ),
                       },
